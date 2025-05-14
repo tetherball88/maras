@@ -1,0 +1,20 @@
+{% if is_in_faction(actorUUID, "TTM_TrackedNpcs") and render_mode == "full" %}
+{{ "## Marrital life" }}
+    {% set factionRank = get_faction_rank(actorUUID, "TTM_TrackedNpcs") %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% if factionRank == 10 or factionRank == 20  %}
+        {% set coSpousesData = get_co_spouses(actorUUID) %}
+    {% endif %}
+    {% if factionRank == 10 %}
+{{npcName}} is engaged with {{player.name}}{% if coSpousesData.current != "" %} and soon will become co-spouse to {{coSpousesData.current}} spouses{% endif %}{% if coSpousesData.future != "" %}, as well as other {{player.name}}'s fiances {{coSpousesData.future}}{% endif %}.
+    {% else if factionRank == 20 %}
+{{npcName}} is {{player.name}}'s spouse.{% if coSpousesData.current != "" %} {{npcName}} and {{coSpousesData.current}} are all {{player.name}}'s spouses.{% endif %} {% if coSpousesData.future != "" %}{{npcName}} and {{coSpousesData.future}} soon will be {{player.name}}'s co-spouses.{% endif %}
+    {% else if factionRank == 30 %}
+{{npcName}} was formerly married to {{player.name}}, but they are now divorced.
+    {% else if factionRank == 40 %}
+{{npcName}} was once engaged to {{player.name}}, but the engagement was called off.
+    {% endif %}
+    {% if get_quest_stage("TTM_EnablePolygamy", false) >= 80 %}
+{{npcName}} has accepted {{player.name}}'s practice of taking multiple spouses, which is blessed by Mara and respected in Skyrim, especially for the Dragonborn. This doesn't mean you necessarily adore your co-spouses - you might be close friends with some, merely cordial with others, or even harbor rivalries, all while respecting the arrangement you've agreed to.
+    {% endif %}
+{% endif %}

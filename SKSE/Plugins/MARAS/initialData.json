@@ -1,0 +1,79 @@
+{
+    "spouseTypesClassesFL": {
+        "Craftsman": "__formData|TT_MARAS.esp|0x12",
+        "Mage": "__formData|TT_MARAS.esp|0xf",
+        "orator": "__formData|TT_MARAS.esp|0x13",
+        "Ranger": "__formData|TT_MARAS.esp|0x10",
+        "Rogue": "__formData|TT_MARAS.esp|0x11",
+        "Warrior": "__formData|TT_MARAS.esp|0xe"
+    },
+    "spouseTypesFactionsFL": {
+        "Middle": "__formData|TT_MARAS.esp|0x4",
+        "nobles": "__formData|TT_MARAS.esp|0xd76",
+        "outcast": "__formData|TT_MARAS.esp|0xd70",
+        "poverty": "__formData|TT_MARAS.esp|0xd74",
+        "religious": "__formData|TT_MARAS.esp|0xd77",
+        "rulers": "__formData|TT_MARAS.esp|0xd75",
+        "wealthy": "__formData|TT_MARAS.esp|0xd71",
+        "working": "__formData|TT_MARAS.esp|0xd73"
+    },
+    "Player": "__formData|Skyrim.esm|0x14",
+    "checkDoorPerk": "__formData|TT_MARAS.esp|0x77",
+    "gameFactions": {
+        "married": "__formData|Skyrim.esm|0xc6472",
+        "bedOwnership": "__formData|Skyrim.esm|0xf2073",
+        "marriageAsked": "__formData|Skyrim.esm|0xff7f3",
+        "courting": "__formData|Skyrim.esm|0x7431a",
+        "excluded": "__formData|Skyrim.esm|0x47a01",
+        "potential": "__formData|Skyrim.esm|0x19809",
+        "playerFaction": "__formData|Skyrim.esm|0xdb1",
+        "potentialHireling": "__formData|Skyrim.esm|0xbcc9a",
+        "marasTrackedNpcFaction": "__formData|TT_MARAS.esp|0x7",
+        "marasCheckSpouseHome": "__formData|TT_MARAS.esp|0x2e",
+        "marasSpouseSocialClassFaction": "__formData|TT_MARAS.esp|0x66",
+        "marasSpouseSkillTypeFaction": "__formData|TT_MARAS.esp|0x4e",
+        "marasSpouseHoused": "__formData|TT_MARAS.esp|0x6c",
+        "marasSpouseSharedHouse": "__formData|TT_MARAS.esp|0x7b",
+        "marasSpouseNoInitialHome": "__formData|TT_MARAS.esp|0x7f",
+        "companions": "__formData|Skyrim.esm|0x48362",
+        "thieves": "__formData|Skyrim.esm|0x29da9",
+        "brotherhood": "__formData|Skyrim.esm|0x1bdb3",
+        "college": "__formData|Skyrim.esm|0x1f259",
+        "bards": "__formData|Skyrim.esm|0xc13c7"
+    },
+    "gameQuests": {
+        "marriageMain": "Skyrim.esm|0x74793",
+        "marriageWedding": "Skyrim.esm|0x7404e",
+        "marriageBreakup": "Skyrim.esm|0x7431b",
+        "marriageFin": "Skyrim.esm|0x21382",
+        "marasMain": "TT_MARAS.esp|0x800",
+        "marasEnablePolygamy": "TT_MARAS.esp|0x5c",
+        "marasDialogues": "TT_MARAS.esp|0x67",
+        "marasCheckSpouseHome": "TT_MARAS.esp|0x30"
+    },
+    "gameKeywords": {
+        "locTypeDwelling": "__formData|Skyrim.esm|0x130dc",
+        "locTypeHouse": "__formData|Skyrim.esm|0x1cb85",
+        "marasHomeSandbox": "__formData|TT_MARAS.esp|0x6b"
+    },
+    "gamePackages": {
+        "marasHomeSandbox": "__formData|TT_MARAS.esp|0x6a"
+    },
+    "gameStatics": {
+        "marasHomeSandboxMarker": "__formData|TT_MARAS.esp|0x76"
+    },
+    "gameMiscs": {
+        "gold": "__formData|Skyrim.esm|0xf"
+    },
+    "gameArmors": {
+        "matrimonyRing": "__formData|Skyrim.esm|0xc5809"
+    },
+    "gameGlobals": {
+        "marasSpousesCount": "__formData|TT_MARAS.esp|0x4f",
+        "marasPlayerHousesCount": "__formData|TT_MARAS.esp|0xc2",
+        "marasHasSkyrimNet": "__formData|TT_MARAS.esp|0xc4"
+    },
+    "gameSpells": {
+        "marasBreakupCooldown": "__formData|TT_MARAS.esp|0x102"
+    }
+}

@@ -1,0 +1,198 @@
+{
+    "craftsman": [
+        {
+            "description": "Your spouse's mastery in the craft ensures your equipment fits true and holds strong, reducing damage taken by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x39",
+            "type": "multiply",
+            "unit": "%",
+            "value": -5
+        },
+        {
+            "description": "",
+            "effectIndex": 1,
+            "perk": "__formData|TT_MARAS.esp|0x39",
+            "type": "spell",
+            "unit": "%",
+            "value": -5
+        }
+    ],
+    "mage": [
+        {
+            "description": "Fighting beside a practiced spellcaster renews your focus, allowing magicka to regenerate faster by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x36",
+            "type": "spell",
+            "unit": "%",
+            "value": 10
+        }
+    ],
+    "middle": [
+        {
+            "description": "Your stable domestic life encourages learning, increasing skill experience gained by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x3f",
+            "type": "multiply",
+            "unit": "%",
+            "value": 2
+        },
+        {
+            "description": "",
+            "effectIndex": 1,
+            "perk": "__formData|TT_MARAS.esp|0x3f",
+            "type": "spell",
+            "unit": "%",
+            "value": 2
+        }
+    ],
+    "nobles": [
+        {
+            "description": "Your noble ties ease every transaction, reducing store prices by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x42",
+            "type": "multiply",
+            "unit": "%",
+            "value": -5
+        },
+        {
+            "description": "",
+            "effectIndex": 1,
+            "perk": "__formData|TT_MARAS.esp|0x42",
+            "type": "spell",
+            "unit": "%",
+            "value": -5
+        }
+    ],
+    "orator": [
+        {
+            "description": "Marching with a gifted speaker empowers your voice, reducing shout cooldown time by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x3a",
+            "type": "spell",
+            "unit": "%",
+            "value": 5
+        }
+    ],
+    "outcast": [
+        {
+            "description": "A life on the fringe teaches you to strike unseen, increasing sneak attack damage by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x41",
+            "type": "multiply",
+            "unit": "%",
+            "value": 10
+        },
+        {
+            "description": "",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x41",
+            "type": "spell",
+            "unit": "%",
+            "value": 10
+        }
+    ],
+    "poverty": [
+        {
+            "description": "Enduring hardship together fosters resilience, allowing stamina to regenerate faster by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x40",
+            "type": "spell",
+            "unit": "%",
+            "value": 10
+        }
+    ],
+    "ranger": [
+        {
+            "description": "With a seasoned ranger by your side, your instincts sharpen and your aim steadies, increasing ranged damage by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x38",
+            "type": "spell",
+            "unit": "%",
+            "value": 5
+        }
+    ],
+    "religious": [
+        {
+            "description": "Living under divine guidance shields you from harm, increasing your magic resistance by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x3c",
+            "type": "multiply",
+            "unit": "%",
+            "value": -3
+        },
+        {
+            "description": "",
+            "effectIndex": 1,
+            "perk": "__formData|TT_MARAS.esp|0x3c",
+            "type": "spell",
+            "unit": "%",
+            "value": -3
+        }
+    ],
+    "rogue": [
+        {
+            "description": "Your partner's silent footsteps teach you subtlety, increasing your sneak effectiveness by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x37",
+            "type": "add",
+            "unit": "%",
+            "value": 5
+        },
+        {
+            "description": "",
+            "effectIndex": 1,
+            "perk": "__formData|TT_MARAS.esp|0x37",
+            "type": "spell",
+            "unit": "%",
+            "value": 5
+        }
+    ],
+    "rulers": [
+        {
+            "description": "Standing beside a figure of authority emboldens your speech, increasing your Speech skill by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x3b",
+            "type": "spell",
+            "unit": "points",
+            "value": 5
+        }
+    ],
+    "warrior": [
+        {
+            "description": "With your spouse at your side in battle, your melee attack damage is increased by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x35",
+            "type": "spell",
+            "unit": "%",
+            "value": 5
+        }
+    ],
+    "wealthy": [
+        {
+            "description": "Sharing wealth brings prosperity, increasing your sell prices by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x3d",
+            "type": "multiply",
+            "unit": "%",
+            "value": 5
+        },
+        {
+            "description": "",
+            "effectIndex": 1,
+            "perk": "__formData|TT_MARAS.esp|0x3d",
+            "type": "spell",
+            "unit": "%",
+            "value": 5
+        }
+    ],
+    "working": [
+        {
+            "description": "Hard-working roots carry their weight, increasing your carry capacity by",
+            "effectIndex": 0,
+            "perk": "__formData|TT_MARAS.esp|0x3e",
+            "type": "spell",
+            "unit": "points",
+            "value": 30
+        }
+    ]
+}

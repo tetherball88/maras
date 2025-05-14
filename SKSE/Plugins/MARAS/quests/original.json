@@ -1,0 +1,26 @@
+{
+    "__formData|Skyrim.esm|0x7404e": {
+        "stages": {
+            "100": {
+                "action": "weddingFinish"
+            },
+            "200": {
+                "action": "weddingCancel"
+            }
+        }
+    },
+    "__formData|Skyrim.esm|0x74793": {
+        "stages": {
+            "stop": {
+                "action": "marriageMainStop"
+            }
+        }
+    },
+    "__formData|Skyrim.esm|0x21382": {
+        "stages": {
+            "start": {
+                "action": "marriageFinStart"
+            }
+        }
+    }
+}
