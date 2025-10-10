@@ -46,16 +46,15 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
         page = 0
     endif
     int perPage = 10
-    int jPlayerHomes = GetPlayerHouses()
+    Form[] playerHomes = GetPlayerHomesForms()
+    int count = playerHomes.Length
 
-    int count = JFormMap_count(jPlayerHomes)
     if(count < 1)
         Debug.Notification("You don't have any home to choose from.")
         return
     endif
     UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
 
-    Form[] playerHomes = JFormMap_allKeysPArray(jPlayerHomes)
     int jMessageOptions = JValue_retain(JMap_object())
 
     int startIdx = page * perPage
@@ -99,11 +98,31 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
     JValue_release(jMessageOptions)
 EndFunction
 
+Form[] Function GetPlayerHomesForms() global
+    int jPlayerHomes = GetPlayerHouses()
+    return JFormMap_allKeysPArray(jPlayerHomes)
+EndFunction
+
+string[] Function GetPlayerHomesNames() global
+    Form[] homes = GetPlayerHomesForms()
+
+    string[] names = PapyrusUtil.StringArray(homes.Length)
+    int i = 0
+
+    while(i < homes.Length)
+        names[i] = homes[i].GetName()
+        i += 1
+    endwhile
+
+    return names
+EndFunction
+
 Function ReleaseSpouseFromPlayerHome(Actor spouse) global
     Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
     spouse.EvaluatePackage()
     spouse.RemoveFromFaction(TTM_JData.GetSpouseHousedFaction())
+    TTM_ServiceNpcs.SetTrackedNpcHome(spouse, none)
 EndFunction
 
 ;/
@@ -119,7 +138,7 @@ Function MoveSpouseToHouse(Actor spouse, Location houseLoc = none ) global
     Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
 
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
-    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 100)
+    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 5)
     spouse.EvaluatePackage()
     spouse.AddToFaction(TTM_JData.GetSpouseHousedFaction())
 

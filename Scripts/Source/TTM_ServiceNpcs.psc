@@ -26,9 +26,15 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcEngaged(Actor npc) global
-    if(TTM_MCM_State.GetSkipWedding())
+    bool alwaysSkipWeddings = TTM_MCM_State.GetSkipWedding()
+    bool answerSkipWedding
+    if(TTM_JData.GetPlayerHadWedding() && !alwaysSkipWeddings)
+        answerSkipWedding = TTM_Utils.ShowMessageMessage("Do you want skip Wedding Ceremony next time you get married? You can set in MCM to always skip weddings.")
+    endif
+    if(alwaysSkipWeddings || answerSkipWedding)
+        TTM_Utils.FadeToBlack()
         Debug.Notification("Congratulations! You and " + TTM_Utils.GetActorName(npc) + " got married!")
-        MakeNpcMarried(npc)
+        TTM_Utils.SendRelationshipChangeEvent(npc, "married")
         TTM_ServiceSkyrimNet.SimulatePostWeddingIfSkippedBehavior(npc)
         return
     endif
@@ -38,12 +44,6 @@ Function MakeNpcEngaged(Actor npc) global
     TTM_ServiceMarriageQuest.StartEngagement(npc)
     if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
         npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
-    endif
-
-    if(TTM_JData.GetPlayerHadWedding() && !TTM_JData.GetPlayerAnsweredSkipWedding())
-        bool answer = TTM_Utils.ShowMessageMessage("Do you want skip Wedding Ceremony next time you get married? You will be able to change your answer in MCM settings.")
-        TTM_MCM_State.SetSkipWedding(answer)
-        TTM_JData.SetPlayerAnsweredSkipWedding()
     endif
 EndFunction
 
@@ -91,8 +91,6 @@ Function MakeNpcDivorced(Actor npc) global
 
     TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
     TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(npc)
-    ; can't make protected if it is npc destined to die by plot
-    ; ProtectSpouse(npc, false)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
 EndFunction
@@ -105,8 +103,6 @@ Function MakeNpcJilted(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
     AddJilted(npc)
     npc.SetRelationshipRank(player, -1)
-    ; can't make protected if it is npc destined to die by plot
-    ; ProtectSpouse(npc, false)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
 EndFunction
@@ -116,21 +112,32 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
-    AddDeceased(npc)
+    bool spouse = IsSpouse(npc)
+    bool engaged = IsFiance(npc)
+    if(spouse || engaged)
+        if(spouse)
+            ;re-evaluate spouses bonuses on each spouse removed
+            TTM_ServiceBuff.CalculatePermanentMultipliers()
+            TTM_ServiceBuff.CalculateFollowerMultipliers()
+        endif
 
-    ;re-evaluate spouses bonuses on each spouse removed
-    TTM_ServiceBuff.CalculatePermanentMultipliers()
-    TTM_ServiceBuff.CalculateFollowerMultipliers()
-
-    if(isPlayerKiller)
-        TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
+        if(isPlayerKiller)
+            TTM_JData.SetPlayerKiller(isPlayerKiller)
+            TTM_ServiceNpcs.SetKilledByPlayer(npc)
+            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
+        endif
     endif
+
+    AddDeceased(npc)
+    ; re-check marriage related quests and stop if any were ongoing for killed npc
+    TTM_ServiceMarriageQuest.ResetMarriageQuests(npc)
+
 EndFunction
 
-
+; Manage TTM utility factions related to marriage status
 Function ManageFactions(Actor npc, string status) global
     TTM_Debug.trace("ManageFactions:npc:"+npc+":"+status)
-    SetTrackedNpcStatus(npc, status)
+    TTM_Utils.SetRelationshipStatus(npc, status)
     if(status == "candidate")
         npc.AddToFaction(TTM_JData.GetMarriagePotentialFaction())
     elseif(status == "engaged")
@@ -152,28 +159,6 @@ Function ManageFactions(Actor npc, string status) global
         npc.RemoveFromFaction(TTM_JData.GetMarriedFaction())
         npc.RemoveFromFaction(TTM_JData.GetPlayerFaction())
         npc.RemoveFromFaction(TTM_JData.GetPlayerBedOwnershipFaction())
-    endif
-EndFunction
-
-; Works only on unique NPCs
-; Make spouse essential - to not accidentally kill them
-Function ProtectSpouse(Actor npc, bool protect = true) global
-    ActorBase npcAB = npc.GetActorBase()
-    if(!npcAB.IsUnique())
-        return
-    endif
-
-    if(protect)
-        if(!npcAB.IsEssential())
-            npcAB.SetEssential()
-        endif
-    else
-        string originalProtectionStatus = GetTrackedNpcOriginalProtectionStatus(npc)
-        if(originalProtectionStatus == "essential")
-            npcAB.SetEssential()
-        elseif(originalProtectionStatus == "protected")
-            npcAB.SetProtected()
-        endif
     endif
 EndFunction
 
@@ -292,37 +277,21 @@ int Function CountTrackedNpcs() global
     return JFormMap_count(GetTrackedNpcs())
 EndFunction
 
+Actor Function NextTrackedNpcs(Actor prev = none) global
+    return JFormMap_nextKey(GetTrackedNpcs(), prev) as Actor
+EndFunction
+
 int Function CreateNewTrackedNpc(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
     int jNpc = JMap_object()
     TTM_debug.trace("CreateNewTrackedNpc:"+npc+":"+jNpc)
-    ActorBase npcAB = npc.GetActorBase()
-    string gender = "female"
-    if(npcAB.GetSex() == 0)
-        gender = "male"
-    endif
     TTM_ServiceSpouseTypes.DetermineSpouseType(npc)
     npc.AddToFaction(TTM_JData.GetTrackedNpcFaction())
 
     JMap_setStr(jNpc, "name", TTM_Utils.GetActorName(npc))
-    JMap_setStr(jNpc, "socialClass", TTM_Utils.GetSpouseSocialClass(npc))
-    JMap_setStr(jNpc, "skillType", TTM_Utils.GetSpouseSkillType(npc))
-    JMap_setStr(jNpc, "race", npc.GetActorBase().GetRace().GetName())
-    JMap_setStr(jNpc, "gender", gender)
-    JMap_setStr(jNpc, "status", "candidate")
     JMap_setFlt(jNpc, "lastTimeSharedIncome", -1)
     JMap_setObj(jNpc, "existingRelationships", JArray_object())
 
-    string protectionStatus = ""
-
-    if(npcAB.IsEssential())
-        protectionStatus = "essential"
-    elseif(npcAB.IsProtected())
-        protectionStatus = "protected"
-    endif
-
-    TTM_Debug.trace("CreateNewTrackedNpc:AddToNPCS")
-    JMap_setStr(jNpc, "originalProtection", protectionStatus)
 
     TTM_ServiceLoversLedger.UpdateNpcCurrentRelationships(jNpc, npc)
 
@@ -372,14 +341,6 @@ ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
     endif
 EndFunction
 
-Function SetTrackedNpcStatus(Actor npc, string status) global
-    TTM_Debug.trace("SetTrackedNpcStatus:"+status)
-    int jNpc = GetTrackedNpc(npc)
-    if(jNpc != 0)
-        JMap_setStr(jNpc, "status", status)
-        TTM_Utils.SetRelationshipStatus(npc, status)
-    endif
-EndFunction
 
 Function SetTrackedNpcHome(Actor npc, Location home) global
     JMap_setForm(GetTrackedNpc(npc), "home", home)
@@ -389,12 +350,19 @@ Location Function GetTrackedNpcHome(Actor npc) global
     return JMap_getForm(GetTrackedNpc(npc), "home") as Location
 EndFunction
 
-int Function GetTrackedNpcCells(Actor npc) global
-    return TTM_JUtils._GetOrCreateJArray(GetTrackedNpc(npc), "ownedCells")
+Function SetTrackedNpcMcmTypeChanged(Actor npc) global
+    int jNpc = GetTrackedNpc(npc)
+    if(jNpc != 0)
+        JMap_setInt(jNpc, "mcmTypeChanged", 1)
+    endif
 EndFunction
 
-string Function GetTrackedNpcOriginalProtectionStatus(Actor npc) global
-    return JMap_getStr(GetTrackedNpc(npc), "originalProtection")
+bool Function GetTrackedNpcMcmTypeChanged(Actor npc) global
+    return JMap_getInt(GetTrackedNpc(npc), "mcmTypeChanged") == 1
+EndFunction
+
+int Function GetTrackedNpcCells(Actor npc) global
+    return TTM_JUtils._GetOrCreateJArray(GetTrackedNpc(npc), "ownedCells")
 EndFunction
 
 Function AddTrackedNpcCell(Actor npc, Cell currentCell) global
@@ -408,7 +376,6 @@ EndFunction
 bool Function TrackedNpcHasCell(Actor npc, Cell currentCell) global
     return JArray_findForm(GetTrackedNpcCells(npc), currentCell) != -1
 EndFunction
-
 
 int Function GetTrackedNpcObjects(Actor npc) global
     return TTM_JUtils._GetOrCreateJArray(GetTrackedNpc(npc), "ownedObjects")
@@ -444,6 +411,14 @@ EndFunction
 
 float Function GetBrokeupTime(Actor npc) global
     return JMap_getFlt(GetTrackedNpc(npc), "brokeupTime")
+EndFunction
+
+Function SetKilledByPlayer(Actor npc) global
+    JMap_setInt(GetTrackedNpc(npc), "killedByPlayer", 1)
+EndFunction
+
+bool Function GetKilledByPlayer(Actor npc) global
+    return JMap_getInt(GetTrackedNpc(npc), "killedByPlayer") == 1
 EndFunction
 
 ;/ ==============================
@@ -528,9 +503,12 @@ bool Function IsInBucket(Actor npc, string status) global
     return JArray_findForm(GetBucket(status), npc) != -1
 EndFunction
 
-; Refactored AddCandidate
 Function AddCandidate(Actor candidate) global
     AddNpcToBucketAndSetStatus("candidate", candidate)
+EndFunction
+
+Function IsCandidate(Actor candidate) global
+    IsInBucket(candidate, "candidate")
 EndFunction
 
 ;/ ==============================

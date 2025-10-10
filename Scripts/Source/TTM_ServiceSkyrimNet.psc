@@ -31,8 +31,6 @@ Function Maintenance() global
     endif
     RegisterActions()
     RegisterDecorators()
-    int j = JValue_retain(JMap_object())
-    JMap_setInt(j, "prop", 1)
 EndFunction
 
 Function RegisterActions() global
@@ -77,7 +75,7 @@ Bool Function BreakupEngagementIsElgigible(Actor akActor, string contextJson, st
 EndFunction
 
 Function BreakupEngagementAction(Actor akActor, string contextJson, string paramsJson) global
-    ; todo
+    TTM_Utils.SendRelationshipChangeEvent(akActor, "jilted")
 EndFunction
 
 Bool Function RegisterDivorseAction() global
@@ -92,7 +90,7 @@ Bool Function DivorseIsElgigible(Actor akActor, string contextJson, string param
 EndFunction
 
 Function DivorseAction(Actor akActor, string contextJson, string paramsJson) global
-    ; todo
+    TTM_Utils.SendRelationshipChangeEvent(akActor, "divorced")
 EndFunction
 
 Function RegisterDecorators() global

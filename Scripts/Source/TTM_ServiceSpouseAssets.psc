@@ -81,7 +81,7 @@ Function CheckCell(Actor spouse = none) global
     TTM_debug.trace("CheckCell")
     Actor player = TTM_JData.GetPlayer()
     Cell currentCell = player.GetParentCell()
-    
+
     if(!currentCell.IsInterior())
         TTM_debug.trace("CheckCell:NotInterior")
         return
@@ -111,7 +111,7 @@ Function CheckCell(Actor spouse = none) global
 
     ; already written to JContainers storage
     if(HasCellSpouse(currentCell, spouse))
-        TTM_debug.trace("CheckCell:ThisCellIsInStorage")
+        TTM_debug.trace("CheckCell:AlreadyInStorage")
         currentCell.SetPublic()
         return
     endif
@@ -179,7 +179,7 @@ Function StopShareHomeWithPlayer(Actor spouse) global
         if(keyCount > 0)
             player.RemoveItem(doorKey, keyCount)
         endif
-        
+
         i += 1
     endwhile
 
@@ -211,7 +211,7 @@ Function ShareObjectWithPlayer(Actor spouse, ObjectReference obj) global
     ActorBase actorOwner
     Faction playerFaction = TTM_JData.GetPlayerFaction()
     actorOwner = obj.GetActorOwner()
-    
+
     if(!actorOwner)
         return
     endif
@@ -229,7 +229,7 @@ EndFunction
 /;
 Function RestoreObjectOwnership(ObjectReference obj) global
     ActorBase actorOwnership = GetOriginalOwnerObject(obj) as ActorBase
-    
+
     if(actorOwnership)
         obj.SetFactionOwner(none)
         obj.SetActorOwner(actorOwnership)
@@ -243,11 +243,11 @@ EndFunction
 /;
 Location Function GetSpouseOriginalHome(Actor spouse) global
     Location loc = spouse.GetEditorLocation()
-    
+
     if(loc.HasKeyword(TTM_JData.GetLocTypeDwellingKeyword()) || loc.HasKeyword(TTM_JData.GetLocTypeHouseKeyword()))
         return loc
     endif
-    
+
     return none
 EndFunction
 
@@ -272,7 +272,7 @@ EndFunction
 /;
 int Function GetLocation(Location loc) global
     int jLoc = JFormMap_getObj(GetLocations(), loc)
-    
+
     if(jLoc == 0)
         jLoc = JMap_object()
         JMap_setStr(jLoc, "name", loc.GetName())
@@ -422,7 +422,7 @@ Function AddOwnersObject(Cell currentCell, ObjectReference obj) global
     ActorBase actorOwner = obj.GetActorOwner()
 
     TTM_Debug.trace("AddOwnersObject:"+actorOwner)
-    
+
     if(actorOwner)
         int jActorObjects = GetActorObjects(currentCell, actorOwner)
         JArray_addForm(jActorObjects, obj)

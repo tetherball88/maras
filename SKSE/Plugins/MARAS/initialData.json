@@ -54,7 +54,8 @@
     "gameKeywords": {
         "locTypeDwelling": "__formData|Skyrim.esm|0x130dc",
         "locTypeHouse": "__formData|Skyrim.esm|0x1cb85",
-        "marasHomeSandbox": "__formData|TT_MARAS.esp|0x6b"
+        "marasHomeSandbox": "__formData|TT_MARAS.esp|0x6b",
+        "clothingRich": "__formData|Skyrim.esm|0xa865d"
     },
     "gamePackages": {
         "marasHomeSandbox": "__formData|TT_MARAS.esp|0x6a"

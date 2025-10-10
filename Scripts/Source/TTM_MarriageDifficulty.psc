@@ -8,22 +8,6 @@ bool Function CheckQuestStage(int questId, int stage) global
     return false
 EndFunction
 
-float Function GetMax(float value1, float value2) global
-    if(value1 > value2)
-        return value1
-    endif
-
-    return value2
-EndFunction
-
-float Function GetMin(float value1, float value2) global
-    if(value1 < value2)
-        return value1
-    endif
-
-    return value2
-EndFunction
-
 int Function GetThaneHolds() global
     int totalHolds = 0
 
@@ -121,9 +105,9 @@ float Function calcGuildAlignmentMod(Actor npc) global
             cand = -2
         endif
         if cand > 0
-            bestPos = GetMax(bestPos, cand)
+            bestPos = TTM_Utils.GetMax(bestPos, cand)
         elseif cand < 0
-            bestNeg = GetMin(bestNeg, cand)
+            bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(companionsFCTN)
             sameGuild = -4
@@ -150,9 +134,9 @@ float Function calcGuildAlignmentMod(Actor npc) global
             cand = 3
         endif
         if cand > 0
-            bestPos = GetMax(bestPos, cand)
+            bestPos = TTM_Utils.GetMax(bestPos, cand)
         elseif cand < 0
-            bestNeg = GetMin(bestNeg, cand)
+            bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(thievesFCTN)
             sameGuild = -4
@@ -181,9 +165,9 @@ float Function calcGuildAlignmentMod(Actor npc) global
             cand = 4
         endif
         if cand > 0
-            bestPos = GetMax(bestPos, cand)
+            bestPos = TTM_Utils.GetMax(bestPos, cand)
         elseif cand < 0
-            bestNeg = GetMin(bestNeg, cand)
+            bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(brotherhoodFCTN)
             sameGuild = -4
@@ -206,9 +190,9 @@ float Function calcGuildAlignmentMod(Actor npc) global
             cand = -3
         endif
         if cand > 0
-            bestPos = GetMax(bestPos, cand)
+            bestPos = TTM_Utils.GetMax(bestPos, cand)
         elseif cand < 0
-            bestNeg = GetMin(bestNeg, cand)
+            bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(collegeFCTN)
             sameGuild = -4
@@ -231,9 +215,9 @@ float Function calcGuildAlignmentMod(Actor npc) global
             cand = -1
         endif
         if cand > 0
-            bestPos = GetMax(bestPos, cand)
+            bestPos = TTM_Utils.GetMax(bestPos, cand)
         elseif cand < 0
-            bestNeg = GetMin(bestNeg, cand)
+            bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(bardsFCTN)
             sameGuild = -4
@@ -315,13 +299,18 @@ float Function calcMarriageSuccessChance(Actor npc) global
     ; player were engaged but it was jilted, it's harder to get another try */
     if (TTM_ServiceNpcs.IsJilted(npc))
         TTM_Debug.trace("calcMarriageSuccessChance:jilted")
-        complexity += 10;
+        complexity += 10
     endif
 
     ; player were married to npc at some point but divorced, so it's harder to re-marry
     if (TTM_ServiceNpcs.IsDivorced(npc))
         TTM_Debug.trace("calcMarriageSuccessChance:divorced")
-        complexity += 20;
+        complexity += 20
+    endif
+
+    ; player killed spouse or fiance without reason - red flag for future potential candidates
+    if(TTM_JData.GetPlayerKiller())
+        complexity += 50
     endif
 
     ; spouse count
@@ -355,6 +344,6 @@ float Function calcMarriageSuccessChance(Actor npc) global
 
     TTM_Debug.trace("calcMarriageSuccessChance:finalChance:"+ chance)
 
-    ; return chance
-    return 1
+    return chance
+    ; return 1
 EndFunction

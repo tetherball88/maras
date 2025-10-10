@@ -252,20 +252,6 @@ bool Function GetPlayerHadWedding() global
     return _GetBool("playerHadWedding")
 EndFunction
 
-;/
-  Set if player killed spouse or fiance
-/;
-Function SetPlayerAnsweredSkipWedding(bool yes = true) global
-    _SetBool("playerAnsweredSkipWedding", yes)
-EndFunction
-
-;/
-  Get if player killed spouse or fiance
-/;
-bool Function GetPlayerAnsweredSkipWedding() global
-    return _GetBool("playerAnsweredSkipWedding")
-EndFunction
-
 ;/ ==============================
    SECTION: GLOBALS
 ============================== /;

@@ -46,6 +46,7 @@ Function Maintenance()
     if(Game.GetModByName("SkyrimNet.esp") != 255)
         TTM_JData.SetHasSkyrimNet()
         TTM_JData.GetSetHasSkyrimNetGlobal(1)
+        RegisterForModEvent("SkyrimNet_OnPackageRemoved", "OnPackageRemoved")
     endif
 
     if(Game.GetModByName("TT_LoversLedger.esp") != 255)
@@ -69,10 +70,14 @@ Function Maintenance()
     endif
 
     TTM_ServiceMarriageQuest.CheckOngoingMarriage()
+    TTM_ServiceSpouseTypes.Maintenance()
     TTM_ServiceBuff.Maintenance()
     questTracker.Maintenance()
     conditions.Maintenance()
     TTM_ServiceSkyrimNet.Maintenance()
+
+    ; patch for ostim removing PapyrusUtils override packages
+    RegisterForModEvent("ostim_thread_end", "OStimEnd")
 EndFunction
 
 ;/
@@ -99,4 +104,23 @@ Event OnRelationshipChanged(Form npc, string status)
     endif
 
     TTM_ServiceNpcs.ManageFactions(npcA, status)
+EndEvent
+
+Event OStimEnd(string eventName, string json, float numArg, Form sender)
+    Actor[] Actors = OJSON.GetActors(Json)
+    Faction housedFaction = TTM_JData.GetSpouseHousedFaction()
+    Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
+
+    int i = 0
+    while(i < actors.Length)
+        Actor akActor = actors[i]
+
+        if(akActor.IsInFaction(housedFaction) && akActor.GetCurrentPackage() != spousePlayerHomeSandbox)
+            ActorUtil.RemovePackageOverride(akActor, spousePlayerHomeSandbox)
+            ActorUtil.AddPackageOverride(akActor, spousePlayerHomeSandbox, 5)
+            akActor.EvaluatePackage()
+        endif
+
+        i += 1
+    endwhile
 EndEvent

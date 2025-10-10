@@ -35,6 +35,7 @@ Function Fragment_0()
         SetObjectiveDisplayed(0)
     else
         TTM_Debug.trace("TTM_QuestCheckSpouseHome:Spouse:"+spouseName+";NO HomeCenter")
+        Debug.Notification(TTM_Utils.GetActorName(spouse) + " doesn't have their own private home.")
         self.Reset()
         self.Stop()
         spouse.AddToFaction(TTM_JData.GetSpouseNoInitialHouseFaction())

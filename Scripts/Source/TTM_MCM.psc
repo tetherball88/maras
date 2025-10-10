@@ -4,8 +4,7 @@ GlobalVariable Property MCM_StartDialGender auto
 GlobalVariable Property TTM_MCM_UseAIMiscDial  Auto
 GlobalVariable Property TTM_MCM_UseAIQuestDial  Auto
 
-int property oid_SearchSpouse auto
-int property oid_ReturnToExplore auto
+
 int property oid_SettingsClearData auto
 int property oid_SettingsExportData auto
 int property oid_SettingsImportData auto
@@ -16,9 +15,22 @@ int property oid_SettingsLogLevel auto
 int property oid_SettingsLogDestination auto
 int property oid_SkipNextWeddings auto
 
+int property oid_SearchSpouse auto
+int property oid_SearchFilterAll auto
+int property oid_SearchFilterCandidate auto
+int property oid_SearchFilterFiance auto
+int property oid_SearchFilterSpouse auto
+int property oid_SearchFilterJilted auto
+int property oid_SearchFilterDivorced auto
+int property oid_SearchFilterDeceased auto
+
+int property oid_ReturnToExplore auto
 int property oid_SpousePageSkillType auto
 int property oid_SpousePageSocialClass auto
 int property oid_SpousePageRank auto
+int property oid_CandidateChance auto
+int property oid_SpousePagePlayerHome auto
+int property oid_SpouseShareTheirHome auto
 
 string property SearchValueSpouse auto
 string property SearchValueLover auto
@@ -131,13 +143,25 @@ event OnOptionInputAccept(int option, string value)
 endEvent
 
 event OnOptionMenuOpen(int a_option)
-    if(currentPage == "Settings")
+    if(currentPage == "Explore")
+        TTM_MCM_ExplorePage.OnOptionMenuOpen(self, a_option)
+        string subPage = TTM_MCM_State.GetCurrentPage()
+        if(subPage == "Spouse")
+            TTM_MCM_SpousePage.OnOptionMenuOpen(self, a_option)
+        endif
+    elseif(currentPage == "Settings")
         TTM_MCM_SettingsPage.OnOptionMenuOpen(self, a_option)
     endif
 endEvent
 
 event OnOptionMenuAccept(int a_option, int a_index)
-	if(currentPage == "Settings")
+    if(currentPage == "Explore")
+        TTM_MCM_ExplorePage.OnOptionMenuAccept(self, a_option, a_index)
+        string subPage = TTM_MCM_State.GetCurrentPage()
+        if(subPage == "Spouse")
+            TTM_MCM_SpousePage.OnOptionMenuAccept(self, a_option, a_index)
+        endif
+	elseif(currentPage == "Settings")
         TTM_MCM_SettingsPage.OnOptionMenuAccept(self, a_option, a_index)
     endif
 endEvent

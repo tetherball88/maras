@@ -151,9 +151,15 @@ Actor Function GetActorAlias(Quest qst, string name) global
     return al.GetActorRef()
 EndFunction
 
-string Function GetSpouseSocialClass(Actor spouse) global
+int Function GetSpouseSocialClassIndex(Actor spouse) global
     Faction socialClassFaction = TTM_JData.GetSpouseSocialClassFaction()
     int index = spouse.GetFactionRank(socialClassFaction)
+
+    return index
+EndFunction
+
+string Function GetSpouseSocialClass(Actor spouse) global
+    int index = GetSpouseSocialClassIndex(spouse)
 
     return GetSpouseSocialTypeByIndexes()[index]
 EndFunction
@@ -248,4 +254,32 @@ bool Function ShowMessageMessage(string msg) global
     endif
 
     return result == "Yes"
+EndFunction
+
+Function FadeToBlack() global
+    ImageSpaceModifier fadeToBlack = Game.GetFormFromFile(0xf756d, "Skyrim.esm") as ImageSpaceModifier
+    ImageSpaceModifier fadeToBlackHold = Game.GetFormFromFile(0xf756e, "Skyrim.esm") as ImageSpaceModifier
+    ImageSpaceModifier fadeToBlackBack = Game.GetFormFromFile(0xf756f, "Skyrim.esm") as ImageSpaceModifier
+
+    fadeToBlack.Apply()
+    Utility.Wait(2.0)
+    fadeToBlack.PopTo(fadeToBlackHold)
+    Utility.Wait(2.0)
+    fadeToBlackHold.PopTo(fadeToBlackBack)
+EndFunction
+
+float Function GetMax(float value1, float value2) global
+    if(value1 > value2)
+        return value1
+    endif
+
+    return value2
+EndFunction
+
+float Function GetMin(float value1, float value2) global
+    if(value1 < value2)
+        return value1
+    endif
+
+    return value2
 EndFunction

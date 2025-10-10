@@ -1,11 +1,5 @@
 scriptname TTM_MCM_CurrentBuff
 
-; 0 - warrior, 1 - mage, 2 - rogue, 3 - craftsman, 4 - ranger, 5 - orator
-
-float[] permanentSkillMultipliers
-; 0 - rulers, 1 - nobles, 2 - religious, 3 - wealthy, 4 - middle, 5 - poverty, 6 - outcast, 7 - working
-float[] permanentSocialMultipliers
-
 Function RenderPage(TTM_MCM mcm) global
     mcm.SetCursorFillMode(mcm.TOP_TO_BOTTOM)
     RenderLeftColumn(mcm)

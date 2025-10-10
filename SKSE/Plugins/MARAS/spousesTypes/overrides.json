@@ -1,0 +1,17 @@
+{
+    "__metaInfo": {
+        "typeName": "JFormMap"
+    },
+    "__formData|Dawnguard.esm|0x2b74": {
+        "comment": "Serana",
+        "social": "rulers"
+    },
+    "__formData|Dawnguard.esm|0x3B8E": {
+        "comment": "Valerica",
+        "social": "rulers"
+    },
+    "__formData|Dawnguard.esm|0x3BA8": {
+        "comment": "Harkon",
+        "social": "rulers"
+    }
+}
