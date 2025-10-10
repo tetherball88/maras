@@ -62,7 +62,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
         mcm.oid_SpousePageRank = mcm.AddTextOption("Rank: ", rankText)
     endif
 
-    if(isCandidate)
+    if(!isFiance && !isSpouse)
         float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(spouse)
         mcm.oid_CandidateChance = mcm.AddTextOption("Your chances to get engaged: ", 100 * chance)
     endif

@@ -2,6 +2,12 @@
 
 > ⚠️ **Note**: While this mod mentions OStim integration, it contains no NSFW content.
 
+## 📚 Documentation
+- [User Guide](docs/USER-GUIDE.md) - Complete guide on how to use the mod
+- [MCM Configuration](docs/MCM.md) - Detailed MCM menu options
+- [JSON Configuration](docs/JSON-CONFIG.md) - Advanced configuration for mod authors
+- [SkyrimNet Integration](docs/SKYRIMNET.md) - Features and AI/chat-driven behaviors when using SkyrimNet
+
 Ever wanted to marry *literally anyone* in Skyrim? The Jarl? The blacksmith? That one suspicious guy in the woods?
 With **M.A.R.A.S**, you can — and that's just the start! 🎉
 
@@ -102,3 +108,13 @@ This combination turns M.A.R.A.S + SkyrimNet into a dynamic relationship system 
 ---
 
 *M.A.R.A.S - Making Skyrim's relationships as dynamic as its dragons!* 🐉💕
+
+*M.A.R.A.S - Making Skyrim's relationships as dynamic as its dragons!* 🐉💕
+
+## What's next
+
+- Create an affection system for spouses: you'll need to visit them, talk to them, bring gifts, and do small errands. If you keep up with these interactions, affection remains high. If you neglect them, affection will diminish which will reduce your buff strength and, at very low levels, the NPC can divorce you.
+
+- Verify and improve vanilla adoption compatibility: make sure the vanilla adoption system isn't broken and consider making it work the same way as vanilla marriage so adoptions behave consistently with existing marriage mechanics.
+
+```
