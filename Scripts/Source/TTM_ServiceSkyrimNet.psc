@@ -47,11 +47,17 @@ Function RegisterAcceptProposalAction() global
 EndFunction
 
 Bool Function AcceptProposalIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    TTM_Debug.trace("AcceptProposalIsElgigible:"+TTM_ServiceNpcs.IsTrackingNpc(akActor))
-    return TTM_ServiceNpcs.IsTrackingNpc(akActor) && !TTM_ServiceNpcs.IsSpouse(akActor) && !TTM_ServiceNpcs.IsFiance(akActor)
+    if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+        TTM_Debug.trace("AcceptProposalIsElgigible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        return false
+    endif
+    bool isEligible = TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor)
+    TTM_Debug.trace("AcceptProposalIsElgigible:"+isEligible)
+    return isEligible
 EndFunction
 
 Function AcceptProposalAction(Actor akActor, string contextJson, string paramsJson) global
+    TTM_Debug.trace("AcceptProposalAction:"+akActor)
     TTM_Utils.SendRelationshipChangeEvent(akActor, "engaged")
 EndFunction
 
@@ -71,7 +77,7 @@ Bool Function RegisterBreakupEngagementAction() global
 EndFunction
 
 Bool Function BreakupEngagementIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    return TTM_ServiceNpcs.IsFiance(akActor)
+    return TTM_Utils.IsFiance(akActor)
 EndFunction
 
 Function BreakupEngagementAction(Actor akActor, string contextJson, string paramsJson) global
@@ -86,7 +92,7 @@ Bool Function RegisterDivorseAction() global
 EndFunction
 
 Bool Function DivorseIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    return TTM_ServiceNpcs.IsSpouse(akActor)
+    return TTM_Utils.IsSpouse(akActor)
 EndFunction
 
 Function DivorseAction(Actor akActor, string contextJson, string paramsJson) global
@@ -94,11 +100,25 @@ Function DivorseAction(Actor akActor, string contextJson, string paramsJson) glo
 EndFunction
 
 Function RegisterDecorators() global
-    SkyrimNetApi.RegisterDecorator("get_marriage_chance", "TTM_ServiceSkyrimNet", "GetMarriageChance")
-    SkyrimNetApi.RegisterDecorator("get_co_spouses", "TTM_ServiceSkyrimNet", "GetCoSpouses")
+    SkyrimNetApi.RegisterDecorator("proposal_chance", "TTM_ServiceSkyrimNet", "GetMarriageChance")
+    SkyrimNetApi.RegisterDecorator("marrital_life", "TTM_ServiceSkyrimNet", "GetCoSpouses")
 EndFunction
 
 string Function GetMarriageChance(Actor akActor) global
+    string notReady = "{\"chance\": -1}"
+    if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+        TTM_Debug.trace("GetMarriageChance:Doesn'tHaveTrackingFaction:SKIP"+akActor)
+        return notReady
+    endif
+    if(akActor == TTM_JData.GetPlayer())
+        TTM_Debug.trace("GetMarriageChance:IsPlayer:SKIP:"+akActor)
+        return notReady
+    endif
+    if(!TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor))
+        TTM_Debug.trace("GetMarriageChance:IsntReady:SKIP"+akActor)
+        return notReady
+    endif
+
     string json = "{"
 
     json += "\"chance\": " + TTM_MarriageDifficulty.calcMarriageSuccessChance(akActor)
@@ -107,7 +127,117 @@ string Function GetMarriageChance(Actor akActor) global
 EndFunction
 
 string Function GetCoSpouses(Actor akActor) global
-    Form[] coSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("married")
-    Form[] futureCoSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("engaged")
-    return "{\"current\": \"" + TTM_Utils.GetActorsNamesJson(coSpouses, akActor) + "\", \"future\": \""+TTM_Utils.GetActorsNamesJson(futureCoSpouses, akActor)+"\"}"
+    Actor player = TTM_JData.GetPlayer()
+    if(akActor == player)
+        return "{\"current\": \"\",\"future\": \"\", \"exPartner\": \"\"}"
+    endif
+    string exPartner = GenerateExPartnerLine(akActor)
+
+    string current = "\"current\":"
+    string future = "\"future\":"
+
+    if(TTM_Utils.IsTracking(akActor))
+        Form[] coSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("married")
+        Form[] futureCoSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("engaged")
+        current += "\"" + TTM_Utils.GetActorsNamesJson(coSpouses, akActor) + "\""
+        future += "\""+TTM_Utils.GetActorsNamesJson(futureCoSpouses, akActor)+"\""
+    else
+        current += "\"\""
+        future += "\"\""
+    endif
+
+
+    return "{"+current+", "+future+", "+exPartner+"}"
+EndFunction
+
+
+string Function GenerateExPartnerLine(Actor akActor) global
+    Actor player = TTM_JData.GetPlayer()
+    Actor existingSpouse = TTRF_Store.GetSpouse(akActor)
+    Actor existingCourting = TTRF_Store.GetCourting(akActor)
+    Form[] existingLovers = TTRF_Store.GetLovers(akActor)
+    bool isTracking = TTM_Utils.IsTracking(akActor)
+    string finalLine = ""
+
+    if(isTracking) ; NPC's perspective (involved with player)
+        if(existingSpouse)
+            finalLine = BuildLine(akActor, akActor, "married", existingSpouse)
+        elseif(existingCourting)
+            finalLine = BuildLine(akActor, akActor, "courting", existingCourting)
+        elseif(existingLovers.Length > 0)
+            finalLine = BuildLine(akActor, akActor, "lover", none, existingLovers)
+        endif
+    else ; Ex-partner's perspective (their partner got involved with player)
+        if(existingSpouse)
+            finalLine = BuildLine(akActor, existingSpouse, "married", akActor)
+        elseif(existingCourting)
+            finalLine = BuildLine(akActor, existingCourting, "courting", akActor)
+        elseif(existingLovers.Length > 0)
+            ; Handle just one example lover for simplicity
+            finalLine = BuildLine(akActor, existingLovers[0] as Actor, "lover", akActor)
+        endif
+    endif
+
+    if(finalLine == "")
+        return "\"exPartner\": \"\""
+    endif
+
+    return "\"exPartner\": \"" + finalLine + "\""
+EndFunction
+
+string Function BuildLine(Actor akActor, Actor playerPartner, string originalRelationType, Actor originalPartner = none, Form[] originalPartners = none) global
+    Actor player = TTM_JData.GetPlayer()
+    string playerName = TTM_Utils.GetActorName(player)
+    string playerPartnerName = TTM_Utils.GetActorName(playerPartner)
+    string actorName = TTM_Utils.GetActorName(akActor)
+
+    ; Get relationship status with player
+    bool isSpouse = TTM_Utils.IsSpouse(playerPartner)
+    bool isFiance = TTM_Utils.IsFiance(playerPartner)
+    bool isJilted = TTM_Utils.IsJilted(playerPartner)
+    bool isDivorced = TTM_Utils.IsDivorced(playerPartner)
+
+    ; Define player relationship status description
+    string playerRelationship = ""
+    if(isFiance)
+        playerRelationship = "became engaged to"
+    elseif(isSpouse)
+        playerRelationship = "married"
+    elseif(isJilted)
+        playerRelationship = "had a brief engagement with"
+    elseif(isDivorced)
+        playerRelationship = "married and later divorced"
+    endif
+
+    string finalLine = ""
+
+    if(akActor == playerPartner) ; NPC's perspective (involved with player)
+        if(originalRelationType == "married" && originalPartner)
+            string exName = TTM_Utils.GetActorName(originalPartner)
+            finalLine = actorName + " divorced " + exName + " when they " + playerRelationship + " " + playerName + "."
+        elseif(originalRelationType == "courting" && originalPartner)
+            string exName = TTM_Utils.GetActorName(originalPartner)
+            finalLine = actorName + " ended their courtship with " + exName + " when they " + playerRelationship + " " + playerName + "."
+        elseif(originalRelationType == "lover")
+            string loversNames = ""
+            if(originalPartners && originalPartners.Length > 0)
+                loversNames = TTM_Utils.GetActorsNamesJson(originalPartners)
+                if(originalPartners.Length == 1)
+                    finalLine = actorName + " ended romantic relationship with " + loversNames + " when " + playerRelationship + " " + playerName + "."
+                else
+                    finalLine = actorName + " ended romantic relationships with " + loversNames + " when " + playerRelationship + " " + playerName + "."
+                endif
+            endif
+        endif
+    else ; Ex-partner's perspective (their partner became involved with player)
+        if(originalRelationType == "married" && originalPartner)
+            finalLine = playerPartnerName + " divorced " + actorName + " when " + playerPartnerName + " " + playerRelationship + " " + playerName + "."
+        elseif(originalRelationType == "courting" && originalPartner)
+            finalLine = actorName + " and " + playerPartnerName + " were courting until " + playerPartnerName + " " + playerRelationship + " " + playerName + "."
+        elseif(originalRelationType == "lover" && originalPartner)
+            finalLine = playerPartnerName + " ended romantic relationship with " + actorName + " when " + playerPartnerName + " " + playerRelationship + " " + playerName + "."
+        endif
+    endif
+
+    return finalLine
 EndFunction

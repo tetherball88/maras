@@ -112,8 +112,8 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
-    bool spouse = IsSpouse(npc)
-    bool engaged = IsFiance(npc)
+    bool spouse = TTM_Utils.IsSpouse(npc)
+    bool engaged = TTM_Utils.IsFiance(npc)
     if(spouse || engaged)
         if(spouse)
             ;re-evaluate spouses bonuses on each spouse removed
@@ -147,7 +147,7 @@ Function ManageFactions(Actor npc, string status) global
         npc.RemoveFromFaction(TTM_JData.GetMarriageAskedFaction())
         npc.RemoveFromFaction(TTM_JData.GetCourtingFaction())
         ; double check if hirelings are still can be followers after marriage
-        ; loveInterest.RemoveFromFaction(TTM_JData.GetPotentialHirelingFaction())
+        npc.RemoveFromFaction(TTM_JData.GetPotentialHirelingFaction())
 
         npc.AddToFaction(TTM_JData.GetMarriedFaction())
         npc.AddToFaction(TTM_JData.GetPlayerFaction())
@@ -286,12 +286,14 @@ int Function CreateNewTrackedNpc(Actor npc) global
     int jNpc = JMap_object()
     TTM_debug.trace("CreateNewTrackedNpc:"+npc+":"+jNpc)
     TTM_ServiceSpouseTypes.DetermineSpouseType(npc)
-    npc.AddToFaction(TTM_JData.GetTrackedNpcFaction())
+    if(!npc.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+        npc.AddToFaction(TTM_JData.GetTrackedNpcFaction())
+    endif
+
 
     JMap_setStr(jNpc, "name", TTM_Utils.GetActorName(npc))
     JMap_setFlt(jNpc, "lastTimeSharedIncome", -1)
     JMap_setObj(jNpc, "existingRelationships", JArray_object())
-
 
     TTM_ServiceLoversLedger.UpdateNpcCurrentRelationships(jNpc, npc)
 
@@ -321,10 +323,6 @@ int Function GetTrackedNpc(Actor npc) global
     endif
 
     return jNpc
-EndFunction
-
-bool Function IsTrackingNpc(Actor npc) global
-    return JFormMap_hasKey(GetTrackedNpcs(), npc)
 EndFunction
 
 ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
@@ -527,11 +525,6 @@ Actor Function GetNextFiance() global
     return JArray_getForm(GetFiances(), 0) as Actor
 EndFunction
 
-bool Function IsFiance(Actor npc) global
-    return IsInBucket(npc, "engaged")
-EndFunction
-
-
 ;/ ==============================
    SECTION: spouses bucket map
 ============================== /;
@@ -566,10 +559,6 @@ Actor Function GetRandomSpouse() global
     return spouse
 EndFunction
 
-bool Function IsSpouse(Actor npc) global
-    return IsInBucket(npc, "married")
-EndFunction
-
 ;/ ==============================
    SECTION: divorcees bucket map
 ============================== /;
@@ -582,10 +571,6 @@ Function AddDivorcee(Actor divorcee) global
     AddNpcToBucketAndSetStatus("divorced", divorcee)
 EndFunction
 
-bool Function IsDivorced(Actor npc) global
-    return IsInBucket(npc, "divorced")
-EndFunction
-
 ;/ ==============================
    SECTION: jilted bucket map
 ============================== /;
@@ -596,10 +581,6 @@ EndFunction
 ; Refactored AddJilted
 Function AddJilted(Actor jilted) global
     AddNpcToBucketAndSetStatus("jilted", jilted)
-EndFunction
-
-bool Function IsJilted(Actor npc) global
-    return IsInBucket(npc, "jilted")
 EndFunction
 
 ;/ ==============================

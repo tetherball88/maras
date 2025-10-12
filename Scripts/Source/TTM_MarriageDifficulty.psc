@@ -8,6 +8,10 @@ bool Function CheckQuestStage(int questId, int stage) global
     return false
 EndFunction
 
+float Function GetParam(string param) global
+    return TTM_JData.GetComplexityVariable(param)
+EndFunction
+
 int Function GetThaneHolds() global
     int totalHolds = 0
 
@@ -53,27 +57,36 @@ float Function calcPlayerPrestige() global
 
     ; isDragonborn, officially dragonborn
     if(CheckQuestStage(0x2610c, 90))
-        result += 25
+        ; result += 25
+        result += GetParam("prestigeDragonbornBonus")
     endif
 
-    result += GetThaneHolds() * 4 ;  9 thanedoms  = +36
+    ; result += GetThaneHolds() * 4 ;  9 thanedoms  = +36
+    result += GetThaneHolds() * GetParam("prestigeThaneHoldValue") ;  9 thanedoms  = +36
 
     if(IsGuildLeader())
-        result += 8
+        ; result += 8
+        result += GetParam("prestigeGuildLeaderBonus")
     endif
 
     ; wealth & property
-    result += PapyrusUtil.ClampFloat(Game.QueryStat("Most Gold Carried") / 5000, 0, 15)
+    ; result += PapyrusUtil.ClampFloat(Game.QueryStat("Most Gold Carried") / 5000, 0, 15)
+    result += PapyrusUtil.ClampFloat(Game.QueryStat("Most Gold Carried") / GetParam("prestigeMostGoldDivisor"), 0, 15)
 
-    int houseCount = Game.QueryStat("Houses Owned") * 3
-    int horsesCount = Game.QueryStat("Horses Owned") * 3
+    ;int houseCount = Game.QueryStat("Houses Owned") * 3
+    ;int horsesCount = Game.QueryStat("Horses Owned") * 3
+    float houseCount = Game.QueryStat("Houses Owned") * GetParam("prestigeHouseUnitMultiplier")
+    float horsesCount = Game.QueryStat("Horses Owned") * GetParam("prestigeHorseUnitMultiplier")
     result += PapyrusUtil.ClampFloat(houseCount + horsesCount, 0, 15)
 
     ; heroic renown
 
-    float quests = Game.QueryStat("Quests Completed") * 0.2
-    float dungeons = Game.QueryStat("Dungeons Cleared") * 0.1
-    float souls = Game.QueryStat("Dragon Souls Collected") * 0.5
+    ; float quests = Game.QueryStat("Quests Completed") * 0.2
+    ; float dungeons = Game.QueryStat("Dungeons Cleared") * 0.1
+    ; float souls = Game.QueryStat("Dragon Souls Collected") * 0.5
+    float quests = Game.QueryStat("Quests Completed") * GetParam("prestigeQuestsMultiplier")
+    float dungeons = Game.QueryStat("Dungeons Cleared") * GetParam("prestigeDungeonsMultiplier")
+    float souls = Game.QueryStat("Dragon Souls Collected") * GetParam("prestigeSoulsMultiplier")
 
     result += PapyrusUtil.ClampFloat(quests + dungeons + souls, 0, 25)
 
@@ -93,16 +106,30 @@ float Function calcGuildAlignmentMod(Actor npc) global
     Faction companionsFCTN = TTM_JData.GetGameFaction("companions")
     if player.IsInFaction(companionsFCTN)
         cand = 0.0
-        if(spouseClass == "working")
-            cand = -2
+        if(spouseClass == "outcast")
+            ; cand = 0
+            cand = GetParam("guildCompanions_outcast")
+        elseif(spouseClass == "poverty")
+            ; cand = 0
+            cand = GetParam("guildCompanions_poverty")
+        elseif(spouseClass == "working")
+            ; cand = -2
+            cand = GetParam("guildCompanions_working")
         elseif(spouseClass == "middle")
-            cand = -1
+            ; cand = -1
+            cand = GetParam("guildCompanions_middle")
+        elseif(spouseClass == "wealthy")
+            ; cand = 0
+            cand = GetParam("guildCompanions_wealthy")
         elseif(spouseClass == "religious")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildCompanions_religious")
         elseif(spouseClass == "nobles")
-            cand = -1
+            ; cand = -1
+            cand = GetParam("guildCompanions_nobles")
         elseif(spouseClass == "rulers")
-            cand = -2
+            ; cand = -2
+            cand = GetParam("guildCompanions_rulers")
         endif
         if cand > 0
             bestPos = TTM_Utils.GetMax(bestPos, cand)
@@ -110,7 +137,8 @@ float Function calcGuildAlignmentMod(Actor npc) global
             bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(companionsFCTN)
-            sameGuild = -4
+            ; sameGuild = -4
+            sameGuild = GetParam("guild_sameGuildBonus")
         endif
     endif
 
@@ -119,19 +147,29 @@ float Function calcGuildAlignmentMod(Actor npc) global
     if player.IsInFaction(thievesFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
-            cand = -2
+            ; cand = -2
+            cand = GetParam("guildThieves_outcast")
         elseif(spouseClass == "poverty")
-            cand = -1
+            ; cand = -1
+            cand = GetParam("guildThieves_poverty")
+        elseif(spouseClass == "working")
+            ; cand = 0
+            cand = GetParam("guildThieves_working")
         elseif(spouseClass == "middle")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildThieves_middle")
         elseif(spouseClass == "wealthy")
-            cand = 2
+            ; cand = 2
+            cand = GetParam("guildThieves_wealthy")
         elseif(spouseClass == "religious")
-            cand = 2
+            ; cand = 2
+            cand = GetParam("guildThieves_religious")
         elseif(spouseClass == "nobles")
-            cand = 2
+            ; cand = 2
+            cand = GetParam("guildThieves_nobles")
         elseif(spouseClass == "rulers")
-            cand = 3
+            ; cand = 3
+            cand = GetParam("guildThieves_rulers")
         endif
         if cand > 0
             bestPos = TTM_Utils.GetMax(bestPos, cand)
@@ -139,7 +177,8 @@ float Function calcGuildAlignmentMod(Actor npc) global
             bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(thievesFCTN)
-            sameGuild = -4
+            ; sameGuild = -4
+            sameGuild = GetParam("guild_sameGuildBonus")
         endif
     endif
 
@@ -148,21 +187,29 @@ float Function calcGuildAlignmentMod(Actor npc) global
     if player.IsInFaction(brotherhoodFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
-            cand = -3
+            ; cand = -3
+            cand = GetParam("guildBrotherhood_outcast")
         elseif(spouseClass == "poverty")
-            cand = -2
+            ; cand = -2
+            cand = GetParam("guildBrotherhood_poverty")
         elseif(spouseClass == "working")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildBrotherhood_working")
         elseif(spouseClass == "middle")
-            cand = 2
+            ; cand = 2
+            cand = GetParam("guildBrotherhood_middle")
         elseif(spouseClass == "wealthy")
-            cand = 3
+            ; cand = 3
+            cand = GetParam("guildBrotherhood_wealthy")
         elseif(spouseClass == "religious")
-            cand = 4
+            ; cand = 4
+            cand = GetParam("guildBrotherhood_religious")
         elseif(spouseClass == "nobles")
-            cand = 3
+            ; cand = 3
+            cand = GetParam("guildBrotherhood_nobles")
         elseif(spouseClass == "rulers")
-            cand = 4
+            ; cand = 4
+            cand = GetParam("guildBrotherhood_rulers")
         endif
         if cand > 0
             bestPos = TTM_Utils.GetMax(bestPos, cand)
@@ -170,7 +217,8 @@ float Function calcGuildAlignmentMod(Actor npc) global
             bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(brotherhoodFCTN)
-            sameGuild = -4
+            ; sameGuild = -4
+            sameGuild = GetParam("guild_sameGuildBonus")
         endif
     endif
 
@@ -179,15 +227,29 @@ float Function calcGuildAlignmentMod(Actor npc) global
     if player.IsInFaction(collegeFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildCollege_outcast")
+        elseif(spouseClass == "poverty")
+            ; cand = 0
+            cand = GetParam("guildCollege_poverty")
         elseif(spouseClass == "working")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildCollege_working")
+        elseif(spouseClass == "middle")
+            ; cand = 0
+            cand = GetParam("guildCollege_middle")
         elseif(spouseClass == "wealthy")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildCollege_wealthy")
         elseif(spouseClass == "religious")
-            cand = -2
+            ; cand = -2
+            cand = GetParam("guildCollege_religious")
+        elseif(spouseClass == "nobles")
+            ; cand = 0
+            cand = GetParam("guildCollege_nobles")
         elseif(spouseClass == "rulers")
-            cand = -3
+            ; cand = -3
+            cand = GetParam("guildCollege_rulers")
         endif
         if cand > 0
             bestPos = TTM_Utils.GetMax(bestPos, cand)
@@ -195,7 +257,8 @@ float Function calcGuildAlignmentMod(Actor npc) global
             bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(collegeFCTN)
-            sameGuild = -4
+            ; sameGuild = -4
+            sameGuild = GetParam("guild_sameGuildBonus")
         endif
     endif
 
@@ -204,15 +267,29 @@ float Function calcGuildAlignmentMod(Actor npc) global
     if CheckQuestStage(0x53511, 300) ; player is Bard
         cand = 0.0
         if(spouseClass == "outcast")
-            cand = 1
+            ; cand = 1
+            cand = GetParam("guildBards_outcast")
+        elseif(spouseClass == "poverty")
+            ; cand = 0
+            cand = GetParam("guildBards_poverty")
+        elseif(spouseClass == "working")
+            ; cand = 0
+            cand = GetParam("guildBards_working")
         elseif(spouseClass == "middle")
-            cand = -1
+            ; cand = -1
+            cand = GetParam("guildBards_middle")
         elseif(spouseClass == "wealthy")
-            cand = -1
+            ; cand = -1
+            cand = GetParam("guildBards_wealthy")
+        elseif(spouseClass == "religious")
+            ; cand = 0
+            cand = GetParam("guildBards_religious")
         elseif(spouseClass == "nobles")
-            cand = -2
+            ; cand = -2
+            cand = GetParam("guildBards_nobles")
         elseif(spouseClass == "rulers")
-            cand = -1
+            ; cand = -1
+            cand = GetParam("guildBards_rulers")
         endif
         if cand > 0
             bestPos = TTM_Utils.GetMax(bestPos, cand)
@@ -220,13 +297,14 @@ float Function calcGuildAlignmentMod(Actor npc) global
             bestNeg = TTM_Utils.GetMin(bestNeg, cand)
         endif
         if npc.IsInFaction(bardsFCTN)
-            sameGuild = -4
+            ; sameGuild = -4
+            sameGuild = GetParam("guild_sameGuildBonus")
         endif
     endif
 
     ; pick the single strongest effect by absolute value
     float res = bestPos
-    if (-bestNeg) > bestPos
+    if -bestNeg > bestPos
         res = bestNeg ; more negative wins
     endif
 
@@ -259,27 +337,36 @@ float Function intimacyAdjustment(Actor npc) global
 
     if(existingSpouse)
         if(isSpouseLover)
-            res += 30
+            ; res += 30
+            res += GetParam("intimacySpouseLoverBonus")
         else
-            res += 25
+            ; res += 25
+            res += GetParam("intimacySpouseNotLoverBonus")
         endif
     elseif(existingCourting)
         if(isCourtingLover)
-            res += 20
+            ; res += 20
+            res += GetParam("intimacyCourtingLoverBonus")
         else
-            res += 15
+            ; res += 15
+            res += GetParam("intimacyCourtingNotLoverBonus")
         endif
     elseif(existingLovers.Length >= 1)
-        res += 10
+        ; res += 10
+        res += GetParam("intimacyOtherLoversBonus")
     endif
 
-    float intimacy = TTM_ServiceLoversLedger.GetNpcPlayerIntimacy(npc)
+    float intimacy = TTM_ServiceLoversLedger.GetNpcPlayerIntimacy(npc) * GetParam("intimacyPlayerMultiplier")
 
     return res - intimacy
 EndFunction
 
 
 float Function calcMarriageSuccessChance(Actor npc) global
+    TTM_Debug.trace("calcMarriageSuccessChance:Actor:"+npc)
+    if(TTM_MCM_State.GetAlwaysSuccessMarriage())
+        return 1.0
+    endif
     Actor player = TTM_JData.GetPlayer()
     int npcLevel = npc.GetLevel()
     int playerLevel = player.GetLevel()
@@ -287,47 +374,64 @@ float Function calcMarriageSuccessChance(Actor npc) global
     int socialClassIndex = TTM_Utils.GetSpouseSocialIndexByType(TTM_Utils.GetSpouseSocialClass(npc))
 
     ;=== 1. Complexity sum ===
-    float complexity = 50.0
+    ; float complexity = 50.0
+    float complexity = GetParam("initialComplexity")
 
     ; prestige delta
-    float target = 10 + 10 * socialClassIndex ; // 10 … 70
+    ; float target = 10 + 10 * socialClassIndex ; // 10 … 70
+    float target = GetParam("prestigeTargetBase") + GetParam("prestigeTargetPerSocialIndexMultiplier") * socialClassIndex ; // 10 … 70
     TTM_Debug.trace("calcMarriageSuccessChance:targetScore:"+target)
-    float pDelta = (target - calcPlayerPrestige()) * 0.30
-    TTM_Debug.trace("calcMarriageSuccessChance:prestigeDelta:"+pDelta)
+    ; float pDelta = (target - calcPlayerPrestige()) * 0.30
+    float playerPrestige = calcPlayerPrestige()
+    float pDelta = (target - playerPrestige) * GetParam("prestigeDeltaMultiplier")
+    TTM_Debug.trace("calcMarriageSuccessChance:player'sPrestige:"+playerPrestige+":target:"+target+":prestigeDelta:"+pDelta)
     complexity += pDelta
 
     ; player were engaged but it was jilted, it's harder to get another try */
-    if (TTM_ServiceNpcs.IsJilted(npc))
+    if (TTM_Utils.IsJilted(npc))
         TTM_Debug.trace("calcMarriageSuccessChance:jilted")
-        complexity += 10
+        ; complexity += 10
+        complexity += GetParam("jiltedPenalty")
     endif
 
     ; player were married to npc at some point but divorced, so it's harder to re-marry
-    if (TTM_ServiceNpcs.IsDivorced(npc))
+    if (TTM_Utils.IsDivorced(npc))
         TTM_Debug.trace("calcMarriageSuccessChance:divorced")
-        complexity += 20
+        ; complexity += 20
+        complexity += GetParam("divorcedPenalty")
     endif
 
     ; player killed spouse or fiance without reason - red flag for future potential candidates
     if(TTM_JData.GetPlayerKiller())
-        complexity += 50
+        TTM_Debug.trace("calcMarriageSuccessChance:playerKilledSpouseBefore")
+        ; complexity += 50
+        complexity += GetParam("playerKillerPenalty")
     endif
 
     ; spouse count
-    complexity += TTM_ServiceNpcs.CountBucket("married") * 2
-    TTM_Debug.trace("calcMarriageSuccessChance:marriedCount:"+TTM_ServiceNpcs.CountBucket("married") * 2)
+    ; complexity += TTM_ServiceNpcs.CountBucket("married") * 2
+    float marriedScore = TTM_ServiceNpcs.CountBucket("married") * GetParam("marriedCountMultiplier")
+    complexity += marriedScore
+    TTM_Debug.trace("calcMarriageSuccessChance:marriedCount:"+marriedScore)
     ; divorced times before
-    complexity += TTM_ServiceNpcs.CountBucket("divorced")
-    TTM_Debug.trace("calcMarriageSuccessChance:divorcedCount:"+TTM_ServiceNpcs.CountBucket("divorced"))
+    ; complexity += TTM_ServiceNpcs.CountBucket("divorced")
+    float divorcedScore = TTM_ServiceNpcs.CountBucket("divorced") * GetParam("divorcedCountMultiplier")
+    complexity += divorcedScore
+    TTM_Debug.trace("calcMarriageSuccessChance:divorcedCount:"+divorcedScore)
     ; level diff
-    complexity += PapyrusUtil.ClampFloat(levelDiff * 0.10, -10, 10)
-    TTM_Debug.trace("calcMarriageSuccessChance:levelDiff:"+PapyrusUtil.ClampFloat(levelDiff * 0.10, -10, 10))
+    ; complexity += PapyrusUtil.ClampFloat(levelDiff * 0.10, -10, 10)
+    float levelDiffScore = PapyrusUtil.ClampFloat(levelDiff * GetParam("levelDiffMultiplier"), -10, 10)
+    complexity += levelDiffScore
+    TTM_Debug.trace("calcMarriageSuccessChance:levelDiff:"+levelDiffScore)
     ; speech bonus
-    complexity += -0.1 * player.GetActorValue("speechcraft")
+    ; complexity += -0.1 * player.GetActorValue("speechcraft")
+    complexity += GetParam("speechcraftMultiplier") * player.GetActorValue("speechcraft")
     TTM_Debug.trace("calcMarriageSuccessChance:Speech:" + (-0.05 * player.GetActorValue("speechcraft")))
     ; relationship rank
-    complexity += -3 * npc.GetRelationshipRank(player)
-    TTM_Debug.trace("calcMarriageSuccessChance:relationshipRanjk:"+ (-3 * npc.GetRelationshipRank(player)))
+    ; complexity += -3 * npc.GetRelationshipRank(player)
+    float relationshipScore = GetParam("relationshipRankMultiplier") * npc.GetRelationshipRank(player)
+    complexity += relationshipScore
+    TTM_Debug.trace("calcMarriageSuccessChance:relationshipRanjk:" + relationshipScore)
     ; guild alignment
     complexity += calcGuildAlignmentMod(npc)
     TTM_Debug.trace("calcMarriageSuccessChance:guilds:"+ calcGuildAlignmentMod(npc))
@@ -345,5 +449,4 @@ float Function calcMarriageSuccessChance(Actor npc) global
     TTM_Debug.trace("calcMarriageSuccessChance:finalChance:"+ chance)
 
     return chance
-    ; return 1
 EndFunction

@@ -161,11 +161,11 @@ EndFunction
   Registers a location as a player house if not already present.
   @param houseLoc The house location to register
 /;
-int Function SetPlayerHouse(Location houseLoc) global
-    TTM_Debug.trace("SetPlayerHouse")
+Function SetPlayerHouse(Location houseLoc) global
     int jHouse = JFormMap_getObj(GetPlayerHouses(), houseLoc)
 
     if(jHouse == 0)
+        TTM_Debug.trace("SetPlayerHouse:AddNew")
         jHouse = JMap_object()
 
         JMap_setStr(jHouse, "name", houseLoc.GetName())

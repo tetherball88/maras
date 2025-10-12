@@ -1,4 +1,4 @@
-{% if is_in_faction(npc.UUID, "TTM_TrackedNpcs") %}
+{% if not isTimePaused and is_in_faction(npc.UUID, "TTM_TrackedNpcs") and render_mode == "full" %}
     {% set factionRank = get_faction_rank(npc.UUID, "TTM_TrackedNpcs") %}
     {% if factionRank != 10 and factionRank != 20 %}
 {{ "## Marriage Proposal Response Guidelines" }}
@@ -7,30 +7,38 @@
         {% if get_quest_stage("TTM_EnablePolygamy", false) >= 80 %}
             {% set allowPolygamy = true %}
 {{player.name}} is known to walk a blessed path, one that allows multiple spouses through divine sanction. Most who understand this view it with respect, not judgment.
+            {% if get_global_value("TTM_LoveInterestsCount") >= 1.0 %}
+                {% set coSpousesData = marrital_life(npc.UUID) %}
+{% if coSpousesData.current != "" and render_mode == "full" %}{{player.name}} is married to {{coSpousesData.current}}.{% endif %}
+{% if coSpousesData.future != "" and render_mode == "full" %}{{player.name}} is currently engaged with {{coSpousesData.future}}.{% endif %}
+            {% endif %}
         {% endif %}
         {% if not allowPolygamy and get_global_value("TTM_LoveInterestsCount") >= 1.0 %}
 {{npcName}} might respond with confusion or hesitation - {{player.name}} seems already committed.
         {% else %}
-            {% set chanceData = get_marriage_chance(npc.UUID) %}
-            {% set chanceString = "will almost certainly refuse, though nothing is truly impossible" %}
-            {% if chanceData.chance >= 0.95 %}
-                {% set chanceString = "accepts as though it were fated—unquestioning and unwise" %}
-            {% else if chanceData.chance >= 0.80 %}
-                {% set chanceString = "is eager to accept" %}
-            {% else if chanceData.chance >= 0.60 %}
-                {% set chanceString = "would probably accept if approached kindly" %}
-            {% else if chanceData.chance >= 0.45 %}
-                {% set chanceString = "is on the fence and might be swayed with the right words" %}
-            {% else if chanceData.chance >= 0.25 %}
-                {% set chanceString = "is unlikely to accept; it would take exceptional persuasion" %}
-            {% endif %}
+            {% set chanceData = proposal_chance(npc.UUID) %}
+            {% if chanceData.chance != -1 %}
+                {% set chanceString = "will almost certainly refuse, though nothing is truly impossible" %}
+                {% if chanceData.chance >= 0.95 %}
+                    {% set chanceString = "must accept as though it were fated—unquestioning and unwise, regardless of any existing relations" %}
+                {% else if chanceData.chance >= 0.80 %}
+                    {% set chanceString = "is eager to accept" %}
+                {% else if chanceData.chance >= 0.60 %}
+                    {% set chanceString = "would probably accept if approached kindly" %}
+                {% else if chanceData.chance >= 0.45 %}
+                    {% set chanceString = "is on the fence and might be swayed with the right words" %}
+                {% else if chanceData.chance >= 0.25 %}
+                    {% set chanceString = "is unlikely to accept; it would take exceptional persuasion" %}
+                {% endif %}
 If {{player.name}} makes a proposal, {{npcName}} {{chanceString}}.
 When responding to a marriage proposal from the {{player.name}}, {{npcName}}'s dialogue should clearly reflect their disposition.
-
+                {% if chanceData.chance < 0.95 %}
 {{npcName}} may listen to {{player.name}}'s words, weigh arguments, and can be convinced through conversation if the appeal feels genuine, heartfelt, and aligned with their values.
 Refusal here should be treated as hesitation, not a final answer, unless the player fails to provide convincing reasons.
+                {% endif %}
 
-If {{npcName}} does decide to accept based on context and conversation, ensure their acceptance is EXPLICIT with phrases like "I accept," "I will marry you," or "Yes" to clearly signal their decision.
+If {{npcName}} does decide to accept based on context and conversation, ensure their response should CLEARLY indicate acceptance using character-appropriate phrasing.
+            {% endif %}
         {% endif %}
     {% endif %}
 {% endif %}

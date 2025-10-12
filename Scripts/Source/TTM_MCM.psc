@@ -13,6 +13,7 @@ int property oid_SettingsAIMiscDial auto
 int property oid_SettingsAIQuestDial auto
 int property oid_SettingsLogLevel auto
 int property oid_SettingsLogDestination auto
+int property oid_SettingsCheatAlwaysSuccess auto
 int property oid_SkipNextWeddings auto
 
 int property oid_SearchSpouse auto

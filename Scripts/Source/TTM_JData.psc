@@ -142,6 +142,15 @@ EndFunction
 /;
 Function ImportStaticData() global
     JDB_solveObjSetter(GetStaticKey() + ".initialData", JValue_readFromFile("Data/SKSE/Plugins/MARAS/initialData.json"), true)
+    JDB_solveObjSetter(GetStaticKey() + ".initialData.complexityVariables", JValue_readFromFile("Data/SKSE/Plugins/MARAS/marriageComplexityVariables.json"), true)
+EndFunction
+
+;/ ==============================
+   SECTION: Get Complexity variables
+============================== /;
+
+float Function GetComplexityVariable(string variable) global
+    return JDB_solveFlt(GetStaticKey() + ".initialData.complexityVariables."+variable)
 EndFunction
 
 ;/ ==============================

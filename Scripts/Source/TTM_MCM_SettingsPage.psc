@@ -49,6 +49,8 @@ Function RenderRightColumn(TTM_MCM mcm) global
     mcm.oid_SettingsLogLevel = mcm.AddMenuOption("Log level", logLevelOptions[TTM_MCM_State.GetLogLevel()])
     string[] logDestinationOptions = GetLogDestinationOptions()
     mcm.oid_SettingsLogDestination = mcm.AddMenuOption("Log destination ", logDestinationOptions[TTM_MCM_State.GetLogDestination()])
+    mcm.AddHeaderOption("Cheats")
+    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("Enable always success for engagement", TTM_MCM_State.GetAlwaysSuccessMarriage())
     mcm.AddHeaderOption("Export/import whole data")
     mcm.oid_SettingsExportData = mcm.AddTextOption("", "Export data to file")
     mcm.oid_SettingsImportData = mcm.AddTextOption("", "Import data from file")
@@ -80,6 +82,10 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
         bool val = TTM_MCM_State.GetSkipWedding()
         mcm.SetToggleOptionValue(option, !val)
         TTM_MCM_State.SetSkipWedding(!val)
+    elseif(option == mcm.oid_SettingsCheatAlwaysSuccess)
+        bool val = TTM_MCM_State.GetAlwaysSuccessMarriage()
+        mcm.SetToggleOptionValue(option, !val)
+        TTM_MCM_State.SetAlwaysSuccessMarriage(!val)
     endif
 EndFunction
 

@@ -45,13 +45,13 @@ TTM_QuestTrackKilledSpouses kmyQuest = __temp as TTM_QuestTrackKilledSpouses
     if(TTM_ServiceNpcs.GetKilledByPlayer(victim))
         ObjectReference letter
         int inheritanceValue = 0
-        if(TTM_ServiceNpcs.IsSpouse(victim))
+        if(TTM_Utils.IsSpouse(victim))
             letter = Alias_SpouseLetter.GetRef()
             int spouseSocialClass = TTM_Utils.GetSpouseSocialClassIndex(victim)
             inheritanceValue = (spouseSocialClass + 1) * 400
-        elseif(TTM_ServiceNpcs.IsFiance(victim))
+        elseif(TTM_Utils.IsFiance(victim))
             letter = Alias_FianceLetter.GetRef()
-        elseif(TTM_ServiceNpcs.IsDivorced(victim) || TTM_ServiceNpcs.IsJilted(victim))
+        elseif(TTM_Utils.IsDivorced(victim) || TTM_Utils.IsJilted(victim))
             letter = Alias_ExLetter.GetRef()
         endif
         WICourierScript vWICourierScript = kmyquest.pWICourier as WICourierScript

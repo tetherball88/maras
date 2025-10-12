@@ -13,7 +13,7 @@ Function CheckOverrides() global
     Actor npc = JFormMap_nextKey(JTypes) as Actor
 
     while(npc)
-        if(TTM_ServiceNpcs.IsTrackingNpc(npc) && !TTM_ServiceNpcs.GetTrackedNpcMcmTypeChanged(npc))
+        if(TTM_Utils.IsTracking(npc) && !TTM_ServiceNpcs.GetTrackedNpcMcmTypeChanged(npc))
             string overrideSocial = GetSocialClassOverride(npc)
             SetSpouseSocialClass(npc, overrideSocial)
 
@@ -25,6 +25,7 @@ Function CheckOverrides() global
 EndFunction
 
 int Function DetermineSpouseType(Actor spouse) global
+    TTM_Debug.trace("DetermineSpouseType:"+spouse)
     SetSpouseSkillType(spouse, DetermineSkillType(spouse))
     SetSpouseSocialClass(spouse, DetermineSocialClass(spouse))
 EndFunction
@@ -38,6 +39,7 @@ Function SetSpouseSocialClass(Actor npc, string socialClass) global
                 npc.AddToFaction(socialClassFaction)
             endif
             npc.SetFactionRank(socialClassFaction, socialIndex)
+            TTM_Debug.trace("DetermineSpouseType:"+npc+":SocialClass:"+socialIndex)
         endif
     endif
 EndFunction
@@ -51,6 +53,7 @@ Function SetSpouseSkillType(Actor npc, string skillType) global
                 npc.AddToFaction(skillTypeFaction)
             endif
             npc.SetFactionRank(skillTypeFaction, skillIndex)
+            TTM_Debug.trace("DetermineSpouseType:"+npc+":SkillType:"+skillIndex)
         endif
     endif
 EndFunction
@@ -99,6 +102,7 @@ EndFunction
 
 string Function DetermineSkillBased(Actor spouse) global
     float[] skills = new float[18]
+
     skills[0] = spouse.GetActorValue("OneHanded")
     skills[1] = spouse.GetActorValue("TwoHanded")
     skills[2] = spouse.GetActorValue("Marksman")
@@ -125,7 +129,7 @@ string Function DetermineSkillBased(Actor spouse) global
     while i < skills.Length
         if(skills[i] > maxVal)
             maxIndex = i
-            maxVal - skills[i]
+            maxVal = skills[i]
         endif
         i += 1
     endwhile
@@ -230,7 +234,6 @@ EndFunction
 
 int Function GetActor(Actor npc) global
     int JTypes = JDB_solveObj(GetTypesNamespace())
-    TTM_Debug.trace("GetActor:"+JFormMap_getObj(JTypes, npc))
     return JFormMap_getObj(JTypes, npc)
 EndFunction
 

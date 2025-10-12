@@ -16,7 +16,7 @@ Event OnPlayerLoadGame()
 EndEvent
 
 Event OnSleepStart(Float afSleepStartTime, Float afDesiredSleepEndTime)
-     TTM_Debug.trace("OnSleepStart:default")
+    TTM_Debug.trace("OnSleepStart:default")
     Actor player = self.GetActorRef()
     Faction PlayerMarriedFaction = TTM_JData.GetMarriedFaction()
     Quest enablePolygamyQst = TTM_JData.GetMarasEnablePolygamyQuest()

@@ -79,9 +79,20 @@ bool Function GetSkipWedding() global
     return _GetMcmBool("skipWedding")
 EndFunction
 
+Function SetAlwaysSuccessMarriage(bool toggle) global
+    _SetMcmBool("alwaysSuccessMarriage", toggle)
+EndFunction
+
+bool Function GetAlwaysSuccessMarriage() global
+    return _GetMcmBool("alwaysSuccessMarriage")
+EndFunction
+
+
 Function SetCurrentPage(string page) global
     JMap_setStr(GetJMCM(), "currentPage", page)
 EndFunction
+
+
 
 string Function GetCurrentPage() global
     string page = JMap_getStr(GetJMCM(), "currentPage")

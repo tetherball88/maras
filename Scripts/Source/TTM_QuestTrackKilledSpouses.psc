@@ -11,7 +11,7 @@ Event OnStoryKillActor(ObjectReference akVictim, ObjectReference akKiller, Locat
     ; if player killed without reason, I assume crime triggers when it wasn't provoked or by quest
     bool isPlayerKiller = killer == player && aiCrimeStatus == 1
 
-    if(TTM_ServiceNpcs.IsTrackingNpc(victim))
+    if(TTM_Utils.IsTracking(victim))
         TTM_ServiceNpcs.MakeNpcDeceased(victim, isPlayerKiller)
         SetStage(1)
     else

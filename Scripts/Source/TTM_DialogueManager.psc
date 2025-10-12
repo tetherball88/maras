@@ -11,11 +11,11 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    if(useAI)
-        SkyrimNetApi.DirectNarration(SkyrimNetApi.RenderTemplate(PromptKey, "spouseName", TTM_Utils.GetActorName(akSpeaker)), akSpeaker, TTM_JData.GetPlayer())
-    endif
     TTM_Debug.trace("TTM_DialogueManager:OnBegin:"+PromptKey+":useAI:"+UseAI)
     if(PromptKey == "maras_enable_candidate")
+        if(!akSpeaker.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+            akSpeaker.AddToFaction(TTM_JData.GetTrackedNpcFaction())
+        endif
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "candidate")
     elseif(PromptKey == "maras_enable_polygamy_maramal_start")
         self.GetOwningQuest().SetStage(10)
@@ -48,9 +48,9 @@ Actor akSpeaker = akSpeakerRef as Actor
     elseif(PromptKey == "maras_reconcile_accept")
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
     elseif(PromptKey == "maras_breakup")
-        if(TTM_ServiceNpcs.IsFiance(akSpeaker))
+        if(TTM_Utils.IsFiance(akSpeaker))
             TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "jilted")
-        elseif(TTM_ServiceNpcs.IsSpouse(akSpeaker))
+        elseif(TTM_Utils.IsSpouse(akSpeaker))
             TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "divorced")
         endif
     elseif(PromptKey == "manage_spouse_set_new_home_do")
@@ -59,7 +59,9 @@ Actor akSpeaker = akSpeakerRef as Actor
         TTM_Debug.warn("TTM_DialogueManager:OnBegin:UnhandledKey:"+PromptKey)
     endif
 
-
+    if(useAI)
+        SkyrimNetApi.DirectNarration(SkyrimNetApi.RenderTemplate(PromptKey, "spouseName", TTM_Utils.GetActorName(akSpeaker)), akSpeaker, TTM_JData.GetPlayer())
+    endif
 ;END CODE
 EndFunction
 ;END FRAGMENT

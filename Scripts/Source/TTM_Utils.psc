@@ -165,14 +165,24 @@ string Function GetSpouseSocialClass(Actor spouse) global
 EndFunction
 
 string Function GetSpouseSkillType(Actor spouse) global
-    Faction skillTypeFaction = TTM_JData.GetSpouseSkillTypeFaction()
-    int index = spouse.GetFactionRank(skillTypeFaction)
+    int index = GetSpouseSkillTypeIndex(spouse)
 
     return GetTrackedNpcSkillTypeByIndexes()[index]
 EndFunction
 
+int Function GetSpouseSkillTypeIndex(Actor spouse) global
+    Faction skillTypeFaction = TTM_JData.GetSpouseSkillTypeFaction()
+    int index = spouse.GetFactionRank(skillTypeFaction)
+
+    return index
+EndFunction
+
+int Function GetTrackingRank(Actor npc) global
+    return npc.GetFactionRank(TTM_JData.GetTrackedNpcFaction())
+EndFunction
+
 string Function GetRelationshipStatus(Actor npc) global
-    int rank = npc.GetFactionRank(TTM_JData.GetTrackedNpcFaction())
+    int rank = GetTrackingRank(npc)
     if(rank == 0)
         return "candidate"
     elseif(rank == 10)
@@ -199,6 +209,26 @@ string Function SetRelationshipStatus(Actor npc, string status) global
     endif
 
     npc.SetFactionRank(TTM_JData.GetTrackedNpcFaction(), rank)
+EndFunction
+
+bool Function IsTracking(Actor npc) global
+    return npc.IsInFaction(TTM_JData.GetTrackedNpcFaction())
+EndFunction
+
+bool Function IsFiance(Actor npc) global
+    return GetRelationshipStatus(npc) == "engaged"
+EndFunction
+
+bool Function IsSpouse(Actor npc) global
+    return GetRelationshipStatus(npc) == "married"
+EndFunction
+
+bool Function IsDivorced(Actor npc) global
+    return GetRelationshipStatus(npc) == "divorced"
+EndFunction
+
+bool Function IsJilted(Actor npc) global
+    return GetRelationshipStatus(npc) == "jilted"
 EndFunction
 
 string Function GetBoolStr(bool flag) global
@@ -282,4 +312,31 @@ float Function GetMin(float value1, float value2) global
     endif
 
     return value2
+EndFunction
+
+bool Function CandidateIsReadyToHearProposal(Actor npc) global
+    int socialClass = GetSpouseSocialClassIndex(npc)
+    int skillType = GetSpouseSkillTypeIndex(npc)
+    return socialClass != -1 && skillType != -1
+EndFunction
+
+bool Function CandidateIsReadyToHearProposalAwait(Actor npc, int attempts = 5, float wait = 0.3) global
+    bool isSpouseNpc = IsSpouse(npc)
+    bool isFianceNpc = IsFiance(npc)
+    bool isPlayer = npc == TTM_JData.GetPlayer()
+    bool isReady = CandidateIsReadyToHearProposal(npc)
+    if(isPlayer || ((isSpouseNpc || isFianceNpc) && isReady))
+        TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: false; isPlayer:"+isPlayer+"; isSpouseNpc:"+isSpouseNpc+"; isFianceNpc:"+isFianceNpc)
+        return false
+    endif
+    int i = 0
+
+    while(i < attempts && !isReady)
+        TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: attempt "+i+"; isReady:"+isReady)
+        Utility.Wait(wait)
+        isReady = CandidateIsReadyToHearProposal(npc)
+        i += 1
+    endwhile
+
+    return isReady
 EndFunction
