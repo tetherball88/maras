@@ -116,6 +116,7 @@ Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
     bool engaged = TTM_Utils.IsFiance(npc)
     if(spouse || engaged)
         if(spouse)
+            RemoveLeadSpouse(npc)
             ;re-evaluate spouses bonuses on each spouse removed
             TTM_ServiceBuff.CalculatePermanentMultipliers()
             TTM_ServiceBuff.CalculateFollowerMultipliers()
@@ -185,60 +186,67 @@ EndFunction
 ============================== /;
 
 ;/ ==============================
-   SECTION: LeadSpouses
+   SECTION: Hierarchy
 ============================== /;
-int Function GetLeadSpouses() global
-    return TTM_JUtils._GetOrCreateJArray(TTM_JData.GetJSaveData(), "leadSpouses")
+int Function GetHierarchy() global
+    return TTM_JUtils._GetOrCreateJArray(TTM_JData.GetJSaveData(), "hierarchy")
+EndFunction
+
+Actor Function GetSpouseByHierarchyRank(int rank) global
+    return JArray_getForm(GetHierarchy(), rank) as Actor
 EndFunction
 
 int Function GetSpouseRank(Actor spouse) global
-    return JArray_findForm(GetLeadSpouses(), spouse)
-EndFunction
-
-Actor Function GetLeadSpouseByRank(int rank) global
-    return JArray_getForm(GetLeadSpouses(), rank) as Actor
+    return spouse.GetFactionRank(TTM_JData.GetSpouseHierarchyFaction())
 EndFunction
 
 Function AddLeadSpouse(Actor spouse) global
-    int jLeadSpouses = GetLeadSpouses()
+    int jHierarchy = GetHierarchy()
     ; if not all top 3 spots are filled, add this spouse to the list
-    if(JArray_count(jLeadSpouses) < 3)
-        JArray_addForm(jLeadSpouses, spouse)
+    if(JArray_count(jHierarchy) < 3)
+        JArray_addForm(jHierarchy, spouse)
+        spouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), JArray_count(jHierarchy) - 1)
+        TTM_ServiceBuff.CalculateFollowerMultipliers()
+        TTM_ServiceBuff.CalculatePermanentMultipliers()
         return
     endif
 EndFunction
 
 Function RemoveLeadSpouse(Actor spouse) global
-    int jLeadSpouses = GetLeadSpouses()
+    int jHierarchy = GetHierarchy()
     int jSpouses = GetSpouses()
-    int currentRank = JArray_findForm(jLeadSpouses, spouse)
+    int currentRank = GetSpouseRank(spouse)
     ; if this spouse is not in the list, do nothing
     if(currentRank == -1)
         return
     endif
 
     ; remove this spouse from the lead list
-    JArray_eraseForm(jLeadSpouses, spouse)
+    JArray_eraseForm(jHierarchy, spouse)
+    spouse.RemoveFromFaction(TTM_JData.GetSpouseHierarchyFaction())
 
     ; attempt to find a new lead spouse
     Actor leadCandidateSpouse = JFormMap_nextKey(jSpouses) as Actor
 
     while(leadCandidateSpouse)
-        if(leadCandidateSpouse != spouse && JArray_findForm(jLeadSpouses, leadCandidateSpouse) == -1)
+        if(leadCandidateSpouse != spouse && JArray_findForm(jHierarchy, leadCandidateSpouse) == -1)
             AddLeadSpouse(leadCandidateSpouse)
-            TTM_Utils.ChangeLeadSpouseRankEvent(leadCandidateSpouse, JArray_count(jLeadSpouses) - 1, -1)
+            TTM_Utils.ChangeLeadSpouseRankEvent(leadCandidateSpouse, JArray_count(jHierarchy) - 1, -1)
             return
         endif
         leadCandidateSpouse = JFormMap_nextKey(jSpouses, leadCandidateSpouse) as Actor
     endwhile
+
+    TTM_ServiceBuff.CalculateFollowerMultipliers()
+    TTM_ServiceBuff.CalculatePermanentMultipliers()
 EndFunction
 
 Function ChangeSpouseRank(Actor spouse, int newRank = -1) global
-    int jLeadSpouses = GetLeadSpouses()
+    int jHierarchy = GetHierarchy()
     int jSpouses = GetSpouses()
 
     ; if total number of spouses is less than 2, do nothing
-    if(JFormMap_count(jSpouses) < 2)
+    if(JArray_count(jSpouses) < 2)
         return
     endif
 
@@ -248,22 +256,31 @@ Function ChangeSpouseRank(Actor spouse, int newRank = -1) global
     endif
 
     int currentRank = GetSpouseRank(spouse)
-    bool isPromotion = currentRank < newRank
 
     ; if this spouse is already in the list, do nothing
     if(currentRank == newRank)
         return
     endif
 
-    Actor newRankSpouse = JArray_getForm(jLeadSpouses, newRank) as Actor
+    Actor newRankSpouse = JArray_getForm(jHierarchy, newRank) as Actor
     ; swap their places if this spouse was already on top 3 list
-    JArray_setForm(jLeadSpouses, newRank, spouse)
+    JArray_setForm(jHierarchy, newRank, spouse)
+    spouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), newRank)
+    TTM_Debug.trace("ChangeSpouseRank:"+spouse+":"+newRank)
     TTM_Utils.ChangeLeadSpouseRankEvent(spouse, newRank, currentRank)
-
     if(newRankSpouse != none)
-        JArray_setForm(jLeadSpouses, currentRank, newRankSpouse)
+        if(currentRank == -1)
+            newRankSpouse.RemoveFromFaction(TTM_JData.GetSpouseHierarchyFaction())
+            TTM_Debug.trace("ChangeSpouseRank:"+newRankSpouse+":-1")
+        else
+            JArray_setForm(jHierarchy, currentRank, newRankSpouse)
+            newRankSpouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), currentRank)
+            TTM_Debug.trace("ChangeSpouseRank:"+newRankSpouse+":"+currentRank)
+        endif
         TTM_Utils.ChangeLeadSpouseRankEvent(newRankSpouse, currentRank, newRank)
     endif
+    TTM_ServiceBuff.CalculateFollowerMultipliers()
+    TTM_ServiceBuff.CalculatePermanentMultipliers()
 EndFunction
 
 ;/ ==============================

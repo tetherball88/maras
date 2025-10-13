@@ -31,6 +31,7 @@ Function Maintenance() global
     endif
     RegisterActions()
     RegisterDecorators()
+    RegisterEventSchemas()
 EndFunction
 
 Function RegisterActions() global
@@ -240,4 +241,42 @@ string Function BuildLine(Actor akActor, Actor playerPartner, string originalRel
     endif
 
     return finalLine
+EndFunction
+
+Function RegisterEventSchemas() global
+    RegisterEventSchemaDemoted()
+    RegisterEventSchemaPromoted()
+EndFunction
+
+Function RegisterEventSchemaDemoted() global
+    string type = "ttm_spouse_demoted"
+    string name = "Spouse Demoted"
+    string description = "Happens when a spouse is demoted in rank"
+    string msg = "SPOUSE DEMOTED: {{actor}} has been demoted from rank {{oldRank}} to {{newRank}}."
+    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was demoted.\"}, {\"name\": \"oldRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's old rank.\"}, {\"name\": \"newRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's new rank.\"}]"
+    string renderParams = "{\"recent_events\":\""+msg+"\",\"raw\":\""+msg+"\",\"compact\":\""+msg+"\",\"verbose\":\""+msg+"\"}"
+    SkyrimnetApi.RegisterEventSchema(type, name, description, jsonParams, renderParams, false, 0)
+EndFunction
+
+Function RegisterDemotedEvent(Actor spouse, int newRank, int oldRank) global
+    string type = "ttm_spouse_demoted"
+    string jsonData = "{\"actor\": \""+TTM_Utils.GetActorName(spouse)+"\", \"oldRank\": "+oldRank+", \"newRank\": "+newRank+"}"
+    SkyrimNetApi.RegisterEvent(type, jsonData, spouse, none)
+EndFunction
+
+; todo promoted schema
+Function RegisterEventSchemaPromoted() global
+    string type = "ttm_spouse_promoted"
+    string name = "Spouse Promoted"
+    string description = "Happens when a spouse is promoted in rank"
+    string msg = "SPOUSE PROMOTED: {{actor}} has been promoted from rank {{oldRank}} to {{newRank}}."
+    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\"}, {\"name\": \"oldRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's old rank.\"}, {\"name\": \"newRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's new rank.\"}]"
+    string renderParams = "{\"recent_events\":\""+msg+"\",\"raw\":\""+msg+"\",\"compact\":\""+msg+"\",\"verbose\":\""+msg+"\"}"
+    SkyrimnetApi.RegisterEventSchema(type, name, description, jsonParams, renderParams, false, 0)
+EndFunction
+
+Function RegisterPromotedEvent(Actor spouse, int newRank, int oldRank) global
+    string type = "ttm_spouse_promoted"
+    string jsonData = "{\"actor\": \""+TTM_Utils.GetActorName(spouse)+"\", \"oldRank\": "+oldRank+", \"newRank\": "+newRank+"}"
+    SkyrimNetApi.RegisterEvent(type, jsonData, spouse, none)
 EndFunction

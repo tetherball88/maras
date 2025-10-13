@@ -58,6 +58,7 @@ Function Maintenance()
     endif
 
     RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
+    RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
 
     Actor player = TTM_JData.GetPlayer()
 
@@ -123,4 +124,16 @@ Event OStimEnd(string eventName, string json, float numArg, Form sender)
 
         i += 1
     endwhile
+EndEvent
+
+Event OnChangeHierarchyRank(Form spouse, int newRank, int oldRank)
+    Actor spouseA = spouse as Actor
+    TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
+    bool isDemoted = newRank == -1 || newRank > oldRank
+    if(isDemoted)
+        spouseA.AddSpell(TTM_JData.GetDemotedCooldownSpell())
+        TTM_ServiceSkyrimNet.RegisterDemotedEvent(spouseA, newRank, oldRank)
+    else
+        TTM_ServiceSkyrimNet.RegisterPromotedEvent(spouseA, newRank, oldRank)
+    endif
 EndEvent

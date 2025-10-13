@@ -425,6 +425,10 @@ Spell Function GetBreakdownCooldownSpell() global
     return GetGameSpell("marasBreakupCooldown")
 EndFunction
 
+Spell Function GetDemotedCooldownSpell() global
+    return GetGameSpell("marasDemotedCooldown")
+EndFunction
+
 ;/ ==============================
    SECTION: QUESTS
 ============================== /;
@@ -573,6 +577,13 @@ EndFunction
 /;
 Faction Function GetSpouseNoInitialHouseFaction() global
     return GetGameFaction("marasSpouseNoInitialHome")
+EndFunction
+
+;/
+  Returns the Faction for spouse which determine their hierarchy in family.
+/;
+Faction Function GetSpouseHierarchyFaction() global
+    return GetGameFaction("marasHierarchy")
 EndFunction
 
 

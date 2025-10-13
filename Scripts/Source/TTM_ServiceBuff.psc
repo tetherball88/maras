@@ -215,6 +215,7 @@ float[] Function GetPermanentMultipliers() global
         string socialType = TTM_Utils.GetSpouseSocialClass(spouse)
         int spouseRank = TTM_ServiceNpcs.GetSpouseRank(spouse)
         float multiplier = GetSpouseMultiplier(spouse)
+        TTM_Debug.trace("GetPermanentMultipliers:SpousesCount:"+TTM_Utils.GetActorName(spouse)+":socialType" + socialType + ":rank" + spouseRank + ":multiplier" + multiplier)
 
         int index = TTM_Utils.GetSpouseSocialIndexByType(socialType)
         if(index != -1)

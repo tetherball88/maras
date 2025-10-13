@@ -35,6 +35,7 @@
         "marasSpouseHoused": "__formData|TT_MARAS.esp|0x6c",
         "marasSpouseSharedHouse": "__formData|TT_MARAS.esp|0x7b",
         "marasSpouseNoInitialHome": "__formData|TT_MARAS.esp|0x7f",
+        "marasHierarchy": "__formData|TT_MARAS.esp|0x111",
         "companions": "__formData|Skyrim.esm|0x48362",
         "thieves": "__formData|Skyrim.esm|0x29da9",
         "brotherhood": "__formData|Skyrim.esm|0x1bdb3",
@@ -75,6 +76,7 @@
         "marasHasSkyrimNet": "__formData|TT_MARAS.esp|0xc4"
     },
     "gameSpells": {
-        "marasBreakupCooldown": "__formData|TT_MARAS.esp|0x102"
+        "marasBreakupCooldown": "__formData|TT_MARAS.esp|0x102",
+        "marasDemotedCooldown": "__formData|TT_MARAS.esp|0x10e"
     }
 }

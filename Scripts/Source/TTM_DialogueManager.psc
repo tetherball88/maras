@@ -45,6 +45,12 @@ Actor akSpeaker = akSpeakerRef as Actor
         TTM_JData.GetPlayer().AddItem(FoodMarriageMeal)
     elseif(PromptKey == "manage_spouse_store")
         TTM_ServiceNpcs.ShareIncome(akSpeaker)
+    elseif(PromptKey == "manage_spouse_set_hierarchy_1")
+        TTM_ServiceNpcs.ChangeSpouseRank(akSpeaker, 0)
+    elseif(PromptKey == "manage_spouse_set_hierarchy_2")
+        TTM_ServiceNpcs.ChangeSpouseRank(akSpeaker, 1)
+    elseif(PromptKey == "manage_spouse_set_hierarchy_3")
+        TTM_ServiceNpcs.ChangeSpouseRank(akSpeaker, 2)
     elseif(PromptKey == "maras_reconcile_accept")
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
     elseif(PromptKey == "maras_breakup")
@@ -53,7 +59,7 @@ Actor akSpeaker = akSpeakerRef as Actor
         elseif(TTM_Utils.IsSpouse(akSpeaker))
             TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "divorced")
         endif
-    elseif(PromptKey == "manage_spouse_set_new_home_do")
+    elseif(PromptKey == "manage_spouse_set_new_home_do" || PromptKey == "maras_spouse_hello")
         ; no special action
     else
         TTM_Debug.warn("TTM_DialogueManager:OnBegin:UnhandledKey:"+PromptKey)

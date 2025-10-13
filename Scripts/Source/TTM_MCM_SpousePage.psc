@@ -25,9 +25,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     string spouseName = TTM_Utils.GetActorName(spouse)
     string skillType = TTM_Utils.GetSpouseSkillType(spouse)
     string socialClass = TTM_Utils.GetSpouseSocialClass(spouse)
-    string rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
     string count = TTM_ServiceNpcs.GetSpousesCount()
-    string rankText = "other"
     string status = TTM_Utils.GetRelationshipStatus(spouse)
     bool isDeceased = TTM_ServiceNpcs.IsDeceased(spouse)
     string deceased = ""
@@ -35,19 +33,6 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     if(isDeceased)
         deceased = "(deceased)"
     endif
-
-    if(rank == 0)
-        rankText = "1st spouse"
-    elseif(rank == 1)
-        rankText = "2nd spouse"
-    elseif(rank ==2)
-        rankText = "3nd spouse"
-    endif
-
-    if(count == 1)
-        rankText = "The only one!"
-    endif
-
 
     bool isCandidate = status == "candidate"
     bool isFiance = status == "engaged"
@@ -59,7 +44,21 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption(TTM_Utils.GetActorName(spouse) + "'s data")
     mcm.AddTextOption("Their status is ", status+deceased)
     if(isSpouse && !isDeceased)
-        mcm.oid_SpousePageRank = mcm.AddTextOption("Rank: ", rankText)
+        if(count == 1)
+            mcm.oid_SpousePageRank = mcm.AddTextOption("Hierarchy Rank: ", "The only one!")
+        else
+            int rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+            string rankText = "4th+ spouse"
+            if(rank == 0)
+                rankText = "1st spouse"
+            elseif(rank == 1)
+                rankText = "2nd spouse"
+            elseif(rank == 2)
+                rankText = "3rd spouse"
+            endif
+            mcm.oid_SpousePageRank = mcm.AddMenuOption("Hierarchy Rank: ", rankText)
+            TTM_Debug.trace("SpousePage: RenderLeftColumn: rank: " + rank + "; rankText: " + rankText)
+        endif
     endif
 
     if(!isFiance && !isSpouse)
@@ -158,7 +157,6 @@ EndFunction
 
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
-    TTM_Debug.trace("OnOptionHighlight:"+option+":"+mcm.oid_SpousePageRank+":"+mcm.oid_CandidateChance)
     Actor spouse = TTM_MCM_State.GetSelectedSpouse()
 
     if(option == mcm.oid_SpousePageSkillType)
@@ -243,6 +241,13 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
         if(start == -1)
             start = default
         endif
+    elseif(option == mcm.oid_SpousePageRank)
+        options = GetHierarchyOptions()
+        int rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+        if(rank != -1)
+            start = rank
+            default = rank
+        endif
     endif
     mcm.SetMenuDialogOptions(options)
     mcm.SetMenuDialogStartIndex(start)
@@ -272,6 +277,13 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
             TTM_ServicePlayerHouse.MoveSpouseToHouse(spouse, houses[index] as Location)
         endif
         opt = names[index]
+    elseif(option == mcm.oid_SpousePageRank)
+        int rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+        if(rank == index)
+            return
+        endif
+        opt = GetHierarchyOptions()[index]
+        TTM_ServiceNpcs.ChangeSpouseRank(spouse, index)
     endif
 
     mcm.SetMenuOptionValue(option, opt)
@@ -279,19 +291,14 @@ EndFunction
 
 ; Default
 Function OnOptionDefault(TTM_MCM mcm, int option) global
-;     TTM_Debug.trace("OnOptionDefault")
-;     Actor spouse = TTM_MCM_State.GetSelectedSpouse()
-;     if(option == mcm.oid_SpousePageSocialClass)
-;         string defaultSocial = TTM_ServiceSpouseTypes.DetermineSocialClass(spouse)
-;         mcm.SetMenuOptionValue(mcm.oid_SettingsStartDialGender, defaultSocial)
-;         TTM_ServiceSpouseTypes.SetSpouseSocialClass(spouse, defaultSocial)
-;     elseif(option == mcm.oid_SpousePageSkillType)
-;         string defaultSkill = TTM_ServiceSpouseTypes.DetermineSkillType(spouse)
-;         TTM_Debug.trace("OnOptionDefault:defaultSkill:"+defaultSkill)
-;         mcm.SetMenuOptionValue(mcm.oid_SettingsStartDialGender, defaultSkill)
-;         TTM_ServiceSpouseTypes.SetSpouseSkillType(spouse, defaultSkill)
-;     elseif(option == mcm.oid_SpousePagePlayerHome)
-;         mcm.SetMenuOptionValue(mcm.oid_SpousePagePlayerHome, "none")
-;         TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouse)
-;     endif
+EndFunction
+
+string[] Function GetHierarchyOptions() global
+    string[] options = new string[3]
+
+    options[0] = "1st spouse"
+    options[1] = "2nd spouse"
+    options[2] = "3rd spouse"
+
+    return options
 EndFunction
