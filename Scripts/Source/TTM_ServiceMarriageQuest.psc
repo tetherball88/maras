@@ -48,7 +48,7 @@ EndFunction
   @param complete Whether to complete (true) or fail (false) objectives
 /;
 Function ResetMarriageQuests(Actor npc = none, bool complete = false) global
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:ResetMarriageQuests:"+npc+":complete:"+complete)
+    TTM_Debug.trace("TTM_ServiceMarriageQuest:ResetMarriageQuests:"+TTM_Utils.GetActorName(npc)+":complete:"+complete)
     Quest mainMarr = TTM_JData.GetMarriageMainQuest()
     Quest finMarr = TTM_JData.GetMarriageFinQuest()
     Actor loveInterest = TTM_Utils.GetActorAlias(mainMarr, "LoveInterest")

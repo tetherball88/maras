@@ -28,6 +28,7 @@ int property oid_SearchFilterDeceased auto
 int property oid_ReturnToExplore auto
 int property oid_SpousePageSkillType auto
 int property oid_SpousePageSocialClass auto
+int property oid_SpousePageTemperament auto
 int property oid_SpousePageRank auto
 int property oid_CandidateChance auto
 int property oid_SpousePagePlayerHome auto

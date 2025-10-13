@@ -45,6 +45,7 @@ Function MakeNpcEngaged(Actor npc) global
     if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
         npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
     endif
+    TTM_ServiceAffection.SetAffectionRank(npc, 100)
 EndFunction
 
 ;/
@@ -72,6 +73,7 @@ Function MakeNpcMarried(Actor npc) global
     if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
         npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
     endif
+    TTM_ServiceAffection.SetAffectionRank(npc, 100)
 EndFunction
 
 ;/
@@ -93,6 +95,7 @@ Function MakeNpcDivorced(Actor npc) global
     TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(npc)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
+    TTM_ServiceAffection.SetAffectionRank(npc, 0)
 EndFunction
 
 ;/
@@ -105,6 +108,7 @@ Function MakeNpcJilted(Actor npc) global
     npc.SetRelationshipRank(player, -1)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
+    TTM_ServiceAffection.SetAffectionRank(npc, 100)
 EndFunction
 
 ;/
@@ -137,7 +141,7 @@ EndFunction
 
 ; Manage TTM utility factions related to marriage status
 Function ManageFactions(Actor npc, string status) global
-    TTM_Debug.trace("ManageFactions:npc:"+npc+":"+status)
+    TTM_Debug.trace("ManageFactions:npc:"+TTM_Utils.GetActorName(npc)+":"+status)
     TTM_Utils.SetRelationshipStatus(npc, status)
     if(status == "candidate")
         npc.AddToFaction(TTM_JData.GetMarriagePotentialFaction())
@@ -226,15 +230,16 @@ Function RemoveLeadSpouse(Actor spouse) global
     spouse.RemoveFromFaction(TTM_JData.GetSpouseHierarchyFaction())
 
     ; attempt to find a new lead spouse
-    Actor leadCandidateSpouse = JFormMap_nextKey(jSpouses) as Actor
-
-    while(leadCandidateSpouse)
+    int i = 0
+    bool found = false
+    while(i < JArray_count(jSpouses) && !found)
+        Actor leadCandidateSpouse = JArray_getForm(jSpouses, i) as Actor
         if(leadCandidateSpouse != spouse && JArray_findForm(jHierarchy, leadCandidateSpouse) == -1)
+            found = true
             AddLeadSpouse(leadCandidateSpouse)
             TTM_Utils.ChangeLeadSpouseRankEvent(leadCandidateSpouse, JArray_count(jHierarchy) - 1, -1)
-            return
         endif
-        leadCandidateSpouse = JFormMap_nextKey(jSpouses, leadCandidateSpouse) as Actor
+        i += 1
     endwhile
 
     TTM_ServiceBuff.CalculateFollowerMultipliers()
@@ -266,17 +271,18 @@ Function ChangeSpouseRank(Actor spouse, int newRank = -1) global
     ; swap their places if this spouse was already on top 3 list
     JArray_setForm(jHierarchy, newRank, spouse)
     spouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), newRank)
-    TTM_Debug.trace("ChangeSpouseRank:"+spouse+":"+newRank)
+    TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(spouse)+":"+newRank)
     TTM_Utils.ChangeLeadSpouseRankEvent(spouse, newRank, currentRank)
     if(newRankSpouse != none)
         if(currentRank == -1)
             newRankSpouse.RemoveFromFaction(TTM_JData.GetSpouseHierarchyFaction())
-            TTM_Debug.trace("ChangeSpouseRank:"+newRankSpouse+":-1")
+            TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(newRankSpouse)+":-1")
         else
             JArray_setForm(jHierarchy, currentRank, newRankSpouse)
             newRankSpouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), currentRank)
-            TTM_Debug.trace("ChangeSpouseRank:"+newRankSpouse+":"+currentRank)
+            TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(newRankSpouse)+":"+currentRank)
         endif
+        newRankSpouse.SetFactionRank(TTM_JData.GetSpouseHierarchyDemotedFromFaction(), newRank)
         TTM_Utils.ChangeLeadSpouseRankEvent(newRankSpouse, currentRank, newRank)
     endif
     TTM_ServiceBuff.CalculateFollowerMultipliers()
@@ -301,18 +307,17 @@ EndFunction
 int Function CreateNewTrackedNpc(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
     int jNpc = JMap_object()
-    TTM_debug.trace("CreateNewTrackedNpc:"+npc+":"+jNpc)
+    TTM_debug.trace("CreateNewTrackedNpc:"+TTM_Utils.GetActorName(npc)+":"+jNpc)
     TTM_ServiceSpouseTypes.DetermineSpouseType(npc)
-    if(!npc.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+    if(!TTM_Utils.IsTracking(npc))
         npc.AddToFaction(TTM_JData.GetTrackedNpcFaction())
     endif
-
 
     JMap_setStr(jNpc, "name", TTM_Utils.GetActorName(npc))
     JMap_setFlt(jNpc, "lastTimeSharedIncome", -1)
     JMap_setObj(jNpc, "existingRelationships", JArray_object())
 
-    TTM_ServiceLoversLedger.UpdateNpcCurrentRelationships(jNpc, npc)
+    TTM_ServiceRelationsFinder.AddNpcCurrentRelationships(jNpc, npc)
 
     JFormMap_setObj(GetTrackedNpcs(), npc, jNpc)
 
@@ -320,10 +325,10 @@ int Function CreateNewTrackedNpc(Actor npc) global
 EndFunction
 
 int Function AddTrackedNpc(Actor npc) global
-    TTM_Debug.trace("AddTrackedNpc:"+npc)
     int jNpcs = GetTrackedNpcs()
 
     if(!JFormMap_hasKey(jNpcs, npc))
+        TTM_Debug.trace("AddTrackedNpc:"+TTM_Utils.GetActorName(npc))
         int jNpc = CreateNewTrackedNpc(npc)
 
         return jNpc
@@ -333,7 +338,7 @@ int Function AddTrackedNpc(Actor npc) global
 EndFunction
 
 int Function GetTrackedNpc(Actor npc) global
-    TTM_Debug.trace("GetTrackedNpc:"+npc)
+    TTM_Debug.trace("GetTrackedNpc:"+TTM_Utils.GetActorName(npc))
     int jNpc = JFormMap_getObj(GetTrackedNpcs(), npc)
     if(jNpc == 0)
         jNpc = AddTrackedNpc(npc)
@@ -355,7 +360,6 @@ ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
         return homeMarker
     endif
 EndFunction
-
 
 Function SetTrackedNpcHome(Actor npc, Location home) global
     JMap_setForm(GetTrackedNpc(npc), "home", home)
@@ -574,6 +578,10 @@ Actor Function GetRandomSpouse() global
     int index = Utility.RandomInt(0, count - 1)
     Actor spouse = JArray_getForm(GetSpouses(), index) as Actor
     return spouse
+EndFunction
+
+Actor Function NextSpouse(Actor prev = none) global
+    return JFormMap_nextKey(GetSpouses(), prev) as Actor
 EndFunction
 
 ;/ ==============================

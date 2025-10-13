@@ -39,6 +39,7 @@ Function Maintenance()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
     TTM_Conditions conditions = _self as TTM_Conditions
+    TTM_ServiceIntimateMoments intimateMoments = _self as TTM_ServiceIntimateMoments
 
 
     ; check if SkyrimNet present
@@ -49,16 +50,15 @@ Function Maintenance()
         RegisterForModEvent("SkyrimNet_OnPackageRemoved", "OnPackageRemoved")
     endif
 
-    if(Game.GetModByName("TT_LoversLedger.esp") != 255)
-        TTM_JData.SetHasTTLL()
-    endif
-
     if(Game.GetModByName("TT_RelationsFinder.esp") != 255)
         TTM_JData.SetHasTTRF()
     endif
 
     RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
     RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
+    RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
+
+     ; ensure player has debug spell and check door perk
 
     Actor player = TTM_JData.GetPlayer()
 
@@ -75,10 +75,14 @@ Function Maintenance()
     TTM_ServiceBuff.Maintenance()
     questTracker.Maintenance()
     conditions.Maintenance()
+    intimateMoments.Maintenance()
     TTM_ServiceSkyrimNet.Maintenance()
 
-    ; patch for ostim removing PapyrusUtils override packages
-    RegisterForModEvent("ostim_thread_end", "OStimEnd")
+    RegisterForMenu("Dialogue Menu")
+    RegisterForMenu("GiftMenu")
+
+    ; JValue.enableAPILog(TTM_MCM_State.GetLogLevel() == 0)
+    JValue.enableAPILog(false)
 EndFunction
 
 ;/
@@ -87,53 +91,127 @@ EndFunction
   @param status The new relationship status (candidate, engaged, married, jilted, divorced)
 /;
 Event OnRelationshipChanged(Form npc, string status)
-    TTM_Debug.trace("MainController:OnRelationshipChanged: " + npc + "; status: " + status)
+    TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
     Actor npcA = npc as Actor
+    string npcName = TTM_Utils.GetActorName(npcA)
 
     TTM_ServiceNpcs.AddTrackedNpc(npcA)
 
+    string msg = ""
+
     if(status == "candidate")
+        msg = "I think " + npcName + " is a good match."
         TTM_ServiceNpcs.MakeNpcCandidate(npcA)
     elseif(status == "engaged")
+        msg = npcName + " and I are engaged to be married."
         TTM_ServiceNpcs.MakeNpcEngaged(npcA)
     elseif(status == "married")
+        msg = npcName + " and I are now newlyweds."
         TTM_ServiceNpcs.MakeNpcMarried(npcA)
     elseif(status == "jilted")
+        msg = "My engagement with " + npcName + " was called off."
         TTM_ServiceNpcs.MakeNpcJilted(npcA)
     elseif(status == "divorced")
+        msg = "Me and " + npcName + " are now divorced."
         TTM_ServiceNpcs.MakeNpcDivorced(npcA)
     endif
+
+    Debug.Notification(msg)
 
     TTM_ServiceNpcs.ManageFactions(npcA, status)
 EndEvent
 
-Event OStimEnd(string eventName, string json, float numArg, Form sender)
-    Actor[] Actors = OJSON.GetActors(Json)
-    Faction housedFaction = TTM_JData.GetSpouseHousedFaction()
-    Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
-
-    int i = 0
-    while(i < actors.Length)
-        Actor akActor = actors[i]
-
-        if(akActor.IsInFaction(housedFaction) && akActor.GetCurrentPackage() != spousePlayerHomeSandbox)
-            ActorUtil.RemovePackageOverride(akActor, spousePlayerHomeSandbox)
-            ActorUtil.AddPackageOverride(akActor, spousePlayerHomeSandbox, 5)
-            akActor.EvaluatePackage()
-        endif
-
-        i += 1
-    endwhile
-EndEvent
 
 Event OnChangeHierarchyRank(Form spouse, int newRank, int oldRank)
     Actor spouseA = spouse as Actor
     TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
-    bool isDemoted = newRank == -1 || newRank > oldRank
-    if(isDemoted)
-        spouseA.AddSpell(TTM_JData.GetDemotedCooldownSpell())
-        TTM_ServiceSkyrimNet.RegisterDemotedEvent(spouseA, newRank, oldRank)
+    if(newRank == -1)
+        newRank = 4
+    endif
+    if(oldRank == -1)
+        oldRank = 4
+    endif
+    int rankDiff = -1 * (newRank - oldRank)
+    if(rankDiff == 0)
+        return
+    endif
+    if(rankDiff > 0)
+        Debug.Notification("I made my spouse " + TTM_Utils.GetActorName(spouseA) + " a higher rank in our relationship hierarchy.")
     else
-        TTM_ServiceSkyrimNet.RegisterPromotedEvent(spouseA, newRank, oldRank)
+        Debug.Notification("I made my spouse " + TTM_Utils.GetActorName(spouseA) + " a lower rank in our relationship hierarchy.")
+    endif
+
+    TTM_ServiceSkyrimNet.RegisterPromotionEvent(spouseA, rankDiff < 0)
+    TTM_ServiceAffection.AddPromotionAffection(spouseA, rankDiff)
+    if(rankDiff < 0)
+        spouseA.AddSpell(TTM_JData.GetDemotedCooldownSpell())
     endif
 EndEvent
+
+Event OnSpouseAffectionChanged(Form spouse, string level, bool up)
+    Actor spouseA = spouse as Actor
+    string spouseName = TTM_Utils.GetActorName(spouseA)
+    string msg = ""
+
+    if(up)
+        if(level == "happy")
+            msg = "I feel closer to " + spouseName + "."
+        elseif(level == "content")
+            msg = "Things are improving with " + spouseName + "."
+        elseif(level == "troubled")
+            msg = "My tension with " + spouseName + " is easing."
+            Quest affectionEstrangedDivorce = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
+            if(affectionEstrangedDivorce.IsRunning())
+                Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
+                if(questSpouse == spouseA)
+                    affectionEstrangedDivorce.SetStage(150)
+                endif
+            endif
+        endif
+    else
+        if(level == "content")
+            msg = "I'm starting to feel distant from " + spouseName + "."
+        elseif(level == "troubled")
+            msg = "I'm growing distant from " + spouseName + "."
+            ; when affection drops to troubled, stop sharing home with player
+            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(spouseA)
+        elseif(level == "estranged")
+            msg = "My relationship with " + spouseName + " has soured."
+            ; when affection drops to estranged, stop sharing home with player and stop using player's home
+            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(spouseA)
+            TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouseA)
+        endif
+    endif
+
+    Debug.Notification(msg)
+EndEvent
+
+Event OnMenuOpen(string menuName)
+    if(menuName == "Dialogue Menu")
+        Actor player = TTM_JData.GetPlayer()
+        Actor[] actors = MiscUtil.ScanCellNPCs(player, 200)
+        int i = 0
+        while(i < actors.Length)
+            Actor akActor = actors[i]
+            if(TTM_Utils.IsTracking(akActor) && akActor.IsInDialogueWithPlayer())
+                OnStartedDialogue(akActor)
+            endif
+            i += 1
+        endwhile
+    elseif(menuName == "GiftMenu")
+        TTM_ServiceGift.OnGiftMenuOpen()
+    endif
+endEvent
+
+
+Event OnMenuClose(string menuName)
+    TTM_Debug.trace("MainController:OnMenuClose:"+menuName)
+    if(menuName == "GiftMenu")
+        TTM_ServiceGift.OnGiftMenuClose()
+    endif
+endEvent
+
+Function OnStartedDialogue(Actor npc)
+    TTM_ServiceAffection.AddDialogueStartedAffection(npc)
+    TTM_Debug.trace("MainController:OnStartedDialogue: " + TTM_Utils.GetActorName(npc))
+EndFunction

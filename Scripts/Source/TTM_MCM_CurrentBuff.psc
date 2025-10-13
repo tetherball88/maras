@@ -16,7 +16,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     int i = 0
 
     float[] multipliers = TTM_ServiceBuff.GetFollowersMultipliers()
-    string[] types = TTM_Utils.GetTrackedNpcSkillTypeByIndexes()
+    string[] types = TTM_Utils.GetSpouseSkillTypeByIndexes()
 
     while(i < types.Length)
         TTM_MCM_State.AddSpouseTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])

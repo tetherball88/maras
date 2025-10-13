@@ -356,14 +356,16 @@ float Function intimacyAdjustment(Actor npc) global
         res += GetParam("intimacyOtherLoversBonus")
     endif
 
-    float intimacy = TTM_ServiceLoversLedger.GetNpcPlayerIntimacy(npc) * GetParam("intimacyPlayerMultiplier")
+    TTM_ServiceIntimateMoments intimacyScript = TTM_JData.GetGameQuest("marasMain") as TTM_ServiceIntimateMoments
+
+    float intimacy = intimacyScript.GetNpcPlayerIntimacy(npc) * GetParam("intimacyPlayerMultiplier")
 
     return res - intimacy
 EndFunction
 
 
 float Function calcMarriageSuccessChance(Actor npc) global
-    TTM_Debug.trace("calcMarriageSuccessChance:Actor:"+npc)
+    Trace("calcMarriageSuccessChance:Actor:"+TTM_Utils.GetActorName(npc))
     if(TTM_MCM_State.GetAlwaysSuccessMarriage())
         return 1.0
     endif
@@ -380,30 +382,30 @@ float Function calcMarriageSuccessChance(Actor npc) global
     ; prestige delta
     ; float target = 10 + 10 * socialClassIndex ; // 10 … 70
     float target = GetParam("prestigeTargetBase") + GetParam("prestigeTargetPerSocialIndexMultiplier") * socialClassIndex ; // 10 … 70
-    TTM_Debug.trace("calcMarriageSuccessChance:targetScore:"+target)
+    Trace("calcMarriageSuccessChance:targetScore:"+target)
     ; float pDelta = (target - calcPlayerPrestige()) * 0.30
     float playerPrestige = calcPlayerPrestige()
     float pDelta = (target - playerPrestige) * GetParam("prestigeDeltaMultiplier")
-    TTM_Debug.trace("calcMarriageSuccessChance:player'sPrestige:"+playerPrestige+":target:"+target+":prestigeDelta:"+pDelta)
+    Trace("calcMarriageSuccessChance:player'sPrestige:"+playerPrestige+":target:"+target+":prestigeDelta:"+pDelta)
     complexity += pDelta
 
     ; player were engaged but it was jilted, it's harder to get another try */
     if (TTM_Utils.IsJilted(npc))
-        TTM_Debug.trace("calcMarriageSuccessChance:jilted")
+        Trace("calcMarriageSuccessChance:jilted")
         ; complexity += 10
         complexity += GetParam("jiltedPenalty")
     endif
 
     ; player were married to npc at some point but divorced, so it's harder to re-marry
     if (TTM_Utils.IsDivorced(npc))
-        TTM_Debug.trace("calcMarriageSuccessChance:divorced")
+        Trace("calcMarriageSuccessChance:divorced")
         ; complexity += 20
         complexity += GetParam("divorcedPenalty")
     endif
 
     ; player killed spouse or fiance without reason - red flag for future potential candidates
     if(TTM_JData.GetPlayerKiller())
-        TTM_Debug.trace("calcMarriageSuccessChance:playerKilledSpouseBefore")
+        Trace("calcMarriageSuccessChance:playerKilledSpouseBefore")
         ; complexity += 50
         complexity += GetParam("playerKillerPenalty")
     endif
@@ -412,32 +414,32 @@ float Function calcMarriageSuccessChance(Actor npc) global
     ; complexity += TTM_ServiceNpcs.CountBucket("married") * 2
     float marriedScore = TTM_ServiceNpcs.CountBucket("married") * GetParam("marriedCountMultiplier")
     complexity += marriedScore
-    TTM_Debug.trace("calcMarriageSuccessChance:marriedCount:"+marriedScore)
+    Trace("calcMarriageSuccessChance:marriedCount:"+marriedScore)
     ; divorced times before
     ; complexity += TTM_ServiceNpcs.CountBucket("divorced")
     float divorcedScore = TTM_ServiceNpcs.CountBucket("divorced") * GetParam("divorcedCountMultiplier")
     complexity += divorcedScore
-    TTM_Debug.trace("calcMarriageSuccessChance:divorcedCount:"+divorcedScore)
+    Trace("calcMarriageSuccessChance:divorcedCount:"+divorcedScore)
     ; level diff
     ; complexity += PapyrusUtil.ClampFloat(levelDiff * 0.10, -10, 10)
     float levelDiffScore = PapyrusUtil.ClampFloat(levelDiff * GetParam("levelDiffMultiplier"), -10, 10)
     complexity += levelDiffScore
-    TTM_Debug.trace("calcMarriageSuccessChance:levelDiff:"+levelDiffScore)
+    Trace("calcMarriageSuccessChance:levelDiff:"+levelDiffScore)
     ; speech bonus
     ; complexity += -0.1 * player.GetActorValue("speechcraft")
     complexity += GetParam("speechcraftMultiplier") * player.GetActorValue("speechcraft")
-    TTM_Debug.trace("calcMarriageSuccessChance:Speech:" + (-0.05 * player.GetActorValue("speechcraft")))
+    Trace("calcMarriageSuccessChance:Speech:" + (-0.05 * player.GetActorValue("speechcraft")))
     ; relationship rank
     ; complexity += -3 * npc.GetRelationshipRank(player)
     float relationshipScore = GetParam("relationshipRankMultiplier") * npc.GetRelationshipRank(player)
     complexity += relationshipScore
-    TTM_Debug.trace("calcMarriageSuccessChance:relationshipRanjk:" + relationshipScore)
+    Trace("calcMarriageSuccessChance:relationshipRanjk:" + relationshipScore)
     ; guild alignment
     complexity += calcGuildAlignmentMod(npc)
-    TTM_Debug.trace("calcMarriageSuccessChance:guilds:"+ calcGuildAlignmentMod(npc))
+    Trace("calcMarriageSuccessChance:guilds:"+ calcGuildAlignmentMod(npc))
     ; intimacy adjustment
     complexity += intimacyAdjustment(npc)
-    TTM_Debug.trace("calcMarriageSuccessChance:intimacyAdjustment:"+ intimacyAdjustment(npc))
+    Trace("calcMarriageSuccessChance:intimacyAdjustment:"+ intimacyAdjustment(npc))
 
 
     ; === 2. Clamp difficulty 0-100 ===
@@ -446,7 +448,11 @@ float Function calcMarriageSuccessChance(Actor npc) global
     ; === 3. Logistic baseline ===
     float chance = PapyrusUtil.ClampFloat(1 - difficulty / 100, 0.0, 1.0)
 
-    TTM_Debug.trace("calcMarriageSuccessChance:finalChance:"+ chance)
+    Trace("calcMarriageSuccessChance:finalChance:"+ chance)
 
     return chance
+EndFunction
+
+Function Trace(string msg) global
+    ; TTM_Debug.trace("TTM_MarriageDifficulty:" + msg)
 EndFunction

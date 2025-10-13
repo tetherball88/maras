@@ -31,7 +31,7 @@ EndFunction
   Calculates and applies follower-based multipliers to player bonuses.
 /;
 Function CalculateFollowerMultipliers() global
-    string[] types = TTM_Utils.GetTrackedNpcSkillTypeByIndexes()
+    string[] types = TTM_Utils.GetSpouseSkillTypeByIndexes()
     float[] multipliers = GetFollowersMultipliers()
     int i = 0
 
@@ -95,15 +95,15 @@ Function UpdatePerk(string type, int index, float multiplier) global
         bonusPerk.SetNthEntryValue(0, 0, newVal)
     endif
 
-    TTM_Debug.trace("CalculateValues:"+bonusPerk+":"+oldVal+":"+newVal)
+    Trace("CalculateValues:"+bonusPerk+":"+oldVal+":"+newVal)
 
     ; new val(spell magnitude or perk value) is 0, means effect will provide 0 benefit - remove perk
     if(newVal == 0.0)
         if(PlayerRef.HasPerk(bonusPerk))
-            TTM_Debug.trace("RemovePerk:"+bonusPerk)
+            Trace("RemovePerk:"+bonusPerk)
             PlayerRef.removePerk(bonusPerk)
         else
-            TTM_Debug.trace("SkipPerk:"+bonusPerk)
+            Trace("SkipPerk:"+bonusPerk)
         endif
         return
     endif
@@ -112,11 +112,11 @@ Function UpdatePerk(string type, int index, float multiplier) global
     if(newVal != oldVal)
         PlayerRef.removePerk(bonusPerk)
         PlayerRef.addPerk(bonusPerk)
-        TTM_Debug.trace("UpdatePerk:"+bonusPerk)
+        Trace("UpdatePerk:"+bonusPerk)
     ; if new value is same as old and it is not 0, but for some reason player doesn't have perk add it
     elseif(!PlayerRef.HasPerk(bonusPerk))
         PlayerRef.addPerk(bonusPerk)
-        TTM_Debug.trace("AddPerk:"+bonusPerk)
+        Trace("AddPerk:"+bonusPerk)
     endif
 EndFunction
 
@@ -138,19 +138,20 @@ EndFunction
 float Function GetSpouseMultiplier(Actor spouse) global
     int spouseRank = TTM_ServiceNpcs.GetSpouseRank(spouse)
     int spouseCount = TTM_ServiceNpcs.GetSpousesCount()
+    float affectionBuffMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(spouse)
 
     if(spouseCount == 1)
-        return 2.0
+        return 2.0 * affectionBuffMult
     endif
 
     if(spouseRank == 0)
-        return 1.0
+        return 1.0 * affectionBuffMult
     elseif(spouseRank == 1)
-        return 0.5
+        return 0.5 * affectionBuffMult
     elseif(spouseRank == 2)
-        return 0.25
+        return 0.25 * affectionBuffMult
     else
-        return 0.1
+        return 0.1 * affectionBuffMult
     endif
 EndFunction
 
@@ -190,9 +191,10 @@ float[] Function GetFollowersMultipliers() global
         Actor follower = followers[i]
         if(TTM_ServiceNpcs.GetSpouse(follower) != 0)
             string skillType = TTM_Utils.GetSpouseSkillType(follower)
+            float spouseMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(follower)
             int index = TTM_Utils.GetSpouseSkillIndexByType(skillType)
             if(index != -1)
-                multipliers[index] = multipliers[index] + 1
+                multipliers[index] = multipliers[index] + spouseMult
             endif
         endif
         i += 1
@@ -215,7 +217,7 @@ float[] Function GetPermanentMultipliers() global
         string socialType = TTM_Utils.GetSpouseSocialClass(spouse)
         int spouseRank = TTM_ServiceNpcs.GetSpouseRank(spouse)
         float multiplier = GetSpouseMultiplier(spouse)
-        TTM_Debug.trace("GetPermanentMultipliers:SpousesCount:"+TTM_Utils.GetActorName(spouse)+":socialType" + socialType + ":rank" + spouseRank + ":multiplier" + multiplier)
+        Trace("GetPermanentMultipliers:SpousesCount:"+TTM_Utils.GetActorName(spouse)+":socialType" + socialType + ":rank" + spouseRank + ":multiplier" + multiplier)
 
         int index = TTM_Utils.GetSpouseSocialIndexByType(socialType)
         if(index != -1)
@@ -293,4 +295,8 @@ EndFunction
 /;
 string Function GetBonusPerkDescription(string type, int index = 0) global
     return JDB_solveStr(GetBonusesNamespace() + "." + type + "[" + index + "].description")
+EndFunction
+
+Function Trace(string msg) global
+    ; TTM_Debug.trace("TTM_ServiceBuff:" + msg)
 EndFunction

@@ -19,15 +19,19 @@ Function CheckOverrides() global
 
             string overrideSkill = GetSkillTypeOverride(npc)
             SetSpouseSkillType(npc, overrideSkill)
+
+            string overrideTemperament = GetTemperamentOverride(npc)
+            SetSpouseTemperament(npc, overrideTemperament)
         endif
         npc = JFormMap_nextKey(JTypes, npc) as Actor
     endwhile
 EndFunction
 
 int Function DetermineSpouseType(Actor spouse) global
-    TTM_Debug.trace("DetermineSpouseType:"+spouse)
+    TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(spouse))
     SetSpouseSkillType(spouse, DetermineSkillType(spouse))
     SetSpouseSocialClass(spouse, DetermineSocialClass(spouse))
+    SetSpouseTemperament(spouse, DetermineTemperament(spouse))
 EndFunction
 
 Function SetSpouseSocialClass(Actor npc, string socialClass) global
@@ -39,7 +43,7 @@ Function SetSpouseSocialClass(Actor npc, string socialClass) global
                 npc.AddToFaction(socialClassFaction)
             endif
             npc.SetFactionRank(socialClassFaction, socialIndex)
-            TTM_Debug.trace("DetermineSpouseType:"+npc+":SocialClass:"+socialIndex)
+            TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":SocialClass:"+socialIndex)
         endif
     endif
 EndFunction
@@ -53,7 +57,21 @@ Function SetSpouseSkillType(Actor npc, string skillType) global
                 npc.AddToFaction(skillTypeFaction)
             endif
             npc.SetFactionRank(skillTypeFaction, skillIndex)
-            TTM_Debug.trace("DetermineSpouseType:"+npc+":SkillType:"+skillIndex)
+            TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":SkillType:"+skillIndex)
+        endif
+    endif
+EndFunction
+
+Function SetSpouseTemperament(Actor npc, string temperament) global
+    if(temperament != "none")
+        int temperamentIndex = TTM_Utils.GetSpouseTemperamentIndexByType(temperament)
+        if(temperamentIndex != -1)
+            Faction temperamentFaction = TTM_JData.GetSpouseTemperamentFaction()
+            if(npc.IsInFaction(temperamentFaction))
+                npc.AddToFaction(temperamentFaction)
+            endif
+            npc.SetFactionRank(temperamentFaction, temperamentIndex)
+            TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":Temperament:"+temperamentIndex)
         endif
     endif
 EndFunction
@@ -79,6 +97,15 @@ string Function DetermineSkillType(Actor spouse) global
     endif
 
     return skillType
+EndFunction
+
+string Function DetermineTemperament(Actor spouse) global
+    string temperament = GetTemperamentOverride(spouse)
+    if(temperament != "none")
+        return temperament
+    endif
+
+    return CheckTemperament(spouse)
 EndFunction
 
 string Function DetermineSkillClassBased(Actor spouse) global
@@ -199,24 +226,83 @@ string Function GetSocialClassByFaction(Actor spouse) global
     return TTM_Utils.GetSpouseSocialTypeByIndexes()[maxClassIndex]
 EndFunction
 
-; bool Function checkByFaction(string type, Faction[] spouseFactions) global
-;     FormList factions = TTM_JData.GetSpouseTypesFactionsByType(type)
-;     int i = 0
-
-;     while i < spouseFactions.Length
-;         TTM_Debug.trace("checkByFaction:"+type+":"+spouseFactions[i])
-;         if(factions.HasForm(spouseFactions[i]))
-;             return true
-;         endif
-;         i += 1
-;     endwhile
-
-;     return false
-; EndFunction
-
 bool Function checkByClass(string type, Class spouseClass) global
     FormList classes = TTM_JData.GetSpouseTypesClassesByType(type)
     return classes.HasForm(spouseClass)
+EndFunction
+
+;/
+                Warrior(0)  Mage(1)     Rogue(2)    Craftsman(3) Ranger(4)   Orator(5)
+Outcast(0)      Independent Jealous     Jealous     Humble       Independent Romantic
+Poverty(1)      Humble      Romantic    Jealous     Independent  Proud       Romantic
+Working(2)      Proud       Humble      Romantic    Independent  Independent Proud
+Middle(3)       Proud       Romantic    Independent Romantic     Humble      Jealous
+Wealthy(4)      Proud       Jealous     Romantic    Romantic     Independent Jealous
+Religious(5)    Independent Humble      Romantic    Jealous      Humble      Proud
+Nobles(6)       Jealous     Romantic    Independent Proud        Humble      Proud
+Rulers(7)       Proud       Independent Humble      Romantic     Jealous     Independent
+/;
+string Function CheckTemperament(Actor akNpc) global
+    int socialClass = TTM_Utils.GetSpouseSocialClassIndex(akNpc)
+    int skillType = TTM_Utils.GetSpouseSkillTypeIndex(akNpc)
+
+    ; Group conditions by temperament for cleaner logic
+    ; Independent: Outcast(Warrior,Ranger), Poverty(Craftsman), Working(Craftsman,Ranger), Middle(Rogue), Wealthy(Ranger), Religious(Warrior), Nobles(Rogue), Rulers(Mage,Orator)
+    if((socialClass == 0 && (skillType == 0 || skillType == 4)) || \
+       (socialClass == 1 && skillType == 3) || \
+       (socialClass == 2 && (skillType == 3 || skillType == 4)) || \
+       (socialClass == 3 && skillType == 2) || \
+       (socialClass == 4 && skillType == 4) || \
+       (socialClass == 5 && skillType == 0) || \
+       (socialClass == 6 && skillType == 2) || \
+       (socialClass == 7 && (skillType == 1 || skillType == 5)))
+        return "independent"
+
+    ; Jealous: Outcast(Mage,Rogue), Poverty(Rogue), Middle(Orator), Wealthy(Mage,Orator), Religious(Craftsman), Nobles(Warrior), Rulers(Ranger)
+    elseif((socialClass == 0 && (skillType == 1 || skillType == 2)) || \
+           (socialClass == 1 && skillType == 2) || \
+           (socialClass == 3 && skillType == 5) || \
+           (socialClass == 4 && (skillType == 1 || skillType == 5)) || \
+           (socialClass == 5 && skillType == 3) || \
+           (socialClass == 6 && skillType == 0) || \
+           (socialClass == 7 && skillType == 4))
+        return "jealous"
+
+    ; Humble: Outcast(Craftsman), Poverty(Warrior), Working(Mage), Middle(Ranger), Religious(Mage,Ranger), Nobles(Ranger), Rulers(Rogue)
+    elseif((socialClass == 0 && skillType == 3) || \
+           (socialClass == 1 && skillType == 0) || \
+           (socialClass == 2 && skillType == 1) || \
+           (socialClass == 3 && skillType == 4) || \
+           (socialClass == 5 && (skillType == 1 || skillType == 4)) || \
+           (socialClass == 6 && skillType == 4) || \
+           (socialClass == 7 && skillType == 2))
+        return "humble"
+
+    ; Proud: Poverty(Ranger), Working(Warrior,Orator), Middle(Warrior), Wealthy(Warrior), Religious(Orator), Nobles(Craftsman,Orator), Rulers(Warrior)
+    elseif((socialClass == 1 && skillType == 4) || \
+           (socialClass == 2 && (skillType == 0 || skillType == 5)) || \
+           (socialClass == 3 && skillType == 0) || \
+           (socialClass == 4 && skillType == 0) || \
+           (socialClass == 5 && skillType == 5) || \
+           (socialClass == 6 && (skillType == 3 || skillType == 5)) || \
+           (socialClass == 7 && skillType == 0))
+        return "proud"
+
+    ; Romantic: Outcast(Orator), Poverty(Mage,Orator), Working(Rogue), Middle(Mage,Craftsman), Wealthy(Rogue,Craftsman), Religious(Rogue), Nobles(Mage), Rulers(Craftsman)
+    elseif((socialClass == 0 && skillType == 5) || \
+           (socialClass == 1 && (skillType == 1 || skillType == 5)) || \
+           (socialClass == 2 && skillType == 2) || \
+           (socialClass == 3 && (skillType == 1 || skillType == 3)) || \
+           (socialClass == 4 && (skillType == 2 || skillType == 3)) || \
+           (socialClass == 5 && skillType == 2) || \
+           (socialClass == 6 && skillType == 1) || \
+           (socialClass == 7 && skillType == 3))
+        return "romantic"
+
+    ; Default fallback
+    else
+        return "independent"
+    endif
 EndFunction
 
 ;/ ==============================
@@ -243,4 +329,8 @@ EndFunction
 
 string Function GetSkillTypeOverride(Actor npc) global
     return JMap_getStr(GetActor(npc), "skill", "none")
+EndFunction
+
+string Function GetTemperamentOverride(Actor npc) global
+    return JMap_getStr(GetActor(npc), "temperament", "none")
 EndFunction

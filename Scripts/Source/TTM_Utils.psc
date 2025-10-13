@@ -10,7 +10,10 @@ string Function GetActorName(actor akActor) global
     EndIf
 EndFunction
 
-string Function SendRelationshipChangeEvent(Actor candidate, string status) global
+Function SendRelationshipChangeEvent(Actor candidate, string status) global
+    if(!TTM_Utils.IsSpouse(candidate) && status == "divorced" || !TTM_Utils.IsFiance(candidate) && status == "jilted" || TTM_Utils.IsSpouse(candidate) && status == "married" || TTM_Utils.IsFiance(candidate) && status == "engaged")
+        return
+    endif
     int handle = ModEvent.Create("TTM_SpouseRelationshipChanged")
     TTM_debug.trace("SendRelationshipChangeEvent:"+handle+":"+candidate+":"+status)
     if(handle)
@@ -20,7 +23,16 @@ string Function SendRelationshipChangeEvent(Actor candidate, string status) glob
     endif
 EndFunction
 
-
+string Function SendAffectionChangeThresholdEvent(Actor spouse, string level, bool up) global
+    int handle = ModEvent.Create("TTM_SpouseAffectionChanged")
+    TTM_debug.trace("SendAffectionChangeThresholdEvent:"+handle+":"+TTM_Utils.GetActorName(spouse)+":"+level+":"+up)
+    if(handle)
+        ModEvent.PushForm(handle, spouse as Form)
+        ModEvent.PushString(handle, level)
+        ModEvent.PushBool(handle, up)
+        ModEvent.Send(handle)
+    endif
+EndFunction
 
 bool Function SpouseOwnsCell(Actor spouse, Cell currentCell) global
     ActorBase ownerAB = currentCell.GetActorOwner()
@@ -70,7 +82,7 @@ EndFunction
 4 - ranger,
 5 - orator
 /;
-string[] Function GetTrackedNpcSkillTypeByIndexes() global
+string[] Function GetSpouseSkillTypeByIndexes() global
     string[] spouseTypes = Utility.CreateStringArray(6)
     spouseTypes[0] = "warrior"
     spouseTypes[1] = "mage"
@@ -146,6 +158,40 @@ int Function GetSpouseSocialIndexByType(string type) global
     return -1
 EndFunction
 
+;/
+0 - Proud,
+1 - Humble,
+2 - Jealous,
+3 - Romantic,
+4 - Independent,
+/;
+string[] Function GetSpouseTemperamentByIndexes() global
+    string[] spouseTypes = Utility.CreateStringArray(5)
+    spouseTypes[0] = "proud"
+    spouseTypes[1] = "humble"
+    spouseTypes[2] = "jealous"
+    spouseTypes[3] = "romantic"
+    spouseTypes[4] = "independent"
+
+    return spouseTypes
+EndFunction
+
+int Function GetSpouseTemperamentIndexByType(string type) global
+    if(type == "proud")
+        return 0
+    elseif(type == "humble")
+        return 1
+    elseif(type == "jealous")
+        return 2
+    elseif(type == "romantic")
+        return 3
+    elseif(type == "independent")
+        return 4
+    endif
+
+    return -1
+EndFunction
+
 Actor Function GetActorAlias(Quest qst, string name) global
     ReferenceAlias al = qst.GetAliasByName(name) as ReferenceAlias
     return al.GetActorRef()
@@ -167,12 +213,25 @@ EndFunction
 string Function GetSpouseSkillType(Actor spouse) global
     int index = GetSpouseSkillTypeIndex(spouse)
 
-    return GetTrackedNpcSkillTypeByIndexes()[index]
+    return GetSpouseSkillTypeByIndexes()[index]
 EndFunction
 
 int Function GetSpouseSkillTypeIndex(Actor spouse) global
     Faction skillTypeFaction = TTM_JData.GetSpouseSkillTypeFaction()
     int index = spouse.GetFactionRank(skillTypeFaction)
+
+    return index
+EndFunction
+
+string Function GetSpouseTemperament(Actor spouse) global
+    int index = GetSpouseTemperamentIndex(spouse)
+
+    return GetSpouseTemperamentByIndexes()[index]
+EndFunction
+
+int Function GetSpouseTemperamentIndex(Actor spouse) global
+    Faction temperamentFaction = TTM_JData.GetSpouseTemperamentFaction()
+    int index = spouse.GetFactionRank(temperamentFaction)
 
     return index
 EndFunction

@@ -38,6 +38,7 @@ Function RegisterActions() global
   RegisterAcceptProposalAction()
   RegisterBreakupEngagementAction()
   RegisterDivorseAction()
+  RegisterAffectionEstrangedDivorceResolutionAction()
 EndFunction
 
 Function RegisterAcceptProposalAction() global
@@ -48,7 +49,7 @@ Function RegisterAcceptProposalAction() global
 EndFunction
 
 Bool Function AcceptProposalIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+    if(!TTM_Utils.IsTracking(akActor))
         TTM_Debug.trace("AcceptProposalIsElgigible:DoesntHaveTrackingFaction:SKIP"+akActor)
         return false
     endif
@@ -67,8 +68,45 @@ Function SimulatePostWeddingIfSkippedBehavior(Actor npc) global
         return
     endif
     Actor player = TTM_JData.GetPlayer()
-    SkyrimNetApi.DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(npc) + " got married!", npc)
+    TTM_ServiceSkyrimNet.DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(npc) + " got married!", npc)
 EndFunction
+
+Function RegisterAffectionEstrangedDivorceResolutionAction() global
+    SkyrimNetApi.RegisterAction("AffectionEstrangedDivorceResolution", \
+    "{{decnpc(npc.UUID).name}} listens to {{player.name}}'s words and makes a decision about their marriage. If what {{player.name}} says resonates with them, they may choose to reconcile. Otherwise, they may opt for divorce.", \
+    "TTM_ServiceSkyrimNet", "AffectionEstrangedDivorceResolutionIsEligible", "TTM_ServiceSkyrimNet", "AffectionEstrangedDivorceResolutionAction", "", "PAPYRUS", 1, \
+    "{\"decision\": \"If spouse is ready to try again for marriage return 'reconcile' else return 'divorce'\"}")
+EndFunction
+
+bool Function CheckIfDivorceQuestIsInPlay(Actor akActor) global
+    Quest affectionDivorceQuest = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
+    int stage = affectionDivorceQuest.GetCurrentStageID()
+    if(stage != 10)
+        return false
+    endif
+    Actor spouse = TTM_Utils.GetActorAlias(affectionDivorceQuest, "spouse")
+    return spouse == akActor
+EndFunction
+
+Bool Function AffectionEstrangedDivorceResolutionIsEligible(Actor akActor, string contextJson, string paramsJson) global
+    if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+        TTM_Debug.trace("AffectionEstrangedDivorceResolutionIsEligible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        return false
+    endif
+
+    return CheckIfDivorceQuestIsInPlay(akActor)
+EndFunction
+
+Function AffectionEstrangedDivorceResolutionAction(Actor akActor, string contextJson, string paramsJson) global
+    string decison = SkyrimNetApi.GetJsonString(paramsJson, "decision", "none")
+    if(decison == "reconcile")
+        TTM_JData.GetMarasAffectionEstrangedDivorceQuest().SetStage(100)
+        return
+    elseif(decison == "divorce")
+        TTM_JData.GetMarasAffectionEstrangedDivorceQuest().SetStage(200)
+    endif
+EndFunction
+
 
 Bool Function RegisterBreakupEngagementAction() global
     SkyrimNetApi.RegisterAction("CancelWeddingEngagement", \
@@ -93,7 +131,7 @@ Bool Function RegisterDivorseAction() global
 EndFunction
 
 Bool Function DivorseIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    return TTM_Utils.IsSpouse(akActor)
+    return TTM_Utils.IsSpouse(akActor) && !CheckIfDivorceQuestIsInPlay(akActor)
 EndFunction
 
 Function DivorseAction(Actor akActor, string contextJson, string paramsJson) global
@@ -107,7 +145,7 @@ EndFunction
 
 string Function GetMarriageChance(Actor akActor) global
     string notReady = "{\"chance\": -1}"
-    if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
+    if(!TTM_Utils.IsTracking(akActor))
         TTM_Debug.trace("GetMarriageChance:Doesn'tHaveTrackingFaction:SKIP"+akActor)
         return notReady
     endif
@@ -244,39 +282,32 @@ string Function BuildLine(Actor akActor, Actor playerPartner, string originalRel
 EndFunction
 
 Function RegisterEventSchemas() global
-    RegisterEventSchemaDemoted()
-    RegisterEventSchemaPromoted()
+    RegisterEventSchemaPromotion()
 EndFunction
 
-Function RegisterEventSchemaDemoted() global
-    string type = "ttm_spouse_demoted"
-    string name = "Spouse Demoted"
-    string description = "Happens when a spouse is demoted in rank"
-    string msg = "SPOUSE DEMOTED: {{actor}} has been demoted from rank {{oldRank}} to {{newRank}}."
-    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was demoted.\"}, {\"name\": \"oldRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's old rank.\"}, {\"name\": \"newRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's new rank.\"}]"
+Function RegisterEventSchemaPromotion() global
+    string type = "ttm_spouse_promotion"
+    string name = "Spouse Promotion"
+    string description = "Happens when a spouse is promoted/demoted in rank"
+    string msg = "SPOUSE PROMOTION/DEMOTION: {{actor}} has been promoted."
+    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\", \"name\": \"promotionKeyword\", \"type\": 0, \"required\": true, \"description\": \"'promoted' or 'demoted' depending on the action.\"}]"
     string renderParams = "{\"recent_events\":\""+msg+"\",\"raw\":\""+msg+"\",\"compact\":\""+msg+"\",\"verbose\":\""+msg+"\"}"
     SkyrimnetApi.RegisterEventSchema(type, name, description, jsonParams, renderParams, false, 0)
 EndFunction
 
-Function RegisterDemotedEvent(Actor spouse, int newRank, int oldRank) global
-    string type = "ttm_spouse_demoted"
-    string jsonData = "{\"actor\": \""+TTM_Utils.GetActorName(spouse)+"\", \"oldRank\": "+oldRank+", \"newRank\": "+newRank+"}"
+Function RegisterPromotionEvent(Actor spouse, bool isDemoted) global
+    string type = "ttm_spouse_promotion"
+    string promotionKeyword = "promoted"
+    if(isDemoted)
+        promotionKeyword = "demoted"
+    endif
+    string jsonData = "{\"actor\": \""+TTM_Utils.GetActorName(spouse)+"\", \"promotionKeyword\": \""+promotionKeyword+"\"}"
     SkyrimNetApi.RegisterEvent(type, jsonData, spouse, none)
 EndFunction
 
-; todo promoted schema
-Function RegisterEventSchemaPromoted() global
-    string type = "ttm_spouse_promoted"
-    string name = "Spouse Promoted"
-    string description = "Happens when a spouse is promoted in rank"
-    string msg = "SPOUSE PROMOTED: {{actor}} has been promoted from rank {{oldRank}} to {{newRank}}."
-    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\"}, {\"name\": \"oldRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's old rank.\"}, {\"name\": \"newRank\", \"type\": 1, \"required\": true, \"description\": \"The actor's new rank.\"}]"
-    string renderParams = "{\"recent_events\":\""+msg+"\",\"raw\":\""+msg+"\",\"compact\":\""+msg+"\",\"verbose\":\""+msg+"\"}"
-    SkyrimnetApi.RegisterEventSchema(type, name, description, jsonParams, renderParams, false, 0)
-EndFunction
-
-Function RegisterPromotedEvent(Actor spouse, int newRank, int oldRank) global
-    string type = "ttm_spouse_promoted"
-    string jsonData = "{\"actor\": \""+TTM_Utils.GetActorName(spouse)+"\", \"oldRank\": "+oldRank+", \"newRank\": "+newRank+"}"
-    SkyrimNetApi.RegisterEvent(type, jsonData, spouse, none)
+Function DirectNarration(String content, Actor originatorActor = None, Actor targetActor = None) global
+    if(!TTM_JData.GetHasSkyrimNet())
+        return
+    endif
+    SkyrimNetApi.DirectNarration(content, originatorActor, targetActor)
 EndFunction

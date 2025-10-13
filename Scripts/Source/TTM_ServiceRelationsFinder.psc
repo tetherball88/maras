@@ -1,29 +1,8 @@
-scriptname TTM_ServiceLoversLedger
+scriptname TTM_ServiceRelationsFinder
 
 import TTM_JCDomain
 
-float Function GetNpcPlayerIntimacy(Actor npc) global
-    if(TTM_JData.GetHasTTLL())
-        return 0
-    endif
-
-    float res = 0
-
-    Actor player = TTM_JData.GetPlayer()
-    if(TTLL_Store.GetLoverExclusiveSexCount(npc, player) >= 1)
-        res += 10
-    elseif(TTLL_Store.GetLoverGroupSexCount(npc, player) >= 1)
-        res += 6
-    endif
-
-    if(TTLL_Store.IsNpcTopThreeLover(npc, TTM_JData.GetPlayer()))
-        res += 6
-    endif
-
-    return res
-EndFunction
-
-Function UpdateNpcCurrentRelationships(int jNpc, Actor npc) global
+Function AddNpcCurrentRelationships(int jNpc, Actor npc) global
     if(TTM_JData.GetHasTTRF())
         int jExistingRelationships = JArray_object()
         Actor spouse = TTRF_Store.GetSpouse(npc)

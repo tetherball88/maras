@@ -323,6 +323,10 @@ Keyword Function GetHomeSandboxKeyword() global
     return GetGameKeyword("marasHomeSandbox")
 EndFunction
 
+Keyword Function GetAffectionQuestKeyword(string type) global
+    return GetGameKeyword("marasAffection" + type)
+EndFunction
+
 ;/ ==============================
    SECTION: ARMORS
 ============================== /;
@@ -449,6 +453,10 @@ Quest Function GetGameQuest(string questName) global
     return res
 EndFunction
 
+Quest Function GetDialogueFavorQuest() global
+    return GetGameQuest("dialogueFavor")
+EndFunction
+
 Quest Function GetMarriageFinQuest() global
     return GetGameQuest("marriageFin")
 EndFunction
@@ -479,6 +487,10 @@ EndFunction
 
 Quest Function GetMarasCheckSpouseHomeQuest() global
     return GetGameQuest("marasCheckSpouseHome")
+EndFunction
+
+Quest Function GetMarasAffectionEstrangedDivorceQuest() global
+    return GetGameQuest("marasAffectionEstrangedDivorce")
 EndFunction
 
 ;/ ==============================
@@ -530,6 +542,10 @@ Faction Function GetPotentialHirelingFaction() global
     return GetGameFaction("potentialHireling")
 EndFunction
 
+Faction Function GetCurrentFollowerFaction() global
+    return GetGameFaction("currentFollower")
+EndFunction
+
 ;/
   Returns the Faction used to check spouse home ownership.
 /;
@@ -556,6 +572,13 @@ EndFunction
 /;
 Faction Function GetSpouseSkillTypeFaction() global
     return GetGameFaction("marasSpouseSkillTypeFaction")
+EndFunction
+
+;/
+  Returns the Faction for spouse temperament.
+/;
+Faction Function GetSpouseTemperamentFaction() global
+    return GetGameFaction("marasSpouseTemperamentFaction")
 EndFunction
 
 ;/
@@ -586,6 +609,19 @@ Faction Function GetSpouseHierarchyFaction() global
     return GetGameFaction("marasHierarchy")
 EndFunction
 
+;/
+  Returns the Faction for spouse which were demoted in hierarchy.
+/;
+Faction Function GetSpouseHierarchyDemotedFromFaction() global
+    return GetGameFaction("marasHierarchyDemotedFrom")
+EndFunction
+
+;/
+  Returns the Faction used for affection system.
+/;
+Faction Function GetAffectionFaction() global
+    return GetGameFaction("marasAffection")
+EndFunction
 
 ;/ ==============================
    SECTION: SPOUSE TYPES FACTIONS and CLASSES FORMLISTS

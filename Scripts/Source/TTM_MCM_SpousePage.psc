@@ -16,6 +16,7 @@ Function CleanMcmOids(TTM_MCM mcm) global
     mcm.oid_CandidateChance = -1
     mcm.oid_SpousePageSocialClass = -1
     mcm.oid_SpousePageSkillType = -1
+    mcm.oid_SpousePageTemperament = -1
     mcm.oid_SpousePagePlayerHome = -1
     mcm.oid_SpouseShareTheirHome = -1
 EndFunction
@@ -25,6 +26,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     string spouseName = TTM_Utils.GetActorName(spouse)
     string skillType = TTM_Utils.GetSpouseSkillType(spouse)
     string socialClass = TTM_Utils.GetSpouseSocialClass(spouse)
+    string temperament = TTM_Utils.GetSpouseTemperament(spouse)
     string count = TTM_ServiceNpcs.GetSpousesCount()
     string status = TTM_Utils.GetRelationshipStatus(spouse)
     bool isDeceased = TTM_ServiceNpcs.IsDeceased(spouse)
@@ -68,6 +70,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
 
     mcm.oid_SpousePageSocialClass = mcm.AddMenuOption("Social class: ", socialClass)
     mcm.oid_SpousePageSkillType = mcm.AddMenuOption("Skilled as: ", skillType)
+    mcm.oid_SpousePageTemperament = mcm.AddMenuOption("Temperament: ", temperament)
 
     if(isSpouse && !isDeceased)
         Location playerHouse = TTM_ServiceNpcs.GetTrackedNpcHome(spouse)
@@ -163,6 +166,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText("Follower bonus - " + TTM_ServiceBuff.GetSpouseFollowerBuffs(spouse))
     elseif(option == mcm.oid_SpousePageSocialClass)
         mcm.SetInfoText("Permanent bonus - " + TTM_ServiceBuff.GetSpousePermanentBuffs(spouse))
+    elseif(option == mcm.oid_SpousePageTemperament)
+        mcm.SetInfoText("Temperament shapes affection gains, jealousy, and how spouses react to you.")
     elseif(option == mcm.oid_SpousePageRank)
         string rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
         string count = TTM_ServiceNpcs.GetSpousesCount()
@@ -231,9 +236,13 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
         start = TTM_Utils.GetSpouseSocialIndexByType(TTM_Utils.GetSpouseSocialClass(spouse))
         default = TTM_Utils.GetSpouseSocialIndexByType(TTM_ServiceSpouseTypes.DetermineSocialClass(spouse))
     elseif(option == mcm.oid_SpousePageSkillType)
-        options = TTM_Utils.GetTrackedNpcSkillTypeByIndexes()
+        options = TTM_Utils.GetSpouseSkillTypeByIndexes()
         start = TTM_Utils.GetSpouseSkillIndexByType(TTM_Utils.GetSpouseSkillType(spouse))
         default = TTM_Utils.GetSpouseSkillIndexByType(TTM_ServiceSpouseTypes.DetermineSkillType(spouse))
+    elseif(option == mcm.oid_SpousePageTemperament)
+        options = TTM_Utils.GetSpouseTemperamentByIndexes()
+        start = TTM_Utils.GetSpouseTemperamentIndex(spouse)
+        default = TTM_Utils.GetSpouseTemperamentIndexByType(TTM_ServiceSpouseTypes.DetermineTemperament(spouse))
     elseif(option == mcm.oid_SpousePagePlayerHome)
         options = PapyrusUtil.PushString(TTM_ServicePlayerHouse.GetPlayerHomesNames(), "unset")
         start = JArray_findForm(JFormMap_allKeys(TTM_ServicePlayerHouse.GetPlayerHouses()), TTM_ServiceNpcs.GetTrackedNpcHome(spouse))
@@ -263,9 +272,14 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
         TTM_ServiceSpouseTypes.SetSpouseSocialClass(spouse, opt)
         TTM_ServiceNpcs.SetTrackedNpcMcmTypeChanged(spouse)
     elseif(option == mcm.oid_SpousePageSkillType)
-        string[] options = TTM_Utils.GetTrackedNpcSkillTypeByIndexes()
+        string[] options = TTM_Utils.GetSpouseSkillTypeByIndexes()
         opt = options[index]
         TTM_ServiceSpouseTypes.SetSpouseSkillType(spouse, opt)
+        TTM_ServiceNpcs.SetTrackedNpcMcmTypeChanged(spouse)
+    elseif(option == mcm.oid_SpousePageTemperament)
+        string[] options = TTM_Utils.GetSpouseTemperamentByIndexes()
+        opt = options[index]
+        TTM_ServiceSpouseTypes.SetSpouseTemperament(spouse, opt)
         TTM_ServiceNpcs.SetTrackedNpcMcmTypeChanged(spouse)
     elseif(option == mcm.oid_SpousePagePlayerHome)
         string[] names = TTM_ServicePlayerHouse.GetPlayerHomesNames()
