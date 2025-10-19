@@ -339,6 +339,7 @@ Armor Function GetGameArmor(string itemName) global
     if(res == none)
         TTM_Debug.trace("Couldn't find Armor with name " + itemName)
     endif
+    return res
 EndFunction
 
 Armor Function GetMatrimonyRingArmor() global

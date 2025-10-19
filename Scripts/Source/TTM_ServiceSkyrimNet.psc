@@ -108,7 +108,7 @@ Function AffectionEstrangedDivorceResolutionAction(Actor akActor, string context
 EndFunction
 
 
-Bool Function RegisterBreakupEngagementAction() global
+Function RegisterBreakupEngagementAction() global
     SkyrimNetApi.RegisterAction("CancelWeddingEngagement", \
   "{{decnpc(npc.UUID).name}} evaluates and potentially ends their engagement to {{player.name}} before the wedding takes place.", \
   "TTM_ServiceSkyrimNet", "BreakupEngagementIsElgigible", "TTM_ServiceSkyrimNet", "BreakupEngagementAction", "", "PAPYRUS", 1, \
@@ -123,7 +123,7 @@ Function BreakupEngagementAction(Actor akActor, string contextJson, string param
     TTM_Utils.SendRelationshipChangeEvent(akActor, "jilted")
 EndFunction
 
-Bool Function RegisterDivorseAction() global
+Function RegisterDivorseAction() global
     SkyrimNetApi.RegisterAction("InitiateDivorce", \
   "{{decnpc(npc.UUID).name}} terminates their marriage bond with {{player.name}}, ending their spousal relationship.", \
   "TTM_ServiceSkyrimNet", "DivorseIsElgigible", "TTM_ServiceSkyrimNet", "DivorseAction", "", "PAPYRUS", 1, \
@@ -192,9 +192,9 @@ EndFunction
 
 string Function GenerateExPartnerLine(Actor akActor) global
     Actor player = TTM_JData.GetPlayer()
-    Actor existingSpouse = TTRF_Store.GetSpouse(akActor)
-    Actor existingCourting = TTRF_Store.GetCourting(akActor)
-    Form[] existingLovers = TTRF_Store.GetLovers(akActor)
+    Actor existingSpouse = TTM_ServiceRelationsFinder.GetExistingSpouse(akActor)
+    Actor existingCourting = TTM_ServiceRelationsFinder.GetExistingCourting(akActor)
+    Form[] existingLovers = TTM_ServiceRelationsFinder.GetExistingLovers(akActor)
     bool isTracking = TTM_Utils.IsTracking(akActor)
     string finalLine = ""
 
@@ -290,7 +290,7 @@ Function RegisterEventSchemaPromotion() global
     string name = "Spouse Promotion"
     string description = "Happens when a spouse is promoted/demoted in rank"
     string msg = "SPOUSE PROMOTION/DEMOTION: {{actor}} has been promoted."
-    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\", \"name\": \"promotionKeyword\", \"type\": 0, \"required\": true, \"description\": \"'promoted' or 'demoted' depending on the action.\"}]"
+    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\"}]"
     string renderParams = "{\"recent_events\":\""+msg+"\",\"raw\":\""+msg+"\",\"compact\":\""+msg+"\",\"verbose\":\""+msg+"\"}"
     SkyrimnetApi.RegisterEventSchema(type, name, description, jsonParams, renderParams, false, 0)
 EndFunction

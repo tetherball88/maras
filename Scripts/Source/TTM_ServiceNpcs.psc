@@ -315,9 +315,6 @@ int Function CreateNewTrackedNpc(Actor npc) global
 
     JMap_setStr(jNpc, "name", TTM_Utils.GetActorName(npc))
     JMap_setFlt(jNpc, "lastTimeSharedIncome", -1)
-    JMap_setObj(jNpc, "existingRelationships", JArray_object())
-
-    TTM_ServiceRelationsFinder.AddNpcCurrentRelationships(jNpc, npc)
 
     JFormMap_setObj(GetTrackedNpcs(), npc, jNpc)
 
@@ -345,6 +342,11 @@ int Function GetTrackedNpc(Actor npc) global
     endif
 
     return jNpc
+EndFunction
+
+int Function GetExistingRelationships(Actor npc) global
+    int jNpc = GetTrackedNpc(npc)
+    return JMap_getObj(jNpc, "existingRelationships")
 EndFunction
 
 ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
@@ -524,10 +526,6 @@ EndFunction
 
 Function AddCandidate(Actor candidate) global
     AddNpcToBucketAndSetStatus("candidate", candidate)
-EndFunction
-
-Function IsCandidate(Actor candidate) global
-    IsInBucket(candidate, "candidate")
 EndFunction
 
 ;/ ==============================

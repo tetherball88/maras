@@ -313,9 +313,9 @@ EndFunction
 
 float Function intimacyAdjustment(Actor npc) global
     float res = 0
-    Actor existingSpouse = TTRF_Store.GetSpouse(npc)
-    Actor existingCourting = TTRF_Store.GetCourting(npc)
-    Form[] existingLovers = TTRF_Store.GetLovers(npc)
+    Actor existingSpouse = TTM_ServiceRelationsFinder.GetExistingSpouse(npc)
+    Actor existingCourting = TTM_ServiceRelationsFinder.GetExistingCourting(npc)
+    Form[] existingLovers = TTM_ServiceRelationsFinder.GetExistingLovers(npc)
 
     int i = 0
 
