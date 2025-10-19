@@ -42,7 +42,7 @@ TTM_QuestTrackKilledSpouses kmyQuest = __temp as TTM_QuestTrackKilledSpouses
     Actor killer = Alias_Killer.GetActorRef()
     Actor victim = Alias_Victim.GetActorRef()
     Actor player = TTM_JData.GetPlayer()
-    if(TTM_ServiceNpcs.GetKilledByPlayer(victim))
+    if(killer != player)
         ObjectReference letter
         int inheritanceValue = 0
         if(TTM_Utils.IsSpouse(victim))

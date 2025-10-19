@@ -4,8 +4,9 @@ Scriptname TTM_CooldownSpell extends activemagiceffect
 Spell Property currentSpell Auto
 
 Event OnUpdateGameTime()
-    TTM_Debug.trace("TTM_CooldownSpell:"+currentSpell+":Cleared:" + TTM_Utils.GetActorName(GetTargetActor()))
-	GetTargetActor().RemoveSpell(currentSpell)
+    Actor akTarget = GetTargetActor()
+    TTM_Debug.trace("TTM_CooldownSpell:"+currentSpell+":Cleared:" + TTM_Utils.GetActorName(akTarget))
+	akTarget.RemoveSpell(currentSpell)
 EndEvent
 
 Event OnEffectStart(Actor akTarget, Actor akCaster)
@@ -15,7 +16,7 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
     TTM_Debug.trace("TTM_CooldownSpell:" + currentSpell + ":Start:diff" + diff)
 
     if(diff >= 1)
-        GetTargetActor().RemoveSpell(currentSpell)
+        akTarget.RemoveSpell(currentSpell)
     endif
 	; start timer
 	RegisterForSingleUpdateGameTime(24)

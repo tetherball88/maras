@@ -13,34 +13,30 @@ Actor akSpeaker = akSpeakerRef as Actor
 ;OnBegin
     float start = Utility.GetCurrentRealTime()
     TTM_Debug.trace("TTM_DialogueManager:OnBegin:"+PromptKey+":useAI:"+UseAI)
-    string temperament = ""
-    if(TTM_Utils.IsTracking(akSpeaker))
-        temperament = TTM_Utils.GetSpouseTemperament(akSpeaker)
-    endif
     string prompt = ""
-    string values = "{\"spouseName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\""
+    string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\""
     int affectionRank = TTM_ServiceAffection.GetAffectionRank(akSpeaker)
-    string affectionPrompt = ""
-    if (affectionRank >= 75)
-        affectionPrompt += "{{values.spouseName}} feels deeply attached to {{values.playerName}} and speaks warmly, playfully, and openly.";
-    elseif (affectionRank >= 50)
-        affectionPrompt += "{{values.spouseName}} feels generally positive toward {{values.playerName}} and speaks in a friendly, cooperative, trusting tone.";
-    elseif (affectionRank >= 25)
-        affectionPrompt += "{{values.spouseName}} has mixed feelings about {{values.playerName}} and speaks cautiously, probing for reassurance or clarity.";
-    else
-        affectionPrompt += "{{values.spouseName}} feels hurt or guarded around {{values.playerName}} and speaks with distance, brevity, or cool restraint.";
-    endif
+    ; string affectionPrompt = ""
+    ; if (affectionRank >= 75)
+    ;     affectionPrompt += "{{values.npcName}} feels deeply attached to {{values.playerName}} and speaks warmly, playfully, and openly.";
+    ; elseif (affectionRank >= 50)
+    ;     affectionPrompt += "{{values.npcName}} feels generally positive toward {{values.playerName}} and speaks in a friendly, cooperative, trusting tone.";
+    ; elseif (affectionRank >= 25)
+    ;     affectionPrompt += "{{values.npcName}} has mixed feelings about {{values.playerName}} and speaks cautiously, probing for reassurance or clarity.";
+    ; else
+    ;     affectionPrompt += "{{values.npcName}} feels hurt or guarded around {{values.playerName}} and speaks with distance, brevity, or cool restraint.";
+    ; endif
     if(PromptKey == "maras_enable_candidate")
         if(!TTM_Utils.IsTracking(akSpeaker))
             akSpeaker.AddToFaction(TTM_JData.GetTrackedNpcFaction())
         endif
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "candidate")
-        prompt = "{{values.spouseName}} gives a response to player's hint of romantic interest. The reply is in-character, acknowledges the intent and contains no questions. It isn't marriage proposal yet."
+        prompt = "{{values.npcName}} gives a response to player's hint of romantic interest. The reply is in-character, acknowledges the intent and contains no questions. It isn't marriage proposal yet."
     elseif(StringUtil.Find(PromptKey, "maras_enable_polygamy_") == 0)
         prompt = GetEnablePolygamyQstDialogues(PromptKey)
     elseif(StringUtil.Find(PromptKey, "maras_misc_") == 0)
         prompt = GetMiscDialogue(PromptKey)
-        prompt = affectionPrompt + "\n" + prompt
+        ; prompt = affectionPrompt + "\n" + prompt
     elseif(StringUtil.Find(PromptKey, "manage_spouse_") == 0)
         prompt = GetManageSpouseDialogue(PromptKey, akSpeaker)
     elseif(StringUtil.Find(PromptKey, "maras_affection_estranged_divorce_") == 0)
@@ -48,14 +44,14 @@ Actor akSpeaker = akSpeakerRef as Actor
     elseif(PromptKey == "maras_reconcile_accept")
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
         ; player apologised and npc accepted reconciliation
-        prompt = "{{values.spouseName}} responds warmly and forgivingly when {{values.playerName}} apologizes and seeks reconciliation. Response should be 8-15 words, expressing understanding and a willingness to move forward together."
+        prompt = "{{values.npcName}} responds warmly and forgivingly when {{values.playerName}} apologizes and seeks reconciliation. Response should be 8-15 words, expressing understanding and a willingness to move forward together."
     elseif(PromptKey == "maras_breakup")
         if(TTM_Utils.IsFiance(akSpeaker))
             TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "jilted")
         elseif(TTM_Utils.IsSpouse(akSpeaker))
             TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "divorced")
         endif
-        prompt = "{{values.spouseName}} responds with anger and hurt when {{values.playerName}} ends their relationship. Response should be 5-12 words, demanding the player leave and never return."
+        prompt = "{{values.npcName}} responds with anger and hurt when {{values.playerName}} ends their relationship. Response should be 5-12 words, demanding the player leave and never return."
     else
         TTM_Debug.warn("TTM_DialogueManager:OnBegin:UnhandledKey:"+PromptKey)
     endif
@@ -78,8 +74,7 @@ Actor akSpeaker = akSpeakerRef as Actor
     if(PromptKey == "manage_spouse_set_new_home_ask" && !UseAI)
         TTM_ServicePlayerHouse.ChooseHomeForSpouseMsg(akSpeakerRef as Actor)
     elseif(PromptKey == "maras_npc_management_gift")
-        int points = akSpeaker.ShowGiftMenu(true, none, true)
-        TTM_Debug.trace("TTM_DialogueManager:OnBegin:GiftPoints:"+points)
+        akSpeaker.ShowGiftMenu(true, none, true)
     endif
 ;END CODE
 EndFunction
@@ -108,7 +103,7 @@ string Function GetEnablePolygamyQstDialogues(string promptKey)
         return "As Maramal, read the scroll with solemnity. Do not ask questions. Acknowledge its authenticity and declare that the Temple cannot ignore doctrine rooted in divine precedent. State that Mara's blessing requires honesty - no bond may be expanded in secrecy. Instruct the {{values.playerName}} to speak with their spouse before the Divine Exception is granted. Speak with calm authority."
     elseif(PromptKey == "maras_enable_polygamy_current_spouse")
         self.GetOwningQuest().SetStage(80)
-        return "As {{values.spouseName}}, {{values.playerName}}'s spouse, respond to their explanation with sincerity. {{values.playerName}} tells you they spoke to Mara's priest, then the priestesses of Dibella, and uncovered an ancient scroll written during the early Alessian era — one that speaks of Dragonborn souls touched by divine fire, capable of holding multiple sacred bonds. They explain that Mara's priest, Maramal, acknowledged this doctrine and is willing to bless it as a Divine Exception — but only if their existing bond remains whole and honest. You are not being replaced or cast aside. React according to your nature: if supportive, express understanding and trust. If cautious, voice your feelings but do not reject them outright. This is about affirming love, not competition. Speak from the heart."
+        return "As {{values.npcName}}, {{values.playerName}}'s spouse, respond to their explanation with sincerity. {{values.playerName}} tells you they spoke to Mara's priest, then the priestesses of Dibella, and uncovered an ancient scroll written during the early Alessian era — one that speaks of Dragonborn souls touched by divine fire, capable of holding multiple sacred bonds. They explain that Mara's priest, Maramal, acknowledged this doctrine and is willing to bless it as a Divine Exception — but only if their existing bond remains whole and honest. You are not being replaced or cast aside. React according to your nature: if supportive, express understanding and trust. If cautious, voice your feelings but do not reject them outright. This is about affirming love, not competition. Speak from the heart."
     endif
 
     return ""
@@ -122,7 +117,7 @@ string Function GetMiscDialogue(string promptKey)
     elseif(PromptKey == "maras_misc_hello_fiance")
         return "{{values.fianceName}} is engaged to {{values.playerName}}. Generate a single warm, excited sentence reminding {{values.playerName}} to arrange the wedding at the Temple of Mara."
     elseif(PromptKey == "maras_misc_hello_fiance_before_wedding")
-        return "{{values.spouseName}} is engaged to {{values.playerName}} and the wedding is scheduled. Generate a single short, warm, anticipatory sentence acknowledging the upcoming wedding, like \"Our wedding is soon. I'll see you there!\"."
+        return "{{values.npcName}} is engaged to {{values.playerName}} and the wedding is scheduled. Generate a single short, warm, anticipatory sentence acknowledging the upcoming wedding, like \"Our wedding is soon. I'll see you there!\"."
     elseif(PromptKey == "maras_misc_goodbye_spouse")
         return "As the {{values.playerName}}'s spouse, say a short, affectionate goodbye. Keep it under one sentence. Tone should be warm and familiar - use terms like \"love\" or \"dear\" - like \"Goodbye, my love.\" or \"I'll be here, my dear.\""
     endif
@@ -133,38 +128,38 @@ EndFunction
 string Function GetManageSpouseDialogue(string promptKey, Actor akSpeaker)
     if(PromptKey == "manage_spouse_set_new_home_ask" && UseAI)
         TTM_ServicePlayerHouse.ChooseHomeForSpouseMsg(akSpeaker)
-        return "{{values.spouseName}} briefly asks where {{values.playerName}} wants to move, showing slight surprise but willingness. Response should be 5-12 words, ending with a simple question about the destination."
+        return "{{values.npcName}} briefly asks where {{values.playerName}} wants to move, showing slight surprise but willingness. Response should be 5-12 words, ending with a simple question about the destination."
     elseif(PromptKey == "manage_spouse_un_set_new_home")
         TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(akSpeaker)
-        return "{{values.spouseName}} responds casually when {{values.playerName}} releases them from staying at an assigned home. Response should be 4-8 words, indicating availability at their original location."
+        return "{{values.npcName}} responds casually when {{values.playerName}} releases them from staying at an assigned home. Response should be 4-8 words, indicating availability at their original location."
     elseif(PromptKey == "manage_spouse_check_spouse_home")
         TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(akSpeaker)
-        return "{{values.spouseName}} responds positively to {{values.playerName}}'s request to access their house, expressing that their property is now shared due to their marriage. Response should be 5-10 words, conveying welcome and openness."
+        return "{{values.npcName}} responds positively to {{values.playerName}}'s request to access their house, expressing that their property is now shared due to their marriage. Response should be 5-10 words, conveying welcome and openness."
     elseif(PromptKey == "manage_spouse_leave_spouse_home")
         TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(akSpeaker)
-        return "{{values.spouseName}} responds casually when {{values.playerName}} states they won't be using the spouse's house. Response should be 4-8 words, showing simple acknowledgment."
+        return "{{values.npcName}} responds casually when {{values.playerName}} states they won't be using the spouse's house. Response should be 4-8 words, showing simple acknowledgment."
     elseif(PromptKey == "maras_no_ai_engagement")
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
     elseif(PromptKey == "manage_spouse_cooking")
         TTM_JData.GetPlayer().AddItem(FoodMarriageMeal)
-        return "{{values.spouseName}} responds to {{values.playerName}}'s request for food by offering a meal with a brief comment about it. Response should be 12-20 words, mentioning the food, possibly its qualities, and stating they'll cook again tomorrow."
+        return "{{values.npcName}} responds to {{values.playerName}}'s request for food by offering a meal with a brief comment about it. Response should be 12-20 words, mentioning the food, possibly its qualities, and stating they'll cook again tomorrow."
     elseif(PromptKey == "manage_spouse_store")
         TTM_ServiceNpcs.ShareIncome(akSpeaker)
-        return "{{values.spouseName}} responds positively when {{values.playerName}} asks about store profits, mentioning they've made money and offering the player's share. Response should be 6-15 words, including a term of endearment like \"love\" or \"dear.\""
+        return "{{values.npcName}} responds positively when {{values.playerName}} asks about store profits, mentioning they've made money and offering the player's share. Response should be 6-15 words, including a term of endearment like \"love\" or \"dear.\""
     elseif(PromptKey == "manage_spouse_set_hierarchy_0")
         TTM_ServiceNpcs.ChangeSpouseRank(akSpeaker, 0)
         ; write prompt for spouse responding to being set to rank 1,
-        return "{{values.spouseName}} responds with surprise and curiosity when {{values.playerName}} sets them to rank 1. Response should be 5-10 words, expressing interest in their new role."
+        return "{{values.npcName}} responds with surprise and curiosity when {{values.playerName}} sets them to rank 1. Response should be 5-10 words, expressing interest in their new role."
     elseif(PromptKey == "manage_spouse_set_hierarchy_1")
         TTM_ServiceNpcs.ChangeSpouseRank(akSpeaker, 1)
-        return "{{values.spouseName}} responds with intrigue and excitement when {{values.playerName}} sets them to rank 2. Response should be 5-10 words, expressing eagerness for their new responsibilities."
+        return "{{values.npcName}} responds with intrigue and excitement when {{values.playerName}} sets them to rank 2. Response should be 5-10 words, expressing eagerness for their new responsibilities."
     elseif(PromptKey == "manage_spouse_set_hierarchy_2")
         TTM_ServiceNpcs.ChangeSpouseRank(akSpeaker, 2)
-        return "{{values.spouseName}} responds with determination and readiness when {{values.playerName}} sets them to rank 3. Response should be 5-10 words, expressing confidence in their new role."
+        return "{{values.npcName}} responds with determination and readiness when {{values.playerName}} sets them to rank 3. Response should be 5-10 words, expressing confidence in their new role."
     elseif(PromptKey == "manage_spouse_set_new_home_ask")
-        return "{{values.spouseName}} briefly asks where {{values.playerName}} wants to move, showing slight surprise but willingness. Response should be 5-12 words, ending with a simple question about the destination."
+        return "{{values.npcName}} briefly asks where {{values.playerName}} wants to move, showing slight surprise but willingness. Response should be 5-12 words, ending with a simple question about the destination."
     elseif(PromptKey == "manage_spouse_set_new_home_do")
-        return "{{values.spouseName}} briefly responds with agreement to {{values.playerName}}'s selected home location, showing readiness to relocate. Response should be 3-8 words, conveying they will meet the player at the new location."
+        return "{{values.npcName}} briefly responds with agreement to {{values.playerName}}'s selected home location, showing readiness to relocate. Response should be 3-8 words, conveying they will meet the player at the new location."
     endif
 
     return ""
@@ -191,7 +186,7 @@ string Function GetEstrangedDivorceDialogue(string promptKey, Actor akSpeaker)
     elseif(PromptKey == "maras_affection_estranged_divorce_intro")
         ; player is using SkyrimNet to sway spouse to divorce or keep marriage
         GetOwningQuest().SetStage(10)
-        return "As {{values.spouseName}}, you are on verge of divorce. {{values.playerName}} approaches you to discuss your feelings. Be honest about your needs and that you need to feel valued again."
+        return "As {{values.npcName}}, you are on verge of divorce. {{values.playerName}} approaches you to discuss your feelings. Be honest about your needs and that you need to feel valued again."
     endif
 
     return ""

@@ -34,6 +34,9 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
+    float startTime = Utility.GetCurrentRealTime()
+    int len = PO3_SKSEFunctions.GetAllActorsInFaction(Game.GetFormFromFile(0x13, "Skyrim.esm") as Faction).Length
+    TTM_Debug.trace("MainController:GetAllActorsInFaction: " + len + " actors; time taken: " + (Utility.GetCurrentRealTime() - startTime))
     TTM_Debug.SetupLogger()
     TTM_JData.ImportStaticData()
     Quest _self = self as Quest
