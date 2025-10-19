@@ -14,6 +14,7 @@ Function CleanMcmOids(TTM_MCM mcm) global
     mcm.oid_ReturnToExplore = -1
     mcm.oid_SpousePageRank = -1
     mcm.oid_CandidateChance = -1
+    mcm.oid_SpousePageAffection = -1
     mcm.oid_SpousePageSocialClass = -1
     mcm.oid_SpousePageSkillType = -1
     mcm.oid_SpousePageTemperament = -1
@@ -67,6 +68,9 @@ Function RenderLeftColumn(TTM_MCM mcm) global
         float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(spouse)
         mcm.oid_CandidateChance = mcm.AddTextOption("Your chances to get engaged: ", 100 * chance)
     endif
+
+    int affection = TTM_ServiceAffection.GetAffectionRank(spouse)
+    mcm.oid_SpousePageAffection = mcm.AddSliderOption("Affection: ", affection as float, "{0}%")
 
     mcm.oid_SpousePageSocialClass = mcm.AddMenuOption("Social class: ", socialClass)
     mcm.oid_SpousePageSkillType = mcm.AddMenuOption("Skilled as: ", skillType)
@@ -202,6 +206,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
             tooltip += " will almost certainly refuse, though nothing is truly impossible"
         endif
         mcm.SetInfoText(tooltip)
+    elseif(option == mcm.oid_SpousePageAffection)
+        mcm.SetInfoText("Adjust their affection directly. Higher scores unlock happier relationship events; lower scores risk estrangement.")
     elseif(option == mcm.oid_SpousePagePlayerHome)
         mcm.SetInfoText(TTM_Utils.GetActorName(spouse) + " will spend time in assigned player's house.\nBe careful with characters who should be somewhere by quest.\n You always can unassign here or throug dialogue.")
     elseif(option == mcm.oid_SpouseShareTheirHome)
@@ -303,6 +309,40 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
     mcm.SetMenuOptionValue(option, opt)
 EndFunction
 
+Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
+    if(option == mcm.oid_SpousePageAffection)
+        Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+        int affection = TTM_ServiceAffection.GetAffectionRank(spouse)
+        float affectionValue = affection as float
+        mcm.SetSliderDialogStartValue(affectionValue)
+        mcm.SetSliderDialogDefaultValue(affectionValue)
+        mcm.SetSliderDialogRange(0.0, 100.0)
+        mcm.SetSliderDialogInterval(1.0)
+    endif
+EndFunction
+
+Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
+    if(option == mcm.oid_SpousePageAffection)
+        Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+        int previousAffection = TTM_ServiceAffection.GetAffectionRank(spouse)
+        int newAffection = value as int
+        if(newAffection < 0)
+            newAffection = 0
+        elseif(newAffection > 100)
+            newAffection = 100
+        endif
+
+        if(newAffection == previousAffection)
+            mcm.SetSliderOptionValue(option, newAffection as float, "{0}%")
+            return
+        endif
+
+        TTM_ServiceAffection.SetAffectionRank(spouse, newAffection)
+        TriggerAffectionThresholdEvents(spouse, previousAffection, newAffection)
+        mcm.SetSliderOptionValue(option, newAffection as float, "{0}%")
+    endif
+EndFunction
+
 ; Default
 Function OnOptionDefault(TTM_MCM mcm, int option) global
 EndFunction
@@ -315,4 +355,24 @@ string[] Function GetHierarchyOptions() global
     options[2] = "3rd spouse"
 
     return options
+EndFunction
+
+Function TriggerAffectionThresholdEvents(Actor spouse, int previousAffection, int newAffection) global
+    if(newAffection >= 75)
+        if(previousAffection < 75)
+            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "happy", true)
+        endif
+    elseif(newAffection >= 50)
+        if(previousAffection < 50 || previousAffection >= 75)
+            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "content", previousAffection < 50)
+        endif
+    elseif(newAffection >= 25)
+        if(previousAffection < 25 || previousAffection >= 50)
+            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "troubled", previousAffection < 25)
+        endif
+    else
+        if(previousAffection >= 25)
+            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "estranged", false)
+        endif
+    endif
 EndFunction

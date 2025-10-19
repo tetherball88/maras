@@ -31,6 +31,7 @@ int property oid_SpousePageSocialClass auto
 int property oid_SpousePageTemperament auto
 int property oid_SpousePageRank auto
 int property oid_CandidateChance auto
+int property oid_SpousePageAffection auto
 int property oid_SpousePagePlayerHome auto
 int property oid_SpouseShareTheirHome auto
 
@@ -165,6 +166,24 @@ event OnOptionMenuAccept(int a_option, int a_index)
         endif
 	elseif(currentPage == "Settings")
         TTM_MCM_SettingsPage.OnOptionMenuAccept(self, a_option, a_index)
+    endif
+endEvent
+
+event OnOptionSliderOpen(int option)
+    if(currentPage == "Explore")
+        string subPage = TTM_MCM_State.GetCurrentPage()
+        if(subPage == "Spouse")
+            TTM_MCM_SpousePage.OnOptionSliderOpen(self, option)
+        endif
+    endif
+endEvent
+
+event OnOptionSliderAccept(int option, float value)
+    if(currentPage == "Explore")
+        string subPage = TTM_MCM_State.GetCurrentPage()
+        if(subPage == "Spouse")
+            TTM_MCM_SpousePage.OnOptionSliderAccept(self, option, value)
+        endif
     endif
 endEvent
 

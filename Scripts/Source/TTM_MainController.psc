@@ -160,12 +160,13 @@ Event OnSpouseAffectionChanged(Form spouse, string level, bool up)
             msg = "Things are improving with " + spouseName + "."
         elseif(level == "troubled")
             msg = "My tension with " + spouseName + " is easing."
-            Quest affectionEstrangedDivorce = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
-            if(affectionEstrangedDivorce.IsRunning())
-                Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
-                if(questSpouse == spouseA)
-                    affectionEstrangedDivorce.SetStage(150)
-                endif
+        endif
+
+        Quest affectionEstrangedDivorce = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
+        if(affectionEstrangedDivorce.IsRunning())
+            Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
+            if(questSpouse == spouseA)
+                affectionEstrangedDivorce.SetStage(150)
             endif
         endif
     else
