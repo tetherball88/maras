@@ -1,8 +1,18 @@
 {% if not isTimePaused and is_in_faction(npc.UUID, "TTM_TrackedNpcs") and render_mode == "full" %}
+    {% set npcName = decnpc(npc.UUID).name %}
+    {% set affectionRank = get_faction_rank(npc.UUID, "TTM_SpouseAffection") %}
+    {% if affectionRank >= 75 %}
+{{npcName}} feels deeply attached to {{player.name}} and speaks warmly, playfully, and openly.
+    {% else if affectionRank >= 50 %}
+{{npcName}} feels generally positive toward {{player.name}} and speaks in a friendly, cooperative, trusting tone.
+    {% else if affectionRank >= 25 %}
+{{npcName}} has mixed feelings about {{player.name}} and speaks cautiously, probing for reassurance or clarity.
+    {% else %}
+{{npcName}} feels hurt or guarded around {{player.name}} and speaks with distance, brevity, or cool restraint.
+    {% endif %}
     {% set factionRank = get_faction_rank(npc.UUID, "TTM_TrackedNpcs") %}
     {% if factionRank != 10 and factionRank != 20 %}
 {{ "## Marriage Proposal Response Guidelines" }}
-        {% set npcName = decnpc(npc.UUID).name %}
         {% set allowPolygamy = false %}
         {% if get_quest_stage("TTM_EnablePolygamy", false) >= 80 %}
             {% set allowPolygamy = true %}

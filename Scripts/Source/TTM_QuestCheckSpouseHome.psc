@@ -30,11 +30,15 @@ Function Fragment_0()
     endif
     string spouseName = TTM_Utils.GetActorName(spouse)
     if(LocationRef != none)
-        TTM_Debug.trace("TTM_QuestCheckSpouseHome:Spouse:"+spouseName+";HomeCenter:"+LocationRef)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestCheckSpouseHome:Spouse:"+spouseName+";HomeCenter:"+LocationRef)
+        endif
         SetActive()
         SetObjectiveDisplayed(0)
     else
-        TTM_Debug.trace("TTM_QuestCheckSpouseHome:Spouse:"+spouseName+";NO HomeCenter")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestCheckSpouseHome:Spouse:"+spouseName+";NO HomeCenter")
+        endif
         Debug.Notification(TTM_Utils.GetActorName(spouse) + " doesn't have their own private home.")
         self.Reset()
         self.Stop()
@@ -53,11 +57,14 @@ Function Fragment_0()
         ObjectReference cellDoor = currentCell.GetNthRef(0, 29)
         Key doorKey = cellDoor.GetKey()
         if(doorKey)
-            TTM_ServiceSpouseAssets.AddKey(doorKey, spouse)
+            TTM_JData.GetPlayer().AddKeyIfNeeded(cellDoor)
         endif
 
         i += 1
     endwhile
+
+    ; check current cell if spouse shared their home inside their home, so you don't need to leave and enter again
+    TTM_ServiceSpouseAssets.CheckCell(spouse)
 
 ;END CODE
 EndFunction

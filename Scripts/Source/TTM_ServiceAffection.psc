@@ -7,7 +7,7 @@ Function UpdateAffectionFaction(Actor spouse) global
 
     Faction affectionFaction = TTM_JData.GetAffectionFaction()
     int prevAffection = PapyrusUtil.ClampInt(spouse.GetFactionRank(affectionFaction), 0, 100)
-    int affection = 15
+    int affection = prevAffection
     bool isSpouse = TTM_Utils.IsSpouse(spouse)
     affection += PapyrusUtil.ClampFloat(GetIntimacyAffection(spouse), -22.0, 22.0) as int
     affection += PapyrusUtil.ClampFloat(GetGiftAffection(spouse), 0.0, 25.0) as int
@@ -15,10 +15,12 @@ Function UpdateAffectionFaction(Actor spouse) global
     if(isSpouse)
         affection += PapyrusUtil.ClampFloat(GetLonelinessAffection(spouse), -4.0, 6.0) as int
         affection += PapyrusUtil.ClampFloat(GetSleptAffection(spouse), 0.0, 8.0) as int
-        affection += PapyrusUtil.ClampFloat(GetPromotionAffection(spouse), 0.0, 24.0) as int
+        affection += PapyrusUtil.ClampFloat(GetPromotionAffection(spouse), -24.0, 24.0) as int
     endif
 
-    TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":UpdateAffectionFaction:"+affection)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":UpdateAffectionFaction:"+affection)
+    endif
     spouse.SetFactionRank(affectionFaction, PapyrusUtil.ClampFloat(affection, 0.0, 100.0) as int)
     int chance = Utility.RandomInt(1, 100)
     if(affection >= 75)
@@ -50,7 +52,7 @@ Function UpdateAffectionFaction(Actor spouse) global
             TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "estranged", false)
         endif
     endif
-    StorageUtil.ClearAllObjPrefix(spouse, "TTM_Affection_")
+    TTM_JMethods.ClearValue(spouse, "Affection")
 EndFunction
 
 int Function GetAffectionRank(Actor spouse) global
@@ -82,8 +84,10 @@ Function AddAffection(Actor spouse, float amount, string suffix) global
 
     float currentAffection = GetAffection(spouse, suffix)
     float newAffection = currentAffection + amount
-    StorageUtil.SetFloatValue(spouse, "TTM_Affection_" + suffix, newAffection)
-    TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":AddAffection("+suffix+"):"+amount+" + "+currentAffection+" = "+newAffection)
+    TTM_JMethods.SetFloatValue(spouse, "Affection." + suffix, newAffection)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":AddAffection("+suffix+"):"+amount+" + "+currentAffection+" = "+newAffection)
+    endif
 EndFunction
 
 float Function GetAffection(Actor spouse, string suffix) global
@@ -91,9 +95,11 @@ float Function GetAffection(Actor spouse, string suffix) global
         return -1.0
     endif
 
-    float affection = StorageUtil.GetFloatValue(spouse, "TTM_Affection_" + suffix)
+    float affection = TTM_JMethods.GetFloatValue(spouse, "Affection." + suffix)
 
-    TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":GetAffection("+suffix+"):"+affection)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":GetAffection("+suffix+"):"+affection)
+    endif
 
     return affection
 EndFunction
@@ -102,12 +108,12 @@ float Function GetLonelinessAffection(Actor spouse) global
     float affection = 0
     float daysSince = GetDaysSinceLastGotAffection(spouse)
     string temperament = TTM_Utils.GetSpouseTemperament((spouse))
-    if(StorageUtil.HasIntValue(spouse, "following") && StorageUtil.GetIntValue(spouse, "following") == 1)
+    if(TTM_JMethods.GetIntValue(spouse, "following") == 1)
         return 6.0
     endif
 
     if(daysSince > 2)
-        int count = TTM_ServiceNpcs.GetSpousesCount()
+        int count = TTM_ServiceRelationships.GetSpousesCount()
         float perDay = 3.0
         if(temperament == "Independent")
             perDay = 1.0
@@ -219,14 +225,16 @@ float Function GetSleptAffection(Actor spouse) global
 EndFunction
 
 Function SetLastTimeGotAffection(Actor spouse) global
-    StorageUtil.SetFloatValue(spouse, "TTM_LastGotAffection", Utility.GetCurrentGameTime())
+    TTM_JMethods.SetFloatValue(spouse, "LastGotAffection", Utility.GetCurrentGameTime())
 EndFunction
 
 float Function GetDaysSinceLastGotAffection(Actor spouse) global
-    float lastGotAffection = StorageUtil.GetFloatValue(spouse, "TTM_LastGotAffection")
+    float lastGotAffection = TTM_JMethods.GetFloatValue(spouse, "LastGotAffection")
     float currentTime = Utility.GetCurrentGameTime()
     float daysSince = currentTime - lastGotAffection
-    TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":DaysSinceLastGotAffection:"+daysSince)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":DaysSinceLastGotAffection:"+daysSince)
+    endif
     return daysSince
 EndFunction
 

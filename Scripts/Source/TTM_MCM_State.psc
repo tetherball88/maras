@@ -1,7 +1,5 @@
 scriptname TTM_MCM_State
 
-import TTM_JCDomain
-
 ;/
 {
     MCM: {
@@ -17,22 +15,13 @@ import TTM_JCDomain
 }
 /;
 
-int Function GetJMCM() global
-    int res = JDB_solveObj(".TT_MARAS.MCM")
-    if(!res)
-        res = JMap_object()
-        JDB_solveObjSetter(".TT_MARAS.MCM", res, true)
-    endif
-
-    return res
-EndFunction
 
 Function _SetMcmInt(string propName, int value = 0) global
-    JDB_solveIntSetter(".TT_MARAS.saveData.MCM.settings" + "." + propName, value, true)
+    TTM_JMethods.SetIntValue(none, "MCMState." + propName, value)
+    TTM_JMethods.ExportStorage()
 EndFunction
-
 int Function _GetMcmInt(string propName, int default = 0) global
-    return JDB_solveInt(".TT_MARAS.saveData.MCM.settings" + "." + propName, default)
+    return TTM_JMethods.GetIntValue(none, "MCMState." + propName, default)
 EndFunction
 
 Function _SetMcmBool(string propName, bool flag = true) global
@@ -42,111 +31,55 @@ Function _SetMcmBool(string propName, bool flag = true) global
         _SetMcmInt(propName, 0)
     endif
 EndFunction
-
 bool Function _GetMcmBool(string propName) global
     return _GetMcmInt(propName) == 1
 EndFunction
 
-Function SetLogLevel(int logLevel) global
-    _SetMcmInt("logLevel", logLevel)
-EndFunction
-
-int Function GetLogLevel() global
-    int logLevel = _GetMcmInt("logLevel", -1)
-    if(logLevel == -1)
-        return 2
-    endif
-    return logLevel
-EndFunction
-
-Function SetLogDestination(int logDestination) global
-    _SetMcmInt("logDestination", logDestination)
-EndFunction
-
-int Function GetLogDestination() global
-    int logDestination = _GetMcmInt("logDestination", -1)
-    if(logDestination == -1)
-        return 0
-    endif
-    return logDestination
-EndFunction
-
-Function SetSkipWedding(bool toggle) global
-    _SetMcmBool("skipWedding", toggle)
-EndFunction
-
-bool Function GetSkipWedding() global
-    return _GetMcmBool("skipWedding")
-EndFunction
-
-Function SetAlwaysSuccessMarriage(bool toggle) global
-    _SetMcmBool("alwaysSuccessMarriage", toggle)
-EndFunction
-
-bool Function GetAlwaysSuccessMarriage() global
-    return _GetMcmBool("alwaysSuccessMarriage")
-EndFunction
-
-
 Function SetCurrentPage(string page) global
-    JMap_setStr(GetJMCM(), "currentPage", page)
+    TTM_JMethods.SetStringValue(none, "MCMState.currentPage", page)
 EndFunction
-
-
 
 string Function GetCurrentPage() global
-    string page = JMap_getStr(GetJMCM(), "currentPage")
-    if(page != "")
-        return page
-    endif
-
-    return "Explore"
+    return TTM_JMethods.GetStringValue(none, "MCMState.currentPage", "Explore")
 EndFunction
 
-int Function GetSpouseOptions() global
-    return TTM_JUtils._GetOrCreateJMap(GetJMCM(), "spouses")
+Function AddNpcOption(int id, Actor npc) global
+    TTM_JMethods.SetFormValue(none, "MCMState.npcs." + id, npc)
+    TTM_JMethods.ExportStorage()
 EndFunction
 
-Function AddSpouseOption(int id, Actor spouse) global
-    JMap_setForm(GetSpouseOptions(), id, spouse)
+Actor Function GetNpcOption(int id) global
+    return TTM_JMethods.GetFormValue(none, "MCMState.npcs." + id) as Actor
 EndFunction
 
-Actor Function GetSpouseOption(int id) global
-    return JMap_getForm(GetSpouseOptions(), id) as Actor
+Function SetSelectedNpc(Actor npc) global
+    TTM_JMethods.SetFormValue(none, "MCMState.selectedNpc", npc)
 EndFunction
 
-Function SetSelectedSpouse(Actor spouse) global
-    JMap_setForm(GetJMCM(), "selectedSpouse", spouse)
+Actor Function GetSelectedNpc() global
+    return TTM_JMethods.GetFormValue(none, "MCMState.selectedNpc") as Actor
 EndFunction
 
-Actor Function GetSelectedSpouse() global
-    return JMap_getForm(GetJMCM(), "selectedSpouse") as Actor
+Function SetSearchValueNpc(string value) global
+    TTM_JMethods.SetStringValue(none, "MCMState.searchValue", value)
 EndFunction
 
-Function SetSearchValueSpouse(string value) global
-    JMap_setStr(GetJMCM(), "searchValue", value)
-EndFunction
-
-string Function GetSearchValueSpouse() global
-    return JMap_getStr(GetJMCM(), "searchValue")
+string Function GetSearchValueNpc() global
+    return TTM_JMethods.GetStringValue(none, "MCMState.searchValue", "")
 EndFunction
 
 Function Clean() global
-    JDB_solveObjSetter(".TT_MARAS.MCM", JMap_object(), true)
+    TTM_JMethods.ClearValue(none, "MCMState")
 EndFunction
 
-Function CleanSelectedSpouse() global
-    JMap_setForm(GetJMCM(), "selectedSpouse", none)
+Function CleanSelectedNpc() global
+    TTM_JMethods.SetFormValue(none, "MCMState.selectedNpc", none)
 EndFunction
 
-int Function GetSpouseTypeOptions() global
-    return TTM_JUtils._GetOrCreateJMap(GetJMCM(), "spouseTypesOptions")
+Function AddNpcTypeOption(int id, string type) global
+    TTM_JMethods.StringListSet(none, "MCMState.npcTypesOptions", id, type)
 EndFunction
 
-Function AddSpouseTypeOption(int id, string type) global
-    JMap_setStr(GetSpouseTypeOptions(), id, type)
-EndFunction
-
-string Function GetSpouseTypeOption(int id) global
-    return JMap_getStr(GetSpouseTypeOptions(), id)
+string Function GetNpcTypeOption(int id) global
+    return TTM_JMethods.StringListGet(none, "MCMState.npcTypesOptions", id)
 EndFunction

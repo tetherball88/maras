@@ -13,6 +13,7 @@ With **M.A.R.A.S**, you can — and that's just the start! 🎉
 
 This mod doesn't just unlock marriage. It reimagines it with:
 - ✨ Personality-based spouse perks
+- ❤️ A living affection + temperament system
 - 🏠 Property sharing
 - 💔 Divorce & remarriage
 - 👥 Multiple spouses (yes, polyamory is now lore-friendly!)
@@ -51,6 +52,12 @@ Your spouse isn't just a pretty face — they come with Profession + Social Clas
 - **Follower buffs**: Active when your spouse follows you (requires separate follower mod)
 - Fully customizable in `SKSE\Plugins\MARAS\bonuses.json`
 - View your current buffs anytime in the MCM
+
+### ❤️ Affection & Temperaments
+- Every tracked NPC now rolls one of five temperaments (Proud, Humble, Jealous, Romantic, Independent) that colors how they react to you
+- Spend time together, bring gifts, sleep in the same location, and keep promises to push affection toward happy tiers with stronger buffs
+- Neglect them and affection fades—hierarchy perks weaken and, at estranged levels, divorce events can fire
+- MCM pages surface temperament, current affection tier, and hierarchy rank so you always know where things stand
 
 ### 👥 Multiple Spouses (Optional)
 Unlock through a special quest! Each spouse adds their bonuses — but with diminishing returns for balance:
@@ -113,8 +120,8 @@ This combination turns M.A.R.A.S + SkyrimNet into a dynamic relationship system 
 
 ## What's next
 
-- Create an affection system for spouses: you'll need to visit them, talk to them, bring gifts, and do small errands. If you keep up with these interactions, affection remains high. If you neglect them, affection will diminish which will reduce your buff strength and, at very low levels, the NPC can divorce you.
-
+- Flesh out SM Event quests for the new affection tiers so happy/content spouses trigger bespoke errands instead of placeholder notifications.
 - Verify and improve vanilla adoption compatibility: make sure the vanilla adoption system isn't broken and consider making it work the same way as vanilla marriage so adoptions behave consistently with existing marriage mechanics.
+- Author temperament-aware AI dialogue variants so SkyrimNet actors comment on their emotional state and relationship tier.
 
 ```

@@ -9,18 +9,8 @@
     - Updating and clearing NPC/quest data in SkyrimNet
     - Handling configuration options and polygamy state
     - All actions are conditional on SkyrimNet being enabled (TTM_JData.GetHasSkyrimNet())
-
-  Dependencies:
-    - TTM_JCDomain
-    - TTM_JData
-    - TTM_ServiceNpcs
-    - TTM_Utils
-    - AIAgentFunctions
-    - JContainers (JValue, JMap, JLua, etc)
 /;
 scriptname TTM_ServiceSkyrimNet
-
-import TTM_JCDomain
 
 ;/
   Main maintenance function. Syncs all relevant data to SkyrimNet if enabled.
@@ -50,16 +40,22 @@ EndFunction
 
 Bool Function AcceptProposalIsElgigible(Actor akActor, string contextJson, string paramsJson) global
     if(!TTM_Utils.IsTracking(akActor))
-        TTM_Debug.trace("AcceptProposalIsElgigible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("AcceptProposalIsElgigible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        endif
         return false
     endif
     bool isEligible = TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor)
-    TTM_Debug.trace("AcceptProposalIsElgigible:"+isEligible)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("AcceptProposalIsElgigible:"+isEligible)
+    endif
     return isEligible
 EndFunction
 
 Function AcceptProposalAction(Actor akActor, string contextJson, string paramsJson) global
-    TTM_Debug.trace("AcceptProposalAction:"+akActor)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("AcceptProposalAction:"+akActor)
+    endif
     TTM_Utils.SendRelationshipChangeEvent(akActor, "engaged")
 EndFunction
 
@@ -90,7 +86,9 @@ EndFunction
 
 Bool Function AffectionEstrangedDivorceResolutionIsEligible(Actor akActor, string contextJson, string paramsJson) global
     if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
-        TTM_Debug.trace("AffectionEstrangedDivorceResolutionIsEligible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("AffectionEstrangedDivorceResolutionIsEligible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        endif
         return false
     endif
 
@@ -108,7 +106,7 @@ Function AffectionEstrangedDivorceResolutionAction(Actor akActor, string context
 EndFunction
 
 
-Bool Function RegisterBreakupEngagementAction() global
+Function RegisterBreakupEngagementAction() global
     SkyrimNetApi.RegisterAction("CancelWeddingEngagement", \
   "{{decnpc(npc.UUID).name}} evaluates and potentially ends their engagement to {{player.name}} before the wedding takes place.", \
   "TTM_ServiceSkyrimNet", "BreakupEngagementIsElgigible", "TTM_ServiceSkyrimNet", "BreakupEngagementAction", "", "PAPYRUS", 1, \
@@ -123,7 +121,7 @@ Function BreakupEngagementAction(Actor akActor, string contextJson, string param
     TTM_Utils.SendRelationshipChangeEvent(akActor, "jilted")
 EndFunction
 
-Bool Function RegisterDivorseAction() global
+Function RegisterDivorseAction() global
     SkyrimNetApi.RegisterAction("InitiateDivorce", \
   "{{decnpc(npc.UUID).name}} terminates their marriage bond with {{player.name}}, ending their spousal relationship.", \
   "TTM_ServiceSkyrimNet", "DivorseIsElgigible", "TTM_ServiceSkyrimNet", "DivorseAction", "", "PAPYRUS", 1, \
@@ -146,15 +144,21 @@ EndFunction
 string Function GetMarriageChance(Actor akActor) global
     string notReady = "{\"chance\": -1}"
     if(!TTM_Utils.IsTracking(akActor))
-        TTM_Debug.trace("GetMarriageChance:Doesn'tHaveTrackingFaction:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("GetMarriageChance:DoesntHaveTrackingFaction:SKIP"+akActor)
+        endif
         return notReady
     endif
     if(akActor == TTM_JData.GetPlayer())
-        TTM_Debug.trace("GetMarriageChance:IsPlayer:SKIP:"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("GetMarriageChance:IsPlayer:SKIP:"+akActor)
+        endif
         return notReady
     endif
     if(!TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor))
-        TTM_Debug.trace("GetMarriageChance:IsntReady:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("GetMarriageChance:IsntReady:SKIP"+akActor)
+        endif
         return notReady
     endif
 
@@ -176,8 +180,8 @@ string Function GetCoSpouses(Actor akActor) global
     string future = "\"future\":"
 
     if(TTM_Utils.IsTracking(akActor))
-        Form[] coSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("married")
-        Form[] futureCoSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("engaged")
+        Form[] coSpouses = TTM_ServiceRelationships.GetSpouses()
+        Form[] futureCoSpouses = TTM_ServiceRelationships.GetSpouses()
         current += "\"" + TTM_Utils.GetActorsNamesJson(coSpouses, akActor) + "\""
         future += "\""+TTM_Utils.GetActorsNamesJson(futureCoSpouses, akActor)+"\""
     else
@@ -192,9 +196,9 @@ EndFunction
 
 string Function GenerateExPartnerLine(Actor akActor) global
     Actor player = TTM_JData.GetPlayer()
-    Actor existingSpouse = TTRF_Store.GetSpouse(akActor)
-    Actor existingCourting = TTRF_Store.GetCourting(akActor)
-    Form[] existingLovers = TTRF_Store.GetLovers(akActor)
+    Actor existingSpouse = TTM_ServiceRelationsFinder.GetExistingSpouse(akActor)
+    Actor existingCourting = TTM_ServiceRelationsFinder.GetExistingCourting(akActor)
+    Form[] existingLovers = TTM_ServiceRelationsFinder.GetExistingLovers(akActor)
     bool isTracking = TTM_Utils.IsTracking(akActor)
     string finalLine = ""
 
@@ -290,7 +294,7 @@ Function RegisterEventSchemaPromotion() global
     string name = "Spouse Promotion"
     string description = "Happens when a spouse is promoted/demoted in rank"
     string msg = "SPOUSE PROMOTION/DEMOTION: {{actor}} has been promoted."
-    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\", \"name\": \"promotionKeyword\", \"type\": 0, \"required\": true, \"description\": \"'promoted' or 'demoted' depending on the action.\"}]"
+    string jsonParams = "[{\"name\": \"actor\", \"type\": 0, \"required\": true, \"description\": \"The actor who was promoted.\"}]"
     string renderParams = "{\"recent_events\":\""+msg+"\",\"raw\":\""+msg+"\",\"compact\":\""+msg+"\",\"verbose\":\""+msg+"\"}"
     SkyrimnetApi.RegisterEventSchema(type, name, description, jsonParams, renderParams, false, 0)
 EndFunction
@@ -311,3 +315,10 @@ Function DirectNarration(String content, Actor originatorActor = None, Actor tar
     endif
     SkyrimNetApi.DirectNarration(content, originatorActor, targetActor)
 EndFunction
+
+; Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor akTarget = none) global
+;     if(!TTM_JData.GetHasSkyrimNet())
+;         return
+;     endif
+;     DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, TTM_JData.GetPlayer())
+; EndFunction

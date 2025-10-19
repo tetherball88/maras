@@ -2,20 +2,18 @@ scriptname TTM_Utils
 
 import TTM_JCDomain
 
-string Function GetActorName(actor akActor) global
-    if akActor == TTM_JData.GetPlayer()
-      return akActor.GetActorBase().GetName()
-    else
-      return akActor.GetDisplayName()
-    EndIf
-EndFunction
+;/ =============================
+   SECTION: EVENTS
+============================== /;
 
 Function SendRelationshipChangeEvent(Actor candidate, string status) global
     if(!TTM_Utils.IsSpouse(candidate) && status == "divorced" || !TTM_Utils.IsFiance(candidate) && status == "jilted" || TTM_Utils.IsSpouse(candidate) && status == "married" || TTM_Utils.IsFiance(candidate) && status == "engaged")
         return
     endif
     int handle = ModEvent.Create("TTM_SpouseRelationshipChanged")
-    TTM_debug.trace("SendRelationshipChangeEvent:"+handle+":"+candidate+":"+status)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("SendRelationshipChangeEvent:"+handle+":"+TTM_Utils.GetActorName(candidate)+":"+status)
+    endif
     if(handle)
         ModEvent.PushForm(handle, candidate as Form)
         ModEvent.PushString(handle, status)
@@ -25,7 +23,9 @@ EndFunction
 
 string Function SendAffectionChangeThresholdEvent(Actor spouse, string level, bool up) global
     int handle = ModEvent.Create("TTM_SpouseAffectionChanged")
-    TTM_debug.trace("SendAffectionChangeThresholdEvent:"+handle+":"+TTM_Utils.GetActorName(spouse)+":"+level+":"+up)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("SendAffectionChangeThresholdEvent:"+handle+":"+TTM_Utils.GetActorName(spouse)+":"+level+":"+up)
+    endif
     if(handle)
         ModEvent.PushForm(handle, spouse as Form)
         ModEvent.PushString(handle, level)
@@ -34,38 +34,11 @@ string Function SendAffectionChangeThresholdEvent(Actor spouse, string level, bo
     endif
 EndFunction
 
-bool Function SpouseOwnsCell(Actor spouse, Cell currentCell) global
-    ActorBase ownerAB = currentCell.GetActorOwner()
-    Faction ownerF = currentCell.GetFactionOwner()
-
-    if(ownerAB && spouse.GetActorBase() == ownerAB)
-        return true
-    endif
-
-    if(ownerF && spouse.IsInFaction(ownerF))
-        return true
-    endif
-
-    return false
-EndFunction
-
-bool Function SpouseOwnsObject(Actor spouse, ObjectReference obj) global
-    ActorBase ownerAB = obj.GetActorOwner()
-    Faction ownerF = obj.GetFactionOwner()
-
-    if(ownerAB && spouse.GetActorBase() == ownerAB)
-        return true
-    endif
-
-    if(ownerF && spouse.IsInFaction(ownerF))
-        return true
-    endif
-
-    return false
-EndFunction
-
-Function ChangeLeadSpouseRankEvent(Actor spouse, int newRank, int oldRank) global
+Function SendChangeLeadSpouseRankEvent(Actor spouse, int newRank, int oldRank) global
     int handler = ModEvent.Create("TTM_ChangeLeadSpouseRankEvent")
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("SendChangeLeadSpouseRankEvent:"+handler+":"+TTM_Utils.GetActorName(spouse)+":"+newRank+":"+oldRank)
+    endif
     if(handler)
         ModEvent.PushForm(handler, spouse as Form)
         ModEvent.PushInt(handler, newRank)
@@ -74,122 +47,44 @@ Function ChangeLeadSpouseRankEvent(Actor spouse, int newRank, int oldRank) globa
     endif
 EndFunction
 
-;/ in return arra:
-0 - warrior,
-1 - mage,
-2 - rogue,
-3 - craftsman,
-4 - ranger,
-5 - orator
-/;
-string[] Function GetSpouseSkillTypeByIndexes() global
-    string[] spouseTypes = Utility.CreateStringArray(6)
-    spouseTypes[0] = "warrior"
-    spouseTypes[1] = "mage"
-    spouseTypes[2] = "rogue"
-    spouseTypes[3] = "craftsman"
-    spouseTypes[4] = "ranger"
-    spouseTypes[5] = "orator"
+;/ =============================
+   SECTION: SPOUSE TYPES
+============================== /;
 
-    return spouseTypes
+; in return array: 0 - warrior, 1 - mage, 2 - rogue, 3 - craftsman, 4 - ranger, 5 - orator
+string[] Function GetSpouseSkillTypeByIndexes() global
+    return JArray_asStringArray(TTM_JMethods.GetObjStaticData("initialData.SpouseSkillTypes"))
 EndFunction
 
 int Function GetSpouseSkillIndexByType(string type) global
-    if(type == "warrior")
-        return 0
-    elseif(type == "mage")
-        return 1
-    elseif(type == "rogue")
-        return 2
-    elseif(type == "craftsman")
-        return 3
-    elseif(type == "ranger")
-        return 4
-    elseif(type == "orator")
-        return 5
-    endif
-
-    return -1
+    return JArray_findStr(TTM_JMethods.GetObjStaticData("initialData.SpouseSkillTypes"), type)
 EndFunction
 
-;/
-0 - outcast,
-1 - poverty,
-2 - working,
-3 - middle,
-4 - wealthy,
-5 - religious,
-6 - nobles,
-7 - rulers
-/;
+; in return array: 0 - outcast, 1 - poverty, 2 - working, 3 - middle, 4 - wealthy, 5 - religious, 6 - nobles, 7 - rulers
 string[] Function GetSpouseSocialTypeByIndexes() global
-    string[] spouseTypes = Utility.CreateStringArray(8)
-    spouseTypes[0] = "outcast"
-    spouseTypes[1] = "poverty"
-    spouseTypes[2] = "working"
-    spouseTypes[3] = "middle"
-    spouseTypes[4] = "wealthy"
-    spouseTypes[5] = "religious"
-    spouseTypes[6] = "nobles"
-    spouseTypes[7] = "rulers"
-
-    return spouseTypes
+    return JArray_asStringArray(TTM_JMethods.GetObjStaticData("initialData.SpouseSocialClasses"))
 EndFunction
 
 int Function GetSpouseSocialIndexByType(string type) global
-    if(type == "outcast")
-        return 0
-    elseif(type == "poverty")
-        return 1
-    elseif(type == "working")
-        return 2
-    elseif(type == "middle")
-        return 3
-    elseif(type == "wealthy")
-        return 4
-    elseif(type == "religious")
-        return 5
-    elseif(type == "nobles")
-        return 6
-    elseif(type == "rulers")
-        return 7
-    endif
-
-    return -1
+    return JArray_findStr(TTM_JMethods.GetObjStaticData("initialData.SpouseSocialClasses"), type)
 EndFunction
 
-;/
-0 - Proud,
-1 - Humble,
-2 - Jealous,
-3 - Romantic,
-4 - Independent,
-/;
+; in return array: 0 - Proud, 1 - Humble, 2 - Jealous, 3 - Romantic, 4 - Independent
 string[] Function GetSpouseTemperamentByIndexes() global
-    string[] spouseTypes = Utility.CreateStringArray(5)
-    spouseTypes[0] = "proud"
-    spouseTypes[1] = "humble"
-    spouseTypes[2] = "jealous"
-    spouseTypes[3] = "romantic"
-    spouseTypes[4] = "independent"
-
-    return spouseTypes
+    return JArray_asStringArray(TTM_JMethods.GetObjStaticData("initialData.SpouseTemperaments"))
 EndFunction
 
 int Function GetSpouseTemperamentIndexByType(string type) global
-    if(type == "proud")
-        return 0
-    elseif(type == "humble")
-        return 1
-    elseif(type == "jealous")
-        return 2
-    elseif(type == "romantic")
-        return 3
-    elseif(type == "independent")
-        return 4
-    endif
+    return JArray_findStr(TTM_JMethods.GetObjStaticData("initialData.SpouseTemperaments"), type)
+EndFunction
 
-    return -1
+
+string Function GetActorName(actor akActor) global
+    if akActor == TTM_JData.GetPlayer()
+      return akActor.GetActorBase().GetName()
+    else
+      return akActor.GetDisplayName()
+    EndIf
 EndFunction
 
 Actor Function GetActorAlias(Quest qst, string name) global
@@ -198,42 +93,27 @@ Actor Function GetActorAlias(Quest qst, string name) global
 EndFunction
 
 int Function GetSpouseSocialClassIndex(Actor spouse) global
-    Faction socialClassFaction = TTM_JData.GetSpouseSocialClassFaction()
-    int index = spouse.GetFactionRank(socialClassFaction)
-
-    return index
+    return spouse.GetFactionRank(TTM_JData.GetSpouseSocialClassFaction())
 EndFunction
 
 string Function GetSpouseSocialClass(Actor spouse) global
-    int index = GetSpouseSocialClassIndex(spouse)
-
-    return GetSpouseSocialTypeByIndexes()[index]
+    return GetSpouseSocialTypeByIndexes()[GetSpouseSocialClassIndex(spouse)]
 EndFunction
 
 string Function GetSpouseSkillType(Actor spouse) global
-    int index = GetSpouseSkillTypeIndex(spouse)
-
-    return GetSpouseSkillTypeByIndexes()[index]
+    return GetSpouseSkillTypeByIndexes()[GetSpouseSkillTypeIndex(spouse)]
 EndFunction
 
 int Function GetSpouseSkillTypeIndex(Actor spouse) global
-    Faction skillTypeFaction = TTM_JData.GetSpouseSkillTypeFaction()
-    int index = spouse.GetFactionRank(skillTypeFaction)
-
-    return index
+    return spouse.GetFactionRank(TTM_JData.GetSpouseSkillTypeFaction())
 EndFunction
 
 string Function GetSpouseTemperament(Actor spouse) global
-    int index = GetSpouseTemperamentIndex(spouse)
-
-    return GetSpouseTemperamentByIndexes()[index]
+    return GetSpouseTemperamentByIndexes()[GetSpouseTemperamentIndex(spouse)]
 EndFunction
 
 int Function GetSpouseTemperamentIndex(Actor spouse) global
-    Faction temperamentFaction = TTM_JData.GetSpouseTemperamentFaction()
-    int index = spouse.GetFactionRank(temperamentFaction)
-
-    return index
+    return spouse.GetFactionRank(TTM_JData.GetSpouseTemperamentFaction())
 EndFunction
 
 int Function GetTrackingRank(Actor npc) global
@@ -288,14 +168,6 @@ EndFunction
 
 bool Function IsJilted(Actor npc) global
     return GetRelationshipStatus(npc) == "jilted"
-EndFunction
-
-string Function GetBoolStr(bool flag) global
-    if(flag)
-        return "true"
-    else
-        return "false"
-    endif
 EndFunction
 
 int Function ToggleGlobalVariable(GlobalVariable gVar) global
@@ -385,13 +257,17 @@ bool Function CandidateIsReadyToHearProposalAwait(Actor npc, int attempts = 5, f
     bool isPlayer = npc == TTM_JData.GetPlayer()
     bool isReady = CandidateIsReadyToHearProposal(npc)
     if(isPlayer || ((isSpouseNpc || isFianceNpc) && isReady))
-        TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: false; isPlayer:"+isPlayer+"; isSpouseNpc:"+isSpouseNpc+"; isFianceNpc:"+isFianceNpc)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: false; isPlayer:"+isPlayer+"; isSpouseNpc:"+isSpouseNpc+"; isFianceNpc:"+isFianceNpc)
+        endif
         return false
     endif
     int i = 0
 
     while(i < attempts && !isReady)
-        TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: attempt "+i+"; isReady:"+isReady)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: attempt "+i+"; isReady:"+isReady)
+        endif
         Utility.Wait(wait)
         isReady = CandidateIsReadyToHearProposal(npc)
         i += 1

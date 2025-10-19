@@ -1,33 +1,43 @@
 scriptname TTM_ServiceGift
 
 Function OnGiftMenuOpen() global
+    if(TTM_Debug.IsTrace())
         TTM_Debug.trace("TTM_ServiceGift:OnMenuOpen:GiftMenu")
-        StorageUtil.SetIntValue(none, "TTM_GiftStarted", 1)
+    endif
+    TTM_JMethods.SetIntValue(none, "Gift.Started", 1)
 EndFunction
 
 Function OnGiftMenuClose() global
-    Actor receiver = StorageUtil.GetFormValue(none, "TTM_GiftReceiver") as Actor
-    TTM_Debug.trace("TTM_ServiceGift:OnMenuClose:GiftMenu:Receiver:"+receiver)
+    Actor receiver = TTM_JMethods.GetFormValue(none, "Gift.Receiver") as Actor
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceGift:OnMenuClose:GiftMenu:Receiver:"+receiver)
+    endif
     if(receiver)
-        int giftValue = StorageUtil.GetIntValue(none, "TTM_GiftValue")
-        string giftItems = StorageUtil.GetStringValue(none, "TTM_GiftItems")
-        TTM_Debug.trace("TTM_ServiceGift:OnMenuClose:GiftValue:"+giftValue)
+        int giftValue = TTM_JMethods.GetIntValue(none, "Gift.Value")
+        string giftItems = TTM_JMethods.GetStringValue(none, "Gift.Items")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_ServiceGift:OnMenuClose:GiftValue:"+giftValue)
+        endif
         string playerName = TTM_Utils.GetActorName(TTM_JData.GetPlayer())
         if(giftItems != "")
             string msg = playerName + " gifted " + giftItems + " to " + TTM_Utils.GetActorName(receiver) + " of total value " + giftValue + "."
             TTM_ServiceSkyrimNet.DirectNarration(msg, TTM_JData.GetPlayer(), receiver)
             TTM_ServiceAffection.AddGiftAffection(receiver, giftValue)
-            TTM_Debug.trace("TTM_ServiceGift:Gift was given: " + msg)
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("TTM_ServiceGift:Gift was given: " + msg)
+            endif
         else
             TTM_ServiceSkyrimNet.DirectNarration(playerName + " gifted nothing to " + TTM_Utils.GetActorName(receiver) + ".", TTM_JData.GetPlayer(), receiver)
-            TTM_Debug.trace("TTM_ServiceGift:No gift was given.")
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("TTM_ServiceGift:No gift was given.")
+            endif
         endif
-        StorageUtil.ClearAllObjPrefix(none, "TTM_Gift")
+        TTM_JMethods.ClearValue(none, "Gift")
     endif
 EndFunction
 
 Function OnItemGifted(Form akDestContainer, Form akBaseItem, int aiItemCount) global
-    if(StorageUtil.GetIntValue(none, "TTM_GiftStarted") == 0)
+    if(TTM_JMethods.GetIntValue(none, "Gift.Started") == 0)
         return
     endif
     Actor npcDestination = akDestContainer as Actor
@@ -39,14 +49,19 @@ Function OnItemGifted(Form akDestContainer, Form akBaseItem, int aiItemCount) gl
     endif
     ; player adding something from npc, so it will add affection
     int value = aiItemCount * akBaseItem.GetGoldValue()
-    StorageUtil.SetFormValue(none, "TTM_GiftReceiver", npcDestination)
-    string itemsString = StorageUtil.GetStringValue(none, "TTM_GiftItems")
+    TTM_JMethods.SetFormValue(none, "Gift.Receiver", npcDestination)
+    string itemsString = TTM_JMethods.GetStringValue(none, "Gift.Items")
     if(itemsString != "")
         itemsString += ","
     endif
-    itemsString += akBaseItem.GetName() + "(" + aiItemCount + ")"
-    int totalValue = StorageUtil.GetIntValue(none, "TTM_GiftValue") + value
-    StorageUtil.SetStringValue(none, "TTM_GiftItems", itemsString)
-    StorageUtil.SetIntValue(none, "TTM_GiftValue", totalValue)
-    TTM_Debug.trace("TTM_ServiceGift:Gift was given to " + TTM_Utils.GetActorName(npcDestination) + ": " + itemsString + " total value: " + totalValue)
+    itemsString += akBaseItem.GetName()
+    if(aiItemCount > 1)
+        itemsString += "(" + aiItemCount + ")"
+    endif
+    int totalValue = TTM_JMethods.GetIntValue(none, "Gift.Value") + value
+    TTM_JMethods.SetStringValue(none, "Gift.Items", itemsString)
+    TTM_JMethods.SetIntValue(none, "Gift.Value", totalValue)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceGift:Gift was given to " + TTM_Utils.GetActorName(npcDestination) + ": " + itemsString + " total value: " + totalValue)
+    endif
 EndFunction

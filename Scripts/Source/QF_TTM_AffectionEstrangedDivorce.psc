@@ -11,10 +11,13 @@ ReferenceAlias Property Alias_Spouse Auto
 Function Fragment_6()
 ;BEGIN CODE
 ; stage 200
+    Actor spouse = Alias_Spouse.GetActorRef()
+    if(spouse)
+        TTM_Utils.SendRelationshipChangeEvent(spouse, "divorced")
+        TTM_ServiceAffection.SetAffectionRank(spouse, 0)
+    endif
     FailAllObjectives()
     Stop()
-    TTM_Utils.SendRelationshipChangeEvent(Alias_Spouse.GetActorRef(), "divorced")
-    TTM_ServiceAffection.SetAffectionRank(Alias_Spouse.GetActorRef(), 0)
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -23,7 +26,10 @@ EndFunction
 Function Fragment_5()
 ;BEGIN CODE
 ; stage 100
-    TTM_ServiceAffection.SetAffectionRank(Alias_Spouse.GetActorRef(), 50)
+    Actor spouse = Alias_Spouse.GetActorRef()
+    if(spouse)
+        TTM_ServiceAffection.SetAffectionRank(spouse, 50)
+    endif
     CompleteAllObjectives()
     Stop()
 ;END CODE
@@ -53,7 +59,10 @@ EndFunction
 Function Fragment_8()
 ;BEGIN CODE
     ; stage 150
-    TTM_ServiceAffection.SetAffectionRank(Alias_Spouse.GetActorRef(), 50)
+    Actor spouse = Alias_Spouse.GetActorRef()
+    if(spouse)
+        TTM_ServiceAffection.SetAffectionRank(spouse, 50)
+    endif
     CompleteAllObjectives()
     Stop()
 ;END CODE

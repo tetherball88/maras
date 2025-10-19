@@ -8,16 +8,6 @@
     - Handles mod events for relationship changes and AI commands
     - Integrates with SkyrimNet and TTLL if present
     - Triggers maintenance for buffs, quest tracking, and conditions
-
-  Dependencies:
-    - TTM_JData
-    - TTM_ServiceBuff
-    - TTM_QuestTracker
-    - TTM_Conditions
-    - TTM_ServiceSkyrimNet
-    - TTM_ServiceNpcs
-    - TTM_Utils
-    - AIAgentFunctions
 /;
 Scriptname TTM_MainController extends Quest
 
@@ -34,7 +24,8 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
-    TTM_Debug.SetupLogger()
+
+    TTM_Debug.CleanOnLoad()
     TTM_JData.ImportStaticData()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
@@ -44,25 +35,30 @@ Function Maintenance()
 
     ; check if SkyrimNet present
     ; otherwise all SkyrimNet related logic will be bypassed
+    bool hasSkyrimNet = false
+    int hasSkyrimNetGlobal = 0
     if(Game.GetModByName("SkyrimNet.esp") != 255)
-        TTM_JData.SetHasSkyrimNet()
-        TTM_JData.GetSetHasSkyrimNetGlobal(1)
+        hasSkyrimNet = true
+        hasSkyrimNetGlobal = 1
         RegisterForModEvent("SkyrimNet_OnPackageRemoved", "OnPackageRemoved")
     endif
 
-    if(Game.GetModByName("TT_RelationsFinder.esp") != 255)
-        TTM_JData.SetHasTTRF()
-    endif
+    TTM_JData.SetHasSkyrimNet(hasSkyrimNet)
+    TTM_JData.GetSetHasSkyrimNetGlobal(hasSkyrimNetGlobal)
+
+
+    TTM_JData.SetHasTTRF(Game.GetModByName("TT_RelationsFinder.esp") != 255)
 
     RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
     RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
     RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
+    RegisterForModEvent("PlayDBVOTopic", "OnPlayDBVOTopic")
 
      ; ensure player has debug spell and check door perk
 
     Actor player = TTM_JData.GetPlayer()
 
-    player.AddSpell(TTM_Debug_ToggleSpouse)
+    bool added = player.AddSpell(TTM_Debug_ToggleSpouse)
 
     Perk checkDoorPerk = TTM_JData.GetCheckDoorPerk()
 
@@ -91,40 +87,44 @@ EndFunction
   @param status The new relationship status (candidate, engaged, married, jilted, divorced)
 /;
 Event OnRelationshipChanged(Form npc, string status)
-    TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
+    endif
     Actor npcA = npc as Actor
     string npcName = TTM_Utils.GetActorName(npcA)
 
-    TTM_ServiceNpcs.AddTrackedNpc(npcA)
+    TTM_ServiceRelationships.AddTrackedNpc(npcA)
 
     string msg = ""
 
     if(status == "candidate")
         msg = "I think " + npcName + " is a good match."
-        TTM_ServiceNpcs.MakeNpcCandidate(npcA)
+        TTM_ServiceRelationships.MakeNpcCandidate(npcA)
     elseif(status == "engaged")
         msg = npcName + " and I are engaged to be married."
-        TTM_ServiceNpcs.MakeNpcEngaged(npcA)
+        TTM_ServiceRelationships.MakeNpcEngaged(npcA)
     elseif(status == "married")
         msg = npcName + " and I are now newlyweds."
-        TTM_ServiceNpcs.MakeNpcMarried(npcA)
+        TTM_ServiceRelationships.MakeNpcMarried(npcA)
     elseif(status == "jilted")
         msg = "My engagement with " + npcName + " was called off."
-        TTM_ServiceNpcs.MakeNpcJilted(npcA)
+        TTM_ServiceRelationships.MakeNpcJilted(npcA)
     elseif(status == "divorced")
         msg = "Me and " + npcName + " are now divorced."
-        TTM_ServiceNpcs.MakeNpcDivorced(npcA)
+        TTM_ServiceRelationships.MakeNpcDivorced(npcA)
     endif
 
     Debug.Notification(msg)
 
-    TTM_ServiceNpcs.ManageFactions(npcA, status)
+    TTM_ServiceRelationships.ManageFactions(npcA, status)
 EndEvent
 
 
 Event OnChangeHierarchyRank(Form spouse, int newRank, int oldRank)
     Actor spouseA = spouse as Actor
-    TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
+    endif
     if(newRank == -1)
         newRank = 4
     endif
@@ -160,12 +160,13 @@ Event OnSpouseAffectionChanged(Form spouse, string level, bool up)
             msg = "Things are improving with " + spouseName + "."
         elseif(level == "troubled")
             msg = "My tension with " + spouseName + " is easing."
-            Quest affectionEstrangedDivorce = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
-            if(affectionEstrangedDivorce.IsRunning())
-                Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
-                if(questSpouse == spouseA)
-                    affectionEstrangedDivorce.SetStage(150)
-                endif
+        endif
+
+        Quest affectionEstrangedDivorce = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
+        if(affectionEstrangedDivorce.IsRunning())
+            Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
+            if(questSpouse == spouseA)
+                affectionEstrangedDivorce.SetStage(150)
             endif
         endif
     else
@@ -205,7 +206,6 @@ endEvent
 
 
 Event OnMenuClose(string menuName)
-    TTM_Debug.trace("MainController:OnMenuClose:"+menuName)
     if(menuName == "GiftMenu")
         TTM_ServiceGift.OnGiftMenuClose()
     endif
@@ -213,5 +213,9 @@ endEvent
 
 Function OnStartedDialogue(Actor npc)
     TTM_ServiceAffection.AddDialogueStartedAffection(npc)
-    TTM_Debug.trace("MainController:OnStartedDialogue: " + TTM_Utils.GetActorName(npc))
 EndFunction
+
+function OnPlayDBVOTopic(String eventName, String dialogue, Float number, Form sender)
+
+	TTM_Debug.trace("MainController:OnPlayDBVOTopic: dialogue: " + dialogue)
+endFunction
