@@ -12,9 +12,9 @@ Actor spouse = spouseAl.GetActorRef()
 
 Key doorKey = akTargetRef.GetKey()
 
-if(doorKey && TTM_ServiceSpouseAssets.HasKey(doorKey))
-    akActor.AddKeyIfNeeded(akTargetRef)
-endif
+; if(doorKey && TTM_ServiceSpouseAssets.HasKey(doorKey))
+;     akActor.AddKeyIfNeeded(akTargetRef)
+; endif
 
 akTargetRef.Activate(akActor)
 ;END CODE

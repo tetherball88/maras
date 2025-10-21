@@ -1,148 +1,106 @@
 scriptname TTM_JData
 
-import TTM_JCDomain
-
-;/
-  Data structure for MARAS saveData and staticData (see below for details).
-/;
-; Setter/getters for below object
-; All additional logic, like swap lead spouses, comparison, etc... Happens in TTM_JUtils
-
-;/
-{
-    saveData: {
-        trackedNpcs: { ; list of current spouses
-            [Actor]:
-            {
-                name: string,
-                level: int,
-                socialClass: string,
-                skillType: string,
-                race: string,
-                gender: string,
-                status: string,
-                homeMarker: ObjectReference
-                home: Location
-                existingRelationships: [{ // track if has original relationship from game start
-                    name: string,
-                    isSpouse: "true" | "false",
-                    isCourting: "true" | "false",
-                    isLover: "true" | "false",
-                    isEx: "true" | "false" // if they broke up due to this mod
-                }]
-        }
-        buckets: {
-            candidates: {[Actor]: int},
-            fiances: {[Actor]: int},
-            spouses: {[Actor]: int},
-            divorcees: {[Actor]: int},
-            ; lovers: {[Actor]: int}, ?
-        }
-        ; when multiple spouses, keeps track which spouse have which rank, 0 - 1st, 1 - 2nd, 2 - 3rd
-        leadSpouses: [Actor, Actor, Actor],
-        maritalAssets: { // player's marital assets they get access to after marriage. It also track original ownership and all spouses which have ownership of cell or object(bed)
-            cells: {
-                [Cell]: {
-                    actor: ActorBase
-                    faction: Faction
-                    spouseOwners: Actor[]
-                }
-            }
-            objects: {
-                [ObjectReference]: {
-                    actor: ActorBase
-                    faction: Faction
-                    spouseOwners: Actor[]
-                }
-            }
-            factions: { // factions which player got from spouses who belong to that factions
-                [Faction]: Actor[]
-            }
-        },
-        spousesFactions: {
-            [Faction]: {
-                spouses: {[Actor]: 0 | 1}
-            }
-        }
-    }
-    static: {
-        "initialData": {...}
-    }
-}
-/;
-
-;/
-  Returns the namespace key for MARAS data in JContainers.
-/;
-string Function GetNamespaceKey() global
-    return ".TT_MARAS"
-EndFunction
-
-;/
-  Returns the static key for MARAS static data in JContainers.
-/;
-string Function GetStaticKey() global
-    return GetNamespaceKey() + ".static"
-EndFunction
-
-;/
-  Returns the key for initial data in JContainers.
-/;
-string Function GetInitialDataKey() global
-    return GetStaticKey() + ".initialData"
-EndFunction
-
-;/
-  Returns the key for save data in JContainers.
-/;
-string Function GetSaveDataKey() global
-    return GetNamespaceKey() + ".saveData"
-EndFunction
-
-;/ ==============================
-   SECTION: Object Top level
-============================== /;
-;/
-  Clears all MARAS data from JContainers.
-/;
-Function Clear() global
-    JDB_solveObjSetter(GetNamespaceKey(), JMap_object())
+Function Maintenance() global
     ImportStaticData()
 EndFunction
 
-;/
-  Exports MARAS data to a JSON file.
-/;
-Function ExportData() global
-    JValue_writeToFile(JDB_solveObj(GetNamespaceKey()), JContainers.userDirectory() + "MARAS/store.json")
-EndFunction
-
-;/
-  Imports MARAS data from a JSON file.
-/;
-Function ImportData() global
-    int jObj = JValue_readFromFile(JContainers.userDirectory() + "MARAS/store.json")
-    JDB_solveObjSetter(GetNamespaceKey(), jObj)
-EndFunction
-
-;/
-  Gets or creates the save data JMap for MARAS.
-/;
-int Function GetJSaveData() global
-    int res = JDB_solveObj(GetSaveDataKey())
-    if (!res)
-        res = JMap_object()
-        JDB_solveObjSetter(GetSaveDataKey(),  res, true)
-    endif
-    return res
-EndFunction
-
-;/
-  Imports static data (initialData.json) into JContainers.
-/;
 Function ImportStaticData() global
-    JDB_solveObjSetter(GetStaticKey() + ".initialData", JValue_readFromFile("Data/SKSE/Plugins/MARAS/initialData.json"), true)
-    JDB_solveObjSetter(GetStaticKey() + ".initialData.complexityVariables", JValue_readFromFile("Data/SKSE/Plugins/MARAS/marriageComplexityVariables.json"), true)
+    TTM_JMethods.ImportDataFromFile("initialData", "Data/SKSE/Plugins/MARAS/initialData.json")
+    TTM_JMethods.ImportDataFromFile("marriageVariables", "Data/SKSE/Plugins/MARAS/marriageComplexityVariables.json")
+    TTM_JMethods.ImportDataFromFile("dialoguePrompts", "Data/SKSE/Plugins/MARAS/promptStrings.json")
+EndFunction
+
+Function Clear() global
+    TTM_JMethods.ClearStorage()
+    ImportStaticData()
+EndFunction
+
+Function ExportData() global
+    TTM_JMethods.ExportStorage()
+EndFunction
+
+Function ImportData() global
+    TTM_JMethods.ImportStorage()
+EndFunction
+
+Function SetBool(string propName, bool value = true) global
+    int val = 0
+    if(value)
+        val = 1
+    endif
+    TTM_JMethods.SetIntValue(none, propName, val)
+EndFunction
+
+bool Function GetBool(string propName) global
+    return TTM_JMethods.GetIntValue(none, propName) == 1
+EndFunction
+
+Function SetHasSkyrimNet() global
+    SetBool("HasSkyrimNet")
+EndFunction
+bool Function GetHasSkyrimNet() global
+    return GetBool("HasSkyrimNet")
+EndFunction
+
+Function SetHasTTLL() global
+    SetBool("HasTTLL")
+EndFunction
+bool Function GetHasTTLL() global
+    return GetBool("HasTTLL")
+EndFunction
+
+Function SetHasTTRF() global
+    SetBool("HasTTRF")
+EndFunction
+bool Function GetHasTTRF() global
+    return GetBool("HasTTRF")
+EndFunction
+
+Function SetPlayerKiller(bool isPlayerKiller = true) global
+    SetBool("PlayerKiller", isPlayerKiller)
+EndFunction
+bool Function GetPlayerKiller() global
+    return GetBool("PlayerKiller")
+EndFunction
+
+Function SetPlayerHadWedding(bool yes = true) global
+    SetBool("PlayerHadWedding", yes)
+EndFunction
+bool Function GetPlayerHadWedding() global
+    return GetBool("PlayerHadWedding")
+EndFunction
+
+;/ ==============================
+   SECTION: MCM Settings
+============================== /;
+
+Function SetLogDestination(int logDestination) global
+    TTM_JMethods.SetIntValue(none, "LogDestination", logDestination)
+EndFunction
+int Function GetLogDestination() global
+    return TTM_JMethods.GetIntValue(none, "LogDestination")
+EndFunction
+
+Function SetLogLevel(int logLevel) global
+    TTM_JMethods.SetIntValue(none, "LogLevel", logLevel)
+EndFunction
+int Function GetLogLevel() global
+    return TTM_JMethods.GetIntValue(none, "LogLevel")
+EndFunction
+
+Function SetSkipWedding(bool toggle) global
+    SetBool("SkipWedding", toggle)
+EndFunction
+
+bool Function GetSkipWedding() global
+    return GetBool("SkipWedding")
+EndFunction
+
+Function SetAlwaysSuccessMarriage(bool toggle) global
+    SetBool("AlwaysSuccessMarriage", toggle)
+EndFunction
+bool Function GetAlwaysSuccessMarriage() global
+    return GetBool("AlwaysSuccessMarriage")
 EndFunction
 
 ;/ ==============================
@@ -150,126 +108,37 @@ EndFunction
 ============================== /;
 
 float Function GetComplexityVariable(string variable) global
-    return JDB_solveFlt(GetStaticKey() + ".initialData.complexityVariables."+variable)
+    return TTM_JMethods.GetFltStaticData("marriageVariables." + variable)
+EndFunction
+
+;/ =============================
+   SECTION: DIALOGUE PROMPTS
+============================== /;
+
+string Function GetDialoguePrompt(string promptKey) global
+    return TTM_JMethods.GetStrStaticData("dialoguePrompts." + promptKey)
 EndFunction
 
 ;/ ==============================
-   SECTION: Single Properties
+   SECTION: READ INITIAL DATA
 ============================== /;
-;/
-  Returns the player Actor form.
-/;
+
 Actor Function GetPlayer() global
-    return JDB_solveForm(GetInitialDataKey() + ".player") as Actor
+    return Game.GetPlayer()
 EndFunction
 
-;/
-  Returns the Perk used for door checking.
-/;
 Perk Function GetCheckDoorPerk() global
-    return JDB_solveForm(GetInitialDataKey() + ".checkDoorPerk") as Perk
-EndFunction
-
-Function _SetInt(string propName, int value = 0) global
-    JDB_solveIntSetter(GetSaveDataKey() + "." + propName, value, true)
-EndFunction
-
-int Function _GetInt(string propName) global
-    return JDB_solveInt(GetSaveDataKey() + "." + propName)
-EndFunction
-
-Function _SetBool(string propName, bool flag = true) global
-    if(flag)
-        _SetInt(propName, 1)
-    else
-        _SetInt(propName, 0)
-    endif
-EndFunction
-
-
-bool Function _GetBool(string propName) global
-    return _GetInt(propName) == 1
-EndFunction
-
-;/
-  Sets the SkyrimNet integration state.
-/;
-Function SetHasSkyrimNet() global
-    _SetBool("hasSkyrimNet")
-EndFunction
-
-;/
-  Returns true if SkyrimNet integration is enabled.
-/;
-bool Function GetHasSkyrimNet() global
-    return _GetBool("hasSkyrimNet")
-EndFunction
-
-;/
-  Sets the TTLL integration state.
-/;
-Function SetHasTTLL() global
-    _SetBool("hasTTLL")
-EndFunction
-
-;/
-  Returns true if TTLL integration is enabled.
-/;
-bool Function GetHasTTLL() global
-    return _GetBool("hasTTLL")
-EndFunction
-
-;/
-  Sets the TTRF integration state.
-/;
-Function SetHasTTRF() global
-    _SetBool("hasTTRF")
-EndFunction
-
-;/
-  Returns true if TTRF integration is enabled.
-/;
-bool Function GetHasTTRF() global
-    return _GetBool("hasTTRF")
-EndFunction
-
-;/
-  Set if player killed spouse or fiance
-/;
-Function SetPlayerKiller(bool isPlayerKiller = true) global
-    _SetBool("playerKiller", isPlayerKiller)
-EndFunction
-
-;/
-  Get if player killed spouse or fiance
-/;
-bool Function GetPlayerKiller() global
-    return _GetBool("playerKiller")
-EndFunction
-
-;/
-  Set if player attended at least one wedding
-/;
-Function SetPlayerHadWedding(bool yes = true) global
-    _SetBool("playerHadWedding", yes)
-EndFunction
-
-;/
-  Get if player attended at least one wedding
-/;
-bool Function GetPlayerHadWedding() global
-    return _GetBool("playerHadWedding")
+    return Game.GetFormFromFile(0x77, "TT_MARAS.esp") as Perk
 EndFunction
 
 ;/ ==============================
    SECTION: GLOBALS
 ============================== /;
-
-Int Function GetSetGameGlobal(string globalName, int val = -1) global
-    GlobalVariable res = JDB_solveForm(GetInitialDataKey() + ".gameGlobals." + globalName) as GlobalVariable
+Int Function _GetSetGameGlobal(int formId, string fileName, int val = -1) global
+    GlobalVariable res = Game.GetFormFromFile(formId, fileName) as GlobalVariable
 
     if(!res)
-        TTM_Debug.trace("Couldn't find GlobalVariable with name " + globalName)
+        TTM_Debug.trace("Couldn't find GlobalVariable " + formId + " in " + fileName)
     endif
 
     if(val == -1)
@@ -281,15 +150,15 @@ Int Function GetSetGameGlobal(string globalName, int val = -1) global
 EndFunction
 
 int Function GetSetSpouseCountGlobal(int val = -1) global
-    return GetSetGameGlobal("marasSpousesCount", val)
+    return _GetSetGameGlobal(0x4f, "TT_MARAS.esp", val)
 EndFunction
 
 int Function GetSetPlayerHousesCountGlobal(int val = -1) global
-    return GetSetGameGlobal("marasPlayerHousesCount", val)
+    return _GetSetGameGlobal(0xc2, "TT_MARAS.esp", val)
 EndFunction
 
 bool Function GetSetHasSkyrimNetGlobal(int val = -1) global
-    int res = GetSetGameGlobal("marasHasSkyrimNet", val)
+    int res = _GetSetGameGlobal(0xc4, "TT_MARAS.esp", val)
 
     return res == 1
 EndFunction
@@ -297,362 +166,256 @@ EndFunction
 ;/ ==============================
    SECTION: KEYWORDS
 ============================== /;
-
-;/
-  Returns a game keyword by name.
-/;
-Keyword Function GetGameKeyword(string keywordName) global
-    Keyword res = JDB_solveForm(GetInitialDataKey() + ".gameKeywords." + keywordName) as Keyword
-
-    if(!res)
-        TTM_Debug.trace("Couldn't find Keyword with name " + keywordName)
-    endif
-
-    return res
-EndFunction
-
 Keyword Function GetLocTypeDwellingKeyword() global
-    return GetGameKeyword("locTypeDwelling")
+    return Game.GetFormFromFile(0x130dc, "Skyrim.esm") as Keyword
 EndFunction
 
 Keyword Function GetLocTypeHouseKeyword() global
-    return GetGameKeyword("locTypeHouse")
+    return Game.GetFormFromFile(0x1cb85, "Skyrim.esm") as Keyword
+EndFunction
+
+Keyword Function GetClothingRichKeyword() global
+    return Game.GetFormFromFile(0xa865d, "Skyrim.esm") as Keyword
 EndFunction
 
 Keyword Function GetHomeSandboxKeyword() global
-    return GetGameKeyword("marasHomeSandbox")
+    return Game.GetFormFromFile(0x6b, "TT_MARAS.esp") as Keyword
 EndFunction
 
 Keyword Function GetAffectionQuestKeyword(string type) global
-    return GetGameKeyword("marasAffection" + type)
+    if(type == "happy")
+        return Game.GetFormFromFile(0x11e + (type as int), "TT_MARAS.esp") as Keyword
+    elseif(type == "content")
+        return Game.GetFormFromFile(0x11f, "TT_MARAS.esp") as Keyword
+    elseif(type == "troubled")
+        return Game.GetFormFromFile(0x120, "TT_MARAS.esp") as Keyword
+    elseif(type == "estranged")
+        return Game.GetFormFromFile(0x121, "TT_MARAS.esp") as Keyword
+    endif
+
+    return none
 EndFunction
 
 ;/ ==============================
    SECTION: ARMORS
 ============================== /;
 
-;/
-  Returns a game item (Armor) by name.
-/;
-Armor Function GetGameArmor(string itemName) global
-    Armor res = JDB_solveForm(GetInitialDataKey() + ".gameArmors." + itemName) as Armor
-    if(res == none)
-        TTM_Debug.trace("Couldn't find Armor with name " + itemName)
-    endif
-    return res
-EndFunction
-
 Armor Function GetMatrimonyRingArmor() global
-    return GetGameArmor("matrimonyRing")
+    return Game.GetFormFromFile(0xc5809, "Skyrim.esm") as Armor
 EndFunction
 
 ;/ ==============================
    SECTION: STATICS
 ============================== /;
 
-;/
-  Returns a MARAS static by name.
-/;
-Static Function GetGameStatic(string staticName) global
-    Static res = JDB_solveForm(GetInitialDataKey() + ".gameStatics." + staticName) as Static
-
-    if(res == none)
-        TTM_Debug.trace("Couldn't find Static with name " + staticName)
-    endif
-
-    return res
-EndFunction
-
 Static Function GetHomeSandboxMarkerStatic() global
-    return GetGameStatic("marasHomeSandboxMarker")
+    return Game.GetFormFromFile(0x76, "TT_MARAS.esp") as Static
 EndFunction
 
 ;/ ==============================
    SECTION: MISCS
 ============================== /;
 
-;/
-  Returns a MARAS static by name.
-/;
-MiscObject Function GetGameMisc(string miscName) global
-    MiscObject res = JDB_solveForm(GetInitialDataKey() + ".gameMiscs." + miscName) as MiscObject
-
-    if(res == none)
-        TTM_Debug.trace("Couldn't find MiscObject with name " + miscName)
-    endif
-
-    return res
-EndFunction
-
 MiscObject Function GetGoldMisc() global
-    return GetGameMisc("gold")
+    return Game.GetFormFromFile(0xf, "Skyrim.esm") as MiscObject
 EndFunction
 
 ;/ ==============================
    SECTION: PACKAGES
 ============================== /;
 
-;/
-  Returns a MARAS package by name.
-/;
-Package Function GetGamePackage(string packageName) global
-    Package res = JDB_solveForm(GetInitialDataKey() + ".gamePackages." + packageName) as Package
-
-    if(res == none)
-        TTM_Debug.trace("Couldn't find Package with name " + packageName)
-    endif
-
-    return res
-EndFunction
-
 Package Function GetHomeSandboxPackage() global
-    return GetGamePackage("marasHomeSandbox")
+    return Game.GetFormFromFile(0x6a, "TT_MARAS.esp") as Package
 EndFunction
 
 ;/ ==============================
    SECTION: SPELLS
 ============================== /;
 
-;/
-  Returns a MARAS package by name.
-/;
-Spell Function GetGameSpell(string spellName) global
-    Spell res = JDB_solveForm(GetInitialDataKey() + ".gameSpells." + spellName) as Spell
-
-    if(res == none)
-        TTM_Debug.trace("Couldn't find Spell with name " + spellName)
-    endif
-
-    return res
-EndFunction
-
 Spell Function GetBreakdownCooldownSpell() global
-    return GetGameSpell("marasBreakupCooldown")
+    return Game.GetFormFromFile(0x102, "TT_MARAS.esp") as Spell
 EndFunction
 
 Spell Function GetDemotedCooldownSpell() global
-    return GetGameSpell("marasDemotedCooldown")
+    return Game.GetFormFromFile(0x10e, "TT_MARAS.esp") as Spell
 EndFunction
 
 ;/ ==============================
    SECTION: QUESTS
 ============================== /;
 
-;/
-  Returns the quest by name.
-/;
-Quest Function GetGameQuest(string questName) global
-    int jQuests = JDB_solveObj(GetInitialDataKey() + ".gameQuests")
-    string questId = JMap_getStr(jQuests, questName)
-
-    Quest res = JString.decodeFormStringToForm("__formData|"+questId) as Quest
-
-    if(res == none)
-        TTM_Debug.trace("Couldn't find Quest with name " + questName)
-    endif
-
-    return res
-EndFunction
-
 Quest Function GetDialogueFavorQuest() global
-    return GetGameQuest("dialogueFavor")
+    return Game.GetFormFromFile(0x5a6dc, "Skyrim.esm") as Quest
 EndFunction
 
 Quest Function GetMarriageFinQuest() global
-    return GetGameQuest("marriageFin")
+    return Game.GetFormFromFile(0x21382, "Skyrim.esm") as Quest
 EndFunction
 
 Quest Function GetMarriageMainQuest() global
-    return GetGameQuest("marriageMain")
+    return Game.GetFormFromFile(0x74793, "Skyrim.esm") as Quest
 EndFunction
 
 Quest Function GetMarriageWeddingQuest() global
-    return GetGameQuest("marriageWedding")
+    return Game.GetFormFromFile(0x7404e, "Skyrim.esm") as Quest
 EndFunction
 
 Quest Function GetMarriageBreakupQuest() global
-    return GetGameQuest("marriageBreakup")
+    return Game.GetFormFromFile(0x7431b, "Skyrim.esm") as Quest
 EndFunction
 
 Quest Function GetMarasMainQuest() global
-    return GetGameQuest("marasMain")
+    return Game.GetFormFromFile(0x800, "TT_MARAS.esp") as Quest
 EndFunction
 
 Quest Function GetMarasEnablePolygamyQuest() global
-    return GetGameQuest("marasEnablePolygamy")
+    return Game.GetFormFromFile(0x5c, "TT_MARAS.esp") as Quest
 EndFunction
 
 Quest Function GetMarasDialoguesQuest() global
-    return GetGameQuest("marasDialogues")
+    return Game.GetFormFromFile(0x67, "TT_MARAS.esp") as Quest
 EndFunction
 
 Quest Function GetMarasCheckSpouseHomeQuest() global
-    return GetGameQuest("marasCheckSpouseHome")
+    return Game.GetFormFromFile(0x30, "TT_MARAS.esp") as Quest
 EndFunction
 
 Quest Function GetMarasAffectionEstrangedDivorceQuest() global
-    return GetGameQuest("marasAffectionEstrangedDivorce")
+    return Game.GetFormFromFile(0x11a, "TT_MARAS.esp") as Quest
 EndFunction
 
 ;/ ==============================
    SECTION: FACTIONS
 ============================== /;
-;/
-  Returns a game faction by name.
-/;
-Faction Function GetGameFaction(string factionName) global
-    Faction res = JDB_solveForm(GetInitialDataKey() + ".gameFactions." + factionName) as Faction
-    if(!res)
-        TTM_Debug.trace("Couldn't find Faction with name " + factionName)
-    endif
-    return res
-EndFunction
 
-;/
-  Returns the player faction.
-/;
+; Return Player Faction
 Faction Function GetPlayerFaction() global
-    return GetGameFaction("playerFaction")
+    return Game.GetFormFromFile(0xdb1, "Skyrim.esm") as Faction
 EndFunction
 
+; Returns the Married Faction
 Faction Function GetMarriedFaction() global
-    return GetGameFaction("married")
+    return Game.GetFormFromFile(0xc6472, "Skyrim.esm") as Faction
 EndFunction
 
+; Returns the Bed Ownership Faction
 Faction Function GetPlayerBedOwnershipFaction() global
-    return GetGameFaction("bedOwnership")
+    return Game.GetFormFromFile(0xf2073, "Skyrim.esm") as Faction
 EndFunction
 
+; Returns the Marriage Asked Faction
 Faction Function GetMarriageAskedFaction() global
-    return GetGameFaction("marriageAsked")
+    return Game.GetFormFromFile(0xff7f3, "Skyrim.esm") as Faction
 EndFunction
 
+; Returns the Courting Faction
 Faction Function GetCourtingFaction() global
-    return GetGameFaction("courting")
+    return Game.GetFormFromFile(0x7431a, "Skyrim.esm") as Faction
 EndFunction
 
+; Returns the Excluded Faction
 Faction Function GetMarriageExcludedFaction() global
-    return GetGameFaction("excluded")
+    return Game.GetFormFromFile(0x47a01, "Skyrim.esm") as Faction
 EndFunction
 
 Faction Function GetMarriagePotentialFaction() global
-    return GetGameFaction("potential")
+    return Game.GetFormFromFile(0x19809, "Skyrim.esm") as Faction
 EndFunction
 
 Faction Function GetPotentialHirelingFaction() global
-    return GetGameFaction("potentialHireling")
+    return Game.GetFormFromFile(0xbcc9a, "Skyrim.esm") as Faction
 EndFunction
 
 Faction Function GetCurrentFollowerFaction() global
-    return GetGameFaction("currentFollower")
+    return Game.GetFormFromFile(0x5c84e, "Skyrim.esm") as Faction
 EndFunction
 
 ;/
   Returns the Faction used to check spouse home ownership.
 /;
 Faction Function GetCheckSpouseHomeFaction() global
-    return GetGameFaction("marasCheckSpouseHome")
+    return Game.GetFormFromFile(0x2e, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for tracked NPCs.
 /;
 Faction Function GetTrackedNpcFaction() global
-    return GetGameFaction("marasTrackedNpcFaction")
+    return Game.GetFormFromFile(0x7, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse social class.
 /;
 Faction Function GetSpouseSocialClassFaction() global
-    return GetGameFaction("marasSpouseSocialClassFaction")
+    return Game.GetFormFromFile(0x66, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse skill type.
 /;
 Faction Function GetSpouseSkillTypeFaction() global
-    return GetGameFaction("marasSpouseSkillTypeFaction")
+    return Game.GetFormFromFile(0x4e, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse temperament.
 /;
 Faction Function GetSpouseTemperamentFaction() global
-    return GetGameFaction("marasSpouseTemperamentFaction")
+    return Game.GetFormFromFile(0x118, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse which player assigned to their house.
 /;
 Faction Function GetSpouseHousedFaction() global
-    return GetGameFaction("marasSpouseHoused")
+    return Game.GetFormFromFile(0x6c, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse which shared their house with player.
 /;
 Faction Function GetSpouseSharedHouseFaction() global
-    return GetGameFaction("marasSpouseSharedHouse")
+    return Game.GetFormFromFile(0x7b, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse which didn't have any house originally.
 /;
 Faction Function GetSpouseNoInitialHouseFaction() global
-    return GetGameFaction("marasSpouseNoInitialHome")
+    return Game.GetFormFromFile(0x7f, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction for spouse which determine their hierarchy in family.
 /;
 Faction Function GetSpouseHierarchyFaction() global
-    return GetGameFaction("marasHierarchy")
-EndFunction
-
-;/
-  Returns the Faction for spouse which were demoted in hierarchy.
-/;
-Faction Function GetSpouseHierarchyDemotedFromFaction() global
-    return GetGameFaction("marasHierarchyDemotedFrom")
+    return Game.GetFormFromFile(0x111, "TT_MARAS.esp") as Faction
 EndFunction
 
 ;/
   Returns the Faction used for affection system.
 /;
 Faction Function GetAffectionFaction() global
-    return GetGameFaction("marasAffection")
+    return Game.GetFormFromFile(0x119, "TT_MARAS.esp") as Faction
 EndFunction
 
-;/ ==============================
-   SECTION: SPOUSE TYPES FACTIONS and CLASSES FORMLISTS
-============================== /;
-;/
-  Returns the JMap of all factions.
-/;
-int Function GetSpouseTypesFactions() global
-    return JDB_solveObj(GetInitialDataKey() + ".spouseTypesClassesFL")
+Faction Function GetCompanionsFaction() global
+    return Game.GetFormFromFile(0x48362, "Skyrim.esm") as Faction
 EndFunction
 
-;/
-  Returns the FormList for a faction type.
-/;
-FormList Function GetSpouseTypesFactionsByType(string type) global
-    return JMap_getForm(GetSpouseTypesFactions(), type) as FormList
+Faction Function GetThievesFaction() global
+    return Game.GetFormFromFile(0x29da9, "Skyrim.esm") as Faction
 EndFunction
 
-;/
-  Returns the JMap of all classes.
-/;
-int Function GetSpouseTypesClasses() global
-    return JDB_solveObj(GetInitialDataKey() + ".spouseTypesFactionsFL")
+Faction Function GetBrotherhoodFaction() global
+    return Game.GetFormFromFile(0x1bdb3, "Skyrim.esm") as Faction
 EndFunction
 
-;/
-  Returns the FormList for a class type.
-  @param type The class type key
-  @return     The FormList for the class type
-/;
-FormList Function GetSpouseTypesClassesByType(string type) global
-    return JMap_getForm(GetSpouseTypesClasses(), type) as FormList
+Faction Function GetCollegeFaction() global
+    return Game.GetFormFromFile(0x1f259, "Skyrim.esm") as Faction
+EndFunction
+
+Faction Function GetBardsFaction() global
+    return Game.GetFormFromFile(0xc13c7, "Skyrim.esm") as Faction
 EndFunction

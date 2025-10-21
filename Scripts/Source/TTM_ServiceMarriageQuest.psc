@@ -8,12 +8,6 @@
     - Skipping wedding sequences and updating relationship state
     - Handling quest events for marriage, wedding, and post-marriage logic
     - Integrating with MARAS data and utility functions
-
-  Dependencies:
-    - TTM_JData
-    - TTM_ServiceNpcs
-    - TTM_Utils
-    - TTM_Debug
 /;
 scriptname TTM_ServiceMarriageQuest
 
@@ -130,7 +124,7 @@ EndFunction
 Function CheckOngoingMarriage() global
     TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage")
     ; means MARAS mod is already in use and we can skip checking current marriage quests
-    if(TTM_ServiceNpcs.CountTrackedNpcs() != 0)
+    if(TTM_ServiceRelationships.GetTrackedNpcs().Length != 0)
         TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage:SKIP")
         return
     endif
@@ -186,7 +180,7 @@ EndFUnction
   Called when the wedding quest finishes. Sends relationship change event for marriage.
 /;
 Function OnWeddingQstFinish() global
-    Actor spouse = TTM_Utils.GetActorAlias(TTM_JData.GetMarriageMainQuest(), "LoveInterest")
+    Actor spouse = TTM_Utils.GetActorAlias(TTM_JData.GetMarriageWeddingQuest(), "LoveInterest")
     TTM_JData.SetPlayerHadWedding()
     if(!spouse)
         TTM_Debug.err("TTM_ServiceMarriageQuest:OnWeddingQstFinish:But no spouse was found!")
@@ -227,7 +221,8 @@ EndFunction
   Checks for the next fiance and starts engagement if found.
 /;
 Function CheckNextFiance() global
-    Actor nextFiance = TTM_ServiceNpcs.GetNextFiance()
+    Form[] fiances = TTM_ServiceRelationships.GetFiances()
+    Actor nextFiance = fiances[0] as Actor
     TTM_Debug.warn("TTM_ServiceMarriageQuest:CheckNextFiance:"+TTM_Utils.GetActorName(nextFiance))
     if(nextFiance)
         ResetMarriageQuests()

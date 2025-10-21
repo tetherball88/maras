@@ -103,7 +103,7 @@ float Function calcGuildAlignmentMod(Actor npc) global
     float sameGuild = 0.0
 
     ; === Companions ===
-    Faction companionsFCTN = TTM_JData.GetGameFaction("companions")
+    Faction companionsFCTN = TTM_JData.GetCompanionsFaction()
     if player.IsInFaction(companionsFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
@@ -143,7 +143,7 @@ float Function calcGuildAlignmentMod(Actor npc) global
     endif
 
     ; === Thieves Guild ===
-    Faction thievesFCTN = TTM_JData.GetGameFaction("thieves")
+    Faction thievesFCTN = TTM_JData.GetThievesFaction()
     if player.IsInFaction(thievesFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
@@ -183,7 +183,7 @@ float Function calcGuildAlignmentMod(Actor npc) global
     endif
 
     ; === Dark Brotherhood ===
-    Faction brotherhoodFCTN = TTM_JData.GetGameFaction("brotherhood")
+    Faction brotherhoodFCTN = TTM_JData.GetBrotherhoodFaction()
     if player.IsInFaction(brotherhoodFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
@@ -223,7 +223,7 @@ float Function calcGuildAlignmentMod(Actor npc) global
     endif
 
     ; === College of Winterhold ===
-    Faction collegeFCTN = TTM_JData.GetGameFaction("college")
+    Faction collegeFCTN = TTM_JData.GetCollegeFaction()
     if player.IsInFaction(collegeFCTN)
         cand = 0.0
         if(spouseClass == "outcast")
@@ -263,7 +263,7 @@ float Function calcGuildAlignmentMod(Actor npc) global
     endif
 
     ; === Bards College ===
-    Faction bardsFCTN = TTM_JData.GetGameFaction("bards")
+    Faction bardsFCTN = TTM_JData.GetBardsFaction()
     if CheckQuestStage(0x53511, 300) ; player is Bard
         cand = 0.0
         if(spouseClass == "outcast")
@@ -356,7 +356,7 @@ float Function intimacyAdjustment(Actor npc) global
         res += GetParam("intimacyOtherLoversBonus")
     endif
 
-    TTM_ServiceIntimateMoments intimacyScript = TTM_JData.GetGameQuest("marasMain") as TTM_ServiceIntimateMoments
+    TTM_ServiceIntimateMoments intimacyScript = TTM_JData.GetMarasMainQuest() as TTM_ServiceIntimateMoments
 
     float intimacy = intimacyScript.GetNpcPlayerIntimacy(npc) * GetParam("intimacyPlayerMultiplier")
 
@@ -366,7 +366,7 @@ EndFunction
 
 float Function calcMarriageSuccessChance(Actor npc) global
     Trace("calcMarriageSuccessChance:Actor:"+TTM_Utils.GetActorName(npc))
-    if(TTM_MCM_State.GetAlwaysSuccessMarriage())
+    if(TTM_JData.GetAlwaysSuccessMarriage())
         return 1.0
     endif
     Actor player = TTM_JData.GetPlayer()
@@ -411,13 +411,13 @@ float Function calcMarriageSuccessChance(Actor npc) global
     endif
 
     ; spouse count
-    ; complexity += TTM_ServiceNpcs.CountBucket("married") * 2
-    float marriedScore = TTM_ServiceNpcs.CountBucket("married") * GetParam("marriedCountMultiplier")
+    ; complexity += TTM_ServiceRelationships.CountBucket("married") * 2
+    float marriedScore = TTM_ServiceRelationships.CountBucket("married") * GetParam("marriedCountMultiplier")
     complexity += marriedScore
     Trace("calcMarriageSuccessChance:marriedCount:"+marriedScore)
     ; divorced times before
-    ; complexity += TTM_ServiceNpcs.CountBucket("divorced")
-    float divorcedScore = TTM_ServiceNpcs.CountBucket("divorced") * GetParam("divorcedCountMultiplier")
+    ; complexity += TTM_ServiceRelationships.CountBucket("divorced")
+    float divorcedScore = TTM_ServiceRelationships.CountBucket("divorced") * GetParam("divorcedCountMultiplier")
     complexity += divorcedScore
     Trace("calcMarriageSuccessChance:divorcedCount:"+divorcedScore)
     ; level diff
@@ -454,5 +454,5 @@ float Function calcMarriageSuccessChance(Actor npc) global
 EndFunction
 
 Function Trace(string msg) global
-    ; TTM_Debug.trace("TTM_MarriageDifficulty:" + msg)
+    TTM_Debug.trace("TTM_MarriageDifficulty:" + msg)
 EndFunction

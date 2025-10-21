@@ -6,23 +6,14 @@
     - Calculating multipliers for followers and spouses
     - Updating player perks and spell effects
     - Providing utility functions for buff descriptions and values
-
-  Dependencies:
-    - TTM_JCDomain
-    - TTM_Utils
-    - TTM_ServiceNpcs
-    - JContainers (JDB, JMap, JArray, etc)
-    - PO3_SKSEFunctions
 /;
 Scriptname TTM_ServiceBuff
-
-import TTM_JCDomain
 
 ;/
   Runs all maintenance functions: imports data and recalculates all multipliers.
 /;
 Function Maintenance() global
-    ImportData()
+    TTM_JMethods.ImportDataFromFile("bonuses", "Data/SKSE/Plugins/MARAS/bonuses.json")
     CalculateFollowerMultipliers()
     CalculatePermanentMultipliers()
 EndFunction
@@ -136,8 +127,8 @@ EndFunction
   Returns the multiplier for a spouse based on their rank and total spouse count.
 /;
 float Function GetSpouseMultiplier(Actor spouse) global
-    int spouseRank = TTM_ServiceNpcs.GetSpouseRank(spouse)
-    int spouseCount = TTM_ServiceNpcs.GetSpousesCount()
+    int spouseRank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
+    int spouseCount = TTM_ServiceRelationships.GetSpousesCount()
     float affectionBuffMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(spouse)
 
     if(spouseCount == 1)
@@ -189,7 +180,7 @@ float[] Function GetFollowersMultipliers() global
     ; 5 is last index for skill based spouse, only skill based types are accountet for follower bonuses
     while(i < followers.Length)
         Actor follower = followers[i]
-        if(TTM_ServiceNpcs.GetSpouse(follower) != 0)
+        if(TTM_Utils.IsSpouse(follower))
             string skillType = TTM_Utils.GetSpouseSkillType(follower)
             float spouseMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(follower)
             int index = TTM_Utils.GetSpouseSkillIndexByType(skillType)
@@ -208,14 +199,13 @@ EndFunction
 /;
 float[] Function GetPermanentMultipliers() global
     float[] multipliers = Utility.CreateFloatArray(8)
-    int jSpouses = TTM_ServiceNpcs.GetSpouses()
-    int count = JArray_count(jSpouses)
+    Form[] spouses = TTM_ServiceRelationships.GetSpouses()
     int i = 0
 
-    while(i < count)
-        Actor spouse = JArray_getForm(jSpouses, i) as Actor
+    while(i < spouses.Length)
+        Actor spouse = spouses[i] as Actor
         string socialType = TTM_Utils.GetSpouseSocialClass(spouse)
-        int spouseRank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+        int spouseRank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
         float multiplier = GetSpouseMultiplier(spouse)
         Trace("GetPermanentMultipliers:SpousesCount:"+TTM_Utils.GetActorName(spouse)+":socialType" + socialType + ":rank" + spouseRank + ":multiplier" + multiplier)
 
@@ -235,66 +225,52 @@ EndFunction
 ============================== /;
 
 ;/
-  Returns the JContainers namespace key for bonuses.
-/;
-string Function GetBonusesNamespace() global
-    return TTM_JData.GetNamespaceKey() + ".bonuses"
-EndFunction
-
-;/
-  Imports bonus data from bonuses.json into JContainers DB.
-/;
-Function ImportData() global
-    JDB_solveObjSetter(GetBonusesNamespace(), JValue_readFromFile("Data/SKSE/Plugins/MARAS/bonuses.json"), true)
-EndFunction
-
-;/
   Returns the number of bonus entries for a given type.
 /;
 int Function GetBonusCount(string type) global
-    return JArray_count(JDB_solveObj(GetBonusesNamespace() + "." + type))
+    return TTM_JMethods.CountStaticData("bonuses." + type + "")
 EndFunction
 
 ;/
   Returns the Perk form for a bonus entry.
 /;
 Perk Function GetBonusPerk(string type, int index = 0) global
-    return JDB_solveForm(GetBonusesNamespace() + "." + type + "[" + index + "].perk") as Perk
+    return TTM_JMethods.GetFormStaticData("bonuses." + type + "[" + index + "].perk") as Perk
 EndFunction
 
 ;/
   Returns the effect index for a bonus entry.
 /;
 int Function GetBonusEffectIndex(string type, int index = 0) global
-    return JDB_solveInt(GetBonusesNamespace() + "." + type + "[" + index + "].effectIndex")
+    return TTM_JMethods.GetIntStaticData("bonuses." + type + "[" + index + "].effectIndex")
 EndFunction
 
 ;/
   Returns the value for a bonus entry.
 /;
 float Function GetBonusPerkValue(string type, int index = 0) global
-    return JDB_solveFlt(GetBonusesNamespace() + "." + type + "[" + index + "].value")
+    return TTM_JMethods.GetFltStaticData("bonuses." + type + "[" + index + "].value")
 EndFunction
 
 ;/
   Returns the type string for a bonus entry (e.g., "spell", "multiply", "add").
 /;
 string Function GetBonusPerkType(string type, int index = 0) global
-    return JDB_solveStr(GetBonusesNamespace() + "." + type + "[" + index + "].type")
+    return TTM_JMethods.GetStrStaticData("bonuses." + type + "[" + index + "].type")
 EndFunction
 
 ;/
   Returns the unit string for a bonus entry.
 /;
 string Function GetBonusPerkUnit(string type, int index = 0) global
-    return JDB_solveStr(GetBonusesNamespace() + "." + type + "[" + index + "].unit")
+    return TTM_JMethods.GetStrStaticData("bonuses." + type + "[" + index + "].unit")
 EndFunction
 
 ;/
   Returns the description string for a bonus entry.
 /;
 string Function GetBonusPerkDescription(string type, int index = 0) global
-    return JDB_solveStr(GetBonusesNamespace() + "." + type + "[" + index + "].description")
+    return TTM_JMethods.GetStrStaticData("bonuses." + type + "[" + index + "].description")
 EndFunction
 
 Function Trace(string msg) global

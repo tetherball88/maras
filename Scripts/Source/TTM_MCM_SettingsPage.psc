@@ -35,7 +35,7 @@ EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption("Settings")
-    mcm.oid_SkipNextWeddings = mcm.AddToggleOption("Skip wedding ceremonies after first?", TTM_MCM_State.GetSkipWedding())
+    mcm.oid_SkipNextWeddings = mcm.AddToggleOption("Skip wedding ceremonies after first?", TTM_JData.GetSkipWedding())
     mcm.AddHeaderOption("AI dialogues")
     string[] genderOptions = GetGendersOptions()
     mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("Show start dialogue to genders: ", genderOptions[mcm.MCM_StartDialGender.GetValue() as int])
@@ -46,11 +46,11 @@ EndFunction
 Function RenderRightColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption("Logging")
     string[] logLevelOptions = GetLogLevelOptions()
-    mcm.oid_SettingsLogLevel = mcm.AddMenuOption("Log level", logLevelOptions[TTM_MCM_State.GetLogLevel()])
+    mcm.oid_SettingsLogLevel = mcm.AddMenuOption("Log level", logLevelOptions[TTM_JData.GetLogLevel()])
     string[] logDestinationOptions = GetLogDestinationOptions()
-    mcm.oid_SettingsLogDestination = mcm.AddMenuOption("Log destination ", logDestinationOptions[TTM_MCM_State.GetLogDestination()])
+    mcm.oid_SettingsLogDestination = mcm.AddMenuOption("Log destination ", logDestinationOptions[TTM_JData.GetLogDestination()])
     mcm.AddHeaderOption("Cheats")
-    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("Enable always success for engagement", TTM_MCM_State.GetAlwaysSuccessMarriage())
+    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("Enable always success for engagement", TTM_JData.GetAlwaysSuccessMarriage())
     mcm.AddHeaderOption("Export/import whole data")
     mcm.oid_SettingsExportData = mcm.AddTextOption("", "Export data to file")
     mcm.oid_SettingsImportData = mcm.AddTextOption("", "Import data from file")
@@ -79,13 +79,13 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
         TTM_Conditions conditions = main as TTM_Conditions
         conditions.CheckUseQuestDialogAI()
     elseif(option == mcm.oid_SkipNextWeddings)
-        bool val = TTM_MCM_State.GetSkipWedding()
+        bool val = TTM_JData.GetSkipWedding()
         mcm.SetToggleOptionValue(option, !val)
-        TTM_MCM_State.SetSkipWedding(!val)
+        TTM_JData.SetSkipWedding(!val)
     elseif(option == mcm.oid_SettingsCheatAlwaysSuccess)
-        bool val = TTM_MCM_State.GetAlwaysSuccessMarriage()
+        bool val = TTM_JData.GetAlwaysSuccessMarriage()
         mcm.SetToggleOptionValue(option, !val)
-        TTM_MCM_State.SetAlwaysSuccessMarriage(!val)
+        TTM_JData.SetAlwaysSuccessMarriage(!val)
     endif
 EndFunction
 
@@ -120,7 +120,6 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_SettingsLogLevel)
         options = GetLogLevelOptions()
     endif
-    MiscUtil.PrintConsole("OnOptionMenuOpen:"+options)
     mcm.SetMenuDialogOptions(options)
 EndFunction
 
@@ -131,10 +130,10 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
         mcm.MCM_StartDialGender.SetValue(index)
     elseif(option == mcm.oid_SettingsLogDestination)
         options = GetLogDestinationOptions()
-        TTM_MCM_State.SetLogDestination(index)
+        TTM_JData.SetLogDestination(index)
     elseif(option == mcm.oid_SettingsLogLevel)
         options = GetLogLevelOptions()
-        TTM_MCM_State.SetLogLevel(index)
+        TTM_JData.SetLogLevel(index)
     endif
 
     mcm.SetMenuOptionValue(option, options[index])
@@ -147,10 +146,10 @@ Function OnOptionDefault(TTM_MCM mcm, int option) global
         mcm.MCM_StartDialGender.SetValue(0)
     elseif(option == mcm.oid_SettingsLogDestination)
         mcm.SetMenuOptionValue(mcm.oid_SettingsLogDestination, 0)
-        TTM_MCM_State.SetLogDestination(0)
+        TTM_JData.SetLogDestination(0)
     elseif(option == mcm.oid_SettingsLogLevel)
         mcm.SetMenuOptionValue(mcm.oid_SettingsLogLevel, 2)
-        TTM_MCM_State.SetLogLevel(2)
+        TTM_JData.SetLogLevel(2)
     endif
 EndFunction
 

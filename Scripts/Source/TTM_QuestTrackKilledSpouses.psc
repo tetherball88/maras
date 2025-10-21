@@ -12,7 +12,7 @@ Event OnStoryKillActor(ObjectReference akVictim, ObjectReference akKiller, Locat
     bool isPlayerKiller = killer == player && aiCrimeStatus == 1
 
     if(TTM_Utils.IsTracking(victim))
-        TTM_ServiceNpcs.MakeNpcDeceased(victim, isPlayerKiller)
+        TTM_ServiceRelationships.MakeNpcDeceased(victim, isPlayerKiller)
         SetStage(1)
     else
         stop()

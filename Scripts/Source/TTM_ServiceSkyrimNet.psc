@@ -9,18 +9,8 @@
     - Updating and clearing NPC/quest data in SkyrimNet
     - Handling configuration options and polygamy state
     - All actions are conditional on SkyrimNet being enabled (TTM_JData.GetHasSkyrimNet())
-
-  Dependencies:
-    - TTM_JCDomain
-    - TTM_JData
-    - TTM_ServiceNpcs
-    - TTM_Utils
-    - AIAgentFunctions
-    - JContainers (JValue, JMap, JLua, etc)
 /;
 scriptname TTM_ServiceSkyrimNet
-
-import TTM_JCDomain
 
 ;/
   Main maintenance function. Syncs all relevant data to SkyrimNet if enabled.
@@ -146,7 +136,7 @@ EndFunction
 string Function GetMarriageChance(Actor akActor) global
     string notReady = "{\"chance\": -1}"
     if(!TTM_Utils.IsTracking(akActor))
-        TTM_Debug.trace("GetMarriageChance:Doesn'tHaveTrackingFaction:SKIP"+akActor)
+        TTM_Debug.trace("GetMarriageChance:DoesntHaveTrackingFaction:SKIP"+akActor)
         return notReady
     endif
     if(akActor == TTM_JData.GetPlayer())
@@ -176,8 +166,8 @@ string Function GetCoSpouses(Actor akActor) global
     string future = "\"future\":"
 
     if(TTM_Utils.IsTracking(akActor))
-        Form[] coSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("married")
-        Form[] futureCoSpouses = TTM_ServiceNPCs.GetAllActorsFromBucket("engaged")
+        Form[] coSpouses = TTM_ServiceRelationships.GetSpouses()
+        Form[] futureCoSpouses = TTM_ServiceRelationships.GetSpouses()
         current += "\"" + TTM_Utils.GetActorsNamesJson(coSpouses, akActor) + "\""
         future += "\""+TTM_Utils.GetActorsNamesJson(futureCoSpouses, akActor)+"\""
     else
@@ -310,4 +300,11 @@ Function DirectNarration(String content, Actor originatorActor = None, Actor tar
         return
     endif
     SkyrimNetApi.DirectNarration(content, originatorActor, targetActor)
+EndFunction
+
+Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor akTarget = none) global
+    if(!TTM_JData.GetHasSkyrimNet())
+        return
+    endif
+    DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, TTM_JData.GetPlayer())
 EndFunction

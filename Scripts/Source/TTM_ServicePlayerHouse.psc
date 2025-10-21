@@ -8,19 +8,8 @@
     - Allowing the player to assign spouses to houses
     - Managing house tenants and home markers
     - Integrating with JContainers for persistent storage
-
-  Dependencies:
-    - TTM_JCDomain
-    - TTM_JData
-    - TTM_JUtils
-    - TTM_ServiceNpcs
-    - TTM_Utils
-    - JContainers (JFormMap, JMap, JArray, etc)
-    - SkyMessage, MiscUtil, ActorUtil
 /;
 scriptname TTM_ServicePlayerHouse
-
-import TTM_JCDomain
 
 ;/
   Checks if the player is in a player house location and registers it if so.
@@ -28,11 +17,11 @@ import TTM_JCDomain
 Function CheckPlayerHouseLocation() global
     Actor player = TTM_JData.GetPlayer()
     Location currentLoc = player.GetCurrentLocation()
-    TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc)
+    TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc.GetName())
     if(currentLoc.HasKeywordString("LocTypePlayerHouse"))
         TTM_Debug.trace("CheckPlayerHouseLocation:playerHome")
         SetPlayerHouse(currentLoc)
-        GetSetPlayerHouseCell(currentLoc, player.GetParentCell())
+        AddPlayerHouseCell(currentLoc, player.GetParentCell())
     endif
 EndFunction
 
@@ -46,7 +35,7 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
         page = 0
     endif
     int perPage = 10
-    Form[] playerHomes = GetPlayerHomesForms()
+    Form[] playerHomes = GetPlayerHouses()
     int count = playerHomes.Length
 
     if(count < 1)
@@ -54,8 +43,6 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
         return
     endif
     UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
-
-    int jMessageOptions = JValue_retain(JMap_object())
 
     int startIdx = page * perPage
     int endIdx = startIdx + perPage
@@ -68,7 +55,7 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
 
     while(i < endIdx)
         string houseName = playerHomes[i].GetName()
-        JMap_setForm(jMessageOptions, menuIdx, playerHomes[i])
+        TTM_JMethods.FormListAdd(none, "SpouseHomeChoiceCache", playerHomes[i])
         listMenu.AddEntryItem(houseName)
         menuIdx += 1
         i += 1
@@ -86,25 +73,21 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
 
     listMenu.OpenMenu()
     int choice = listMenu.GetResultInt()
+    Form homeChoice = TTM_JMethods.FormListGet(none, "SpouseHomeChoiceCache", choice)
 
-    if(JMap_hasKey(jMessageOptions, choice))
-        MoveSpouseToHouse(spouse, JMap_getForm(jMessageOptions, choice) as Location)
+    if(homeChoice != none)
+        MoveSpouseToHouse(spouse, homeChoice as Location)
     elseif(choice == prevIdx)
         ChooseHomeForSpouseMsg(spouse, page - 1)
     elseif(choice == nextIdx)
         ChooseHomeForSpouseMsg(spouse, page + 1)
     endif
 
-    JValue_release(jMessageOptions)
-EndFunction
-
-Form[] Function GetPlayerHomesForms() global
-    int jPlayerHomes = GetPlayerHouses()
-    return JFormMap_allKeysPArray(jPlayerHomes)
+    TTM_JMethods.ClearValue(none, "SpouseHomeChoiceCache")
 EndFunction
 
 string[] Function GetPlayerHomesNames() global
-    Form[] homes = GetPlayerHomesForms()
+    Form[] homes = GetPlayerHouses()
 
     string[] names = PapyrusUtil.StringArray(homes.Length)
     int i = 0
@@ -122,7 +105,7 @@ Function ReleaseSpouseFromPlayerHome(Actor spouse) global
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
     spouse.EvaluatePackage()
     spouse.RemoveFromFaction(TTM_JData.GetSpouseHousedFaction())
-    TTM_ServiceNpcs.SetTrackedNpcHome(spouse, none)
+    TTM_ServiceRelationships.SetTrackedNpcHome(spouse, none)
 EndFunction
 
 ;/
@@ -130,9 +113,8 @@ EndFunction
   @param spouse   The spouse actor to move
   @param houseLoc The house location (optional, defaults to first house)
 /;
-Function MoveSpouseToHouse(Actor spouse, Location houseLoc = none ) global
-    houseLoc = JFormMap_nextKey(GetPlayerHouses()) as Location
-    ObjectReference spouseMarker = TTM_ServiceNpcs.GetTrackedNpcHomeMarker(spouse)
+Function MoveSpouseToHouse(Actor spouse, Location houseLoc ) global
+    ObjectReference spouseMarker = TTM_ServiceRelationships.GetTrackedNpcHomeMarker(spouse)
     spouseMarker.MoveTo(GetPlayerHouseMarker(houseLoc))
 
     Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
@@ -142,129 +124,48 @@ Function MoveSpouseToHouse(Actor spouse, Location houseLoc = none ) global
     spouse.EvaluatePackage()
     spouse.AddToFaction(TTM_JData.GetSpouseHousedFaction())
 
-    Location spouseCurrentHome = TTM_ServiceNpcs.GetTrackedNpcHome(spouse)
+    Location spouseCurrentHome = TTM_ServiceRelationships.GetTrackedNpcHome(spouse)
     if(spouseCurrentHome)
         RemovePlayerHomeTenant(spouseCurrentHome, spouse)
     endif
-    TTM_ServiceNpcs.SetTrackedNpcHome(spouse, houseLoc)
+    TTM_ServiceRelationships.SetTrackedNpcHome(spouse, houseLoc)
     AddPlayerHomeTenant(houseLoc, spouse)
 EndFunction
 
-;/
-  Returns the JFormMap of all player houses.
-/;
-int Function GetPlayerHouses() global
-    return TTM_JUtils._GetOrCreateJFormMap(TTM_JData.GetJSaveData(), "playerHouses")
-EndFunction
-
-;/
-  Registers a location as a player house if not already present.
-  @param houseLoc The house location to register
-/;
 Function SetPlayerHouse(Location houseLoc) global
-    int jHouse = JFormMap_getObj(GetPlayerHouses(), houseLoc)
-
-    if(jHouse == 0)
-        TTM_Debug.trace("SetPlayerHouse:AddNew")
-        jHouse = JMap_object()
-
-        JMap_setStr(jHouse, "name", houseLoc.GetName())
-        JMap_setForm(jHouse, "houseMarker", TTM_JData.GetPlayer().PlaceAtMe(TTM_JData.GetHomeSandboxMarkerStatic()))
-
-        int jTenants = JArray_Object()
-        JMap_setObj(jHouse, "tenants", jTenants)
-
-        JFormMap_setObj(GetPlayerHouses(), houseLoc, jHouse)
-
-        CountPlayerHouses()
-    endif
+    TTM_JMethods.FormListAdd(none, "PlayerHousesCache", houseLoc)
+    TTM_JMethods.SetFormValue(houseLoc, "HouseMarker", TTM_JData.GetPlayer().PlaceAtMe(TTM_JData.GetHomeSandboxMarkerStatic()))
+    CountPlayerHouses()
 EndFunction
 
-;/
-  Gets the JMap object for a player house, creating it if needed.
-  @param houseLoc The house location
-  @return         The JMap object for the house
-/;
-int Function GetPlayerHouse(Location houseLoc) global
-   return JFormMap_getObj(GetPlayerHouses(), houseLoc)
+Form[] Function GetPlayerHouses() global
+    return TTM_JMethods.FormListToArray(none, "PlayerHousesCache")
 EndFunction
 
-;/
-  Gets or creates the JFormMap of cells for a house.
-  @param houseLoc The house location
-  @return         The JFormMap of cells
-/;
-int Function GetSetPlayerHouseCells(Location houseLoc) global
-    int jHouse = GetPlayerHouse(houseLoc)
-    return TTM_JUtils._GetOrCreateJFormMap(jHouse, "cells")
+int Function FindPlayerHouseIndex(Location houseLoc) global
+    return TTM_JMethods.FormListFind(none, "PlayerHousesCache", houseLoc)
 EndFunction
 
-;/
-  Gets or creates the JMap object for a specific cell in a house.
-  @param houseLoc The house location
-  @param houseCell The cell to get or create
-  @return         The JMap object for the cell
-/;
-int Function GetSetPlayerHouseCell(Location houseLoc, Cell houseCell) global
-    int jCells = GetSetPlayerHouseCells(houseLoc)
-    int jCell = JFormMap_getObj(jCells, houseCell)
-
-    if(jCell == 0)
-        jCell = JMap_object()
-        JMap_setStr(jCell, "name", houseCell.GetName())
-        JFormMap_setObj(jCells, houseCell, jCell)
-    endif
-
-    return jCell
+int Function AddPlayerHouseCell(Location houseLoc, Cell houseCell) global
+    TTM_JMethods.FormListAdd(houseLoc, "PlayerHouseCells", houseCell)
 EndFunction
 
-;/
-  Gets the house marker object reference for a house location.
-  @param houseLoc The house location
-  @return         The house marker reference
-/;
 ObjectReference Function GetPlayerHouseMarker(Location houseLoc) global
-    return JMap_getForm(GetPlayerHouse(houseLoc), "houseMarker") as ObjectReference
+    return TTM_JMethods.GetFormValue(houseLoc, "HouseMarker") as ObjectReference
 EndFunction
 
-;/
-  Gets the JArray of tenants for a house.
-  @param home The house location
-  @return     The JArray of tenants
-/;
-int Function GetHomeTenants(Location home) global
-    if(!JFormMap_hasKey(GetPlayerHouses(), home))
-        return 0
-    endif
-    int jHome = GetPlayerHouse(home)
-    return JMap_getObj(jHome, "tenants")
+Form[] Function GetHomeTenants(Location home) global
+    return TTM_JMethods.FormListToArray(home, "PlayerHouseTenants")
 EndFunction
 
-;/
-  Adds a tenant (spouse) to a house if not already present.
-  @param home   The house location
-  @param tenant The actor to add as tenant
-/;
 Function AddPlayerHomeTenant(Location home, Actor tenant) global
-    int jTenants = GetHomeTenants(home)
-    if(JArray_findForm(jTenants, tenant) == -1)
-        JArray_addForm(jTenants, tenant)
-    endif
+    TTM_JMethods.FormListAdd(home, "PlayerHouseTenants", tenant)
 EndFunction
 
-;/
-  Removes a tenant (spouse) from a house if present.
-  @param home   The house location
-  @param tenant The actor to remove as tenant
-/;
 Function RemovePlayerHomeTenant(Location home, Actor tenant) global
-    int jTenants = GetHomeTenants(home)
-    if(JArray_findForm(jTenants, tenant) != -1)
-        JArray_eraseForm(jTenants, tenant)
-    endif
+    TTM_JMethods.FormListRemove(home, "PlayerHouseTenants", tenant)
 EndFunction
 
 Function CountPlayerHouses() global
-    TTM_Debug.trace("CountPlayerHouses:"+JFormMap_count(GetPlayerHouses()))
-    TTM_JData.GetSetPlayerHousesCountGlobal(JFormMap_count(GetPlayerHouses()))
+    TTM_JData.GetSetPlayerHousesCountGlobal(GetPlayerHouses().Length)
 EndFunction

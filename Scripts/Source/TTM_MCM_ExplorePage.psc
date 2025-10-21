@@ -1,7 +1,5 @@
 scriptname TTM_MCM_ExplorePage
 
-import TTM_JCDomain
-
 Function RenderPage(TTM_MCM mcm) global
     mcm.SetCursorFillMode(mcm.TOP_TO_BOTTOM)
     RenderLeftColumn(mcm)
@@ -29,8 +27,8 @@ EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption("Explore")
-    mcm.oid_SearchSpouse = mcm.AddInputOption("Search Spouse", "")
-    RenderSpousesList(mcm)
+    mcm.oid_SearchNpc = mcm.AddInputOption("Search NPC", "")
+    RenderNpcsList(mcm)
 EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
@@ -51,9 +49,9 @@ Function RenderRightColumn(TTM_MCM mcm) global
     mcm.oid_SearchFilterDeceased = mcm.AddMenuOption("Show alive/deceased", options[TTM_MCM_State._GetMcmInt("searchDeceased")])
 EndFunction
 
-Function RenderSpousesList(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Spouses: ")
-    string searchValue = TTM_MCM_State.GetSearchValueSpouse()
+Function RenderNpcsList(TTM_MCM mcm) global
+    mcm.AddHeaderOption("NPCs: ")
+    string searchValue = TTM_MCM_State.GetSearchValueNpc()
     bool searchAll = GetSearchAll()
     bool searchCandidates = TTM_MCM_State._GetMcmBool("searchCandidates")
     bool searchFiances = TTM_MCM_State._GetMcmBool("searchFiances")
@@ -62,11 +60,13 @@ Function RenderSpousesList(TTM_MCM mcm) global
     bool searchDivorced = TTM_MCM_State._GetMcmBool("searchDivorced")
     int searchDeceased = TTM_MCM_State._GetMcmInt("searchDeceased")
 
-    Actor npc = TTM_ServiceNpcs.NextTrackedNpcs()
+    Form[] npcs = TTM_ServiceRelationships.GetTrackedNpcs()
+    int i = 0
 
-    while(npc)
+    while(i < npcs.Length)
+        Actor npc = npcs[i] as Actor
         bool skipNpc = false
-        bool isDeceased = TTM_ServiceNpcs.IsDeceased(npc)
+        bool isDeceased = TTM_ServiceRelationships.IsDeceased(npc)
         if((searchDeceased == 1 && isDeceased) || (searchDeceased == 2 && !isDeceased))
             skipNpc = true
         else
@@ -86,27 +86,27 @@ Function RenderSpousesList(TTM_MCM mcm) global
             endif
         endif
         if(!skipNpc)
-            string spouseName = TTM_Utils.GetActorName(npc)
+            string npcName = TTM_Utils.GetActorName(npc)
             bool shouldAdd = false
             if(searchValue != "")
-                shouldAdd = StringUtil.Find(spouseName, searchValue) != -1
+                shouldAdd = StringUtil.Find(npcName, searchValue) != -1
             else
                 shouldAdd = true
             endif
 
             if(shouldAdd)
-                TTM_MCM_State.AddSpouseOption(mcm.AddTextOption(spouseName, ""), npc)
+                TTM_MCM_State.AddNpcOption(mcm.AddTextOption(npcName, ""), npc)
             endif
         endif
-        npc = TTM_ServiceNpcs.NextTrackedNpcs(npc)
+        i += 1
     endwhile
 EndFunction
 
 Function OnOptionSelect(TTM_MCM mcm, int option) global
-    Actor spouse = TTM_MCM_State.GetSpouseOption(option)
-    if(spouse != none)
-        TTM_MCM_State.SetSelectedSpouse(spouse)
-        mcm.Navigate("spouse")
+    Actor npc = TTM_MCM_State.GetNpcOption(option)
+    if(npc != none)
+        TTM_MCM_State.SetSelectedNpc(npc)
+        mcm.Navigate("npc")
     elseif(option == mcm.oid_SearchFilterAll)
         TTM_MCM_State._SetMcmBool("searchAll", !GetSearchAll())
         mcm.ForcePageReset()
@@ -133,11 +133,11 @@ EndFunction
 
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
-    Actor spouse = TTM_MCM_State.GetSpouseOption(option)
-    if(option == mcm.oid_SearchSpouse)
+    Actor npc = TTM_MCM_State.GetNpcOption(option)
+    if(option == mcm.oid_SearchNpc)
         mcm.SetInfoText("Search characters by name(can be partial)")
-    elseif(spouse != none)
-        mcm.SetInfoText("View " + TTM_Utils.GetActorName(spouse) + "'s data")
+    elseif(npc != none)
+        mcm.SetInfoText("View " + TTM_Utils.GetActorName(npc) + "'s data")
     elseif(option == mcm.oid_SearchFilterAll)
     elseif(option == mcm.oid_SearchFilterCandidate)
     elseif(option == mcm.oid_SearchFilterFiance)
@@ -159,9 +159,9 @@ Function OnOptionInputOpen(TTM_MCM mcm, int option) global
 EndFunction
 
 Function OnOptionInputAccept(TTM_MCM mcm, int option, string value) global
-    if (mcm.oid_SearchSpouse == option)
-        mcm.SetInputOptionValue(mcm.oid_SearchSpouse, mcm.SearchValueSpouse)
-        TTM_MCM_State.SetSearchValueSpouse(value)
+    if (mcm.oid_SearchNpc == option)
+        mcm.SetInputOptionValue(mcm.oid_SearchNpc, mcm.SearchValueNpc)
+        TTM_MCM_State.SetSearchValueNpc(value)
         mcm.ForcePageReset()
     endIf
 

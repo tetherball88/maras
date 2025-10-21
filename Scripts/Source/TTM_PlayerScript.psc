@@ -1,11 +1,11 @@
 Scriptname TTM_PlayerScript extends ReferenceAlias
 
 import PO3_Events_Form
-import TTM_JCDomain
 
 Spell Property TTM_LoversRadianceAbility auto
 
 Event OnPlayerLoadGame()
+    int logDestination = TTM_JData.GetLogDestination()
     TTM_MainController mainController = self.GetOwningQuest() as TTM_MainController
     mainController.Maintenance()
     Quest enablePolygamyQst = TTM_JData.GetMarasEnablePolygamyQuest()
@@ -36,24 +36,23 @@ EndEvent
 Event OnSleepStop(bool abInterrupted)
     Actor player = TTM_JData.GetPlayer()
     Location loc = player.GetCurrentLocation()
-    int jTenants = TTM_ServicePlayerHouse.GetHomeTenants(loc)
+    Form[] tenants = TTM_ServicePlayerHouse.GetHomeTenants(loc)
 
-    if(jTenants != 0)
-        int i = 0
-        bool addedSpell = false
-        while(i < JArray_count(jTenants))
-            Actor tenant = JArray_getForm(jTenants, i) as Actor
-            if(tenant.GetCurrentLocation() == loc)
-                TTM_ServiceAffection.AddSleptAffection(tenant)
-                if(!addedSpell)
-                    addedSpell = true
-                    player.AddSpell(TTM_LoversRadianceAbility, false)
-                    Debug.Notification("You feel the warmth of your partner's love. Lover's Radiance granted.")
-                endif
+    ; todo scan nearby npcs instead of tenants from player house
+    int i = 0
+    bool addedSpell = false
+    while(i < tenants.Length)
+        Actor tenant = tenants[i] as Actor
+        if(tenant.GetCurrentLocation() == loc)
+            TTM_ServiceAffection.AddSleptAffection(tenant)
+            if(!addedSpell)
+                addedSpell = true
+                player.AddSpell(TTM_LoversRadianceAbility, false)
+                Debug.Notification("You feel the warmth of your partner's love. Lover's Radiance granted.")
             endif
-            i += 1
-        endwhile
-    endif
+        endif
+        i += 1
+    endwhile
 EndEvent
 
 Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akDestContainer)
@@ -72,15 +71,17 @@ Event OnCellLoad()
 EndEvent
 
 Event OnUpdateGameTime()
-    Actor nextNpc = TTM_ServiceNpcs.NextTrackedNpcs()
-    while(nextNpc)
+    Form[] npcs = TTM_ServiceRelationships.GetTrackedNpcs()
+    int i = 0
+    while(i < npcs.Length)
+        Actor nextNpc = npcs[i] as Actor
         if(nextNpc.IsPlayerTeammate() || nextNpc.IsInFaction(TTM_JData.GetCurrentFollowerFaction()))
-            StorageUtil.SetIntValue(nextNpc, "following", 1)
+            TTM_JMethods.SetIntValue(nextNpc, "following", 1)
         else
-            StorageUtil.SetIntValue(nextNpc, "following", 0)
+            TTM_JMethods.SetIntValue(nextNpc, "following", 0)
         endif
         TTM_ServiceAffection.UpdateAffectionFaction(nextNpc)
-        nextNpc = TTM_ServiceNpcs.NextTrackedNpcs(nextNpc)
+        i += 1
     endwhile
 
     RegisterForUpdateGameTime(1)

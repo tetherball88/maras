@@ -1,8 +1,7 @@
-scriptname TTM_MCM_SpousePage
-
-import TTM_JCDomain
+scriptname TTM_MCM_NpcPage
 
 Function RenderPage(TTM_MCM mcm) global
+    TTM_JMethods.ExportStorage()
     CleanMcmOids(mcm)
     mcm.SetCursorFillMode(mcm.TOP_TO_BOTTOM)
     RenderLeftColumn(mcm)
@@ -12,25 +11,25 @@ EndFunction
 
 Function CleanMcmOids(TTM_MCM mcm) global
     mcm.oid_ReturnToExplore = -1
-    mcm.oid_SpousePageRank = -1
+    mcm.oid_NpcPageRank = -1
     mcm.oid_CandidateChance = -1
-    mcm.oid_SpousePageAffection = -1
-    mcm.oid_SpousePageSocialClass = -1
-    mcm.oid_SpousePageSkillType = -1
-    mcm.oid_SpousePageTemperament = -1
-    mcm.oid_SpousePagePlayerHome = -1
-    mcm.oid_SpouseShareTheirHome = -1
+    mcm.oid_NpcPageAffection = -1
+    mcm.oid_NpcPageSocialClass = -1
+    mcm.oid_NpcPageSkillType = -1
+    mcm.oid_NpcPageTemperament = -1
+    mcm.oid_NpcPagePlayerHome = -1
+    mcm.oid_NpcPageShareTheirHome = -1
 EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
-    Actor spouse = TTM_MCM_State.GetSelectedSpouse()
-    string spouseName = TTM_Utils.GetActorName(spouse)
-    string skillType = TTM_Utils.GetSpouseSkillType(spouse)
-    string socialClass = TTM_Utils.GetSpouseSocialClass(spouse)
-    string temperament = TTM_Utils.GetSpouseTemperament(spouse)
-    string count = TTM_ServiceNpcs.GetSpousesCount()
-    string status = TTM_Utils.GetRelationshipStatus(spouse)
-    bool isDeceased = TTM_ServiceNpcs.IsDeceased(spouse)
+    Actor npc = TTM_MCM_State.GetSelectedNpc()
+    string npcName = TTM_Utils.GetActorName(npc)
+    string skillType = TTM_Utils.GetSpouseSkillType(npc)
+    string socialClass = TTM_Utils.GetSpouseSocialClass(npc)
+    string temperament = TTM_Utils.GetSpouseTemperament(npc)
+    string count = TTM_ServiceRelationships.GetSpousesCount()
+    string status = TTM_Utils.GetRelationshipStatus(npc)
+    bool isDeceased = TTM_ServiceRelationships.IsDeceased(npc)
     string deceased = ""
 
     if(isDeceased)
@@ -44,13 +43,13 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     bool isDivorced = status == "divorced"
 
     mcm.oid_ReturnToExplore = mcm.AddTextOption("", "Return to explore")
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(spouse) + "'s data")
+    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s data")
     mcm.AddTextOption("Their status is ", status+deceased)
     if(isSpouse && !isDeceased)
         if(count == 1)
-            mcm.oid_SpousePageRank = mcm.AddTextOption("Hierarchy Rank: ", "The only one!")
+            mcm.oid_NpcPageRank = mcm.AddTextOption("Hierarchy Rank: ", "The only one!")
         else
-            int rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+            int rank = TTM_ServiceHierarchy.GetSpouseRank(npc)
             string rankText = "4th+ spouse"
             if(rank == 0)
                 rankText = "1st spouse"
@@ -59,46 +58,45 @@ Function RenderLeftColumn(TTM_MCM mcm) global
             elseif(rank == 2)
                 rankText = "3rd spouse"
             endif
-            mcm.oid_SpousePageRank = mcm.AddMenuOption("Hierarchy Rank: ", rankText)
-            TTM_Debug.trace("SpousePage: RenderLeftColumn: rank: " + rank + "; rankText: " + rankText)
+            mcm.oid_NpcPageRank = mcm.AddMenuOption("Hierarchy Rank: ", rankText)
         endif
     endif
 
     if(!isFiance && !isSpouse)
-        float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(spouse)
+        float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(npc)
         mcm.oid_CandidateChance = mcm.AddTextOption("Your chances to get engaged: ", 100 * chance)
     endif
 
-    int affection = TTM_ServiceAffection.GetAffectionRank(spouse)
-    mcm.oid_SpousePageAffection = mcm.AddSliderOption("Affection: ", affection as float, "{0}%")
+    int affection = TTM_ServiceAffection.GetAffectionRank(npc)
+    mcm.oid_NpcPageAffection = mcm.AddSliderOption("Affection: ", affection as float, "{0}%")
 
-    mcm.oid_SpousePageSocialClass = mcm.AddMenuOption("Social class: ", socialClass)
-    mcm.oid_SpousePageSkillType = mcm.AddMenuOption("Skilled as: ", skillType)
-    mcm.oid_SpousePageTemperament = mcm.AddMenuOption("Temperament: ", temperament)
+    mcm.oid_NpcPageSocialClass = mcm.AddMenuOption("Social class: ", socialClass)
+    mcm.oid_NpcPageSkillType = mcm.AddMenuOption("Skilled as: ", skillType)
+    mcm.oid_NpcPageTemperament = mcm.AddMenuOption("Temperament: ", temperament)
 
     if(isSpouse && !isDeceased)
-        Location playerHouse = TTM_ServiceNpcs.GetTrackedNpcHome(spouse)
+        Location playerHouse = TTM_ServiceRelationships.GetTrackedNpcHome(npc)
         string playerHouseName = playerHouse.GetName()
         if(playerHouse == none)
             playerHouseName = "unset"
         endif
-        mcm.oid_SpousePagePlayerHome = mcm.AddMenuOption("Assigned player's home: ", playerHouseName)
+        mcm.oid_NpcPagePlayerHome = mcm.AddMenuOption("Assigned player's home: ", playerHouseName)
     endif
 
     if(isSpouse)
-        bool spouseShareHome = spouse.IsInFaction(TTM_JData.GetSpouseSharedHouseFaction())
-        if(spouse.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
-            mcm.oid_SpouseShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(spouse) + " doesn't have any place they can call home.", "")
+        bool spouseShareHome = npc.IsInFaction(TTM_JData.GetSpouseSharedHouseFaction())
+        if(npc.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
+            mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't have any place they can call home.", "")
         else
             if(TTM_JData.GetMarasCheckSpouseHomeQuest().IsRunning() && !spouseShareHome)
                 mcm.AddTextOption("You can't start share home at this moment because of another share home quest running.", "")
             else
                 if(!isDeceased)
-                    mcm.oid_SpouseShareTheirHome = mcm.AddToggleOption("Share their home with player: ", spouseShareHome)
-                elseif(TTM_ServiceNpcs.GetKilledByPlayer(spouse))
-                    mcm.oid_SpouseShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(spouse) + " was killed by you. You can't use thier property", "")
+                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("Share their home with player: ", spouseShareHome)
+                elseif(TTM_ServiceRelationships.GetKilledByPlayer(npc))
+                    mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " was killed by you. You can't use thier property", "")
                 else
-                    mcm.oid_SpouseShareTheirHome = mcm.AddToggleOption("Inhereted home from deceased spouse", spouseShareHome)
+                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("Inhereted home from deceased spouse", spouseShareHome)
                 endif
             endif
         endif
@@ -113,32 +111,32 @@ int Function ShareHomeIsAvailable(Actor spouse) global
 EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
-    Actor spouse = TTM_MCM_State.GetSelectedSpouse()
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(spouse) + "'s original house they share with you.")
-    int jSpouseCells = TTM_ServiceSpouseAssets.GetSpouseArray(spouse, "cells")
+    Actor npc = TTM_MCM_State.GetSelectedNpc()
+    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s original house they share with you.")
+    Form[] cells = TTM_ServiceSpouseAssets.GetSpouseCells(npc)
     int i = 0
 
-    if(JArray_count(jSpouseCells))
-        mcm.AddTextOption(TTM_Utils.GetActorName(spouse) + " doesn't share any property with you.", "")
+    if(cells.Length == 0)
+        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't share any property with you.", "")
     endif
 
-    while(i < JArray_count(jSpouseCells))
-        Cell home = JArray_getForm(jSpouseCells, i) as Cell
+    while(i < cells.Length)
+        Cell home = cells[i] as Cell
         mcm.AddTextOption(home.GetName(), "")
 
         i += 1
     endwhile
 
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(spouse) + "'s owns furniture and share it with you")
-    int jSpouseObjects = TTM_ServiceSpouseAssets.GetSpouseArray(spouse, "objects")
+    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s owns furniture and share it with you")
+    Form[] objects = TTM_ServiceSpouseAssets.GetSpouseObjs(npc)
     i = 0
 
-    if(JArray_count(jSpouseObjects))
-        mcm.AddTextOption(TTM_Utils.GetActorName(spouse) + " doesn't share any furniture with you.", "")
+    if(objects.Length == 0)
+        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't share any furniture with you.", "")
     endif
 
-    while(i < JArray_count(jSpouseObjects))
-        ObjectReference obj = JArray_getForm(jSpouseObjects, i) as ObjectReference
+    while(i < objects.Length)
+        ObjectReference obj = objects[i] as ObjectReference
         mcm.AddTextOption(obj.GetBaseObject().GetName(), "")
 
         i += 1
@@ -146,35 +144,35 @@ Function RenderRightColumn(TTM_MCM mcm) global
 EndFunction
 
 Function OnOptionSelect(TTM_MCM mcm, int option) global
-    Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+    Actor npc = TTM_MCM_State.GetSelectedNpc()
 
     if(option == mcm.oid_ReturnToExplore)
         mcm.Navigate("Explore")
-    elseif(option == mcm.oid_SpouseShareTheirHome)
-        if(ShareHomeIsAvailable(spouse) == 1)
+    elseif(option == mcm.oid_NpcPageShareTheirHome)
+        if(ShareHomeIsAvailable(npc) == 1)
             return
         endif
-        if(spouse.IsInFaction(TTM_JData.GetSpouseSharedHouseFaction()))
-            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(spouse)
+        if(npc.IsInFaction(TTM_JData.GetSpouseSharedHouseFaction()))
+            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
         else
-            TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(spouse)
+            TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(npc)
         endif
     endif
 EndFunction
 
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
-    Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+    Actor npc = TTM_MCM_State.GetSelectedNpc()
 
-    if(option == mcm.oid_SpousePageSkillType)
-        mcm.SetInfoText("Follower bonus - " + TTM_ServiceBuff.GetSpouseFollowerBuffs(spouse))
-    elseif(option == mcm.oid_SpousePageSocialClass)
-        mcm.SetInfoText("Permanent bonus - " + TTM_ServiceBuff.GetSpousePermanentBuffs(spouse))
-    elseif(option == mcm.oid_SpousePageTemperament)
+    if(option == mcm.oid_NpcPageSkillType)
+        mcm.SetInfoText("Follower bonus - " + TTM_ServiceBuff.GetSpouseFollowerBuffs(npc))
+    elseif(option == mcm.oid_NpcPageSocialClass)
+        mcm.SetInfoText("Permanent bonus - " + TTM_ServiceBuff.GetSpousePermanentBuffs(npc))
+    elseif(option == mcm.oid_NpcPageTemperament)
         mcm.SetInfoText("Temperament shapes affection gains, jealousy, and how spouses react to you.")
-    elseif(option == mcm.oid_SpousePageRank)
-        string rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
-        string count = TTM_ServiceNpcs.GetSpousesCount()
+    elseif(option == mcm.oid_NpcPageRank)
+        string rank = TTM_ServiceHierarchy.GetSpouseRank(npc)
+        string count = TTM_ServiceRelationships.GetSpousesCount()
         string rankText = "This spouse is one of many, they will give only 10% of their permanent bonus."
 
         if(rank == 0)
@@ -190,8 +188,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         endif
         mcm.SetInfoText(rankText)
     elseif(option == mcm.oid_CandidateChance)
-        float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(spouse)
-        string tooltip = TTM_Utils.GetActorName(spouse)
+        float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(npc)
+        string tooltip = TTM_Utils.GetActorName(npc)
         if(chance >= 0.95)
             tooltip += " accepts as though it were fated—unquestioning and unwise"
         elseif(chance >= 0.8)
@@ -206,16 +204,16 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
             tooltip += " will almost certainly refuse, though nothing is truly impossible"
         endif
         mcm.SetInfoText(tooltip)
-    elseif(option == mcm.oid_SpousePageAffection)
+    elseif(option == mcm.oid_NpcPageAffection)
         mcm.SetInfoText("Adjust their affection directly. Higher scores unlock happier relationship events; lower scores risk estrangement.")
-    elseif(option == mcm.oid_SpousePagePlayerHome)
-        mcm.SetInfoText(TTM_Utils.GetActorName(spouse) + " will spend time in assigned player's house.\nBe careful with characters who should be somewhere by quest.\n You always can unassign here or throug dialogue.")
-    elseif(option == mcm.oid_SpouseShareTheirHome)
-        string tooltip = "By enabling you will start quest to check " + TTM_Utils.GetActorName(spouse) + "'s own home, and you will get permanent access to it.\nBy disabling you will loose access to their home.\n Close menu to start quest."
+    elseif(option == mcm.oid_NpcPagePlayerHome)
+        mcm.SetInfoText(TTM_Utils.GetActorName(npc) + " will spend time in assigned player's house.\nBe careful with characters who should be somewhere by quest.\n You always can unassign here or throug dialogue.")
+    elseif(option == mcm.oid_NpcPageShareTheirHome)
+        string tooltip = "By enabling you will start quest to check " + TTM_Utils.GetActorName(npc) + "'s own home, and you will get permanent access to it.\nBy disabling you will loose access to their home.\n Close menu to start quest."
         if(TTM_JData.GetMarasCheckSpouseHomeQuest().IsRunning())
             tooltip = "You are already trying to get access to spouse's home, check your journal and finish it before you can toggle this checkbox.\nClicking on this option won't do anything."
-        elseif(spouse.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
-            tooltip = TTM_Utils.GetActorName(spouse) + " doesn't have their own home.\nClicking on this option won't do anything."
+        elseif(npc.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
+            tooltip = TTM_Utils.GetActorName(npc) + " doesn't have their own home.\nClicking on this option won't do anything."
         endif
         mcm.SetInfoText(tooltip)
     endif
@@ -233,32 +231,32 @@ Function OnOptionInputAccept(TTM_MCM mcm, int option, string value) global
 EndFunction
 
 Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
-    Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+    Actor spouse = TTM_MCM_State.GetSelectedNpc()
     string[] options
     int start
     int default
-    if(option == mcm.oid_SpousePageSocialClass)
+    if(option == mcm.oid_NpcPageSocialClass)
         options = TTM_Utils.GetSpouseSocialTypeByIndexes()
         start = TTM_Utils.GetSpouseSocialIndexByType(TTM_Utils.GetSpouseSocialClass(spouse))
         default = TTM_Utils.GetSpouseSocialIndexByType(TTM_ServiceSpouseTypes.DetermineSocialClass(spouse))
-    elseif(option == mcm.oid_SpousePageSkillType)
+    elseif(option == mcm.oid_NpcPageSkillType)
         options = TTM_Utils.GetSpouseSkillTypeByIndexes()
         start = TTM_Utils.GetSpouseSkillIndexByType(TTM_Utils.GetSpouseSkillType(spouse))
         default = TTM_Utils.GetSpouseSkillIndexByType(TTM_ServiceSpouseTypes.DetermineSkillType(spouse))
-    elseif(option == mcm.oid_SpousePageTemperament)
+    elseif(option == mcm.oid_NpcPageTemperament)
         options = TTM_Utils.GetSpouseTemperamentByIndexes()
         start = TTM_Utils.GetSpouseTemperamentIndex(spouse)
         default = TTM_Utils.GetSpouseTemperamentIndexByType(TTM_ServiceSpouseTypes.DetermineTemperament(spouse))
-    elseif(option == mcm.oid_SpousePagePlayerHome)
+    elseif(option == mcm.oid_NpcPagePlayerHome)
         options = PapyrusUtil.PushString(TTM_ServicePlayerHouse.GetPlayerHomesNames(), "unset")
-        start = JArray_findForm(JFormMap_allKeys(TTM_ServicePlayerHouse.GetPlayerHouses()), TTM_ServiceNpcs.GetTrackedNpcHome(spouse))
-        default = JFormMap_count(TTM_ServicePlayerHouse.GetPlayerHouses())
+        start = TTM_ServicePlayerHouse.FindPlayerHouseIndex(TTM_ServiceRelationships.GetTrackedNpcHome(spouse))
+        default = TTM_ServicePlayerHouse.GetPlayerHouses().Length  ; unset
         if(start == -1)
             start = default
         endif
-    elseif(option == mcm.oid_SpousePageRank)
+    elseif(option == mcm.oid_NpcPageRank)
         options = GetHierarchyOptions()
-        int rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+        int rank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
         if(rank != -1)
             start = rank
             default = rank
@@ -270,48 +268,48 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
 EndFunction
 
 Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
-    Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+    Actor spouse = TTM_MCM_State.GetSelectedNpc()
     string opt
-	if(option == mcm.oid_SpousePageSocialClass)
+	if(option == mcm.oid_NpcPageSocialClass)
         string[] options = TTM_Utils.GetSpouseSocialTypeByIndexes()
         opt = options[index]
         TTM_ServiceSpouseTypes.SetSpouseSocialClass(spouse, opt)
-        TTM_ServiceNpcs.SetTrackedNpcMcmTypeChanged(spouse)
-    elseif(option == mcm.oid_SpousePageSkillType)
+        TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
+    elseif(option == mcm.oid_NpcPageSkillType)
         string[] options = TTM_Utils.GetSpouseSkillTypeByIndexes()
         opt = options[index]
         TTM_ServiceSpouseTypes.SetSpouseSkillType(spouse, opt)
-        TTM_ServiceNpcs.SetTrackedNpcMcmTypeChanged(spouse)
-    elseif(option == mcm.oid_SpousePageTemperament)
+        TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
+    elseif(option == mcm.oid_NpcPageTemperament)
         string[] options = TTM_Utils.GetSpouseTemperamentByIndexes()
         opt = options[index]
         TTM_ServiceSpouseTypes.SetSpouseTemperament(spouse, opt)
-        TTM_ServiceNpcs.SetTrackedNpcMcmTypeChanged(spouse)
-    elseif(option == mcm.oid_SpousePagePlayerHome)
+        TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
+    elseif(option == mcm.oid_NpcPagePlayerHome)
         string[] names = TTM_ServicePlayerHouse.GetPlayerHomesNames()
         names = PapyrusUtil.PushString(names, "unset")
-        Form[] houses = TTM_ServicePlayerHouse.GetPlayerHomesForms()
+        Form[] houses = TTM_ServicePlayerHouse.GetPlayerHouses()
         if(index >= houses.Length)
             TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouse)
         else
             TTM_ServicePlayerHouse.MoveSpouseToHouse(spouse, houses[index] as Location)
         endif
         opt = names[index]
-    elseif(option == mcm.oid_SpousePageRank)
-        int rank = TTM_ServiceNpcs.GetSpouseRank(spouse)
+    elseif(option == mcm.oid_NpcPageRank)
+        int rank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
         if(rank == index)
             return
         endif
         opt = GetHierarchyOptions()[index]
-        TTM_ServiceNpcs.ChangeSpouseRank(spouse, index)
+        TTM_ServiceHierarchy.ChangeSpouseRank(spouse, index)
     endif
 
     mcm.SetMenuOptionValue(option, opt)
 EndFunction
 
 Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
-    if(option == mcm.oid_SpousePageAffection)
-        Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+    if(option == mcm.oid_NpcPageAffection)
+        Actor spouse = TTM_MCM_State.GetSelectedNpc()
         int affection = TTM_ServiceAffection.GetAffectionRank(spouse)
         float affectionValue = affection as float
         mcm.SetSliderDialogStartValue(affectionValue)
@@ -322,8 +320,8 @@ Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
 EndFunction
 
 Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
-    if(option == mcm.oid_SpousePageAffection)
-        Actor spouse = TTM_MCM_State.GetSelectedSpouse()
+    if(option == mcm.oid_NpcPageAffection)
+        Actor spouse = TTM_MCM_State.GetSelectedNpc()
         int previousAffection = TTM_ServiceAffection.GetAffectionRank(spouse)
         int newAffection = value as int
         if(newAffection < 0)

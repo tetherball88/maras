@@ -8,16 +8,6 @@
     - Handles mod events for relationship changes and AI commands
     - Integrates with SkyrimNet and TTLL if present
     - Triggers maintenance for buffs, quest tracking, and conditions
-
-  Dependencies:
-    - TTM_JData
-    - TTM_ServiceBuff
-    - TTM_QuestTracker
-    - TTM_Conditions
-    - TTM_ServiceSkyrimNet
-    - TTM_ServiceNpcs
-    - TTM_Utils
-    - AIAgentFunctions
 /;
 Scriptname TTM_MainController extends Quest
 
@@ -34,10 +24,8 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
-    float startTime = Utility.GetCurrentRealTime()
-    int len = PO3_SKSEFunctions.GetAllActorsInFaction(Game.GetFormFromFile(0x13, "Skyrim.esm") as Faction).Length
-    TTM_Debug.trace("MainController:GetAllActorsInFaction: " + len + " actors; time taken: " + (Utility.GetCurrentRealTime() - startTime))
-    TTM_Debug.SetupLogger()
+
+    ; TTM_Debug.SetupLogger()
     TTM_JData.ImportStaticData()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
@@ -65,7 +53,7 @@ Function Maintenance()
 
     Actor player = TTM_JData.GetPlayer()
 
-    player.AddSpell(TTM_Debug_ToggleSpouse)
+    bool added = player.AddSpell(TTM_Debug_ToggleSpouse)
 
     Perk checkDoorPerk = TTM_JData.GetCheckDoorPerk()
 
@@ -98,30 +86,30 @@ Event OnRelationshipChanged(Form npc, string status)
     Actor npcA = npc as Actor
     string npcName = TTM_Utils.GetActorName(npcA)
 
-    TTM_ServiceNpcs.AddTrackedNpc(npcA)
+    TTM_ServiceRelationships.AddTrackedNpc(npcA)
 
     string msg = ""
 
     if(status == "candidate")
         msg = "I think " + npcName + " is a good match."
-        TTM_ServiceNpcs.MakeNpcCandidate(npcA)
+        TTM_ServiceRelationships.MakeNpcCandidate(npcA)
     elseif(status == "engaged")
         msg = npcName + " and I are engaged to be married."
-        TTM_ServiceNpcs.MakeNpcEngaged(npcA)
+        TTM_ServiceRelationships.MakeNpcEngaged(npcA)
     elseif(status == "married")
         msg = npcName + " and I are now newlyweds."
-        TTM_ServiceNpcs.MakeNpcMarried(npcA)
+        TTM_ServiceRelationships.MakeNpcMarried(npcA)
     elseif(status == "jilted")
         msg = "My engagement with " + npcName + " was called off."
-        TTM_ServiceNpcs.MakeNpcJilted(npcA)
+        TTM_ServiceRelationships.MakeNpcJilted(npcA)
     elseif(status == "divorced")
         msg = "Me and " + npcName + " are now divorced."
-        TTM_ServiceNpcs.MakeNpcDivorced(npcA)
+        TTM_ServiceRelationships.MakeNpcDivorced(npcA)
     endif
 
     Debug.Notification(msg)
 
-    TTM_ServiceNpcs.ManageFactions(npcA, status)
+    TTM_ServiceRelationships.ManageFactions(npcA, status)
 EndEvent
 
 

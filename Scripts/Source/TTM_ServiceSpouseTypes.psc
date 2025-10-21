@@ -13,7 +13,7 @@ Function CheckOverrides() global
     Actor npc = JFormMap_nextKey(JTypes) as Actor
 
     while(npc)
-        if(TTM_Utils.IsTracking(npc) && !TTM_ServiceNpcs.GetTrackedNpcMcmTypeChanged(npc))
+        if(TTM_Utils.IsTracking(npc) && !TTM_ServiceRelationships.GetTrackedNpcMcmTypeChanged(npc))
             string overrideSocial = GetSocialClassOverride(npc)
             SetSpouseSocialClass(npc, overrideSocial)
 
@@ -186,17 +186,17 @@ EndFunction
 
 string Function GetSocialClassByFaction(Actor spouse) global
     Faction[] spouseFactions = spouse.GetFactions(-100, 100)
-    FormList rulerFactions = TTM_JData.GetSpouseTypesFactionsByType("rulers")
-    FormList nobleFactions = TTM_JData.GetSpouseTypesFactionsByType("nobles")
-    FormList religiousFactions = TTM_JData.GetSpouseTypesFactionsByType("religious")
-    FormList wealthyFactions = TTM_JData.GetSpouseTypesFactionsByType("wealthy")
-    FormList middleFactions = TTM_JData.GetSpouseTypesFactionsByType("middle")
-    FormList povertyFactions = TTM_JData.GetSpouseTypesFactionsByType("poverty")
-    FormList outcastFactions = TTM_JData.GetSpouseTypesFactionsByType("outcast")
+    FormList rulerFactions = Game.GetFormFromFile(0xd75, "TT_MARAS.esp") as FormList
+    FormList nobleFactions = Game.GetFormFromFile(0xd76, "TT_MARAS.esp") as FormList
+    FormList religiousFactions = Game.GetFormFromFile(0xd77, "TT_MARAS.esp") as FormList
+    FormList wealthyFactions = Game.GetFormFromFile(0xd71, "TT_MARAS.esp") as FormList
+    FormList middleFactions = Game.GetFormFromFile(0x4, "TT_MARAS.esp") as FormList
+    FormList povertyFactions = Game.GetFormFromFile(0xd74, "TT_MARAS.esp") as FormList
+    FormList outcastFactions = Game.GetFormFromFile(0xd70, "TT_MARAS.esp") as FormList
     int i = 0
     int maxClassIndex = 0
 
-    while i < spouseFactions.Length
+    while(i < spouseFactions.Length)
         Faction spouseFaction = spouseFactions[i]
 
         if(rulerFactions.HasForm(spouseFaction))
@@ -216,7 +216,7 @@ string Function GetSocialClassByFaction(Actor spouse) global
         else
             maxClassIndex = TTM_Utils.GetMax(maxClassIndex, TTM_Utils.GetSpouseSocialIndexByType("working")) as int
 
-            if(spouse.WornHasKeyword(TTM_JData.GetGameKeyword("clothingRich")))
+            if(spouse.WornHasKeyword(TTM_JData.GetClothingRichKeyword()))
                 maxClassIndex = TTM_Utils.GetMax(maxClassIndex, TTM_Utils.GetSpouseSocialIndexByType("wealthy")) as int
             endif
         endif
@@ -227,7 +227,20 @@ string Function GetSocialClassByFaction(Actor spouse) global
 EndFunction
 
 bool Function checkByClass(string type, Class spouseClass) global
-    FormList classes = TTM_JData.GetSpouseTypesClassesByType(type)
+    FormList classes
+    if(type == "warrior")
+        classes = Game.GetFormFromFile(0xe, "TT_MARAS.esp") as FormList
+    elseif(type == "mage")
+        classes = Game.GetFormFromFile(0xf, "TT_MARAS.esp") as FormList
+    elseif(type == "rogue")
+        classes = Game.GetFormFromFile(0x11, "TT_MARAS.esp") as FormList
+    elseif(type == "ranger")
+        classes = Game.GetFormFromFile(0x10, "TT_MARAS.esp") as FormList
+    elseif(type == "orator")
+        classes = Game.GetFormFromFile(0x13, "TT_MARAS.esp") as FormList
+    elseif(type == "craftsman")
+        classes = Game.GetFormFromFile(0x12, "TT_MARAS.esp") as FormList
+    endif
     return classes.HasForm(spouseClass)
 EndFunction
 
@@ -310,16 +323,15 @@ EndFunction
 ============================== /;
 
 string Function GetTypesNamespace() global
-    return TTM_JData.GetInitialDataKey() + ".spouseTypeOverrides"
+    return "TT_MARAS.spouseTypeOverrides"
 EndFunction
 
 Function ImportJson() global
-    int JTypesFromFiles = TTM_JUtils.LoadMultipleFiles("Data/SKSE/Plugins/MARAS/spousesTypes", true)
-    JDB_solveObjSetter(GetTypesNamespace(), JTypesFromFiles, true)
+    TTM_JMethods.ImportDataFromFile("spouseTypesOverrides", "Data/SKSE/Plugins/MARAS/spousesTypes", true, true)
 EndFunction
 
 int Function GetActor(Actor npc) global
-    int JTypes = JDB_solveObj(GetTypesNamespace())
+    int JTypes = TTM_JMethods.GetObjStaticData("spouseTypesOverrides")
     return JFormMap_getObj(JTypes, npc)
 EndFunction
 

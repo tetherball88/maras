@@ -19,7 +19,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     string[] types = TTM_Utils.GetSpouseSkillTypeByIndexes()
 
     while(i < types.Length)
-        TTM_MCM_State.AddSpouseTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
+        TTM_MCM_State.AddNpcTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
         i += 1
     endwhile
 EndFunction
@@ -33,7 +33,7 @@ Function RenderRightColumn(TTM_MCM mcm) global
     string[] types = TTM_Utils.GetSpouseSocialTypeByIndexes()
 
     while(i < types.Length)
-        TTM_MCM_State.AddSpouseTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
+        TTM_MCM_State.AddNpcTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
         i += 1
     endwhile
 EndFunction
@@ -50,21 +50,21 @@ EndFunction
 
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
-    string spouseType = TTM_MCM_State.GetSpouseTypeOption(option)
-    if(spouseType != "")
+    string npcType = TTM_MCM_State.GetNpcTypeOption(option)
+    if(npcType != "")
         float[] multipliers
-        int typeIndex = TTM_Utils.GetSpouseSkillIndexByType(spouseType)
+        int typeIndex = TTM_Utils.GetSpouseSkillIndexByType(npcType)
         if(typeIndex == -1)
             multipliers = TTM_ServiceBuff.GetPermanentMultipliers()
-            typeIndex = TTM_Utils.GetSpouseSocialIndexByType(spouseType)
+            typeIndex = TTM_Utils.GetSpouseSocialIndexByType(npcType)
         else
             multipliers = TTM_ServiceBuff.GetFollowersMultipliers()
         endif
 
         if(typeIndex != -1)
-            float bonusValue = TTM_ServiceBuff.GetBonusPerkValue(spouseType, 0)
-            string bonusDescription = TTM_ServiceBuff.GetBonusPerkDescription(spouseType, 0)
-            string bonusUnit = TTM_ServiceBuff.GetBonusPerkUnit(spouseType, 0)
+            float bonusValue = TTM_ServiceBuff.GetBonusPerkValue(npcType, 0)
+            string bonusDescription = TTM_ServiceBuff.GetBonusPerkDescription(npcType, 0)
+            string bonusUnit = TTM_ServiceBuff.GetBonusPerkUnit(npcType, 0)
             float value = bonusValue * multipliers[typeIndex]
             if(bonusDescription != "")
                 mcm.SetInfoText(bonusDescription + " " + value + " " + bonusUnit)

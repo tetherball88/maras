@@ -53,7 +53,7 @@ Function Fragment_0()
         ObjectReference cellDoor = currentCell.GetNthRef(0, 29)
         Key doorKey = cellDoor.GetKey()
         if(doorKey)
-            TTM_ServiceSpouseAssets.AddKey(doorKey, spouse)
+            TTM_JData.GetPlayer().AddKeyIfNeeded(cellDoor)
         endif
 
         i += 1
