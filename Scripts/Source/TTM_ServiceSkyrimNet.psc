@@ -40,16 +40,22 @@ EndFunction
 
 Bool Function AcceptProposalIsElgigible(Actor akActor, string contextJson, string paramsJson) global
     if(!TTM_Utils.IsTracking(akActor))
-        TTM_Debug.trace("AcceptProposalIsElgigible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("AcceptProposalIsElgigible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        endif
         return false
     endif
     bool isEligible = TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor)
-    TTM_Debug.trace("AcceptProposalIsElgigible:"+isEligible)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("AcceptProposalIsElgigible:"+isEligible)
+    endif
     return isEligible
 EndFunction
 
 Function AcceptProposalAction(Actor akActor, string contextJson, string paramsJson) global
-    TTM_Debug.trace("AcceptProposalAction:"+akActor)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("AcceptProposalAction:"+akActor)
+    endif
     TTM_Utils.SendRelationshipChangeEvent(akActor, "engaged")
 EndFunction
 
@@ -80,7 +86,9 @@ EndFunction
 
 Bool Function AffectionEstrangedDivorceResolutionIsEligible(Actor akActor, string contextJson, string paramsJson) global
     if(!akActor.IsInFaction(TTM_JData.GetTrackedNpcFaction()))
-        TTM_Debug.trace("AffectionEstrangedDivorceResolutionIsEligible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("AffectionEstrangedDivorceResolutionIsEligible:DoesntHaveTrackingFaction:SKIP"+akActor)
+        endif
         return false
     endif
 
@@ -136,15 +144,21 @@ EndFunction
 string Function GetMarriageChance(Actor akActor) global
     string notReady = "{\"chance\": -1}"
     if(!TTM_Utils.IsTracking(akActor))
-        TTM_Debug.trace("GetMarriageChance:DoesntHaveTrackingFaction:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("GetMarriageChance:DoesntHaveTrackingFaction:SKIP"+akActor)
+        endif
         return notReady
     endif
     if(akActor == TTM_JData.GetPlayer())
-        TTM_Debug.trace("GetMarriageChance:IsPlayer:SKIP:"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("GetMarriageChance:IsPlayer:SKIP:"+akActor)
+        endif
         return notReady
     endif
     if(!TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor))
-        TTM_Debug.trace("GetMarriageChance:IsntReady:SKIP"+akActor)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("GetMarriageChance:IsntReady:SKIP"+akActor)
+        endif
         return notReady
     endif
 

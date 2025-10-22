@@ -28,7 +28,6 @@ Function CheckOverrides() global
 EndFunction
 
 int Function DetermineSpouseType(Actor spouse) global
-    TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(spouse))
     SetSpouseSkillType(spouse, DetermineSkillType(spouse))
     SetSpouseSocialClass(spouse, DetermineSocialClass(spouse))
     SetSpouseTemperament(spouse, DetermineTemperament(spouse))
@@ -43,7 +42,9 @@ Function SetSpouseSocialClass(Actor npc, string socialClass) global
                 npc.AddToFaction(socialClassFaction)
             endif
             npc.SetFactionRank(socialClassFaction, socialIndex)
-            TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":SocialClass:"+socialIndex)
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":SocialClass:"+socialIndex)
+            endif
         endif
     endif
 EndFunction
@@ -57,7 +58,9 @@ Function SetSpouseSkillType(Actor npc, string skillType) global
                 npc.AddToFaction(skillTypeFaction)
             endif
             npc.SetFactionRank(skillTypeFaction, skillIndex)
-            TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":SkillType:"+skillIndex)
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":SkillType:"+skillIndex)
+            endif
         endif
     endif
 EndFunction
@@ -71,7 +74,9 @@ Function SetSpouseTemperament(Actor npc, string temperament) global
                 npc.AddToFaction(temperamentFaction)
             endif
             npc.SetFactionRank(temperamentFaction, temperamentIndex)
-            TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":Temperament:"+temperamentIndex)
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("DetermineSpouseType:"+TTM_Utils.GetActorName(npc)+":Temperament:"+temperamentIndex)
+            endif
         endif
     endif
 EndFunction

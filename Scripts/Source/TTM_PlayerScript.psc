@@ -18,14 +18,10 @@ Event OnPlayerLoadGame()
 EndEvent
 
 Event OnSleepStart(Float afSleepStartTime, Float afDesiredSleepEndTime)
-    TTM_Debug.trace("OnSleepStart:default")
     Actor player = self.GetActorRef()
     Faction PlayerMarriedFaction = TTM_JData.GetMarriedFaction()
     Quest enablePolygamyQst = TTM_JData.GetMarasEnablePolygamyQuest()
     bool questIsntTouched = !enablePolygamyQst.IsRunning() && !enablePolygamyQst.IsCompleted()
-    if(!questIsntTouched)
-        TTM_Debug.trace("OnSleepStart:"+player.GetActorValue("DragonSouls"))
-    endif
 
     if(questIsntTouched && player.GetActorValue("DragonSouls") >= 1 && player.IsInFaction(PlayerMarriedFaction))
         TTM_Debug.trace("Start Enable Poly")

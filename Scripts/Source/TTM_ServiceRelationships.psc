@@ -125,7 +125,9 @@ EndFunction
 
 ; Manage TTM utility factions related to marriage status
 Function ManageFactions(Actor npc, string status) global
-    TTM_Debug.trace("ManageFactions:npc:"+TTM_Utils.GetActorName(npc)+":"+status)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("ManageFactions:npc:"+TTM_Utils.GetActorName(npc)+":"+status)
+    endif
     TTM_Utils.SetRelationshipStatus(npc, status)
     if(status == "candidate")
         npc.AddToFaction(TTM_JData.GetMarriagePotentialFaction())
@@ -151,16 +153,19 @@ Function ManageFactions(Actor npc, string status) global
     endif
 EndFunction
 
-Function ShareIncome(Actor spouse) global
+; Dialogue line has 24 hours cooldown so will assume if it is from dialogue it already passed at least one day
+Function ShareIncome(Actor spouse, bool fromDialogue = false) global
     float currentTime = Utility.GetCurrentGameTime()
     float lastTime = GetLastTimeSharedIncome(spouse)
     float diff = currentTime - lastTime
 
-    if(lastTime == -1)
+    if(lastTime == -1 || fromDialogue)
         diff = 1
     endif
 
-    TTM_Debug.trace("ShareIncome:"+diff+":"+lastTime)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("ShareIncome:current:"+currentTime+":diff:"+diff+":"+lastTime)
+    endif
 
     if(diff >= 1)
         int diffInt = diff as int

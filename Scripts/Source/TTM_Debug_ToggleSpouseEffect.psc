@@ -3,7 +3,9 @@ Scriptname TTM_Debug_ToggleSpouseEffect extends activemagiceffect
 Event OnEffectStart(Actor akTarget, Actor akCaster)
     string status = TTM_Utils.GetRelationshipStatus(akTarget)
 
-    TTM_Debug.trace("TTM_Debug_ToggleSpouseEffect:OnEffectStart:currentStatus:"+status)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_Debug_ToggleSpouseEffect:OnEffectStart:currentStatus:"+status)
+    endif
 
     if(status == "")
         TTM_Utils.SendRelationshipChangeEvent(akTarget, "candidate")

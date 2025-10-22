@@ -138,7 +138,9 @@ Int Function _GetSetGameGlobal(int formId, string fileName, int val = -1) global
     GlobalVariable res = Game.GetFormFromFile(formId, fileName) as GlobalVariable
 
     if(!res)
-        TTM_Debug.trace("Couldn't find GlobalVariable " + formId + " in " + fileName)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("Couldn't find GlobalVariable " + formId + " in " + fileName)
+        endif
     endif
 
     if(val == -1)

@@ -15,7 +15,7 @@ EndFunction
 
 Function trace(string msg) global
     int logLevel = TTM_JData.GetLogLevel()
-    if(logLevel == 0)
+    if(isTrace())
         log("[maras(trace)]: " + msg)
     endif
 EndFunction
@@ -43,4 +43,9 @@ EndFunction
 
 Function JWriteToFile(string msg) global
     MiscUtil.WriteToFile("MARAS_Log.txt", msg, true, true)
+EndFunction
+
+bool Function IsTrace() global
+    int logLevel = TTM_JData.GetLogLevel()
+    return logLevel == 0
 EndFunction

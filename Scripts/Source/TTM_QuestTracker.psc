@@ -26,7 +26,9 @@ Function RegisterQuest(Quest qst)
     bool allStagesPassed = true
     int i = 0
 
-    TTM_Debug.trace("TTM_QuestTracker:RegisterQuest:CHECK:"+qst.GetName()+"; stagesCount:"+allStages.Length)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_QuestTracker:RegisterQuest:CHECK:"+qst.GetName()+"; stagesCount:"+allStages.Length)
+    endif
 
     while(i < allStages.Length)
         string stage = allStages[i]
@@ -44,11 +46,14 @@ Function RegisterQuest(Quest qst)
     ; todo we can't remove quest from jcontainers if it is repeatable
     ; check if all tracked stages for this quest already passed, we can remove whole quest from tracked
     if(allStagesPassed)
-        TTM_Debug.trace("TTM_QuestTracker:RegisterQuest:SKIP:"+qst.GetName())
-        ; TTM_JData.RemoveQuest(qst)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestTracker:RegisterQuest:SKIP:"+qst.GetName())
+        endif
     ; otherwise subscribe to quest stage changes
     else
-        TTM_Debug.trace("TTM_QuestTracker:RegisterQuest:DONE:"+qst.GetName())
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestTracker:RegisterQuest:DONE:"+qst.GetName())
+        endif
         RegisterForQuestStage(self, qst)
     endif
 EndFunction
@@ -58,11 +63,15 @@ Function ProcessStage(Quest qst, string stage, bool onLoad = false)
     bool stageProcessOnLoad = GetQstStageCheckOnLoad(qst, stage) == 1
 
     if(onLoad && !stageProcessOnLoad)
-        TTM_Debug.trace("TTM_QuestTracker:ProcessStage:SKIP:"+stage+":action:"+stageAction)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestTracker:ProcessStage:SKIP:"+stage+":action:"+stageAction)
+        endif
         return
     endif
 
-    TTM_Debug.trace("TTM_QuestTracker:Quest:"+qst.GetName()+":ProcessStage:"+stage+":action:"+stageAction)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_QuestTracker:Quest:"+qst.GetName()+":ProcessStage:"+stage+":action:"+stageAction)
+    endif
 
     if(stageAction == "weddingFinish")
         TTM_ServiceMarriageQuest.OnWeddingQstFinish()
@@ -77,17 +86,23 @@ Function ProcessStage(Quest qst, string stage, bool onLoad = false)
 EndFunction
 
 Event OnQuestStageChange(Quest akQuest, Int aiNewStage)
-    TTM_Debug.trace("TTM_QuestTracker:OnQuestStageChange:"+akQuest.GetName()+"; stage:"+aiNewStage)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_QuestTracker:OnQuestStageChange:"+akQuest.GetName()+"; stage:"+aiNewStage)
+    endif
     ProcessStage(akQuest, aiNewStage)
 EndEvent
 
 Event OnQuestStart(Quest akQuest)
-    TTM_Debug.trace("TTM_QuestTracker:OnQuestStageChange:"+akQuest.GetName()+"; stage:START")
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_QuestTracker:OnQuestStart:"+akQuest.GetName()+"; stage:START")
+    endif
     ProcessStage(akQuest, "start")
 EndEvent
 
 Event OnQuestStop(Quest akQuest)
-    TTM_Debug.trace("TTM_QuestTracker:OnQuestStageChange:"+akQuest.GetName()+"; stage:STOP")
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_QuestTracker:OnQuestStop:"+akQuest.GetName()+"; stage:STOP")
+    endif
     ProcessStage(akQuest, "stop")
 EndEvent
 

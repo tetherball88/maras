@@ -59,9 +59,13 @@ TTM_QuestTrackKilledSpouses kmyQuest = __temp as TTM_QuestTrackKilledSpouses
         if(inheritanceValue)
             vWICourierScript.addItemToContainer(TTM_JData.GetGoldMisc(), inheritanceValue)
         endif
-        TTM_Debug.trace("TTM_QuestTrackKilledSpouses:VictimSpouse:"+TTM_Utils.GetActorName(victim)+":Letter:"+Letter)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestTrackKilledSpouses:VictimSpouse:"+TTM_Utils.GetActorName(victim)+":Letter:"+letter)
+        endif
     else
-        TTM_Debug.trace("TTM_QuestTrackKilledSpouses:VictimSpouse:"+TTM_Utils.GetActorName(victim)+":YouAreKiller:NoInheritance")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("TTM_QuestTrackKilledSpouses:VictimSpouse:"+TTM_Utils.GetActorName(victim)+":YouAreKiller:NoInheritance")
+        endif
     endif
 
     kmyquest.SetNextEventGlobals()

@@ -17,7 +17,9 @@ Function Maintenance()
 EndFunction
 
 Event OStimEnd(string eventName, string json, float numArg, Form sender)
-    TTM_Debug.trace("TTM_ServiceIntimateMoments:OStimEnd:"+json)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_ServiceIntimateMoments:OStimEnd:"+json)
+    endif
     Actor[] Actors = OJSON.GetActors(Json)
     Faction housedFaction = TTM_JData.GetSpouseHousedFaction()
     Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()

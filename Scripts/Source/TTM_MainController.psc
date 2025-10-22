@@ -82,7 +82,9 @@ EndFunction
   @param status The new relationship status (candidate, engaged, married, jilted, divorced)
 /;
 Event OnRelationshipChanged(Form npc, string status)
-    TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
+    endif
     Actor npcA = npc as Actor
     string npcName = TTM_Utils.GetActorName(npcA)
 
@@ -115,7 +117,9 @@ EndEvent
 
 Event OnChangeHierarchyRank(Form spouse, int newRank, int oldRank)
     Actor spouseA = spouse as Actor
-    TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
+    endif
     if(newRank == -1)
         newRank = 4
     endif
@@ -197,7 +201,6 @@ endEvent
 
 
 Event OnMenuClose(string menuName)
-    TTM_Debug.trace("MainController:OnMenuClose:"+menuName)
     if(menuName == "GiftMenu")
         TTM_ServiceGift.OnGiftMenuClose()
     endif
@@ -205,5 +208,4 @@ endEvent
 
 Function OnStartedDialogue(Actor npc)
     TTM_ServiceAffection.AddDialogueStartedAffection(npc)
-    TTM_Debug.trace("MainController:OnStartedDialogue: " + TTM_Utils.GetActorName(npc))
 EndFunction

@@ -21,11 +21,12 @@ Function ExportStorage() global
 EndFunction
 
 Function ImportStorage() global
-    int storedData = JValue.readFromFile(JContainers.userDirectory() + "MARAS/store.json")
+    int storedData = JValue_retain(JValue_readFromFile(JContainers.userDirectory() + "MARAS/store.json"))
     int regular = JMap_getObj(storedData, "regular")
     int forms = JMap_getObj(storedData, "forms")
     JDB_solveObjSetter(_GetNamespaceKey(), regular, true)
     JDB_solveObjSetter(_GetNamespaceKey() + "Forms", forms, true)
+    JValue_release(storedData)
 EndFunction
 
 ;/ ==============================
@@ -134,7 +135,7 @@ EndFunction
 
 ; Clear object structure at given path
 Function ClearValue(Form formKey, string propertyName) global
-    JFormDB_solveObjSetter(ProcessFormKey(formKey), BuildPath(propertyName), 0)
+    JFormDB_solveObjSetter(ProcessFormKey(formKey), BuildPath(propertyName), JMap_object(), true)
 EndFunction
 
 ;/==============================

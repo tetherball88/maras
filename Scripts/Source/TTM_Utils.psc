@@ -11,7 +11,9 @@ Function SendRelationshipChangeEvent(Actor candidate, string status) global
         return
     endif
     int handle = ModEvent.Create("TTM_SpouseRelationshipChanged")
-    TTM_debug.trace("SendRelationshipChangeEvent:"+handle+":"+candidate+":"+status)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("SendRelationshipChangeEvent:"+handle+":"+TTM_Utils.GetActorName(candidate)+":"+status)
+    endif
     if(handle)
         ModEvent.PushForm(handle, candidate as Form)
         ModEvent.PushString(handle, status)
@@ -21,7 +23,9 @@ EndFunction
 
 string Function SendAffectionChangeThresholdEvent(Actor spouse, string level, bool up) global
     int handle = ModEvent.Create("TTM_SpouseAffectionChanged")
-    TTM_debug.trace("SendAffectionChangeThresholdEvent:"+handle+":"+TTM_Utils.GetActorName(spouse)+":"+level+":"+up)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("SendAffectionChangeThresholdEvent:"+handle+":"+TTM_Utils.GetActorName(spouse)+":"+level+":"+up)
+    endif
     if(handle)
         ModEvent.PushForm(handle, spouse as Form)
         ModEvent.PushString(handle, level)
@@ -32,6 +36,9 @@ EndFunction
 
 Function SendChangeLeadSpouseRankEvent(Actor spouse, int newRank, int oldRank) global
     int handler = ModEvent.Create("TTM_ChangeLeadSpouseRankEvent")
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("SendChangeLeadSpouseRankEvent:"+handler+":"+TTM_Utils.GetActorName(spouse)+":"+newRank+":"+oldRank)
+    endif
     if(handler)
         ModEvent.PushForm(handler, spouse as Form)
         ModEvent.PushInt(handler, newRank)
@@ -250,13 +257,17 @@ bool Function CandidateIsReadyToHearProposalAwait(Actor npc, int attempts = 5, f
     bool isPlayer = npc == TTM_JData.GetPlayer()
     bool isReady = CandidateIsReadyToHearProposal(npc)
     if(isPlayer || ((isSpouseNpc || isFianceNpc) && isReady))
-        TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: false; isPlayer:"+isPlayer+"; isSpouseNpc:"+isSpouseNpc+"; isFianceNpc:"+isFianceNpc)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: false; isPlayer:"+isPlayer+"; isSpouseNpc:"+isSpouseNpc+"; isFianceNpc:"+isFianceNpc)
+        endif
         return false
     endif
     int i = 0
 
     while(i < attempts && !isReady)
-        TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: attempt "+i+"; isReady:"+isReady)
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CandidateIsReadyToHearProposalAwait: attempt "+i+"; isReady:"+isReady)
+        endif
         Utility.Wait(wait)
         isReady = CandidateIsReadyToHearProposal(npc)
         i += 1

@@ -13,30 +13,39 @@ scriptname TTM_ServiceSpouseAssets
 
 Function StartShareHomeWithPlayer(Actor spouse) global
     spouse.AddToFaction(TTM_JData.GetCheckSpouseHomeFaction())
-    TTM_Debug.trace("StartShareHomeWithPlayer:"+TTM_JData.GetMarasCheckSpouseHomeQuest())
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("StartShareHomeWithPlayer:"+TTM_JData.GetMarasCheckSpouseHomeQuest())
+    endif
     TTM_JData.GetMarasCheckSpouseHomeQuest().SetStage(0)
 EndFunction
 
 Function CheckCell(Actor spouse = none) global
-    TTM_debug.trace("CheckCell")
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("CheckCell")
+    endif
     Actor player = TTM_JData.GetPlayer()
     Cell currentCell = player.GetParentCell()
 
-    if(IsCellOwnedBySpouse(currentCell))
-        TTM_debug.trace("CheckCell:IsOwnedByOneOrMoreSpouses")
-        currentCell.SetPublic()
-        return
-    endif
-
     if(!currentCell.IsInterior())
-        TTM_debug.trace("CheckCell:NotInterior")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CheckCell:NotInterior")
+        endif
         return
     endif
 
     Location currentLoc = player.GetCurrentLocation()
     if(!IsLocationRegistered(currentLoc))
-        TTM_debug.trace("CheckCell:Not registered spouse location")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CheckCell:Not registered spouse location")
+        endif
         return
+    endif
+
+    if(IsCellOwnedBySpouse(currentCell))
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CheckCell:AlreadyOwnedBySpouse")
+        endif
+        currentCell.SetPublic()
     endif
 
     Quest checkSpouseHomeQst = TTM_JData.GetMarasCheckSpouseHomeQuest()
@@ -45,18 +54,24 @@ Function CheckCell(Actor spouse = none) global
         Location spouseLoc = spouseLocAl.GetLocation()
 
         if(spouseLoc != currentLoc)
-            TTM_debug.trace("CheckCell:NotSpouseHome")
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("CheckCell:NotSpouseLocation")
+            endif
             return
         endif
 
         if(!spouse)
             spouse = TTM_Utils.GetActorAlias(checkSpouseHomeQst, "spouse")
-            TTM_debug.trace("CheckCell:SetSpouseFromQuest")
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("CheckCell:SetSpouseFromQuest")
+            endif
         endif
     endif
 
     if(!spouse)
-        TTM_debug.trace("CheckCell:NoSpouseProvided")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CheckCell:NoSpouseProvided")
+        endif
         return
     endif
 
@@ -70,7 +85,9 @@ Function CheckCell(Actor spouse = none) global
     endif
 
     if(spouseOwnsCell)
-        TTM_debug.trace("CheckCell:SpouseOwnsThisHome")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CheckCell:SpouseOwnsThisHome")
+        endif
         AddCell(currentCell, spouse)
         Form[] objects = GetCellObjectsWithOwners(currentCell)
         int i = 0
@@ -146,7 +163,9 @@ EndFunction
 Function FindSpouseHome(Actor spouse) global
     Actor player = TTM_JData.GetPlayer()
     Location spouseHome = GetSpouseOriginalHome(spouse)
-    TTM_Debug.trace("FindSpouseHome:"+spouseHome)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("FindSpouseHome:"+spouseHome)
+    endif
     if(!spouseHome)
         return
     endif
@@ -178,16 +197,22 @@ Function RestoreObjectOwnership(ObjectReference obj) global
 EndFunction
 
 Function ScanCell(Cell currentCell) global
-    TTM_Debug.trace("ScanCell")
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("ScanCell")
+    endif
     if(TTM_JMethods.GetIntValue(currentCell, "CellScanned") == 1)
-        TTM_Debug.trace("ScanCell:AlreadyScanned:SKIP")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("ScanCell:AlreadyScanned:SKIP")
+        endif
         return
     endif
     int numFurns = currentCell.GetNumRefs(40)
 
     int i = 0
 
-    TTM_Debug.trace("ScanCell:objectsCount:"+numFurns)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("ScanCell:objectsCount:"+numFurns)
+    endif
 
     while(i < numFurns)
         ObjectReference obj = currentCell.GetNthRef(i, 40)

@@ -76,16 +76,22 @@ Function ChangeSpouseRank(Actor spouse, int newRank = -1) global
     ; swap their places if this spouse was already on top 3 list
     TTM_JMethods.FormListSet(none, "SpouseHierarchyCache", newRank, spouse)
     spouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), newRank)
-    TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(spouse)+":"+newRank)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(spouse)+":"+newRank)
+    endif
     TTM_Utils.SendChangeLeadSpouseRankEvent(spouse, newRank, currentRank)
     if(newRankSpouse != none)
         if(currentRank == -1)
             newRankSpouse.RemoveFromFaction(TTM_JData.GetSpouseHierarchyFaction())
-            TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(newRankSpouse)+":-1")
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(newRankSpouse)+":-1")
+            endif
         else
             TTM_JMethods.FormListSet(none, "SpouseHierarchyCache", currentRank, newRankSpouse)
             newRankSpouse.SetFactionRank(TTM_JData.GetSpouseHierarchyFaction(), currentRank)
-            TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(newRankSpouse)+":"+currentRank)
+            if(TTM_Debug.IsTrace())
+                TTM_Debug.trace("ChangeSpouseRank:"+TTM_Utils.GetActorName(newRankSpouse)+":"+currentRank)
+            endif
         endif
         TTM_Utils.SendChangeLeadSpouseRankEvent(newRankSpouse, currentRank, newRank)
     endif

@@ -11,7 +11,9 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    TTM_Debug.trace("TTM_DialogueManagerAffectionDivorceQst:OnBegin:"+PromptKey+":useAI:"+UseAI)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_DialogueManagerAffectionDivorceQst:OnBegin:"+PromptKey+":useAI:"+UseAI)
+    endif
     if(StageTarget > 0)
         self.GetOwningQuest().SetStage(StageTarget)
     endif

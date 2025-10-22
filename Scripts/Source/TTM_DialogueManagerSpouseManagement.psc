@@ -11,7 +11,9 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    TTM_Debug.trace("TTM_DialogueManagerSpouseManagement:OnBegin:"+PromptKey+":useAI:"+UseAI)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_DialogueManagerSpouseManagement:OnBegin:"+PromptKey+":useAI:"+UseAI)
+    endif
     if(PromptKey == "manage_spouse_set_new_home_ask" && UseAI)
         TTM_ServicePlayerHouse.ChooseHomeForSpouseMsg(akSpeaker)
     elseif(PromptKey == "manage_spouse_un_set_new_home")
@@ -25,7 +27,7 @@ Actor akSpeaker = akSpeakerRef as Actor
     elseif(PromptKey == "manage_spouse_cooking")
         TTM_JData.GetPlayer().AddItem(FoodMarriageMeal)
     elseif(PromptKey == "manage_spouse_store")
-        TTM_ServiceRelationships.ShareIncome(akSpeaker)
+        TTM_ServiceRelationships.ShareIncome(akSpeaker, true)
     elseif(PromptKey == "manage_spouse_set_hierarchy_0")
         TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 0)
         ; write prompt for spouse responding to being set to rank 1,
@@ -61,29 +63,3 @@ EndFunction
 ;END FRAGMENT
 
 ;END FRAGMENT CODE - Do not edit anything between this and the begin comment
-
-Function GetManageSpouseDialogue(string promptKey, Actor akSpeaker)
-    if(PromptKey == "manage_spouse_set_new_home_ask" && UseAI)
-        TTM_ServicePlayerHouse.ChooseHomeForSpouseMsg(akSpeaker)
-    elseif(PromptKey == "manage_spouse_un_set_new_home")
-        TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(akSpeaker)
-    elseif(PromptKey == "manage_spouse_check_spouse_home")
-        TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(akSpeaker)
-    elseif(PromptKey == "manage_spouse_leave_spouse_home")
-        TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(akSpeaker)
-    elseif(PromptKey == "maras_no_ai_engagement")
-        TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
-    elseif(PromptKey == "manage_spouse_cooking")
-        TTM_JData.GetPlayer().AddItem(FoodMarriageMeal)
-    elseif(PromptKey == "manage_spouse_store")
-        TTM_ServiceRelationships.ShareIncome(akSpeaker)
-    elseif(PromptKey == "manage_spouse_set_hierarchy_0")
-        TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 0)
-        ; write prompt for spouse responding to being set to rank 1,
-    elseif(PromptKey == "manage_spouse_set_hierarchy_1")
-        TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 1)
-    elseif(PromptKey == "manage_spouse_set_hierarchy_2")
-        TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 2)
-    endif
-EndFunction
-

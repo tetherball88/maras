@@ -5,15 +5,18 @@ Spell Property currentSpell Auto
 
 Event OnUpdateGameTime()
     Actor akTarget = GetTargetActor()
-    TTM_Debug.trace("TTM_CooldownSpell:"+currentSpell+":Cleared:" + TTM_Utils.GetActorName(akTarget))
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_CooldownSpell:"+currentSpell.GetName()+":Cleared:" + TTM_Utils.GetActorName(akTarget))
+    endif
 	akTarget.RemoveSpell(currentSpell)
 EndEvent
 
 Event OnEffectStart(Actor akTarget, Actor akCaster)
 	float brokeupTime = TTM_ServiceRelationships.GetBrokeupTime(akTarget)
     float diff = Utility.GetCurrentGameTime() - brokeupTime
-
-    TTM_Debug.trace("TTM_CooldownSpell:" + currentSpell + ":Start:diff" + diff)
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("TTM_CooldownSpell:" + currentSpell.GetName() + ":Start:diff" + diff)
+    endif
 
     if(diff >= 1)
         akTarget.RemoveSpell(currentSpell)

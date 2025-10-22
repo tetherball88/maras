@@ -17,9 +17,13 @@ scriptname TTM_ServicePlayerHouse
 Function CheckPlayerHouseLocation() global
     Actor player = TTM_JData.GetPlayer()
     Location currentLoc = player.GetCurrentLocation()
-    TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc.GetName())
+    if(TTM_Debug.IsTrace())
+        TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc.GetName())
+    endif
     if(currentLoc.HasKeywordString("LocTypePlayerHouse"))
-        TTM_Debug.trace("CheckPlayerHouseLocation:playerHome")
+        if(TTM_Debug.IsTrace())
+            TTM_Debug.trace("CheckPlayerHouseLocation:playerHome")
+        endif
         SetPlayerHouse(currentLoc)
         AddPlayerHouseCell(currentLoc, player.GetParentCell())
     endif
