@@ -29,7 +29,8 @@ Function Fragment_0()
         return
     endif
     string spouseName = TTM_Utils.GetActorName(spouse)
-    if(LocationRef != none)
+    Cell currentCell = LocationRef.GetParentCell()
+    if(LocationRef != none && TTM_ServiceSpouseAssets.DoesSpouseOwnHome(spouse, currentCell))
         if(TTM_Debug.IsTrace())
             TTM_Debug.trace("TTM_QuestCheckSpouseHome:Spouse:"+spouseName+";HomeCenter:"+LocationRef)
         endif
@@ -46,8 +47,6 @@ Function Fragment_0()
         return
     endif
 
-
-    Cell currentCell = LocationRef.GetParentCell()
     ; 29 is for door
     int count = currentCell.GetNumRefs(29)
     int i = 0

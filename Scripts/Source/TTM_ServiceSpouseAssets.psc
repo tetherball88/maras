@@ -75,14 +75,7 @@ Function CheckCell(Actor spouse = none) global
         return
     endif
 
-    ActorBase actorOwner = currentCell.GetActorOwner()
-    Faction factionOwner = currentCell.GetFactionOwner()
-    bool spouseOwnsCell = false
-    if(actorOwner)
-        spouseOwnsCell = actorOwner == spouse.GetActorBase()
-    elseif(factionOwner)
-        spouseOwnsCell = spouse.IsInFaction(factionOwner)
-    endif
+    bool spouseOwnsCell = DoesSpouseOwnHome(spouse, currentCell)
 
     if(spouseOwnsCell)
         if(TTM_Debug.IsTrace())
@@ -109,6 +102,19 @@ Function CheckCell(Actor spouse = none) global
         checkSpouseHomeQst.Reset()
         checkSpouseHomeQst.Stop()
     endif
+EndFunction
+
+bool Function DoesSpouseOwnHome(Actor spouse, Cell currentCell) global
+    ActorBase actorOwner = currentCell.GetActorOwner()
+    Faction factionOwner = currentCell.GetFactionOwner()
+    bool spouseOwnsCell = false
+    if(actorOwner)
+        spouseOwnsCell = actorOwner == spouse.GetActorBase()
+    elseif(factionOwner)
+        spouseOwnsCell = spouse.IsInFaction(factionOwner)
+    endif
+
+    return spouseOwnsCell
 EndFunction
 
 Function StopShareHomeWithPlayer(Actor spouse) global

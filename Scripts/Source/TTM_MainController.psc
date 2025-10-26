@@ -52,7 +52,6 @@ Function Maintenance()
     RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
     RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
     RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
-    RegisterForModEvent("PlayDBVOTopic", "OnPlayDBVOTopic")
 
      ; ensure player has debug spell and check door perk
 
@@ -214,8 +213,3 @@ endEvent
 Function OnStartedDialogue(Actor npc)
     TTM_ServiceAffection.AddDialogueStartedAffection(npc)
 EndFunction
-
-function OnPlayDBVOTopic(String eventName, String dialogue, Float number, Form sender)
-
-	TTM_Debug.trace("MainController:OnPlayDBVOTopic: dialogue: " + dialogue)
-endFunction

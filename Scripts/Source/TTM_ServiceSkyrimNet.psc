@@ -28,7 +28,7 @@ Function RegisterActions() global
   RegisterAcceptProposalAction()
   RegisterBreakupEngagementAction()
   RegisterDivorseAction()
-  RegisterAffectionEstrangedDivorceResolutionAction()
+;   RegisterAffectionEstrangedDivorceResolutionAction()
 EndFunction
 
 Function RegisterAcceptProposalAction() global
@@ -72,6 +72,10 @@ Function RegisterAffectionEstrangedDivorceResolutionAction() global
     "{{decnpc(npc.UUID).name}} listens to {{player.name}}'s words and makes a decision about their marriage. If what {{player.name}} says resonates with them, they may choose to reconcile. Otherwise, they may opt for divorce.", \
     "TTM_ServiceSkyrimNet", "AffectionEstrangedDivorceResolutionIsEligible", "TTM_ServiceSkyrimNet", "AffectionEstrangedDivorceResolutionAction", "", "PAPYRUS", 1, \
     "{\"decision\": \"If spouse is ready to try again for marriage return 'reconcile' else return 'divorce'\"}")
+EndFunction
+
+Function UnregisterAffectionEstrangedDivorceResolutionAction() global
+    SkyrimNetApi.UnregisterAction("AffectionEstrangedDivorceResolution")
 EndFunction
 
 bool Function CheckIfDivorceQuestIsInPlay(Actor akActor) global

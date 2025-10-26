@@ -16,8 +16,7 @@ Function Fragment_6()
         TTM_Utils.SendRelationshipChangeEvent(spouse, "divorced")
         TTM_ServiceAffection.SetAffectionRank(spouse, 0)
     endif
-    FailAllObjectives()
-    Stop()
+    FinishQuest(false)
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -30,8 +29,7 @@ Function Fragment_5()
     if(spouse)
         TTM_ServiceAffection.SetAffectionRank(spouse, 50)
     endif
-    CompleteAllObjectives()
-    Stop()
+    FinishQuest()
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -42,6 +40,7 @@ Function Fragment_4()
 ; stage 10
     SetObjectiveCompleted(0)
     SetObjectiveDisplayed(10)
+    TTM_ServiceSkyrimNet.RegisterAffectionEstrangedDivorceResolutionAction()
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -63,10 +62,19 @@ Function Fragment_8()
     if(spouse)
         TTM_ServiceAffection.SetAffectionRank(spouse, 50)
     endif
-    CompleteAllObjectives()
-    Stop()
+    FinishQuest()
 ;END CODE
 EndFunction
 ;END FRAGMENT
 
 ;END FRAGMENT CODE - Do not edit anything between this and the begin comment
+
+Function FinishQuest(bool success = true)
+    if(success)
+        CompleteAllObjectives()
+    else
+        FailAllObjectives()
+    endif
+    TTM_ServiceSkyrimNet.UnregisterAffectionEstrangedDivorceResolutionAction()
+    Stop()
+EndFunction

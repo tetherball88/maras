@@ -2,13 +2,13 @@
     {% set npcName = decnpc(npc.UUID).name %}
     {% set affectionRank = get_faction_rank(npc.UUID, "TTM_SpouseAffection") %}
     {% if affectionRank >= 75 %}
-{{npcName}} feels deeply attached to {{player.name}} and speaks warmly, playfully, and openly.
+{{npcName}} typically has deep attachment to {{player.name}}, though their current response should reflect immediate context and recent events.
     {% else if affectionRank >= 50 %}
-{{npcName}} feels generally positive toward {{player.name}} and speaks in a friendly, cooperative, trusting tone.
+{{npcName}} generally maintains positive feelings toward {{player.name}}, though their immediate response should appropriately reflect current circumstances.
     {% else if affectionRank >= 25 %}
-{{npcName}} has mixed feelings about {{player.name}} and speaks cautiously, probing for reassurance or clarity.
+{{npcName}} has mixed feelings about {{player.name}}, with responses that balance their underlying caution with reactions to the current situation.
     {% else %}
-{{npcName}} feels hurt or guarded around {{player.name}} and speaks with distance, brevity, or cool restraint.
+{{npcName}} maintains a guarded attitude toward {{player.name}}, with responses that reflect both this underlying distance and their reaction to immediate events.
     {% endif %}
     {% set factionRank = get_faction_rank(npc.UUID, "TTM_TrackedNpcs") %}
     {% if factionRank != 10 and factionRank != 20 %}
