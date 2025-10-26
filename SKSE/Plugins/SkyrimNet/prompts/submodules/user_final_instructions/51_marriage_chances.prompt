@@ -1,6 +1,6 @@
 {% if not isTimePaused and is_in_faction(npc.UUID, "TTM_TrackedNpcs") and render_mode == "full" %}
     {% set npcName = decnpc(npc.UUID).name %}
-    {% set affectionRank = get_faction_rank(actorUUID, "TTM_SpouseAffection") %}
+    {% set affectionRank = get_faction_rank(npc.UUID, "TTM_SpouseAffection") %}
     {% if affectionRank >= 75 %}
 {{npcName}} feels deeply attached to {{player.name}} and speaks warmly, playfully, and openly.
     {% else if affectionRank >= 50 %}

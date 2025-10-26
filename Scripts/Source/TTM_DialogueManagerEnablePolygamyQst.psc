@@ -18,11 +18,22 @@ Actor akSpeaker = akSpeakerRef as Actor
 
     if(UseAI)
         string prompt = TTM_JData.GetDialoguePrompt(PromptKey)
+        TTM_Debug.trace("TTM_DialogueManagerEnablePolygamyQst:Prompt:"+prompt)
         string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\"}"
         if(prompt != "")
-            TTM_ServiceSkyrimNet.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
+            TTM_RequestLLMDialogue.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
         endif
     endif
+;END CODE
+EndFunction
+;END FRAGMENT
+
+;BEGIN FRAGMENT Fragment_1
+Function Fragment_1(ObjectReference akSpeakerRef)
+Actor akSpeaker = akSpeakerRef as Actor
+;BEGIN CODE
+;OnEnd
+    self.GetOwningQuest().SetStage(StageTarget)
 ;END CODE
 EndFunction
 ;END FRAGMENT

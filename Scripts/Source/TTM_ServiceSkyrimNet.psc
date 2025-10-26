@@ -316,9 +316,9 @@ Function DirectNarration(String content, Actor originatorActor = None, Actor tar
     SkyrimNetApi.DirectNarration(content, originatorActor, targetActor)
 EndFunction
 
-Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor akTarget = none) global
-    if(!TTM_JData.GetHasSkyrimNet())
-        return
-    endif
-    DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, TTM_JData.GetPlayer())
-EndFunction
+; Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor akTarget = none) global
+;     if(!TTM_JData.GetHasSkyrimNet())
+;         return
+;     endif
+;     DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, TTM_JData.GetPlayer())
+; EndFunction

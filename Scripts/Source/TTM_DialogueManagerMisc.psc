@@ -36,7 +36,7 @@ Actor akSpeaker = akSpeakerRef as Actor
         string prompt = TTM_JData.GetDialoguePrompt(PromptKey)
         string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\"}"
         if(prompt != "")
-            TTM_ServiceSkyrimNet.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
+            TTM_RequestLLMDialogue.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
         endif
     endif
 ;END CODE

@@ -41,8 +41,12 @@ Function err(string msg) global
     endif
 EndFunction
 
+Function CleanOnLoad() global
+    MiscUtil.WriteToFile("MARAS_Log.txt", "", false, false)
+EndFunction
+
 Function JWriteToFile(string msg) global
-    MiscUtil.WriteToFile("MARAS_Log.txt", msg, true, true)
+    MiscUtil.WriteToFile("MARAS_Log.txt", "\n" + msg, true, true)
 EndFunction
 
 bool Function IsTrace() global

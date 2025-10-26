@@ -25,7 +25,7 @@ EndEvent
 /;
 Function Maintenance()
 
-    ; TTM_Debug.SetupLogger()
+    TTM_Debug.CleanOnLoad()
     TTM_JData.ImportStaticData()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
@@ -35,19 +35,24 @@ Function Maintenance()
 
     ; check if SkyrimNet present
     ; otherwise all SkyrimNet related logic will be bypassed
+    bool hasSkyrimNet = false
+    int hasSkyrimNetGlobal = 0
     if(Game.GetModByName("SkyrimNet.esp") != 255)
-        TTM_JData.SetHasSkyrimNet()
-        TTM_JData.GetSetHasSkyrimNetGlobal(1)
+        hasSkyrimNet = true
+        hasSkyrimNetGlobal = 1
         RegisterForModEvent("SkyrimNet_OnPackageRemoved", "OnPackageRemoved")
     endif
 
-    if(Game.GetModByName("TT_RelationsFinder.esp") != 255)
-        TTM_JData.SetHasTTRF()
-    endif
+    TTM_JData.SetHasSkyrimNet(hasSkyrimNet)
+    TTM_JData.GetSetHasSkyrimNetGlobal(hasSkyrimNetGlobal)
+
+
+    TTM_JData.SetHasTTRF(Game.GetModByName("TT_RelationsFinder.esp") != 255)
 
     RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
     RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
     RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
+    RegisterForModEvent("PlayDBVOTopic", "OnPlayDBVOTopic")
 
      ; ensure player has debug spell and check door perk
 
@@ -209,3 +214,8 @@ endEvent
 Function OnStartedDialogue(Actor npc)
     TTM_ServiceAffection.AddDialogueStartedAffection(npc)
 EndFunction
+
+function OnPlayDBVOTopic(String eventName, String dialogue, Float number, Form sender)
+
+	TTM_Debug.trace("MainController:OnPlayDBVOTopic: dialogue: " + dialogue)
+endFunction

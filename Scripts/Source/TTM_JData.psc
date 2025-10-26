@@ -35,8 +35,8 @@ bool Function GetBool(string propName) global
     return TTM_JMethods.GetIntValue(none, propName) == 1
 EndFunction
 
-Function SetHasSkyrimNet() global
-    SetBool("HasSkyrimNet")
+Function SetHasSkyrimNet(bool has) global
+    SetBool("HasSkyrimNet", has)
 EndFunction
 bool Function GetHasSkyrimNet() global
     return GetBool("HasSkyrimNet")
@@ -49,8 +49,8 @@ bool Function GetHasTTLL() global
     return GetBool("HasTTLL")
 EndFunction
 
-Function SetHasTTRF() global
-    SetBool("HasTTRF")
+Function SetHasTTRF(bool has) global
+    SetBool("HasTTRF", has)
 EndFunction
 bool Function GetHasTTRF() global
     return GetBool("HasTTRF")
