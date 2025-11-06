@@ -16,10 +16,11 @@ Actor akSpeaker = akSpeakerRef as Actor
 
     if(PromptKey == "maras_enable_candidate")
         if(!TTM_Utils.IsTracking(akSpeaker))
-            akSpeaker.AddToFaction(TTM_JData.GetTrackedNpcFaction())
+            ; akSpeaker.AddToFaction(TTM_JData.GetTrackedNpcFaction())
             TTM_ServiceRelationsFinder.ScanRelationships(akSpeaker)
         endif
-        TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "candidate")
+        MARAS.RegisterCandidate(akSpeaker)
+        ; TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "candidate")
     elseif(PromptKey == "maras_no_ai_engagement")
         TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
     elseif(PromptKey == "maras_breakup_reconcile_accept")

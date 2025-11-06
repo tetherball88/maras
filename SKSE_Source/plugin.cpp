@@ -1,7 +1,12 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
+
 #include "PCH.h"
+#include "core/NPCRelationshipManager.h"
+#include "core/Serialization.h"
+#include "papyrus/PapyrusInterface.h"
 
 using namespace SKSE;
 
@@ -46,6 +51,50 @@ namespace {
             console->Print("%s", message.data());
         }
     }
+
+    // SKSE Serialization callbacks
+    void SaveCallback(SKSE::SerializationInterface* serialization) {
+        auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
+
+        if (!serialization->OpenRecord(MARAS::Serialization::kNPCRelationshipData,
+                                       MARAS::Serialization::kDataVersion)) {
+            SKSE::log::error("Failed to open record for saving");
+            return;
+        }
+
+        if (!manager.Save(serialization)) {
+            SKSE::log::error("Failed to save NPC relationship data");
+        } else {
+            SKSE::log::info("Successfully saved NPC relationship data");
+        }
+    }
+
+    void LoadCallback(SKSE::SerializationInterface* serialization) {
+        auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
+
+        std::uint32_t type, version, length;
+        while (serialization->GetNextRecordInfo(type, version, length)) {
+            if (type == MARAS::Serialization::kNPCRelationshipData) {
+                if (version != MARAS::Serialization::kDataVersion) {
+                    SKSE::log::error("Invalid data version {} (expected {})", version,
+                                     MARAS::Serialization::kDataVersion);
+                    continue;
+                }
+
+                if (!manager.Load(serialization)) {
+                    SKSE::log::error("Failed to load NPC relationship data");
+                } else {
+                    SKSE::log::info("Successfully loaded NPC relationship data");
+                }
+            }
+        }
+    }
+
+    void RevertCallback(SKSE::SerializationInterface*) {
+        auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
+        manager.Revert();
+        SKSE::log::info("Reverted NPC relationship data");
+    }
 }
 
 SKSEPluginLoad(const LoadInterface* skse) {
@@ -53,6 +102,18 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
     SetupLogging();
     SKSE::log::info("MARAS plugin loading...");
+
+    // Register serialization callbacks
+    if (const auto* serialization = SKSE::GetSerializationInterface()) {
+        serialization->SetUniqueID(MARAS::Serialization::kMarasPluginID);
+        serialization->SetSaveCallback(SaveCallback);
+        serialization->SetLoadCallback(LoadCallback);
+        serialization->SetRevertCallback(RevertCallback);
+        SKSE::log::info("Registered MARAS serialization callbacks");
+    } else {
+        SKSE::log::critical("Serialization interface unavailable.");
+        return false;
+    }
 
     if (const auto* messaging = SKSE::GetMessagingInterface()) {
         if (!messaging->RegisterListener([](SKSE::MessagingInterface::Message* message) {
@@ -66,12 +127,29 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         SKSE::log::info("New game/Load...");
                         break;
 
-                    case SKSE::MessagingInterface::kDataLoaded:
+                    case SKSE::MessagingInterface::kDataLoaded: {
                         SKSE::log::info("Data loaded successfully.");
+
+                        // Initialize the NPC relationship manager
+                        auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
+
+                        // Load override data
+                        std::filesystem::path overrideFolder = "Data/SKSE/Plugins/MARAS/spousesTypes";
+                        if (manager.LoadOverridesFromFolder(overrideFolder.string())) {
+                            auto stats = manager.GetLastOverrideLoadStats();
+                            SKSE::log::info("Loaded {} NPC type overrides from {} files", manager.GetOverrideCount(),
+                                            stats.successfulFiles);
+                        } else {
+                            SKSE::log::warn("Failed to load NPC type overrides from {}", overrideFolder.string());
+                        }
+
+                        manager.LogStatistics();
+
                         if (auto* console = RE::ConsoleLog::GetSingleton()) {
                             console->Print("MARAS: Ready");
                         }
                         break;
+                    }
 
                     default:
                         break;
@@ -82,6 +160,17 @@ SKSEPluginLoad(const LoadInterface* skse) {
         }
     } else {
         SKSE::log::critical("Messaging interface unavailable.");
+        return false;
+    }
+
+    // Register Papyrus functions
+    if (const auto* papyrus = SKSE::GetPapyrusInterface()) {
+        if (!papyrus->Register(MARAS::PapyrusInterface::RegisterPapyrusFunctions)) {
+            SKSE::log::critical("Failed to register Papyrus functions.");
+            return false;
+        }
+    } else {
+        SKSE::log::critical("Papyrus interface unavailable.");
         return false;
     }
 

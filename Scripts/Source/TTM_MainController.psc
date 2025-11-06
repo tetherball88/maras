@@ -49,6 +49,8 @@ Function Maintenance()
 
     TTM_JData.SetHasTTRF(Game.GetModByName("TT_RelationsFinder.esp") != 255)
 
+    RegisterForModEvent("maras_status_changed", "OnRelationshipChanged2")
+
     RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
     RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
     RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
@@ -79,6 +81,10 @@ Function Maintenance()
     ; JValue.enableAPILog(TTM_MCM_State.GetLogLevel() == 0)
     JValue.enableAPILog(false)
 EndFunction
+
+Event OnRelationshipChanged2(String EventName, String status, Float statusEnum, Form Sender)
+    TTM_Debug.trace("MainController:OnRelationshipChanged2: " + TTM_Utils.GetActorName(Sender as Actor) + "; status: " + status + "; enum: " + statusEnum)
+EndEvent
 
 ;/
   Handles relationship change events. Updates tracked NPCs and their status, and syncs with CHIM if enabled.
