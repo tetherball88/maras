@@ -27,9 +27,9 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     string skillType = TTM_Utils.GetSpouseSkillType(npc)
     string socialClass = TTM_Utils.GetSpouseSocialClass(npc)
     string temperament = TTM_Utils.GetSpouseTemperament(npc)
-    string count = TTM_ServiceRelationships.GetSpousesCount()
+    int count = MARAS.GetStatusCount("married")
     string status = TTM_Utils.GetRelationshipStatus(npc)
-    bool isDeceased = TTM_ServiceRelationships.IsDeceased(npc)
+    bool isDeceased = MARAS.IsNPCStatus(npc, "deceased")
     string deceased = ""
 
     if(isDeceased)
@@ -171,8 +171,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_NpcPageTemperament)
         mcm.SetInfoText("Temperament shapes affection gains, jealousy, and how spouses react to you.")
     elseif(option == mcm.oid_NpcPageRank)
-        string rank = TTM_ServiceHierarchy.GetSpouseRank(npc)
-        string count = TTM_ServiceRelationships.GetSpousesCount()
+        int rank = TTM_ServiceHierarchy.GetSpouseRank(npc)
+        int count = MARAS.GetStatusCount("married")
         string rankText = "This spouse is one of many, they will give only 10% of their permanent bonus."
 
         if(rank == 0)

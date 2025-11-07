@@ -136,7 +136,7 @@ Function CheckOngoingMarriage() global
         TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage")
     endif
     ; means MARAS mod is already in use and we can skip checking current marriage quests
-    if(TTM_ServiceRelationships.GetTrackedNpcs().Length != 0)
+    if(MARAS.GetStatusCount("all") != 0)
         if(TTM_Debug.IsTrace())
             TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage:SKIP")
         endif
@@ -247,7 +247,7 @@ EndFunction
   Checks for the next fiance and starts engagement if found.
 /;
 Function CheckNextFiance() global
-    Form[] fiances = TTM_ServiceRelationships.GetFiances()
+    Actor[] fiances = MARAS.GetNPCsByStatus("engaged")
     Actor nextFiance = fiances[0] as Actor
     TTM_Debug.warn("TTM_ServiceMarriageQuest:CheckNextFiance:"+TTM_Utils.GetActorName(nextFiance))
     if(nextFiance)

@@ -24,7 +24,6 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
-
     TTM_Debug.CleanOnLoad()
     TTM_JData.ImportStaticData()
     Quest _self = self as Quest
@@ -98,8 +97,6 @@ Event OnRelationshipChanged(Form npc, string status)
     Actor npcA = npc as Actor
     string npcName = TTM_Utils.GetActorName(npcA)
 
-    TTM_ServiceRelationships.AddTrackedNpc(npcA)
-
     string msg = ""
 
     if(status == "candidate")
@@ -120,6 +117,8 @@ Event OnRelationshipChanged(Form npc, string status)
     endif
 
     Debug.Notification(msg)
+
+    TTM_ServiceRelationships.CountLoveInterests()
 
     TTM_ServiceRelationships.ManageFactions(npcA, status)
 EndEvent

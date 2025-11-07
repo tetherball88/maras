@@ -147,7 +147,7 @@ EndFunction
 
 string Function GetMarriageChance(Actor akActor) global
     string notReady = "{\"chance\": -1}"
-    if(!TTM_Utils.IsTracking(akActor))
+    if(!MARAS.IsNPCStatus(akActor, "any") || MARAS.IsNPCStatus(akActor, "engaged") || MARAS.IsNPCStatus(akActor, "married"))
         if(TTM_Debug.IsTrace())
             TTM_Debug.trace("GetMarriageChance:DoesntHaveTrackingFaction:SKIP"+akActor)
         endif
@@ -159,12 +159,8 @@ string Function GetMarriageChance(Actor akActor) global
         endif
         return notReady
     endif
-    if(!TTM_Utils.CandidateIsReadyToHearProposalAwait(akActor))
-        if(TTM_Debug.IsTrace())
-            TTM_Debug.trace("GetMarriageChance:IsntReady:SKIP"+akActor)
-        endif
-        return notReady
-    endif
+
+    TTM_Debug.trace("GetMarriageChance:Calculating for:"+akActor)
 
     string json = "{"
 
@@ -184,8 +180,8 @@ string Function GetCoSpouses(Actor akActor) global
     string future = "\"future\":"
 
     if(TTM_Utils.IsTracking(akActor))
-        Form[] coSpouses = TTM_ServiceRelationships.GetSpouses()
-        Form[] futureCoSpouses = TTM_ServiceRelationships.GetSpouses()
+        Actor[] coSpouses = MARAS.GetNPCsByStatus("married")
+        Actor[] futureCoSpouses = MARAS.GetNPCsByStatus("engaged")
         current += "\"" + TTM_Utils.GetActorsNamesJson(coSpouses, akActor) + "\""
         future += "\""+TTM_Utils.GetActorsNamesJson(futureCoSpouses, akActor)+"\""
     else
@@ -267,14 +263,14 @@ string Function BuildLine(Actor akActor, Actor playerPartner, string originalRel
             finalLine = actorName + " ended their courtship with " + exName + " when they " + playerRelationship + " " + playerName + "."
         elseif(originalRelationType == "lover")
             string loversNames = ""
-            if(originalPartners && originalPartners.Length > 0)
-                loversNames = TTM_Utils.GetActorsNamesJson(originalPartners)
-                if(originalPartners.Length == 1)
-                    finalLine = actorName + " ended romantic relationship with " + loversNames + " when " + playerRelationship + " " + playerName + "."
-                else
-                    finalLine = actorName + " ended romantic relationships with " + loversNames + " when " + playerRelationship + " " + playerName + "."
-                endif
-            endif
+            ; if(originalPartners && originalPartners.Length > 0)
+            ;     loversNames = TTM_Utils.GetActorsNamesJson(originalPartners)
+            ;     if(originalPartners.Length == 1)
+            ;         finalLine = actorName + " ended romantic relationship with " + loversNames + " when " + playerRelationship + " " + playerName + "."
+            ;     else
+            ;         finalLine = actorName + " ended romantic relationships with " + loversNames + " when " + playerRelationship + " " + playerName + "."
+            ;     endif
+            ; endif
         endif
     else ; Ex-partner's perspective (their partner became involved with player)
         if(originalRelationType == "married" && originalPartner)

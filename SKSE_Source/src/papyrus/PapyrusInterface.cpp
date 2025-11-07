@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 
+#include "core/MarriageDifficulty.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 
@@ -22,13 +24,23 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     bool RegisterCandidate(RE::StaticFunctionTag*, RE::Actor* npc) {
+        auto startTime = std::chrono::high_resolution_clock::now();
+        
         if (!npc) {
             SKSE::log::warn("RegisterCandidate: null actor provided");
             return false;
         }
 
         auto& manager = NPCRelationshipManager::GetSingleton();
-        return manager.RegisterAsCandidate(npc->GetFormID());
+        bool result = manager.RegisterAsCandidate(npc->GetFormID());
+        
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+        
+        SKSE::log::info("Papyrus RegisterCandidate for {} completed in {} microseconds (success: {})", 
+                       npc->GetDisplayFullName(), duration.count(), result);
+        
+        return result;
     }
 
     bool UnregisterNPC(RE::StaticFunctionTag*, RE::Actor* npc) {
@@ -341,12 +353,29 @@ namespace MARAS::PapyrusInterface {
 
     void LogNPCDetails(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) {
-            SKSE::log::warn("LogNPCDetails: null actor provided");
+            SKSE::log::warn("LogNPCDetails called with null NPC");
             return;
         }
 
         auto& manager = NPCRelationshipManager::GetSingleton();
         manager.LogNPCDetails(npc->GetFormID());
+    }
+
+    // ========================================
+    // Marriage Difficulty Calculation
+    // ========================================
+
+    float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
+                                         float mostGold, float housesOwned, float horsesOwned, float questsCompleted,
+                                         float dungeonsCleared, float dragonSoulsCollected) {
+        if (!npc) {
+            SKSE::log::warn("CalculateMarriageSuccessChance called with null NPC");
+            return 0.0f;
+        }
+
+        return MarriageDifficulty::CalculateMarriageSuccessChance(npc, intimacyAdjustment, mostGold, housesOwned,
+                                                                  horsesOwned, questsCompleted, dungeonsCleared,
+                                                                  dragonSoulsCollected);
     }
 
     // ========================================
@@ -381,7 +410,10 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("LogNPCStatistics", "MARAS", LogNPCStatistics);
         vm->RegisterFunction("LogNPCDetails", "MARAS", LogNPCDetails);
 
-        SKSE::log::info("Registered {} MARAS Papyrus functions", 17);
+        // Marriage difficulty calculation
+        vm->RegisterFunction("CalculateMarriageSuccessChance", "MARAS", CalculateMarriageSuccessChance);
+
+        SKSE::log::info("Registered {} MARAS Papyrus functions", 18);
         return true;
     }
 

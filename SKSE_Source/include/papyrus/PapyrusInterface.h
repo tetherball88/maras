@@ -34,6 +34,11 @@ namespace MARAS::PapyrusInterface {
     void LogNPCStatistics(RE::StaticFunctionTag*);
     void LogNPCDetails(RE::StaticFunctionTag*, RE::Actor* npc);
 
+    // Marriage difficulty calculation
+    float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
+                                         float mostGold, float housesOwned, float horsesOwned, float questsCompleted,
+                                         float dungeonsCleared, float dragonSoulsCollected);
+
     // Registration function for SKSE
     bool RegisterPapyrusFunctions(RE::BSScript::IVirtualMachine* vm);
 

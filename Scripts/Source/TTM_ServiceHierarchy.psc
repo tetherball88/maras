@@ -37,9 +37,9 @@ Function RemoveLeadSpouse(Actor spouse) global
     ; attempt to find a new lead spouse
     int i = 0
     bool found = false
-    Form[] spouses = TTM_ServiceRelationships.GetSpouses()
+    Actor[] spouses = MARAS.GetNPCsByStatus("married")
     while(i < spouses.Length && !found)
-        Actor leadCandidateSpouse = spouses[i] as Actor
+        Actor leadCandidateSpouse = spouses[i]
         if(leadCandidateSpouse != spouse && TTM_JMethods.FormListFind(none, "SpouseHierarchyCache", leadCandidateSpouse) == -1)
             found = true
             AddLeadSpouse(leadCandidateSpouse)
@@ -53,7 +53,7 @@ Function RemoveLeadSpouse(Actor spouse) global
 EndFunction
 
 Function ChangeSpouseRank(Actor spouse, int newRank = -1) global
-    Form[] spouses = TTM_ServiceRelationships.GetSpouses()
+    Actor[] spouses = MARAS.GetNPCsByStatus("married")
 
     ; if total number of spouses is less than 2, do nothing
     if(spouses.Length < 2)

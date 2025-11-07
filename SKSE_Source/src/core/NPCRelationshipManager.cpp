@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <chrono>
+
 #include "core/Serialization.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
@@ -122,6 +124,8 @@ namespace MARAS {
 
     // Registration and unregistration
     bool NPCRelationshipManager::RegisterAsCandidate(RE::FormID npcFormID) {
+        auto startTime = std::chrono::high_resolution_clock::now();
+        
         if (IsRegistered(npcFormID)) {
             MARAS_LOG_WARN("NPC {:08X} is already registered", npcFormID);
             return false;
@@ -149,9 +153,13 @@ namespace MARAS {
         // Add to tracked faction with status as rank
         UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
 
-        MARAS_LOG_INFO("Auto-registered NPC {} ({:08X}) as candidate (SC: {}, ST: {}, T: {})",
-                       Utils::GetNPCName(npcFormID), npcFormID, Utils::SocialClassToString(socialClass),
-                       Utils::SkillTypeToString(skillType), Utils::TemperamentToString(temperament));
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+        
+        MARAS_LOG_INFO("Auto-registered NPC {} ({:08X}) as candidate in {} microseconds (SC: {}, ST: {}, T: {})",
+                       Utils::GetNPCName(npcFormID), npcFormID, duration.count(), 
+                       Utils::SocialClassToString(socialClass), Utils::SkillTypeToString(skillType), 
+                       Utils::TemperamentToString(temperament));
 
         return true;
     }

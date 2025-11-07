@@ -206,46 +206,4 @@ namespace MARAS::Utils {
 
     JsonOverrideLoader::LoadStatistics JsonOverrideLoader::GetLastLoadStatistics() { return s_lastStats; }
 
-    bool JsonOverrideLoader::SaveOverridesToFile(const std::string& filePath, const OverrideMap& overrides) {
-        try {
-            nlohmann::json json;
-
-            // Add metadata
-            json["__metaInfo"]["typeName"] = "JFormMap";
-
-            // Add override data
-            for (const auto& [formID, data] : overrides) {
-                std::string pluginName = GetPluginNameFromFormID(formID);
-                RE::FormID localFormID = formID & 0x00FFFFFF;
-                std::string key = fmt::format("__formData|{}|0x{:X}", pluginName, localFormID);
-
-                nlohmann::json overrideObj;
-                if (!data.comment.empty()) {
-                    overrideObj["comment"] = data.comment;
-                }
-                if (!data.socialClass.empty()) {
-                    overrideObj["social"] = data.socialClass;
-                }
-                if (!data.skillType.empty()) {
-                    overrideObj["skill"] = data.skillType;
-                }
-                if (!data.temperament.empty()) {
-                    overrideObj["temperament"] = data.temperament;
-                }
-
-                json[key] = overrideObj;
-            }
-
-            std::ofstream file(filePath);
-            file << json.dump(4);
-
-            MARAS_LOG_INFO("Saved {} overrides to file: {}", overrides.size(), filePath);
-            return true;
-
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("Failed to save overrides to '{}': {}", filePath, e.what());
-            return false;
-        }
-    }
-
 }  // namespace MARAS::Utils

@@ -76,3 +76,5 @@ Function LogNPCStatistics() global native
 
 ;/ Log detailed information about a specific NPC /;
 Function LogNPCDetails(Actor npc) global native
+
+float Function CalculateMarriageSuccessChance(Actor npc, float intimacyAdjustment, float mostGold, float housesOwned, float horsesOwned, float questsCompleted, float dungeonsCleared, float dragonSoulsCollected) global native

@@ -102,4 +102,7 @@ namespace MARAS::Utils {
     // Get NPC name for logging
     std::string GetNPCName(FormID npcFormID);
 
+    // String utility functions
+    std::string ToLower(std::string_view str);
+
 }  // namespace MARAS::Utils

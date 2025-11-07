@@ -181,7 +181,7 @@ int Function ToggleGlobalVariable(GlobalVariable gVar) global
     return newVal
 EndFunction
 
-string Function GetActorsNamesJson(Form[] actors, Actor excluded = none) global
+string Function GetActorsNamesJson(Actor[] actors, Actor excluded = none) global
     if(actors.length == 0)
         return ""
     endif
@@ -195,7 +195,7 @@ string Function GetActorsNamesJson(Form[] actors, Actor excluded = none) global
             actorNames += ", "
         endif
 
-        Actor currentActor = actors[i] as Actor
+        Actor currentActor = actors[i]
 
         if(currentActor && currentActor != excluded)
             actorNames += GetActorName(currentActor)

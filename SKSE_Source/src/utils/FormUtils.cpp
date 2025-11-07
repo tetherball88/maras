@@ -33,81 +33,15 @@ namespace MARAS::Utils {
         return ParsedFormKey();  // Invalid
     }
 
-    std::optional<RE::FormID> ResolveFormID(const std::string& pluginName, RE::FormID localFormID) {
-        auto dataHandler = RE::TESDataHandler::GetSingleton();
-        if (!dataHandler) {
-            MARAS_LOG_ERROR("TESDataHandler not available");
-            return std::nullopt;
-        }
-
-        // Find the mod file
-        const RE::TESFile* modFile = nullptr;
-        for (const auto& file : dataHandler->files) {
-            if (file && _stricmp(std::string(file->GetFilename()).c_str(), pluginName.c_str()) == 0) {
-                modFile = file;
-                break;
-            }
-        }
-
-        if (!modFile) {
-            MARAS_LOG_WARN("Plugin '{}' not found or not loaded", pluginName);
-            return std::nullopt;
-        }
-
-        // Calculate global form ID
-        RE::FormID globalFormID =
-            (static_cast<RE::FormID>(modFile->GetCompileIndex()) << 24) | (localFormID & 0x00FFFFFF);
-
-        // Verify the form exists
-        auto form = RE::TESForm::LookupByID(globalFormID);
-        if (!form) {
-            MARAS_LOG_WARN("Form {:08X} not found in plugin '{}'", localFormID, pluginName);
-            return std::nullopt;
-        }
-
-        MARAS_LOG_DEBUG("Resolved {}|{:08X} -> {:08X}", pluginName, localFormID, globalFormID);
-        return globalFormID;
-    }
-
     std::optional<RE::FormID> ParseAndResolveFormKey(std::string_view formKey) {
         auto parsed = ParseFormKey(formKey);
         if (!parsed.isValid) {
             return std::nullopt;
         }
 
-        return ResolveFormID(parsed.pluginName, parsed.localFormID);
-    }
-
-    std::string GetPluginNameFromFormID(RE::FormID formID) {
-        auto dataHandler = RE::TESDataHandler::GetSingleton();
-        if (!dataHandler) {
-            return "Unknown";
-        }
-
-        uint8_t modIndex = (formID >> 24) & 0xFF;
-
-        for (const auto& file : dataHandler->files) {
-            if (file && file->GetCompileIndex() == modIndex) {
-                return std::string(file->GetFilename());
-            }
-        }
-
-        return fmt::format("Unknown_{:02X}", modIndex);
-    }
-
-    bool IsPluginLoaded(const std::string& pluginName) {
-        auto dataHandler = RE::TESDataHandler::GetSingleton();
-        if (!dataHandler) {
-            return false;
-        }
-
-        for (const auto& file : dataHandler->files) {
-            if (file && _stricmp(std::string(file->GetFilename()).c_str(), pluginName.c_str()) == 0) {
-                return true;
-            }
-        }
-
-        return false;
+        // Use the simplified approach - just get the form and return its ID
+        auto form = LookupForm<RE::TESForm>(parsed.localFormID, parsed.pluginName);
+        return form ? std::make_optional(form->GetFormID()) : std::nullopt;
     }
 
     std::optional<RE::FormID> HexStringToFormID(std::string_view hexStr) {

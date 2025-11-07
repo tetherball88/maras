@@ -60,13 +60,13 @@ Function RenderNpcsList(TTM_MCM mcm) global
     bool searchDivorced = TTM_MCM_State._GetMcmBool("searchDivorced")
     int searchDeceased = TTM_MCM_State._GetMcmInt("searchDeceased")
 
-    Form[] npcs = TTM_ServiceRelationships.GetTrackedNpcs()
+    Actor[] npcs = MARAS.GetNPCsByStatus("all")
     int i = 0
 
     while(i < npcs.Length)
-        Actor npc = npcs[i] as Actor
+        Actor npc = npcs[i]
         bool skipNpc = false
-        bool isDeceased = TTM_ServiceRelationships.IsDeceased(npc)
+        bool isDeceased = MARAS.IsNPCStatus(npc, "deceased")
         if((searchDeceased == 1 && isDeceased) || (searchDeceased == 2 && !isDeceased))
             skipNpc = true
         else

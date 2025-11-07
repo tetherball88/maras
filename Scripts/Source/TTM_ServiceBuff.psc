@@ -128,7 +128,7 @@ EndFunction
 /;
 float Function GetSpouseMultiplier(Actor spouse) global
     int spouseRank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
-    int spouseCount = TTM_ServiceRelationships.GetSpousesCount()
+    int spouseCount = MARAS.GetStatusCount("married")
     float affectionBuffMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(spouse)
 
     if(spouseCount == 1)
@@ -199,11 +199,11 @@ EndFunction
 /;
 float[] Function GetPermanentMultipliers() global
     float[] multipliers = Utility.CreateFloatArray(8)
-    Form[] spouses = TTM_ServiceRelationships.GetSpouses()
+    Actor[] spouses = MARAS.GetNPCsByStatus("married")
     int i = 0
 
     while(i < spouses.Length)
-        Actor spouse = spouses[i] as Actor
+        Actor spouse = spouses[i]
         string socialType = TTM_Utils.GetSpouseSocialClass(spouse)
         int spouseRank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
         float multiplier = GetSpouseMultiplier(spouse)

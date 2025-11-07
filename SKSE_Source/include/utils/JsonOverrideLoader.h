@@ -37,9 +37,6 @@ namespace MARAS::Utils {
         // Load overrides from a single JSON file
         static bool LoadOverridesFromFile(const std::string& filePath, OverrideMap& outOverrides);
 
-        // Save overrides to a JSON file (for testing/debugging)
-        static bool SaveOverridesToFile(const std::string& filePath, const OverrideMap& overrides);
-
         // Validate override values against known enum types
         static bool ValidateOverrideData(const NPCOverrideData& data);
 

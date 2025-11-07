@@ -113,7 +113,7 @@ float Function GetLonelinessAffection(Actor spouse) global
     endif
 
     if(daysSince > 2)
-        int count = TTM_ServiceRelationships.GetSpousesCount()
+        int count = MARAS.GetStatusCount("married")
         float perDay = 3.0
         if(temperament == "Independent")
             perDay = 1.0

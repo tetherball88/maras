@@ -5,7 +5,6 @@ scriptname TTM_ServiceRelationships
   @param npc The NPC actor
 /;
 Function MakeNpcCandidate(Actor npc) global
-    AddCandidate(npc)
 EndFunction
 
 ;/
@@ -26,7 +25,6 @@ Function MakeNpcEngaged(Actor npc) global
         return
     endif
     Actor player = TTM_JData.GetPlayer()
-    AddFiance(npc)
     npc.SetRelationshipRank(player, 3)
     TTM_ServiceMarriageQuest.StartEngagement(npc)
     if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
@@ -42,7 +40,6 @@ EndFunction
 Function MakeNpcMarried(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
 
-    AddSpouse(npc)
     TTM_ServiceHierarchy.AddLeadSpouse(npc)
 
     npc.SetRelationshipRank(player, 4)
@@ -69,7 +66,6 @@ Function MakeNpcDivorced(Actor npc) global
     Faction playerFaction = TTM_JData.GetPlayerFaction()
 
     TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
-    AddDivorcee(npc)
     npc.SetRelationshipRank(player, -2)
     ;re-evaluate spouses bonuses on each spouse removed
     TTM_ServiceBuff.CalculatePermanentMultipliers()
@@ -88,7 +84,6 @@ EndFunction
 /;
 Function MakeNpcJilted(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
-    AddJilted(npc)
     npc.SetRelationshipRank(player, -1)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
@@ -116,8 +111,6 @@ Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
             TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
         endif
     endif
-
-    AddDeceased(npc)
     ; re-check marriage related quests and stop if any were ongoing for killed npc
     TTM_ServiceMarriageQuest.ResetMarriageQuests(npc)
 
@@ -177,22 +170,6 @@ EndFunction
 ;/ ==============================
    SECTION: trackedNpcs map
 ============================== /;
-Function AddTrackedNpc(Actor npc) global
-    if(TTM_JMethods.FormListFind(none, "TrackedNpcs", npc) != -1)
-        return
-    endif
-    if(!TTM_Utils.IsTracking(npc))
-        npc.AddToFaction(TTM_JData.GetTrackedNpcFaction())
-    endif
-    TTM_ServiceSpouseTypes.DetermineSpouseType(npc)
-    TTM_JMethods.FormListAdd(none, "TrackedNpcs", npc)
-    TTM_JMethods.SetFloatValue(npc, "LastTimeSharedIncome", -1.0)
-EndFunction
-
-Form[] Function GetTrackedNpcs() global
-    return TTM_JMethods.FormListToArray(none, "TrackedNpcs")
-EndFunction
-
 ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
     if(TTM_JMethods.HasFormValue(npc, "HomeMarker"))
         return TTM_JMethods.GetFormValue(npc, "HomeMarker") as ObjectReference
@@ -244,128 +221,7 @@ bool Function GetKilledByPlayer(Actor npc) global
     return TTM_JMethods.GetIntValue(npc, "KilledByPlayer") == 1
 EndFunction
 
-;/ ==============================
-   SECTION: BUCKETS
-============================== /;
-
-bool Function IsInBucket(String type, Actor npc) global
-    return TTM_JMethods.FormListFind(none, "Bucket_" + type, npc) != -1
-EndFunction
-
-Function AddToBucket(string type, Actor npc) global
-    string bucketName = "Bucket_" + type
-    if(IsInBucket(type, npc))
-        return
-    endif
-    TTM_JMethods.FormListAdd(none, bucketName, npc)
-EndFunction
-
-Function RemoveFromBucket(string type, Actor npc) global
-    string bucketName = "Bucket_" + type
-    TTM_JMethods.FormListRemove(none, bucketName, npc)
-EndFunction
-
-Function AddToBucketAndCleanFromOthers(string type, Actor npc) global
-    if(IsInBucket(type, npc))
-        return
-    endif
-    string[] buckets = new string[6]
-    buckets[0] = "Candidate"
-    buckets[1] = "Engaged"
-    buckets[2] = "Married"
-    buckets[3] = "Jilted"
-    buckets[4] = "Divorced"
-    buckets[5] = "Deceased"
-    int i = 0
-
-    while(i < buckets.Length)
-        if(buckets[i] == type)
-            AddToBucket(type, npc)
-        else
-            RemoveFromBucket(buckets[i], npc)
-        endif
-        i += 1
-    endwhile
-
-    CountLoveInterests()
-EndFunction
-
-Form[] Function GetAllActorsFromBucket(string type) global
-    return TTM_JMethods.FormListToArray(none, "Bucket_" + type)
-EndFunction
-
-int Function CountBucket(string type) global
-    return GetAllActorsFromBucket(type).Length
-EndFunction
-
-Actor Function GetRandomFromBucket(string type) global
-    return TTM_JMethods.FormListRandom(none, "Bucket_" + type) as Actor
-EndFunction
-
-;/ ==============================
-   SECTION: candidate bucket map
-============================== /;
-Function AddCandidate(Actor candidate) global
-    AddToBucketAndCleanFromOthers("candidate", candidate)
-EndFunction
-
-;/ ==============================
-   SECTION: fiances bucket map
-============================== /;
-Function AddFiance(Actor fiance) global
-    AddToBucketAndCleanFromOthers("engaged", fiance)
-EndFunction
-
-Form[] Function GetFiances() global
-    return GetAllActorsFromBucket("engaged")
-EndFunction
-
-;/ ==============================
-   SECTION: spouses bucket map
-============================== /;
-int Function GetSpousesCount() global
-    return CountBucket("married")
-EndFunction
-
-; Refactored AddSpouse
-Function AddSpouse(Actor spouse) global
-    AddToBucketAndCleanFromOthers("married", spouse)
-EndFunction
-
-Actor Function GetRandomSpouse() global
-    return GetRandomFromBucket("married")
-EndFunction
-
-Form[] Function GetSpouses() global
-    return GetAllActorsFromBucket("married")
-EndFunction
-
-;/ ==============================
-   SECTION: divorcees bucket map
-============================== /;
-Function AddDivorcee(Actor divorcee) global
-    AddToBucketAndCleanFromOthers("divorced", divorcee)
-EndFunction
-
-;/ ==============================
-   SECTION: jilted bucket map
-============================== /;
-Function AddJilted(Actor jilted) global
-    AddToBucketAndCleanFromOthers("jilted", jilted)
-EndFunction
-
-;/ ==============================
-   SECTION: deceased bucket map
-============================== /;
-Function AddDeceased(Actor deceased) global
-    AddToBucketAndCleanFromOthers("deceased", deceased)
-EndFunction
-
-bool Function IsDeceased(Actor npc) global
-    return IsInBucket("deceased", npc)
-EndFunction
-
 Function CountLoveInterests() global
-    int count = CountBucket("engaged") + CountBucket("married")
+    int count = MARAS.GetStatusCount("married") + MARAS.GetStatusCount("engaged")
     TTM_JData.GetSetSpouseCountGlobal(count)
 EndFunction

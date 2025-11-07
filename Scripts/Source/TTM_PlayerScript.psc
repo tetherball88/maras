@@ -67,10 +67,10 @@ Event OnCellLoad()
 EndEvent
 
 Event OnUpdateGameTime()
-    Form[] npcs = TTM_ServiceRelationships.GetTrackedNpcs()
+    Actor[] npcs = MARAS.GetNPCsByStatus("all")
     int i = 0
     while(i < npcs.Length)
-        Actor nextNpc = npcs[i] as Actor
+        Actor nextNpc = npcs[i]
         if(nextNpc.IsPlayerTeammate() || nextNpc.IsInFaction(TTM_JData.GetCurrentFollowerFaction()))
             TTM_JMethods.SetIntValue(nextNpc, "following", 1)
         else

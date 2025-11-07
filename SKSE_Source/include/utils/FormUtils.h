@@ -22,17 +22,8 @@ namespace MARAS::Utils {
     // Parse JContainers form key format: "__formData|PluginName|0xFormID"
     ParsedFormKey ParseFormKey(std::string_view formKey);
 
-    // Resolve local form ID to global form ID using plugin name
-    std::optional<RE::FormID> ResolveFormID(const std::string& pluginName, RE::FormID localFormID);
-
     // Convenience function to parse and resolve in one call
     std::optional<RE::FormID> ParseAndResolveFormKey(std::string_view formKey);
-
-    // Get plugin name from form ID (reverse lookup for debugging)
-    std::string GetPluginNameFromFormID(RE::FormID formID);
-
-    // Check if a plugin is loaded
-    bool IsPluginLoaded(const std::string& pluginName);
 
     // Convert hex string to FormID (handles "0x" prefix)
     std::optional<RE::FormID> HexStringToFormID(std::string_view hexStr);
@@ -40,7 +31,7 @@ namespace MARAS::Utils {
     // Convert FormID to hex string
     std::string FormIDToHexString(RE::FormID formID);
 
-    // Generic TESDataHandler lookup with error handling
+    // Generic TESDataHandler lookup with error handling - handles both lookup and resolution
     template <typename T>
     T* LookupForm(RE::FormID localFormID, const std::string& pluginName) {
         auto dataHandler = RE::TESDataHandler::GetSingleton();
@@ -56,6 +47,13 @@ namespace MARAS::Utils {
         }
 
         return form;
+    }
+
+    // Get global FormID if you need the ID instead of the form object
+    template <typename T = RE::TESForm>
+    std::optional<RE::FormID> GetFormID(RE::FormID localFormID, const std::string& pluginName) {
+        auto form = LookupForm<T>(localFormID, pluginName);
+        return form ? std::make_optional(form->GetFormID()) : std::nullopt;
     }
 
 }  // namespace MARAS::Utils
