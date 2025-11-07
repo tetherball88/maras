@@ -127,7 +127,7 @@ EndFunction
   Returns the multiplier for a spouse based on their rank and total spouse count.
 /;
 float Function GetSpouseMultiplier(Actor spouse) global
-    int spouseRank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
+    int spouseRank = MARAS.GetHierarchyRank(spouse)
     int spouseCount = MARAS.GetStatusCount("married")
     float affectionBuffMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(spouse)
 
@@ -205,7 +205,7 @@ float[] Function GetPermanentMultipliers() global
     while(i < spouses.Length)
         Actor spouse = spouses[i]
         string socialType = TTM_Utils.GetSpouseSocialClass(spouse)
-        int spouseRank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
+        int spouseRank = MARAS.GetHierarchyRank(spouse)
         float multiplier = GetSpouseMultiplier(spouse)
         Trace("GetPermanentMultipliers:SpousesCount:"+TTM_Utils.GetActorName(spouse)+":socialType" + socialType + ":rank" + spouseRank + ":multiplier" + multiplier)
 

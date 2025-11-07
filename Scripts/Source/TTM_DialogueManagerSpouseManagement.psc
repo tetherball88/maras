@@ -29,12 +29,12 @@ Actor akSpeaker = akSpeakerRef as Actor
     elseif(PromptKey == "manage_spouse_store")
         TTM_ServiceRelationships.ShareIncome(akSpeaker, true)
     elseif(PromptKey == "manage_spouse_set_hierarchy_0")
-        TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 0)
+        MARAS.SetHierarchyRank(akSpeaker, 0)
         ; write prompt for spouse responding to being set to rank 1,
     elseif(PromptKey == "manage_spouse_set_hierarchy_1")
-        TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 1)
+        MARAS.SetHierarchyRank(akSpeaker, 1)
     elseif(PromptKey == "manage_spouse_set_hierarchy_2")
-        TTM_ServiceHierarchy.ChangeSpouseRank(akSpeaker, 2)
+        MARAS.SetHierarchyRank(akSpeaker, 2)
     endif
 
     if(useAI)

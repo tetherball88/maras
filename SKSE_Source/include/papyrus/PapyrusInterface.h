@@ -34,6 +34,10 @@ namespace MARAS::PapyrusInterface {
     void LogNPCStatistics(RE::StaticFunctionTag*);
     void LogNPCDetails(RE::StaticFunctionTag*, RE::Actor* npc);
 
+    // Spouse hierarchy bindings
+    bool SetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t rank);
+    std::int32_t GetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc);
+
     // Marriage difficulty calculation
     float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
                                          float mostGold, float housesOwned, float horsesOwned, float questsCompleted,

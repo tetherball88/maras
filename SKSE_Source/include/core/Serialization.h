@@ -12,6 +12,8 @@ namespace MARAS {
 
         // Record types for different data chunks
         constexpr std::uint32_t kNPCRelationshipData = 'NPCR';
+        // Spouse hierarchy data record
+        constexpr std::uint32_t kSpouseHierarchyData = 'SPHR';
 
         // Magic number to validate data integrity
         constexpr std::uint32_t kMagicNumber = 0xDEADBEEF;

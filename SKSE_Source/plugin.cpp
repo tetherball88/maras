@@ -6,6 +6,7 @@
 #include "PCH.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/Serialization.h"
+#include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
 
 using namespace SKSE;
@@ -67,6 +68,18 @@ namespace {
         } else {
             SKSE::log::info("Successfully saved NPC relationship data");
         }
+
+        // Save spouse hierarchy
+        if (!serialization->OpenRecord(MARAS::Serialization::kSpouseHierarchyData,
+                                       MARAS::Serialization::kDataVersion)) {
+            SKSE::log::error("Failed to open record for saving spouse hierarchy");
+            return;
+        }
+        if (!MARAS::SpouseHierarchyManager::GetSingleton().Save(serialization)) {
+            SKSE::log::error("Failed to save spouse hierarchy data");
+        } else {
+            SKSE::log::info("Successfully saved spouse hierarchy data");
+        }
     }
 
     void LoadCallback(SKSE::SerializationInterface* serialization) {
@@ -86,6 +99,18 @@ namespace {
                 } else {
                     SKSE::log::info("Successfully loaded NPC relationship data");
                 }
+            } else if (type == MARAS::Serialization::kSpouseHierarchyData) {
+                if (version != MARAS::Serialization::kDataVersion) {
+                    SKSE::log::error("Invalid spouse hierarchy data version {} (expected {})", version,
+                                     MARAS::Serialization::kDataVersion);
+                    continue;
+                }
+
+                if (!MARAS::SpouseHierarchyManager::GetSingleton().Load(serialization)) {
+                    SKSE::log::error("Failed to load spouse hierarchy data");
+                } else {
+                    SKSE::log::info("Successfully loaded spouse hierarchy data");
+                }
             }
         }
     }
@@ -93,6 +118,7 @@ namespace {
     void RevertCallback(SKSE::SerializationInterface*) {
         auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
         manager.Revert();
+        MARAS::SpouseHierarchyManager::GetSingleton().Revert();
         SKSE::log::info("Reverted NPC relationship data");
     }
 }

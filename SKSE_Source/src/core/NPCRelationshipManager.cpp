@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "core/Serialization.h"
+#include "core/SpouseHierarchyManager.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
@@ -125,7 +126,7 @@ namespace MARAS {
     // Registration and unregistration
     bool NPCRelationshipManager::RegisterAsCandidate(RE::FormID npcFormID) {
         auto startTime = std::chrono::high_resolution_clock::now();
-        
+
         if (IsRegistered(npcFormID)) {
             MARAS_LOG_WARN("NPC {:08X} is already registered", npcFormID);
             return false;
@@ -155,10 +156,10 @@ namespace MARAS {
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-        
+
         MARAS_LOG_INFO("Auto-registered NPC {} ({:08X}) as candidate in {} microseconds (SC: {}, ST: {}, T: {})",
-                       Utils::GetNPCName(npcFormID), npcFormID, duration.count(), 
-                       Utils::SocialClassToString(socialClass), Utils::SkillTypeToString(skillType), 
+                       Utils::GetNPCName(npcFormID), npcFormID, duration.count(),
+                       Utils::SocialClassToString(socialClass), Utils::SkillTypeToString(skillType),
                        Utils::TemperamentToString(temperament));
 
         return true;
@@ -178,6 +179,9 @@ namespace MARAS {
 
         // Remove data
         npcData.erase(npcFormID);
+
+        // Ensure spouse hierarchy is updated if this NPC was present
+        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
 
         MARAS_LOG_INFO("Unregistered NPC {} ({:08X})", Utils::GetNPCName(npcFormID), npcFormID);
         return true;
@@ -233,6 +237,9 @@ namespace MARAS {
         // Update tracked faction rank
         UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Married);
 
+        // Notify spouse hierarchy manager
+        SpouseHierarchyManager::GetSingleton().OnSpouseAdded(npcFormID);
+
         MARAS_LOG_INFO("Promoted NPC {:08X} to married", npcFormID);
         return true;
     }
@@ -272,6 +279,9 @@ namespace MARAS {
         // Update tracked faction rank
         UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Divorced);
 
+        // Remove from spouse hierarchy if present
+        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
+
         MARAS_LOG_INFO("Promoted NPC {:08X} to divorced", npcFormID);
         return true;
     }
@@ -310,6 +320,9 @@ namespace MARAS {
 
         // Update tracked faction rank
         UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Deceased);
+
+        // Remove from spouse hierarchy if present
+        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
 
         MARAS_LOG_INFO("Promoted NPC {:08X} to deceased", npcFormID);
         return true;

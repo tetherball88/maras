@@ -67,6 +67,51 @@ Actor[] Function GetNPCsByStatusEnum(int statusEnum) global native
 int Function GetStatusCount(string statusType) global native
 int Function GetStatusCountByEnum(int statusEnum) global native
 
+;/
+  CalculateMarriageSuccessChance
+
+  Estimate the chance (0.0 - 1.0) that a proposal / marriage action will succeed for the
+  provided NPC given a set of player-relative metrics. This mirrors the native C++
+  implementation and is intended for use in Papyrus scripts that need the same
+  deterministic calculation used by the plugin.
+
+  @param npc - Actor being proposed to / evaluated
+  @param intimacyAdjustment - float adjustment to NPC intimacy (positive increases chance)
+  @param mostGold - player's most gold carried (or relevant gold metric)
+  @param housesOwned - number of houses player owns
+  @param horsesOwned - number of horses player owns
+  @param questsCompleted - number of quests completed by player
+  @param dungeonsCleared - number of dungeons cleared by player
+  @param dragonSoulsCollected - number of dragon souls collected by player
+  @return float in range [0.0, 1.0] representing estimated success probability.
+/;
+float Function CalculateMarriageSuccessChance(Actor npc, float intimacyAdjustment, float mostGold, float housesOwned, float horsesOwned, float questsCompleted, float dungeonsCleared, float dragonSoulsCollected) global native
+
+;/ ========================================
+  Spouse hierarchy bindings (native C++)
+  ====================================== /;
+
+;/
+  SetHierarchyRank
+
+  Set a spouse's hierarchy rank.
+
+  @param npc - Actor spouse to modify
+  @param rank - desired rank: 0..2 = top slots (0 = lead). Use 4 or -1 to remove from top slots
+  @return True if the operation was successful (assignment or removal applied)
+/;
+bool Function SetHierarchyRank(Actor npc, int rank) global native
+
+;/
+  GetHierarchyRank
+
+  Get a spouse's hierarchy rank.
+
+  @param npc - Actor spouse to query
+  @return int - 0..2 if in top-three slots, otherwise 4 to indicate 4+
+/;
+int Function GetHierarchyRank(Actor npc) global native
+
 ;/ ========================================
    SECTION: Debug Functions
    ====================================== /;
@@ -77,4 +122,4 @@ Function LogNPCStatistics() global native
 ;/ Log detailed information about a specific NPC /;
 Function LogNPCDetails(Actor npc) global native
 
-float Function CalculateMarriageSuccessChance(Actor npc, float intimacyAdjustment, float mostGold, float housesOwned, float horsesOwned, float questsCompleted, float dungeonsCleared, float dragonSoulsCollected) global native
+

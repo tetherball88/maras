@@ -49,7 +49,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
         if(count == 1)
             mcm.oid_NpcPageRank = mcm.AddTextOption("Hierarchy Rank: ", "The only one!")
         else
-            int rank = TTM_ServiceHierarchy.GetSpouseRank(npc)
+            int rank = MARAS.GetHierarchyRank(npc)
             string rankText = "4th+ spouse"
             if(rank == 0)
                 rankText = "1st spouse"
@@ -171,7 +171,7 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_NpcPageTemperament)
         mcm.SetInfoText("Temperament shapes affection gains, jealousy, and how spouses react to you.")
     elseif(option == mcm.oid_NpcPageRank)
-        int rank = TTM_ServiceHierarchy.GetSpouseRank(npc)
+        int rank = MARAS.GetHierarchyRank(npc)
         int count = MARAS.GetStatusCount("married")
         string rankText = "This spouse is one of many, they will give only 10% of their permanent bonus."
 
@@ -256,7 +256,7 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
         endif
     elseif(option == mcm.oid_NpcPageRank)
         options = GetHierarchyOptions()
-        int rank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
+        int rank = MARAS.GetHierarchyRank(spouse)
         if(rank != -1)
             start = rank
             default = rank
@@ -296,12 +296,12 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
         endif
         opt = names[index]
     elseif(option == mcm.oid_NpcPageRank)
-        int rank = TTM_ServiceHierarchy.GetSpouseRank(spouse)
+        int rank = MARAS.GetHierarchyRank(spouse)
         if(rank == index)
             return
         endif
         opt = GetHierarchyOptions()[index]
-        TTM_ServiceHierarchy.ChangeSpouseRank(spouse, index)
+        MARAS.SetHierarchyRank(spouse, index)
     endif
 
     mcm.SetMenuOptionValue(option, opt)

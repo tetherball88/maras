@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include "core/MarriageDifficulty.h"
+#include "core/SpouseHierarchyManager.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 
@@ -25,7 +26,7 @@ namespace MARAS::PapyrusInterface {
 
     bool RegisterCandidate(RE::StaticFunctionTag*, RE::Actor* npc) {
         auto startTime = std::chrono::high_resolution_clock::now();
-        
+
         if (!npc) {
             SKSE::log::warn("RegisterCandidate: null actor provided");
             return false;
@@ -33,13 +34,13 @@ namespace MARAS::PapyrusInterface {
 
         auto& manager = NPCRelationshipManager::GetSingleton();
         bool result = manager.RegisterAsCandidate(npc->GetFormID());
-        
+
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-        
-        SKSE::log::info("Papyrus RegisterCandidate for {} completed in {} microseconds (success: {})", 
-                       npc->GetDisplayFullName(), duration.count(), result);
-        
+
+        SKSE::log::info("Papyrus RegisterCandidate for {} completed in {} microseconds (success: {})",
+                        npc->GetDisplayFullName(), duration.count(), result);
+
         return result;
     }
 
@@ -362,6 +363,30 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
+    // Spouse hierarchy bindings
+    // ========================================
+
+    bool SetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t rank) {
+        if (!npc) {
+            SKSE::log::warn("SetHierarchyRank called with null actor");
+            return false;
+        }
+
+        auto& mgr = MARAS::SpouseHierarchyManager::GetSingleton();
+        return mgr.SetRank(npc->GetFormID(), static_cast<int>(rank));
+    }
+
+    std::int32_t GetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc) {
+        if (!npc) {
+            SKSE::log::warn("GetHierarchyRank called with null actor");
+            return 4;
+        }
+
+        auto& mgr = MARAS::SpouseHierarchyManager::GetSingleton();
+        return mgr.GetRank(npc->GetFormID());
+    }
+
+    // ========================================
     // Marriage Difficulty Calculation
     // ========================================
 
@@ -413,7 +438,11 @@ namespace MARAS::PapyrusInterface {
         // Marriage difficulty calculation
         vm->RegisterFunction("CalculateMarriageSuccessChance", "MARAS", CalculateMarriageSuccessChance);
 
-        SKSE::log::info("Registered {} MARAS Papyrus functions", 18);
+        // Spouse hierarchy
+        vm->RegisterFunction("SetHierarchyRank", "MARAS", SetHierarchyRank);
+        vm->RegisterFunction("GetHierarchyRank", "MARAS", GetHierarchyRank);
+
+        SKSE::log::info("Registered {} MARAS Papyrus functions", 20);
         return true;
     }
 

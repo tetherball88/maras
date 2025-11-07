@@ -40,7 +40,7 @@ EndFunction
 Function MakeNpcMarried(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
 
-    TTM_ServiceHierarchy.AddLeadSpouse(npc)
+    ; TTM_ServiceHierarchy.AddLeadSpouse(npc)
 
     npc.SetRelationshipRank(player, 4)
     ;re-evaluate spouses bonuses on each spouse added
@@ -65,7 +65,7 @@ Function MakeNpcDivorced(Actor npc) global
     Actor player = TTM_JData.GetPlayer()
     Faction playerFaction = TTM_JData.GetPlayerFaction()
 
-    TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
+    ; TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
     npc.SetRelationshipRank(player, -2)
     ;re-evaluate spouses bonuses on each spouse removed
     TTM_ServiceBuff.CalculatePermanentMultipliers()
@@ -99,7 +99,7 @@ Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
     bool engaged = TTM_Utils.IsFiance(npc)
     if(spouse || engaged)
         if(spouse)
-            TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
+            ; TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
             ;re-evaluate spouses bonuses on each spouse removed
             TTM_ServiceBuff.CalculatePermanentMultipliers()
             TTM_ServiceBuff.CalculateFollowerMultipliers()
