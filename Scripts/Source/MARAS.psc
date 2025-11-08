@@ -113,6 +113,40 @@ bool Function SetHierarchyRank(Actor npc, int rank) global native
 int Function GetHierarchyRank(Actor npc) global native
 
 ;/ ========================================
+   Spouse buff / service bindings (native C++)
+   ====================================== /;
+
+;/
+  GetSpouseMultiplier
+
+  Returns the multiplier for a single spouse actor based on hierarchy, count, and (future) affection.
+
+  @param spouse - Actor to evaluate
+  @return float multiplier (0.0 if null)
+/;
+float Function GetSpouseMultiplier(Actor spouse) global native
+
+;/
+  GetFollowersMultipliers
+
+  Returns an array of multipliers aggregated by skill-type buckets for the provided follower actors.
+
+  @param followers - array of Actor followers to evaluate
+  @return float[] array of multipliers per skill-type bucket (size = 6)
+/;
+float[] Function GetFollowersMultipliers(Actor[] followers) global native
+
+;/
+  GetPermanentMultipliers
+
+  Returns an array of permanent multipliers aggregated by social-class for all married spouses.
+
+  @return float[] array of multipliers per social-class bucket (size = 8)
+/;
+float[] Function GetPermanentMultipliers() global native
+
+
+;/ ========================================
    SECTION: Debug Functions
    ====================================== /;
 

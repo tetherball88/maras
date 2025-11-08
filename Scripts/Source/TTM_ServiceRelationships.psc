@@ -20,7 +20,6 @@ Function MakeNpcEngaged(Actor npc) global
     if(alwaysSkipWeddings || answerSkipWedding)
         TTM_Utils.FadeToBlack()
         Debug.Notification("Congratulations! You and " + TTM_Utils.GetActorName(npc) + " got married!")
-        TTM_Utils.SendRelationshipChangeEvent(npc, "married")
         TTM_ServiceSkyrimNet.SimulatePostWeddingIfSkippedBehavior(npc)
         return
     endif

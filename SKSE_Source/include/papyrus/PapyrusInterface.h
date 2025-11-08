@@ -38,6 +38,11 @@ namespace MARAS::PapyrusInterface {
     bool SetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t rank);
     std::int32_t GetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc);
 
+    // Spouse buff/service bindings
+    float GetSpouseMultiplier(RE::StaticFunctionTag*, RE::Actor* spouse);
+    std::vector<float> GetFollowersMultipliers(RE::StaticFunctionTag*, std::vector<RE::Actor*> followers);
+    std::vector<float> GetPermanentMultipliers(RE::StaticFunctionTag*);
+
     // Marriage difficulty calculation
     float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
                                          float mostGold, float housesOwned, float horsesOwned, float questsCompleted,

@@ -124,29 +124,6 @@ Function UpdateSpellEffect(Spell updateSpell, float magnitude) global
 EndFunction
 
 ;/
-  Returns the multiplier for a spouse based on their rank and total spouse count.
-/;
-float Function GetSpouseMultiplier(Actor spouse) global
-    int spouseRank = MARAS.GetHierarchyRank(spouse)
-    int spouseCount = MARAS.GetStatusCount("married")
-    float affectionBuffMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(spouse)
-
-    if(spouseCount == 1)
-        return 2.0 * affectionBuffMult
-    endif
-
-    if(spouseRank == 0)
-        return 1.0 * affectionBuffMult
-    elseif(spouseRank == 1)
-        return 0.5 * affectionBuffMult
-    elseif(spouseRank == 2)
-        return 0.25 * affectionBuffMult
-    else
-        return 0.1 * affectionBuffMult
-    endif
-EndFunction
-
-;/
   Returns a string describing the follower buff for a spouse.
 /;
 string Function GetSpouseFollowerBuffs(Actor spouse) global
@@ -175,49 +152,14 @@ EndFunction
 /;
 float[] Function GetFollowersMultipliers() global
     Actor[] followers = PO3_SKSEFunctions.GetPlayerFollowers()
-    float[] multipliers = Utility.CreateFloatArray(6)
-    int i = 0
-    ; 5 is last index for skill based spouse, only skill based types are accountet for follower bonuses
-    while(i < followers.Length)
-        Actor follower = followers[i]
-        if(TTM_Utils.IsSpouse(follower))
-            string skillType = TTM_Utils.GetSpouseSkillType(follower)
-            float spouseMult = TTM_ServiceAffection.GetAffectionBuffMultiplier(follower)
-            int index = TTM_Utils.GetSpouseSkillIndexByType(skillType)
-            if(index != -1)
-                multipliers[index] = multipliers[index] + spouseMult
-            endif
-        endif
-        i += 1
-    endwhile
-
-    return multipliers
+    return MARAS.GetFollowersMultipliers(followers)
 EndFunction
 
 ;/
   Calculates permanent multipliers for each social type based on all spouses.
 /;
 float[] Function GetPermanentMultipliers() global
-    float[] multipliers = Utility.CreateFloatArray(8)
-    Actor[] spouses = MARAS.GetNPCsByStatus("married")
-    int i = 0
-
-    while(i < spouses.Length)
-        Actor spouse = spouses[i]
-        string socialType = TTM_Utils.GetSpouseSocialClass(spouse)
-        int spouseRank = MARAS.GetHierarchyRank(spouse)
-        float multiplier = GetSpouseMultiplier(spouse)
-        Trace("GetPermanentMultipliers:SpousesCount:"+TTM_Utils.GetActorName(spouse)+":socialType" + socialType + ":rank" + spouseRank + ":multiplier" + multiplier)
-
-        int index = TTM_Utils.GetSpouseSocialIndexByType(socialType)
-        if(index != -1)
-            multipliers[index] = multipliers[index] + multiplier
-        endif
-
-        i += 1
-    endwhile
-
-    return multipliers
+    return MARAS.GetPermanentMultipliers()
 EndFunction
 
 ;/ ==============================

@@ -42,6 +42,11 @@ file(GLOB_RECURSE SOURCES
     "version.rc"
 )
 
+# Some source files live under subfolders (e.g., src/core). Ensure core sources are included
+list(APPEND SOURCES
+    "src/core/SpouseBuffService.cpp"
+)
+
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${SOURCES})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!

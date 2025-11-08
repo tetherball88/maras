@@ -192,7 +192,7 @@ float Function GetDialogueStartedAffection(Actor spouse) global
     return GetAffection(spouse, "DialogueStarted")
 EndFunction
 
-Function AddPromotionAffection(Actor spouse, int rankDiff) global
+Function AddPromotionAffection(Actor spouse, float rankDiff) global
     float promoAffection = 8.0
     string temperament = TTM_Utils.GetSpouseTemperament((spouse))
     if(temperament == "Proud")

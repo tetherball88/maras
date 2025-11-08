@@ -48,10 +48,9 @@ Function Maintenance()
 
     TTM_JData.SetHasTTRF(Game.GetModByName("TT_RelationsFinder.esp") != 255)
 
-    RegisterForModEvent("maras_status_changed", "OnRelationshipChanged2")
+    RegisterForModEvent("maras_status_changed", "OnRelationshipChanged")
 
-    RegisterForModEvent("TTM_SpouseRelationshipChanged", "OnRelationshipChanged")
-    RegisterForModEvent("TTM_ChangeLeadSpouseRankEvent", "OnChangeHierarchyRank")
+    RegisterForModEvent("maras_hierarchy_changed", "OnChangeHierarchyRank")
     RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
 
      ; ensure player has debug spell and check door perk
@@ -81,16 +80,12 @@ Function Maintenance()
     JValue.enableAPILog(false)
 EndFunction
 
-Event OnRelationshipChanged2(String EventName, String status, Float statusEnum, Form Sender)
-    TTM_Debug.trace("MainController:OnRelationshipChanged2: " + TTM_Utils.GetActorName(Sender as Actor) + "; status: " + status + "; enum: " + statusEnum)
-EndEvent
-
 ;/
   Handles relationship change events. Updates tracked NPCs and their status, and syncs with CHIM if enabled.
   @param npc    The NPC whose relationship changed
   @param status The new relationship status (candidate, engaged, married, jilted, divorced)
 /;
-Event OnRelationshipChanged(Form npc, string status)
+Event OnRelationshipChanged(String EventName, String status, Float statusEnum, Form npc)
     if(TTM_Debug.IsTrace())
         TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
     endif
@@ -124,18 +119,11 @@ Event OnRelationshipChanged(Form npc, string status)
 EndEvent
 
 
-Event OnChangeHierarchyRank(Form spouse, int newRank, int oldRank)
+Event OnChangeHierarchyRank(String EventName, String promotDemote, Float rankDiff, Form spouse)
     Actor spouseA = spouse as Actor
     if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; newRank: " + newRank + "; oldRank: " + oldRank)
+        TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; rankDiff: " + rankDiff)
     endif
-    if(newRank == -1)
-        newRank = 4
-    endif
-    if(oldRank == -1)
-        oldRank = 4
-    endif
-    int rankDiff = -1 * (newRank - oldRank)
     if(rankDiff == 0)
         return
     endif

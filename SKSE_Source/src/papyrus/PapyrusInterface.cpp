@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include "core/MarriageDifficulty.h"
+#include "core/SpouseBuffService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
@@ -404,6 +405,27 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
+    // Spouse buff/service bindings
+    // ========================================
+
+    float GetSpouseMultiplier(RE::StaticFunctionTag*, RE::Actor* spouse) {
+        if (!spouse) {
+            SKSE::log::warn("GetSpouseMultiplier called with null actor");
+            return 0.0f;
+        }
+
+        return MARAS::SpouseBuffService::GetSpouseMultiplier(spouse);
+    }
+
+    std::vector<float> GetFollowersMultipliers(RE::StaticFunctionTag*, std::vector<RE::Actor*> followers) {
+        return MARAS::SpouseBuffService::GetFollowersMultipliers(followers);
+    }
+
+    std::vector<float> GetPermanentMultipliers(RE::StaticFunctionTag*) {
+        return MARAS::SpouseBuffService::GetPermanentMultipliers();
+    }
+
+    // ========================================
     // Registration function for SKSE
     // ========================================
 
@@ -442,7 +464,11 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("SetHierarchyRank", "MARAS", SetHierarchyRank);
         vm->RegisterFunction("GetHierarchyRank", "MARAS", GetHierarchyRank);
 
-        SKSE::log::info("Registered {} MARAS Papyrus functions", 20);
+        // Spouse buff/service bindings
+        vm->RegisterFunction("GetSpouseMultiplier", "MARAS", GetSpouseMultiplier);
+        vm->RegisterFunction("GetFollowersMultipliers", "MARAS", GetFollowersMultipliers);
+        vm->RegisterFunction("GetPermanentMultipliers", "MARAS", GetPermanentMultipliers);
+        SKSE::log::info("Registered {} MARAS Papyrus functions", 23);
         return true;
     }
 
