@@ -248,9 +248,11 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
         start = TTM_Utils.GetSpouseTemperamentIndex(spouse)
         default = TTM_Utils.GetSpouseTemperamentIndexByType(TTM_ServiceSpouseTypes.DetermineTemperament(spouse))
     elseif(option == mcm.oid_NpcPagePlayerHome)
-        options = PapyrusUtil.PushString(TTM_ServicePlayerHouse.GetPlayerHomesNames(), "unset")
-        start = TTM_ServicePlayerHouse.FindPlayerHouseIndex(TTM_ServiceRelationships.GetTrackedNpcHome(spouse))
-        default = TTM_ServicePlayerHouse.GetPlayerHouses().Length  ; unset
+        StorageUtil.StringListSlice(none, "SpouseHomeChoiceCache", MARAS.GetAllPlayerHousesNames())
+        StorageUtil.StringListAdd(none, "SpouseHomeChoiceCache", "unset")
+        start = StorageUtil.StringListFind(none, "SpouseHomeChoiceCache", MARAS.GetTenantHouse(spouse).GetName())
+        default = MARAS.CountPlayerHouses()  ; unset
+        StorageUtil.StringListClear(none, "SpouseHomeChoiceCache")
         if(start == -1)
             start = default
         endif
@@ -286,9 +288,9 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
         TTM_ServiceSpouseTypes.SetSpouseTemperament(spouse, opt)
         TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
     elseif(option == mcm.oid_NpcPagePlayerHome)
-        string[] names = TTM_ServicePlayerHouse.GetPlayerHomesNames()
+        string[] names = MARAS.GetAllPlayerHousesNames()
         names = PapyrusUtil.PushString(names, "unset")
-        Form[] houses = TTM_ServicePlayerHouse.GetPlayerHouses()
+        Location[] houses = MARAS.GetAllPlayerHouses()
         if(index >= houses.Length)
             TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouse)
         else

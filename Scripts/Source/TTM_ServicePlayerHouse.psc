@@ -24,8 +24,9 @@ Function CheckPlayerHouseLocation() global
         if(TTM_Debug.IsTrace())
             TTM_Debug.trace("CheckPlayerHouseLocation:playerHome")
         endif
-        SetPlayerHouse(currentLoc)
-        AddPlayerHouseCell(currentLoc, player.GetParentCell())
+        if(MARAS.RegisterPlayerHouseCell(currentLoc, TTM_JData.GetPlayer().PlaceAtMe(TTM_JData.GetHomeSandboxMarkerStatic())))
+            TTM_JData.GetSetPlayerHousesCountGlobal(MARAS.CountPlayerHouses())
+        endif
     endif
 EndFunction
 
@@ -39,7 +40,7 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
         page = 0
     endif
     int perPage = 10
-    Form[] playerHomes = GetPlayerHouses()
+    Location[] playerHomes = MARAS.GetAllPlayerHouses()
     int count = playerHomes.Length
 
     if(count < 1)
@@ -59,7 +60,7 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
 
     while(i < endIdx)
         string houseName = playerHomes[i].GetName()
-        TTM_JMethods.FormListAdd(none, "SpouseHomeChoiceCache", playerHomes[i])
+        StorageUtil.FormListAdd(none, "SpouseHomeChoiceCache", playerHomes[i])
         listMenu.AddEntryItem(houseName)
         menuIdx += 1
         i += 1
@@ -77,7 +78,7 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
 
     listMenu.OpenMenu()
     int choice = listMenu.GetResultInt()
-    Form homeChoice = TTM_JMethods.FormListGet(none, "SpouseHomeChoiceCache", choice)
+    Form homeChoice = StorageUtil.FormListGet(none, "SpouseHomeChoiceCache", choice)
 
     if(homeChoice != none)
         MoveSpouseToHouse(spouse, homeChoice as Location)
@@ -87,29 +88,15 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
         ChooseHomeForSpouseMsg(spouse, page + 1)
     endif
 
-    TTM_JMethods.ClearValue(none, "SpouseHomeChoiceCache")
-EndFunction
-
-string[] Function GetPlayerHomesNames() global
-    Form[] homes = GetPlayerHouses()
-
-    string[] names = PapyrusUtil.StringArray(homes.Length)
-    int i = 0
-
-    while(i < homes.Length)
-        names[i] = homes[i].GetName()
-        i += 1
-    endwhile
-
-    return names
+    StorageUtil.FormListClear(none, "SpouseHomeChoiceCache")
 EndFunction
 
 Function ReleaseSpouseFromPlayerHome(Actor spouse) global
     Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
     spouse.EvaluatePackage()
-    spouse.RemoveFromFaction(TTM_JData.GetSpouseHousedFaction())
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, none)
+    MARAS.RemoveTenantFromPlayerHouse(spouse)
 EndFunction
 
 ;/
@@ -119,57 +106,15 @@ EndFunction
 /;
 Function MoveSpouseToHouse(Actor spouse, Location houseLoc ) global
     ObjectReference spouseMarker = TTM_ServiceRelationships.GetTrackedNpcHomeMarker(spouse)
-    spouseMarker.MoveTo(GetPlayerHouseMarker(houseLoc))
+    spouseMarker.MoveTo(MARAS.GetHouseMarker(houseLoc))
 
     Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
 
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
     ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 5)
     spouse.EvaluatePackage()
-    spouse.AddToFaction(TTM_JData.GetSpouseHousedFaction())
 
-    Location spouseCurrentHome = TTM_ServiceRelationships.GetTrackedNpcHome(spouse)
-    if(spouseCurrentHome)
-        RemovePlayerHomeTenant(spouseCurrentHome, spouse)
-    endif
-    TTM_ServiceRelationships.SetTrackedNpcHome(spouse, houseLoc)
-    AddPlayerHomeTenant(houseLoc, spouse)
+    MARAS.RegisterTenantInPlayerHouse(spouse, houseLoc)
 EndFunction
 
-Function SetPlayerHouse(Location houseLoc) global
-    TTM_JMethods.FormListAdd(none, "PlayerHousesCache", houseLoc)
-    TTM_JMethods.SetFormValue(houseLoc, "HouseMarker", TTM_JData.GetPlayer().PlaceAtMe(TTM_JData.GetHomeSandboxMarkerStatic()))
-    CountPlayerHouses()
-EndFunction
 
-Form[] Function GetPlayerHouses() global
-    return TTM_JMethods.FormListToArray(none, "PlayerHousesCache")
-EndFunction
-
-int Function FindPlayerHouseIndex(Location houseLoc) global
-    return TTM_JMethods.FormListFind(none, "PlayerHousesCache", houseLoc)
-EndFunction
-
-int Function AddPlayerHouseCell(Location houseLoc, Cell houseCell) global
-    TTM_JMethods.FormListAdd(houseLoc, "PlayerHouseCells", houseCell)
-EndFunction
-
-ObjectReference Function GetPlayerHouseMarker(Location houseLoc) global
-    return TTM_JMethods.GetFormValue(houseLoc, "HouseMarker") as ObjectReference
-EndFunction
-
-Form[] Function GetHomeTenants(Location home) global
-    return TTM_JMethods.FormListToArray(home, "PlayerHouseTenants")
-EndFunction
-
-Function AddPlayerHomeTenant(Location home, Actor tenant) global
-    TTM_JMethods.FormListAdd(home, "PlayerHouseTenants", tenant)
-EndFunction
-
-Function RemovePlayerHomeTenant(Location home, Actor tenant) global
-    TTM_JMethods.FormListRemove(home, "PlayerHouseTenants", tenant)
-EndFunction
-
-Function CountPlayerHouses() global
-    TTM_JData.GetSetPlayerHousesCountGlobal(GetPlayerHouses().Length)
-EndFunction

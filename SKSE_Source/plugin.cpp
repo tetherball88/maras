@@ -6,6 +6,7 @@
 #include "PCH.h"
 #include "core/AffectionService.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PlayerHouseService.h"
 #include "core/Serialization.h"
 #include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
@@ -92,6 +93,17 @@ namespace {
         } else {
             SKSE::log::info("Successfully saved affection data");
         }
+
+        // Save player house data
+        if (!serialization->OpenRecord(MARAS::Serialization::kPlayerHouseData, MARAS::Serialization::kDataVersion)) {
+            SKSE::log::error("Failed to open record for saving player house data");
+            return;
+        }
+        if (!MARAS::PlayerHouseService::GetSingleton().Save(serialization)) {
+            SKSE::log::error("Failed to save player house data");
+        } else {
+            SKSE::log::info("Successfully saved player house data");
+        }
     }
 
     void LoadCallback(SKSE::SerializationInterface* serialization) {
@@ -135,6 +147,18 @@ namespace {
                 } else {
                     SKSE::log::info("Successfully loaded affection data");
                 }
+            } else if (type == MARAS::Serialization::kPlayerHouseData) {
+                if (version != MARAS::Serialization::kDataVersion) {
+                    SKSE::log::error("Invalid player house data version {} (expected {})", version,
+                                     MARAS::Serialization::kDataVersion);
+                    continue;
+                }
+
+                if (!MARAS::PlayerHouseService::GetSingleton().Load(serialization)) {
+                    SKSE::log::error("Failed to load player house data");
+                } else {
+                    SKSE::log::info("Successfully loaded player house data");
+                }
             }
         }
     }
@@ -144,6 +168,7 @@ namespace {
         manager.Revert();
         MARAS::SpouseHierarchyManager::GetSingleton().Revert();
         MARAS::AffectionService::GetSingleton().Revert();
+        MARAS::PlayerHouseService::GetSingleton().Revert();
         SKSE::log::info("Reverted NPC relationship data");
     }
 }

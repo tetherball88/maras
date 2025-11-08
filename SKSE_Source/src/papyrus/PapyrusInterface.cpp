@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <string>
 
 #include "core/AffectionService.h"
 #include "core/MarriageDifficulty.h"
+#include "core/PlayerHouseService.h"
 #include "core/SpouseBuffService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "utils/Common.h"
@@ -214,7 +216,7 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     // Helper function to convert FormID vector to Actor array
-    std::vector<RE::Actor*> ConvertFormIDsToActors(const std::vector<FormID>& formIDs) {
+    std::vector<RE::Actor*> ConvertFormIDsToActors(const std::vector<RE::FormID>& formIDs) {
         std::vector<RE::Actor*> actors;
         actors.reserve(formIDs.size());
 
@@ -471,6 +473,95 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
+    // Player house bindings
+    // ========================================
+
+    bool RegisterPlayerHouseCell(RE::StaticFunctionTag*, RE::BGSLocation* loc, RE::TESBoundObject* homeMarker) {
+        if (!loc) {
+            SKSE::log::warn("RegisterPlayerHouseCell: null location provided");
+            return false;
+        }
+
+        RE::FormID markerId = 0;
+        if (homeMarker) markerId = homeMarker->GetFormID();
+
+        return MARAS::PlayerHouseService::GetSingleton().RegisterPlayerHouseCell(loc->GetFormID(), markerId);
+    }
+
+    std::vector<RE::BGSLocation*> GetAllPlayerHouses(RE::StaticFunctionTag*) {
+        std::vector<RE::BGSLocation*> result;
+        auto ids = MARAS::PlayerHouseService::GetSingleton().GetAllPlayerHouses();
+        result.reserve(ids.size());
+        for (auto id : ids) {
+            if (auto form = RE::TESForm::LookupByID(id)) {
+                if (auto loc = form->As<RE::BGSLocation>()) result.push_back(loc);
+            }
+        }
+        return result;
+    }
+
+    bool RegisterTenantInPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse, RE::BGSLocation* playerHouse) {
+        if (!spouse || !playerHouse) {
+            SKSE::log::warn("RegisterTenantInPlayerHouse: null argument(s)");
+            return false;
+        }
+        return MARAS::PlayerHouseService::GetSingleton().RegisterTenantInPlayerHouse(spouse->GetFormID(),
+                                                                                     playerHouse->GetFormID());
+    }
+
+    bool RemoveTenantFromPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse) {
+        if (!spouse) {
+            SKSE::log::warn("RemoveTenantFromPlayerHouse: null spouse");
+            return false;
+        }
+        return MARAS::PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(spouse->GetFormID());
+    }
+
+    std::vector<RE::Actor*> GetPlayerHouseTenants(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse) {
+        if (!playerHouse) return {};
+        std::vector<RE::Actor*> result;
+        auto ids = MARAS::PlayerHouseService::GetSingleton().GetPlayerHouseTenants(playerHouse->GetFormID());
+        result.reserve(ids.size());
+        for (auto id : ids) {
+            if (auto form = RE::TESForm::LookupByID(id)) {
+                if (auto actor = form->As<RE::Actor>()) result.push_back(actor);
+            }
+        }
+        return result;
+    }
+
+    // Returns the stored marker object (base object) for a given player house, or nullptr
+    RE::TESBoundObject* GetHouseMarker(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse) {
+        if (!playerHouse) return nullptr;
+        RE::FormID markerId = MARAS::PlayerHouseService::GetSingleton().GetHouseMarkerFormID(playerHouse->GetFormID());
+        if (markerId == 0) return nullptr;
+        if (auto form = RE::TESForm::LookupByID(markerId)) {
+            return form->As<RE::TESBoundObject>();
+        }
+        return nullptr;
+    }
+
+    // Returns an array of player house names
+    std::vector<std::string> GetAllPlayerHousesNames(RE::StaticFunctionTag*) {
+        return MARAS::PlayerHouseService::GetSingleton().GetAllPlayerHousesNames();
+    }
+
+    // Returns the house location for a tenant, or nullptr
+    RE::BGSLocation* GetTenantHouse(RE::StaticFunctionTag*, RE::Actor* npc) {
+        if (!npc) return nullptr;
+        RE::FormID houseId = MARAS::PlayerHouseService::GetSingleton().GetTenantHouseFormID(npc->GetFormID());
+        if (houseId == 0) return nullptr;
+        if (auto form = RE::TESForm::LookupByID(houseId)) {
+            if (auto loc = form->As<RE::BGSLocation>()) return loc;
+        }
+        return nullptr;
+    }
+
+    int CountPlayerHouses(RE::StaticFunctionTag*) {
+        return MARAS::PlayerHouseService::GetSingleton().CountPlayerHouses();
+    }
+
+    // ========================================
     // Registration function for SKSE
     // ========================================
 
@@ -509,6 +600,17 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("SetHierarchyRank", "MARAS", SetHierarchyRank);
         vm->RegisterFunction("GetHierarchyRank", "MARAS", GetHierarchyRank);
 
+        // Player house functions
+        vm->RegisterFunction("RegisterPlayerHouseCell", "MARAS", RegisterPlayerHouseCell);
+        vm->RegisterFunction("GetAllPlayerHouses", "MARAS", GetAllPlayerHouses);
+        vm->RegisterFunction("GetAllPlayerHousesNames", "MARAS", GetAllPlayerHousesNames);
+        vm->RegisterFunction("RegisterTenantInPlayerHouse", "MARAS", RegisterTenantInPlayerHouse);
+        vm->RegisterFunction("RemoveTenantFromPlayerHouse", "MARAS", RemoveTenantFromPlayerHouse);
+        vm->RegisterFunction("GetPlayerHouseTenants", "MARAS", GetPlayerHouseTenants);
+        vm->RegisterFunction("GetHouseMarker", "MARAS", GetHouseMarker);
+        vm->RegisterFunction("GetTenantHouse", "MARAS", GetTenantHouse);
+        vm->RegisterFunction("CountPlayerHouses", "MARAS", CountPlayerHouses);
+
         // Spouse buff/service bindings
         vm->RegisterFunction("GetSpouseMultiplier", "MARAS", GetSpouseMultiplier);
         vm->RegisterFunction("GetFollowersMultipliers", "MARAS", GetFollowersMultipliers);
@@ -520,7 +622,7 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("SetPermanentAffection", "MARAS", SetPermanentAffection);
         vm->RegisterFunction("SetAffectionMinMax", "MARAS", SetAffectionMinMax);
         vm->RegisterFunction("ApplyDailyAffection", "MARAS", ApplyDailyAffection);
-        SKSE::log::info("Registered {} MARAS Papyrus functions", 23);
+        SKSE::log::info("Registered {} MARAS Papyrus functions", 28);
         return true;
     }
 

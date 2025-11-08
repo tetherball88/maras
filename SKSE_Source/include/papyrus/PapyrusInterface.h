@@ -51,6 +51,17 @@ namespace MARAS::PapyrusInterface {
     void SetAffectionMinMax(RE::StaticFunctionTag*, std::string type, int minVal, int maxVal);
     void ApplyDailyAffection(RE::StaticFunctionTag*);
 
+    // Player house papyrus bindings
+    bool RegisterPlayerHouseCell(RE::StaticFunctionTag*, RE::BGSLocation* loc, RE::TESBoundObject* homeMarker);
+    std::vector<RE::BGSLocation*> GetAllPlayerHouses(RE::StaticFunctionTag*);
+    std::vector<std::string> GetAllPlayerHousesNames(RE::StaticFunctionTag*);
+    bool RegisterTenantInPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse, RE::BGSLocation* playerHouse);
+    bool RemoveTenantFromPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse);
+    std::vector<RE::Actor*> GetPlayerHouseTenants(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse);
+    RE::TESBoundObject* GetHouseMarker(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse);
+    RE::BGSLocation* GetTenantHouse(RE::StaticFunctionTag*, RE::Actor* npc);
+    int CountPlayerHouses(RE::StaticFunctionTag*);
+
     // Marriage difficulty calculation
     float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
                                          float mostGold, float housesOwned, float horsesOwned, float questsCompleted,

@@ -32,13 +32,13 @@ EndEvent
 Event OnSleepStop(bool abInterrupted)
     Actor player = TTM_JData.GetPlayer()
     Location loc = player.GetCurrentLocation()
-    Form[] tenants = TTM_ServicePlayerHouse.GetHomeTenants(loc)
+    Actor[] tenants = MARAS.GetPlayerHouseTenants(loc)
 
     ; todo scan nearby npcs instead of tenants from player house
     int i = 0
     bool addedSpell = false
     while(i < tenants.Length)
-        Actor tenant = tenants[i] as Actor
+        Actor tenant = tenants[i]
         if(tenant.GetCurrentLocation() == loc)
             TTM_ServiceAffection.AddSleptAffection(tenant)
             if(!addedSpell)

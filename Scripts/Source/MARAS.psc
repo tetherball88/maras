@@ -178,6 +178,80 @@ Function SetAffectionMinMax(string type, int minVal, int maxVal) global native
 Function ApplyDailyAffection() global native
 
 ;/ ========================================
+   SECTION: Player House Functions (native C++)
+   ====================================== /;
+
+;/ Register a player-placed house marker for a BGSLocation
+  @param loc - The BGSLocation representing the player house
+  @param homeMarker - The base object (TESBoundObject) placed/shared as the house marker
+  @return True on success
+/;
+bool Function RegisterPlayerHouseCell(Location loc, ObjectReference homeMarker) global native
+
+;/ GetAllPlayerHouses
+
+  Returns all registered player house locations as an array of BGSLocation
+/;
+Location[] Function GetAllPlayerHouses() global native
+
+;/ RegisterTenantInPlayerHouse
+
+  Registers an Actor (tenant/spouse) to a player house location
+  @param spouse - Actor to register
+  @param playerHouse - BGSLocation of the house
+  @return True on success
+/;
+bool Function RegisterTenantInPlayerHouse(Actor spouse, Location playerHouse) global native
+
+;/ RemoveTenantFromPlayerHouse
+
+  Removes an Actor from any registered player house
+  @param spouse - Actor to remove
+  @return True if a removal occurred
+/;
+bool Function RemoveTenantFromPlayerHouse(Actor spouse) global native
+
+;/ GetPlayerHouseTenants
+
+  Returns list of Actor tenants for a given player house
+  @param playerHouse - BGSLocation to query
+  @return Actor[] tenants
+/;
+Actor[] Function GetPlayerHouseTenants(Location playerHouse) global native
+
+;/ GetHouseMarker
+
+  Returns the stored TESBoundObject (base) marker for the given house, or None
+  @param playerHouse - BGSLocation to query
+  @return TESBoundObject base object or None
+/;
+ObjectReference Function GetHouseMarker(Location playerHouse) global native
+
+;/ ========================================
+   SECTION: Player House Helpers
+   ====================================== /;
+
+;/ GetAllPlayerHousesNames
+
+  Returns array of display names for all registered player houses. Empty string for unnamed houses.
+/;
+string[] Function GetAllPlayerHousesNames() global native
+
+;/ GetTenantHouse
+
+  Returns the Location for the house a tenant (Actor) is registered in, or None.
+  @param npc - Actor to query
+  @return Location or None
+/;
+Location Function GetTenantHouse(Actor npc) global native
+
+;/ CountPlayerHouses
+
+  Returns number of registered player houses
+/;
+int Function CountPlayerHouses() global native
+
+;/ ========================================
    SECTION: Debug Functions
    ====================================== /;
 

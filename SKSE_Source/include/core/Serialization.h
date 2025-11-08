@@ -16,6 +16,8 @@ namespace MARAS {
         constexpr std::uint32_t kSpouseHierarchyData = 'SPHR';
         // Affection system persistent data
         constexpr std::uint32_t kAffectionData = 'AFCT';
+        // Player house persistent data
+        constexpr std::uint32_t kPlayerHouseData = 'PHOU';
 
         // Magic number to validate data integrity
         constexpr std::uint32_t kMagicNumber = 0xDEADBEEF;
