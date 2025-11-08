@@ -67,18 +67,7 @@ Event OnCellLoad()
 EndEvent
 
 Event OnUpdateGameTime()
-    Actor[] npcs = MARAS.GetNPCsByStatus("all")
-    int i = 0
-    while(i < npcs.Length)
-        Actor nextNpc = npcs[i]
-        if(nextNpc.IsPlayerTeammate() || nextNpc.IsInFaction(TTM_JData.GetCurrentFollowerFaction()))
-            TTM_JMethods.SetIntValue(nextNpc, "following", 1)
-        else
-            TTM_JMethods.SetIntValue(nextNpc, "following", 0)
-        endif
-        TTM_ServiceAffection.UpdateAffectionFaction(nextNpc)
-        i += 1
-    endwhile
+    MARAS.ApplyDailyAffection()
 
     RegisterForUpdateGameTime(1)
 EndEvent

@@ -1,11 +1,13 @@
+#include "core/SpouseBuffService.h"
+
 #include <spdlog/spdlog.h>
 
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
 
+#include "core/AffectionService.h"
 #include "core/NPCRelationshipManager.h"
-#include "core/SpouseBuffService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
 #include "utils/EnumUtils.h"
@@ -22,10 +24,8 @@ namespace MARAS {
         // Number of married spouses
         int spouseCount = static_cast<int>(NPCRelationshipManager::GetSingleton().GetMarriedCount());
 
-        // Affection multiplier is currently provided by the Papyrus TTM_ServiceAffection; until
-        // that is ported to native code we conservatively use 1.0 here. TODO: wire native affection.
-        // TODO: use affection when implemented
-        float affectionBuffMult = 1.0f;
+        // Affection multiplier: use native AffectionService permanent affection thresholds
+        float affectionBuffMult = MARAS::AffectionService::GetSingleton().GetMultiplierForNPC(spouse->GetFormID());
 
         if (spouseCount == 1) {
             return 2.0f * affectionBuffMult;
@@ -61,9 +61,10 @@ namespace MARAS {
                 continue;
             }
 
-            // TODO add affection multiplier when implemented
-            float mult = 1.0f;
-            multipliers[static_cast<size_t>(skillIndex)] += mult;
+            // Add affection multiplier from native AffectionService
+            float affectionMultFollower = MARAS::AffectionService::GetSingleton().GetMultiplierForNPC(fid);
+
+            multipliers[static_cast<size_t>(skillIndex)] += affectionMultFollower;
         }
 
         return multipliers;

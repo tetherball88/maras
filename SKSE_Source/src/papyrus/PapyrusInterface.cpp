@@ -6,6 +6,7 @@
 #include <cctype>
 #include <chrono>
 
+#include "core/AffectionService.h"
 #include "core/MarriageDifficulty.h"
 #include "core/SpouseBuffService.h"
 #include "core/SpouseHierarchyManager.h"
@@ -426,6 +427,50 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
+    // Affection system bindings
+    // ========================================
+
+    void AddAffection(RE::StaticFunctionTag*, RE::Actor* npc, float amount, std::string type) {
+        if (!npc) {
+            SKSE::log::warn("AddAffection: null actor provided");
+            return;
+        }
+        MARAS::AffectionService::GetSingleton().AddAffection(npc->GetFormID(), amount, type);
+    }
+
+    float GetAffection(RE::StaticFunctionTag*, RE::Actor* npc, std::string type) {
+        if (!npc) {
+            SKSE::log::warn("GetAffection: null actor provided");
+            return 0.0f;
+        }
+        return MARAS::AffectionService::GetSingleton().GetDailyAffection(npc->GetFormID(), type);
+    }
+
+    int GetPermanentAffection(RE::StaticFunctionTag*, RE::Actor* npc) {
+        if (!npc) {
+            SKSE::log::warn("GetPermanentAffection: null actor provided");
+            return 0;
+        }
+        return MARAS::AffectionService::GetSingleton().GetPermanentAffection(npc->GetFormID());
+    }
+
+    void SetPermanentAffection(RE::StaticFunctionTag*, RE::Actor* npc, int amount) {
+        if (!npc) {
+            SKSE::log::warn("SetPermanentAffection: null actor provided");
+            return;
+        }
+        MARAS::AffectionService::GetSingleton().SetPermanentAffection(npc->GetFormID(), amount);
+    }
+
+    void SetAffectionMinMax(RE::StaticFunctionTag*, std::string type, int minVal, int maxVal) {
+        MARAS::AffectionService::GetSingleton().SetAffectionMinMax(type, minVal, maxVal);
+    }
+
+    void ApplyDailyAffection(RE::StaticFunctionTag*) {
+        MARAS::AffectionService::GetSingleton().ApplyDailyAffectionsForAll();
+    }
+
+    // ========================================
     // Registration function for SKSE
     // ========================================
 
@@ -468,6 +513,13 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetSpouseMultiplier", "MARAS", GetSpouseMultiplier);
         vm->RegisterFunction("GetFollowersMultipliers", "MARAS", GetFollowersMultipliers);
         vm->RegisterFunction("GetPermanentMultipliers", "MARAS", GetPermanentMultipliers);
+        // Affection system
+        vm->RegisterFunction("AddAffection", "MARAS", AddAffection);
+        vm->RegisterFunction("GetAffection", "MARAS", GetAffection);
+        vm->RegisterFunction("GetPermanentAffection", "MARAS", GetPermanentAffection);
+        vm->RegisterFunction("SetPermanentAffection", "MARAS", SetPermanentAffection);
+        vm->RegisterFunction("SetAffectionMinMax", "MARAS", SetAffectionMinMax);
+        vm->RegisterFunction("ApplyDailyAffection", "MARAS", ApplyDailyAffection);
         SKSE::log::info("Registered {} MARAS Papyrus functions", 23);
         return true;
     }

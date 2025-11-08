@@ -26,6 +26,7 @@ EndEvent
 Function Maintenance()
     TTM_Debug.CleanOnLoad()
     TTM_JData.ImportStaticData()
+    TTM_ServiceAffection.Maintenance()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
     TTM_Conditions conditions = _self as TTM_Conditions
@@ -51,7 +52,7 @@ Function Maintenance()
     RegisterForModEvent("maras_status_changed", "OnRelationshipChanged")
 
     RegisterForModEvent("maras_hierarchy_changed", "OnChangeHierarchyRank")
-    RegisterForModEvent("TTM_SpouseAffectionChanged", "OnSpouseAffectionChanged")
+    RegisterForModEvent("maras_change_affection", "OnSpouseAffectionChanged")
 
      ; ensure player has debug spell and check door perk
 
@@ -140,12 +141,12 @@ Event OnChangeHierarchyRank(String EventName, String promotDemote, Float rankDif
     endif
 EndEvent
 
-Event OnSpouseAffectionChanged(Form spouse, string level, bool up)
+Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDiff, Form spouse)
     Actor spouseA = spouse as Actor
     string spouseName = TTM_Utils.GetActorName(spouseA)
     string msg = ""
 
-    if(up)
+    if(affectionDiff > 0)
         if(level == "happy")
             msg = "I feel closer to " + spouseName + "."
         elseif(level == "content")
@@ -161,7 +162,7 @@ Event OnSpouseAffectionChanged(Form spouse, string level, bool up)
                 affectionEstrangedDivorce.SetStage(150)
             endif
         endif
-    else
+    elseif(affectionDiff < 0)
         if(level == "content")
             msg = "I'm starting to feel distant from " + spouseName + "."
         elseif(level == "troubled")
@@ -173,6 +174,8 @@ Event OnSpouseAffectionChanged(Form spouse, string level, bool up)
             ; when affection drops to estranged, stop sharing home with player and stop using player's home
             TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(spouseA)
             TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouseA)
+            ; TODO check that quest isn't running already
+            TTM_JData.GetAffectionQuestKeyword("estranged").SendStoryEvent()
         endif
     endif
 

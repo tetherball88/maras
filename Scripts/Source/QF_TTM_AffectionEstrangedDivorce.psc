@@ -14,7 +14,7 @@ Function Fragment_6()
     Actor spouse = Alias_Spouse.GetActorRef()
     if(spouse)
         TTM_Utils.SendRelationshipChangeEvent(spouse, "divorced")
-        TTM_ServiceAffection.SetAffectionRank(spouse, 0)
+        MARAS.SetPermanentAffection(spouse, 0)
     endif
     FinishQuest(false)
 ;END CODE
@@ -27,7 +27,7 @@ Function Fragment_5()
 ; stage 100
     Actor spouse = Alias_Spouse.GetActorRef()
     if(spouse)
-        TTM_ServiceAffection.SetAffectionRank(spouse, 50)
+        MARAS.SetPermanentAffection(spouse, 50)
     endif
     FinishQuest()
 ;END CODE
@@ -60,7 +60,7 @@ Function Fragment_8()
     ; stage 150
     Actor spouse = Alias_Spouse.GetActorRef()
     if(spouse)
-        TTM_ServiceAffection.SetAffectionRank(spouse, 50)
+        MARAS.SetPermanentAffection(spouse, 50)
     endif
     FinishQuest()
 ;END CODE

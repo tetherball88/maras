@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "PCH.h"
+#include "core/AffectionService.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/Serialization.h"
 #include "core/SpouseHierarchyManager.h"
@@ -80,6 +81,17 @@ namespace {
         } else {
             SKSE::log::info("Successfully saved spouse hierarchy data");
         }
+
+        // Save affection data
+        if (!serialization->OpenRecord(MARAS::Serialization::kAffectionData, MARAS::Serialization::kDataVersion)) {
+            SKSE::log::error("Failed to open record for saving affection data");
+            return;
+        }
+        if (!MARAS::AffectionService::GetSingleton().Save(serialization)) {
+            SKSE::log::error("Failed to save affection data");
+        } else {
+            SKSE::log::info("Successfully saved affection data");
+        }
     }
 
     void LoadCallback(SKSE::SerializationInterface* serialization) {
@@ -111,6 +123,18 @@ namespace {
                 } else {
                     SKSE::log::info("Successfully loaded spouse hierarchy data");
                 }
+            } else if (type == MARAS::Serialization::kAffectionData) {
+                if (version != MARAS::Serialization::kDataVersion) {
+                    SKSE::log::error("Invalid affection data version {} (expected {})", version,
+                                     MARAS::Serialization::kDataVersion);
+                    continue;
+                }
+
+                if (!MARAS::AffectionService::GetSingleton().Load(serialization)) {
+                    SKSE::log::error("Failed to load affection data");
+                } else {
+                    SKSE::log::info("Successfully loaded affection data");
+                }
             }
         }
     }
@@ -119,6 +143,7 @@ namespace {
         auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
         manager.Revert();
         MARAS::SpouseHierarchyManager::GetSingleton().Revert();
+        MARAS::AffectionService::GetSingleton().Revert();
         SKSE::log::info("Reverted NPC relationship data");
     }
 }

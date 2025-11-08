@@ -1,107 +1,12 @@
 scriptname TTM_ServiceAffection
 
-Function UpdateAffectionFaction(Actor spouse) global
-    if(!spouse)
-        return
-    endif
-
-    Faction affectionFaction = TTM_JData.GetAffectionFaction()
-    int prevAffection = PapyrusUtil.ClampInt(spouse.GetFactionRank(affectionFaction), 0, 100)
-    int affection = prevAffection
-    bool isSpouse = TTM_Utils.IsSpouse(spouse)
-    affection += PapyrusUtil.ClampFloat(GetIntimacyAffection(spouse), -22.0, 22.0) as int
-    affection += PapyrusUtil.ClampFloat(GetGiftAffection(spouse), 0.0, 25.0) as int
-    affection += PapyrusUtil.ClampFloat(GetDialogueStartedAffection(spouse), 0.0, 5.0) as int
-    if(isSpouse)
-        affection += PapyrusUtil.ClampFloat(GetLonelinessAffection(spouse), -4.0, 6.0) as int
-        affection += PapyrusUtil.ClampFloat(GetSleptAffection(spouse), 0.0, 8.0) as int
-        affection += PapyrusUtil.ClampFloat(GetPromotionAffection(spouse), -24.0, 24.0) as int
-    endif
-
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":UpdateAffectionFaction:"+affection)
-    endif
-    spouse.SetFactionRank(affectionFaction, PapyrusUtil.ClampFloat(affection, 0.0, 100.0) as int)
-    int chance = Utility.RandomInt(1, 100)
-    if(affection >= 75)
-        ; try to run happy quests from SM Events. It has 5 days cooldown and will hit for any spouse with happy affection
-        ; currently there is no quest
-        TTM_JData.GetAffectionQuestKeyword("happy").SendStoryEvent()
-        if(prevAffection < 75)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "happy", true)
-        endif
-    elseif(affection >= 50)
-        ; try to run content quests from SM Events. It has 5 days cooldown and will hit for any spouse with content affection
-        ; currently there is no quest
-        TTM_JData.GetAffectionQuestKeyword("content").SendStoryEvent()
-        if(prevAffection < 50 || prevAffection >= 75)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "content", prevAffection < 50)
-        endif
-    elseif(affection >= 25)
-        ; try to run troubled quests from SM Events. It has 5 days cooldown and will hit for any spouse with troubled affection
-        ; currently there is no quest
-        TTM_JData.GetAffectionQuestKeyword("troubled").SendStoryEvent()
-        if(prevAffection < 25 || prevAffection >= 50)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "troubled", prevAffection < 25)
-        endif
-    else
-        ; try to run estranged quests from SM Events. It has 5 days cooldown and will hit for any spouse with estranged affection
-        ; currently there is only divorce quest
-        TTM_JData.GetAffectionQuestKeyword("estranged").SendStoryEvent()
-        if(prevAffection >= 25)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "estranged", false)
-        endif
-    endif
-    TTM_JMethods.ClearValue(spouse, "Affection")
-EndFunction
-
-int Function GetAffectionRank(Actor spouse) global
-    Faction affectionFaction = TTM_JData.GetAffectionFaction()
-    int rank = spouse.GetFactionRank(affectionFaction)
-    if(rank < 0)
-        int relationshipRank = spouse.GetRelationshipRank(TTM_JData.GetPlayer())
-        int adj = relationshipRank * 10
-        rank = 50 + adj
-        SetAffectionRank(spouse, rank)
-    endif
-
-    return rank
-EndFunction
-
-Function SetAffectionRank(Actor spouse, int amount) global
-    Faction affectionFaction = TTM_JData.GetAffectionFaction()
-    spouse.SetFactionRank(affectionFaction, amount)
-EndFunction
-
-Function AddAffection(Actor spouse, float amount, string suffix) global
-    if(!spouse)
-        return
-    endif
-
-    if(amount > 0)
-        SetLastTimeGotAffection(spouse)
-    endif
-
-    float currentAffection = GetAffection(spouse, suffix)
-    float newAffection = currentAffection + amount
-    TTM_JMethods.SetFloatValue(spouse, "Affection." + suffix, newAffection)
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":AddAffection("+suffix+"):"+amount+" + "+currentAffection+" = "+newAffection)
-    endif
-EndFunction
-
-float Function GetAffection(Actor spouse, string suffix) global
-    if(!spouse)
-        return -1.0
-    endif
-
-    float affection = TTM_JMethods.GetFloatValue(spouse, "Affection." + suffix)
-
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_ServiceAffection:"+TTM_Utils.GetActorName(spouse)+":GetAffection("+suffix+"):"+affection)
-    endif
-
-    return affection
+Function Maintenance() global
+    MARAS.SetAffectionMinMax("intimacy", -22, 22)
+    MARAS.SetAffectionMinMax("gift", 0, 25)
+    MARAS.SetAffectionMinMax("dialogueStarted", 0, 5)
+    MARAS.SetAffectionMinMax("slept", 0, 8)
+    MARAS.SetAffectionMinMax("promotion", -24, 24)
+    MARAS.SetAffectionMinMax("loneliness", -4, 6)
 EndFunction
 
 float Function GetLonelinessAffection(Actor spouse) global
@@ -146,11 +51,7 @@ Function AddIntimacyAffection(Actor spouse, float affection) global
         mlt = 0.5
     endif
 
-    return AddAffection(spouse, affection * mlt, "Intimacy")
-EndFunction
-
-float Function GetIntimacyAffection(Actor spouse) global
-    return GetAffection(spouse, "Intimacy")
+    return MARAS.AddAffection(spouse, affection * mlt, "Intimacy")
 EndFunction
 
 Function AddGiftAffection(Actor spouse, float value) global
@@ -177,19 +78,11 @@ Function AddGiftAffection(Actor spouse, float value) global
     if(TTM_Utils.GetSpouseTemperament((spouse)) == "Romantic")
         giftAffection = giftAffection * 1.5
     endif
-    AddAffection(spouse, giftAffection, "Gift")
-EndFunction
-
-float Function GetGiftAffection(Actor spouse) global
-    return GetAffection(spouse, "Gift")
+    MARAS.AddAffection(spouse, giftAffection, "Gift")
 EndFunction
 
 Function AddDialogueStartedAffection(Actor spouse) global
-    AddAffection(spouse, 1.0, "DialogueStarted")
-EndFunction
-
-float Function GetDialogueStartedAffection(Actor spouse) global
-    return GetAffection(spouse, "DialogueStarted")
+    MARAS.AddAffection(spouse, 1.0, "DialogueStarted")
 EndFunction
 
 Function AddPromotionAffection(Actor spouse, float rankDiff) global
@@ -200,11 +93,7 @@ Function AddPromotionAffection(Actor spouse, float rankDiff) global
     elseif(temperament == "Humble")
         promoAffection = 4.0
     endif
-    AddAffection(spouse, promoAffection * rankDiff, "Promotion")
-EndFunction
-
-float Function GetPromotionAffection(Actor spouse) global
-    return GetAffection(spouse, "Promotion")
+    MARAS.AddAffection(spouse, promoAffection * rankDiff, "Promotion")
 EndFunction
 
 Function AddSleptAffection(Actor spouse) global
@@ -217,11 +106,7 @@ Function AddSleptAffection(Actor spouse) global
     elseif(temperament == "Jealous")
         affection = 4.0
     endif
-    AddAffection(spouse, affection, "Slept")
-EndFunction
-
-float Function GetSleptAffection(Actor spouse) global
-    return GetAffection(spouse, "Slept")
+    MARAS.AddAffection(spouse, affection, "Slept")
 EndFunction
 
 Function SetLastTimeGotAffection(Actor spouse) global
@@ -238,15 +123,15 @@ float Function GetDaysSinceLastGotAffection(Actor spouse) global
     return daysSince
 EndFunction
 
-Float Function GetAffectionBuffMultiplier(Actor spouse) global
-    int affection = GetAffectionRank(spouse)
-    If affection >= 75
-        return 1.25
-    ElseIf affection >= 50
-        return 1
-    ElseIf affection >= 25
-        return 0.25
-    Else
-        return 0
-    EndIf
-EndFunction
+; Float Function GetAffectionBuffMultiplier(Actor spouse) global
+;     int affection = GetAffectionRank(spouse)
+;     If affection >= 75
+;         return 1.25
+;     ElseIf affection >= 50
+;         return 1
+;     ElseIf affection >= 25
+;         return 0.25
+;     Else
+;         return 0
+;     EndIf
+; EndFunction

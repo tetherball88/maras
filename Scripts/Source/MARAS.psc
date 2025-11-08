@@ -147,6 +147,37 @@ float[] Function GetPermanentMultipliers() global native
 
 
 ;/ ========================================
+   SECTION: Affection system bindings (native C++)
+   ====================================== /;
+
+;/
+  AddAffection
+
+  Accumulate daily affection for an NPC under a named type. This is kept in-memory
+  and will be applied to permanent affection when ApplyDailyAffection is called.
+
+  @param npc - Actor to receive affection
+  @param amount - float amount to add (can be negative)
+  @param type - string type name (e.g., "gift", "intimacy", "interaction")
+/;
+Function AddAffection(Actor npc, float amount, string type) global native
+
+;/ Get the current daily accumulated affection for npc/type (float) /;
+float Function GetAffection(Actor npc, string type) global native
+
+;/ Get permanent affection stored for an NPC (int) /;
+int Function GetPermanentAffection(Actor npc) global native
+
+;/ Replace permanent affection for NPC with given amount /;
+Function SetPermanentAffection(Actor npc, int amount) global native
+
+;/ Set min/max clamp for a specific affection type; call on game load to configure /;
+Function SetAffectionMinMax(string type, int minVal, int maxVal) global native
+
+;/ Apply all daily affection to permanent for all registered NPCs (should be called once per in-game day) /;
+Function ApplyDailyAffection() global native
+
+;/ ========================================
    SECTION: Debug Functions
    ====================================== /;
 

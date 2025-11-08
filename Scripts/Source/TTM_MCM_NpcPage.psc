@@ -67,7 +67,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
         mcm.oid_CandidateChance = mcm.AddTextOption("Your chances to get engaged: ", 100 * chance)
     endif
 
-    int affection = TTM_ServiceAffection.GetAffectionRank(npc)
+    int affection = MARAS.GetPermanentAffection(npc)
     mcm.oid_NpcPageAffection = mcm.AddSliderOption("Affection: ", affection as float, "{0}%")
 
     mcm.oid_NpcPageSocialClass = mcm.AddMenuOption("Social class: ", socialClass)
@@ -310,7 +310,7 @@ EndFunction
 Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
     if(option == mcm.oid_NpcPageAffection)
         Actor spouse = TTM_MCM_State.GetSelectedNpc()
-        int affection = TTM_ServiceAffection.GetAffectionRank(spouse)
+        int affection = MARAS.GetPermanentAffection(spouse)
         float affectionValue = affection as float
         mcm.SetSliderDialogStartValue(affectionValue)
         mcm.SetSliderDialogDefaultValue(affectionValue)
@@ -322,7 +322,7 @@ EndFunction
 Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
     if(option == mcm.oid_NpcPageAffection)
         Actor spouse = TTM_MCM_State.GetSelectedNpc()
-        int previousAffection = TTM_ServiceAffection.GetAffectionRank(spouse)
+        int previousAffection = MARAS.GetPermanentAffection(spouse)
         int newAffection = value as int
         if(newAffection < 0)
             newAffection = 0
@@ -335,7 +335,7 @@ Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
             return
         endif
 
-        TTM_ServiceAffection.SetAffectionRank(spouse, newAffection)
+        MARAS.SetPermanentAffection(spouse, newAffection)
         TriggerAffectionThresholdEvents(spouse, previousAffection, newAffection)
         mcm.SetSliderOptionValue(option, newAffection as float, "{0}%")
     endif

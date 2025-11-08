@@ -29,7 +29,7 @@ Function MakeNpcEngaged(Actor npc) global
     if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
         npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
     endif
-    TTM_ServiceAffection.SetAffectionRank(npc, 100)
+    MARAS.SetPermanentAffection(npc, 100)
 EndFunction
 
 ;/
@@ -53,7 +53,7 @@ Function MakeNpcMarried(Actor npc) global
     if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
         npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
     endif
-    TTM_ServiceAffection.SetAffectionRank(npc, 100)
+    MARAS.SetPermanentAffection(npc, 100)
 EndFunction
 
 ;/
@@ -74,7 +74,7 @@ Function MakeNpcDivorced(Actor npc) global
     TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(npc)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
-    TTM_ServiceAffection.SetAffectionRank(npc, 0)
+    MARAS.SetPermanentAffection(npc, 0)
 EndFunction
 
 ;/
@@ -86,7 +86,7 @@ Function MakeNpcJilted(Actor npc) global
     npc.SetRelationshipRank(player, -1)
     SetBrokeupTime(npc)
     npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
-    TTM_ServiceAffection.SetAffectionRank(npc, 100)
+    MARAS.SetPermanentAffection(npc, 100)
 EndFunction
 
 ;/

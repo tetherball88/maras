@@ -43,6 +43,14 @@ namespace MARAS::PapyrusInterface {
     std::vector<float> GetFollowersMultipliers(RE::StaticFunctionTag*, std::vector<RE::Actor*> followers);
     std::vector<float> GetPermanentMultipliers(RE::StaticFunctionTag*);
 
+    // Affection system bindings
+    void AddAffection(RE::StaticFunctionTag*, RE::Actor* npc, float amount, std::string type);
+    float GetAffection(RE::StaticFunctionTag*, RE::Actor* npc, std::string type);
+    int GetPermanentAffection(RE::StaticFunctionTag*, RE::Actor* npc);
+    void SetPermanentAffection(RE::StaticFunctionTag*, RE::Actor* npc, int amount);
+    void SetAffectionMinMax(RE::StaticFunctionTag*, std::string type, int minVal, int maxVal);
+    void ApplyDailyAffection(RE::StaticFunctionTag*);
+
     // Marriage difficulty calculation
     float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
                                          float mostGold, float housesOwned, float horsesOwned, float questsCompleted,
