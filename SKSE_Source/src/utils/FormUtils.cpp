@@ -39,6 +39,20 @@ namespace MARAS::Utils {
             return std::nullopt;
         }
 
+        // Verify the plugin is loaded
+        auto dataHandler = RE::TESDataHandler::GetSingleton();
+        if (!dataHandler) {
+            MARAS_LOG_ERROR("Cannot access TESDataHandler");
+            return std::nullopt;
+        }
+
+        // Check if the plugin is loaded
+        const auto* file = dataHandler->LookupModByName(parsed.pluginName);
+        if (!file) {
+            MARAS_LOG_ERROR("Plugin '{}' is not loaded", parsed.pluginName);
+            return std::nullopt;
+        }
+
         // Use the simplified approach - just get the form and return its ID
         auto form = LookupForm<RE::TESForm>(parsed.localFormID, parsed.pluginName);
         return form ? std::make_optional(form->GetFormID()) : std::nullopt;

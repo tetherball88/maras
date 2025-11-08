@@ -11,9 +11,6 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_DialogueManagerSpouseManagement:OnBegin:"+PromptKey+":useAI:"+UseAI)
-    endif
     if(PromptKey == "manage_spouse_set_new_home_ask" && UseAI)
         TTM_ServicePlayerHouse.ChooseHomeForSpouseMsg(akSpeaker)
     elseif(PromptKey == "manage_spouse_un_set_new_home")
@@ -21,27 +18,27 @@ Actor akSpeaker = akSpeakerRef as Actor
     elseif(PromptKey == "manage_spouse_check_spouse_home")
         TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(akSpeaker)
     elseif(PromptKey == "manage_spouse_leave_spouse_home")
-        TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(akSpeaker)
+        TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(akSpeaker)
     elseif(PromptKey == "maras_no_ai_engagement")
-        TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
+        MARAS.PromoteNPCToStatus(akSpeaker, "engaged")
     elseif(PromptKey == "manage_spouse_cooking")
-        TTM_JData.GetPlayer().AddItem(FoodMarriageMeal)
+        TTM_Data.GetPlayer().AddItem(FoodMarriageMeal)
     elseif(PromptKey == "manage_spouse_store")
-        TTM_ServiceRelationships.ShareIncome(akSpeaker, true)
-    elseif(PromptKey == "manage_spouse_set_hierarchy_0")
+        TTM_ServiceRelationships.ShareIncome(akSpeaker)
+    elseif(PromptKey == "manage_spouse_promote_hierarchy_0")
         MARAS.SetHierarchyRank(akSpeaker, 0)
         ; write prompt for spouse responding to being set to rank 1,
-    elseif(PromptKey == "manage_spouse_set_hierarchy_1")
+    elseif(PromptKey == "manage_spouse_promote_hierarchy_1" || PromptKey == "manage_spouse_demote_hierarchy_1")
         MARAS.SetHierarchyRank(akSpeaker, 1)
-    elseif(PromptKey == "manage_spouse_set_hierarchy_2")
+    elseif(PromptKey == "manage_spouse_promote_hierarchy_2" || PromptKey == "manage_spouse_demote_hierarchy_2")
         MARAS.SetHierarchyRank(akSpeaker, 2)
     endif
 
     if(useAI)
-        string prompt = TTM_JData.GetDialoguePrompt(PromptKey)
-        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\"}"
+        string prompt = TTM_Data.GetDialoguePrompt(PromptKey)
+        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_Data.GetPlayer()) + "\"}"
         if(prompt != "")
-            TTM_RequestLLMDialogue.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
+            TTM_Utils.RequestDialogue(prompt, values, akSpeaker, TTM_Data.GetPlayer())
         endif
     endif
 ;END CODE

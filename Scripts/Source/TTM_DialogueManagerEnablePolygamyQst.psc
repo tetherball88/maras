@@ -11,17 +11,13 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_DialogueManagerEnablePolygamyQst:OnBegin:"+PromptKey+":useAI:"+UseAI)
-    endif
     self.GetOwningQuest().SetStage(StageTarget)
 
     if(UseAI)
-        string prompt = TTM_JData.GetDialoguePrompt(PromptKey)
-        TTM_Debug.trace("TTM_DialogueManagerEnablePolygamyQst:Prompt:"+prompt)
-        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\"}"
+        string prompt = TTM_Data.GetDialoguePrompt(PromptKey)
+        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_Data.GetPlayer()) + "\"}"
         if(prompt != "")
-            TTM_RequestLLMDialogue.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
+            TTM_Utils.RequestDialogue(prompt, values, akSpeaker, TTM_Data.GetPlayer())
         endif
     endif
 ;END CODE

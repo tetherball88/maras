@@ -4,8 +4,12 @@
 
 #include <chrono>
 
+#include "core/FormCache.h"
+#include "core/NPCTypeDeterminer.h"
 #include "core/Serialization.h"
+#include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
+#include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
@@ -75,11 +79,9 @@ namespace MARAS {
     }
 
     void NPCRelationshipManager::UpdateTrackedFactionRank(RE::FormID npcFormID, RelationshipStatus status) {
-        // Get the tracked NPC faction (FormID 0x7 from TT_MARAS.esp)
-        // Load FormLists from TT_MARAS.esp
-        auto trackedFaction = Utils::LookupForm<RE::TESFaction>(0x7, "TT_MARAS.esp");
+        // Get the tracked NPC faction from the centralized cache
+        auto trackedFaction = FormCache::GetSingleton().GetTrackedFaction();
         if (!trackedFaction) {
-            MARAS_LOG_WARN("Could not find tracked NPC faction (0x7) for NPC {:08X}", npcFormID);
             return;
         }
 
@@ -123,6 +125,42 @@ namespace MARAS {
         }
     }
 
+    bool NPCRelationshipManager::ChangeStatusCommon(RE::FormID npcFormID, RelationshipStatus status,
+                                                    const std::function<void(RE::FormID)>& postAction) {
+        // Ensure NPC is registered and has storage/faction data
+        if (!EnsureRegistered(npcFormID)) {
+            MARAS_LOG_WARN("Cannot change status for unregistered NPC {:08X}", npcFormID);
+            return false;
+        }
+
+        // Remove from any previous buckets and add to desired status bucket
+        RemoveFromAllBuckets(npcFormID);
+        AddToBucket(npcFormID, status);
+
+        auto& data = npcData[npcFormID];
+        data.status = status;
+
+        // Update tracked faction rank
+        UpdateTrackedFactionRank(npcFormID, status);
+
+        // Manage faction membership based on relationship status
+        ManageFactions(npcFormID, status);
+
+        // Optional post-action (notify hierarchy, cleanup assets, etc.)
+        if (postAction) {
+            try {
+                postAction(npcFormID);
+            } catch (const std::exception& e) {
+                MARAS_LOG_ERROR("Exception in ChangeStatusCommon postAction for {:08X}: {}", npcFormID, e.what());
+            }
+        }
+
+        MARAS_LOG_INFO("Set status for NPC {:08X} to {}", npcFormID, Utils::RelationshipStatusToString(status));
+        // Recalculate and update TT_MARAS.esp globals that track love interests and spouses
+        RecalculateAndUpdateGlobals();
+        return true;
+    }
+
     // Registration and unregistration
     bool NPCRelationshipManager::RegisterAsCandidate(RE::FormID npcFormID) {
         auto startTime = std::chrono::high_resolution_clock::now();
@@ -135,7 +173,13 @@ namespace MARAS {
         // Automatically determine all attributes
         SocialClass socialClass = DetermineSocialClass(npcFormID);
         SkillType skillType = DetermineSkillType(npcFormID);
-        Temperament temperament = DetermineTemperament(npcFormID);
+        // Temperament depends on SC and ST; prefer override if present
+        Temperament temperament = [this, npcFormID, socialClass, skillType]() {
+            if (auto ov = GetTemperamentOverride(npcFormID); ov.has_value()) {
+                return Utils::StringToTemperament(ov.value());
+            }
+            return NPCTypeDeterminer::ComputeTemperament(socialClass, skillType);
+        }();
 
         // Add to master set
         allRegistered.insert(npcFormID);
@@ -154,6 +198,9 @@ namespace MARAS {
         // Add to tracked faction with status as rank
         UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
 
+        // Manage status-based faction membership
+        ManageFactions(npcFormID, RelationshipStatus::Candidate);
+
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
 
@@ -161,6 +208,9 @@ namespace MARAS {
                        Utils::GetNPCName(npcFormID), npcFormID, duration.count(),
                        Utils::SocialClassToString(socialClass), Utils::SkillTypeToString(skillType),
                        Utils::TemperamentToString(temperament));
+
+        // Update globals in case registration affects tracked counts
+        RecalculateAndUpdateGlobals();
 
         return true;
     }
@@ -182,7 +232,8 @@ namespace MARAS {
 
         // Ensure spouse hierarchy is updated if this NPC was present
         SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
-
+        // Recalculate globals after removal
+        RecalculateAndUpdateGlobals();
         MARAS_LOG_INFO("Unregistered NPC {} ({:08X})", Utils::GetNPCName(npcFormID), npcFormID);
         return true;
     }
@@ -204,128 +255,28 @@ namespace MARAS {
 
     // Status transitions
     bool NPCRelationshipManager::PromoteToEngaged(RE::FormID npcFormID) {
-        if (!IsCandidate(npcFormID)) {
-            MARAS_LOG_WARN("Cannot promote NPC {:08X} to engaged - not a candidate", npcFormID);
-            return false;
-        }
-
-        RemoveFromBucket(npcFormID, RelationshipStatus::Candidate);
-        AddToBucket(npcFormID, RelationshipStatus::Engaged);
-
-        auto& data = npcData[npcFormID];
-        data.status = RelationshipStatus::Engaged;
-
-        // Update tracked faction rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Engaged);
-
-        MARAS_LOG_INFO("Promoted NPC {:08X} to engaged", npcFormID);
-        return true;
+        return ChangeStatusCommon(npcFormID, RelationshipStatus::Engaged, nullptr);
     }
 
     bool NPCRelationshipManager::PromoteToMarried(RE::FormID npcFormID) {
-        if (!IsEngaged(npcFormID)) {
-            MARAS_LOG_WARN("Cannot promote NPC {:08X} to married - not engaged", npcFormID);
-            return false;
-        }
-
-        RemoveFromBucket(npcFormID, RelationshipStatus::Engaged);
-        AddToBucket(npcFormID, RelationshipStatus::Married);
-
-        auto& data = npcData[npcFormID];
-        data.status = RelationshipStatus::Married;
-
-        // Update tracked faction rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Married);
-
-        // Notify spouse hierarchy manager
-        SpouseHierarchyManager::GetSingleton().OnSpouseAdded(npcFormID);
-
-        MARAS_LOG_INFO("Promoted NPC {:08X} to married", npcFormID);
-        return true;
-    }
-
-    bool NPCRelationshipManager::DemoteToCandidate(RE::FormID npcFormID) {
-        if (!IsEngaged(npcFormID)) {
-            MARAS_LOG_WARN("Cannot demote NPC {:08X} to candidate - not engaged", npcFormID);
-            return false;
-        }
-
-        RemoveFromBucket(npcFormID, RelationshipStatus::Engaged);
-        AddToBucket(npcFormID, RelationshipStatus::Candidate);
-
-        auto& data = npcData[npcFormID];
-        data.status = RelationshipStatus::Candidate;
-        data.engagementDate = 0;  // Reset engagement date
-
-        // Update tracked faction rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
-
-        MARAS_LOG_INFO("Demoted NPC {:08X} to candidate", npcFormID);
-        return true;
+        return ChangeStatusCommon(npcFormID, RelationshipStatus::Married,
+                                  [](RE::FormID id) { SpouseHierarchyManager::GetSingleton().OnSpouseAdded(id); });
     }
 
     bool NPCRelationshipManager::PromoteToDivorced(RE::FormID npcFormID) {
-        if (!IsMarried(npcFormID)) {
-            MARAS_LOG_WARN("Cannot promote NPC {:08X} to divorced - not married", npcFormID);
-            return false;
-        }
-
-        RemoveFromBucket(npcFormID, RelationshipStatus::Married);
-        AddToBucket(npcFormID, RelationshipStatus::Divorced);
-
-        auto& data = npcData[npcFormID];
-        data.status = RelationshipStatus::Divorced;
-
-        // Update tracked faction rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Divorced);
-
-        // Remove from spouse hierarchy if present
-        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
-
-        MARAS_LOG_INFO("Promoted NPC {:08X} to divorced", npcFormID);
-        return true;
+        return ChangeStatusCommon(npcFormID, RelationshipStatus::Divorced, [](RE::FormID id) {
+            SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(id);
+            MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(id);
+        });
     }
 
     bool NPCRelationshipManager::PromoteToJilted(RE::FormID npcFormID) {
-        if (!IsEngaged(npcFormID)) {
-            MARAS_LOG_WARN("Cannot promote NPC {:08X} to jilted - not engaged", npcFormID);
-            return false;
-        }
-
-        RemoveFromBucket(npcFormID, RelationshipStatus::Engaged);
-        AddToBucket(npcFormID, RelationshipStatus::Jilted);
-
-        auto& data = npcData[npcFormID];
-        data.status = RelationshipStatus::Jilted;
-
-        // Update tracked faction rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Jilted);
-
-        MARAS_LOG_INFO("Promoted NPC {:08X} to jilted", npcFormID);
-        return true;
+        return ChangeStatusCommon(npcFormID, RelationshipStatus::Jilted, nullptr);
     }
 
     bool NPCRelationshipManager::PromoteToDeceased(RE::FormID npcFormID) {
-        if (!IsRegistered(npcFormID)) {
-            MARAS_LOG_WARN("Cannot promote NPC {:08X} to deceased - not registered", npcFormID);
-            return false;
-        }
-
-        auto currentStatus = GetRelationshipStatus(npcFormID);
-        RemoveFromBucket(npcFormID, currentStatus);
-        AddToBucket(npcFormID, RelationshipStatus::Deceased);
-
-        auto& data = npcData[npcFormID];
-        data.status = RelationshipStatus::Deceased;
-
-        // Update tracked faction rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Deceased);
-
-        // Remove from spouse hierarchy if present
-        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
-
-        MARAS_LOG_INFO("Promoted NPC {:08X} to deceased", npcFormID);
-        return true;
+        return ChangeStatusCommon(npcFormID, RelationshipStatus::Deceased,
+                                  [](RE::FormID id) { SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(id); });
     }
 
     // Bulk retrievals
@@ -365,7 +316,7 @@ namespace MARAS {
 
     RelationshipStatus NPCRelationshipManager::GetRelationshipStatus(RE::FormID npcFormID) const {
         auto data = GetNPCData(npcFormID);
-        return data ? data->status : RelationshipStatus::Candidate;
+        return data ? data->status : RelationshipStatus::Unknown;
     }
 
     SocialClass NPCRelationshipManager::GetSocialClass(RE::FormID npcFormID) const {
@@ -381,33 +332,6 @@ namespace MARAS {
     Temperament NPCRelationshipManager::GetTemperament(RE::FormID npcFormID) const {
         auto data = GetNPCData(npcFormID);
         return data ? data->temperament : Temperament::Proud;
-    }
-
-    // Date tracking
-    bool NPCRelationshipManager::SetEngagementDate(RE::FormID npcFormID, uint32_t gameDay) {
-        if (!IsRegistered(npcFormID)) {
-            return false;
-        }
-        npcData[npcFormID].engagementDate = gameDay;
-        return true;
-    }
-
-    bool NPCRelationshipManager::SetMarriageDate(RE::FormID npcFormID, uint32_t gameDay) {
-        if (!IsRegistered(npcFormID)) {
-            return false;
-        }
-        npcData[npcFormID].marriageDate = gameDay;
-        return true;
-    }
-
-    uint32_t NPCRelationshipManager::GetEngagementDate(RE::FormID npcFormID) const {
-        auto data = GetNPCData(npcFormID);
-        return data ? data->engagementDate : 0;
-    }
-
-    uint32_t NPCRelationshipManager::GetMarriageDate(RE::FormID npcFormID) const {
-        auto data = GetNPCData(npcFormID);
-        return data ? data->marriageDate : 0;
     }
 
     // Statistics
@@ -501,16 +425,40 @@ namespace MARAS {
         }
 
         for (std::uint32_t i = 0; i < npcCount; ++i) {
-            RE::FormID oldFormID, newFormID;
+            RE::FormID oldFormID = 0, newFormID = 0;
             if (!serialization->ReadRecordData(oldFormID) || !serialization->ResolveFormID(oldFormID, newFormID)) {
                 MARAS_LOG_WARN("Could not resolve FormID {:08X}, skipping NPC", oldFormID);
+                // Consume the rest of this NPC's record to stay aligned
+                std::uint8_t discard8 = 0;
+                // socialClass, skillType, temperament, status
+                for (int k = 0; k < 4; ++k) {
+                    if (!serialization->ReadRecordData(discard8)) return false;
+                }
+                // originalHome flag and maybe value
+                bool hasOrig = false;
+                if (!serialization->ReadRecordData(hasOrig)) return false;
+                if (hasOrig) {
+                    RE::FormID discardForm = 0;
+                    if (!serialization->ReadRecordData(discardForm)) return false;
+                }
+                // currentHome flag and maybe value
+                bool hasCurr = false;
+                if (!serialization->ReadRecordData(hasCurr)) return false;
+                if (hasCurr) {
+                    RE::FormID discardForm = 0;
+                    if (!serialization->ReadRecordData(discardForm)) return false;
+                }
+                // engagementDate, marriageDate
+                std::uint32_t discard32 = 0;
+                if (!serialization->ReadRecordData(discard32) || !serialization->ReadRecordData(discard32))
+                    return false;
                 continue;
             }
 
             NPCRelationshipData data;
             data.formID = newFormID;
 
-            std::uint8_t enumValue;
+            std::uint8_t enumValue = 0;
 
             if (!serialization->ReadRecordData(enumValue)) return false;
             data.socialClass = static_cast<SocialClass>(enumValue);
@@ -523,6 +471,28 @@ namespace MARAS {
 
             if (!serialization->ReadRecordData(enumValue)) return false;
             data.status = static_cast<RelationshipStatus>(enumValue);
+
+            // Read optional originalHome
+            bool hasOriginalHome = false;
+            if (!serialization->ReadRecordData(hasOriginalHome)) return false;
+            if (hasOriginalHome) {
+                RE::FormID oldHome = 0, resolvedHome = 0;
+                if (!serialization->ReadRecordData(oldHome)) return false;
+                if (oldHome != 0 && serialization->ResolveFormID(oldHome, resolvedHome)) {
+                    data.originalHome = resolvedHome;
+                }
+            }
+
+            // Read optional currentHome
+            bool hasCurrentHome = false;
+            if (!serialization->ReadRecordData(hasCurrentHome)) return false;
+            if (hasCurrentHome) {
+                RE::FormID oldHome = 0, resolvedHome = 0;
+                if (!serialization->ReadRecordData(oldHome)) return false;
+                if (oldHome != 0 && serialization->ResolveFormID(oldHome, resolvedHome)) {
+                    data.currentHome = resolvedHome;
+                }
+            }
 
             if (!serialization->ReadRecordData(data.engagementDate) ||
                 !serialization->ReadRecordData(data.marriageDate)) {
@@ -553,6 +523,29 @@ namespace MARAS {
         MARAS_LOG_INFO("  Divorced: {}", GetDivorcedCount());
         MARAS_LOG_INFO("  Jilted: {}", GetJiltedCount());
         MARAS_LOG_INFO("  Deceased: {}", GetDeceasedCount());
+    }
+
+    // Recalculate and update TT_MARAS.esp globals used by scripts (LoveInterestsCount and SpousesCount)
+    void NPCRelationshipManager::RecalculateAndUpdateGlobals() {
+        // Love interests = engaged + married (matches Papyrus behavior)
+        std::int32_t loveInterests = static_cast<std::int32_t>(engaged.size() + married.size());
+        std::int32_t spouses = static_cast<std::int32_t>(married.size());
+
+        auto& cache = FormCache::GetSingleton();
+
+        if (auto globalLove = cache.GetLoveInterestsCount()) {
+            globalLove->value = static_cast<float>(loveInterests);
+            MARAS_LOG_DEBUG("Updated LoveInterestsCount global to {}", loveInterests);
+        } else {
+            MARAS_LOG_WARN("Cannot update LoveInterestsCount global - form not found");
+        }
+
+        if (auto globalSpouses = cache.GetSpousesCount()) {
+            globalSpouses->value = static_cast<float>(spouses);
+            MARAS_LOG_DEBUG("Updated SpousesCount global to {}", spouses);
+        } else {
+            MARAS_LOG_WARN("Cannot update SpousesCount global - form not found");
+        }
     }
 
     void NPCRelationshipManager::LogNPCDetails(RE::FormID npcFormID) const {
@@ -587,11 +580,6 @@ namespace MARAS {
         }
 
         return success;
-    }
-
-    void NPCRelationshipManager::ClearOverrides() {
-        npcOverrides.clear();
-        MARAS_LOG_DEBUG("Cleared all NPC type overrides");
     }
 
     bool NPCRelationshipManager::HasSocialClassOverride(RE::FormID npcFormID) const {
@@ -644,330 +632,22 @@ namespace MARAS {
     // ========================================
 
     SocialClass NPCRelationshipManager::DetermineSocialClass(RE::FormID npcFormID) {
-        // Check override first
-        auto override = GetSocialClassOverride(npcFormID);
-        if (override.has_value()) {
-            auto result = Utils::StringToSocialClass(override.value());
-            MARAS_LOG_DEBUG("Using social class override for {:08X}: {}", npcFormID, override.value());
-            return result;
-        }
-
-        // Fallback to faction-based determination
-        return DetermineSocialClassByFaction(npcFormID);
+        return NPCTypeDeterminer::DetermineSocialClass(npcFormID,
+                                                       [this](RE::FormID id) { return GetSocialClassOverride(id); });
     }
 
     SkillType NPCRelationshipManager::DetermineSkillType(RE::FormID npcFormID) {
-        // Check override first
-        auto override = GetSkillTypeOverride(npcFormID);
-        if (override.has_value()) {
-            auto result = Utils::StringToSkillType(override.value());
-            MARAS_LOG_DEBUG("Using skill type override for {:08X}: {}", npcFormID, override.value());
-            return result;
-        }
-
-        // Try class-based determination
-        auto skillType = DetermineSkillTypeByClass(npcFormID);
-        if (skillType != SkillType::Warrior) {  // Warrior is our default fallback
-            return skillType;
-        }
-
-        // Fallback to skill-based determination
-        return DetermineSkillTypeBySkills(npcFormID);
+        return NPCTypeDeterminer::DetermineSkillType(npcFormID,
+                                                     [this](RE::FormID id) { return GetSkillTypeOverride(id); });
     }
 
     Temperament NPCRelationshipManager::DetermineTemperament(RE::FormID npcFormID) {
-        // Check override first
-        auto override = GetTemperamentOverride(npcFormID);
-        if (override.has_value()) {
-            auto result = Utils::StringToTemperament(override.value());
-            MARAS_LOG_DEBUG("Using temperament override for {:08X}: {}", npcFormID, override.value());
-            return result;
-        }
-
-        // Fallback to matrix-based determination
-        return DetermineTemperamentByMatrix(npcFormID);
+        return NPCTypeDeterminer::DetermineTemperament(
+            npcFormID, [this](RE::FormID id) { return GetTemperamentOverride(id); },
+            [this](RE::FormID id) { return GetSocialClass(id); }, [this](RE::FormID id) { return GetSkillType(id); });
     }
 
-    // ========================================
-    // Type Determination Helper Methods (Stubs for now)
-    // ========================================
-
-    SocialClass NPCRelationshipManager::DetermineSocialClassByFaction(RE::FormID npcFormID) const {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-        if (!actor) {
-            MARAS_LOG_ERROR("Cannot find actor for FormID {:08X}", npcFormID);
-            return SocialClass::Working;
-        }
-
-        // Load FormLists from TT_MARAS.esp
-        // FormList references from Papyrus script - use string-based lookup
-        auto rulerFactions = Utils::LookupForm<RE::BGSListForm>(0xd75, "TT_MARAS.esp");
-        auto nobleFactions = Utils::LookupForm<RE::BGSListForm>(0xd76, "TT_MARAS.esp");
-        auto religiousFactions = Utils::LookupForm<RE::BGSListForm>(0xd77, "TT_MARAS.esp");
-        auto wealthyFactions = Utils::LookupForm<RE::BGSListForm>(0xd71, "TT_MARAS.esp");
-        auto middleFactions = Utils::LookupForm<RE::BGSListForm>(0x4, "TT_MARAS.esp");
-        auto povertyFactions = Utils::LookupForm<RE::BGSListForm>(0xd74, "TT_MARAS.esp");
-        auto outcastFactions = Utils::LookupForm<RE::BGSListForm>(0xd70, "TT_MARAS.esp");
-
-        // Get actor's factions
-        if (!actor->GetActorBase() || !actor->GetActorBase()->factions.size()) {
-            MARAS_LOG_DEBUG("No factions found for actor {:08X}, defaulting to Working class", npcFormID);
-            return SocialClass::Working;
-        }
-
-        auto& actorFactions = actor->GetActorBase()->factions;
-        int maxClassIndex = static_cast<int>(SocialClass::Working);  // Default
-
-        for (const auto& factionInfo : actorFactions) {
-            if (!factionInfo.faction) continue;
-
-            auto faction = factionInfo.faction;
-
-            // Check faction membership in FormLists (highest priority wins)
-            if (rulerFactions && rulerFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Rulers));
-            } else if (nobleFactions && nobleFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Nobles));
-            } else if (religiousFactions && religiousFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Religious));
-            } else if (wealthyFactions && wealthyFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Wealthy));
-            } else if (middleFactions && middleFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Middle));
-            } else if (povertyFactions && povertyFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Poverty));
-            } else if (outcastFactions && outcastFactions->HasForm(faction)) {
-                maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Outcast));
-            }
-        }
-
-        // TODO: Check for rich clothing keyword (from Papyrus: TTM_JData.GetClothingRichKeyword())
-        // This would boost to wealthy class if worn
-        // Skipping for now as it requires keyword lookup implementation
-
-        MARAS_LOG_DEBUG("Determined social class for {:08X}: {}", npcFormID,
-                        Utils::SocialClassToString(static_cast<SocialClass>(maxClassIndex)));
-
-        return static_cast<SocialClass>(maxClassIndex);
-    }
-
-    SkillType NPCRelationshipManager::DetermineSkillTypeByClass(RE::FormID npcFormID) const {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-        if (!actor || !actor->GetActorBase()) {
-            MARAS_LOG_WARN("Cannot find actor or actor base for FormID {:08X}", npcFormID);
-            return SkillType::Warrior;
-        }
-
-        auto spouseClass = actor->GetActorBase()->npcClass;
-        if (!spouseClass) {
-            MARAS_LOG_DEBUG("No class found for actor {:08X}", npcFormID);
-            return SkillType::Warrior;
-        }
-
-        // Load FormLists from TT_MARAS.esp (from Papyrus checkByClass function)
-        // FormList references from Papyrus script - use string-based lookup
-        auto oratorClasses = Utils::LookupForm<RE::BGSListForm>(0x13, "TT_MARAS.esp");
-        auto rangerClasses = Utils::LookupForm<RE::BGSListForm>(0x10, "TT_MARAS.esp");
-        auto rogueClasses = Utils::LookupForm<RE::BGSListForm>(0x11, "TT_MARAS.esp");
-        auto craftsmanClasses = Utils::LookupForm<RE::BGSListForm>(0x12, "TT_MARAS.esp");
-        auto mageClasses = Utils::LookupForm<RE::BGSListForm>(0xf, "TT_MARAS.esp");
-        auto warriorClasses = Utils::LookupForm<RE::BGSListForm>(0xe, "TT_MARAS.esp");
-
-        // Check class membership (order matches Papyrus priority)
-        if (oratorClasses && oratorClasses->HasForm(spouseClass)) {
-            MARAS_LOG_DEBUG("Determined skill type by class for {:08X}: Orator", npcFormID);
-            return SkillType::Orator;
-        }
-        if (rangerClasses && rangerClasses->HasForm(spouseClass)) {
-            MARAS_LOG_DEBUG("Determined skill type by class for {:08X}: Ranger", npcFormID);
-            return SkillType::Ranger;
-        }
-        if (rogueClasses && rogueClasses->HasForm(spouseClass)) {
-            MARAS_LOG_DEBUG("Determined skill type by class for {:08X}: Rogue", npcFormID);
-            return SkillType::Rogue;
-        }
-        if (craftsmanClasses && craftsmanClasses->HasForm(spouseClass)) {
-            MARAS_LOG_DEBUG("Determined skill type by class for {:08X}: Craftsman", npcFormID);
-            return SkillType::Craftsman;
-        }
-        if (mageClasses && mageClasses->HasForm(spouseClass)) {
-            MARAS_LOG_DEBUG("Determined skill type by class for {:08X}: Mage", npcFormID);
-            return SkillType::Mage;
-        }
-        if (warriorClasses && warriorClasses->HasForm(spouseClass)) {
-            MARAS_LOG_DEBUG("Determined skill type by class for {:08X}: Warrior", npcFormID);
-            return SkillType::Warrior;
-        }
-
-        MARAS_LOG_DEBUG("No class match found for {:08X}, defaulting to Warrior", npcFormID);
-        return SkillType::Warrior;  // Default fallback
-    }
-
-    SkillType NPCRelationshipManager::DetermineSkillTypeBySkills(RE::FormID npcFormID) const {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-        if (!actor) {
-            MARAS_LOG_WARN("Cannot find actor for FormID {:08X} in skill determination", npcFormID);
-            return SkillType::Warrior;
-        }
-
-        // Get skill values (mirroring Papyrus DetermineSkillBased function)
-        std::array<float, 18> skills;
-
-        // Use CommonLibSSE API - access ActorValueOwner interface
-        auto actorValueOwner = actor->As<RE::ActorValueOwner>();
-        if (!actorValueOwner) {
-            MARAS_LOG_WARN("Actor {:08X} does not implement ActorValueOwner interface", npcFormID);
-            return SkillType::Warrior;
-        }
-
-        // Use ActorValue enum values - CommonLibSSE constants
-        skills[0] = actorValueOwner->GetActorValue(RE::ActorValue::kOneHanded);
-        skills[1] = actorValueOwner->GetActorValue(RE::ActorValue::kTwoHanded);
-        skills[2] = actorValueOwner->GetActorValue(RE::ActorValue::kArchery);  // Marksman in Papyrus
-        skills[3] = actorValueOwner->GetActorValue(RE::ActorValue::kBlock);
-        skills[4] = actorValueOwner->GetActorValue(RE::ActorValue::kSmithing);
-        skills[5] = actorValueOwner->GetActorValue(RE::ActorValue::kHeavyArmor);
-        skills[6] = actorValueOwner->GetActorValue(RE::ActorValue::kLightArmor);
-        skills[7] = actorValueOwner->GetActorValue(RE::ActorValue::kPickpocket);
-        skills[8] = actorValueOwner->GetActorValue(RE::ActorValue::kLockpicking);
-        skills[9] = actorValueOwner->GetActorValue(RE::ActorValue::kSneak);
-        skills[10] = actorValueOwner->GetActorValue(RE::ActorValue::kAlchemy);
-        skills[11] = actorValueOwner->GetActorValue(RE::ActorValue::kSpeech);  // Speechcraft in Papyrus
-        skills[12] = actorValueOwner->GetActorValue(RE::ActorValue::kAlteration);
-        skills[13] = actorValueOwner->GetActorValue(RE::ActorValue::kConjuration);
-        skills[14] = actorValueOwner->GetActorValue(RE::ActorValue::kDestruction);
-        skills[15] = actorValueOwner->GetActorValue(RE::ActorValue::kIllusion);
-        skills[16] = actorValueOwner->GetActorValue(RE::ActorValue::kRestoration);
-        skills[17] = actorValueOwner->GetActorValue(RE::ActorValue::kEnchanting);
-
-        // Find max skill (copying Papyrus logic exactly)
-        int maxIndex = 0;
-        float maxVal = skills[0];
-
-        for (int i = 1; i < 18; ++i) {
-            if (skills[i] > maxVal) {
-                maxIndex = i;
-                maxVal = skills[i];
-            }
-        }
-
-        // Determine skill type based on highest skill (matches Papyrus logic)
-        if (maxIndex == 0 || maxIndex == 1 || maxIndex == 3 || maxIndex == 5) {
-            // OneHanded, TwoHanded, Block, HeavyArmor
-            return SkillType::Warrior;
-        } else if (maxIndex == 2) {
-            // Marksman
-            return SkillType::Ranger;
-        } else if (maxIndex == 7 || maxIndex == 8 || maxIndex == 9) {
-            // Pickpocket, Lockpicking, Sneak
-            return SkillType::Rogue;
-        } else if (maxIndex == 12 || maxIndex == 13 || maxIndex == 14 || maxIndex == 15 || maxIndex == 16) {
-            // Alteration, Conjuration, Destruction, Illusion, Restoration
-            return SkillType::Mage;
-        } else if (maxIndex == 11) {
-            // Speech/Speechcraft
-            return SkillType::Orator;
-        } else if (maxIndex == 4 || maxIndex == 10 || maxIndex == 17) {
-            // Smithing, Alchemy, Enchanting
-            return SkillType::Craftsman;
-        } else if (maxIndex == 6) {
-            // LightArmor - special case from Papyrus
-            // if marksman is higher than lockpick and pickpocket - archer (ranger)
-            // otherwise rogue
-            if (skills[2] > skills[7] && skills[2] > skills[8]) {
-                return SkillType::Ranger;
-            } else {
-                return SkillType::Rogue;
-            }
-        }
-
-        // Default fallback
-        return SkillType::Warrior;
-    }
-
-    Temperament NPCRelationshipManager::DetermineTemperamentByMatrix(RE::FormID npcFormID) const {
-        // Get the current social class and skill type for this NPC
-        // These should be set before calling this method
-        SocialClass socialClass = GetSocialClass(npcFormID);
-        SkillType skillType = GetSkillType(npcFormID);
-
-        int socialClassIndex = static_cast<int>(socialClass);
-        int skillTypeIndex = static_cast<int>(skillType);
-
-        // Temperament matrix from Papyrus CheckTemperament function
-        // Matrix layout:
-        //                Warrior(0)  Mage(1)     Rogue(2)    Craftsman(3) Ranger(4)   Orator(5)
-        // Outcast(0)      Independent Jealous     Jealous     Humble       Independent Romantic
-        // Poverty(1)      Humble      Romantic    Jealous     Independent  Proud       Romantic
-        // Working(2)      Proud       Humble      Romantic    Independent  Independent Proud
-        // Middle(3)       Proud       Romantic    Independent Romantic     Humble      Jealous
-        // Wealthy(4)      Proud       Jealous     Romantic    Romantic     Independent Jealous
-        // Religious(5)    Independent Humble      Romantic    Jealous      Humble      Proud
-        // Nobles(6)       Jealous     Romantic    Independent Proud        Humble      Proud
-        // Rulers(7)       Proud       Independent Humble      Romantic     Jealous     Independent
-
-        // Group conditions by temperament for cleaner logic (copied from Papyrus)
-
-        // Independent: Outcast(Warrior,Ranger), Poverty(Craftsman), Working(Craftsman,Ranger), Middle(Rogue),
-        // Wealthy(Ranger), Religious(Warrior), Nobles(Rogue), Rulers(Mage,Orator)
-        if ((socialClassIndex == 0 && (skillTypeIndex == 0 || skillTypeIndex == 4)) ||
-            (socialClassIndex == 1 && skillTypeIndex == 3) ||
-            (socialClassIndex == 2 && (skillTypeIndex == 3 || skillTypeIndex == 4)) ||
-            (socialClassIndex == 3 && skillTypeIndex == 2) || (socialClassIndex == 4 && skillTypeIndex == 4) ||
-            (socialClassIndex == 5 && skillTypeIndex == 0) || (socialClassIndex == 6 && skillTypeIndex == 2) ||
-            (socialClassIndex == 7 && (skillTypeIndex == 1 || skillTypeIndex == 5))) {
-            return Temperament::Independent;
-        }
-
-        // Jealous: Outcast(Mage,Rogue), Poverty(Rogue), Middle(Orator), Wealthy(Mage,Orator), Religious(Craftsman),
-        // Nobles(Warrior), Rulers(Ranger)
-        else if ((socialClassIndex == 0 && (skillTypeIndex == 1 || skillTypeIndex == 2)) ||
-                 (socialClassIndex == 1 && skillTypeIndex == 2) || (socialClassIndex == 3 && skillTypeIndex == 5) ||
-                 (socialClassIndex == 4 && (skillTypeIndex == 1 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 5 && skillTypeIndex == 3) || (socialClassIndex == 6 && skillTypeIndex == 0) ||
-                 (socialClassIndex == 7 && skillTypeIndex == 4)) {
-            return Temperament::Jealous;
-        }
-
-        // Humble: Outcast(Craftsman), Poverty(Warrior), Working(Mage), Middle(Ranger), Religious(Mage,Ranger),
-        // Nobles(Ranger), Rulers(Rogue)
-        else if ((socialClassIndex == 0 && skillTypeIndex == 3) || (socialClassIndex == 1 && skillTypeIndex == 0) ||
-                 (socialClassIndex == 2 && skillTypeIndex == 1) || (socialClassIndex == 3 && skillTypeIndex == 4) ||
-                 (socialClassIndex == 5 && (skillTypeIndex == 1 || skillTypeIndex == 4)) ||
-                 (socialClassIndex == 6 && skillTypeIndex == 4) || (socialClassIndex == 7 && skillTypeIndex == 2)) {
-            return Temperament::Humble;
-        }
-
-        // Proud: Poverty(Ranger), Working(Warrior,Orator), Middle(Warrior), Wealthy(Warrior), Religious(Orator),
-        // Nobles(Craftsman,Orator), Rulers(Warrior)
-        else if ((socialClassIndex == 1 && skillTypeIndex == 4) ||
-                 (socialClassIndex == 2 && (skillTypeIndex == 0 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 3 && skillTypeIndex == 0) || (socialClassIndex == 4 && skillTypeIndex == 0) ||
-                 (socialClassIndex == 5 && skillTypeIndex == 5) ||
-                 (socialClassIndex == 6 && (skillTypeIndex == 3 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 7 && skillTypeIndex == 0)) {
-            return Temperament::Proud;
-        }
-
-        // Romantic: Outcast(Orator), Poverty(Mage,Orator), Working(Rogue), Middle(Mage,Craftsman),
-        // Wealthy(Rogue,Craftsman), Religious(Rogue), Nobles(Mage), Rulers(Craftsman)
-        else if ((socialClassIndex == 0 && skillTypeIndex == 5) ||
-                 (socialClassIndex == 1 && (skillTypeIndex == 1 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 2 && skillTypeIndex == 2) ||
-                 (socialClassIndex == 3 && (skillTypeIndex == 1 || skillTypeIndex == 3)) ||
-                 (socialClassIndex == 4 && (skillTypeIndex == 2 || skillTypeIndex == 3)) ||
-                 (socialClassIndex == 5 && skillTypeIndex == 2) || (socialClassIndex == 6 && skillTypeIndex == 1) ||
-                 (socialClassIndex == 7 && skillTypeIndex == 3)) {
-            return Temperament::Romantic;
-        }
-
-        // Default fallback (should not normally be reached)
-        else {
-            MARAS_LOG_DEBUG("Temperament matrix fallback for NPC {:08X} (SC:{}, ST:{}), using Independent", npcFormID,
-                            socialClassIndex, skillTypeIndex);
-            return Temperament::Independent;
-        }
-    }
+    // Removed determination helper implementations (moved to NPCTypeDeterminer.cpp)
 
     // ========================================
     // Faction Management Methods
@@ -995,10 +675,8 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::AddToSocialClassFaction(RE::FormID npcFormID, std::int8_t rank) {
-        // Get the faction using the form ID from TTM_JData.psc: GetSpouseSocialClassFaction() -> 0x66
-        auto faction = Utils::LookupForm<RE::TESFaction>(0x66, "TT_MARAS.esp");
+        auto faction = FormCache::GetSingleton().GetSpouseSocialClassFaction();
         if (!faction) {
-            MARAS_LOG_ERROR("Cannot find SpouseSocialClassFaction (0x66) in TT_MARAS.esp");
             return false;
         }
 
@@ -1006,10 +684,8 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::AddToSkillTypeFaction(RE::FormID npcFormID, std::int8_t rank) {
-        // Get the faction using the form ID from TTM_JData.psc: GetSpouseSkillTypeFaction() -> 0x4e
-        auto faction = Utils::LookupForm<RE::TESFaction>(0x4e, "TT_MARAS.esp");
+        auto faction = FormCache::GetSingleton().GetSpouseSkillTypeFaction();
         if (!faction) {
-            MARAS_LOG_ERROR("Cannot find SpouseSkillTypeFaction (0x4e) in TT_MARAS.esp");
             return false;
         }
 
@@ -1017,14 +693,170 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::AddToTemperamentFaction(RE::FormID npcFormID, std::int8_t rank) {
-        // Get the faction using the form ID from TTM_JData.psc: GetSpouseTemperamentFaction() -> 0x118
-        auto faction = Utils::LookupForm<RE::TESFaction>(0x118, "TT_MARAS.esp");
+        auto faction = FormCache::GetSingleton().GetSpouseTemperamentFaction();
         if (!faction) {
-            MARAS_LOG_ERROR("Cannot find SpouseTemperamentFaction (0x118) in TT_MARAS.esp");
             return false;
         }
 
         return AddToFaction(npcFormID, faction, rank);
+    }
+
+    // ========================================
+    // Status-Based Faction Management
+    // ========================================
+
+    void NPCRelationshipManager::ManageFactions(RE::FormID npcFormID, RelationshipStatus status) {
+        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
+        if (!actor) {
+            MARAS_LOG_WARN("Could not find actor {:08X} for faction management", npcFormID);
+            return;
+        }
+
+        auto& cache = FormCache::GetSingleton();
+
+        switch (status) {
+            case RelationshipStatus::Candidate: {
+                auto potentialFaction = cache.GetMarriagePotentialFaction();
+                if (potentialFaction) {
+                    Utils::AddToFaction(actor, potentialFaction, 0);
+                }
+                break;
+            }
+
+            case RelationshipStatus::Engaged: {
+                auto askedFaction = cache.GetMarriageAskedFaction();
+                auto courtingFaction = cache.GetCourtingFaction();
+                if (askedFaction) Utils::AddToFaction(actor, askedFaction, 0);
+                if (courtingFaction) Utils::AddToFaction(actor, courtingFaction, 0);
+                break;
+            }
+
+            case RelationshipStatus::Married: {
+                auto askedFaction = cache.GetMarriageAskedFaction();
+                auto courtingFaction = cache.GetCourtingFaction();
+                auto hirelingFaction = cache.GetPotentialHirelingFaction();
+                auto marriedFaction = cache.GetMarriedFaction();
+                auto playerFaction = cache.GetPlayerFaction();
+                auto bedOwnershipFaction = cache.GetPlayerBedOwnershipFaction();
+
+                // Remove from courting/engagement factions
+                if (askedFaction) Utils::RemoveFromFaction(actor, askedFaction);
+                if (courtingFaction) Utils::RemoveFromFaction(actor, courtingFaction);
+
+                // Remove from hireling potential
+                if (hirelingFaction) Utils::RemoveFromFaction(actor, hirelingFaction);
+
+                // Add to marriage-related factions
+                if (marriedFaction) Utils::AddToFaction(actor, marriedFaction, 0);
+                if (playerFaction) Utils::AddToFaction(actor, playerFaction, 0);
+                if (bedOwnershipFaction) Utils::AddToFaction(actor, bedOwnershipFaction, 0);
+
+                MARAS_LOG_DEBUG("Added NPC {:08X} to married factions", npcFormID);
+                break;
+            }
+
+            case RelationshipStatus::Divorced: {
+                auto marriedFaction = cache.GetMarriedFaction();
+                auto playerFaction = cache.GetPlayerFaction();
+                auto bedOwnershipFaction = cache.GetPlayerBedOwnershipFaction();
+
+                if (marriedFaction) Utils::RemoveFromFaction(actor, marriedFaction);
+                if (playerFaction) Utils::RemoveFromFaction(actor, playerFaction);
+                if (bedOwnershipFaction) Utils::RemoveFromFaction(actor, bedOwnershipFaction);
+
+                MARAS_LOG_DEBUG("Removed NPC {:08X} from married factions", npcFormID);
+                break;
+            }
+
+            case RelationshipStatus::Jilted: {
+                auto askedFaction = cache.GetMarriageAskedFaction();
+                auto courtingFaction = cache.GetCourtingFaction();
+
+                if (askedFaction) Utils::RemoveFromFaction(actor, askedFaction);
+                if (courtingFaction) Utils::RemoveFromFaction(actor, courtingFaction);
+
+                MARAS_LOG_DEBUG("Removed NPC {:08X} from engagement factions", npcFormID);
+                break;
+            }
+
+            case RelationshipStatus::Deceased: {
+                // Deceased NPCs might need to remain in some factions, so no changes here
+                // but could be extended if needed
+                break;
+            }
+        }
+    }
+
+    // ========================================
+    // Attribute setters
+    // ========================================
+
+    bool NPCRelationshipManager::SetSocialClass(RE::FormID npcFormID, std::int8_t socialClass) {
+        if (socialClass < 0 || socialClass > static_cast<std::int8_t>(SocialClass::Rulers)) {
+            MARAS_LOG_WARN("SetSocialClass: invalid social class {} for {:08X}", socialClass, npcFormID);
+            return false;
+        }
+
+        // Ensure NPC is registered so we have storage for it
+        if (!EnsureRegistered(npcFormID)) return false;
+
+        auto& data = npcData[npcFormID];
+        data.socialClass = static_cast<SocialClass>(socialClass);
+
+        // Update faction membership for social class
+        AddToSocialClassFaction(npcFormID, socialClass);
+
+        MARAS_LOG_INFO("Set social class for {:08X} to {}", npcFormID, Utils::SocialClassToString(data.socialClass));
+        return true;
+    }
+
+    bool NPCRelationshipManager::SetSkillType(RE::FormID npcFormID, std::int8_t skillType) {
+        if (skillType < 0 || skillType > static_cast<std::int8_t>(SkillType::Orator)) {
+            MARAS_LOG_WARN("SetSkillType: invalid skill type {} for {:08X}", skillType, npcFormID);
+            return false;
+        }
+
+        if (!EnsureRegistered(npcFormID)) return false;
+
+        auto& data = npcData[npcFormID];
+        data.skillType = static_cast<SkillType>(skillType);
+
+        // Update faction membership for skill type
+        AddToSkillTypeFaction(npcFormID, skillType);
+
+        MARAS_LOG_INFO("Set skill type for {:08X} to {}", npcFormID, Utils::SkillTypeToString(data.skillType));
+        return true;
+    }
+
+    bool NPCRelationshipManager::SetTemperament(RE::FormID npcFormID, std::int8_t temperament) {
+        if (temperament < 0 || temperament > static_cast<std::int8_t>(Temperament::Independent)) {
+            MARAS_LOG_WARN("SetTemperament: invalid temperament {} for {:08X}", temperament, npcFormID);
+            return false;
+        }
+
+        if (!EnsureRegistered(npcFormID)) return false;
+
+        auto& data = npcData[npcFormID];
+        data.temperament = static_cast<Temperament>(temperament);
+
+        // Update faction membership for temperament
+        AddToTemperamentFaction(npcFormID, temperament);
+
+        MARAS_LOG_INFO("Set temperament for {:08X} to {}", npcFormID, Utils::TemperamentToString(data.temperament));
+        return true;
+    }
+
+    // Small DRY helper
+    bool NPCRelationshipManager::EnsureRegistered(RE::FormID npcFormID) {
+        if (IsRegistered(npcFormID)) {
+            return true;
+        }
+        MARAS_LOG_WARN("NPC {:08X} is not registered - attempting to register as candidate", npcFormID);
+        if (!RegisterAsCandidate(npcFormID)) {
+            MARAS_LOG_WARN("Failed to auto-register NPC {:08X}", npcFormID);
+            return false;
+        }
+        return true;
     }
 
 }  // namespace MARAS

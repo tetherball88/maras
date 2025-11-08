@@ -41,11 +41,9 @@ ReferenceAlias Property Alias_OldScrollContainer Auto
 Function Fragment_18()
 ;BEGIN CODE
     ; stage 50
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     player.RemoveItem(Alias_OldScroll.GetReference())
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_QuestEnablePolygamy:Give scroll for translation")
-    endif
+    TTM_Debug.trace("TTM_QuestEnablePolygamy:Give scroll for translation")
     ; todo make 24 hours after development
     self.RegisterForUpdateGameTime(24)
     self.SetObjectiveCompleted(40)
@@ -60,11 +58,9 @@ Function Fragment_24()
     ; stage 55
     ObjectReference translatedScroll = Alias_OldScrollTranslated.GetReference()
     translatedScroll.Enable()
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     player.AddItem(translatedScroll)
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_QuestEnablePolygamy:Player gets translated scroll")
-    endif
+    TTM_Debug.trace("TTM_QuestEnablePolygamy:Player gets translated scroll")
     self.SetObjectiveCompleted(52)
     self.SetObjectiveDisplayed(55)
 ;END CODE
@@ -95,11 +91,9 @@ EndFunction
 Function Fragment_20()
 ;BEGIN CODE
     ; stage 70
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     player.RemoveItem(Alias_OldScrollTranslated.GetReference())
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_QuestEnablePolygamy:Player gives away translated scroll")
-    endif
+    TTM_Debug.trace("TTM_QuestEnablePolygamy:Player gives away translated scroll")
     self.SetObjectiveCompleted(60)
     self.SetObjectiveDisplayed(70)
 ;END CODE
@@ -121,9 +115,7 @@ Function Fragment_15()
 ;BEGIN CODE
     ; stage 20
     Alias_OldScroll.GetReference().Enable()
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_QuestEnablePolygamy:Scroll appears in chest")
-    endif
+    TTM_Debug.trace("TTM_QuestEnablePolygamy:Scroll appears in chest")
     self.SetObjectiveCompleted(10)
     self.SetObjectiveDisplayed(20)
 ;END CODE
@@ -175,14 +167,12 @@ Function Fragment_21()
     ; stage 80
     self.SetObjectiveCompleted(70)
     self.CompleteAllObjectives()
-    Actor player = TTM_JData.GetPlayer()
-    Faction married = TTM_JData.GetMarriedFaction()
+    Actor player = TTM_Data.GetPlayer()
+    Faction married = TTM_Data.GetMarriedFaction()
     if(player.IsInFaction(married))
         player.RemoveFromFaction(married)
     endif
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_QuestEnablePolygamy:Removes player from married faction so player can re-marry")
-    endif
+    TTM_Debug.trace("TTM_QuestEnablePolygamy:Removes player from married faction so player can re-marry")
     self.CompleteQuest()
 ;END CODE
 EndFunction
@@ -194,8 +184,6 @@ Event OnUpdateGameTime()
 	if(GetStage() == 50)
 		SetStage(52)
 		Self.UnregisterForUpdateGameTime()
-        if(TTM_Debug.IsTrace())
-            TTM_Debug.trace("TTM_QuestEnablePolygamy:Player waited for translation")
-        endif
+        TTM_Debug.trace("TTM_QuestEnablePolygamy:Player waited for translation")
 	endif
 EndEvent

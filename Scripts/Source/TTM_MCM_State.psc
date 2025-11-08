@@ -17,11 +17,10 @@ scriptname TTM_MCM_State
 
 
 Function _SetMcmInt(string propName, int value = 0) global
-    TTM_JMethods.SetIntValue(none, "MCMState." + propName, value)
-    TTM_JMethods.ExportStorage()
+    StorageUtil.SetIntValue(none, "MCMState." + propName, value)
 EndFunction
 int Function _GetMcmInt(string propName, int default = 0) global
-    return TTM_JMethods.GetIntValue(none, "MCMState." + propName, default)
+    return StorageUtil.GetIntValue(none, "MCMState." + propName, default)
 EndFunction
 
 Function _SetMcmBool(string propName, bool flag = true) global
@@ -36,50 +35,57 @@ bool Function _GetMcmBool(string propName) global
 EndFunction
 
 Function SetCurrentPage(string page) global
-    TTM_JMethods.SetStringValue(none, "MCMState.currentPage", page)
+    StorageUtil.SetStringValue(none, "MCMState.currentPage", page)
 EndFunction
 
 string Function GetCurrentPage() global
-    return TTM_JMethods.GetStringValue(none, "MCMState.currentPage", "Explore")
+    return StorageUtil.GetStringValue(none, "MCMState.currentPage", "Explore")
 EndFunction
 
 Function AddNpcOption(int id, Actor npc) global
-    TTM_JMethods.SetFormValue(none, "MCMState.npcs." + id, npc)
-    TTM_JMethods.ExportStorage()
+    StorageUtil.SetFormValue(none, "MCMState.npcs." + id, npc)
 EndFunction
 
 Actor Function GetNpcOption(int id) global
-    return TTM_JMethods.GetFormValue(none, "MCMState.npcs." + id) as Actor
+    return StorageUtil.GetFormValue(none, "MCMState.npcs." + id) as Actor
 EndFunction
 
 Function SetSelectedNpc(Actor npc) global
-    TTM_JMethods.SetFormValue(none, "MCMState.selectedNpc", npc)
+    StorageUtil.SetFormValue(none, "MCMState.selectedNpc", npc)
 EndFunction
 
 Actor Function GetSelectedNpc() global
-    return TTM_JMethods.GetFormValue(none, "MCMState.selectedNpc") as Actor
+    return StorageUtil.GetFormValue(none, "MCMState.selectedNpc") as Actor
 EndFunction
 
 Function SetSearchValueNpc(string value) global
-    TTM_JMethods.SetStringValue(none, "MCMState.searchValue", value)
+    StorageUtil.SetStringValue(none, "MCMState.searchValue", value)
 EndFunction
 
 string Function GetSearchValueNpc() global
-    return TTM_JMethods.GetStringValue(none, "MCMState.searchValue", "")
+    return StorageUtil.GetStringValue(none, "MCMState.searchValue", "")
 EndFunction
 
 Function Clean() global
-    TTM_JMethods.ClearValue(none, "MCMState")
+    StorageUtil.ClearAllPrefix("MCMState")
 EndFunction
 
 Function CleanSelectedNpc() global
-    TTM_JMethods.SetFormValue(none, "MCMState.selectedNpc", none)
+    StorageUtil.SetFormValue(none, "MCMState.selectedNpc", none)
 EndFunction
 
-Function AddNpcTypeOption(int id, string type) global
-    TTM_JMethods.StringListSet(none, "MCMState.npcTypesOptions", id, type)
+Function AddNpcSkillTypeOption(int id, string type) global
+    StorageUtil.SetStringValue(none, "MCMState.npcSkillTypesOptions"+id, type)
 EndFunction
 
-string Function GetNpcTypeOption(int id) global
-    return TTM_JMethods.StringListGet(none, "MCMState.npcTypesOptions", id)
+string Function GetNpcSkillTypeOption(int id) global
+    return StorageUtil.GetStringValue(none, "MCMState.npcSkillTypesOptions"+id, "")
+EndFunction
+
+Function AddNpcSocialTypeOption(int id, string type) global
+    StorageUtil.SetStringValue(none, "MCMState.npcSocialTypesOptions"+id, type)
+EndFunction
+
+string Function GetNpcSocialTypeOption(int id) global
+    return StorageUtil.GetStringValue(none, "MCMState.npcSocialTypesOptions"+id, "")
 EndFunction

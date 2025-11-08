@@ -1,10 +1,12 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "RE/Skyrim.h"
 #include "core/Serialization.h"
 #include "utils/Common.h"
 #include "utils/JsonOverrideLoader.h"
@@ -38,7 +40,9 @@ namespace MARAS {
         Married = 2,
         Divorced = 3,
         Jilted = 4,
-        Deceased = 5
+        Deceased = 5,
+        // Unknown is used as a default/absent value when no stored data exists
+        Unknown = 255
     };
 
     // Lightweight data structure for NPC information
@@ -101,17 +105,24 @@ namespace MARAS {
         void AddToBucket(RE::FormID npcFormID, RelationshipStatus status);
         void RemoveFromBucket(RE::FormID npcFormID, RelationshipStatus status);
 
+        // Centralized status-change helper to reduce duplication in Promote*/Demote methods
+        bool ChangeStatusCommon(RE::FormID npcFormID, RelationshipStatus status,
+                                const std::function<void(RE::FormID)>& postAction = nullptr);
+
         // Faction management helper
         void UpdateTrackedFactionRank(RE::FormID npcFormID, RelationshipStatus status);
 
         // Event sending helper
         void SendStatusChangedEvent(RE::FormID npcFormID, RelationshipStatus status);
 
-        // Type determination helper methods
-        SocialClass DetermineSocialClassByFaction(RE::FormID npcFormID) const;
-        SkillType DetermineSkillTypeByClass(RE::FormID npcFormID) const;
-        SkillType DetermineSkillTypeBySkills(RE::FormID npcFormID) const;
-        Temperament DetermineTemperamentByMatrix(RE::FormID npcFormID) const;
+        // Low-level faction add helper (adds a FormID actor to a faction with rank)
+        bool AddToFaction(RE::FormID npcFormID, RE::TESFaction* faction, std::int8_t rank);
+
+        // Ensure NPC is registered prior to mutating operations
+        bool EnsureRegistered(RE::FormID npcFormID);
+
+        // Recalculate and update game globals for love interests and spouse counts
+        void RecalculateAndUpdateGlobals();
 
     public:
         // Singleton access
@@ -122,10 +133,12 @@ namespace MARAS {
         bool UnregisterNPC(RE::FormID npcFormID);
 
         // Faction management methods
-        bool AddToFaction(RE::FormID npcFormID, RE::TESFaction* faction, std::int8_t rank);
         bool AddToSocialClassFaction(RE::FormID npcFormID, std::int8_t rank);
         bool AddToSkillTypeFaction(RE::FormID npcFormID, std::int8_t rank);
         bool AddToTemperamentFaction(RE::FormID npcFormID, std::int8_t rank);
+
+        // Manage faction membership based on relationship status
+        void ManageFactions(RE::FormID npcFormID, RelationshipStatus status);
 
         // Status checks
         bool IsRegistered(RE::FormID npcFormID) const;
@@ -139,7 +152,6 @@ namespace MARAS {
         // Status transitions
         bool PromoteToEngaged(RE::FormID npcFormID);
         bool PromoteToMarried(RE::FormID npcFormID);
-        bool DemoteToCandidate(RE::FormID npcFormID);  // From engaged
         bool PromoteToDivorced(RE::FormID npcFormID);  // From married
         bool PromoteToJilted(RE::FormID npcFormID);    // From engaged
         bool PromoteToDeceased(RE::FormID npcFormID);  // From any status
@@ -166,20 +178,18 @@ namespace MARAS {
         std::optional<RE::FormID> GetOriginalHome(RE::FormID npcFormID) const;
         std::optional<RE::FormID> GetCurrentHome(RE::FormID npcFormID) const;
 
-        // Date tracking
-        bool SetEngagementDate(RE::FormID npcFormID, uint32_t gameDay);
-        bool SetMarriageDate(RE::FormID npcFormID, uint32_t gameDay);
-        uint32_t GetEngagementDate(RE::FormID npcFormID) const;
-        uint32_t GetMarriageDate(RE::FormID npcFormID) const;
-
         // Type determination methods (with override support)
         SocialClass DetermineSocialClass(RE::FormID npcFormID);
         SkillType DetermineSkillType(RE::FormID npcFormID);
         Temperament DetermineTemperament(RE::FormID npcFormID);
 
+        // Methods to programmatically change attributes (also update factions/derived types)
+        bool SetSocialClass(RE::FormID npcFormID, std::int8_t socialClass);
+        bool SetSkillType(RE::FormID npcFormID, std::int8_t skillType);
+        bool SetTemperament(RE::FormID npcFormID, std::int8_t temperament);
+
         // Override management
         bool LoadOverridesFromFolder(const std::string& folderPath);
-        void ClearOverrides();
         bool HasSocialClassOverride(RE::FormID npcFormID) const;
         bool HasSkillTypeOverride(RE::FormID npcFormID) const;
         bool HasTemperamentOverride(RE::FormID npcFormID) const;

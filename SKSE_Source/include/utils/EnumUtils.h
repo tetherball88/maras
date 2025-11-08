@@ -93,12 +93,6 @@ namespace MARAS::Utils {
 
     // Utility functions
 
-    // Get current game day from Skyrim
-    GameDay GetCurrentGameDay();
-
-    // Check if an NPC is valid and loaded
-    bool IsValidNPC(FormID npcFormID);
-
     // Get NPC name for logging
     std::string GetNPCName(FormID npcFormID);
 

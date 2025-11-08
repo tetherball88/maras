@@ -69,24 +69,11 @@ namespace MARAS::Utils {
         return RelationshipStatus::Candidate;
     }
 
-    // Utility functions
-    GameDay GetCurrentGameDay() {
-        auto calendar = RE::Calendar::GetSingleton();
-        return calendar ? static_cast<GameDay>(calendar->GetDaysPassed()) : 0;
-    }
-
-    bool IsValidNPC(FormID npcFormID) {
-        auto form = RE::TESForm::LookupByID(npcFormID);
-        auto npc = form ? form->As<RE::TESNPC>() : nullptr;
-        return npc != nullptr;
-    }
-
     std::string GetNPCName(FormID npcFormID) {
-        auto form = RE::TESForm::LookupByID(npcFormID);
-        auto npc = form ? form->As<RE::TESNPC>() : nullptr;
+        auto form = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
 
-        if (npc && npc->GetName()) {
-            return std::string(npc->GetName());
+        if (form && form->GetDisplayFullName()) {
+            return std::string(form->GetDisplayFullName());
         }
 
         return fmt::format("NPC_{:08X}", npcFormID);

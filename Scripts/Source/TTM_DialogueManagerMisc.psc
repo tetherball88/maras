@@ -10,34 +10,29 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_DialogueManagerMisc:OnBegin:"+PromptKey+":useAI:"+UseAI)
-    endif
-
     if(PromptKey == "maras_enable_candidate")
-        if(!TTM_Utils.IsTracking(akSpeaker))
-            ; akSpeaker.AddToFaction(TTM_JData.GetTrackedNpcFaction())
-            TTM_ServiceRelationsFinder.ScanRelationships(akSpeaker)
-        endif
         MARAS.RegisterCandidate(akSpeaker)
-        ; TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "candidate")
     elseif(PromptKey == "maras_no_ai_engagement")
-        TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
+        MARAS.PromoteNPCToStatus(akSpeaker, "engaged")
     elseif(PromptKey == "maras_breakup_reconcile_accept")
-        TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "engaged")
+        MARAS.PromoteNPCToStatus(akSpeaker, "engaged")
     elseif(PromptKey == "maras_breakup")
-        if(TTM_Utils.IsFiance(akSpeaker))
-            TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "jilted")
-        elseif(TTM_Utils.IsSpouse(akSpeaker))
-            TTM_Utils.SendRelationshipChangeEvent(akSpeaker, "divorced")
+        if(MARAS.IsNPCStatus(akSpeaker, "engaged"))
+            MARAS.PromoteNPCToStatus(akSpeaker, "jilted")
+        elseif(MARAS.IsNPCStatus(akSpeaker, "married"))
+            MARAS.PromoteNPCToStatus(akSpeaker, "divorced")
+        endif
+    elseif(PromptKey == "maras_non_marriage_management")
+        if(!TTM_Data.GetHasSkyrimNet() && !MARAS.IsNPCStatus(akSpeaker, "married"))
+            TTM_Data.GetSetGameNoAIMarriageGlobal(akSpeaker)
         endif
     endif
 
     if(UseAI)
-        string prompt = TTM_JData.GetDialoguePrompt(PromptKey)
-        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\"}"
+        string prompt = TTM_Data.GetDialoguePrompt(PromptKey)
+        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_Data.GetPlayer()) + "\"}"
         if(prompt != "")
-            TTM_RequestLLMDialogue.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
+            TTM_Utils.RequestDialogue(prompt, values, akSpeaker, TTM_Data.GetPlayer())
         endif
     endif
 ;END CODE

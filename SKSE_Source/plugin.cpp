@@ -5,15 +5,43 @@
 
 #include "PCH.h"
 #include "core/AffectionService.h"
+#include "core/BonusesService.h"
+#include "core/HomeCellService.h"
+#include "core/LoggingService.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerHouseService.h"
+#include "core/PollingService.h"
 #include "core/Serialization.h"
+#include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
 
 using namespace SKSE;
 
 namespace {
+    // Event sink for OnUpdate to drive polling service
+    class UpdateEventSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent> {
+    public:
+        static UpdateEventSink* GetSingleton() {
+            static UpdateEventSink singleton;
+            return &singleton;
+        }
+
+        RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent*,
+                                              RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override {
+            // Called frequently enough to drive our polling service
+            MARAS::PollingService::GetSingleton().Update();
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+    private:
+        UpdateEventSink() = default;
+        UpdateEventSink(const UpdateEventSink&) = delete;
+        UpdateEventSink(UpdateEventSink&&) = delete;
+        UpdateEventSink& operator=(const UpdateEventSink&) = delete;
+        UpdateEventSink& operator=(UpdateEventSink&&) = delete;
+    };
+
     void SetupLogging() {
         auto logDir = SKSE::log::log_directory();
         if (!logDir) {
@@ -49,7 +77,7 @@ namespace {
     }
 
     void PrintToConsole(std::string_view message) {
-        SKSE::log::info("{}", message);
+        MARAS_LOG_INFO("{}", message);
         if (auto* console = RE::ConsoleLog::GetSingleton()) {
             console->Print("%s", message.data());
         }
@@ -61,48 +89,70 @@ namespace {
 
         if (!serialization->OpenRecord(MARAS::Serialization::kNPCRelationshipData,
                                        MARAS::Serialization::kDataVersion)) {
-            SKSE::log::error("Failed to open record for saving");
+            MARAS_LOG_ERROR("Failed to open record for saving");
             return;
         }
 
         if (!manager.Save(serialization)) {
-            SKSE::log::error("Failed to save NPC relationship data");
+            MARAS_LOG_ERROR("Failed to save NPC relationship data");
         } else {
-            SKSE::log::info("Successfully saved NPC relationship data");
+            MARAS_LOG_INFO("Successfully saved NPC relationship data");
         }
 
         // Save spouse hierarchy
         if (!serialization->OpenRecord(MARAS::Serialization::kSpouseHierarchyData,
                                        MARAS::Serialization::kDataVersion)) {
-            SKSE::log::error("Failed to open record for saving spouse hierarchy");
+            MARAS_LOG_ERROR("Failed to open record for saving spouse hierarchy");
             return;
         }
         if (!MARAS::SpouseHierarchyManager::GetSingleton().Save(serialization)) {
-            SKSE::log::error("Failed to save spouse hierarchy data");
+            MARAS_LOG_ERROR("Failed to save spouse hierarchy data");
         } else {
-            SKSE::log::info("Successfully saved spouse hierarchy data");
+            MARAS_LOG_INFO("Successfully saved spouse hierarchy data");
         }
 
         // Save affection data
         if (!serialization->OpenRecord(MARAS::Serialization::kAffectionData, MARAS::Serialization::kDataVersion)) {
-            SKSE::log::error("Failed to open record for saving affection data");
+            MARAS_LOG_ERROR("Failed to open record for saving affection data");
             return;
         }
         if (!MARAS::AffectionService::GetSingleton().Save(serialization)) {
-            SKSE::log::error("Failed to save affection data");
+            MARAS_LOG_ERROR("Failed to save affection data");
         } else {
-            SKSE::log::info("Successfully saved affection data");
+            MARAS_LOG_INFO("Successfully saved affection data");
         }
 
         // Save player house data
         if (!serialization->OpenRecord(MARAS::Serialization::kPlayerHouseData, MARAS::Serialization::kDataVersion)) {
-            SKSE::log::error("Failed to open record for saving player house data");
+            MARAS_LOG_ERROR("Failed to open record for saving player house data");
             return;
         }
         if (!MARAS::PlayerHouseService::GetSingleton().Save(serialization)) {
-            SKSE::log::error("Failed to save player house data");
+            MARAS_LOG_ERROR("Failed to save player house data");
         } else {
-            SKSE::log::info("Successfully saved player house data");
+            MARAS_LOG_INFO("Successfully saved player house data");
+        }
+
+        // Save spouse assets data
+        if (!serialization->OpenRecord(MARAS::Serialization::kSpouseAssetsData, MARAS::Serialization::kDataVersion)) {
+            MARAS_LOG_ERROR("Failed to open record for saving spouse assets data");
+            return;
+        }
+        if (!MARAS::SpouseAssetsService::GetSingleton().Save(serialization)) {
+            MARAS_LOG_ERROR("Failed to save spouse assets data");
+        } else {
+            MARAS_LOG_INFO("Successfully saved spouse assets data");
+        }
+
+        // Save plugin settings (log level / global plugin config)
+        if (!serialization->OpenRecord(MARAS::Serialization::kPluginSettingsData, MARAS::Serialization::kDataVersion)) {
+            MARAS_LOG_ERROR("Failed to open record for saving plugin settings");
+            return;
+        }
+        if (!MARAS::LoggingService::GetSingleton().Save(serialization)) {
+            MARAS_LOG_ERROR("Failed to save plugin settings (log level)");
+        } else {
+            MARAS_LOG_INFO("Successfully saved plugin settings");
         }
     }
 
@@ -113,51 +163,74 @@ namespace {
         while (serialization->GetNextRecordInfo(type, version, length)) {
             if (type == MARAS::Serialization::kNPCRelationshipData) {
                 if (version != MARAS::Serialization::kDataVersion) {
-                    SKSE::log::error("Invalid data version {} (expected {})", version,
-                                     MARAS::Serialization::kDataVersion);
+                    MARAS_LOG_ERROR("Invalid data version {} (expected {})", version,
+                                    MARAS::Serialization::kDataVersion);
                     continue;
                 }
 
                 if (!manager.Load(serialization)) {
-                    SKSE::log::error("Failed to load NPC relationship data");
+                    MARAS_LOG_ERROR("Failed to load NPC relationship data");
                 } else {
-                    SKSE::log::info("Successfully loaded NPC relationship data");
+                    MARAS_LOG_INFO("Successfully loaded NPC relationship data");
                 }
             } else if (type == MARAS::Serialization::kSpouseHierarchyData) {
                 if (version != MARAS::Serialization::kDataVersion) {
-                    SKSE::log::error("Invalid spouse hierarchy data version {} (expected {})", version,
-                                     MARAS::Serialization::kDataVersion);
+                    MARAS_LOG_ERROR("Invalid spouse hierarchy data version {} (expected {})", version,
+                                    MARAS::Serialization::kDataVersion);
                     continue;
                 }
 
                 if (!MARAS::SpouseHierarchyManager::GetSingleton().Load(serialization)) {
-                    SKSE::log::error("Failed to load spouse hierarchy data");
+                    MARAS_LOG_ERROR("Failed to load spouse hierarchy data");
                 } else {
-                    SKSE::log::info("Successfully loaded spouse hierarchy data");
+                    MARAS_LOG_INFO("Successfully loaded spouse hierarchy data");
                 }
             } else if (type == MARAS::Serialization::kAffectionData) {
                 if (version != MARAS::Serialization::kDataVersion) {
-                    SKSE::log::error("Invalid affection data version {} (expected {})", version,
-                                     MARAS::Serialization::kDataVersion);
+                    MARAS_LOG_ERROR("Invalid affection data version {} (expected {})", version,
+                                    MARAS::Serialization::kDataVersion);
                     continue;
                 }
 
                 if (!MARAS::AffectionService::GetSingleton().Load(serialization)) {
-                    SKSE::log::error("Failed to load affection data");
+                    MARAS_LOG_ERROR("Failed to load affection data");
                 } else {
-                    SKSE::log::info("Successfully loaded affection data");
+                    MARAS_LOG_INFO("Successfully loaded affection data");
                 }
             } else if (type == MARAS::Serialization::kPlayerHouseData) {
                 if (version != MARAS::Serialization::kDataVersion) {
-                    SKSE::log::error("Invalid player house data version {} (expected {})", version,
-                                     MARAS::Serialization::kDataVersion);
+                    MARAS_LOG_ERROR("Invalid player house data version {} (expected {})", version,
+                                    MARAS::Serialization::kDataVersion);
                     continue;
                 }
 
                 if (!MARAS::PlayerHouseService::GetSingleton().Load(serialization)) {
-                    SKSE::log::error("Failed to load player house data");
+                    MARAS_LOG_ERROR("Failed to load player house data");
                 } else {
-                    SKSE::log::info("Successfully loaded player house data");
+                    MARAS_LOG_INFO("Successfully loaded player house data");
+                }
+            } else if (type == MARAS::Serialization::kSpouseAssetsData) {
+                if (version != MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid spouse assets data version {} (expected {})", version,
+                                    MARAS::Serialization::kDataVersion);
+                    continue;
+                }
+
+                if (!MARAS::SpouseAssetsService::GetSingleton().Load(serialization)) {
+                    MARAS_LOG_ERROR("Failed to load spouse assets data");
+                } else {
+                    MARAS_LOG_INFO("Successfully loaded spouse assets data");
+                }
+            } else if (type == MARAS::Serialization::kPluginSettingsData) {
+                if (version != MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid plugin settings data version {} (expected {})", version,
+                                    MARAS::Serialization::kDataVersion);
+                    continue;
+                }
+                if (!MARAS::LoggingService::GetSingleton().Load(serialization)) {
+                    MARAS_LOG_ERROR("Failed to load plugin settings (log level)");
+                } else {
+                    MARAS_LOG_INFO("Successfully loaded plugin settings");
                 }
             }
         }
@@ -169,7 +242,9 @@ namespace {
         MARAS::SpouseHierarchyManager::GetSingleton().Revert();
         MARAS::AffectionService::GetSingleton().Revert();
         MARAS::PlayerHouseService::GetSingleton().Revert();
-        SKSE::log::info("Reverted NPC relationship data");
+        MARAS::SpouseAssetsService::GetSingleton().Revert();
+        MARAS::LoggingService::GetSingleton().Revert();
+        MARAS_LOG_INFO("Reverted NPC relationship data");
     }
 }
 
@@ -177,7 +252,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     SKSE::Init(skse);
 
     SetupLogging();
-    SKSE::log::info("MARAS plugin loading...");
+    MARAS_LOG_INFO("MARAS plugin loading...");
 
     // Register serialization callbacks
     if (const auto* serialization = SKSE::GetSerializationInterface()) {
@@ -185,9 +260,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
         serialization->SetSaveCallback(SaveCallback);
         serialization->SetLoadCallback(LoadCallback);
         serialization->SetRevertCallback(RevertCallback);
-        SKSE::log::info("Registered MARAS serialization callbacks");
+        MARAS_LOG_INFO("Registered MARAS serialization callbacks");
     } else {
-        SKSE::log::critical("Serialization interface unavailable.");
+        MARAS_LOG_ERROR("Serialization interface unavailable.");
         return false;
     }
 
@@ -195,16 +270,21 @@ SKSEPluginLoad(const LoadInterface* skse) {
         if (!messaging->RegisterListener([](SKSE::MessagingInterface::Message* message) {
                 switch (message->type) {
                     case SKSE::MessagingInterface::kPreLoadGame:
-                        SKSE::log::info("PreLoadGame...");
+                        MARAS_LOG_INFO("PreLoadGame...");
                         break;
 
                     case SKSE::MessagingInterface::kPostLoadGame:
                     case SKSE::MessagingInterface::kNewGame:
-                        SKSE::log::info("New game/Load...");
+                        MARAS_LOG_INFO("New game/Load...");
+                        // Load runtime-only bonuses.json each time a save is loaded or a new game starts
+                        MARAS::BonusesService::GetSingleton().LoadFromFile();
+
+                        // Initialize/reset polling service state to prevent false events from previous save
+                        MARAS::PollingService::GetSingleton().Initialize();
                         break;
 
                     case SKSE::MessagingInterface::kDataLoaded: {
-                        SKSE::log::info("Data loaded successfully.");
+                        MARAS_LOG_INFO("Data loaded successfully.");
 
                         // Initialize the NPC relationship manager
                         auto& manager = MARAS::NPCRelationshipManager::GetSingleton();
@@ -213,13 +293,25 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         std::filesystem::path overrideFolder = "Data/SKSE/Plugins/MARAS/spousesTypes";
                         if (manager.LoadOverridesFromFolder(overrideFolder.string())) {
                             auto stats = manager.GetLastOverrideLoadStats();
-                            SKSE::log::info("Loaded {} NPC type overrides from {} files", manager.GetOverrideCount(),
-                                            stats.successfulFiles);
+                            MARAS_LOG_INFO("Loaded {} NPC type overrides from {} files", manager.GetOverrideCount(),
+                                           stats.successfulFiles);
                         } else {
-                            SKSE::log::warn("Failed to load NPC type overrides from {}", overrideFolder.string());
+                            MARAS_LOG_WARN("Failed to load NPC type overrides from {}", overrideFolder.string());
                         }
 
                         manager.LogStatistics();
+
+                        // Build the home/cell index (doors, persistent actors, furniture owners)
+                        MARAS::HomeCellService::GetSingleton().BuildIndex();
+
+                        // Register update event sink for polling service
+                        auto ui = RE::UI::GetSingleton();
+                        if (ui) {
+                            ui->AddEventSink(UpdateEventSink::GetSingleton());
+                            MARAS_LOG_INFO("Registered polling service update event sink");
+                        } else {
+                            MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
+                        }
 
                         if (auto* console = RE::ConsoleLog::GetSingleton()) {
                             console->Print("MARAS: Ready");
@@ -231,22 +323,22 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         break;
                 }
             })) {
-            SKSE::log::critical("Failed to register messaging listener.");
+            MARAS_LOG_ERROR("Failed to register messaging listener.");
             return false;
         }
     } else {
-        SKSE::log::critical("Messaging interface unavailable.");
+        MARAS_LOG_ERROR("Messaging interface unavailable.");
         return false;
     }
 
     // Register Papyrus functions
     if (const auto* papyrus = SKSE::GetPapyrusInterface()) {
         if (!papyrus->Register(MARAS::PapyrusInterface::RegisterPapyrusFunctions)) {
-            SKSE::log::critical("Failed to register Papyrus functions.");
+            MARAS_LOG_ERROR("Failed to register Papyrus functions.");
             return false;
         }
     } else {
-        SKSE::log::critical("Papyrus interface unavailable.");
+        MARAS_LOG_ERROR("Papyrus interface unavailable.");
         return false;
     }
 

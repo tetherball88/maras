@@ -163,8 +163,11 @@ namespace MARAS::Utils {
     bool JsonOverrideLoader::ValidateOverrideData(const NPCOverrideData& data) {
         // Helper lambda for case-insensitive comparison
         auto caseInsensitiveEquals = [](std::string_view a, std::string_view b) {
-            return std::equal(a.begin(), a.end(), b.begin(), b.end(),
-                              [](char a, char b) { return std::tolower(a) == std::tolower(b); });
+            return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](char ca, char cb) {
+                unsigned char ua = static_cast<unsigned char>(ca);
+                unsigned char ub = static_cast<unsigned char>(cb);
+                return std::tolower(ua) == std::tolower(ub);
+            });
         };
 
         // Validate social class

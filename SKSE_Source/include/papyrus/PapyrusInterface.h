@@ -12,7 +12,7 @@ namespace MARAS::PapyrusInterface {
     bool UnregisterNPC(RE::StaticFunctionTag*, RE::Actor* npc);
 
     // Consolidated faction management - supports both enum and string type
-    bool AddToFaction(RE::StaticFunctionTag*, RE::Actor* npc, std::string factionType, std::int32_t rank);
+    bool SetNpcCharacteristics(RE::StaticFunctionTag*, RE::Actor* npc, std::string factionType, std::int32_t rank);
 
     // Consolidated status checks - supports both enum and string type
     bool IsNPCStatus(RE::StaticFunctionTag*, RE::Actor* npc, std::string statusType);
@@ -26,6 +26,9 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::Actor*> GetNPCsByStatus(RE::StaticFunctionTag*, std::string statusType);
     std::vector<RE::Actor*> GetNPCsByStatusEnum(RE::StaticFunctionTag*, std::int32_t statusEnum);
 
+    // Returns currently-detected teammates (actors following/teammates of the player)
+    std::vector<RE::Actor*> GetCurrentTeammates(RE::StaticFunctionTag*);
+
     // Consolidated statistics - supports both enum and string type
     int GetStatusCount(RE::StaticFunctionTag*, std::string statusType);
     int GetStatusCountByEnum(RE::StaticFunctionTag*, std::int32_t statusEnum);
@@ -33,6 +36,8 @@ namespace MARAS::PapyrusInterface {
     // Debug functions
     void LogNPCStatistics(RE::StaticFunctionTag*);
     void LogNPCDetails(RE::StaticFunctionTag*, RE::Actor* npc);
+    void SetLogLevel(RE::StaticFunctionTag*, std::int32_t logLevel);
+    std::int32_t GetLogLevel(RE::StaticFunctionTag*);
 
     // Spouse hierarchy bindings
     bool SetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t rank);
@@ -43,6 +48,15 @@ namespace MARAS::PapyrusInterface {
     std::vector<float> GetFollowersMultipliers(RE::StaticFunctionTag*, std::vector<RE::Actor*> followers);
     std::vector<float> GetPermanentMultipliers(RE::StaticFunctionTag*);
 
+    // Bonuses JSON runtime accessors
+    int GetBonusCount(RE::StaticFunctionTag*, std::string type);
+    RE::BGSPerk* GetBonusPerk(RE::StaticFunctionTag*, std::string type, int index = 0);
+    int GetBonusEffectIndex(RE::StaticFunctionTag*, std::string type, int index = 0);
+    float GetBonusPerkValue(RE::StaticFunctionTag*, std::string type, int index = 0);
+    std::string GetBonusPerkType(RE::StaticFunctionTag*, std::string type, int index = 0);
+    std::string GetBonusPerkUnit(RE::StaticFunctionTag*, std::string type, int index = 0);
+    std::string GetBonusPerkDescription(RE::StaticFunctionTag*, std::string type, int index = 0);
+
     // Affection system bindings
     void AddAffection(RE::StaticFunctionTag*, RE::Actor* npc, float amount, std::string type);
     float GetAffection(RE::StaticFunctionTag*, RE::Actor* npc, std::string type);
@@ -52,22 +66,35 @@ namespace MARAS::PapyrusInterface {
     void ApplyDailyAffection(RE::StaticFunctionTag*);
 
     // Player house papyrus bindings
-    bool RegisterPlayerHouseCell(RE::StaticFunctionTag*, RE::BGSLocation* loc, RE::TESBoundObject* homeMarker);
+    bool RegisterPlayerHouseCell(RE::StaticFunctionTag*, RE::BGSLocation* loc, RE::TESObjectREFR* homeMarker);
     std::vector<RE::BGSLocation*> GetAllPlayerHouses(RE::StaticFunctionTag*);
     std::vector<std::string> GetAllPlayerHousesNames(RE::StaticFunctionTag*);
     bool RegisterTenantInPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse, RE::BGSLocation* playerHouse);
     bool RemoveTenantFromPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse);
     std::vector<RE::Actor*> GetPlayerHouseTenants(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse);
-    RE::TESBoundObject* GetHouseMarker(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse);
+    RE::TESObjectREFR* GetHouseMarker(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse);
     RE::BGSLocation* GetTenantHouse(RE::StaticFunctionTag*, RE::Actor* npc);
     int CountPlayerHouses(RE::StaticFunctionTag*);
+
+    // Home cell helpers
+    RE::TESObjectCELL* GetNpcOriginalHouse(RE::StaticFunctionTag*, RE::Actor* npc);
+    std::vector<RE::TESObjectREFR*> GetNpcBeds(RE::StaticFunctionTag*, RE::Actor* npc);
+    RE::TESObjectREFR* GetNpcOriginalHouseCenterMarker(RE::StaticFunctionTag*, RE::Actor* npc);
 
     // Marriage difficulty calculation
     float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
                                          float mostGold, float housesOwned, float horsesOwned, float questsCompleted,
-                                         float dungeonsCleared, float dragonSoulsCollected);
+                                         float dungeonsCleared, float dragonSoulsCollected, bool playerKiller);
 
     // Registration function for SKSE
     bool RegisterPapyrusFunctions(RE::BSScript::IVirtualMachine* vm);
+
+    // NPC Type and Status Queries
+    std::string GetNpcStatusName(RE::StaticFunctionTag*, RE::Actor* npc);
+    std::int32_t GetNpcStatusEnum(RE::StaticFunctionTag*, RE::Actor* npc);
+    std::vector<std::string> GetNpcTypes(RE::StaticFunctionTag*, std::string type);
+    std::int32_t GetNpcTypeEnum(RE::StaticFunctionTag*, std::string type, std::string name);
+    std::int32_t GetNpcCurrentTypeEnum(RE::StaticFunctionTag*, RE::Actor* npc, std::string type);
+    std::string GetNpcCurrentTypeName(RE::StaticFunctionTag*, RE::Actor* npc, std::string type);
 
 }  // namespace MARAS::PapyrusInterface

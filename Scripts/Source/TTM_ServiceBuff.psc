@@ -13,7 +13,6 @@ Scriptname TTM_ServiceBuff
   Runs all maintenance functions: imports data and recalculates all multipliers.
 /;
 Function Maintenance() global
-    TTM_JMethods.ImportDataFromFile("bonuses", "Data/SKSE/Plugins/MARAS/bonuses.json")
     CalculateFollowerMultipliers()
     CalculatePermanentMultipliers()
 EndFunction
@@ -22,7 +21,7 @@ EndFunction
   Calculates and applies follower-based multipliers to player bonuses.
 /;
 Function CalculateFollowerMultipliers() global
-    string[] types = TTM_Utils.GetSpouseSkillTypeByIndexes()
+    string[] types = MARAS.GetNpcTypes("skillType")
     float[] multipliers = GetFollowersMultipliers()
     int i = 0
 
@@ -36,8 +35,8 @@ EndFunction
   Calculates and applies permanent (spouse) multipliers to player bonuses.
 /;
 Function CalculatePermanentMultipliers() global
-    string[] types = TTM_Utils.GetSpouseSocialTypeByIndexes()
-    float[] multipliers = GetPermanentMultipliers()
+    string[] types = MARAS.GetNpcTypes("socialClass")
+    float[] multipliers = MARAS.GetPermanentMultipliers()
 
     int i = 0
 
@@ -51,10 +50,13 @@ EndFunction
   Updates all bonus perks of a given type with the provided multiplier.
 /;
 Function UpdateBonus(string type, float multiplier) global
-    int count = GetBonusCount(type)
+    int count = MARAS.GetBonusCount(type)
     int i = 0
 
+    Trace("UpdateBonus:"+type+":"+multiplier+":"+count)
+
     while(i < count)
+
         UpdatePerk(type, i, multiplier)
         i += 1
     endwhile
@@ -64,13 +66,14 @@ EndFunction
   Updates a single perk or spell effect for the player based on the bonus type and multiplier.
 /;
 Function UpdatePerk(string type, int index, float multiplier) global
-    Actor PlayerRef = TTM_JData.GetPlayer()
-    Perk bonusPerk = GetBonusPerk(type, index)
-    int bonusPerkEffIndex = GetBonusEffectIndex(type, index)
-    string bonusType = GetBonusPerkType(type, index)
-    float bonusValue = GetBonusPerkValue(type, index)
+    Actor PlayerRef = TTM_Data.GetPlayer()
+    Perk bonusPerk = MARAS.GetBonusPerk(type, index)
+    int bonusPerkEffIndex = MARAS.GetBonusEffectIndex(type, index)
+    string bonusType = MARAS.GetBonusPerkType(type, index)
+    float bonusValue = MARAS.GetBonusPerkValue(type, index)
     float newVal = 0
     float oldVal = 0
+    Trace("UpdatePerk:"+type+":"+index+":"+bonusPerk+":"+bonusType+":"+bonusValue+":"+multiplier)
     if(bonusType == "spell")
         Spell bonusSpell = bonusPerk.GetNthEntrySpell(bonusPerkEffIndex)
         newVal = bonusValue * multiplier
@@ -127,10 +130,10 @@ EndFunction
   Returns a string describing the follower buff for a spouse.
 /;
 string Function GetSpouseFollowerBuffs(Actor spouse) global
-    string skillType = TTM_Utils.GetSpouseSkillType(spouse)
-    string description = GetBonusPerkDescription(skillType)
-    float value = GetBonusPerkValue(skillType)
-    string unit = GetBonusPerkUnit(skillType)
+    string skillType = MARAS.GetNpcCurrentTypeName(spouse, "skillType")
+    string description = MARAS.GetBonusPerkDescription(skillType)
+    float value = MARAS.GetBonusPerkValue(skillType)
+    string unit = MARAS.GetBonusPerkUnit(skillType)
 
     return description + " " + value + " " + unit
 EndFunction
@@ -139,10 +142,10 @@ EndFunction
   Returns a string describing the permanent buff for a spouse.
 /;
 string Function GetSpousePermanentBuffs(Actor spouse) global
-    string socialClass = TTM_Utils.GetSpouseSocialClass(spouse)
-    string description = GetBonusPerkDescription(socialClass)
-    float value = GetBonusPerkValue(socialClass)
-    string unit = GetBonusPerkUnit(socialClass)
+    string socialClass = MARAS.GetNpcCurrentTypeName(spouse, "socialClass")
+    string description = MARAS.GetBonusPerkDescription(socialClass)
+    float value = MARAS.GetBonusPerkValue(socialClass)
+    string unit = MARAS.GetBonusPerkUnit(socialClass)
 
     return description + " " + value + " " + unit
 EndFunction
@@ -151,70 +154,10 @@ EndFunction
   Calculates follower multipliers for each skill type based on current followers.
 /;
 float[] Function GetFollowersMultipliers() global
-    Actor[] followers = PO3_SKSEFunctions.GetPlayerFollowers()
+    Actor[] followers = MARAS.GetCurrentTeammates()
     return MARAS.GetFollowersMultipliers(followers)
 EndFunction
 
-;/
-  Calculates permanent multipliers for each social type based on all spouses.
-/;
-float[] Function GetPermanentMultipliers() global
-    return MARAS.GetPermanentMultipliers()
-EndFunction
-
-;/ ==============================
-   SECTION: JContainers functions
-============================== /;
-
-;/
-  Returns the number of bonus entries for a given type.
-/;
-int Function GetBonusCount(string type) global
-    return TTM_JMethods.CountStaticData("bonuses." + type + "")
-EndFunction
-
-;/
-  Returns the Perk form for a bonus entry.
-/;
-Perk Function GetBonusPerk(string type, int index = 0) global
-    return TTM_JMethods.GetFormStaticData("bonuses." + type + "[" + index + "].perk") as Perk
-EndFunction
-
-;/
-  Returns the effect index for a bonus entry.
-/;
-int Function GetBonusEffectIndex(string type, int index = 0) global
-    return TTM_JMethods.GetIntStaticData("bonuses." + type + "[" + index + "].effectIndex")
-EndFunction
-
-;/
-  Returns the value for a bonus entry.
-/;
-float Function GetBonusPerkValue(string type, int index = 0) global
-    return TTM_JMethods.GetFltStaticData("bonuses." + type + "[" + index + "].value")
-EndFunction
-
-;/
-  Returns the type string for a bonus entry (e.g., "spell", "multiply", "add").
-/;
-string Function GetBonusPerkType(string type, int index = 0) global
-    return TTM_JMethods.GetStrStaticData("bonuses." + type + "[" + index + "].type")
-EndFunction
-
-;/
-  Returns the unit string for a bonus entry.
-/;
-string Function GetBonusPerkUnit(string type, int index = 0) global
-    return TTM_JMethods.GetStrStaticData("bonuses." + type + "[" + index + "].unit")
-EndFunction
-
-;/
-  Returns the description string for a bonus entry.
-/;
-string Function GetBonusPerkDescription(string type, int index = 0) global
-    return TTM_JMethods.GetStrStaticData("bonuses." + type + "[" + index + "].description")
-EndFunction
-
 Function Trace(string msg) global
-    ; TTM_Debug.trace("TTM_ServiceBuff:" + msg)
+    TTM_Debug.Trace("TTM_ServiceBuff:" + msg)
 EndFunction

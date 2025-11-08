@@ -1,7 +1,6 @@
 scriptname TTM_MCM_NpcPage
 
 Function RenderPage(TTM_MCM mcm) global
-    TTM_JMethods.ExportStorage()
     CleanMcmOids(mcm)
     mcm.SetCursorFillMode(mcm.TOP_TO_BOTTOM)
     RenderLeftColumn(mcm)
@@ -24,11 +23,11 @@ EndFunction
 Function RenderLeftColumn(TTM_MCM mcm) global
     Actor npc = TTM_MCM_State.GetSelectedNpc()
     string npcName = TTM_Utils.GetActorName(npc)
-    string skillType = TTM_Utils.GetSpouseSkillType(npc)
-    string socialClass = TTM_Utils.GetSpouseSocialClass(npc)
-    string temperament = TTM_Utils.GetSpouseTemperament(npc)
+    string skillType = MARAS.GetNpcCurrentTypeName(npc, "skillType")
+    string socialClass = MARAS.GetNpcCurrentTypeName(npc, "socialClass")
+    string temperament = MARAS.GetNpcCurrentTypeName(npc, "temperament")
     int count = MARAS.GetStatusCount("married")
-    string status = TTM_Utils.GetRelationshipStatus(npc)
+    string status = MARAS.GetNpcStatusName(npc)
     bool isDeceased = MARAS.IsNPCStatus(npc, "deceased")
     string deceased = ""
 
@@ -36,11 +35,11 @@ Function RenderLeftColumn(TTM_MCM mcm) global
         deceased = "(deceased)"
     endif
 
-    bool isCandidate = status == "candidate"
-    bool isFiance = status == "engaged"
-    bool isSpouse = status == "married"
-    bool isJilted = status == "jilted"
-    bool isDivorced = status == "divorced"
+    bool isCandidate = MARAS.IsNPCStatus(npc, "candidate")
+    bool isFiance = MARAS.IsNPCStatus(npc, "engaged")
+    bool isSpouse = MARAS.IsNPCStatus(npc, "married")
+    bool isJilted = MARAS.IsNPCStatus(npc, "jilted")
+    bool isDivorced = MARAS.IsNPCStatus(npc, "divorced")
 
     mcm.oid_ReturnToExplore = mcm.AddTextOption("", "Return to explore")
     mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s data")
@@ -63,7 +62,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     endif
 
     if(!isFiance && !isSpouse)
-        float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(npc)
+        float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc)
         mcm.oid_CandidateChance = mcm.AddTextOption("Your chances to get engaged: ", 100 * chance)
     endif
 
@@ -84,11 +83,11 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     endif
 
     if(isSpouse)
-        bool spouseShareHome = npc.IsInFaction(TTM_JData.GetSpouseSharedHouseFaction())
-        if(npc.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
+        bool spouseShareHome = npc.IsInFaction(TTM_Data.GetSpouseSharedHouseFaction())
+        if(npc.IsInFaction(TTM_Data.GetSpouseNoInitialHouseFaction()))
             mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't have any place they can call home.", "")
         else
-            if(TTM_JData.GetMarasCheckSpouseHomeQuest().IsRunning() && !spouseShareHome)
+            if(TTM_Data.GetMarasCheckSpouseHomeQuest().IsRunning() && !spouseShareHome)
                 mcm.AddTextOption("You can't start share home at this moment because of another share home quest running.", "")
             else
                 if(!isDeceased)
@@ -104,7 +103,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
 EndFunction
 
 int Function ShareHomeIsAvailable(Actor spouse) global
-    if(TTM_JData.GetMarasCheckSpouseHomeQuest().IsRunning() || spouse.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
+    if(TTM_Data.GetMarasCheckSpouseHomeQuest().IsRunning() || spouse.IsInFaction(TTM_Data.GetSpouseNoInitialHouseFaction()))
         return 1
     endif
     return 0
@@ -112,33 +111,36 @@ EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
     Actor npc = TTM_MCM_State.GetSelectedNpc()
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s original house they share with you.")
-    Form[] cells = TTM_ServiceSpouseAssets.GetSpouseCells(npc)
+    if(!MARAS.IsNPCStatus(npc, "married"))
+        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " is not married to you and can't share anything with you.", "")
+        return
+    endif
+    string npcName = TTM_Utils.GetActorName(npc)
+    mcm.AddHeaderOption(npcName + "'s property:")
+    Cell npcOriginalHouse = MARAS.GetNpcOriginalHouse(npc)
+    if(!npcOriginalHouse)
+        mcm.AddTextOption(npcName + " doesn't have their own home.", "")
+        return
+    endif
+    bool isShared = MARAS.IsHouseSharedWithPlayer(npcOriginalHouse)
+    string sharedString
+    if(isShared)
+        sharedString = " (shared with you)"
+    else
+        sharedString = " (not shared with you)"
+    endif
+    mcm.AddTextOption(npcOriginalHouse.GetName() + sharedString, "")
+
+    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s beds:")
+    ObjectReference[] beds = MARAS.GetNpcBeds(npc)
+    if(beds.Length == 0)
+        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't have any personal bed.", "")
+        return
+    endif
+
     int i = 0
-
-    if(cells.Length == 0)
-        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't share any property with you.", "")
-    endif
-
-    while(i < cells.Length)
-        Cell home = cells[i] as Cell
-        mcm.AddTextOption(home.GetName(), "")
-
-        i += 1
-    endwhile
-
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s owns furniture and share it with you")
-    Form[] objects = TTM_ServiceSpouseAssets.GetSpouseObjs(npc)
-    i = 0
-
-    if(objects.Length == 0)
-        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't share any furniture with you.", "")
-    endif
-
-    while(i < objects.Length)
-        ObjectReference obj = objects[i] as ObjectReference
-        mcm.AddTextOption(obj.GetBaseObject().GetName(), "")
-
+    while(i < beds.Length)
+        mcm.AddTextOption(beds[i].GetName() + sharedString, "")
         i += 1
     endwhile
 EndFunction
@@ -152,8 +154,8 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
         if(ShareHomeIsAvailable(npc) == 1)
             return
         endif
-        if(npc.IsInFaction(TTM_JData.GetSpouseSharedHouseFaction()))
-            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
+        if(npc.IsInFaction(TTM_Data.GetSpouseSharedHouseFaction()))
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(npc)
         else
             TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(npc)
         endif
@@ -188,7 +190,7 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         endif
         mcm.SetInfoText(rankText)
     elseif(option == mcm.oid_CandidateChance)
-        float chance = TTM_MarriageDifficulty.calcMarriageSuccessChance(npc)
+        float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc)
         string tooltip = TTM_Utils.GetActorName(npc)
         if(chance >= 0.95)
             tooltip += " accepts as though it were fated—unquestioning and unwise"
@@ -210,9 +212,9 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText(TTM_Utils.GetActorName(npc) + " will spend time in assigned player's house.\nBe careful with characters who should be somewhere by quest.\n You always can unassign here or throug dialogue.")
     elseif(option == mcm.oid_NpcPageShareTheirHome)
         string tooltip = "By enabling you will start quest to check " + TTM_Utils.GetActorName(npc) + "'s own home, and you will get permanent access to it.\nBy disabling you will loose access to their home.\n Close menu to start quest."
-        if(TTM_JData.GetMarasCheckSpouseHomeQuest().IsRunning())
+        if(TTM_Data.GetMarasCheckSpouseHomeQuest().IsRunning())
             tooltip = "You are already trying to get access to spouse's home, check your journal and finish it before you can toggle this checkbox.\nClicking on this option won't do anything."
-        elseif(npc.IsInFaction(TTM_JData.GetSpouseNoInitialHouseFaction()))
+        elseif(npc.IsInFaction(TTM_Data.GetSpouseNoInitialHouseFaction()))
             tooltip = TTM_Utils.GetActorName(npc) + " doesn't have their own home.\nClicking on this option won't do anything."
         endif
         mcm.SetInfoText(tooltip)
@@ -236,20 +238,21 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
     int start
     int default
     if(option == mcm.oid_NpcPageSocialClass)
-        options = TTM_Utils.GetSpouseSocialTypeByIndexes()
-        start = TTM_Utils.GetSpouseSocialIndexByType(TTM_Utils.GetSpouseSocialClass(spouse))
-        default = TTM_Utils.GetSpouseSocialIndexByType(TTM_ServiceSpouseTypes.DetermineSocialClass(spouse))
+        options = MARAS.GetNpcTypes("socialClass")
+        start = MARAS.GetNpcCurrentTypeEnum(spouse, "socialClass")
+        default = MARAS.DetermineSocialClass(spouse)
     elseif(option == mcm.oid_NpcPageSkillType)
-        options = TTM_Utils.GetSpouseSkillTypeByIndexes()
-        start = TTM_Utils.GetSpouseSkillIndexByType(TTM_Utils.GetSpouseSkillType(spouse))
-        default = TTM_Utils.GetSpouseSkillIndexByType(TTM_ServiceSpouseTypes.DetermineSkillType(spouse))
+        options = MARAS.GetNpcTypes("skillType")
+        start = MARAS.GetNpcCurrentTypeEnum(spouse, "skillType")
+        default = MARAS.DetermineSkillType(spouse)
     elseif(option == mcm.oid_NpcPageTemperament)
-        options = TTM_Utils.GetSpouseTemperamentByIndexes()
-        start = TTM_Utils.GetSpouseTemperamentIndex(spouse)
-        default = TTM_Utils.GetSpouseTemperamentIndexByType(TTM_ServiceSpouseTypes.DetermineTemperament(spouse))
+        options = MARAS.GetNpcTypes("temperament")
+        start = MARAS.GetNpcCurrentTypeEnum(spouse, "temperament")
+        default = MARAS.DetermineTemperament(spouse)
     elseif(option == mcm.oid_NpcPagePlayerHome)
-        StorageUtil.StringListSlice(none, "SpouseHomeChoiceCache", MARAS.GetAllPlayerHousesNames())
+        StorageUtil.StringListCopy(none, "SpouseHomeChoiceCache", MARAS.GetAllPlayerHousesNames())
         StorageUtil.StringListAdd(none, "SpouseHomeChoiceCache", "unset")
+        options = StorageUtil.StringListToArray(none, "SpouseHomeChoiceCache")
         start = StorageUtil.StringListFind(none, "SpouseHomeChoiceCache", MARAS.GetTenantHouse(spouse).GetName())
         default = MARAS.CountPlayerHouses()  ; unset
         StorageUtil.StringListClear(none, "SpouseHomeChoiceCache")
@@ -273,20 +276,17 @@ Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
     Actor spouse = TTM_MCM_State.GetSelectedNpc()
     string opt
 	if(option == mcm.oid_NpcPageSocialClass)
-        string[] options = TTM_Utils.GetSpouseSocialTypeByIndexes()
+        string[] options = MARAS.GetNpcTypes("socialClass")
         opt = options[index]
-        TTM_ServiceSpouseTypes.SetSpouseSocialClass(spouse, opt)
-        TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
+        MARAS.SetNpcCharacteristics(spouse, "socialClass", index)
     elseif(option == mcm.oid_NpcPageSkillType)
-        string[] options = TTM_Utils.GetSpouseSkillTypeByIndexes()
+        string[] options = MARAS.GetNpcTypes("skillType")
         opt = options[index]
-        TTM_ServiceSpouseTypes.SetSpouseSkillType(spouse, opt)
-        TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
+        MARAS.SetNpcCharacteristics(spouse, "skillType", index)
     elseif(option == mcm.oid_NpcPageTemperament)
-        string[] options = TTM_Utils.GetSpouseTemperamentByIndexes()
+        string[] options = MARAS.GetNpcTypes("temperament")
         opt = options[index]
-        TTM_ServiceSpouseTypes.SetSpouseTemperament(spouse, opt)
-        TTM_ServiceRelationships.SetTrackedNpcMcmTypeChanged(spouse)
+        MARAS.SetNpcCharacteristics(spouse, "temperament", index)
     elseif(option == mcm.oid_NpcPagePlayerHome)
         string[] names = MARAS.GetAllPlayerHousesNames()
         names = PapyrusUtil.PushString(names, "unset")
@@ -338,7 +338,6 @@ Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
         endif
 
         MARAS.SetPermanentAffection(spouse, newAffection)
-        TriggerAffectionThresholdEvents(spouse, previousAffection, newAffection)
         mcm.SetSliderOptionValue(option, newAffection as float, "{0}%")
     endif
 EndFunction
@@ -355,24 +354,4 @@ string[] Function GetHierarchyOptions() global
     options[2] = "3rd spouse"
 
     return options
-EndFunction
-
-Function TriggerAffectionThresholdEvents(Actor spouse, int previousAffection, int newAffection) global
-    if(newAffection >= 75)
-        if(previousAffection < 75)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "happy", true)
-        endif
-    elseif(newAffection >= 50)
-        if(previousAffection < 50 || previousAffection >= 75)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "content", previousAffection < 50)
-        endif
-    elseif(newAffection >= 25)
-        if(previousAffection < 25 || previousAffection >= 50)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "troubled", previousAffection < 25)
-        endif
-    else
-        if(previousAffection >= 25)
-            TTM_Utils.SendAffectionChangeThresholdEvent(spouse, "estranged", false)
-        endif
-    endif
 EndFunction

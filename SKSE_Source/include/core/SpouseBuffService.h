@@ -14,8 +14,7 @@ namespace MARAS {
     class SpouseBuffService {
     public:
         // Returns the multiplier for a single spouse actor. Returns 0.0f for null actor.
-        static float GetSpouseMultiplier(
-            RE::Actor* spouse);  // affectionBuffMult is TODO; return placeholder multiplier
+        static float GetSpouseMultiplier(const RE::Actor* spouse);
 
         // Returns a vector of multipliers for follower actors grouped by skill-type buckets.
         static std::vector<float> GetFollowersMultipliers(const std::vector<RE::Actor*>& followers);

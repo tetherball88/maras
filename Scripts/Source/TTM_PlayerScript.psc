@@ -5,36 +5,30 @@ import PO3_Events_Form
 Spell Property TTM_LoversRadianceAbility auto
 
 Event OnPlayerLoadGame()
-    int logDestination = TTM_JData.GetLogDestination()
+    int logDestination = TTM_Data.GetLogDestination()
     TTM_MainController mainController = self.GetOwningQuest() as TTM_MainController
     mainController.Maintenance()
-    Quest enablePolygamyQst = TTM_JData.GetMarasEnablePolygamyQuest()
+    Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
 
     if(!enablePolygamyQst.IsRunning() && !enablePolygamyQst.IsCompleted())
         RegisterForSleep()
     endif
 
-    RegisterForUpdateGameTime(1)
-EndEvent
-
-Event OnSleepStart(Float afSleepStartTime, Float afDesiredSleepEndTime)
-    Actor player = self.GetActorRef()
-    Faction PlayerMarriedFaction = TTM_JData.GetMarriedFaction()
-    Quest enablePolygamyQst = TTM_JData.GetMarasEnablePolygamyQuest()
-    bool questIsntTouched = !enablePolygamyQst.IsRunning() && !enablePolygamyQst.IsCompleted()
-
-    if(questIsntTouched && player.GetActorValue("DragonSouls") >= 1 && player.IsInFaction(PlayerMarriedFaction))
-        TTM_Debug.trace("Start Enable Poly")
-        enablePolygamyQst.SetStage(0)
-    endif
+    CheckCell()
 EndEvent
 
 Event OnSleepStop(bool abInterrupted)
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     Location loc = player.GetCurrentLocation()
     Actor[] tenants = MARAS.GetPlayerHouseTenants(loc)
 
-    ; todo scan nearby npcs instead of tenants from player house
+    Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
+    bool questIsntTouched = !enablePolygamyQst.IsRunning() && !enablePolygamyQst.IsCompleted()
+
+    if(questIsntTouched && player.GetActorValue("DragonSouls") >= 1 && MARAS.GetStatusCount("married") == 1)
+        enablePolygamyQst.SetStage(0)
+    endif
+
     int i = 0
     bool addedSpell = false
     while(i < tenants.Length)
@@ -45,6 +39,7 @@ Event OnSleepStop(bool abInterrupted)
                 addedSpell = true
                 player.AddSpell(TTM_LoversRadianceAbility, false)
                 Debug.Notification("You feel the warmth of your partner's love. Lover's Radiance granted.")
+                return
             endif
         endif
         i += 1
@@ -55,19 +50,12 @@ Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemRefe
     TTM_ServiceGift.OnItemGifted(akDestContainer, akBaseItem, aiItemCount)
 EndEvent
 
-; Event received when every object in this object's parent cell is loaded (TODO: Find restrictions)
-Event OnCellLoad()
-    ; since follower can be added and removed and we don't have a way to track it
-    ; check each cell load player's followers and try to update spouse follower bonuses
-    TTM_ServiceBuff.CalculateFollowerMultipliers()
-
+Function CheckCell()
     TTM_ServiceSpouseAssets.CheckCell()
-
     TTM_ServicePlayerHouse.CheckPlayerHouseLocation()
+EndFunction
+
+Event OnLocationChange(Location akOldLoc, Location akNewLoc)
+    CheckCell()
 EndEvent
 
-Event OnUpdateGameTime()
-    MARAS.ApplyDailyAffection()
-
-    RegisterForUpdateGameTime(1)
-EndEvent

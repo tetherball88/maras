@@ -16,10 +16,10 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     int i = 0
 
     float[] multipliers = TTM_ServiceBuff.GetFollowersMultipliers()
-    string[] types = TTM_Utils.GetSpouseSkillTypeByIndexes()
+    string[] types = MARAS.GetNpcTypes("skillType")
 
     while(i < types.Length)
-        TTM_MCM_State.AddNpcTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
+        TTM_MCM_State.AddNpcSkillTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
         i += 1
     endwhile
 EndFunction
@@ -29,51 +29,43 @@ Function RenderRightColumn(TTM_MCM mcm) global
 
     int i = 0
 
-    float[] multipliers = TTM_ServiceBuff.GetPermanentMultipliers()
-    string[] types = TTM_Utils.GetSpouseSocialTypeByIndexes()
+    float[] multipliers = MARAS.GetPermanentMultipliers()
+    string[] types = MARAS.GetNpcTypes("socialClass")
 
     while(i < types.Length)
-        TTM_MCM_State.AddNpcTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
+        TTM_MCM_State.AddNpcSocialTypeOption(mcm.AddTextOption(types[i], multipliers[i]), types[i])
         i += 1
     endwhile
 EndFunction
 
 Function OnOptionSelect(TTM_MCM mcm, int option) global
-    if (mcm.oid_SettingsClearData == option)
 
-    elseif (mcm.oid_SettingsExportData == option)
-
-    elseif (mcm.oid_SettingsImportData == option)
-
-    endif
 EndFunction
 
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
-    string npcType = TTM_MCM_State.GetNpcTypeOption(option)
-    if(npcType != "")
-        float[] multipliers
-        int typeIndex = TTM_Utils.GetSpouseSkillIndexByType(npcType)
-        if(typeIndex == -1)
-            multipliers = TTM_ServiceBuff.GetPermanentMultipliers()
-            typeIndex = TTM_Utils.GetSpouseSocialIndexByType(npcType)
-        else
-            multipliers = TTM_ServiceBuff.GetFollowersMultipliers()
+    string skillType = TTM_MCM_State.GetNpcSkillTypeOption(option)
+    string socialType = TTM_MCM_State.GetNpcSocialTypeOption(option)
+    int typeIndex = -1
+    string npcType = ""
+    float[] multipliers
+    if(skillType != "")
+        multipliers = TTM_ServiceBuff.GetFollowersMultipliers()
+        typeIndex = MARAS.GetNpcTypeEnum("skillType", skillType)
+        npcType = skillType
+    elseif(socialType != "")
+        multipliers = MARAS.GetPermanentMultipliers()
+        typeIndex = MARAS.GetNpcTypeEnum("socialClass", socialType)
+        npcType = socialType
+    endif
+    if(npcType != "" && typeIndex != -1)
+        float bonusValue = MARAS.GetBonusPerkValue(npcType, 0)
+        string bonusDescription = MARAS.GetBonusPerkDescription(npcType, 0)
+        string bonusUnit = MARAS.GetBonusPerkUnit(npcType, 0)
+        float value = bonusValue * multipliers[typeIndex]
+        if(bonusDescription != "")
+            mcm.SetInfoText(bonusDescription + " " + value + " " + bonusUnit)
         endif
-
-        if(typeIndex != -1)
-            float bonusValue = TTM_ServiceBuff.GetBonusPerkValue(npcType, 0)
-            string bonusDescription = TTM_ServiceBuff.GetBonusPerkDescription(npcType, 0)
-            string bonusUnit = TTM_ServiceBuff.GetBonusPerkUnit(npcType, 0)
-            float value = bonusValue * multipliers[typeIndex]
-            if(bonusDescription != "")
-                mcm.SetInfoText(bonusDescription + " " + value + " " + bonusUnit)
-            endif
-        endif
-    elseif(option == mcm.oid_SettingsExportData)
-
-    elseif(option == mcm.oid_SettingsClearData)
-
     endif
 
 EndFunction

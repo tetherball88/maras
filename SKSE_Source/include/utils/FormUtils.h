@@ -40,9 +40,26 @@ namespace MARAS::Utils {
             return nullptr;
         }
 
-        auto form = dataHandler->LookupForm<T>(localFormID, pluginName);
+        // First verify the plugin is loaded
+        const auto* file = dataHandler->LookupModByName(pluginName);
+        if (!file) {
+            MARAS_LOG_ERROR("Plugin '{}' is not loaded in game", pluginName);
+            return nullptr;
+        }
+
+        // Mask off any high bytes to ensure we have a local FormID
+        RE::FormID maskedFormID = localFormID & 0x00FFFFFF;
+
+        // Try to lookup the form
+        auto form = dataHandler->LookupForm<T>(maskedFormID, pluginName);
         if (!form) {
-            MARAS_LOG_WARN("Could not find form {:08X} in plugin '{}'", localFormID, pluginName);
+            // Try alternative: use file's CompileIndex to build full FormID
+            RE::FormID fullFormID = file->GetCompileIndex() << 24 | maskedFormID;
+            form = RE::TESForm::LookupByID<T>(fullFormID);
+            if (form) {
+                return form;
+            }
+            MARAS_LOG_WARN("Could not find form {:08X} in plugin '{}'", maskedFormID, pluginName);
             return nullptr;
         }
 

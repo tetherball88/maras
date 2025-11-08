@@ -7,6 +7,8 @@
 #include <chrono>
 #include <fstream>
 
+#include "core/AffectionService.h"
+#include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
@@ -14,10 +16,62 @@
 
 namespace MARAS {
 
+    namespace {
+        // Helper: Get FormCache singleton
+        FormCache& GetCache() { return FormCache::GetSingleton(); }
+
+        // Helper: Get NPCRelationshipManager singleton
+        NPCRelationshipManager& GetManager() { return NPCRelationshipManager::GetSingleton(); }
+
+        // Helper: Clamp value to range
+        template <typename T>
+        T ClampValue(T value, T min, T max) {
+            return std::clamp(value, min, max);
+        }
+
+        // Helper: Check if quest has reached stage
+        bool QuestReachedStage(RE::TESQuest* quest, std::uint32_t stage) {
+            return quest && quest->GetCurrentStageID() >= stage;
+        }
+
+        // Helper: Convert difficulty to success chance using sigmoid curve for smoother transitions
+        // Options:
+        // - Linear: simple inversion (current)
+        // - Sigmoid: smooth S-curve with gentle extremes
+        // - Quadratic: easing function for moderate smoothing
+        float DifficultyToChance(float difficulty) {
+            // Sigmoid curve: 1 / (1 + e^(k*(x-50)))
+            // k controls steepness (0.08-0.12 works well)
+            // Centered at difficulty=50 (50% chance)
+            constexpr float steepness = 0.10f;
+            constexpr float center = 50.0f;
+            float exponent = steepness * (difficulty - center);
+            return 1.0f / (1.0f + std::exp(exponent));
+        }
+
+        // Helper: Track best positive and negative guild modifiers
+        struct GuildModifiers {
+            float bestPositive = 0.0f;
+            float bestNegative = 0.0f;
+            float sameGuild = 0.0f;
+
+            void UpdateWith(float modifier) {
+                if (modifier > 0.0f) {
+                    bestPositive = std::max(bestPositive, modifier);
+                } else if (modifier < 0.0f) {
+                    bestNegative = std::min(bestNegative, modifier);
+                }
+            }
+
+            float GetStrongest() const { return (-bestNegative > bestPositive) ? bestNegative : bestPositive; }
+        };
+
+    }  // namespace
+
     float MarriageDifficulty::CalculateMarriageSuccessChance(RE::Actor* npc, float intimacyAdjustment, float mostGold,
                                                              float housesOwned, float horsesOwned,
                                                              float questsCompleted, float dungeonsCleared,
-                                                             float dragonSoulsCollected) {
+                                                             float dragonSoulsCollected, bool playerKiller) {
         auto startTime = std::chrono::high_resolution_clock::now();
 
         if (!npc) {
@@ -67,26 +121,31 @@ namespace MARAS {
         }
 
         // Player killer penalty
-        if (GetPlayerKiller()) {
+        if (playerKiller) {
             complexity += GetParam("playerKillerPenalty");
             MARAS_LOG_DEBUG("Applied player killer penalty");
         }
 
         // Spouse count penalty
         float marriedScore = CountMarried() * GetParam("marriedCountMultiplier");
+        MARAS_LOG_DEBUG("Married count: {}, score: {}", CountMarried(), marriedScore);
         complexity += marriedScore;
 
         // Divorced count penalty
         float divorcedScore = CountDivorced() * GetParam("divorcedCountMultiplier");
+        MARAS_LOG_DEBUG("Divorced count: {}, score: {}", CountDivorced(), divorcedScore);
         complexity += divorcedScore;
 
         // Level difference
         float levelDiffScore = std::clamp(levelDiff * GetParam("levelDiffMultiplier"), -10.0f, 10.0f);
+        MARAS_LOG_DEBUG("Level difference: {}, score: {}", levelDiff, levelDiffScore);
         complexity += levelDiffScore;
 
         // Speech bonus
-        complexity +=
-            GetParam("speechcraftMultiplier") * player->AsActorValueOwner()->GetActorValue(RE::ActorValue::kSpeech);
+        float speechcraft = player->AsActorValueOwner()->GetActorValue(RE::ActorValue::kSpeech);
+        float speechScore = GetParam("speechcraftMultiplier") * speechcraft;
+        MARAS_LOG_DEBUG("Speechcraft value: {}, score: {}", speechcraft, speechScore);
+        complexity += speechScore;
 
         // Relationship rank bonus - get actual relationship rank between NPC and player
         int relationshipRank = 0;
@@ -104,34 +163,43 @@ namespace MARAS {
         MARAS_LOG_DEBUG("Relationship rank: {}, score: {}", relationshipRank, relationshipScore);
 
         // Guild alignment
-        complexity += CalculateGuildAlignmentMod(npc);
+        float guildAlignment = CalculateGuildAlignmentMod(npc);
+        complexity += guildAlignment;
+        MARAS_LOG_DEBUG("Guild alignment score: {}", guildAlignment);
 
         // Intimacy adjustment (passed from Papyrus)
         complexity += intimacyAdjustment;
+        MARAS_LOG_DEBUG("Applied intimacy adjustment: {}", intimacyAdjustment);
+
+        // Affection adjustment (permanent affection 0..100, baseline 50)
+        // Values above 50 reduce complexity (improve chance), below 50 increase complexity (worsen chance)
+        int permanentAffection = AffectionService::GetSingleton().GetPermanentAffection(npc->GetFormID());
+        float affectionMultiplier = GetParam("affectionMultiplier");
+        float affectionAdjustment = (static_cast<float>(permanentAffection) - 50.0f) * affectionMultiplier;
+        complexity -= affectionAdjustment;
+        MARAS_LOG_DEBUG("Permanent affection: {}, multiplier: {}, adjustment applied: {}", permanentAffection,
+                        affectionMultiplier, affectionAdjustment);
 
         MARAS_LOG_DEBUG("Final complexity: {}", complexity);
 
         // === 2. Clamp difficulty 0-100 ===
-        float difficulty = std::clamp(complexity, 0.0f, 100.0f);
+        float difficulty = ClampValue(complexity, 0.0f, 100.0f);
 
-        // === 3. Calculate success chance ===
-        float chance = std::clamp(1.0f - difficulty / 100.0f, 0.0f, 1.0f);
+        // === 3. Calculate success chance using sigmoid curve for smoother transitions ===
+        float chance = DifficultyToChance(difficulty);
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
 
-        MARAS_LOG_INFO("Marriage difficulty calculation completed for {} in {} microseconds (chance: {:.3f})",
-                       npc->GetDisplayFullName(), duration.count(), chance);
+        MARAS_LOG_INFO(
+            "Marriage difficulty calculation completed for {} in {} microseconds (chance: {:.3f}; difficulty: {:.2f})",
+            npc->GetDisplayFullName(), duration.count(), chance, difficulty);
 
         return chance;
     }
 
-    bool MarriageDifficulty::CheckQuestStage(std::uint32_t questId, std::uint32_t stage) {
-        auto quest = RE::TESForm::LookupByID<RE::TESQuest>(questId);
-        if (!quest) {
-            return false;
-        }
-        return quest->GetCurrentStageID() >= stage;
+    bool MarriageDifficulty::CheckQuestStage(RE::TESQuest* quest, std::uint32_t stage) {
+        return QuestReachedStage(quest, stage);
     }
 
     float MarriageDifficulty::GetParam(const std::string& param) {
@@ -209,9 +277,10 @@ namespace MARAS {
             {"playerKillerPenalty", 50.0f},
             {"marriedCountMultiplier", 2.0f},
             {"divorcedCountMultiplier", 1.0f},
-            {"levelDiffMultiplier", 0.10f},
+            {"levelDiffMultiplier", 0.50f},
             {"speechcraftMultiplier", -0.1f},
-            {"relationshipRankMultiplier", -3.0f}};
+            {"relationshipRankMultiplier", -3.0f},
+            {"affectionMultiplier", 0.50f}};
 
         auto it = configParams.find(param);
         if (it != configParams.end()) {
@@ -223,27 +292,29 @@ namespace MARAS {
     }
 
     int MarriageDifficulty::GetThaneHolds() {
-        int totalHolds = 0;
+        constexpr std::uint32_t THANE_STAGE = 25;
+        auto& cache = GetCache();
 
-        // Check all thane quests
-        if (CheckQuestStage(0xa2ca6, 25)) totalHolds++;  // Eastmarch
-        if (CheckQuestStage(0xa34de, 25)) totalHolds++;  // Falkreath
-        if (CheckQuestStage(0xa2c9b, 25)) totalHolds++;  // Haafingar
-        if (CheckQuestStage(0xa34ce, 25)) totalHolds++;  // Hjaalmarch
-        if (CheckQuestStage(0xa34d4, 25)) totalHolds++;  // Pale
-        if (CheckQuestStage(0xa2c86, 25)) totalHolds++;  // Reach
-        if (CheckQuestStage(0x65bdf, 25)) totalHolds++;  // Rift
-        if (CheckQuestStage(0xa2c9e, 25)) totalHolds++;  // Whiterun
-        if (CheckQuestStage(0xa34d7, 25)) totalHolds++;  // Winterhold
+        // Array of thane quest getters
+        RE::TESQuest* thaneQuests[] = {
+            cache.GetEastmarchThane(),  cache.GetFalkreathThane(), cache.GetHaafingarThane(),
+            cache.GetHjaalmarchThane(), cache.GetPaleThane(),      cache.GetReachThane(),
+            cache.GetRiftThane(),       cache.GetWhiterunThane(),  cache.GetWinterholdThane()};
+
+        int totalHolds = 0;
+        for (auto* quest : thaneQuests) {
+            if (QuestReachedStage(quest, THANE_STAGE)) {
+                ++totalHolds;
+            }
+        }
 
         return totalHolds;
     }
 
     bool MarriageDifficulty::IsGuildLeader() {
-        // Check guild leader quests
-        return CheckQuestStage(0x1cef6, 200) ||  // Companions
-               CheckQuestStage(0x1f258, 200) ||  // College of Winterhold
-               CheckQuestStage(0xd7d69, 40);     // Thieves Guild
+        auto& cache = GetCache();
+        return QuestReachedStage(cache.GetCompanionsQuest(), 200) || QuestReachedStage(cache.GetCollegeQuest(), 200) ||
+               QuestReachedStage(cache.GetThievesQuest(), 40);
     }
 
     float MarriageDifficulty::CalculatePlayerPrestige(float mostGold, float housesOwned, float horsesOwned,
@@ -252,7 +323,7 @@ namespace MARAS {
         float result = 0.0f;
 
         // Dragonborn status
-        if (CheckQuestStage(0x2610c, 90)) {
+        if (QuestReachedStage(GetCache().GetDragonbornQuest(), 90)) {
             result += GetParam("prestigeDragonbornBonus");
         }
 
@@ -264,144 +335,70 @@ namespace MARAS {
             result += GetParam("prestigeGuildLeaderBonus");
         }
 
-        // Wealth - use passed game statistics from Papyrus
-        result += std::clamp(mostGold / GetParam("prestigeMostGoldDivisor"), 0.0f, 15.0f);
+        // Wealth
+        result +=
+            ClampValue(mostGold / GetParam("prestigeMostGoldDivisor"), 0.0f, GetParam("prestigeMostGoldClampMax"));
 
-        // Houses and horses - use passed game statistics from Papyrus
-        float houseCount = housesOwned * GetParam("prestigeHouseUnitMultiplier");
-        float horsesCount = horsesOwned * GetParam("prestigeHorseUnitMultiplier");
-        result += std::clamp(houseCount + horsesCount, 0.0f, 15.0f);
+        // Houses and horses
+        float houseHorseScore = housesOwned * GetParam("prestigeHouseUnitMultiplier") +
+                                horsesOwned * GetParam("prestigeHorseUnitMultiplier");
+        result += ClampValue(houseHorseScore, 0.0f, GetParam("prestigeHouseHorseClampMax"));
 
-        // Heroic achievements - use passed game statistics from Papyrus
-        float quests = questsCompleted * GetParam("prestigeQuestsMultiplier");
-        float dungeons = dungeonsCleared * GetParam("prestigeDungeonsMultiplier");
-        float souls = dragonSoulsCollected * GetParam("prestigeSoulsMultiplier");
-        result += std::clamp(quests + dungeons + souls, 0.0f, 25.0f);
+        // Heroic achievements
+        float heroicScore = questsCompleted * GetParam("prestigeQuestsMultiplier") +
+                            dungeonsCleared * GetParam("prestigeDungeonsMultiplier") +
+                            dragonSoulsCollected * GetParam("prestigeSoulsMultiplier");
+        result += ClampValue(heroicScore, 0.0f, GetParam("prestigeRenownClampMax"));
 
-        return std::clamp(result, 0.0f, 100.0f);
+        return ClampValue(result, GetParam("prestigePrestigeClamp_min"), GetParam("prestigePrestigeClamp_max"));
     }
 
     float MarriageDifficulty::CalculateGuildAlignmentMod(RE::Actor* npc) {
         auto player = RE::PlayerCharacter::GetSingleton();
         if (!player || !npc) return 0.0f;
 
-        auto& manager = NPCRelationshipManager::GetSingleton();
-        auto socialClass = manager.GetSocialClass(npc->GetFormID());
-
-        // Use existing enum-to-string function and convert to lowercase for config lookup
+        auto socialClass = GetManager().GetSocialClass(npc->GetFormID());
         std::string spouseClass = Utils::ToLower(Utils::SocialClassToString(socialClass));
 
-        float bestPos = 0.0f;  // track strongest positive modifier
-        float bestNeg = 0.0f;  // track strongest negative modifier (stored as negative)
-        float cand = 0.0f;
-        float sameGuild = 0.0f;
+        GuildModifiers modifiers;
+        auto& cache = GetCache();
 
-        // === Companions ===
-        auto companionsFaction = Utils::LookupForm<RE::TESFaction>(0x48362, "Skyrim.esm");
-        if (companionsFaction && player->IsInFaction(companionsFaction)) {
-            cand = GetParam("guildCompanions_" + spouseClass);
-            if (cand > 0) {
-                bestPos = std::max(bestPos, cand);
-            } else if (cand < 0) {
-                bestNeg = std::min(bestNeg, cand);
-            }
-            if (npc->IsInFaction(companionsFaction)) {
-                sameGuild += GetParam("guild_sameGuildBonus");
-            }
-        }
+        // Helper lambda to process guild faction
+        auto processGuild = [&](RE::TESFaction* faction, const std::string& guildName, bool checkQuest = false,
+                                RE::TESQuest* quest = nullptr, std::uint32_t stage = 0) {
+            // Skip if quest check required and quest hasn't reached stage
+            if (checkQuest && !QuestReachedStage(quest, stage)) return;
 
-        // === Thieves Guild ===
-        auto thievesFaction = Utils::LookupForm<RE::TESFaction>(0x29da9, "Skyrim.esm");
-        if (thievesFaction && player->IsInFaction(thievesFaction)) {
-            cand = GetParam("guildThieves_" + spouseClass);
-            if (cand > 0) {
-                bestPos = std::max(bestPos, cand);
-            } else if (cand < 0) {
-                bestNeg = std::min(bestNeg, cand);
-            }
-            if (npc->IsInFaction(thievesFaction)) {
-                sameGuild += GetParam("guild_sameGuildBonus");
-            }
-        }
+            // Check if player is in guild (or quest-based membership)
+            bool playerInGuild = checkQuest || (faction && player->IsInFaction(faction));
+            if (!playerInGuild) return;
 
-        // === Dark Brotherhood ===
-        auto brotherhoodFaction = Utils::LookupForm<RE::TESFaction>(0x1bdb3, "Skyrim.esm");
-        if (brotherhoodFaction && player->IsInFaction(brotherhoodFaction)) {
-            cand = GetParam("guildBrotherhood_" + spouseClass);
-            if (cand > 0) {
-                bestPos = std::max(bestPos, cand);
-            } else if (cand < 0) {
-                bestNeg = std::min(bestNeg, cand);
-            }
-            if (npc->IsInFaction(brotherhoodFaction)) {
-                sameGuild += GetParam("guild_sameGuildBonus");
-            }
-        }
+            // Get and apply guild modifier for this social class
+            float modifier = GetParam(guildName + "_" + spouseClass);
+            modifiers.UpdateWith(modifier);
 
-        // === College of Winterhold ===
-        auto collegeFaction = Utils::LookupForm<RE::TESFaction>(0x1f259, "Skyrim.esm");
-        if (collegeFaction && player->IsInFaction(collegeFaction)) {
-            cand = GetParam("guildCollege_" + spouseClass);
-            if (cand > 0) {
-                bestPos = std::max(bestPos, cand);
-            } else if (cand < 0) {
-                bestNeg = std::min(bestNeg, cand);
+            // Check if NPC is also in same guild
+            if (faction && npc->IsInFaction(faction)) {
+                modifiers.sameGuild += GetParam("guild_sameGuildBonus");
             }
-            if (npc->IsInFaction(collegeFaction)) {
-                sameGuild += GetParam("guild_sameGuildBonus");
-            }
-        }
+        };
 
-        // === Bards College ===
-        auto bardsFaction = Utils::LookupForm<RE::TESFaction>(0xc13c7, "Skyrim.esm");
-        if (CheckQuestStage(0x53511, 300)) {  // player is Bard
-            cand = GetParam("guildBards_" + spouseClass);
-            if (cand > 0) {
-                bestPos = std::max(bestPos, cand);
-            } else if (cand < 0) {
-                bestNeg = std::min(bestNeg, cand);
-            }
-            if (bardsFaction && npc->IsInFaction(bardsFaction)) {
-                sameGuild += GetParam("guild_sameGuildBonus");
-            }
-        }
+        // Process each guild
+        processGuild(cache.GetCompanionsFaction(), "guildCompanions");
+        processGuild(cache.GetThievesFaction(), "guildThieves");
+        processGuild(cache.GetBrotherhoodFaction(), "guildBrotherhood");
+        processGuild(cache.GetCollegeFaction(), "guildCollege");
+        processGuild(cache.GetBardsFaction(), "guildBards", true, cache.GetBardsQuest(), 300);
 
-        // Pick the single strongest effect by absolute value
-        float res = bestPos;
-        if (-bestNeg > bestPos) {
-            res = bestNeg;  // more negative wins
-        }
-
-        return res + sameGuild;
+        return modifiers.GetStrongest() + modifiers.sameGuild;
     }
 
-    bool MarriageDifficulty::IsJilted(RE::Actor* npc) {
-        if (!npc) return false;
-        auto& manager = NPCRelationshipManager::GetSingleton();
-        return manager.IsJilted(npc->GetFormID());
-    }
+    bool MarriageDifficulty::IsJilted(RE::Actor* npc) { return npc && GetManager().IsJilted(npc->GetFormID()); }
 
-    bool MarriageDifficulty::IsDivorced(RE::Actor* npc) {
-        if (!npc) return false;
-        auto& manager = NPCRelationshipManager::GetSingleton();
-        return manager.IsDivorced(npc->GetFormID());
-    }
+    bool MarriageDifficulty::IsDivorced(RE::Actor* npc) { return npc && GetManager().IsDivorced(npc->GetFormID()); }
 
-    bool MarriageDifficulty::GetPlayerKiller() {
-        // Check global variable or quest flag for player killer status
-        // For now, return false - would need to track this in the C++ plugin
-        // This could be set when player kills spouses and tracked in NPCRelationshipManager
-        return false;
-    }
+    int MarriageDifficulty::CountMarried() { return static_cast<int>(GetManager().GetMarriedCount()); }
 
-    int MarriageDifficulty::CountMarried() {
-        auto& manager = NPCRelationshipManager::GetSingleton();
-        return static_cast<int>(manager.GetMarriedCount());
-    }
-
-    int MarriageDifficulty::CountDivorced() {
-        auto& manager = NPCRelationshipManager::GetSingleton();
-        return static_cast<int>(manager.GetDivorcedCount());
-    }
+    int MarriageDifficulty::CountDivorced() { return static_cast<int>(GetManager().GetDivorcedCount()); }
 
 }  // namespace MARAS

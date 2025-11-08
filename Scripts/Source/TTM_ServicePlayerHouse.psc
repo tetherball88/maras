@@ -15,18 +15,14 @@ scriptname TTM_ServicePlayerHouse
   Checks if the player is in a player house location and registers it if so.
 /;
 Function CheckPlayerHouseLocation() global
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     Location currentLoc = player.GetCurrentLocation()
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc.GetName())
-    endif
+    TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc.GetName())
     if(currentLoc.HasKeywordString("LocTypePlayerHouse"))
-        if(TTM_Debug.IsTrace())
-            TTM_Debug.trace("CheckPlayerHouseLocation:playerHome")
-        endif
-        if(MARAS.RegisterPlayerHouseCell(currentLoc, TTM_JData.GetPlayer().PlaceAtMe(TTM_JData.GetHomeSandboxMarkerStatic())))
-            TTM_JData.GetSetPlayerHousesCountGlobal(MARAS.CountPlayerHouses())
-        endif
+        Static homeMarker = TTM_Data.GetHomeSandboxMarkerStatic()
+        ; Place marker as persistent so the reference FormID can be resolved later by the plugin
+        ObjectReference placedMarker = player.PlaceAtMe(homeMarker, 1, true)
+        MARAS.RegisterPlayerHouseCell(currentLoc, placedMarker)
     endif
 EndFunction
 
@@ -91,8 +87,14 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
     StorageUtil.FormListClear(none, "SpouseHomeChoiceCache")
 EndFunction
 
-Function ReleaseSpouseFromPlayerHome(Actor spouse) global
-    Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
+Function ReleaseSpouseFromPlayerHome(Actor spouse, string reason = "") global
+    if(MARAS.GetTenantHouse(spouse) != none)
+        if(reason == "affection")
+            Debug.Notification(TTM_Utils.GetActorName(spouse) + " has stopped using your home due to your estranged relationship.")
+        endif
+    endif
+    TTM_Debug.trace("ReleaseSpouseFromPlayerHome:spouse:"+spouse+":reason:"+reason)
+    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
     spouse.EvaluatePackage()
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, none)
@@ -106,13 +108,16 @@ EndFunction
 /;
 Function MoveSpouseToHouse(Actor spouse, Location houseLoc ) global
     ObjectReference spouseMarker = TTM_ServiceRelationships.GetTrackedNpcHomeMarker(spouse)
-    spouseMarker.MoveTo(MARAS.GetHouseMarker(houseLoc))
+    ObjectReference houseMarker = MARAS.GetHouseMarker(houseLoc)
+    TTM_Debug.trace("MoveSpouseToHouse:houseLoc:"+houseLoc.GetName()+":marker:"+houseMarker)
+    spouseMarker.MoveTo(houseMarker)
 
-    Package spousePlayerHomeSandbox = TTM_JData.GetHomeSandboxPackage()
+    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
 
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
     ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 5)
     spouse.EvaluatePackage()
+    TTM_ServiceRelationships.SetTrackedNpcHome(spouse, houseLoc)
 
     MARAS.RegisterTenantInPlayerHouse(spouse, houseLoc)
 EndFunction

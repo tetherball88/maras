@@ -9,11 +9,12 @@ namespace MARAS {
         // Calculate marriage success chance on-the-fly
         static float CalculateMarriageSuccessChance(RE::Actor* npc, float intimacyAdjustment, float mostGold,
                                                     float housesOwned, float horsesOwned, float questsCompleted,
-                                                    float dungeonsCleared, float dragonSoulsCollected);
+                                                    float dungeonsCleared, float dragonSoulsCollected,
+                                                    bool playerKiller);
 
     private:
         // Helper methods for individual calculations
-        static bool CheckQuestStage(std::uint32_t questId, std::uint32_t stage);
+        static bool CheckQuestStage(RE::TESQuest* quest, std::uint32_t stage);
         static float GetParam(const std::string& param);
         static int GetThaneHolds();
         static bool IsGuildLeader();
@@ -23,7 +24,6 @@ namespace MARAS {
         static bool IsAlwaysSuccessMarriage();
         static bool IsJilted(RE::Actor* npc);
         static bool IsDivorced(RE::Actor* npc);
-        static bool GetPlayerKiller();
         static int CountMarried();
         static int CountDivorced();
     };

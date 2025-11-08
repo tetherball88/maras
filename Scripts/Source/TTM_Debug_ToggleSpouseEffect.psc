@@ -1,19 +1,31 @@
 Scriptname TTM_Debug_ToggleSpouseEffect extends activemagiceffect
 
+; Debug magic effect used by the in-game debugging spell.
+; When the player casts this spell on an NPC, it cycles that NPC's MARAS status in the order:
+;   unknown -> candidate -> engaged -> married -> divorced
+; This is intended for testing relationship and quest flows only.
+
 Event OnEffectStart(Actor akTarget, Actor akCaster)
-    string status = TTM_Utils.GetRelationshipStatus(akTarget)
+    string status = MARAS.GetNpcStatusName(akTarget)
 
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_Debug_ToggleSpouseEffect:OnEffectStart:currentStatus:"+status)
-    endif
+     UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
+    int i = 0
+    string[] statuses = new string[5]
+    statuses[0] = "candidate"
+    statuses[1] = "engaged"
+    statuses[2] = "married"
+    statuses[3] = "divorced"
+    statuses[4] = "jilted"
 
-    if(status == "")
-        TTM_Utils.SendRelationshipChangeEvent(akTarget, "candidate")
-    elseif(status == "candidate")
-        TTM_Utils.SendRelationshipChangeEvent(akTarget, "engaged")
-    elseif(status == "engaged")
-        TTM_Utils.SendRelationshipChangeEvent(akTarget, "married")
-    elseif(status == "married")
-        TTM_Utils.SendRelationshipChangeEvent(akTarget, "divorced")
-    endif
+    while(i < 5)
+        listMenu.AddEntryItem("Change status to: " + statuses[i])
+        i += 1
+    endwhile
+
+    listMenu.OpenMenu()
+    int choice = listMenu.GetResultInt()
+
+    TTM_Debug.debug("TTM_Debug_ToggleSpouseEffect: Changing status of " + TTM_Utils.GetActorName(akTarget) + " from " + status + " to " + statuses[choice])
+
+    MARAS.PromoteNPCToStatusByEnum(akTarget, choice)
 EndEvent

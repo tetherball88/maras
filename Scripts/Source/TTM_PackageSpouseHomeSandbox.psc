@@ -5,9 +5,7 @@ Scriptname TTM_PackageSpouseHomeSandbox Extends Package Hidden
 ;BEGIN FRAGMENT Fragment_1
 Function Fragment_1(Actor akActor)
 ;BEGIN CODE
-if(TTM_Debug.IsTrace())
-    TTM_Debug.trace("End TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
-endif
+TTM_Debug.trace("End TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -15,9 +13,7 @@ EndFunction
 ;BEGIN FRAGMENT Fragment_0
 Function Fragment_0(Actor akActor)
 ;BEGIN CODE
-if(TTM_Debug.IsTrace())
-    TTM_Debug.trace("Start TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
-endif
+TTM_Debug.trace("Start TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -25,9 +21,7 @@ EndFunction
 ;BEGIN FRAGMENT Fragment_2
 Function Fragment_2(Actor akActor)
 ;BEGIN CODE
-if(TTM_Debug.IsTrace())
-    TTM_Debug.trace("Change TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
-endif
+TTM_Debug.trace("Change TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
 ;END CODE
 EndFunction
 ;END FRAGMENT

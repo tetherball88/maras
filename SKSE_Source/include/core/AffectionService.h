@@ -37,15 +37,32 @@ namespace MARAS {
         bool Load(SKSE::SerializationInterface* serialization);
         void Revert();
 
-    // Affection multiplier helpers
-    // Compute multiplier factor from a permanent affection value (0..100)
-    float GetMultiplierForValue(int permanentAffection) const;
+        // Affection multiplier helpers
+        // Compute multiplier factor from a permanent affection value (0..100)
+        float GetMultiplierForValue(int permanentAffection) const;
 
-    // Convenience: get permanent affection for NPC and return its multiplier
-    float GetMultiplierForNPC(FormID npcFormID) const;
+        // Convenience: get permanent affection for NPC and return its multiplier
+        float GetMultiplierForNPC(FormID npcFormID) const;
+
+        // Track when NPC last received affection
+        void RecordAffectionInteraction(FormID npcFormID);
+        float GetDaysSinceLastAffection(FormID npcFormID) const;
+
+        // Handle day change event for decay logic
+        void OnDayChanged();
 
     private:
         AffectionService() = default;
+
+        // Helper methods
+        static RE::Actor* ValidateActor(FormID formID, const char* context);
+        static std::string NormalizeType(const std::string& type);
+        static std::string GetAffectionThreshold(int affectionValue);
+        static int ClampAffection(int value);
+        void UpdateAffectionFaction(RE::Actor* actor, FormID npcFormID, int affectionValue);
+        void SendAffectionChangeEvent(FormID npcFormID, const std::string& threshold, int delta);
+        int CalculateTotalDailyDelta(const std::unordered_map<std::string, float>& dailyByType) const;
+        float CalculateLonelinessDecay(FormID npcFormID, bool isFollowing) const;
 
         // permanent affection per NPC
         std::unordered_map<FormID, int> permanentAffection_;
@@ -55,6 +72,9 @@ namespace MARAS {
 
         // per-type min/max clamp settings (type -> {min, max})
         std::unordered_map<std::string, std::pair<int, int>> minMaxByType_;
+
+        // Track last game day when NPC received affection
+        std::unordered_map<FormID, float> lastAffectionDay_;
     };
 
 }  // namespace MARAS

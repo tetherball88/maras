@@ -11,7 +11,6 @@
 /;
 Scriptname TTM_MainController extends Quest
 
-SPELL Property TTM_Debug_ToggleSpouse  Auto
 
 ;/
   OnInit event: Called when the quest initializes. Triggers maintenance.
@@ -24,8 +23,6 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
-    TTM_Debug.CleanOnLoad()
-    TTM_JData.ImportStaticData()
     TTM_ServiceAffection.Maintenance()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
@@ -43,31 +40,22 @@ Function Maintenance()
         RegisterForModEvent("SkyrimNet_OnPackageRemoved", "OnPackageRemoved")
     endif
 
-    TTM_JData.SetHasSkyrimNet(hasSkyrimNet)
-    TTM_JData.GetSetHasSkyrimNetGlobal(hasSkyrimNetGlobal)
+    TTM_Data.SetHasSkyrimNet(hasSkyrimNet)
+    TTM_Data.GetSetHasSkyrimNetGlobal(hasSkyrimNetGlobal)
 
 
-    TTM_JData.SetHasTTRF(Game.GetModByName("TT_RelationsFinder.esp") != 255)
+    TTM_Data.SetHasTTRF(Game.GetModByName("TT_RelationsFinder.esp") != 255)
 
     RegisterForModEvent("maras_status_changed", "OnRelationshipChanged")
-
     RegisterForModEvent("maras_hierarchy_changed", "OnChangeHierarchyRank")
     RegisterForModEvent("maras_change_affection", "OnSpouseAffectionChanged")
+    RegisterForModEvent("maras_teammate_change", "OnTeammateChange")
 
      ; ensure player has debug spell and check door perk
 
-    Actor player = TTM_JData.GetPlayer()
-
-    bool added = player.AddSpell(TTM_Debug_ToggleSpouse)
-
-    Perk checkDoorPerk = TTM_JData.GetCheckDoorPerk()
-
-    if(!player.hasPerk(checkDoorPerk))
-        player.addPerk(checkDoorPerk)
-    endif
+    Actor player = TTM_Data.GetPlayer()
 
     TTM_ServiceMarriageQuest.CheckOngoingMarriage()
-    TTM_ServiceSpouseTypes.Maintenance()
     TTM_ServiceBuff.Maintenance()
     questTracker.Maintenance()
     conditions.Maintenance()
@@ -76,68 +64,50 @@ Function Maintenance()
 
     RegisterForMenu("Dialogue Menu")
     RegisterForMenu("GiftMenu")
-
-    ; JValue.enableAPILog(TTM_MCM_State.GetLogLevel() == 0)
-    JValue.enableAPILog(false)
 EndFunction
 
 ;/
   Handles relationship change events. Updates tracked NPCs and their status, and syncs with CHIM if enabled.
   @param npc    The NPC whose relationship changed
   @param status The new relationship status (candidate, engaged, married, jilted, divorced)
+  @param statusEnum The enum value of the new status
 /;
 Event OnRelationshipChanged(String EventName, String status, Float statusEnum, Form npc)
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("MainController:OnRelationshipChanged: " + TTM_Utils.GetActorName(npc as Actor) + "; status: " + status)
-    endif
     Actor npcA = npc as Actor
     string npcName = TTM_Utils.GetActorName(npcA)
-
-    string msg = ""
+    TTM_Debug.debug("MainController:OnRelationshipChanged: " + npcName + "; status: " + status)
 
     if(status == "candidate")
-        msg = "I think " + npcName + " is a good match."
         TTM_ServiceRelationships.MakeNpcCandidate(npcA)
     elseif(status == "engaged")
-        msg = npcName + " and I are engaged to be married."
         TTM_ServiceRelationships.MakeNpcEngaged(npcA)
     elseif(status == "married")
-        msg = npcName + " and I are now newlyweds."
         TTM_ServiceRelationships.MakeNpcMarried(npcA)
     elseif(status == "jilted")
-        msg = "My engagement with " + npcName + " was called off."
         TTM_ServiceRelationships.MakeNpcJilted(npcA)
     elseif(status == "divorced")
-        msg = "Me and " + npcName + " are now divorced."
         TTM_ServiceRelationships.MakeNpcDivorced(npcA)
     endif
-
-    Debug.Notification(msg)
-
-    TTM_ServiceRelationships.CountLoveInterests()
-
-    TTM_ServiceRelationships.ManageFactions(npcA, status)
 EndEvent
 
 
-Event OnChangeHierarchyRank(String EventName, String promotDemote, Float rankDiff, Form spouse)
+Event OnChangeHierarchyRank(String EventName, String promoteDemote, Float rankDiff, Form spouse)
     Actor spouseA = spouse as Actor
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("MainController:OnChangeHierarchyRank: " + TTM_Utils.GetActorName(spouseA) + "; rankDiff: " + rankDiff)
-    endif
+    string spouseName = TTM_Utils.GetActorName(spouseA)
+    TTM_Debug.debug("MainController:OnChangeHierarchyRank:"+promoteDemote+" " + spouseName + ";  rankDiff: " + rankDiff)
     if(rankDiff == 0)
         return
     endif
     if(rankDiff > 0)
-        Debug.Notification("I made my spouse " + TTM_Utils.GetActorName(spouseA) + " a higher rank in our relationship hierarchy.")
+        Debug.Notification("I made my spouse " + spouseName + " a higher rank in our relationship hierarchy.")
     else
-        Debug.Notification("I made my spouse " + TTM_Utils.GetActorName(spouseA) + " a lower rank in our relationship hierarchy.")
+        Debug.Notification("I made my spouse " + spouseName + " a lower rank in our relationship hierarchy.")
     endif
 
     TTM_ServiceSkyrimNet.RegisterPromotionEvent(spouseA, rankDiff < 0)
     TTM_ServiceAffection.AddPromotionAffection(spouseA, rankDiff)
     if(rankDiff < 0)
-        spouseA.AddSpell(TTM_JData.GetDemotedCooldownSpell())
+        spouseA.AddSpell(TTM_Data.GetDemotedCooldownSpell())
     endif
 EndEvent
 
@@ -155,11 +125,14 @@ Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDi
             msg = "My tension with " + spouseName + " is easing."
         endif
 
-        Quest affectionEstrangedDivorce = TTM_JData.GetMarasAffectionEstrangedDivorceQuest()
-        if(affectionEstrangedDivorce.IsRunning())
-            Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
-            if(questSpouse == spouseA)
-                affectionEstrangedDivorce.SetStage(150)
+        ; if affection level restored complete affection estranged divorce quest
+        if(level == "content" || level == "happy")
+            Quest affectionEstrangedDivorce = TTM_Data.GetMarasAffectionEstrangedDivorceQuest()
+            if(affectionEstrangedDivorce.IsRunning())
+                Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
+                if(questSpouse == spouseA)
+                    affectionEstrangedDivorce.SetStage(150)
+                endif
             endif
         endif
     elseif(affectionDiff < 0)
@@ -168,28 +141,32 @@ Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDi
         elseif(level == "troubled")
             msg = "I'm growing distant from " + spouseName + "."
             ; when affection drops to troubled, stop sharing home with player
-            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(spouseA)
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
         elseif(level == "estranged")
             msg = "My relationship with " + spouseName + " has soured."
             ; when affection drops to estranged, stop sharing home with player and stop using player's home
-            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(spouseA)
-            TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouseA)
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
+            TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouseA, "affection")
             ; TODO check that quest isn't running already
-            TTM_JData.GetAffectionQuestKeyword("estranged").SendStoryEvent()
+            TTM_Data.GetAffectionQuestKeyword("estranged").SendStoryEvent()
         endif
     endif
 
     Debug.Notification(msg)
 EndEvent
 
+Event OnTeammateChange(String eventName, string strArg, float fltArg, Form sender)
+    TTM_ServiceBuff.CalculateFollowerMultipliers()
+EndEvent
+
 Event OnMenuOpen(string menuName)
     if(menuName == "Dialogue Menu")
-        Actor player = TTM_JData.GetPlayer()
+        Actor player = TTM_Data.GetPlayer()
         Actor[] actors = MiscUtil.ScanCellNPCs(player, 200)
         int i = 0
         while(i < actors.Length)
             Actor akActor = actors[i]
-            if(TTM_Utils.IsTracking(akActor) && akActor.IsInDialogueWithPlayer())
+            if(MARAS.IsNPCStatus(akActor, "any") && akActor.IsInDialogueWithPlayer())
                 OnStartedDialogue(akActor)
             endif
             i += 1

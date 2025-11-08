@@ -1,7 +1,0 @@
-{% if not isTimePaused and get_quest_stage("TTM_AffectionEstrangedDivorce", true) == 10 and render_mode == "full" %}
-{{decnpc(npc.UUID)}}
-{{decnpc(npc.UUID).name}} and {{player.name}} are in marriage crisis. They are considering whether to reconcile or to proceed with a divorce. The outcome will depend on {{player.name}}'s actions and words towards {{decnpc(npc.UUID).name}}. Words alone are more than enough to sway {{decnpc(npc.UUID).objective_pronoun}} decision.
-If {{decnpc(npc.UUID).name}} and {{player.name}} are in intimate encounters, it may influence their decision in positive ways.
-If {{decnpc(npc.UUID).name}} is ready to make a decision, they will either choose to reconcile with {{player.name}} or to finalize the divorce. {{decnpc(npc.UUID).subjective_pronoun}} will use clear language stating if {{decnpc(npc.UUID).objective_pronoun}} will reconcile or divorce.
-{% endif %}
-

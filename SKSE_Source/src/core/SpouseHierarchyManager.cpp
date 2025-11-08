@@ -2,34 +2,47 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <optional>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
+#include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/Serialization.h"
 #include "utils/ActorUtils.h"
 #include "utils/FormUtils.h"
 
 namespace MARAS {
-    // Helper to get spouse hierarchy faction
-    RE::TESFaction* GetHierarchyFaction() { return Utils::LookupForm<RE::TESFaction>(0x111, "TT_MARAS.esp"); }
+    // Helper to get spouse hierarchy faction (centralized cached lookup)
+    RE::TESFaction* GetHierarchyFaction() { return FormCache::GetSingleton().GetHierarchyFaction(); }
 
-    // Helper to set or remove a faction rank for an actor by FormID
+    // Helper to set or remove a faction rank for an actor by FormID (centralized)
     void SetActorHierarchyFactionRank(RE::FormID actorFormID, std::optional<std::int8_t> rank) {
         if (actorFormID == 0) return;
         auto faction = GetHierarchyFaction();
         if (!faction) return;
-        if (auto actor = RE::TESForm::LookupByID<RE::Actor>(actorFormID)) {
-            if (rank.has_value()) {
-                // Add or update faction rank
-                actor->AddToFaction(faction, rank.value());
-            } else {
-                // Try engine removal; the util will call the relocated engine function
-                // when available and fall back to the -1 rank behavior otherwise.
-                Utils::RemoveFromFaction(actor, faction);
-            }
+        auto actor = RE::TESForm::LookupByID<RE::Actor>(actorFormID);
+        if (!actor) return;
+
+        if (rank.has_value()) {
+            actor->AddToFaction(faction, *rank);
+        } else {
+            Utils::RemoveFromFaction(actor, faction);
         }
     }
+
+    // Convenience wrappers to reduce repeated casting noise
+    inline std::optional<std::int8_t> MakeRankOpt(int rank) {
+        if (rank < INT8_MIN || rank > INT8_MAX) {
+            return std::nullopt;
+        }
+        return static_cast<std::int8_t>(rank);
+    }
+
+    inline void ApplyFactionRank(RE::FormID id, int rank) { SetActorHierarchyFactionRank(id, MakeRankOpt(rank)); }
+    inline void ClearFactionRank(RE::FormID id) { SetActorHierarchyFactionRank(id, std::nullopt); }
 
     // Helper to send hierarchy changed event to Papyrus
     void SendHierarchyChangedEvent(RE::FormID npcFormID, const std::string& action, float newRank) {
@@ -71,8 +84,8 @@ namespace MARAS {
     }
 
     bool SpouseHierarchyManager::SetRank(RE::FormID npcFormID, int rank) {
-        // Normalize ranks: anything >=4 or negative -> remove
-        if (rank < 0 || rank >= 4) {
+        // Normalize ranks: anything >=3 or negative -> remove (valid rank indices: 0,1,2)
+        if (rank < 0 || rank >= static_cast<int>(ranks_.size())) {
             // remove if present
             bool changed = false;
             for (size_t i = 0; i < ranks_.size(); ++i) {
@@ -86,7 +99,7 @@ namespace MARAS {
         }
 
         // If requesting a top-3 rank
-        if (rank >= 0 && rank <= 2) {
+        if (rank >= 0 && rank < static_cast<int>(ranks_.size())) {
             // Find current rank
             int cur = GetRank(npcFormID);
 
@@ -102,8 +115,7 @@ namespace MARAS {
                 }
                 ranks_[rank] = npcFormID;
                 // set faction rank on actor
-                SetActorHierarchyFactionRank(npcFormID,
-                                             static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(rank)));
+                ApplyFactionRank(npcFormID, rank);
                 // Notify Papyrus of promotion with rank difference (old - new)
                 {
                     float diff = static_cast<float>(cur - rank);
@@ -114,15 +126,13 @@ namespace MARAS {
             }
 
             // Occupied spot
-            if (cur >= 0 && cur <= 2) {
+            if (cur >= 0 && cur < static_cast<int>(ranks_.size())) {
                 // NPC already had a top-3 spot: swap
                 ranks_[cur] = occupant;
                 ranks_[rank] = npcFormID;
                 // update faction ranks for both
-                SetActorHierarchyFactionRank(occupant,
-                                             static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(cur)));
-                SetActorHierarchyFactionRank(npcFormID,
-                                             static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(rank)));
+                ApplyFactionRank(occupant, cur);
+                ApplyFactionRank(npcFormID, rank);
                 // Notify Papyrus about both changes (send rank difference old-new)
                 {
                     // npc: old=cur -> new=rank
@@ -145,14 +155,14 @@ namespace MARAS {
                     }
                 }
                 // update faction ranks: set new npc, remove old occupant
-                SetActorHierarchyFactionRank(npcFormID,
-                                             static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(rank)));
-                SetActorHierarchyFactionRank(occupant, std::nullopt);
+                ApplyFactionRank(npcFormID, rank);
+                ClearFactionRank(occupant);
                 // Notify Papyrus: send rank differences (old - new)
                 {
                     float npcDiff = static_cast<float>(cur - rank);
                     SendHierarchyChangedEvent(npcFormID, std::string("promote"), npcDiff);
-                    float occDiff = static_cast<float>(rank - 4);
+                    // occupant demoted out of hierarchy (represented as rank size -> outside range)
+                    float occDiff = static_cast<float>(rank - static_cast<int>(ranks_.size()));
                     SendHierarchyChangedEvent(occupant, std::string("demote"), occDiff);
                 }
                 // ensure no other gaps
@@ -173,8 +183,7 @@ namespace MARAS {
             if (ranks_[i] == 0) {
                 ranks_[i] = npcFormID;
                 // set faction rank
-                SetActorHierarchyFactionRank(npcFormID,
-                                             static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(i)));
+                ApplyFactionRank(npcFormID, static_cast<int>(i));
                 MARAS_LOG_INFO("Assigned spouse {:08X} to hierarchy slot {}", npcFormID, i);
                 return;
             }
@@ -187,7 +196,7 @@ namespace MARAS {
         for (size_t i = 0; i < ranks_.size(); ++i) {
             if (ranks_[i] == npcFormID) {
                 // remove faction rank
-                SetActorHierarchyFactionRank(npcFormID, std::nullopt);
+                ClearFactionRank(npcFormID);
                 ranks_[i] = 0;
                 wasPresent = true;
             }
@@ -199,32 +208,93 @@ namespace MARAS {
     }
 
     void SpouseHierarchyManager::FillGaps() {
-        // Pull all married NPCs and ensure top slots are filled without duplicates
+        // Rebuild the top slots by keeping existing top-ranked spouses in order
+        // and then appending other married NPCs. This ensures that when a
+        // top slot is vacated (e.g. divorce at slot 0) the remaining top-ranked
+        // spouses shift up (1->0, 2->1) and the 3rd slot is filled from the
+        // remaining married NPCs, if any.
         auto& rel = NPCRelationshipManager::GetSingleton();
         auto married = rel.GetAllMarried();
 
-        // Build a set of already assigned
-        std::unordered_set<RE::FormID> assigned;
+        // Build candidates: existing top-ranked spouses first (preserve their relative order),
+        // then other married NPCs not already present.
+        std::vector<RE::FormID> candidates;
+        candidates.reserve(ranks_.size() + married.size());
+        std::unordered_set<RE::FormID> present;
+
         for (auto id : ranks_) {
-            if (id != 0) assigned.insert(id);
+            if (id != 0) {
+                candidates.push_back(id);
+                present.insert(id);
+            }
         }
 
-        // For each slot, if empty, find first married not assigned
-        for (size_t i = 0; i < ranks_.size(); ++i) {
-            if (ranks_[i] == 0) {
-                for (auto id : married) {
-                    if (assigned.contains(id)) continue;
-                    // assign
-                    ranks_[i] = id;
-                    assigned.insert(id);
-                    // set faction rank for this assigned spouse
-                    SetActorHierarchyFactionRank(id,
-                                                 static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(i)));
-                    MARAS_LOG_DEBUG("Filled spouse hierarchy slot {} with {:08X}", i, id);
+        for (auto id : married) {
+            if (present.find(id) == present.end()) {
+                candidates.push_back(id);
+                present.insert(id);
+            }
+        }
+
+        // Compose new ranks array from candidates, preserving order and shifting up as needed
+        std::array<RE::FormID, 3> newRanks;
+        newRanks.fill(0);
+        for (size_t i = 0; i < ranks_.size() && i < candidates.size(); ++i) {
+            newRanks[i] = candidates[i];
+        }
+
+        // Clear faction rank for any old occupant that no longer appears in newRanks
+        for (auto old : ranks_) {
+            if (old == 0) continue;
+            bool stillPresent = false;
+            for (auto nr : newRanks) {
+                if (nr == old) {
+                    stillPresent = true;
                     break;
                 }
             }
+            if (!stillPresent) {
+                ClearFactionRank(old);
+            }
         }
+
+        // Apply faction ranks for new positions and log assignments
+        for (size_t i = 0; i < newRanks.size(); ++i) {
+            auto id = newRanks[i];
+            if (id != 0) {
+                ApplyFactionRank(id, static_cast<int>(i));
+                MARAS_LOG_DEBUG("Filled spouse hierarchy slot {} with {:08X}", i, id);
+            }
+        }
+
+        // Send hierarchy changed events for any spouse whose rank changed
+        for (auto id : present) {
+            if (id == 0) continue;
+            int oldRank = 4;  // default 4+ for not present
+            for (size_t i = 0; i < ranks_.size(); ++i) {
+                if (ranks_[i] == id) {
+                    oldRank = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            int newRank = 4;
+            for (size_t i = 0; i < newRanks.size(); ++i) {
+                if (newRanks[i] == id) {
+                    newRank = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            if (oldRank != newRank) {
+                const char* action = (newRank < oldRank) ? "promote" : "demote";
+                float diff = static_cast<float>(oldRank - newRank);
+                SendHierarchyChangedEvent(id, std::string(action), diff);
+            }
+        }
+
+        // Commit new ranks
+        ranks_ = newRanks;
     }
 
     bool SpouseHierarchyManager::Save(SKSE::SerializationInterface* serialization) const {
@@ -250,15 +320,20 @@ namespace MARAS {
         ranks_.fill(0);
 
         for (std::uint32_t i = 0; i < slotCount && i < ranks_.size(); ++i) {
-            RE::FormID id = 0;
-            if (!serialization->ReadRecordData(id)) return false;
-            ranks_[i] = id;
+            RE::FormID savedId = 0;
+            if (!serialization->ReadRecordData(savedId)) return false;
+            // Resolve saved formIDs to current load-order IDs
+            RE::FormID resolved = 0;
+            if (savedId != 0 && serialization->ResolveFormID(savedId, resolved)) {
+                ranks_[i] = resolved;
+            } else {
+                ranks_[i] = 0;  // unresolved or empty
+            }
         }
         // After loading ranks, apply faction ranks to actors
         for (size_t i = 0; i < ranks_.size(); ++i) {
             if (ranks_[i] != 0) {
-                SetActorHierarchyFactionRank(ranks_[i],
-                                             static_cast<std::optional<std::int8_t>>(static_cast<std::int8_t>(i)));
+                ApplyFactionRank(ranks_[i], static_cast<int>(i));
             }
         }
 
@@ -270,7 +345,7 @@ namespace MARAS {
         // remove faction rank from any assigned spouses
         for (auto id : ranks_) {
             if (id != 0) {
-                SetActorHierarchyFactionRank(id, std::nullopt);
+                ClearFactionRank(id);
             }
         }
 

@@ -71,7 +71,7 @@ Function RenderNpcsList(TTM_MCM mcm) global
             skipNpc = true
         else
             if(!searchAll)
-                string status = TTM_Utils.GetRelationshipStatus(npc)
+                string status = MARAS.GetNpcStatusName(npc)
                 if(status == "candidate")
                     skipNpc = !searchCandidates
                 elseif(status == "engaged")

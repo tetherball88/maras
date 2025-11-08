@@ -11,26 +11,23 @@ Function Fragment_0(ObjectReference akSpeakerRef)
 Actor akSpeaker = akSpeakerRef as Actor
 ;BEGIN CODE
 ;OnBegin
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("TTM_DialogueManagerAffectionDivorceQst:OnBegin:"+PromptKey+":useAI:"+UseAI)
-    endif
     if(StageTarget > 0)
         self.GetOwningQuest().SetStage(StageTarget)
     endif
 
     if(PromptKey == "maras_affection_estranged_divorce_intimidation_success")
-        FavorDialogueScript pFDS = TTM_JData.GetDialogueFavorQuest() as FavorDialogueScript
+        FavorDialogueScript pFDS = TTM_Data.GetDialogueFavorQuest() as FavorDialogueScript
         pFDS.Intimidate(akSpeaker)
     elseif(PromptKey == "maras_affection_estranged_divorce_persuasion_success")
-        FavorDialogueScript pFDS = TTM_JData.GetDialogueFavorQuest() as FavorDialogueScript
+        FavorDialogueScript pFDS = TTM_Data.GetDialogueFavorQuest() as FavorDialogueScript
         pFDS.Persuade(akSpeaker)
     endif
 
     if(UseAI)
-        string prompt = TTM_JData.GetDialoguePrompt(PromptKey)
-        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_JData.GetPlayer()) + "\"}"
+        string prompt = TTM_Data.GetDialoguePrompt(PromptKey)
+        string values = "{\"npcName\": \"" + TTM_Utils.GetActorName(akSpeaker) + "\", \"playerName\": \"" + TTM_Utils.GetActorName(TTM_Data.GetPlayer()) + "\"}"
         if(prompt != "")
-            TTM_RequestLLMDialogue.RequestDialogue(prompt, values, akSpeaker, TTM_JData.GetPlayer())
+            TTM_Utils.RequestDialogue(prompt, values, akSpeaker, TTM_Data.GetPlayer())
         endif
     endif
 ;END CODE

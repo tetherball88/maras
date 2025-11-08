@@ -5,6 +5,10 @@ scriptname TTM_ServiceRelationships
   @param npc The NPC actor
 /;
 Function MakeNpcCandidate(Actor npc) global
+    int playerRank = TTM_Data.GetPlayer().GetRelationshipRank(npc)
+    MARAS.SetPermanentAffection(npc, 50 + (playerRank * 10))
+    string msg = "I think " + TTM_Utils.GetActorName(npc) + " is a good match."
+    Debug.Notification(msg)
 EndFunction
 
 ;/
@@ -12,24 +16,31 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcEngaged(Actor npc) global
-    bool alwaysSkipWeddings = TTM_JData.GetSkipWedding()
-    bool answerSkipWedding
-    if(TTM_JData.GetPlayerHadWedding() && !alwaysSkipWeddings)
-        answerSkipWedding = TTM_Utils.ShowMessageMessage("Do you want skip Wedding Ceremony next time you get married? You can set in MCM to always skip weddings.")
+    bool alwaysSkipWeddings = TTM_Data.GetSkipWedding()
+    int answerSkipWedding = -1
+    if(TTM_Data.GetPlayerHadWedding() && !alwaysSkipWeddings && StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 0)
+        answerSkipWedding = TTM_Data.GetSkipWeddingMsg().Show()
     endif
-    if(alwaysSkipWeddings || answerSkipWedding)
+    if(answerSkipWedding == 2)
+        StorageUtil.SetIntValue(none, "TTM_DontShowSkipWeddingMessage", 1)
+    endif
+    if(alwaysSkipWeddings || answerSkipWedding == 0)
         TTM_Utils.FadeToBlack()
-        Debug.Notification("Congratulations! You and " + TTM_Utils.GetActorName(npc) + " got married!")
+        MARAS.PromoteNPCToStatus(npc, "married")
         TTM_ServiceSkyrimNet.SimulatePostWeddingIfSkippedBehavior(npc)
         return
     endif
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, 3)
     TTM_ServiceMarriageQuest.StartEngagement(npc)
-    if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
-        npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
+    if(npc.HasSpell(TTM_Data.GetBreakupCooldownSpell()))
+        npc.RemoveSpell(TTM_Data.GetBreakupCooldownSpell())
     endif
     MARAS.SetPermanentAffection(npc, 100)
+    string msg = TTM_Utils.GetActorName(npc) + " and I are engaged to be married."
+    Debug.Notification(msg)
+
+    PacifyFianceOrSpouse(npc)
 EndFunction
 
 ;/
@@ -37,10 +48,7 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcMarried(Actor npc) global
-    Actor player = TTM_JData.GetPlayer()
-
-    ; TTM_ServiceHierarchy.AddLeadSpouse(npc)
-
+    Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, 4)
     ;re-evaluate spouses bonuses on each spouse added
     TTM_ServiceBuff.CalculatePermanentMultipliers()
@@ -48,12 +56,17 @@ Function MakeNpcMarried(Actor npc) global
 
     ; it will check if npc who becomes spouse actually is current fiance with wedding about to happen
     TTM_ServiceMarriageQuest.SkipWedding(npc)
-
-    TTM_ServiceSpouseAssets.FindSpouseHome(npc)
-    if(npc.HasSpell(TTM_JData.GetBreakdownCooldownSpell()))
-        npc.RemoveSpell(TTM_JData.GetBreakdownCooldownSpell())
+    if(npc.HasSpell(TTM_Data.GetBreakupCooldownSpell()))
+        npc.RemoveSpell(TTM_Data.GetBreakupCooldownSpell())
     endif
     MARAS.SetPermanentAffection(npc, 100)
+    string msg = TTM_Utils.GetActorName(npc) + " and I are now newlyweds."
+    Debug.Notification(msg)
+
+    if(npc.GetActorValue("Aggression") > 0)
+        npc.AddSpell(TTM_Data.GetPacifyFianceOrSpouseSpell())
+    endif
+    PacifyFianceOrSpouse(npc)
 EndFunction
 
 ;/
@@ -61,20 +74,21 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcDivorced(Actor npc) global
-    Actor player = TTM_JData.GetPlayer()
-    Faction playerFaction = TTM_JData.GetPlayerFaction()
-
-    ; TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
+    bool res = TTM_Data.GetDivorceKeyword().SendStoryEventAndWait(akRef1 = npc)
+    Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -2)
     ;re-evaluate spouses bonuses on each spouse removed
     TTM_ServiceBuff.CalculatePermanentMultipliers()
     TTM_ServiceBuff.CalculateFollowerMultipliers()
 
-    TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
+    TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(npc, "divorce")
     TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(npc)
     SetBrokeupTime(npc)
-    npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
+    npc.AddSpell(TTM_Data.GetBreakupCooldownSpell())
     MARAS.SetPermanentAffection(npc, 0)
+    PacifyFianceOrSpouse(npc, false)
+    string msg = "Me and " + TTM_Utils.GetActorName(npc) + " are now divorced."
+    Debug.Notification(msg)
 EndFunction
 
 ;/
@@ -82,11 +96,14 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcJilted(Actor npc) global
-    Actor player = TTM_JData.GetPlayer()
+    Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -1)
     SetBrokeupTime(npc)
-    npc.AddSpell(TTM_JData.GetBreakdownCooldownSpell())
-    MARAS.SetPermanentAffection(npc, 100)
+    npc.AddSpell(TTM_Data.GetBreakupCooldownSpell())
+    MARAS.SetPermanentAffection(npc, 0)
+    PacifyFianceOrSpouse(npc, false)
+    string msg = "My engagement with " + TTM_Utils.GetActorName(npc) + " was called off."
+    Debug.Notification(msg)
 EndFunction
 
 ;/
@@ -94,20 +111,19 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
-    bool spouse = TTM_Utils.IsSpouse(npc)
-    bool engaged = TTM_Utils.IsFiance(npc)
+    bool spouse = MARAS.IsNPCStatus(npc, "married")
+    bool engaged = MARAS.IsNPCStatus(npc, "engaged")
     if(spouse || engaged)
         if(spouse)
-            ; TTM_ServiceHierarchy.RemoveLeadSpouse(npc)
             ;re-evaluate spouses bonuses on each spouse removed
             TTM_ServiceBuff.CalculatePermanentMultipliers()
             TTM_ServiceBuff.CalculateFollowerMultipliers()
         endif
 
         if(isPlayerKiller)
-            TTM_JData.SetPlayerKiller(isPlayerKiller)
+            TTM_Data.SetPlayerKiller(isPlayerKiller)
             SetKilledByPlayer(npc)
-            TTM_ServiceSpouseAssets.StopShareHomeWithPlayer(npc)
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(npc, "deceased")
         endif
     endif
     ; re-check marriage related quests and stop if any were ongoing for killed npc
@@ -115,112 +131,114 @@ Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
 
 EndFunction
 
-; Manage TTM utility factions related to marriage status
-Function ManageFactions(Actor npc, string status) global
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("ManageFactions:npc:"+TTM_Utils.GetActorName(npc)+":"+status)
-    endif
-    TTM_Utils.SetRelationshipStatus(npc, status)
-    if(status == "candidate")
-        npc.AddToFaction(TTM_JData.GetMarriagePotentialFaction())
-    elseif(status == "engaged")
-        npc.AddToFaction(TTM_JData.GetMarriageAskedFaction())
-        npc.AddToFaction(TTM_JData.GetCourtingFaction())
-    elseif(status == "married")
-        npc.RemoveFromFaction(TTM_JData.GetMarriageAskedFaction())
-        npc.RemoveFromFaction(TTM_JData.GetCourtingFaction())
-        ; double check if hirelings are still can be followers after marriage
-        npc.RemoveFromFaction(TTM_JData.GetPotentialHirelingFaction())
-
-        npc.AddToFaction(TTM_JData.GetMarriedFaction())
-        npc.AddToFaction(TTM_JData.GetPlayerFaction())
-        npc.AddToFaction(TTM_JData.GetPlayerBedOwnershipFaction())
-    elseif(status == "jilted")
-        npc.RemoveFromFaction(TTM_JData.GetMarriageAskedFaction())
-        npc.RemoveFromFaction(TTM_JData.GetCourtingFaction())
-    elseif(status == "divorced")
-        npc.RemoveFromFaction(TTM_JData.GetMarriedFaction())
-        npc.RemoveFromFaction(TTM_JData.GetPlayerFaction())
-        npc.RemoveFromFaction(TTM_JData.GetPlayerBedOwnershipFaction())
-    endif
-EndFunction
-
-; Dialogue line has 24 hours cooldown so will assume if it is from dialogue it already passed at least one day
-Function ShareIncome(Actor spouse, bool fromDialogue = false) global
+Function ShareIncome(Actor spouse) global
     float currentTime = Utility.GetCurrentGameTime()
     float lastTime = GetLastTimeSharedIncome(spouse)
     float diff = currentTime - lastTime
 
-    if(lastTime == -1 || fromDialogue)
+    if(lastTime == -1)
         diff = 1
-    endif
-
-    if(TTM_Debug.IsTrace())
-        TTM_Debug.trace("ShareIncome:current:"+currentTime+":diff:"+diff+":"+lastTime)
     endif
 
     if(diff >= 1)
         int diffInt = diff as int
-        TTM_JData.GetPlayer().AddItem(TTM_JData.GetGoldMisc(), diffInt * 100)
+        TTM_Data.GetPlayer().AddItem(TTM_Data.GetGoldMisc(), PapyrusUtil.ClampInt(diffInt * 100, 0, 500))
         SetLastTimeSharedIncome(spouse)
     endif
+EndFunction
+
+Function AddDivorceFee(Quest divorceQuest) global
+    float lastTimePayedDivorceFee = StorageUtil.GetFloatValue(none, "TTM_LastTimePayedDivorceFee", -1)
+    float now = Utility.GetCurrentGameTime()
+
+    if(lastTimePayedDivorceFee != -1 && now - lastTimePayedDivorceFee < 7)
+        ; less than 7 days since last payment
+        return
+    endif
+
+    Actor spouse = StorageUtil.GetFormValue(none, "TTM_DivorceLetter_Spouse") as Actor
+    Actor player = TTM_Data.GetPlayer()
+    Faction crimeFaction = spouse.GetCrimeFaction()
+
+
+    if(crimeFaction == none)
+        crimeFaction = TTM_Data.GetDefaultCrimeFaction()
+    endif
+
+    int playerWealth = PapyrusUtil.ClampInt((player.GetGoldAmount() * 0.3) as int, 0, 1000)
+    int housesOwned = Game.QueryStat("Houses Owned") * 700
+    int horsesOwned = Game.QueryStat("Horses Owned") * 500
+    int questsCompleted = PapyrusUtil.ClampInt(Game.QueryStat("Quests Completed") * 100, 0, 1000)
+    int dungeonsCleared = PapyrusUtil.ClampInt(Game.QueryStat("Dungeons Cleared") * 100, 0, 1000)
+
+    int fee = 100 + playerWealth + housesOwned + horsesOwned + questsCompleted + dungeonsCleared
+
+    crimeFaction.SetCrimeGold(fee)
+    StorageUtil.SetFloatValue(none, "TTM_LastTimePayedDivorceFee", now)
+    StorageUtil.SetFormValue(none, "TTM_DivorceLetter_Spouse", none)
+    divorceQuest.Stop()
+
+    TTM_Data.GetDivorceSettlementMsg().Show(fee)
 EndFunction
 
 ;/ ==============================
    SECTION: trackedNpcs map
 ============================== /;
 ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
-    if(TTM_JMethods.HasFormValue(npc, "HomeMarker"))
-        return TTM_JMethods.GetFormValue(npc, "HomeMarker") as ObjectReference
+    if(StorageUtil.HasFormValue(npc, "HomeMarker"))
+        return StorageUtil.GetFormValue(npc, "HomeMarker") as ObjectReference
     endif
 
-    ObjectReference homeMarker = npc.PlaceAtMe(TTM_JData.GetHomeSandboxMarkerStatic(), 1, true)
-    PO3_SKSEFunctions.SetLinkedRef(npc, homeMarker, TTM_JData.GetHomeSandboxKeyword())
-    TTM_JMethods.SetFormValue(npc, "HomeMarker", homeMarker)
+    ObjectReference homeMarker = npc.PlaceAtMe(TTM_Data.GetHomeSandboxMarkerStatic(), 1, true)
+    PO3_SKSEFunctions.SetLinkedRef(npc, homeMarker, TTM_Data.GetHomeSandboxKeyword())
+    StorageUtil.SetFormValue(npc, "HomeMarker", homeMarker)
     return homeMarker
 EndFunction
 
 Function SetTrackedNpcHome(Actor npc, Location home) global
-    TTM_JMethods.SetFormValue(npc, "HomeLocation", home)
+    StorageUtil.SetFormValue(npc, "HomeLocation", home)
 EndFunction
 
 Location Function GetTrackedNpcHome(Actor npc) global
-    return TTM_JMethods.GetFormValue(npc, "HomeLocation") as Location
+    return StorageUtil.GetFormValue(npc, "HomeLocation") as Location
 EndFunction
 
-Function SetTrackedNpcMcmTypeChanged(Actor npc) global
-    TTM_JMethods.SetIntValue(npc, "McmTypeChanged", 1)
-EndFunction
-
-bool Function GetTrackedNpcMcmTypeChanged(Actor npc) global
-    return TTM_JMethods.GetIntValue(npc, "McmTypeChanged") == 1
-EndFunction
 
 Function SetLastTimeSharedIncome(Actor npc) global
-    TTM_JMethods.SetFloatValue(npc, "LastTimeSharedIncome", Utility.GetCurrentGameTime())
+    StorageUtil.SetFloatValue(npc, "LastTimeSharedIncome", Utility.GetCurrentGameTime())
 EndFunction
 
 float Function GetLastTimeSharedIncome(Actor npc) global
-    return TTM_JMethods.GetFloatValue(npc, "LastTimeSharedIncome", -1.0)
+    return StorageUtil.GetFloatValue(npc, "LastTimeSharedIncome", -1.0)
 EndFunction
 
 Function SetBrokeupTime(Actor npc) global
-    TTM_JMethods.SetFloatValue(npc, "BrokeupTime", Utility.GetCurrentGameTime())
+    StorageUtil.SetFloatValue(npc, "BrokeupTime", Utility.GetCurrentGameTime())
 EndFunction
 
 float Function GetBrokeupTime(Actor npc) global
-    return TTM_JMethods.GetFloatValue(npc, "BrokeupTime", -1.0)
+    return StorageUtil.GetFloatValue(npc, "BrokeupTime", -1.0)
 EndFunction
 
 Function SetKilledByPlayer(Actor npc) global
-    TTM_JMethods.SetIntValue(npc, "KilledByPlayer", 1)
+    StorageUtil.SetIntValue(npc, "KilledByPlayer", 1)
 EndFunction
 
 bool Function GetKilledByPlayer(Actor npc) global
-    return TTM_JMethods.GetIntValue(npc, "KilledByPlayer") == 1
+    return StorageUtil.GetIntValue(npc, "KilledByPlayer") == 1
 EndFunction
 
-Function CountLoveInterests() global
-    int count = MARAS.GetStatusCount("married") + MARAS.GetStatusCount("engaged")
-    TTM_JData.GetSetSpouseCountGlobal(count)
+; If player somehow engaged with hostile by default NPC, we need to pacify them
+; If player broke up with fiance/spouse, we need to remove the pacify spell
+Function PacifyFianceOrSpouse(Actor npc, bool add = true) global
+    float aggr = npc.GetActorValue("Aggression")
+    if(add)
+        if(!npc.HasSpell(TTM_Data.GetPacifyFianceOrSpouseSpell()) && (aggr > 0 || aggr == -1))
+            npc.AddSpell(TTM_Data.GetPacifyFianceOrSpouseSpell())
+        endif
+    else
+        if(npc.HasSpell(TTM_Data.GetPacifyFianceOrSpouseSpell()))
+            npc.RemoveSpell(TTM_Data.GetPacifyFianceOrSpouseSpell())
+        endif
+    endif
 EndFunction
