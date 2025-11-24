@@ -4,6 +4,7 @@ GlobalVariable Property MCM_StartDialGender auto
 GlobalVariable Property TTM_MCM_PreferVanillaAudio  Auto
 GlobalVariable Property TTM_MCM_AllowAIDial  Auto
 GlobalVariable Property TTM_EnablePolygamyToggle Auto
+GlobalVariable Property TTM_MinRelRankForDial Auto
 
 
 int property oid_SettingsStartDialGender auto
@@ -15,6 +16,7 @@ int property oid_SettingsCheatAlwaysSuccess auto
 int property oid_SkipNextWeddings auto
 int property oid_SettingsCheatDebugSpell auto
 int property oid_EnablePolygamyToggle auto
+int property oid_MinRelRankForDial auto
 
 int property oid_SearchNpc auto
 int property oid_SearchFilterAll auto
@@ -181,6 +183,8 @@ event OnOptionSliderOpen(int option)
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionSliderOpen(self, option)
         endif
+    elseif(currentPage == "Settings")
+        TTM_MCM_SettingsPage.OnOptionSliderOpen(self, option)
     endif
 endEvent
 
@@ -190,6 +194,8 @@ event OnOptionSliderAccept(int option, float value)
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionSliderAccept(self, option, value)
         endif
+    elseif(currentPage == "Settings")
+        TTM_MCM_SettingsPage.OnOptionSliderAccept(self, option, value)
     endif
 endEvent
 

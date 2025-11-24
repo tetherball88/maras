@@ -44,6 +44,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
         hasSkyrimNet = 1
     endif
     mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("Show start dialogue to genders: ", genderOptions[mcm.MCM_StartDialGender.GetValue() as int])
+    mcm.oid_MinRelRankForDial = mcm.AddSliderOption("Min relationship rank for dialogue", mcm.TTM_MinRelRankForDial.GetValue(), "{0}")
     mcm.oid_SettingsPreferVanillaAudio= mcm.AddToggleOption("Use vanilla voiced dialogues if possible: ", mcm.TTM_MCM_PreferVanillaAudio.GetValue() as int, hasSkyrimNet)
     mcm.oid_SettingsAllowAIDial = mcm.AddToggleOption("Use AI generated responses in dialogues: ", mcm.TTM_MCM_AllowAIDial.GetValue() as int, hasSkyrimNet)
 EndFunction
@@ -120,6 +121,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText("Toggles a debug spell on the player. When cast on an NPC, the spell cycles that NPC's MARAS status through: unknown -> candidate -> engaged -> married -> divorced. Useful for testing romance flows and status transitions.")
     elseif(option == mcm.oid_EnablePolygamyToggle)
         mcm.SetInfoText("Enables polygamy, allowing multiple marriages without completing the polygamy quest.")
+    elseif(option == mcm.oid_MinRelRankForDial)
+        mcm.SetInfoText("Sets the minimum relationship rank required for NPCs to show the initial romance dialogue. \nRelationship ranks range from -4 (arch enemy) to 4 (lover).")
     endif
 EndFunction
 
@@ -170,6 +173,9 @@ Function OnOptionDefault(TTM_MCM mcm, int option) global
             _player.RemoveSpell(_debug)
         endif
         mcm.SetToggleOptionValue(mcm.oid_SettingsCheatDebugSpell, 0)
+    elseif(option == mcm.oid_MinRelRankForDial)
+        mcm.TTM_MinRelRankForDial.SetValue(-4)
+        mcm.SetSliderOptionValue(option, -4, "{0}")
     endif
 EndFunction
 
@@ -179,4 +185,20 @@ EndFunction
 
 Function OnOptionInputAccept(TTM_MCM mcm, int option, string value) global
 
+EndFunction
+
+Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
+    if(option == mcm.oid_MinRelRankForDial)
+        mcm.SetSliderDialogStartValue(mcm.TTM_MinRelRankForDial.GetValue())
+        mcm.SetSliderDialogDefaultValue(-4)
+        mcm.SetSliderDialogRange(-4, 4)
+        mcm.SetSliderDialogInterval(1)
+    endif
+EndFunction
+
+Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
+    if(option == mcm.oid_MinRelRankForDial)
+        mcm.TTM_MinRelRankForDial.SetValue(value)
+        mcm.SetSliderOptionValue(option, value, "{0}")
+    endif
 EndFunction

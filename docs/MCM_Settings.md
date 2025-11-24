@@ -75,6 +75,12 @@ Options:
   - When **enabled**, applicable lines can use **AI-generated responses**.
   - When **disabled**, those lines will always use **silent fallback dialogues** (no AI improv, just the written line).
 
+- **Min relationship rank for dialogue**
+  Sets the minimum relationship rank required for NPCs to show the initial romance dialogue `(M) Ever think we could be something more?`.
+  - Relationship ranks range from **-4 (arch enemy)** to **4 (lover)**.
+  - Default: **-4**
+  - Use this to restrict romance prompts to NPCs you have a positive relationship with, or open it up to enemies for dramatic roleplay.
+
 > These two toggles only truly **come alive together** when you use them with the **SkyrimNet** mod.
 
 ---
@@ -208,6 +214,8 @@ If you ask **“Will you marry me?”** – the answer is effectively “Yes, of
   - With SkyrimNet: pick based on whether you value **stability** (enabled) or **full AI voicing** (disabled).
 - **Use AI generated responses in dialogues:**
   - Recommended: **Enabled** if you’re using SkyrimNet and like dynamic storytelling.
+- **Min relationship rank for dialogue:**
+  - Default: **-4** – allows romance with enemies and positive relationships.
 - **Log level:**
   - Default: **warning** – good for most players.
 - **Log destination:**
