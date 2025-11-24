@@ -162,15 +162,12 @@ EndEvent
 Event OnMenuOpen(string menuName)
     if(menuName == "Dialogue Menu")
         Actor player = TTM_Data.GetPlayer()
-        Actor[] actors = MiscUtil.ScanCellNPCs(player, 200)
-        int i = 0
-        while(i < actors.Length)
-            Actor akActor = actors[i]
-            if(MARAS.IsNPCStatus(akActor, "any") && akActor.IsInDialogueWithPlayer())
-                OnStartedDialogue(akActor)
-            endif
-            i += 1
-        endwhile
+        ObjectReference ref = Game.GetCurrentCrosshairRef()
+        Actor akActor = ref as Actor
+        TTM_Debug.debug("MainController:OnMenuOpen: Dialogue Menu with " + TTM_Utils.GetActorName(akActor))
+        if(MARAS.IsNPCStatus(akActor, "any") && akActor.IsInDialogueWithPlayer())
+            OnStartedDialogue(akActor)
+        endif
     elseif(menuName == "GiftMenu")
         TTM_ServiceGift.OnGiftMenuOpen()
     endif

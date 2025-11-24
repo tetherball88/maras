@@ -59,7 +59,8 @@ namespace MARAS::Utils {
             if (form) {
                 return form;
             }
-            MARAS_LOG_WARN("Could not find form {:08X} in plugin '{}'", maskedFormID, pluginName);
+            MARAS_LOG_WARN("Could not find form {:08X} (full {:08X}, compile index=0x{:02X}) in plugin '{}'",
+                           maskedFormID, fullFormID, file->GetCompileIndex(), pluginName);
             return nullptr;
         }
 

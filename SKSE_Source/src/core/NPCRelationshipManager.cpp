@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <exception>
 
 #include "core/FormCache.h"
 #include "core/NPCTypeDeterminer.h"
@@ -170,6 +171,20 @@ namespace MARAS {
             return false;
         }
 
+        // Validate actor existence and basic data before proceeding. This avoids
+        // calling into the engine with invalid pointers that can crash in VR builds
+        // (observed as read from invalid addresses while scanning or manipulating
+        // actor internals).
+        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
+        if (!actor) {
+            MARAS_LOG_WARN("RegisterAsCandidate: Cannot find actor for FormID {:08X}", npcFormID);
+            return false;
+        }
+        if (!actor->GetActorBase()) {
+            MARAS_LOG_WARN("RegisterAsCandidate: Actor base missing for FormID {:08X}", npcFormID);
+            return false;
+        }
+
         // Automatically determine all attributes
         SocialClass socialClass = DetermineSocialClass(npcFormID);
         SkillType skillType = DetermineSkillType(npcFormID);
@@ -188,18 +203,48 @@ namespace MARAS {
         candidates.insert(npcFormID);
 
         // Store NPC data
-        npcData[npcFormID] = NPCRelationshipData(npcFormID, socialClass, skillType, temperament);
+        try {
+            npcData[npcFormID] = NPCRelationshipData(npcFormID, socialClass, skillType, temperament);
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("Exception while storing NPC data for {:08X}: {}", npcFormID, e.what());
+            // Rollback registration to keep data consistent
+            allRegistered.erase(npcFormID);
+            candidates.erase(npcFormID);
+            return false;
+        }
 
-        // Add to appropriate factions with enum values as ranks
-        AddToSocialClassFaction(npcFormID, static_cast<std::int8_t>(socialClass));
-        AddToSkillTypeFaction(npcFormID, static_cast<std::int8_t>(skillType));
-        AddToTemperamentFaction(npcFormID, static_cast<std::int8_t>(temperament));
+        // Add to appropriate factions with enum values as ranks. Wrap calls in
+        // try/catch to ensure that plugin doesn't crash the game if an engine call
+        // fails or throws.
+        try {
+            AddToSocialClassFaction(npcFormID, static_cast<std::int8_t>(socialClass));
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("AddToSocialClassFaction exception for {:08X}: {}", npcFormID, e.what());
+        }
+        try {
+            AddToSkillTypeFaction(npcFormID, static_cast<std::int8_t>(skillType));
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("AddToSkillTypeFaction exception for {:08X}: {}", npcFormID, e.what());
+        }
+        try {
+            AddToTemperamentFaction(npcFormID, static_cast<std::int8_t>(temperament));
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("AddToTemperamentFaction exception for {:08X}: {}", npcFormID, e.what());
+        }
 
         // Add to tracked faction with status as rank
-        UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
+        try {
+            UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("UpdateTrackedFactionRank exception for {:08X}: {}", npcFormID, e.what());
+        }
 
         // Manage status-based faction membership
-        ManageFactions(npcFormID, RelationshipStatus::Candidate);
+        try {
+            ManageFactions(npcFormID, RelationshipStatus::Candidate);
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("ManageFactions exception for {:08X}: {}", npcFormID, e.what());
+        }
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
@@ -662,6 +707,10 @@ namespace MARAS {
         auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
         if (!actor) {
             MARAS_LOG_ERROR("Cannot find actor for FormID {:08X}", npcFormID);
+            return false;
+        }
+        if (!actor->GetActorBase()) {
+            MARAS_LOG_ERROR("Cannot determine base for actor {:08X}; aborting AddToFaction", npcFormID);
             return false;
         }
 

@@ -42,8 +42,28 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
+        // Defensive validation: ensure we have a valid actor base/form so we don't
+        // cause the engine to deref invalid pointers later (observed in VR build).
+        if (!npc->GetActorBase()) {
+            MARAS_LOG_WARN("RegisterCandidate: actor has no base data (possible invalid actor) for form {:08X}",
+                           npc->GetFormID());
+            return false;
+        }
+
+        // Avoid registering the player or invalid actor refs
+        if (npc->IsPlayerRef()) {
+            MARAS_LOG_WARN("RegisterCandidate: cannot register player (form {:08X}) as candidate", npc->GetFormID());
+            return false;
+        }
+
         auto& manager = NPCRelationshipManager::GetSingleton();
-        bool result = manager.RegisterAsCandidate(npc->GetFormID());
+        bool result = false;
+        try {
+            result = manager.RegisterAsCandidate(npc->GetFormID());
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("RegisterCandidate: exception when registering {:08X}: {}", npc->GetFormID(), e.what());
+            result = false;
+        }
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
@@ -57,6 +77,12 @@ namespace MARAS::PapyrusInterface {
     bool UnregisterNPC(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) {
             MARAS_LOG_WARN("UnregisterNPC: null actor provided");
+            return false;
+        }
+
+        if (!npc->GetActorBase()) {
+            MARAS_LOG_WARN("UnregisterNPC: actor has no base data (possible invalid actor) for form {:08X}",
+                           npc->GetFormID());
             return false;
         }
 
