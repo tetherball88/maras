@@ -63,6 +63,7 @@ Function RenderRightColumn(TTM_MCM mcm) global
         hasDebug = player.HasSpell(TTM_Data.GetDebugSpell())
     endif
     mcm.oid_SettingsCheatDebugSpell = mcm.AddToggleOption("Enable debug spell (grants a debug power)", hasDebug)
+    mcm.oid_EnablePolygamyToggle = mcm.AddToggleOption("Enable polygamy (bypasses quest)", mcm.TTM_EnablePolygamyToggle.GetValue() as int)
 EndFunction
 
 Function OnOptionSelect(TTM_MCM mcm, int option) global
@@ -98,6 +99,8 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
                 mcm.SetToggleOptionValue(option, 0)
             endif
         endif
+    elseif(option == mcm.oid_EnablePolygamyToggle)
+        mcm.SetToggleOptionValue(option, TTM_Utils.ToggleGlobalVariable(mcm.TTM_EnablePolygamyToggle))
     endif
 EndFunction
 
@@ -115,6 +118,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText("If enabled - you will have to attend wedding ceremony only once, after that you will get married without Wedding Ceremony quest.")
     elseif(option == mcm.oid_SettingsCheatDebugSpell)
         mcm.SetInfoText("Toggles a debug spell on the player. When cast on an NPC, the spell cycles that NPC's MARAS status through: unknown -> candidate -> engaged -> married -> divorced. Useful for testing romance flows and status transitions.")
+    elseif(option == mcm.oid_EnablePolygamyToggle)
+        mcm.SetInfoText("Enables polygamy, allowing multiple marriages without completing the polygamy quest.")
     endif
 EndFunction
 

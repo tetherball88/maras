@@ -172,6 +172,7 @@ Function Fragment_21()
     if(player.IsInFaction(married))
         player.RemoveFromFaction(married)
     endif
+    TTM_EnablePolygamyToggle.SetValue(1)
     TTM_Debug.trace("TTM_QuestEnablePolygamy:Removes player from married faction so player can re-marry")
     self.CompleteQuest()
 ;END CODE
@@ -187,3 +188,5 @@ Event OnUpdateGameTime()
         TTM_Debug.trace("TTM_QuestEnablePolygamy:Player waited for translation")
 	endif
 EndEvent
+
+GlobalVariable Property TTM_EnablePolygamyToggle  Auto

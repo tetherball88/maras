@@ -138,12 +138,11 @@ Polygamy is:
 
 - **Disabled by default**
 - Completely **optional**
-- Unlocked by meeting these conditions:
-  1. Already married.
-  2. Consume at least one **dragon soul** (be Dragonborn for real).
-  3. Sleep somewhere.
+- Unlocked by either:
+  - Completing the quest **“The Flame Divides Not”** (requires being married, consuming a dragon soul, and sleeping).
+  - Or via MCM cheat: **Settings > Cheats > Enable polygamy (bypasses quest)**.
 
-This starts the quest **“The Flame Divides Not”**. Once completed, the universe shrugs and accepts the Dragonborn’s unconventional lifestyle.
+This starts the quest **“The Flame Divides Not”** (or bypasses it if using the cheat). Once unlocked, the universe shrugs and accepts the Dragonborn’s unconventional lifestyle.
 
 Polygamy rules:
 

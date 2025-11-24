@@ -183,7 +183,9 @@ Function OnWeddingQstFinish() global
     MARAS.PromoteNPCToStatus(spouse, "married")
     TTM_Debug.trace("TTM_ServiceMarriageQuest:PlayerGotMarried:"+TTM_Utils.GetActorName(spouse))
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
-    if(enablePolygamyQst.IsCompleted())
+    Quest main = TTM_Data.GetMarasMainQuest()
+    TTM_MCM mcm = main as TTM_MCM
+    if(enablePolygamyQst.IsCompleted() || mcm.TTM_EnablePolygamyToggle.GetValue() == 1)
         Actor player = TTM_Data.GetPlayer()
         player.RemoveFromFaction(TTM_Data.GetMarriedFaction())
         TTM_Debug.trace("TTM_ServiceMarriageQuest:PlayerGotMarried:RemoveFromMarriedFactionForRemarrying")

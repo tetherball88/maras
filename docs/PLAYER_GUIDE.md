@@ -480,6 +480,8 @@ If **you killed them**:
 
 ### Unlocking Polygamy
 
+**Standard Way (Quest):**
+
 Requirements:
 
 1. Be **married**.
@@ -492,7 +494,16 @@ This triggers the quest:
 
 This quest is your in-lore explanation for how the Nord gods (and everyone else) tolerate you having multiple spouses.
 
-Once completed:
+**Alternative Way (MCM Cheat):**
+
+If you prefer to skip the quest, you can enable polygamy directly via the MCM:
+
+- Go to **MCM > M.A.R.A.S > Settings**.
+- Under **Cheats**, toggle **"Enable polygamy (bypasses quest)"** to **ON**.
+
+This instantly unlocks polygamy without needing to complete the quest or meet the requirements above.
+
+**Once Unlocked (Either Way):**
 
 - You can go to as many NPCs as you want, use:
   - `(M) Ever think we could be something more?`

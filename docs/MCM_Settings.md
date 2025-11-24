@@ -177,6 +177,27 @@ If you ask **“Will you marry me?”** – the answer is effectively “Yes, of
 
 ---
 
+#### **Enable polygamy (bypasses quest)**
+
+**What it does:**
+- When enabled, allows **multiple marriages** (polygamy) without requiring the player to complete the in-game polygamy quest.
+- This bypasses the need to obtain and translate the ancient scroll, collect dragon souls, or follow the quest steps.
+- Once toggled on, the player can marry multiple NPCs immediately, as if the polygamy feature had been unlocked through the quest.
+
+**Perfect if:**
+- You want to enable polygamy quickly for testing or roleplay purposes.
+- You're playing a save where you've already experienced the quest and want to skip it in future playthroughs.
+- You prefer not to engage with the polygamy quest mechanics.
+
+**Not recommended if:**
+- You want to experience the full questline and story progression for unlocking polygamy.
+- You're aiming for a more immersive, quest-driven experience.
+
+**Notes:**
+- This is a cheat option intended for advanced users or modders.
+- Enabling this toggle will prevent the polygamy quest from starting automatically (e.g., via dragon soul collection during sleep).
+- The toggle reflects the quest's completion status but can be set independently.
+
 ## Defaults & Quick Recommendations ✅
 
 - **Skip wedding ceremonies after first?**
@@ -193,5 +214,7 @@ If you ask **“Will you marry me?”** – the answer is effectively “Yes, of
   - Default: **file** – safe and standard.
 - **Enable always success for engagement:**
   - Default: **Disabled**, unless you’re testing or embracing full Dragonborn narcissism.
+- **Enable polygamy (bypasses quest):**
+  - Default: **Disabled**, unless you want to skip the polygamy quest and enable multiple marriages immediately.
 
 Tweak these until your game feels like *your* version of Skyrim romance: chill, chaotic, or somewhere between “Hallmark movie” and “political power harem.” 😉

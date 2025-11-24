@@ -3,6 +3,7 @@ Scriptname TTM_MCM extends SKI_ConfigBase
 GlobalVariable Property MCM_StartDialGender auto
 GlobalVariable Property TTM_MCM_PreferVanillaAudio  Auto
 GlobalVariable Property TTM_MCM_AllowAIDial  Auto
+GlobalVariable Property TTM_EnablePolygamyToggle Auto
 
 
 int property oid_SettingsStartDialGender auto
@@ -13,6 +14,7 @@ int property oid_SettingsLogDestination auto
 int property oid_SettingsCheatAlwaysSuccess auto
 int property oid_SkipNextWeddings auto
 int property oid_SettingsCheatDebugSpell auto
+int property oid_EnablePolygamyToggle auto
 
 int property oid_SearchNpc auto
 int property oid_SearchFilterAll auto

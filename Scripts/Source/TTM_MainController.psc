@@ -64,6 +64,13 @@ Function Maintenance()
 
     RegisterForMenu("Dialogue Menu")
     RegisterForMenu("GiftMenu")
+
+    Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
+    if(enablePolygamyQst.IsCompleted())
+        Quest mcmQ = self as Quest
+        TTM_MCM mcm = mcmQ as TTM_MCM
+        mcm.TTM_EnablePolygamyToggle.SetValue(1)
+    endif
 EndFunction
 
 ;/
