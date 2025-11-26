@@ -8,14 +8,13 @@ Event OnInit()
     InitPlayer()
 EndEvent
 
-Event OnPlayerLoad()
+Event OnPlayerLoadGame()
     InitPlayer()
+    TTM_MainController mainController = self.GetOwningQuest() as TTM_MainController
+    mainController.Maintenance()
 EndEvent
 
 Function InitPlayer()
-    int logDestination = TTM_Data.GetLogDestination()
-    TTM_MainController mainController = self.GetOwningQuest() as TTM_MainController
-    mainController.Maintenance()
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
     Quest main = self.GetOwningQuest()
     TTM_MCM mcm = main as TTM_MCM
