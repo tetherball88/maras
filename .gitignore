@@ -1,5 +1,6 @@
 .vscode
 .github/*
+.claude/
 !.github/workflows/
 meta.ini
 SkyrimSE.code-workspace
@@ -9,6 +10,7 @@ tools
 
 build/
 SKSE_Source/build/
+SKSE_Source/extern/
 cmake-build*/
 *.pdb
 *.exp

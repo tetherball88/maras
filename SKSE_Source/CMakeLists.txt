@@ -28,11 +28,33 @@ elseif(DEFINED SKYRIM_MODS_FOLDER AND IS_DIRECTORY "${SKYRIM_MODS_FOLDER}")
     set(OUTPUT_FOLDER "${SKYRIM_MODS_FOLDER}/${MOD_FOLDER_NAME}")
 endif()
 
+set(CommonLibPath "extern/CommonLibSSE-NG")
+set(CommonLibName "CommonLibSSE")
+
+set(BUILD_TESTS       OFF CACHE BOOL "" FORCE)
+
+if (DEFINED CommonLibPath AND NOT ${CommonLibPath} STREQUAL "")
+        add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
+else ()
+        message(
+                FATAL_ERROR
+                "Variable ${CommonLibName}Path is not set."
+        )
+endif()
+
+find_path(RAPIDCSV_INCLUDE_DIRS
+    NAMES rapidcsv.h
+    PATH_SUFFIXES rapidcsv
+    REQUIRED
+)
+
+include("${CommonLibPath}/cmake/CommonLibSSE.cmake")
+
 # Otherwise, you can set OUTPUT_FOLDER to any place you'd like :)
 # set(OUTPUT_FOLDER "C:/path/to/any/folder")
 
 # Setup your SKSE plugin as an SKSE plugin!
-find_package(CommonLibSSE CONFIG REQUIRED)
+# find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 # Collect all source files
@@ -42,10 +64,15 @@ file(GLOB_RECURSE SOURCES
     "version.rc"
 )
 
+# add_library(${PROJECT_NAME} SHARED ${SOURCES})
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${SOURCES})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!
-target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    nlohmann_json::nlohmann_json
+    ${CommonLibName}::${CommonLibName}
+)
 
 # Add include directories
 target_include_directories(${PROJECT_NAME} PRIVATE

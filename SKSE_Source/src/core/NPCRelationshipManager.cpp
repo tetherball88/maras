@@ -754,6 +754,22 @@ namespace MARAS {
     // Status-Based Faction Management
     // ========================================
 
+    namespace {
+        // Helper to safely add actor to faction if faction is valid
+        void SafeAddToFaction(RE::Actor* actor, RE::TESFaction* faction) {
+            if (faction) {
+                Utils::AddToFaction(actor, faction, 0);
+            }
+        }
+
+        // Helper to safely remove actor from faction if faction is valid
+        void SafeRemoveFromFaction(RE::Actor* actor, RE::TESFaction* faction) {
+            if (faction) {
+                Utils::RemoveFromFaction(actor, faction);
+            }
+        }
+    }  // namespace
+
     void NPCRelationshipManager::ManageFactions(RE::FormID npcFormID, RelationshipStatus status) {
         auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
         if (!actor) {
@@ -764,75 +780,49 @@ namespace MARAS {
         auto& cache = FormCache::GetSingleton();
 
         switch (status) {
-            case RelationshipStatus::Candidate: {
-                auto potentialFaction = cache.GetMarriagePotentialFaction();
-                if (potentialFaction) {
-                    Utils::AddToFaction(actor, potentialFaction, 0);
-                }
+            case RelationshipStatus::Candidate:
+                SafeAddToFaction(actor, cache.GetMarriagePotentialFaction());
                 break;
-            }
 
-            case RelationshipStatus::Engaged: {
-                auto askedFaction = cache.GetMarriageAskedFaction();
-                auto courtingFaction = cache.GetCourtingFaction();
-                if (askedFaction) Utils::AddToFaction(actor, askedFaction, 0);
-                if (courtingFaction) Utils::AddToFaction(actor, courtingFaction, 0);
+            case RelationshipStatus::Engaged:
+                SafeAddToFaction(actor, cache.GetMarriageAskedFaction());
+                SafeAddToFaction(actor, cache.GetCourtingFaction());
                 break;
-            }
 
-            case RelationshipStatus::Married: {
-                auto askedFaction = cache.GetMarriageAskedFaction();
-                auto courtingFaction = cache.GetCourtingFaction();
-                auto hirelingFaction = cache.GetPotentialHirelingFaction();
-                auto marriedFaction = cache.GetMarriedFaction();
-                auto playerFaction = cache.GetPlayerFaction();
-                auto bedOwnershipFaction = cache.GetPlayerBedOwnershipFaction();
-
+            case RelationshipStatus::Married:
                 // Remove from courting/engagement factions
-                if (askedFaction) Utils::RemoveFromFaction(actor, askedFaction);
-                if (courtingFaction) Utils::RemoveFromFaction(actor, courtingFaction);
-
-                // Remove from hireling potential
-                if (hirelingFaction) Utils::RemoveFromFaction(actor, hirelingFaction);
+                SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
+                SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
+                SafeRemoveFromFaction(actor, cache.GetPotentialHirelingFaction());
 
                 // Add to marriage-related factions
-                if (marriedFaction) Utils::AddToFaction(actor, marriedFaction, 0);
-                if (playerFaction) Utils::AddToFaction(actor, playerFaction, 0);
-                if (bedOwnershipFaction) Utils::AddToFaction(actor, bedOwnershipFaction, 0);
+                SafeAddToFaction(actor, cache.GetMarriedFaction());
+                SafeAddToFaction(actor, cache.GetPlayerFaction());
+                SafeAddToFaction(actor, cache.GetPlayerBedOwnershipFaction());
 
                 MARAS_LOG_DEBUG("Added NPC {:08X} to married factions", npcFormID);
                 break;
-            }
 
-            case RelationshipStatus::Divorced: {
-                auto marriedFaction = cache.GetMarriedFaction();
-                auto playerFaction = cache.GetPlayerFaction();
-                auto bedOwnershipFaction = cache.GetPlayerBedOwnershipFaction();
-
-                if (marriedFaction) Utils::RemoveFromFaction(actor, marriedFaction);
-                if (playerFaction) Utils::RemoveFromFaction(actor, playerFaction);
-                if (bedOwnershipFaction) Utils::RemoveFromFaction(actor, bedOwnershipFaction);
+            case RelationshipStatus::Divorced:
+                SafeRemoveFromFaction(actor, cache.GetMarriedFaction());
+                SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
+                SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
 
                 MARAS_LOG_DEBUG("Removed NPC {:08X} from married factions", npcFormID);
                 break;
-            }
 
-            case RelationshipStatus::Jilted: {
-                auto askedFaction = cache.GetMarriageAskedFaction();
-                auto courtingFaction = cache.GetCourtingFaction();
-
-                if (askedFaction) Utils::RemoveFromFaction(actor, askedFaction);
-                if (courtingFaction) Utils::RemoveFromFaction(actor, courtingFaction);
+            case RelationshipStatus::Jilted:
+                SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
+                SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
 
                 MARAS_LOG_DEBUG("Removed NPC {:08X} from engagement factions", npcFormID);
                 break;
-            }
 
-            case RelationshipStatus::Deceased: {
-                // Deceased NPCs might need to remain in some factions, so no changes here
-                // but could be extended if needed
+            case RelationshipStatus::Deceased:
+            case RelationshipStatus::Unknown:
+            default:
+                // No faction changes for deceased or unknown status
                 break;
-            }
         }
     }
 
@@ -841,7 +831,7 @@ namespace MARAS {
     // ========================================
 
     bool NPCRelationshipManager::SetSocialClass(RE::FormID npcFormID, std::int8_t socialClass) {
-        if (socialClass < 0 || socialClass > static_cast<std::int8_t>(SocialClass::Rulers)) {
+        if (socialClass < 0 || socialClass >= static_cast<std::int8_t>(SocialClass::_Count)) {
             MARAS_LOG_WARN("SetSocialClass: invalid social class {} for {:08X}", socialClass, npcFormID);
             return false;
         }
@@ -860,7 +850,7 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::SetSkillType(RE::FormID npcFormID, std::int8_t skillType) {
-        if (skillType < 0 || skillType > static_cast<std::int8_t>(SkillType::Orator)) {
+        if (skillType < 0 || skillType >= static_cast<std::int8_t>(SkillType::_Count)) {
             MARAS_LOG_WARN("SetSkillType: invalid skill type {} for {:08X}", skillType, npcFormID);
             return false;
         }
@@ -878,7 +868,7 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::SetTemperament(RE::FormID npcFormID, std::int8_t temperament) {
-        if (temperament < 0 || temperament > static_cast<std::int8_t>(Temperament::Independent)) {
+        if (temperament < 0 || temperament >= static_cast<std::int8_t>(Temperament::_Count)) {
             MARAS_LOG_WARN("SetTemperament: invalid temperament {} for {:08X}", temperament, npcFormID);
             return false;
         }

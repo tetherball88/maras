@@ -399,16 +399,16 @@ namespace MARAS::PapyrusInterface {
     void Log(RE::StaticFunctionTag*, std::string msg, std::int32_t logLevel) {
         switch (logLevel) {
             case 0:  // trace
-                spdlog::trace("Papyrus: {}", msg);
+                MARAS_LOG_TRACE("Papyrus: {}", msg);
                 break;
             case 1:  // debug
-                spdlog::debug("Papyrus: {}", msg);
+                MARAS_LOG_DEBUG("Papyrus: {}", msg);
                 break;
             case 2:  // warning
-                spdlog::warn("Papyrus: {}", msg);
+                MARAS_LOG_WARN("Papyrus: {}", msg);
                 break;
             case 3:  // error
-                spdlog::error("Papyrus: {}", msg);
+                MARAS_LOG_ERROR("Papyrus: {}", msg);
                 break;
             default:  // none or invalid
                 break;

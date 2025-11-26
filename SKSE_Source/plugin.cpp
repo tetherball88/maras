@@ -18,6 +18,11 @@
 
 using namespace SKSE;
 
+// Define the global logger (declared extern in Common.h)
+namespace MARAS {
+    std::shared_ptr<spdlog::logger> g_Logger;
+}
+
 namespace {
     // Event sink for OnUpdate to drive polling service
     class UpdateEventSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent> {
@@ -42,13 +47,13 @@ namespace {
         UpdateEventSink& operator=(UpdateEventSink&&) = delete;
     };
 
-    void SetupLogging() {
+    std::shared_ptr<spdlog::logger> SetupLogging() {
         auto logDir = SKSE::log::log_directory();
         if (!logDir) {
             if (auto* console = RE::ConsoleLog::GetSingleton()) {
                 console->Print("MARAS: log directory unavailable");
             }
-            return;
+            return nullptr;
         }
 
         std::filesystem::path logPath = *logDir;
@@ -63,7 +68,7 @@ namespace {
             if (auto* console = RE::ConsoleLog::GetSingleton()) {
                 console->Print("MARAS: failed to create log folder (%s)", ec.message().c_str());
             }
-            return;
+            return nullptr;
         }
 
         auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), true);
@@ -72,8 +77,13 @@ namespace {
         logger->flush_on(spdlog::level::info);
         logger->set_pattern("[%H:%M:%S] [%l] %v");
 
-        spdlog::set_default_logger(std::move(logger));
-        spdlog::info("Logging to {}", logPath.string());
+        // Store in global variable - this is the SINGLE source of truth
+        MARAS::g_Logger = logger;
+
+        logger->info("Logging to {}", logPath.string());
+        logger->info("MARAS logger initialized with pattern: [HH:MM:SS] [level] message");
+
+        return logger;
     }
 
     void PrintToConsole(std::string_view message) {

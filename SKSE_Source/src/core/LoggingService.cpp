@@ -14,8 +14,8 @@ namespace MARAS {
     }
 
     LoggingService::LoggingService() {
-        // Initialize current log level from spdlog default logger
-        if (auto logger = spdlog::default_logger()) {
+        // Initialize current log level from MARAS logger
+        if (auto logger = MARAS::GetLogger()) {
             auto lvl = logger->level();
             switch (lvl) {
                 case spdlog::level::trace:
@@ -40,6 +40,9 @@ namespace MARAS {
                     m_logLevel = 2;
                     break;
             }
+        } else {
+            // If logger not yet initialized, default to debug (level 1)
+            m_logLevel = 1;
         }
     }
 
@@ -72,7 +75,8 @@ namespace MARAS {
                 break;
         }
 
-        if (auto logger = spdlog::default_logger()) {
+        // Use MARAS::g_Logger instead of spdlog::default_logger()
+        if (auto logger = MARAS::GetLogger()) {
             logger->set_level(lvl);
         }
 

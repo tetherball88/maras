@@ -158,14 +158,15 @@ namespace MARAS {
         bool foundCenterMarker = false;
 
         // Single pass over references: collect doors, furniture ownership, persistent actors, and center marker
-        cell->ForEachReference([&](RE::TESObjectREFR& ref) {
-            auto base = ref.GetBaseObject();
+        cell->ForEachReference([&](RE::TESObjectREFR* ref) {
+            if (!ref) return RE::BSContainer::ForEachResult::kContinue;
+            auto base = ref->GetBaseObject();
             if (!base) return RE::BSContainer::ForEachResult::kContinue;
 
             // Process doors that require keys
             if (base->formType == RE::FormType::Door) {
-                if (DoorRequiresKey(ref)) {
-                    outData.doors.push_back(ref.GetFormID());
+                if (DoorRequiresKey(*ref)) {
+                    outData.doors.push_back(ref->GetFormID());
                 }
             }
 
@@ -173,28 +174,28 @@ namespace MARAS {
             if (base->formType == RE::FormType::Furniture) {
                 if (auto furn = base->As<RE::TESFurniture>()) {
                     if (IsBed(furn)) {
-                        ProcessBedOwnership(ref);
+                        ProcessBedOwnership(*ref);
                     }
                 }
             }
 
             // Process LocationCenterMarker: XMarker with ExtraLocationRefType (always takes priority)
-            if (auto* lrt = ref.extraList.GetByType<RE::ExtraLocationRefType>()) {
+            if (auto* lrt = ref->extraList.GetByType<RE::ExtraLocationRefType>()) {
                 if (lrt->locRefType == kLocationCenterLCRT) {
-                    outData.centerMarker = ref.GetFormID();
+                    outData.centerMarker = ref->GetFormID();
                     foundCenterMarker = true;
                 }
             }
 
             // Record first object reference in the cell as fallback if no center marker set yet
             if (!foundCenterMarker && !outData.centerMarker) {
-                outData.centerMarker = ref.GetFormID();
+                outData.centerMarker = ref->GetFormID();
             }
 
             // Process persistent actor references
-            if (ref.IsPersistent() && base->formType == RE::FormType::NPC) {
+            if (ref->IsPersistent() && base->formType == RE::FormType::NPC) {
                 hasPersistentActor = true;
-                ProcessActorHome(ref.GetFormID(), cellId);
+                ProcessActorHome(ref->GetFormID(), cellId);
             }
 
             return RE::BSContainer::ForEachResult::kContinue;

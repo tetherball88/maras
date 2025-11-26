@@ -44,7 +44,7 @@ namespace MARAS {
     void PollingService::Update() {
         if (!initialized_) return;
         if (RE::UI::GetSingleton()->GameIsPaused()) {
-            SKSE::log::debug("Game is paused; skipping PollingService update");
+            MARAS_LOG_DEBUG("Game is paused; skipping PollingService update");
             return;
         }
 
@@ -136,15 +136,15 @@ namespace MARAS {
 
             // Native teammate flag
             if (actor->IsPlayerTeammate()) {
-                SKSE::log::info("Actor {:08X} is a native teammate", actor->GetFormID());
+                MARAS_LOG_INFO("Actor {:08X} is a native teammate", actor->GetFormID());
                 isTeammate = true;
             }
 
             // Also treat actors running a follow package as teammates
             if (!isTeammate) {
                 if (auto* pkg = actor->GetCurrentPackage()) {
-                    if (pkg->packData.packType == RE::PACKAGE_PROCEDURE_TYPE::kFollow) {
-                        SKSE::log::info("Actor {:08X} is following player via package", actor->GetFormID());
+                    if (pkg->packData.packType == RE::PACKAGE_TYPE::kFollow) {
+                        MARAS_LOG_INFO("Actor {:08X} is following player via package", actor->GetFormID());
                         isTeammate = true;
                     }
                 }
@@ -153,9 +153,9 @@ namespace MARAS {
                     // Only consider as teammate if the actor's follow target is the player
                     if (auto targetRef = RE::TESObjectREFR::LookupByHandle(ai->followTarget)) {
                         if (!targetRef) {
-                            SKSE::log::info("Actor {:08X} follow target is null", actor->GetFormID());
+                            MARAS_LOG_INFO("Actor {:08X} follow target is null", actor->GetFormID());
                         } else if (targetRef.get() == player) {
-                            SKSE::log::info("Actor {:08X} is following player via AI state", actor->GetFormID());
+                            MARAS_LOG_INFO("Actor {:08X} is following player via AI state", actor->GetFormID());
                             isTeammate = true;
                         }
                     }

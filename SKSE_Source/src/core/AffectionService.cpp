@@ -15,11 +15,41 @@ namespace MARAS {
 
     // Constants
     namespace {
-        constexpr int AFFECTION_MIN = 0;
-        constexpr int AFFECTION_MAX = 100;
-        constexpr int THRESHOLD_HAPPY = 75;
-        constexpr int THRESHOLD_CONTENT = 50;
-        constexpr int THRESHOLD_TROUBLED = 25;
+        // Affection value bounds
+        constexpr int kAffectionMin = 0;
+        constexpr int kAffectionMax = 100;
+
+        // Threshold values for affection states
+        constexpr int kThresholdHappy = 75;
+        constexpr int kThresholdContent = 50;
+        constexpr int kThresholdTroubled = 25;
+
+        // Multiplier values for affection levels
+        constexpr float kMultiplierHappy = 1.25f;
+        constexpr float kMultiplierContent = 1.0f;
+        constexpr float kMultiplierTroubled = 0.25f;
+        constexpr float kMultiplierEstranged = 0.0f;
+
+        // Loneliness decay configuration
+        constexpr float kDaysBeforeDecayStarts = 2.0f;
+        constexpr float kFollowingAffectionBonus = 6.0f;
+        constexpr float kDefaultDecayPerDay = 3.0f;
+        constexpr float kNeverRecordedDaysSince = 999.0f;
+
+        // Temperament-based decay rates
+        constexpr float kDecayIndependent = 1.0f;
+        constexpr float kDecayHumble = 2.0f;
+        constexpr float kDecayRomantic = 4.0f;
+        constexpr float kDecayDefault = 3.0f;
+
+        // Spouse count multipliers for decay
+        constexpr int kSpouseCountHigh = 7;
+        constexpr int kSpouseCountMedium = 5;
+        constexpr int kSpouseCountLow = 3;
+        constexpr float kSpouseMultHigh = 0.5f;
+        constexpr float kSpouseMultMedium = 0.6f;
+        constexpr float kSpouseMultLow = 0.75f;
+        constexpr float kEngagedDecayMultiplier = 0.5f;
     }  // namespace
 
     AffectionService& AffectionService::GetSingleton() {
@@ -205,16 +235,16 @@ namespace MARAS {
     }
 
     float AffectionService::GetMultiplierForValue(int permanentAffection) const {
-        if (permanentAffection >= 75) {
-            return 1.25f;
+        if (permanentAffection >= kThresholdHappy) {
+            return kMultiplierHappy;
         }
-        if (permanentAffection >= 50) {
-            return 1.0f;
+        if (permanentAffection >= kThresholdContent) {
+            return kMultiplierContent;
         }
-        if (permanentAffection >= 25) {
-            return 0.25f;
+        if (permanentAffection >= kThresholdTroubled) {
+            return kMultiplierTroubled;
         }
-        return 0.0f;
+        return kMultiplierEstranged;
     }
 
     float AffectionService::GetMultiplierForNPC(FormID npcFormID) const {
@@ -237,7 +267,7 @@ namespace MARAS {
         auto it = lastAffectionDay_.find(npcFormID);
         if (it == lastAffectionDay_.end()) {
             // Never recorded, assume it's been a while
-            return 999.0f;
+            return kNeverRecordedDaysSince;
         }
 
         return currentDay - it->second;
@@ -252,8 +282,8 @@ namespace MARAS {
         for (auto npcFormID : allNPCs) {
             float daysSince = GetDaysSinceLastAffection(npcFormID);
 
-            // Only apply decay if no affection received for more than 2 days
-            if (daysSince <= 2.0f) {
+            // Only apply decay if no affection received for more than the threshold
+            if (daysSince <= kDaysBeforeDecayStarts) {
                 continue;
             }
 
@@ -284,13 +314,13 @@ namespace MARAS {
     std::string AffectionService::NormalizeType(const std::string& type) { return Utils::ToLower(type); }
 
     std::string AffectionService::GetAffectionThreshold(int affectionValue) {
-        if (affectionValue >= THRESHOLD_HAPPY) return "happy";
-        if (affectionValue >= THRESHOLD_CONTENT) return "content";
-        if (affectionValue >= THRESHOLD_TROUBLED) return "troubled";
+        if (affectionValue >= kThresholdHappy) return "happy";
+        if (affectionValue >= kThresholdContent) return "content";
+        if (affectionValue >= kThresholdTroubled) return "troubled";
         return "estranged";
     }
 
-    int AffectionService::ClampAffection(int value) { return std::clamp(value, AFFECTION_MIN, AFFECTION_MAX); }
+    int AffectionService::ClampAffection(int value) { return std::clamp(value, kAffectionMin, kAffectionMax); }
 
     void AffectionService::UpdateAffectionFaction(RE::Actor* actor, FormID npcFormID, int affectionValue) {
         auto faction = FormCache::GetSingleton().GetAffectionFaction();
@@ -337,52 +367,52 @@ namespace MARAS {
     float AffectionService::CalculateLonelinessDecay(FormID npcFormID, bool isFollowing) const {
         // If following player, they gain affection instead of losing it
         if (isFollowing) {
-            SKSE::log::info("NPC {:08X} is following player, applying positive loneliness affection", npcFormID);
-            return 6.0f;
+            MARAS_LOG_INFO("NPC {:08X} is following player, applying positive loneliness affection", npcFormID);
+            return kFollowingAffectionBonus;
         }
 
         // Get NPC's temperament
         auto& manager = NPCRelationshipManager::GetSingleton();
         auto npcData = manager.GetNPCData(npcFormID);
+        if (!npcData) {
+            MARAS_LOG_WARN("No NPC data found for {:08X}, using default decay", npcFormID);
+            return -kDefaultDecayPerDay;
+        }
         if (npcData->status != RelationshipStatus::Married && npcData->status != RelationshipStatus::Engaged) {
             // Only married and engaged NPCs experience loneliness decay
             return 0.0f;
         }
-        if (!npcData) {
-            MARAS_LOG_WARN("No NPC data found for {:08X}, using default decay", npcFormID);
-            return -3.0f;  // Default decay
-        }
 
         // Base decay per day based on temperament
-        float perDay = 3.0f;  // Default
+        float perDay = kDecayDefault;
         switch (npcData->temperament) {
             case Temperament::Independent:
-                perDay = 1.0f;
+                perDay = kDecayIndependent;
                 break;
             case Temperament::Humble:
-                perDay = 2.0f;
+                perDay = kDecayHumble;
                 break;
             case Temperament::Romantic:
-                perDay = 4.0f;
+                perDay = kDecayRomantic;
                 break;
             default:
-                perDay = 3.0f;
+                perDay = kDecayDefault;
                 break;
         }
 
         // Apply multiplier based on spouse count
         int spouseCount = static_cast<int>(manager.GetAllMarried().size());
         float mult = 1.0f;
-        if (spouseCount >= 7) {
-            mult = 0.5f;
-        } else if (spouseCount >= 5) {
-            mult = 0.6f;
-        } else if (spouseCount >= 3) {
-            mult = 0.75f;
+        if (spouseCount >= kSpouseCountHigh) {
+            mult = kSpouseMultHigh;
+        } else if (spouseCount >= kSpouseCountMedium) {
+            mult = kSpouseMultMedium;
+        } else if (spouseCount >= kSpouseCountLow) {
+            mult = kSpouseMultLow;
         }
 
         if (npcData->status == RelationshipStatus::Engaged) {
-            mult *= 0.5f;  // Engaged NPCs have reduced loneliness decay
+            mult *= kEngagedDecayMultiplier;
         }
 
         // Calculate final decay (negative value)

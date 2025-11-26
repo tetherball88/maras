@@ -27,12 +27,31 @@ namespace MARAS {
         Wealthy = 4,
         Religious = 5,
         Nobles = 6,
-        Rulers = 7
+        Rulers = 7,
+        // Sentinel for range checking (not a valid value)
+        _Count
     };
 
-    enum class SkillType : uint8_t { Warrior = 0, Mage = 1, Rogue = 2, Craftsman = 3, Ranger = 4, Orator = 5 };
+    enum class SkillType : uint8_t {
+        Warrior = 0,
+        Mage = 1,
+        Rogue = 2,
+        Craftsman = 3,
+        Ranger = 4,
+        Orator = 5,
+        // Sentinel for range checking (not a valid value)
+        _Count
+    };
 
-    enum class Temperament : uint8_t { Proud = 0, Humble = 1, Jealous = 2, Romantic = 3, Independent = 4 };
+    enum class Temperament : uint8_t {
+        Proud = 0,
+        Humble = 1,
+        Jealous = 2,
+        Romantic = 3,
+        Independent = 4,
+        // Sentinel for range checking (not a valid value)
+        _Count
+    };
 
     enum class RelationshipStatus : uint8_t {
         Candidate = 0,
@@ -44,6 +63,16 @@ namespace MARAS {
         // Unknown is used as a default/absent value when no stored data exists
         Unknown = 255
     };
+
+    // Compile-time validation: ensure enums fit in uint8_t for serialization
+    static_assert(static_cast<uint8_t>(SocialClass::_Count) <= 255,
+                  "SocialClass enum exceeds uint8_t range");
+    static_assert(static_cast<uint8_t>(SkillType::_Count) <= 255,
+                  "SkillType enum exceeds uint8_t range");
+    static_assert(static_cast<uint8_t>(Temperament::_Count) <= 255,
+                  "Temperament enum exceeds uint8_t range");
+    static_assert(static_cast<uint8_t>(RelationshipStatus::Deceased) < 255,
+                  "RelationshipStatus valid values must be less than Unknown sentinel");
 
     // Lightweight data structure for NPC information
     struct NPCRelationshipData {
