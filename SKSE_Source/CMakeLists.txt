@@ -33,6 +33,10 @@ set(CommonLibName "CommonLibSSE")
 
 set(BUILD_TESTS       OFF CACHE BOOL "" FORCE)
 
+# Force static linking for all vcpkg dependencies
+set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
+
 if (DEFINED CommonLibPath AND NOT ${CommonLibPath} STREQUAL "")
         add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
 else ()
@@ -82,6 +86,23 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # Silence Microsoft STL deprecation warnings
 target_compile_definitions(${PROJECT_NAME} PRIVATE _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+
+# Force static linking of runtime library to reduce dependencies
+if(MSVC)
+    set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+    # Also ensure CommonLibSSE uses static runtime
+    if(TARGET ${CommonLibName})
+        set_property(TARGET ${CommonLibName} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+
+    # Additional linker flags to embed dependencies
+    target_link_options(${PROJECT_NAME} PRIVATE
+        /INCREMENTAL:NO
+        /OPT:REF
+        /OPT:ICF
+    )
+endif()
 
 # When your SKSE .dll is compiled, this will automatically copy the .dll into your mods folder.
 # Only works if you configure DEPLOY_ROOT above (or set the SKYRIM_MODS_FOLDER environment variable)
