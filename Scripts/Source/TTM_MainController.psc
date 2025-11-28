@@ -66,6 +66,8 @@ Function Maintenance()
     RegisterForMenu("GiftMenu")
 
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
+    ; it does check inside to see if spouse alias is empty and quest is running
+    TTM_Utils.ReinforceEnablePolygamySpouseAlias()
     if(enablePolygamyQst.IsCompleted())
         Quest mcmQ = self as Quest
         TTM_MCM mcm = mcmQ as TTM_MCM

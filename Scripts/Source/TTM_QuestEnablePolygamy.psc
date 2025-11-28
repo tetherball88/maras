@@ -127,6 +127,8 @@ Function Fragment_23()
 ;BEGIN CODE
     ; stage 0
     self.SetObjectiveDisplayed(0)
+    ; it does check inside to see if spouse alias is empty and quest is running
+    TTM_Utils.ReinforceEnablePolygamySpouseAlias()
 ;END CODE
 EndFunction
 ;END FRAGMENT

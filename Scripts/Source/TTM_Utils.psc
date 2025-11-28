@@ -69,3 +69,19 @@ Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor ak
 
     SkyrimNetApi.DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, TTM_Data.GetPlayer())
 EndFunction
+
+Function ReinforceEnablePolygamySpouseAlias() global
+    Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
+    ReferenceAlias spouseAlias = enablePolygamyQst.GetAliasByName("CurrentSpouse") as ReferenceAlias
+    Actor spouseRef = spouseAlias.GetActorRef()
+    if(enablePolygamyQst.IsRunning() && !spouseRef)
+        Actor[] spouses = MARAS.GetNPCsByStatus("married")
+        if(spouses.Length == 0)
+            TTM_Debug.err("MainController:Maintenance: EnablePolygamyQuest is running but no married spouses found!")
+        else
+            TTM_Debug.debug("MainController:Maintenance: Forcing spouse alias to " + TTM_Utils.GetActorName(spouse))
+            Actor spouse = spouses[0]
+            spouseAlias.ForceRefTo(spouse)
+        endif
+    endif
+EndFunction
