@@ -41,61 +41,61 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     bool isJilted = MARAS.IsNPCStatus(npc, "jilted")
     bool isDivorced = MARAS.IsNPCStatus(npc, "divorced")
 
-    mcm.oid_ReturnToExplore = mcm.AddTextOption("", "Return to explore")
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s data")
-    mcm.AddTextOption("Their status is ", status+deceased)
+    mcm.oid_ReturnToExplore = mcm.AddTextOption("", "$TTM_MCM_ReturnToExplore")
+    mcm.AddHeaderOption("$TTM_MCM_NpcDataHeader{" + TTM_Utils.GetActorName(npc) + "}")
+    mcm.AddTextOption("$TTM_MCM_NpcStatus", status+deceased)
     if(isSpouse && !isDeceased)
         if(count == 1)
-            mcm.oid_NpcPageRank = mcm.AddTextOption("Hierarchy Rank: ", "The only one!")
+            mcm.oid_NpcPageRank = mcm.AddTextOption("$TTM_MCM_NpcRankHierarchy", "$TTM_MCM_NpcRankOnly")
         else
             int rank = MARAS.GetHierarchyRank(npc)
-            string rankText = "4th+ spouse"
+            string rankText = "$TTM_MCM_NpcRank4th"
             if(rank == 0)
-                rankText = "1st spouse"
+                rankText = "$TTM_MCM_NpcRank1st"
             elseif(rank == 1)
-                rankText = "2nd spouse"
+                rankText = "$TTM_MCM_NpcRank2nd"
             elseif(rank == 2)
-                rankText = "3rd spouse"
+                rankText = "$TTM_MCM_NpcRank3rd"
             endif
-            mcm.oid_NpcPageRank = mcm.AddMenuOption("Hierarchy Rank: ", rankText)
+            mcm.oid_NpcPageRank = mcm.AddMenuOption("$TTM_MCM_NpcRankHierarchy", rankText)
         endif
     endif
 
     if(!isFiance && !isSpouse)
         float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc)
-        mcm.oid_CandidateChance = mcm.AddTextOption("Your chances to get engaged: ", 100 * chance)
+        mcm.oid_CandidateChance = mcm.AddTextOption("$TTM_MCM_NpcChances", 100 * chance)
     endif
 
     int affection = MARAS.GetPermanentAffection(npc)
-    mcm.oid_NpcPageAffection = mcm.AddSliderOption("Affection: ", affection as float, "{0}%")
+    mcm.oid_NpcPageAffection = mcm.AddSliderOption("$TTM_MCM_NpcAffection", affection as float, "{0}%")
 
-    mcm.oid_NpcPageSocialClass = mcm.AddMenuOption("Social class: ", socialClass)
-    mcm.oid_NpcPageSkillType = mcm.AddMenuOption("Skilled as: ", skillType)
-    mcm.oid_NpcPageTemperament = mcm.AddMenuOption("Temperament: ", temperament)
+    mcm.oid_NpcPageSocialClass = mcm.AddMenuOption("$TTM_MCM_NpcSocialClass", socialClass)
+    mcm.oid_NpcPageSkillType = mcm.AddMenuOption("$TTM_MCM_NpcSkillType", skillType)
+    mcm.oid_NpcPageTemperament = mcm.AddMenuOption("$TTM_MCM_NpcTemperament", temperament)
 
     if(isSpouse && !isDeceased)
         Location playerHouse = TTM_ServiceRelationships.GetTrackedNpcHome(npc)
         string playerHouseName = playerHouse.GetName()
         if(playerHouse == none)
-            playerHouseName = "unset"
+            playerHouseName = "$TTM_MCM_NpcHomeUnset"
         endif
-        mcm.oid_NpcPagePlayerHome = mcm.AddMenuOption("Assigned player's home: ", playerHouseName)
+        mcm.oid_NpcPagePlayerHome = mcm.AddMenuOption("$TTM_MCM_NpcPlayerHome", playerHouseName)
     endif
 
     if(isSpouse)
         bool spouseShareHome = npc.IsInFaction(TTM_Data.GetSpouseSharedHouseFaction())
         if(npc.IsInFaction(TTM_Data.GetSpouseNoInitialHouseFaction()))
-            mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't have any place they can call home.", "")
+            mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption("$TTM_MCM_NpcNoHome{" + TTM_Utils.GetActorName(npc) + "}", "")
         else
             if(TTM_Data.GetMarasCheckSpouseHomeQuest().IsRunning() && !spouseShareHome)
-                mcm.AddTextOption("You can't start share home at this moment because of another share home quest running.", "")
+                mcm.AddTextOption("$TTM_MCM_NpcShareHomeRunning", "")
             else
                 if(!isDeceased)
-                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("Share their home with player: ", spouseShareHome)
+                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("$TTM_MCM_NpcShareTheirHome", spouseShareHome)
                 elseif(TTM_ServiceRelationships.GetKilledByPlayer(npc))
-                    mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " was killed by you. You can't use thier property", "")
+                    mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption("$TTM_MCM_NpcKilledByPlayer{" + TTM_Utils.GetActorName(npc) + "}", "")
                 else
-                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("Inhereted home from deceased spouse", spouseShareHome)
+                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("$TTM_MCM_NpcInheritedHome", spouseShareHome)
                 endif
             endif
         endif
@@ -112,29 +112,29 @@ EndFunction
 Function RenderRightColumn(TTM_MCM mcm) global
     Actor npc = TTM_MCM_State.GetSelectedNpc()
     if(!MARAS.IsNPCStatus(npc, "married"))
-        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " is not married to you and can't share anything with you.", "")
+        mcm.AddTextOption("$TTM_MCM_NpcNotMarried{" + TTM_Utils.GetActorName(npc) + "}", "")
         return
     endif
     string npcName = TTM_Utils.GetActorName(npc)
-    mcm.AddHeaderOption(npcName + "'s property:")
+    mcm.AddHeaderOption("$TTM_MCM_NpcPropertyHeader{" + npcName + "}")
     Cell npcOriginalHouse = MARAS.GetNpcOriginalHouse(npc)
     if(!npcOriginalHouse)
-        mcm.AddTextOption(npcName + " doesn't have their own home.", "")
+        mcm.AddTextOption("$TTM_MCM_NpcNoOwnHome{" + npcName + "}", "")
         return
     endif
     bool isShared = MARAS.IsHouseSharedWithPlayer(npcOriginalHouse)
     string sharedString
     if(isShared)
-        sharedString = " (shared with you)"
+        sharedString = "$TTM_MCM_NpcHomeShared"
     else
-        sharedString = " (not shared with you)"
+        sharedString = "$TTM_MCM_NpcHomeNotShared"
     endif
-    mcm.AddTextOption(npcOriginalHouse.GetName() + sharedString, "")
+    mcm.AddTextOption(sharedString + "{" + npcName + "}", "")
 
-    mcm.AddHeaderOption(TTM_Utils.GetActorName(npc) + "'s beds:")
+    mcm.AddHeaderOption("$TTM_MCM_NpcBedsHeader{" + TTM_Utils.GetActorName(npc) + "}")
     ObjectReference[] beds = MARAS.GetNpcBeds(npc)
     if(beds.Length == 0)
-        mcm.AddTextOption(TTM_Utils.GetActorName(npc) + " doesn't have any personal bed.", "")
+        mcm.AddTextOption("$TTM_MCM_NpcNoPersonalBed{" + TTM_Utils.GetActorName(npc) + "}", "")
         return
     endif
 
@@ -167,55 +167,56 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
     Actor npc = TTM_MCM_State.GetSelectedNpc()
 
     if(option == mcm.oid_NpcPageSkillType)
-        mcm.SetInfoText("Follower bonus - " + TTM_ServiceBuff.GetSpouseFollowerBuffs(npc))
+        mcm.SetInfoText("$TTM_MCM_TT_NpcSkillType{" + TTM_ServiceBuff.GetSpouseFollowerBuffs(npc) + "}")
     elseif(option == mcm.oid_NpcPageSocialClass)
-        mcm.SetInfoText("Permanent bonus - " + TTM_ServiceBuff.GetSpousePermanentBuffs(npc))
+        mcm.SetInfoText("$TTM_MCM_TT_NpcSocialClass{" + TTM_ServiceBuff.GetSpousePermanentBuffs(npc) + "}")
     elseif(option == mcm.oid_NpcPageTemperament)
-        mcm.SetInfoText("Temperament shapes affection gains, jealousy, and how spouses react to you.")
+        mcm.SetInfoText("$TTM_MCM_TT_NpcTemperament")
     elseif(option == mcm.oid_NpcPageRank)
         int rank = MARAS.GetHierarchyRank(npc)
         int count = MARAS.GetStatusCount("married")
-        string rankText = "This spouse is one of many, they will give only 10% of their permanent bonus."
+        string rankText = "$TTM_MCM_TT_NpcRank4th"
 
         if(rank == 0)
-            rankText = "This spouse is your 1st, they will give 100% of their permanent bonus."
+            rankText = "$TTM_MCM_TT_NpcRank1st"
         elseif(rank == 1)
-            rankText = "This spouse is your 2nd, they will give 50% of their permanent bonus."
+            rankText = "$TTM_MCM_TT_NpcRank2nd"
         elseif(rank == 2)
-            rankText = "This spouse is your 3rd, they will give 25% of their permanent bonus."
+            rankText = "$TTM_MCM_TT_NpcRank3rd"
         endif
 
         if(count == 1)
-            rankText = "Well you have only one spouse. It means they will give you 200% of their permanent bonus."
+            rankText = "$TTM_MCM_TT_NpcRankOnly"
         endif
         mcm.SetInfoText(rankText)
     elseif(option == mcm.oid_CandidateChance)
         float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc)
-        string tooltip = TTM_Utils.GetActorName(npc)
+        string npcName = TTM_Utils.GetActorName(npc)
+        string tooltip
         if(chance >= 0.95)
-            tooltip += " accepts as though it were fated—unquestioning and unwise"
+            tooltip = "$TTM_MCM_TT_ChanceFated{" + npcName + "}"
         elseif(chance >= 0.8)
-            tooltip += " is eager to accept"
+            tooltip = "$TTM_MCM_TT_ChanceEager{" + npcName + "}"
         elseif(chance >= 0.6)
-            tooltip += " would probably accept if approached kindly"
+            tooltip = "$TTM_MCM_TT_ChanceProbably{" + npcName + "}"
         elseif(chance >= 0.45)
-            tooltip += " is on the fence and might be swayed with the right words"
+            tooltip = "$TTM_MCM_TT_ChanceFence{" + npcName + "}"
         elseif(chance >= 0.25)
-            tooltip += " is unlikely to accept; it would take exceptional persuasion"
+            tooltip = "$TTM_MCM_TT_ChanceUnlikely{" + npcName + "}"
         else
-            tooltip += " will almost certainly refuse, though nothing is truly impossible"
+            tooltip = "$TTM_MCM_TT_ChanceRefuse{" + npcName + "}"
         endif
         mcm.SetInfoText(tooltip)
     elseif(option == mcm.oid_NpcPageAffection)
-        mcm.SetInfoText("Adjust their affection directly. Higher scores unlock happier relationship events; lower scores risk estrangement.")
+        mcm.SetInfoText("$TTM_MCM_TT_NpcAffection")
     elseif(option == mcm.oid_NpcPagePlayerHome)
-        mcm.SetInfoText(TTM_Utils.GetActorName(npc) + " will spend time in assigned player's house.\nBe careful with characters who should be somewhere by quest.\n You always can unassign here or throug dialogue.")
+        mcm.SetInfoText("$TTM_MCM_TT_NpcPlayerHome{" + TTM_Utils.GetActorName(npc) + "}")
     elseif(option == mcm.oid_NpcPageShareTheirHome)
-        string tooltip = "By enabling you will start quest to check " + TTM_Utils.GetActorName(npc) + "'s own home, and you will get permanent access to it.\nBy disabling you will loose access to their home.\n Close menu to start quest."
+        string tooltip = "$TTM_MCM_TT_NpcShareHome{" + TTM_Utils.GetActorName(npc) + "}"
         if(TTM_Data.GetMarasCheckSpouseHomeQuest().IsRunning())
-            tooltip = "You are already trying to get access to spouse's home, check your journal and finish it before you can toggle this checkbox.\nClicking on this option won't do anything."
+            tooltip = "$TTM_MCM_TT_NpcShareHomeRunning"
         elseif(npc.IsInFaction(TTM_Data.GetSpouseNoInitialHouseFaction()))
-            tooltip = TTM_Utils.GetActorName(npc) + " doesn't have their own home.\nClicking on this option won't do anything."
+            tooltip = "$TTM_MCM_TT_NpcShareHomeNoHouse{" + TTM_Utils.GetActorName(npc) + "}"
         endif
         mcm.SetInfoText(tooltip)
     endif
@@ -349,9 +350,9 @@ EndFunction
 string[] Function GetHierarchyOptions() global
     string[] options = new string[3]
 
-    options[0] = "1st spouse"
-    options[1] = "2nd spouse"
-    options[2] = "3rd spouse"
+    options[0] = "$TTM_MCM_NpcRank1st"
+    options[1] = "$TTM_MCM_NpcRank2nd"
+    options[2] = "$TTM_MCM_NpcRank3rd"
 
     return options
 EndFunction

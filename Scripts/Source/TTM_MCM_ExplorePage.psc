@@ -19,38 +19,38 @@ EndFunction
 
 string[] Function GetAliveDeceasedOptions() global
     string[] options = new string[3]
-    options[0] = "all"
-    options[1] = "alive"
-    options[2] = "deceased"
+    options[0] = "$TTM_MCM_FilterAll"
+    options[1] = "$TTM_MCM_FilterAlive"
+    options[2] = "$TTM_MCM_FilterDeceased"
     return options
 EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Explore")
-    mcm.oid_SearchNpc = mcm.AddInputOption("Search NPC", "")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderExplore")
+    mcm.oid_SearchNpc = mcm.AddInputOption("$TTM_MCM_SearchNPC", "")
     RenderNpcsList(mcm)
 EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Filter by type:")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderFilterByType")
     bool searchAll = GetSearchAll()
     int disableOtherFilters = 0
     if(searchAll)
         disableOtherFilters = 1
     endif
-    mcm.oid_SearchFilterAll = mcm.AddToggleOption("Show all", searchAll)
-    mcm.oid_SearchFilterCandidate = mcm.AddToggleOption("Show candidates", TTM_MCM_State._GetMcmBool("searchCandidates"), disableOtherFilters)
-    mcm.oid_SearchFilterFiance = mcm.AddToggleOption("Show fiances", TTM_MCM_State._GetMcmBool("searchFiances"), disableOtherFilters)
-    mcm.oid_SearchFilterSpouse = mcm.AddToggleOption("Show spouses", TTM_MCM_State._GetMcmBool("searchSpouses"), disableOtherFilters)
-    mcm.oid_SearchFilterJilted = mcm.AddToggleOption("Show jilted", TTM_MCM_State._GetMcmBool("searchJilted"), disableOtherFilters)
-    mcm.oid_SearchFilterDivorced = mcm.AddToggleOption("Show divorced", TTM_MCM_State._GetMcmBool("searchDivorced"), disableOtherFilters)
+    mcm.oid_SearchFilterAll = mcm.AddToggleOption("$TTM_MCM_FilterShowAll", searchAll)
+    mcm.oid_SearchFilterCandidate = mcm.AddToggleOption("$TTM_MCM_FilterShowCandidates", TTM_MCM_State._GetMcmBool("searchCandidates"), disableOtherFilters)
+    mcm.oid_SearchFilterFiance = mcm.AddToggleOption("$TTM_MCM_FilterShowFiances", TTM_MCM_State._GetMcmBool("searchFiances"), disableOtherFilters)
+    mcm.oid_SearchFilterSpouse = mcm.AddToggleOption("$TTM_MCM_FilterShowSpouses", TTM_MCM_State._GetMcmBool("searchSpouses"), disableOtherFilters)
+    mcm.oid_SearchFilterJilted = mcm.AddToggleOption("$TTM_MCM_FilterShowJilted", TTM_MCM_State._GetMcmBool("searchJilted"), disableOtherFilters)
+    mcm.oid_SearchFilterDivorced = mcm.AddToggleOption("$TTM_MCM_FilterShowDivorced", TTM_MCM_State._GetMcmBool("searchDivorced"), disableOtherFilters)
     mcm.AddEmptyOption()
     string[] options = GetAliveDeceasedOptions()
-    mcm.oid_SearchFilterDeceased = mcm.AddMenuOption("Show alive/deceased", options[TTM_MCM_State._GetMcmInt("searchDeceased")])
+    mcm.oid_SearchFilterDeceased = mcm.AddMenuOption("$TTM_MCM_FilterAliveDeceased", options[TTM_MCM_State._GetMcmInt("searchDeceased")])
 EndFunction
 
 Function RenderNpcsList(TTM_MCM mcm) global
-    mcm.AddHeaderOption("NPCs: ")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderNPCs")
     string searchValue = TTM_MCM_State.GetSearchValueNpc()
     bool searchAll = GetSearchAll()
     bool searchCandidates = TTM_MCM_State._GetMcmBool("searchCandidates")
@@ -135,9 +135,9 @@ EndFunction
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
     Actor npc = TTM_MCM_State.GetNpcOption(option)
     if(option == mcm.oid_SearchNpc)
-        mcm.SetInfoText("Search characters by name(can be partial)")
+        mcm.SetInfoText("$TTM_MCM_TT_SearchNPC")
     elseif(npc != none)
-        mcm.SetInfoText("View " + TTM_Utils.GetActorName(npc) + "'s data")
+        mcm.SetInfoText("$TTM_MCM_TT_ViewNpcData{" + TTM_Utils.GetActorName(npc) + "}")
     elseif(option == mcm.oid_SearchFilterAll)
     elseif(option == mcm.oid_SearchFilterCandidate)
     elseif(option == mcm.oid_SearchFilterFiance)

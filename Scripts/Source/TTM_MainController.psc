@@ -23,6 +23,7 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
+    MiscUtil.PrintConsole("LANGUAGE: " + Utility.GetINIString("sLanguage:General"))
     TTM_ServiceAffection.Maintenance()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
@@ -107,11 +108,8 @@ Event OnChangeHierarchyRank(String EventName, String promoteDemote, Float rankDi
     if(rankDiff == 0)
         return
     endif
-    if(rankDiff > 0)
-        Debug.Notification("I made my spouse " + spouseName + " a higher rank in our relationship hierarchy.")
-    else
-        Debug.Notification("I made my spouse " + spouseName + " a lower rank in our relationship hierarchy.")
-    endif
+
+    TTM_Messages.RankChangeMsg(spouseName, rankDiff > 0)
 
     TTM_ServiceSkyrimNet.RegisterPromotionEvent(spouseA, rankDiff < 0)
     TTM_ServiceAffection.AddPromotionAffection(spouseA, rankDiff)
@@ -123,17 +121,8 @@ EndEvent
 Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDiff, Form spouse)
     Actor spouseA = spouse as Actor
     string spouseName = TTM_Utils.GetActorName(spouseA)
-    string msg = ""
 
     if(affectionDiff > 0)
-        if(level == "happy")
-            msg = "I feel closer to " + spouseName + "."
-        elseif(level == "content")
-            msg = "Things are improving with " + spouseName + "."
-        elseif(level == "troubled")
-            msg = "My tension with " + spouseName + " is easing."
-        endif
-
         ; if affection level restored complete affection estranged divorce quest
         if(level == "content" || level == "happy")
             Quest affectionEstrangedDivorce = TTM_Data.GetMarasAffectionEstrangedDivorceQuest()
@@ -145,23 +134,18 @@ Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDi
             endif
         endif
     elseif(affectionDiff < 0)
-        if(level == "content")
-            msg = "I'm starting to feel distant from " + spouseName + "."
-        elseif(level == "troubled")
-            msg = "I'm growing distant from " + spouseName + "."
+        if(level == "troubled")
             ; when affection drops to troubled, stop sharing home with player
             TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
         elseif(level == "estranged")
-            msg = "My relationship with " + spouseName + " has soured."
             ; when affection drops to estranged, stop sharing home with player and stop using player's home
             TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
             TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouseA, "affection")
-            ; TODO check that quest isn't running already
             TTM_Data.GetAffectionQuestKeyword("estranged").SendStoryEvent()
         endif
     endif
 
-    Debug.Notification(msg)
+    TTM_Messages.AffectionChangeMsg(spouseName, level, affectionDiff > 0)
 EndEvent
 
 Event OnTeammateChange(String eventName, string strArg, float fltArg, Form sender)

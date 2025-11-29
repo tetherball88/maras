@@ -42,34 +42,54 @@ string property SearchValueLover auto
 
 string selectedPage
 
-Event OnConfigInit()
-    ModName = "M.A.R.A.S"
-    Pages = new string[3]
+bool property oneTimeUpdate auto
 
-    Pages[0] = "Explore"
-    Pages[1] = "Settings"
-    Pages[2] = "Spouse buff"
-    TTM_MCM_State.SetCurrentPage("Explore")
+int Function GetVersion()
+	Return 2
+EndFunction
+
+Event OnVersionUpdate(int Version)
+	SetupPages()
 EndEvent
 
+
+Event OnConfigInit()
+    ModName = "M.A.R.A.S"
+    SetupPages()
+EndEvent
+
+Function SetupPages()
+    Pages = new string[3]
+
+    Pages[0] = "$TTM_MCM_PageExplore"
+    Pages[1] = "$TTM_MCM_PageSettings"
+    Pages[2] = "$TTM_MCM_PageSpouseBuff"
+    TTM_MCM_State.SetCurrentPage("$TTM_MCM_PageExplore")
+EndFunction
+
 Event OnPageReset(string page)
+    if(!oneTimeUpdate)
+        SetupPages()
+        oneTimeUpdate = true
+    endif
+
     if(TTM_MCM_PreferVanillaAudio == none)
         TTM_MCM_PreferVanillaAudio = Game.GetFormFromFile(0x18, "TT_MARAS.esp") as GlobalVariable
     endif
     if(TTM_MCM_AllowAIDial == none)
         TTM_MCM_AllowAIDial = Game.GetFormFromFile(0x1c, "TT_MARAS.esp") as GlobalVariable
     endif
-    if(page == "Explore")
+    if(page == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.RenderPage(self)
         else
             TTM_MCM_ExplorePage.RenderPage(self)
         endif
-    elseif(page == "Settings")
+    elseif(page == "$TTM_MCM_PageSettings")
         TTM_MCM_State.Clean()
         TTM_MCM_SettingsPage.RenderPage(self)
-    elseif(page == "Spouse buff")
+    elseif(page == "$TTM_MCM_PageSpouseBuff")
         TTM_MCM_State.Clean()
         TTM_MCM_CurrentBuff.RenderPage(self)
     endif
@@ -77,124 +97,124 @@ EndEvent
 
 ; Select
 event OnOptionSelect(int option)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionSelect(self, option)
         else
             TTM_MCM_ExplorePage.OnOptionSelect(self, option)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionSelect(self, option)
-    elseif(currentPage == "Spouse buff")
+    elseif(currentPage == "$TTM_MCM_PageSpouseBuff")
         TTM_MCM_CurrentBuff.OnOptionSelect(self, option)
     endif
 endevent
 
 ; Highlight
 event OnOptionHighlight(int option)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionHighlight(self, option)
         else
             TTM_MCM_ExplorePage.OnOptionHighlight(self, option)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionHighlight(self, option)
-    elseif(currentPage == "Spouse buff")
+    elseif(currentPage == "$TTM_MCM_PageSpouseBuff")
         TTM_MCM_CurrentBuff.OnOptionHighlight(self, option)
     endif
 endevent
 
 ; Default
 event OnOptionDefault(int option)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionDefault(self, option)
         else
             TTM_MCM_ExplorePage.OnOptionDefault(self, option)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionDefault(self, option)
-    elseif(currentPage == "Spouse buff")
+    elseif(currentPage == "$TTM_MCM_PageSpouseBuff")
         TTM_MCM_CurrentBuff.OnOptionDefault(self, option)
     endif
 endevent
 
 event OnOptionInputOpen(int option)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionInputOpen(self, option)
         else
             TTM_MCM_ExplorePage.OnOptionInputOpen(self, option)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionInputOpen(self, option)
-    elseif(currentPage == "Spouse buff")
+    elseif(currentPage == "$TTM_MCM_PageSpouseBuff")
         TTM_MCM_CurrentBuff.OnOptionInputOpen(self, option)
     endif
 endEvent
 
 event OnOptionInputAccept(int option, string value)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionInputAccept(self, option, value)
         else
             TTM_MCM_ExplorePage.OnOptionInputAccept(self, option, value)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionInputAccept(self, option, value)
-    elseif(currentPage == "Spouse buff")
+    elseif(currentPage == "$TTM_MCM_PageSpouseBuff")
         TTM_MCM_CurrentBuff.OnOptionInputAccept(self, option, value)
     endif
 endEvent
 
 event OnOptionMenuOpen(int a_option)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         TTM_MCM_ExplorePage.OnOptionMenuOpen(self, a_option)
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionMenuOpen(self, a_option)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionMenuOpen(self, a_option)
     endif
 endEvent
 
 event OnOptionMenuAccept(int a_option, int a_index)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         TTM_MCM_ExplorePage.OnOptionMenuAccept(self, a_option, a_index)
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionMenuAccept(self, a_option, a_index)
         endif
-	elseif(currentPage == "Settings")
+	elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionMenuAccept(self, a_option, a_index)
     endif
 endEvent
 
 event OnOptionSliderOpen(int option)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionSliderOpen(self, option)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionSliderOpen(self, option)
     endif
 endEvent
 
 event OnOptionSliderAccept(int option, float value)
-    if(currentPage == "Explore")
+    if(currentPage == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")
             TTM_MCM_NpcPage.OnOptionSliderAccept(self, option, value)
         endif
-    elseif(currentPage == "Settings")
+    elseif(currentPage == "$TTM_MCM_PageSettings")
         TTM_MCM_SettingsPage.OnOptionSliderAccept(self, option, value)
     endif
 endEvent

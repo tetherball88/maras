@@ -49,7 +49,7 @@ Event OnSleepStop(bool abInterrupted)
             if(!addedSpell)
                 addedSpell = true
                 player.AddSpell(TTM_LoversRadianceAbility, false)
-                Debug.Notification("You feel the warmth of your partner's love. Lover's Radiance granted.")
+                TTM_Messages.LoversRadianceEffectMsg()
                 return
             endif
         endif

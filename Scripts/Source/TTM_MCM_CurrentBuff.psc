@@ -8,7 +8,7 @@ Function RenderPage(TTM_MCM mcm) global
 EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Follower buff from spouses")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderFollowerBuff")
     Actor[] followers = PO3_SKSEFunctions.GetPlayerFollowers()
     float[] followerSkillMultipliers = Utility.CreateFloatArray(6)
     float[] followerSocialMultipliers = Utility.CreateFloatArray(8)
@@ -25,7 +25,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
 EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Permanent buff from spouses")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderPermanentBuff")
 
     int i = 0
 

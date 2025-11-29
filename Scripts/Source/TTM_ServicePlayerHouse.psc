@@ -40,7 +40,7 @@ Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0) global
     int count = playerHomes.Length
 
     if(count < 1)
-        Debug.Notification("You don't have any home to choose from.")
+        TTM_Messages.PlayerNoHomeMsg()
         return
     endif
     UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
@@ -90,7 +90,7 @@ EndFunction
 Function ReleaseSpouseFromPlayerHome(Actor spouse, string reason = "") global
     if(MARAS.GetTenantHouse(spouse) != none)
         if(reason == "affection")
-            Debug.Notification(TTM_Utils.GetActorName(spouse) + " has stopped using your home due to your estranged relationship.")
+            TTM_Messages.FreeSpouseFromPlayerHomeMsg(TTM_Utils.GetActorName(spouse))
         endif
     endif
     TTM_Debug.trace("ReleaseSpouseFromPlayerHome:spouse:"+spouse+":reason:"+reason)

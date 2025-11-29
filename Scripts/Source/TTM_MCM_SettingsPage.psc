@@ -9,62 +9,62 @@ EndFunction
 
 string[] Function GetGendersOptions() global
     string[] options = new string[3]
-    options[0] = "opposite"
-    options[1] = "same"
-    options[2] = "all"
+    options[0] = "$TTM_MCM_GenderOpposite"
+    options[1] = "$TTM_MCM_GenderSame"
+    options[2] = "$TTM_MCM_GenderAll"
     return options
 EndFunction
 
 string[] Function GetLogDestinationOptions() global
     string[] options = new string[3]
-    options[0] = "file"
-    options[1] = "console"
-    options[2] = "floating"
+    options[0] = "$TTM_MCM_LogDestFile"
+    options[1] = "$TTM_MCM_LogDestConsole"
+    options[2] = "$TTM_MCM_LogDestFloating"
     return options
 EndFunction
 
 string[] Function GetLogLevelOptions() global
     string[] options = new string[6]
-    options[0] = "trace"
-    options[1] = "debug"
-    options[2] = "info"
-    options[3] = "warning"
-    options[4] = "error"
-    options[5] = "none"
+    options[0] = "$TTM_MCM_LogLevelTrace"
+    options[1] = "$TTM_MCM_LogLevelDebug"
+    options[2] = "$TTM_MCM_LogLevelInfo"
+    options[3] = "$TTM_MCM_LogLevelWarning"
+    options[4] = "$TTM_MCM_LogLevelError"
+    options[5] = "$TTM_MCM_LogLevelNone"
     return options
 EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Settings")
-    mcm.oid_SkipNextWeddings = mcm.AddToggleOption("Skip wedding ceremonies after first?", TTM_Data.GetSkipWedding())
-    mcm.AddHeaderOption("AI dialogues")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderSettings")
+    mcm.oid_SkipNextWeddings = mcm.AddToggleOption("$TTM_MCM_SkipWedding", TTM_Data.GetSkipWedding())
+    mcm.AddHeaderOption("$TTM_MCM_HeaderAIDialogues")
     string[] genderOptions = GetGendersOptions()
     int hasSkyrimNet = 0
     if(!TTM_Data.GetHasSkyrimNet())
         hasSkyrimNet = 1
     endif
-    mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("Show start dialogue to genders: ", genderOptions[mcm.MCM_StartDialGender.GetValue() as int])
-    mcm.oid_MinRelRankForDial = mcm.AddSliderOption("Min relationship rank for dialogue", mcm.TTM_MinRelRankForDial.GetValue(), "{0}")
-    mcm.oid_SettingsPreferVanillaAudio= mcm.AddToggleOption("Use vanilla voiced dialogues if possible: ", mcm.TTM_MCM_PreferVanillaAudio.GetValue() as int, hasSkyrimNet)
-    mcm.oid_SettingsAllowAIDial = mcm.AddToggleOption("Use AI generated responses in dialogues: ", mcm.TTM_MCM_AllowAIDial.GetValue() as int, hasSkyrimNet)
+    mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("$TTM_MCM_StartDialGender", genderOptions[mcm.MCM_StartDialGender.GetValue() as int])
+    mcm.oid_MinRelRankForDial = mcm.AddSliderOption("$TTM_MCM_MinRelRankForDial", mcm.TTM_MinRelRankForDial.GetValue(), "{0}")
+    mcm.oid_SettingsPreferVanillaAudio= mcm.AddToggleOption("$TTM_MCM_PreferVanillaAudio", mcm.TTM_MCM_PreferVanillaAudio.GetValue() as int, hasSkyrimNet)
+    mcm.oid_SettingsAllowAIDial = mcm.AddToggleOption("$TTM_MCM_AllowAIDial", mcm.TTM_MCM_AllowAIDial.GetValue() as int, hasSkyrimNet)
 EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
-    mcm.AddHeaderOption("Logging")
+    mcm.AddHeaderOption("$TTM_MCM_HeaderLogging")
     string[] logLevelOptions = GetLogLevelOptions()
-    mcm.oid_SettingsLogLevel = mcm.AddMenuOption("Log level", logLevelOptions[MARAS.GetLogLevel()])
+    mcm.oid_SettingsLogLevel = mcm.AddMenuOption("$TTM_MCM_LogLevel", logLevelOptions[MARAS.GetLogLevel()])
     string[] logDestinationOptions = GetLogDestinationOptions()
-    mcm.oid_SettingsLogDestination = mcm.AddMenuOption("Log destination ", logDestinationOptions[TTM_Data.GetLogDestination()])
-    mcm.AddHeaderOption("Cheats")
-    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("Enable always success for engagement", TTM_Data.GetAlwaysSuccessMarriage())
+    mcm.oid_SettingsLogDestination = mcm.AddMenuOption("$TTM_MCM_LogDestination", logDestinationOptions[TTM_Data.GetLogDestination()])
+    mcm.AddHeaderOption("$TTM_MCM_HeaderCheats")
+    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("$TTM_MCM_CheatAlwaysSuccess", TTM_Data.GetAlwaysSuccessMarriage())
     ; Debug Spell toggle: add/remove debug spell to player
     Actor player = TTM_Data.GetPlayer()
     bool hasDebug = false
     if(player != none)
         hasDebug = player.HasSpell(TTM_Data.GetDebugSpell())
     endif
-    mcm.oid_SettingsCheatDebugSpell = mcm.AddToggleOption("Enable debug spell (grants a debug power)", hasDebug)
-    mcm.oid_EnablePolygamyToggle = mcm.AddToggleOption("Enable polygamy (bypasses quest)", mcm.TTM_EnablePolygamyToggle.GetValue() as int)
+    mcm.oid_SettingsCheatDebugSpell = mcm.AddToggleOption("$TTM_MCM_CheatDebugSpell", hasDebug)
+    mcm.oid_EnablePolygamyToggle = mcm.AddToggleOption("$TTM_MCM_EnablePolygamy", mcm.TTM_EnablePolygamyToggle.GetValue() as int)
 EndFunction
 
 Function OnOptionSelect(TTM_MCM mcm, int option) global
@@ -108,21 +108,21 @@ EndFunction
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
     if(option == mcm.oid_SettingsPreferVanillaAudio)
-        mcm.SetInfoText("If true it will try to use vanilla voiced dialogues when possible, otherwise it will use AI generated responses.\n Pros: fast but hardcoded. \nCons: slower but more dynamic.")
+        mcm.SetInfoText("$TTM_MCM_TT_PreferVanilla")
     elseif(option == mcm.oid_SettingsAllowAIDial)
-        mcm.SetInfoText("If true it will use AI generated responses in quest dialogues, otherwise un-voiced hardcoded dialogues. \n Pros: dynamic and context/persoanlity-aware. \nCons: slower and hardcoded.")
+        mcm.SetInfoText("$TTM_MCM_TT_AllowAIDial")
     elseif(option == mcm.oid_SettingsLogDestination)
-        mcm.SetInfoText("Select where logs will be shown/written: to file, in console, as floating message.")
+        mcm.SetInfoText("$TTM_MCM_TT_LogDestination")
     elseif(option == mcm.oid_SettingsLogLevel)
-        mcm.SetInfoText("Sets how much detail is logged.\nHigher levels (Trace, Debug) show more technical data — useful for troubleshooting.\nLower levels (Warning, Error) show only important issues.")
+        mcm.SetInfoText("$TTM_MCM_TT_LogLevel")
     elseif(option == mcm.oid_SkipNextWeddings)
-        mcm.SetInfoText("If enabled - you will have to attend wedding ceremony only once, after that you will get married without Wedding Ceremony quest.")
+        mcm.SetInfoText("$TTM_MCM_TT_SkipWedding")
     elseif(option == mcm.oid_SettingsCheatDebugSpell)
-        mcm.SetInfoText("Toggles a debug spell on the player. When cast on an NPC, the spell cycles that NPC's MARAS status through: unknown -> candidate -> engaged -> married -> divorced. Useful for testing romance flows and status transitions.")
+        mcm.SetInfoText("$TTM_MCM_TT_DebugSpell")
     elseif(option == mcm.oid_EnablePolygamyToggle)
-        mcm.SetInfoText("Enables polygamy, allowing multiple marriages without completing the polygamy quest.")
+        mcm.SetInfoText("$TTM_MCM_TT_EnablePolygamy")
     elseif(option == mcm.oid_MinRelRankForDial)
-        mcm.SetInfoText("Sets the minimum relationship rank required for NPCs to show the initial romance dialogue. \nRelationship ranks range from -4 (arch enemy) to 4 (lover).")
+        mcm.SetInfoText("$TTM_MCM_TT_MinRelRank")
     endif
 EndFunction
 

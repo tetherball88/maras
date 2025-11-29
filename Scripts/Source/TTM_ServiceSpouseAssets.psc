@@ -10,13 +10,13 @@ Function StartShareHomeWithPlayer(Actor spouse) global
     if(MARAS.GetNpcOriginalHouse(spouse) == none)
         TTM_Debug.warn("StartShareHomeWithPlayer:NoHomeCell")
         spouse.AddToFaction(TTM_Data.GetSpouseNoInitialHouseFaction())
-        Debug.Notification(TTM_Utils.GetActorName(spouse) + " doesn't have their own private home.")
+        TTM_Messages.SpouseNoHomeMsg(TTM_Utils.GetActorName(spouse))
         return
     endif
 
     if(MARAS.ShareHouseWithPlayer(spouse))
         Cell spouseHomeCell = MARAS.GetNpcOriginalHouse(spouse)
-        Debug.Notification(TTM_Utils.GetActorName(spouse) + " shared their home - "+spouseHomeCell.GetName()+" - with you.")
+        TTM_Messages.SpouseSharedHomeMsg(TTM_Utils.GetActorName(spouse), spouseHomeCell.GetName())
         spouse.AddToFaction(TTM_Data.GetSpouseSharedHouseFaction())
         ObjectReference[] doors = MARAS.GetCellDoors(spouseHomeCell)
         int i = 0
@@ -58,15 +58,7 @@ EndFunction
 Function StopShareHouseWithPlayer(Actor spouse, string reason = "") global
     string spouseName = TTM_Utils.GetActorName(spouse)
     if(MARAS.HasSpouseSharedHouseWithPlayer(spouse))
-        if(reason == "divorce")
-            Debug.Notification(spouseName + " has divorced you and taken back their home.")
-        elseif(reason == "deceased")
-            Debug.Notification(spouseName + " has passed away and their home is no longer shared with you.")
-        elseif(reason == "affection")
-            Debug.Notification(spouseName + " no longer wishes to share their home with you due to your estranged relationship.")
-        else
-            Debug.Notification("You don't need " + spouseName + "'s home anymore, so they have taken back ownership.")
-        endif
+        TTM_Messages.SpouseSharedHomeStoppedMsg(spouseName, reason)
     endif
     MARAS.StopShareHouseWithPlayer(spouse)
     StopQuest()

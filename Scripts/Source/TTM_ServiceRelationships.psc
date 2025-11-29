@@ -7,8 +7,7 @@ scriptname TTM_ServiceRelationships
 Function MakeNpcCandidate(Actor npc) global
     int playerRank = TTM_Data.GetPlayer().GetRelationshipRank(npc)
     MARAS.SetPermanentAffection(npc, 50 + (playerRank * 10))
-    string msg = "I think " + TTM_Utils.GetActorName(npc) + " is a good match."
-    Debug.Notification(msg)
+    TTM_Messages.RegisterCandidateMsg(TTM_Utils.GetActorName(npc))
 EndFunction
 
 ;/
@@ -37,8 +36,8 @@ Function MakeNpcEngaged(Actor npc) global
         npc.RemoveSpell(TTM_Data.GetBreakupCooldownSpell())
     endif
     MARAS.SetPermanentAffection(npc, 100)
-    string msg = TTM_Utils.GetActorName(npc) + " and I are engaged to be married."
-    Debug.Notification(msg)
+
+    TTM_Messages.EngagementMsg(TTM_Utils.GetActorName(npc))
 
     PacifyFianceOrSpouse(npc)
 EndFunction
@@ -60,8 +59,7 @@ Function MakeNpcMarried(Actor npc) global
         npc.RemoveSpell(TTM_Data.GetBreakupCooldownSpell())
     endif
     MARAS.SetPermanentAffection(npc, 100)
-    string msg = TTM_Utils.GetActorName(npc) + " and I are now newlyweds."
-    Debug.Notification(msg)
+    TTM_Messages.MarriedMsg(TTM_Utils.GetActorName(npc))
 
     if(npc.GetActorValue("Aggression") > 0)
         npc.AddSpell(TTM_Data.GetPacifyFianceOrSpouseSpell())
@@ -87,8 +85,7 @@ Function MakeNpcDivorced(Actor npc) global
     npc.AddSpell(TTM_Data.GetBreakupCooldownSpell())
     MARAS.SetPermanentAffection(npc, 0)
     PacifyFianceOrSpouse(npc, false)
-    string msg = "Me and " + TTM_Utils.GetActorName(npc) + " are now divorced."
-    Debug.Notification(msg)
+    TTM_Messages.DivorceMsg(TTM_Utils.GetActorName(npc))
 EndFunction
 
 ;/
@@ -102,8 +99,7 @@ Function MakeNpcJilted(Actor npc) global
     npc.AddSpell(TTM_Data.GetBreakupCooldownSpell())
     MARAS.SetPermanentAffection(npc, 0)
     PacifyFianceOrSpouse(npc, false)
-    string msg = "My engagement with " + TTM_Utils.GetActorName(npc) + " was called off."
-    Debug.Notification(msg)
+    TTM_Messages.JiltedMsg(TTM_Utils.GetActorName(npc))
 EndFunction
 
 ;/
