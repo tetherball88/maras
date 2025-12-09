@@ -26,10 +26,12 @@ jobs:
           TAG="${{ github.ref_name }}"
           # quote paths in case
           zip -r "out/MARAS_${TAG}.zip" \
+            interface/ \
             Scripts/ \
             SKSE/ \
             Seq/ \
             sound/ \
+            Strings/ \
             TT_MARAS.esp \
             -x ".github/*"
 
