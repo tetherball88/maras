@@ -230,13 +230,15 @@ When affection for a spouse drops into estranged:
 
 ## 7. How Affection Feeds Into Marriage Chance
 
-- Affection is treated as 0–100 with 50 as “neutral”.
-- Values above 50 reduce internal “difficulty,” boosting your chance.
+- Affection is treated as 0–100 with 50 as "neutral".
+- Values above 50 reduce internal "difficulty," boosting your chance.
 - Values below 50 increase difficulty, lowering your odds.
 
 In practical terms:
-- Low affection: you’re asking a near-stranger (or ex) to marry you. Expect more “Nope.”
+- Low affection: you're asking a near-stranger (or ex) to marry you. Expect more "Nope."
 - High affection: chances shift noticeably in your favor. RNG can still be mean, but the curve is on your side.
+
+> For the complete marriage difficulty calculation formula and all factors involved (prestige, guilds, social class, penalties, etc.), see [Marriage Difficulty Configuration Guide](MarriageDifficultyConfig.md).
 
 ## 8. Practical Tips 🎯
 

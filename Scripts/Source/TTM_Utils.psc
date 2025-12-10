@@ -85,3 +85,64 @@ Function ReinforceEnablePolygamySpouseAlias() global
         endif
     endif
 EndFunction
+
+bool Function ShowAIConfirmationMessage(string type, Actor npc) global
+    if(!TTM_Data.GetHasSkyrimNet())
+        return false
+    endif
+
+    if(!TTM_MCM_State.GetConfirmMcm(type))
+        return true
+    endif
+
+    string actorName = GetActorName(npc)
+    string msg = actorName + " "
+    if(type == "ConfirmAcceptProposal")
+        msg += "accepted your proposal."
+    elseif(type == "ConfirmBreakupEngagement")
+        msg += "wants to breakup with you."
+    elseif(type == "ConfirmDivorce")
+        msg += "wants a divorce."
+    elseif(type == "ConfirmDivorceDuringLowAffectionQuest")
+        msg = "decided to divorce you after you neglected them."
+    endif
+
+    string[] buttons = new string[2]
+    buttons[0] = "$TTM_MSG_ConfirmActionYes"
+    buttons[1] = "$TTM_MSG_ConfirmActionNo"
+
+    int buttonIndex = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int
+
+    if(buttonIndex == 0)
+        return true
+    elseif(buttonIndex == 1)
+        StorageUtil.SetFloatValue(npc, "TTM_ConfirmationActionCooldown." + type, Utility.GetCurrentGameTime())
+        return false
+    endif
+EndFunction
+
+bool Function OpenMisclickedMenu(string type, Actor npc) global
+    UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
+    listMenu.AddEntryItem("$TTM_MSG_ConfirmActionMisclick")
+    listMenu.AddEntryItem("$TTM_MSG_ConfirmActionYes")
+    listMenu.AddEntryItem("$TTM_MSG_ConfirmActionNo")
+
+    listMenu.OpenMenu()
+    int choice = listMenu.GetResultInt()
+
+    if(choice == 1)
+        return true
+    elseif(choice == 2)
+        StorageUtil.SetFloatValue(npc, "TTM_ConfirmationActionCooldown." + type, Utility.GetCurrentGameTime())
+        return false
+    elseif(choice == 0)
+        return OpenMisclickedMenu(type, npc)
+    else
+        return true
+    endif
+EndFunction
+
+bool Function ActionConfirmationCooldownPassed(string type, Actor npc, int cooldownInDays = 1) global
+    float lastActionTime = StorageUtil.GetFloatValue(npc, "TTM_ConfirmationActionCooldown." + type, 0.0)
+    return Utility.GetCurrentGameTime() >= lastActionTime + cooldownInDays
+EndFunction

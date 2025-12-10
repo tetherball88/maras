@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 
 #include "core/AffectionService.h"
@@ -15,6 +16,10 @@
 #include "utils/FormUtils.h"
 
 namespace MARAS {
+
+    // Static member initialization
+    std::unordered_map<std::string, float> MarriageDifficulty::config_;
+    bool MarriageDifficulty::configLoaded_ = false;
 
     namespace {
         // Helper: Get FormCache singleton
@@ -39,12 +44,10 @@ namespace MARAS {
         // - Linear: simple inversion (current)
         // - Sigmoid: smooth S-curve with gentle extremes
         // - Quadratic: easing function for moderate smoothing
-        float DifficultyToChance(float difficulty) {
+        float DifficultyToChance(float difficulty, float steepness, float center) {
             // Sigmoid curve: 1 / (1 + e^(k*(x-50)))
             // k controls steepness (0.08-0.12 works well)
             // Centered at difficulty=50 (50% chance)
-            constexpr float steepness = 0.10f;
-            constexpr float center = 50.0f;
             float exponent = steepness * (difficulty - center);
             return 1.0f / (1.0f + std::exp(exponent));
         }
@@ -137,7 +140,8 @@ namespace MARAS {
         complexity += divorcedScore;
 
         // Level difference
-        float levelDiffScore = std::clamp(levelDiff * GetParam("levelDiffMultiplier"), -10.0f, 10.0f);
+        float levelDiffScore = std::clamp(levelDiff * GetParam("levelDiffMultiplier"), GetParam("levelDiffClampMin"),
+                                          GetParam("levelDiffClampMax"));
         MARAS_LOG_DEBUG("Level difference: {}, score: {}", levelDiff, levelDiffScore);
         complexity += levelDiffScore;
 
@@ -183,10 +187,10 @@ namespace MARAS {
         MARAS_LOG_DEBUG("Final complexity: {}", complexity);
 
         // === 2. Clamp difficulty 0-100 ===
-        float difficulty = ClampValue(complexity, 0.0f, 100.0f);
+        float difficulty = ClampValue(complexity, GetParam("difficultyClampMin"), GetParam("difficultyClampMax"));
 
         // === 3. Calculate success chance using sigmoid curve for smoother transitions ===
-        float chance = DifficultyToChance(difficulty);
+        float chance = DifficultyToChance(difficulty, GetParam("sigmoidSteepness"), GetParam("sigmoidCenter"));
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
@@ -202,88 +206,149 @@ namespace MARAS {
         return QuestReachedStage(quest, stage);
     }
 
-    float MarriageDifficulty::GetParam(const std::string& param) {
-        // Use hardcoded values from the actual JSON file since JSON parsing is complex
-        // These values are directly from marriageComplexityVariables.json
-        static const std::unordered_map<std::string, float> configParams = {
-            {"prestigeDragonbornBonus", 25.0f},
-            {"prestigeThaneHoldValue", 4.0f},
-            {"prestigeMaxThaneHolds", 9.0f},
-            {"prestigeGuildLeaderBonus", 8.0f},
-            {"prestigeMostGoldDivisor", 5000.0f},
-            {"prestigeMostGoldClampMax", 15.0f},
-            {"prestigeHouseUnitMultiplier", 3.0f},
-            {"prestigeHorseUnitMultiplier", 3.0f},
-            {"prestigeHouseHorseClampMax", 15.0f},
-            {"prestigeQuestsMultiplier", 0.2f},
-            {"prestigeDungeonsMultiplier", 0.1f},
-            {"prestigeSoulsMultiplier", 0.5f},
-            {"prestigeRenownClampMax", 25.0f},
-            {"prestigePrestigeClamp_min", 0.0f},
-            {"prestigePrestigeClamp_max", 100.0f},
-            {"guild_sameGuildBonus", -4.0f},
-            {"guildCompanions_outcast", 0.0f},
-            {"guildCompanions_poverty", 0.0f},
-            {"guildCompanions_working", -2.0f},
-            {"guildCompanions_middle", -1.0f},
-            {"guildCompanions_wealthy", 0.0f},
-            {"guildCompanions_religious", 1.0f},
-            {"guildCompanions_nobles", -1.0f},
-            {"guildCompanions_rulers", -2.0f},
-            {"guildThieves_outcast", -2.0f},
-            {"guildThieves_poverty", -1.0f},
-            {"guildThieves_middle", 1.0f},
-            {"guildThieves_working", 0.0f},
-            {"guildThieves_wealthy", 2.0f},
-            {"guildThieves_religious", 2.0f},
-            {"guildThieves_nobles", 2.0f},
-            {"guildThieves_rulers", 3.0f},
-            {"guildBrotherhood_outcast", -3.0f},
-            {"guildBrotherhood_poverty", -2.0f},
-            {"guildBrotherhood_working", 1.0f},
-            {"guildBrotherhood_middle", 2.0f},
-            {"guildBrotherhood_wealthy", 3.0f},
-            {"guildBrotherhood_religious", 4.0f},
-            {"guildBrotherhood_nobles", 3.0f},
-            {"guildBrotherhood_rulers", 4.0f},
-            {"guildCollege_outcast", 1.0f},
-            {"guildCollege_poverty", 0.0f},
-            {"guildCollege_working", 1.0f},
-            {"guildCollege_middle", 0.0f},
-            {"guildCollege_wealthy", 1.0f},
-            {"guildCollege_religious", -2.0f},
-            {"guildCollege_nobles", 0.0f},
-            {"guildCollege_rulers", -3.0f},
-            {"guildBards_outcast", 1.0f},
-            {"guildBards_poverty", 0.0f},
-            {"guildBards_working", 0.0f},
-            {"guildBards_middle", -1.0f},
-            {"guildBards_wealthy", -1.0f},
-            {"guildBards_religious", 0.0f},
-            {"guildBards_nobles", -2.0f},
-            {"guildBards_rulers", -1.0f},
-            {"intimacySpouseLoverPenalty", 30.0f},
-            {"intimacySpouseNotLoverPenalty", 25.0f},
-            {"intimacyCourtingLoverPenalty", 20.0f},
-            {"intimacyCourtingNotLoverPenalty", 15.0f},
-            {"intimacyOtherLoversPenalty", 10.0f},
-            {"intimacyPlayerMultiplier", 1.0f},
-            {"initialComplexity", 50.0f},
-            {"prestigeTargetBase", 10.0f},
-            {"prestigeTargetPerSocialIndexMultiplier", 10.0f},
-            {"prestigeDeltaMultiplier", 0.30f},
-            {"jiltedPenalty", 10.0f},
-            {"divorcedPenalty", 20.0f},
-            {"playerKillerPenalty", 50.0f},
-            {"marriedCountMultiplier", 2.0f},
-            {"divorcedCountMultiplier", 1.0f},
-            {"levelDiffMultiplier", 0.50f},
-            {"speechcraftMultiplier", -0.1f},
-            {"relationshipRankMultiplier", -3.0f},
-            {"affectionMultiplier", 0.50f}};
+    bool MarriageDifficulty::LoadConfig() {
+        std::filesystem::path path = "Data/SKSE/Plugins/MARAS/marriageDifficultyConfig.json";
 
-        auto it = configParams.find(param);
-        if (it != configParams.end()) {
+        try {
+            if (!std::filesystem::exists(path)) {
+                MARAS_LOG_ERROR("MarriageDifficulty: config file not found at {}", path.string());
+                return false;
+            }
+
+            std::ifstream in(path);
+            if (!in.is_open()) {
+                MARAS_LOG_ERROR("MarriageDifficulty: failed to open {}", path.string());
+                return false;
+            }
+
+            nlohmann::json j;
+            in >> j;
+
+            config_.clear();
+
+            // Load difficulty calculation parameters
+            if (j.contains("difficultyCalculation")) {
+                auto& dc = j["difficultyCalculation"];
+                if (dc.contains("sigmoidSteepness")) config_["sigmoidSteepness"] = dc["sigmoidSteepness"].get<float>();
+                if (dc.contains("sigmoidCenter")) config_["sigmoidCenter"] = dc["sigmoidCenter"].get<float>();
+                if (dc.contains("difficultyClampMin"))
+                    config_["difficultyClampMin"] = dc["difficultyClampMin"].get<float>();
+                if (dc.contains("difficultyClampMax"))
+                    config_["difficultyClampMax"] = dc["difficultyClampMax"].get<float>();
+            }
+
+            // Load complexity parameters
+            if (j.contains("complexity")) {
+                auto& c = j["complexity"];
+                if (c.contains("initialComplexity")) config_["initialComplexity"] = c["initialComplexity"].get<float>();
+                if (c.contains("levelDiffClampMin")) config_["levelDiffClampMin"] = c["levelDiffClampMin"].get<float>();
+                if (c.contains("levelDiffClampMax")) config_["levelDiffClampMax"] = c["levelDiffClampMax"].get<float>();
+            }
+
+            // Load prestige parameters with renamed keys to match old naming
+            if (j.contains("prestige")) {
+                auto& p = j["prestige"];
+                if (p.contains("dragonbornBonus"))
+                    config_["prestigeDragonbornBonus"] = p["dragonbornBonus"].get<float>();
+                if (p.contains("thaneHoldValue")) config_["prestigeThaneHoldValue"] = p["thaneHoldValue"].get<float>();
+                if (p.contains("maxThaneHolds")) config_["prestigeMaxThaneHolds"] = p["maxThaneHolds"].get<float>();
+                if (p.contains("guildLeaderBonus"))
+                    config_["prestigeGuildLeaderBonus"] = p["guildLeaderBonus"].get<float>();
+                if (p.contains("mostGoldDivisor"))
+                    config_["prestigeMostGoldDivisor"] = p["mostGoldDivisor"].get<float>();
+                if (p.contains("mostGoldClampMax"))
+                    config_["prestigeMostGoldClampMax"] = p["mostGoldClampMax"].get<float>();
+                if (p.contains("houseUnitMultiplier"))
+                    config_["prestigeHouseUnitMultiplier"] = p["houseUnitMultiplier"].get<float>();
+                if (p.contains("horseUnitMultiplier"))
+                    config_["prestigeHorseUnitMultiplier"] = p["horseUnitMultiplier"].get<float>();
+                if (p.contains("houseHorseClampMax"))
+                    config_["prestigeHouseHorseClampMax"] = p["houseHorseClampMax"].get<float>();
+                if (p.contains("questsMultiplier"))
+                    config_["prestigeQuestsMultiplier"] = p["questsMultiplier"].get<float>();
+                if (p.contains("dungeonsMultiplier"))
+                    config_["prestigeDungeonsMultiplier"] = p["dungeonsMultiplier"].get<float>();
+                if (p.contains("soulsMultiplier"))
+                    config_["prestigeSoulsMultiplier"] = p["soulsMultiplier"].get<float>();
+                if (p.contains("renownClampMax")) config_["prestigeRenownClampMax"] = p["renownClampMax"].get<float>();
+                if (p.contains("prestigeClampMin"))
+                    config_["prestigePrestigeClamp_min"] = p["prestigeClampMin"].get<float>();
+                if (p.contains("prestigeClampMax"))
+                    config_["prestigePrestigeClamp_max"] = p["prestigeClampMax"].get<float>();
+                if (p.contains("targetBase")) config_["prestigeTargetBase"] = p["targetBase"].get<float>();
+                if (p.contains("targetPerSocialIndexMultiplier"))
+                    config_["prestigeTargetPerSocialIndexMultiplier"] =
+                        p["targetPerSocialIndexMultiplier"].get<float>();
+                if (p.contains("deltaMultiplier"))
+                    config_["prestigeDeltaMultiplier"] = p["deltaMultiplier"].get<float>();
+            }
+
+            // Load penalties
+            if (j.contains("penalties")) {
+                auto& pen = j["penalties"];
+                if (pen.contains("jiltedPenalty")) config_["jiltedPenalty"] = pen["jiltedPenalty"].get<float>();
+                if (pen.contains("divorcedPenalty")) config_["divorcedPenalty"] = pen["divorcedPenalty"].get<float>();
+                if (pen.contains("playerKillerPenalty"))
+                    config_["playerKillerPenalty"] = pen["playerKillerPenalty"].get<float>();
+            }
+
+            // Load multipliers
+            if (j.contains("multipliers")) {
+                auto& m = j["multipliers"];
+                if (m.contains("marriedCountMultiplier"))
+                    config_["marriedCountMultiplier"] = m["marriedCountMultiplier"].get<float>();
+                if (m.contains("divorcedCountMultiplier"))
+                    config_["divorcedCountMultiplier"] = m["divorcedCountMultiplier"].get<float>();
+                if (m.contains("levelDiffMultiplier"))
+                    config_["levelDiffMultiplier"] = m["levelDiffMultiplier"].get<float>();
+                if (m.contains("speechcraftMultiplier"))
+                    config_["speechcraftMultiplier"] = m["speechcraftMultiplier"].get<float>();
+                if (m.contains("relationshipRankMultiplier"))
+                    config_["relationshipRankMultiplier"] = m["relationshipRankMultiplier"].get<float>();
+                if (m.contains("affectionMultiplier"))
+                    config_["affectionMultiplier"] = m["affectionMultiplier"].get<float>();
+            }
+
+            // Load guild parameters
+            if (j.contains("guilds")) {
+                auto& guilds = j["guilds"];
+                if (guilds.contains("sameGuildBonus"))
+                    config_["guild_sameGuildBonus"] = guilds["sameGuildBonus"].get<float>();
+
+                // Load each guild's social class modifiers
+                const std::vector<std::string> guildNames = {"companions", "thieves", "brotherhood", "college",
+                                                             "bards"};
+                const std::vector<std::string> socialClasses = {"outcast", "poverty",   "working", "middle",
+                                                                "wealthy", "religious", "nobles",  "rulers"};
+
+                for (const auto& guildName : guildNames) {
+                    if (guilds.contains(guildName)) {
+                        auto& guild = guilds[guildName];
+                        for (const auto& socialClass : socialClasses) {
+                            if (guild.contains(socialClass)) {
+                                std::string key = "guild" + std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(guildName[0])))) +
+                                                  guildName.substr(1) + "_" + socialClass;
+                                config_[key] = guild[socialClass].get<float>();
+                            }
+                        }
+                    }
+                }
+            }
+
+            configLoaded_ = true;
+            MARAS_LOG_INFO("MarriageDifficulty: loaded {} configuration parameters from {}", config_.size(),
+                           path.string());
+            return true;
+
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("MarriageDifficulty::LoadConfig exception: {}", e.what());
+            return false;
+        }
+    }
+
+    float MarriageDifficulty::GetParam(const std::string& param) {
+        auto it = config_.find(param);
+        if (it != config_.end()) {
             return it->second;
         }
 
@@ -322,35 +387,60 @@ namespace MARAS {
                                                       float dragonSoulsCollected) {
         float result = 0.0f;
 
+        MARAS_LOG_DEBUG("Prestige inputs - gold: {}, houses: {}, horses: {}, quests: {}, dungeons: {}, souls: {}",
+                        mostGold, housesOwned, horsesOwned, questsCompleted, dungeonsCleared, dragonSoulsCollected);
+
         // Dragonborn status
+        float dragonbornBonus = 0.0f;
         if (QuestReachedStage(GetCache().GetDragonbornQuest(), 90)) {
-            result += GetParam("prestigeDragonbornBonus");
+            dragonbornBonus = GetParam("prestigeDragonbornBonus");
+            result += dragonbornBonus;
         }
+        MARAS_LOG_DEBUG("Dragonborn bonus: {}", dragonbornBonus);
 
         // Thane holds
-        result += GetThaneHolds() * GetParam("prestigeThaneHoldValue");
+        int thaneHolds = GetThaneHolds();
+        float thaneScore = thaneHolds * GetParam("prestigeThaneHoldValue");
+        result += thaneScore;
+        MARAS_LOG_DEBUG("Thane holds: {}, score: {}", thaneHolds, thaneScore);
 
         // Guild leader
+        float guildLeaderBonus = 0.0f;
         if (IsGuildLeader()) {
-            result += GetParam("prestigeGuildLeaderBonus");
+            guildLeaderBonus = GetParam("prestigeGuildLeaderBonus");
+            result += guildLeaderBonus;
         }
+        MARAS_LOG_DEBUG("Guild leader bonus: {}", guildLeaderBonus);
 
         // Wealth
-        result +=
+        float wealthScore =
             ClampValue(mostGold / GetParam("prestigeMostGoldDivisor"), 0.0f, GetParam("prestigeMostGoldClampMax"));
+        result += wealthScore;
+        MARAS_LOG_DEBUG("Wealth score: {} (from {} gold)", wealthScore, mostGold);
 
         // Houses and horses
         float houseHorseScore = housesOwned * GetParam("prestigeHouseUnitMultiplier") +
                                 horsesOwned * GetParam("prestigeHorseUnitMultiplier");
-        result += ClampValue(houseHorseScore, 0.0f, GetParam("prestigeHouseHorseClampMax"));
+        float houseHorseClamped = ClampValue(houseHorseScore, 0.0f, GetParam("prestigeHouseHorseClampMax"));
+        result += houseHorseClamped;
+        MARAS_LOG_DEBUG("House/horse score: {} (clamped from {})", houseHorseClamped, houseHorseScore);
 
         // Heroic achievements
         float heroicScore = questsCompleted * GetParam("prestigeQuestsMultiplier") +
                             dungeonsCleared * GetParam("prestigeDungeonsMultiplier") +
                             dragonSoulsCollected * GetParam("prestigeSoulsMultiplier");
-        result += ClampValue(heroicScore, 0.0f, GetParam("prestigeRenownClampMax"));
+        float heroicClamped = ClampValue(heroicScore, 0.0f, GetParam("prestigeRenownClampMax"));
+        result += heroicClamped;
+        MARAS_LOG_DEBUG("Heroic achievements score: {} (clamped from {}) - quests: {}, dungeons: {}, souls: {}",
+                        heroicClamped, heroicScore, questsCompleted * GetParam("prestigeQuestsMultiplier"),
+                        dungeonsCleared * GetParam("prestigeDungeonsMultiplier"),
+                        dragonSoulsCollected * GetParam("prestigeSoulsMultiplier"));
 
-        return ClampValue(result, GetParam("prestigePrestigeClamp_min"), GetParam("prestigePrestigeClamp_max"));
+        float finalPrestige =
+            ClampValue(result, GetParam("prestigePrestigeClamp_min"), GetParam("prestigePrestigeClamp_max"));
+        MARAS_LOG_DEBUG("Total prestige: {} (clamped from {})", finalPrestige, result);
+
+        return finalPrestige;
     }
 
     float MarriageDifficulty::CalculateGuildAlignmentMod(RE::Actor* npc) {

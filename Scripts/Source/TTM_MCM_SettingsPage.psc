@@ -45,8 +45,14 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     endif
     mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("$TTM_MCM_StartDialGender", genderOptions[mcm.MCM_StartDialGender.GetValue() as int])
     mcm.oid_MinRelRankForDial = mcm.AddSliderOption("$TTM_MCM_MinRelRankForDial", mcm.TTM_MinRelRankForDial.GetValue(), "{0}")
-    mcm.oid_SettingsPreferVanillaAudio= mcm.AddToggleOption("$TTM_MCM_PreferVanillaAudio", mcm.TTM_MCM_PreferVanillaAudio.GetValue() as int, hasSkyrimNet)
-    mcm.oid_SettingsAllowAIDial = mcm.AddToggleOption("$TTM_MCM_AllowAIDial", mcm.TTM_MCM_AllowAIDial.GetValue() as int, hasSkyrimNet)
+    mcm.AddHeaderOption("$TTM_MCM_HeaderSettingsSkyrimNet")
+    mcm.oid_SettingsPreferVanillaAudio= mcm.AddToggleOption("$TTM_MCM_PreferVanillaAudio", mcm.TTM_MCM_PreferVanillaAudio.GetValue(), hasSkyrimNet)
+    mcm.oid_SettingsAllowAIDial = mcm.AddToggleOption("$TTM_MCM_AllowAIDial", mcm.TTM_MCM_AllowAIDial.GetValue(), hasSkyrimNet)
+    mcm.AddHeaderOption("$TTM_MCM_HeaderSettingsSkyrimNetActionsConfirmation")
+    mcm.oid_ConfirmAcceptProposal = mcm.AddToggleOption("$TTM_MCM_ConfirmAcceptProposal", TTM_MCM_State.GetConfirmAcceptProposal(), hasSkyrimNet)
+    mcm.oid_ConfirmBreakupEngagement = mcm.AddToggleOption("$TTM_MCM_ConfirmBreakupEngagement", TTM_MCM_State.GetConfirmBreakupEngagement(), hasSkyrimNet)
+    mcm.oid_ConfirmDivorce = mcm.AddToggleOption("$TTM_MCM_ConfirmDivorce", TTM_MCM_State.GetConfirmDivorce(), hasSkyrimNet)
+    mcm.oid_ConfirmDivorceDuringLowAffectionQuest = mcm.AddToggleOption("$TTM_MCM_ConfirmDivorceDuringLowAffectionQuest", TTM_MCM_State.GetConfirmDivorceDuringLowAffectionQuest(), hasSkyrimNet)
 EndFunction
 
 Function RenderRightColumn(TTM_MCM mcm) global
@@ -102,6 +108,26 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
         endif
     elseif(option == mcm.oid_EnablePolygamyToggle)
         mcm.SetToggleOptionValue(option, TTM_Utils.ToggleGlobalVariable(mcm.TTM_EnablePolygamyToggle))
+    elseif(option == mcm.oid_ConfirmAcceptProposal)
+        bool newVal = !TTM_MCM_State.GetConfirmAcceptProposal()
+        mcm.SetToggleOptionValue(option, newVal)
+        TTM_MCM_State.SetConfirmAcceptProposal(newVal)
+    elseif(option == mcm.oid_ConfirmBreakupEngagement)
+        bool newVal = !TTM_MCM_State.GetConfirmBreakupEngagement()
+        mcm.SetToggleOptionValue(option, newVal)
+        TTM_MCM_State.SetConfirmBreakupEngagement(newVal)
+    elseif(option == mcm.oid_ConfirmDivorce)
+        bool newVal = !TTM_MCM_State.GetConfirmDivorce()
+        mcm.SetToggleOptionValue(option, newVal)
+        TTM_MCM_State.SetConfirmDivorce(newVal)
+    elseif(option == mcm.oid_ConfirmDivorceDuringLowAffectionQuest)
+        bool newVal = !TTM_MCM_State.GetConfirmDivorceDuringLowAffectionQuest()
+        mcm.SetToggleOptionValue(option, newVal)
+        TTM_MCM_State.SetConfirmDivorceDuringLowAffectionQuest(newVal)
+    elseif(option == mcm.oid_ConfirmDivorceDuringLowAffectionQuest)
+        bool newVal = !TTM_MCM_State.GetConfirmDivorceDuringLowAffectionQuest()
+        mcm.SetToggleOptionValue(option, newVal)
+        TTM_MCM_State.SetConfirmDivorceDuringLowAffectionQuest(newVal)
     endif
 EndFunction
 

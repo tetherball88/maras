@@ -39,6 +39,8 @@ Social Class is mostly determined by what the NPC *is* in Skyrim:
 
 This class controls which **permanent buff** you get when you marry them.
 
+> Social class also affects marriage difficulty through prestige requirements and guild reputation modifiers. See [Marriage Difficulty Configuration Guide](MarriageDifficultyConfig.md) for details.
+
 ---
 
 ## Skill Type – What They Actually *Do* in Practice ⚔️📚🗡️

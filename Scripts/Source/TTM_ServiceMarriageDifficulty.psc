@@ -50,6 +50,7 @@ EndFunction
 
 float Function calcMarriageSuccessChance(Actor npc) global
     if(TTM_Data.GetAlwaysSuccessMarriage())
+        TTM_Debug.debug("calcMarriageSuccessChance: Always success enabled, returning 1.0")
         return 1.0
     endif
 

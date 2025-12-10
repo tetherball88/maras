@@ -70,27 +70,29 @@ Affection is baked into proposal chances and some buff behavior, so treat your p
 
 ---
 
-#### Marriage Chances: Not Just “Wear Amulet, Get Spouse”
+#### Marriage Chances: Not Just "Wear Amulet, Get Spouse"
 
-Proposals in M.A.R.A.S are not “equip Mara’s Amulet, win instantly” anymore.
+Proposals in M.A.R.A.S are not "equip Mara's Amulet, win instantly" anymore.
 
 The acceptance chance is influenced by things like:
 
 - Level difference between you and the NPC.
 - Your **wealth** and **prestige** (thane, guild master, Dragonborn, etc).
-- NPC’s **social class** and any **existing relationships** (married, courting, secret lover…).
+- NPC's **social class** and any **existing relationships** (married, courting, secret lover…).
 - Your **Speech skill** and current **affection**.
 - Faction/ethical alignment (a proud jarl might not be thrilled about a Dark Brotherhood sweetheart).
-- Whether they’ve been **jilted** or **divorced** by you before.
-- Whether you’ve killed a fiancé or spouse in the past (yikes).
-- Optional: **Lover’s Ledger** intimacy scores.
+- Whether they've been **jilted** or **divorced** by you before.
+- Whether you've killed a fiancé or spouse in the past (yikes).
+- Optional: **Lover's Ledger** intimacy scores.
 
-No fixed thresholds, no “100% or nothing”:
+No fixed thresholds, no "100% or nothing":
 
 - You can succeed with **1%** if luck is on your side.
-- You can fail at **90%** because the gods of RNG weren’t impressed.
+- You can fail at **90%** because the gods of RNG weren't impressed.
 
 With **SkyrimNet**, this becomes even cooler: conversations and roleplay can push NPCs past what raw stats would suggest.
+
+> For advanced users: All marriage difficulty parameters can be customized via `marriageDifficultyConfig.json`. See [Marriage Difficulty Configuration Guide](docs/MarriageDifficultyConfig.md) for the complete technical reference.
 
 ---
 
@@ -230,6 +232,11 @@ M.A.R.A.S runs great without SkyrimNet, but together they’re kind of a power c
      - All those silent lines get **generated voice acting**.
      - You can even opt out of vanilla lines and let the AI generate unique responses, giving each spouse more distinct personality.
 
+3. **AI-Driven Relationship Actions (with Safety Nets)**
+   - The AI can accept proposals, break engagements, or initiate divorces during natural conversations.
+   - **Action confirmations** (enabled by default in MCM) give you a final say before major relationship changes happen.
+   - Disable confirmations if you want full AI autonomy and maximum drama.
+
 Result: your marriages feel more like relationships and less like menu options.
 
 ---
@@ -261,11 +268,15 @@ Overall, M.A.R.A.S is designed as a **big, flexible, mostly non-destructive marr
 
 If you want more detail than this overview, see:
 
+### For Players
 - [Player Guide](docs/PLAYER_GUIDE.md) – moment-to-moment gameplay: how to start relationships, engagement, polygamy, divorce, etc.
 - [Affection System – Deep Dive](docs/AFFECTION_SYSTEM.md) – the full 0–100 affection model, daily caps, decay, and how it affects chances and buffs.
 - [Archetypes & Buffs](docs/ARCHETYPES_AND_BUFFS.md) – social classes, skill types, temperaments, and the buffs they give you.
 - [MCM Settings Guide](docs/MCM_Settings.md) – global settings, AI dialogue toggles, logging, and cheats.
 - [NPC Explorer MCM](docs/MCM_NPC.md) – per-NPC status, affection, archetypes, hierarchy, homes, and beds.
 - [Current Buffs MCM](docs/MCM_BUFF.md) – live view of your current permanent and follower buffs.
+
+### For Advanced Users & Modders
+- [Marriage Difficulty Configuration Guide](docs/MarriageDifficultyConfig.md) – complete reference for customizing marriage difficulty calculation via JSON.
 - [Advanced Configuration & Modding](docs/ADVANCED_CONFIGURATION_AND_MODDING.md) – JSON archetype overrides, buff tuning, and Papyrus integration points.
 

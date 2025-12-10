@@ -81,7 +81,43 @@ Options:
   - Default: **-4**
   - Use this to restrict romance prompts to NPCs you have a positive relationship with, or open it up to enemies for dramatic roleplay.
 
-> These two toggles only truly **come alive together** when you use them with the **SkyrimNet** mod.
+> These toggles only truly **come alive together** when you use them with the **SkyrimNet** mod.
+
+---
+
+### ✅ Actions Confirmation
+
+> These options only available if **SkyrimNet** is installed. Without it, the toggles will be disabled.
+
+When using SkyrimNet, the AI can sometimes suggest or trigger major relationship actions during conversations. These toggles control whether the game asks you to confirm before those actions actually happen.
+
+- **Confirm Accept Marriage Proposal action**
+  - When **enabled**: If the AI conversation leads to the NPC accepting your marriage proposal, you'll get a confirmation prompt before the engagement actually occurs.
+  - When **disabled**: The AI can directly accept proposals and move the NPC to engaged status.
+  - Default: **Enabled**
+
+- **Confirm Breakup Engagement action**
+  - When **enabled**: If the AI conversation leads to breaking off an engagement, you'll be asked to confirm before it happens.
+  - When **disabled**: The AI can directly break engagements during conversations.
+  - Default: **Disabled**
+
+- **Confirm Divorce action**
+  - When **enabled**: If the AI conversation leads to a divorce, you'll get a confirmation prompt before the marriage ends.
+  - When **disabled**: The AI can directly divorce you during conversations.
+  - Default: **Disabled**
+
+- **Confirm Divorce action when affection is low**
+  - When **enabled**: During the "Marriage: The Last Word" quest (when affection drops to estranged), you'll be asked to confirm before the AI finalizes a divorce.
+  - When **disabled**: The AI can complete the divorce without confirmation during low affection scenarios.
+  - Default: **Disabled**
+
+**Use these if:**
+- You want to stay in control of major relationship decisions, even when using AI conversations.
+- You want a safety net to prevent accidental relationship changes during roleplay.
+
+**Disable these if:**
+- You prefer fully AI-driven relationship outcomes without interruptions.
+- You trust the AI to make dramatic decisions on your behalf for maximum immersion.
 
 ---
 
@@ -147,7 +183,7 @@ Options:
 
 #### **Enable always success for engagement**
 
-This is the **“I am the Dragonborn, I do not roll dice for love”** button.
+This is the **"I am the Dragonborn, I do not roll dice for love"** button.
 
 **What it does:**
 - When enabled, **engagement attempts always(almost for SkyrimNet) succeed** regardless of:
@@ -157,15 +193,17 @@ This is the **“I am the Dragonborn, I do not roll dice for love”** button.
   - Jilted/divorce history
   - All that careful balance logic from the main system
 
-If you ask **“Will you marry me?”** – the answer is effectively “Yes, of course,” every time.
+If you ask **"Will you marry me?"** – the answer is effectively "Yes, of course," every time.
+
+> For a detailed breakdown of the marriage difficulty calculation that this cheat bypasses, see [Marriage Difficulty Configuration Guide](MarriageDifficultyConfig.md).
 
 **Perfect if:**
 - You just want to test downstream features (weddings, buffs, polygamy) quickly.
-- You’re running a sandbox save where everyone is contractually obligated to be your fiancé(e).
+- You're running a sandbox save where everyone is contractually obligated to be your fiancé(e).
 
 **Not recommended if:**
 - You want any semblance of challenge or roleplay.
-- You enjoy the feeling of *earning* that “Yes.”
+- You enjoy the feeling of *earning* that "Yes."
 
 ---
 
@@ -216,12 +254,15 @@ If you ask **“Will you marry me?”** – the answer is effectively “Yes, of
   - Recommended: **Enabled** if you’re using SkyrimNet and like dynamic storytelling.
 - **Min relationship rank for dialogue:**
   - Default: **-4** – allows romance with enemies and positive relationships.
+- **Action Confirmations** (all four options):
+  - Default: **Enabled** – recommended for most players to maintain control over major relationship decisions.
+  - Disable if you prefer full AI autonomy.
 - **Log level:**
   - Default: **warning** – good for most players.
 - **Log destination:**
   - Default: **file** – safe and standard.
 - **Enable always success for engagement:**
-  - Default: **Disabled**, unless you’re testing or embracing full Dragonborn narcissism.
+  - Default: **Disabled**, unless you're testing or embracing full Dragonborn narcissism.
 - **Enable polygamy (bypasses quest):**
   - Default: **Disabled**, unless you want to skip the polygamy quest and enable multiple marriages immediately.
 

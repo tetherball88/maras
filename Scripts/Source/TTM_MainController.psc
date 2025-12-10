@@ -23,7 +23,6 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
-    MiscUtil.PrintConsole("LANGUAGE: " + Utility.GetINIString("sLanguage:General"))
     TTM_ServiceAffection.Maintenance()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker

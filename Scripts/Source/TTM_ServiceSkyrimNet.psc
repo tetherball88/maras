@@ -27,21 +27,26 @@ Function RegisterActions() global
   RegisterAcceptProposalAction()
   RegisterBreakupEngagementAction()
   RegisterDivorseAction()
-;   RegisterAffectionEstrangedDivorceResolutionAction()
+  RegisterAffectionEstrangedDivorceResolutionAction()
 EndFunction
 
 Function RegisterAcceptProposalAction() global
     SkyrimNetApi.RegisterAction("AcceptMarriageProposal", \
-    "{{decnpc(npc.UUID).name}} accepts {{player.name}}'s marriage proposal.", \
+    GetActionProp("accept_marriage_proposal_description"), \
     "TTM_ServiceSkyrimNet", "AcceptProposalIsElgigible", "TTM_ServiceSkyrimNet", "AcceptProposalAction", "", "PAPYRUS", 1, \
-    "{}")
+    GetActionProp("accept_marriage_proposal_params"))
 EndFunction
 
 Bool Function AcceptProposalIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    return MARAS.IsNPCStatus(akActor, "any") && !MARAS.IsNPCStatus(akActor, "engaged") && !MARAS.IsNPCStatus(akActor, "married") && TTM_Data.GetPlayer() != akActor
+    bool isCooldownPassed = TTM_Utils.ActionConfirmationCooldownPassed("ConfirmAcceptProposal", akActor)
+    return MARAS.IsNPCStatus(akActor, "any") && !MARAS.IsNPCStatus(akActor, "engaged") && !MARAS.IsNPCStatus(akActor, "married") && TTM_Data.GetPlayer() != akActor && isCooldownPassed
 EndFunction
 
 Function AcceptProposalAction(Actor akActor, string contextJson, string paramsJson) global
+    bool confirm = TTM_Utils.ShowAIConfirmationMessage("ConfirmAcceptProposal", akActor)
+    if(!confirm)
+        return
+    endif
     MARAS.PromoteNPCToStatus(akActor, "engaged")
 EndFunction
 
@@ -55,9 +60,9 @@ EndFunction
 
 Function RegisterAffectionEstrangedDivorceResolutionAction() global
     SkyrimNetApi.RegisterAction("AffectionEstrangedDivorceResolution", \
-    "Use this only when {{decnpc(npc.UUID).name}}'s most recent line clearly reflects their current decision about the marriage: choose 'reconcile' if {{player.name}} has just shown clear remorse and a commitment to change and {{decnpc(npc.UUID).name}} explicitly accepts continuing the relationship, choose 'divorce' only if they explicitly state that the marriage is over or that they want a divorce, and choose 'undecided' when they are expressing hurt, frustration, or issuing ultimatums (e.g., 'something has to change', 'either make time for us or admit this isn't working') but has not clearly committed to either staying together or ending the marriage", \
+    GetActionProp("affection_estranged_divorce_resolution_description"), \
     "TTM_ServiceSkyrimNet", "AffectionEstrangedDivorceResolutionIsEligible", "TTM_ServiceSkyrimNet", "AffectionEstrangedDivorceResolutionAction", "", "PAPYRUS", 1, \
-    "{\"decision\": \"'reconcile' | 'divorce' | 'undecided'\"}")
+    GetActionProp("affection_estranged_divorce_resolution_params"))
 EndFunction
 
 Function UnregisterAffectionEstrangedDivorceResolutionAction() global
@@ -79,10 +84,16 @@ Bool Function AffectionEstrangedDivorceResolutionIsEligible(Actor akActor, strin
         return false
     endif
 
-    return CheckIfDivorceQuestIsInPlay(akActor)
+    bool isCooldownPassed = TTM_Utils.ActionConfirmationCooldownPassed("ConfirmDivorceDuringLowAffectionQuest", akActor)
+
+    return CheckIfDivorceQuestIsInPlay(akActor) && isCooldownPassed
 EndFunction
 
 Function AffectionEstrangedDivorceResolutionAction(Actor akActor, string contextJson, string paramsJson) global
+    bool confirm = TTM_Utils.ShowAIConfirmationMessage("ConfirmDivorceDuringLowAffectionQuest", akActor)
+    if(!confirm)
+        return
+    endif
     string decison = SkyrimNetApi.GetJsonString(paramsJson, "decision", "none")
     if(decison == "reconcile")
         TTM_Data.GetMarasAffectionEstrangedDivorceQuest().SetStage(100)
@@ -94,31 +105,41 @@ EndFunction
 
 Function RegisterBreakupEngagementAction() global
     SkyrimNetApi.RegisterAction("CancelWeddingEngagement", \
-  "{{decnpc(npc.UUID).name}} breaks off her engagement to {{player.name}}. Use when dialogue shows {{decnpc(npc.UUID).name}} explicitly ending her romantic commitment TO {{player.name}}. Do NOT use for discussing past breakups or hypothetical scenarios. If {{decnpc(npc.UUID).name}} breaking off engagement with another NPC, use ACTION: None.", \
+  GetActionProp("cancel_engagement_description"), \
   "TTM_ServiceSkyrimNet", "BreakupEngagementIsElgigible", "TTM_ServiceSkyrimNet", "BreakupEngagementAction", "", "PAPYRUS", 1, \
-  "") == 1
+  GetActionProp("cancel_engagement_params")) == 1
 EndFunction
 
 Bool Function BreakupEngagementIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    return MARAS.IsNPCStatus(akActor, "engaged")
+    bool isCooldownPassed = TTM_Utils.ActionConfirmationCooldownPassed("ConfirmBreakupEngagement", akActor)
+    return MARAS.IsNPCStatus(akActor, "engaged") && isCooldownPassed
 EndFunction
 
 Function BreakupEngagementAction(Actor akActor, string contextJson, string paramsJson) global
+    bool confirm = TTM_Utils.ShowAIConfirmationMessage("ConfirmBreakupEngagement", akActor)
+    if(!confirm)
+        return
+    endif
     MARAS.PromoteNPCToStatus(akActor, "jilted")
 EndFunction
 
 Function RegisterDivorseAction() global
     SkyrimNetApi.RegisterAction("InitiateDivorce", \
-  "{{decnpc(npc.UUID).name}} initiates divorce from {{player.name}}. Use when dialogue shows {{decnpc(npc.UUID).name}} explicitly ending her marriage TO {{player.name}}. Do NOT use for discussing past divorces or hypothetical scenarios. If {{decnpc(npc.UUID).name}} is divorcing another NPC, use ACTION: None.", \
+  GetActionProp("initiate_divorce_description"), \
   "TTM_ServiceSkyrimNet", "DivorseIsElgigible", "TTM_ServiceSkyrimNet", "DivorseAction", "", "PAPYRUS", 1, \
-  "") == 1
+  GetActionProp("initiate_divorce_params")) == 1
 EndFunction
 
 Bool Function DivorseIsElgigible(Actor akActor, string contextJson, string paramsJson) global
-    return MARAS.IsNPCStatus(akActor, "married") && !CheckIfDivorceQuestIsInPlay(akActor)
+    bool isCooldownPassed = TTM_Utils.ActionConfirmationCooldownPassed("ConfirmDivorce", akActor)
+    return MARAS.IsNPCStatus(akActor, "married") && !CheckIfDivorceQuestIsInPlay(akActor) && isCooldownPassed
 EndFunction
 
 Function DivorseAction(Actor akActor, string contextJson, string paramsJson) global
+    bool confirm = TTM_Utils.ShowAIConfirmationMessage("ConfirmDivorce", akActor)
+    if(!confirm)
+        return
+    endif
     MARAS.PromoteNPCToStatus(akActor, "divorced")
 EndFunction
 
@@ -257,4 +278,8 @@ Function DirectNarration(String content, Actor originatorActor = None, Actor tar
         return
     endif
     SkyrimNetApi.DirectNarration(content, originatorActor, targetActor)
+EndFunction
+
+string Function GetActionProp(string keyName) global
+    return JsonUtil.GetPathStringValue("../MARAS/actions.json", "." + keyName)
 EndFunction

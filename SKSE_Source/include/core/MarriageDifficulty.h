@@ -1,5 +1,8 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+#include <unordered_map>
+
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -11,6 +14,9 @@ namespace MARAS {
                                                     float housesOwned, float horsesOwned, float questsCompleted,
                                                     float dungeonsCleared, float dragonSoulsCollected,
                                                     bool playerKiller);
+
+        // Load configuration from JSON file
+        static bool LoadConfig();
 
     private:
         // Helper methods for individual calculations
@@ -26,6 +32,10 @@ namespace MARAS {
         static bool IsDivorced(RE::Actor* npc);
         static int CountMarried();
         static int CountDivorced();
+
+        // Configuration storage
+        static std::unordered_map<std::string, float> config_;
+        static bool configLoaded_;
     };
 
 }  // namespace MARAS

@@ -8,6 +8,7 @@
 #include "core/BonusesService.h"
 #include "core/HomeCellService.h"
 #include "core/LoggingService.h"
+#include "core/MarriageDifficulty.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerHouseService.h"
 #include "core/PollingService.h"
@@ -254,6 +255,10 @@ namespace {
         MARAS::PlayerHouseService::GetSingleton().Revert();
         MARAS::SpouseAssetsService::GetSingleton().Revert();
         MARAS::LoggingService::GetSingleton().Revert();
+
+        // Load marriage difficulty configuration for new game
+        MARAS::MarriageDifficulty::LoadConfig();
+
         MARAS_LOG_INFO("Reverted NPC relationship data");
     }
 }
@@ -288,6 +293,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS_LOG_INFO("New game/Load...");
                         // Load runtime-only bonuses.json each time a save is loaded or a new game starts
                         MARAS::BonusesService::GetSingleton().LoadFromFile();
+
+                        // Load marriage difficulty configuration on game load
+                        MARAS::MarriageDifficulty::LoadConfig();
 
                         // Initialize/reset polling service state to prevent false events from previous save
                         MARAS::PollingService::GetSingleton().Initialize();

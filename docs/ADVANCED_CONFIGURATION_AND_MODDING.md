@@ -12,13 +12,14 @@ This is all external configuration and scripting. For in-game per-save overrides
 
 ---
 
-> **If you’re not a modder…**
+> **If you're not a modder…**
 >
-> If you’re a player rather than a script/mod author, you probably want:
+> If you're a player rather than a script/mod author, you probably want:
 >
 > - [Player Guide](PLAYER_GUIDE.md) – gameplay flow and behaviour.
 > - [MCM Settings Guide](MCM_Settings.md) – in-game configuration per save.
 > - [NPC Explorer MCM](MCM_NPC.md) – per-NPC editing inside the current save.
+> - [Marriage Difficulty Configuration Guide](MarriageDifficultyConfig.md) – complete reference for marriage difficulty calculation parameters.
 >
 > This document is for **permanent, external configuration** and **Papyrus integration**.
 
@@ -204,7 +205,7 @@ You can distribute such JSON files separately, for example:
 
 ## 2. Buff Values Configuration (bonuses.json)
 
-MARAS also exposes buff values in a JSON file so you can tweak how powerful each archetype’s bonuses are.
+MARAS also exposes buff values in a JSON file so you can tweak how powerful each archetype's bonuses are.
 
 Path:
 ```
@@ -217,6 +218,8 @@ This file stores the numeric values used for:
 - Spouse buffs based on skill type
 - Any derived buffs that spouses grant while married or following
 - Temporary follower buffs where applicable
+
+> For marriage difficulty parameters, see the separate [Marriage Difficulty Configuration Guide](MarriageDifficultyConfig.md), which covers `marriageDifficultyConfig.json`.
 
 You can:
 

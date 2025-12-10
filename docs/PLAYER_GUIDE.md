@@ -56,7 +56,9 @@ This opens two main branches if you’re **not** using SkyrimNet:
 - **`I found something I thought you might like. (Gift)`**
 - **`Will you marry me?`**
 
-If you’re **using SkyrimNet**, the marriage acceptance goes through AI chat instead of the simple “Will you marry me?” check, but the affection system still matters.
+If you're **using SkyrimNet**, the marriage acceptance goes through AI chat instead of the simple "Will you marry me?" check, but the affection system still matters.
+
+> **SkyrimNet Action Confirmations:** When using SkyrimNet, the AI can sometimes trigger major relationship changes (accepting proposals, breaking engagements, divorces) during conversations. You can control whether these require your confirmation in [MCM Settings](MCM_Settings.md) under "Actions Confirmation."
 
 ### How to increase affection as a Candidate
 
@@ -104,7 +106,12 @@ When you feel ready, use:
 - M.A.R.A.S rolls your **marriage chance**, based on:
   - Affection
   - Stats/traits (wealth, prestige, etc.)
+  - Guild memberships
+  - Social class differences
+  - Your relationship history
 - You get **Yes** or **No**:
+
+> For the complete technical breakdown of how marriage difficulty is calculated, see [Marriage Difficulty Configuration Guide](MarriageDifficultyConfig.md).
 
 #### If you get **No**:
 - You can **try again after 24 in-game hours**.
