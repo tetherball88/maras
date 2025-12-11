@@ -165,6 +165,10 @@ Keyword Function GetDivorceKeyword() global
     return Game.GetFormFromFile(0x160, "TT_MARAS.esp") as Keyword
 EndFunction
 
+Keyword Function GetIgnoreProposeKeyword() global
+    return Game.GetFormFromFile(0xc0b, "TT_MARAS.esp") as Keyword
+EndFunction
+
 ;/ ==============================
    SECTION: ARMORS
 ============================== /;

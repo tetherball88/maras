@@ -39,7 +39,8 @@ EndFunction
 
 Bool Function AcceptProposalIsElgigible(Actor akActor, string contextJson, string paramsJson) global
     bool isCooldownPassed = TTM_Utils.ActionConfirmationCooldownPassed("ConfirmAcceptProposal", akActor)
-    return MARAS.IsNPCStatus(akActor, "any") && !MARAS.IsNPCStatus(akActor, "engaged") && !MARAS.IsNPCStatus(akActor, "married") && TTM_Data.GetPlayer() != akActor && isCooldownPassed
+    return MARAS.IsNPCStatus(akActor, "any") && !MARAS.IsNPCStatus(akActor, "engaged") && !MARAS.IsNPCStatus(akActor, "married") \
+        && TTM_Data.GetPlayer() != akActor && isCooldownPassed && akActor.HasKeyword(TTM_Data.GetIgnoreProposeKeyword())
 EndFunction
 
 Function AcceptProposalAction(Actor akActor, string contextJson, string paramsJson) global

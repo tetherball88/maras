@@ -153,6 +153,9 @@ namespace MARAS {
         // Recalculate and update game globals for love interests and spouse counts
         void RecalculateAndUpdateGlobals();
 
+        // Helper to look up override data by reference ID or base actor ID
+        const Utils::NPCOverrideData* FindOverrideData(RE::FormID npcFormID) const;
+
     public:
         // Singleton access
         static NPCRelationshipManager& GetSingleton();

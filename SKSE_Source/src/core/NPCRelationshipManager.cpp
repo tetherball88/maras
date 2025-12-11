@@ -613,6 +613,29 @@ namespace MARAS {
     // Override Management
     // ========================================
 
+    const Utils::NPCOverrideData* NPCRelationshipManager::FindOverrideData(RE::FormID npcFormID) const {
+        // First try to find override by reference ID
+        auto it = npcOverrides.find(npcFormID);
+        if (it != npcOverrides.end()) {
+            return &it->second;
+        }
+
+        // If not found, try to find override by base actor ID
+        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
+        if (actor && actor->GetActorBase()) {
+            RE::FormID baseFormID = actor->GetActorBase()->GetFormID();
+            if (baseFormID != npcFormID) {  // Avoid duplicate lookup
+                auto baseIt = npcOverrides.find(baseFormID);
+                if (baseIt != npcOverrides.end()) {
+                    MARAS_LOG_DEBUG("Found override for {:08X} via base actor {:08X}", npcFormID, baseFormID);
+                    return &baseIt->second;
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
     bool NPCRelationshipManager::LoadOverridesFromFolder(const std::string& folderPath) {
         MARAS_LOG_INFO("Loading NPC type overrides from folder: {}", folderPath);
 
@@ -628,40 +651,40 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::HasSocialClassOverride(RE::FormID npcFormID) const {
-        auto it = npcOverrides.find(npcFormID);
-        return it != npcOverrides.end() && it->second.HasSocialClassOverride();
+        auto data = FindOverrideData(npcFormID);
+        return data && data->HasSocialClassOverride();
     }
 
     bool NPCRelationshipManager::HasSkillTypeOverride(RE::FormID npcFormID) const {
-        auto it = npcOverrides.find(npcFormID);
-        return it != npcOverrides.end() && it->second.HasSkillTypeOverride();
+        auto data = FindOverrideData(npcFormID);
+        return data && data->HasSkillTypeOverride();
     }
 
     bool NPCRelationshipManager::HasTemperamentOverride(RE::FormID npcFormID) const {
-        auto it = npcOverrides.find(npcFormID);
-        return it != npcOverrides.end() && it->second.HasTemperamentOverride();
+        auto data = FindOverrideData(npcFormID);
+        return data && data->HasTemperamentOverride();
     }
 
     std::optional<std::string> NPCRelationshipManager::GetSocialClassOverride(RE::FormID npcFormID) const {
-        auto it = npcOverrides.find(npcFormID);
-        if (it != npcOverrides.end() && it->second.HasSocialClassOverride()) {
-            return it->second.socialClass;
+        auto data = FindOverrideData(npcFormID);
+        if (data && data->HasSocialClassOverride()) {
+            return data->socialClass;
         }
         return std::nullopt;
     }
 
     std::optional<std::string> NPCRelationshipManager::GetSkillTypeOverride(RE::FormID npcFormID) const {
-        auto it = npcOverrides.find(npcFormID);
-        if (it != npcOverrides.end() && it->second.HasSkillTypeOverride()) {
-            return it->second.skillType;
+        auto data = FindOverrideData(npcFormID);
+        if (data && data->HasSkillTypeOverride()) {
+            return data->skillType;
         }
         return std::nullopt;
     }
 
     std::optional<std::string> NPCRelationshipManager::GetTemperamentOverride(RE::FormID npcFormID) const {
-        auto it = npcOverrides.find(npcFormID);
-        if (it != npcOverrides.end() && it->second.HasTemperamentOverride()) {
-            return it->second.temperament;
+        auto data = FindOverrideData(npcFormID);
+        if (data && data->HasTemperamentOverride()) {
+            return data->temperament;
         }
         return std::nullopt;
     }
@@ -768,6 +791,24 @@ namespace MARAS {
                 Utils::RemoveFromFaction(actor, faction);
             }
         }
+
+        // Helper to safely remove keyword from actor if keyword is valid
+        void SafeRemoveKeyword(RE::Actor* actor, RE::BGSKeyword* keyword) {
+            if (!actor || !keyword) {
+                return;
+            }
+
+            auto actorBase = actor->GetActorBase();
+            if (!actorBase) {
+                return;
+            }
+
+            if (actorBase->HasKeyword(keyword)) {
+                actorBase->RemoveKeyword(keyword);
+                MARAS_LOG_DEBUG("Removed keyword {:08X} from actor base {:08X} (actor {:08X})",
+                               keyword->GetFormID(), actorBase->GetFormID(), actor->GetFormID());
+            }
+        }
     }  // namespace
 
     void NPCRelationshipManager::ManageFactions(RE::FormID npcFormID, RelationshipStatus status) {
@@ -787,6 +828,8 @@ namespace MARAS {
             case RelationshipStatus::Engaged:
                 SafeAddToFaction(actor, cache.GetMarriageAskedFaction());
                 SafeAddToFaction(actor, cache.GetCourtingFaction());
+                // Remove ignore propose keyword when NPC becomes engaged
+                SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
                 break;
 
             case RelationshipStatus::Married:
@@ -800,6 +843,9 @@ namespace MARAS {
                 SafeAddToFaction(actor, cache.GetPlayerFaction());
                 SafeAddToFaction(actor, cache.GetPlayerBedOwnershipFaction());
 
+                // Remove ignore propose keyword when NPC gets married
+                SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
+
                 MARAS_LOG_DEBUG("Added NPC {:08X} to married factions", npcFormID);
                 break;
 
@@ -808,12 +854,18 @@ namespace MARAS {
                 SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
                 SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
 
+                // Remove ignore propose keyword when NPC gets divorced
+                SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
+
                 MARAS_LOG_DEBUG("Removed NPC {:08X} from married factions", npcFormID);
                 break;
 
             case RelationshipStatus::Jilted:
                 SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
                 SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
+
+                // Remove ignore propose keyword when NPC gets jilted
+                SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
 
                 MARAS_LOG_DEBUG("Removed NPC {:08X} from engagement factions", npcFormID);
                 break;

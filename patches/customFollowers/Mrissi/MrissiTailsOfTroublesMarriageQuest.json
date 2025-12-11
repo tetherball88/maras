@@ -1,0 +1,17 @@
+{
+  "__metaInfo": {
+    "description": "Integration with M'rissi custom follower with custom marriage quest",
+    "version": "1.0",
+    "author": "MARAS",
+    "notes": [
+      "Integration between MARAS and M'rissi's Tails of Troubles SE",
+      "When M'rissi's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|MrissiTailOfTroubles.esp|0x30DCA3": {
+    "comment": "Ceremonial Turmoil; Possible M'rissi marriage",
+    "onStageChange:125": [
+      "promoteToStatus:Mri:Married"
+    ]
+  }
+}

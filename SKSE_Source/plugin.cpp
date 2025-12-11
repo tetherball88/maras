@@ -12,6 +12,7 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerHouseService.h"
 #include "core/PollingService.h"
+#include "core/QuestEventHandler.h"
 #include "core/Serialization.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
@@ -299,6 +300,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
                         // Initialize/reset polling service state to prevent false events from previous save
                         MARAS::PollingService::GetSingleton().Initialize();
+
+                        // Log statistics after save data has been loaded
+                        MARAS::NPCRelationshipManager::GetSingleton().LogStatistics();
                         break;
 
                     case SKSE::MessagingInterface::kDataLoaded: {
@@ -317,10 +321,30 @@ SKSEPluginLoad(const LoadInterface* skse) {
                             MARAS_LOG_WARN("Failed to load NPC type overrides from {}", overrideFolder.string());
                         }
 
-                        manager.LogStatistics();
-
                         // Build the home/cell index (doors, persistent actors, furniture owners)
                         MARAS::HomeCellService::GetSingleton().BuildIndex();
+
+                        // Load quest event configurations
+                        std::filesystem::path questEventFolder = "Data/SKSE/Plugins/MARAS/questEvents";
+                        if (MARAS::QuestEventManager::GetSingleton().LoadConfigFromFolder(questEventFolder.string())) {
+                            MARAS_LOG_INFO("Loaded {} quest event configurations",
+                                           MARAS::QuestEventManager::GetSingleton().GetConfigCount());
+                        } else {
+                            MARAS_LOG_INFO("No quest event configurations found (folder may not exist: {})",
+                                           questEventFolder.string());
+                        }
+
+                        // Register quest event sinks
+                        auto* scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+                        if (scriptEventSourceHolder) {
+                            scriptEventSourceHolder->AddEventSink<RE::TESQuestStartStopEvent>(
+                                MARAS::QuestStartStopEventSink::GetSingleton());
+                            scriptEventSourceHolder->AddEventSink<RE::TESQuestStageEvent>(
+                                MARAS::QuestStageEventSink::GetSingleton());
+                            MARAS_LOG_INFO("Registered quest event sinks");
+                        } else {
+                            MARAS_LOG_ERROR("Failed to get ScriptEventSourceHolder for quest event registration");
+                        }
 
                         // Register update event sink for polling service
                         auto ui = RE::UI::GetSingleton();

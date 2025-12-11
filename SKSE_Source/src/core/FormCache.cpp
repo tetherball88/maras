@@ -64,6 +64,10 @@ namespace MARAS {
         return LazyLoadForm(affectionFaction_, 0x119, "affection faction");
     }
 
+    RE::BGSKeyword* FormCache::GetIgnoreProposeKeyword() {
+        return LazyLoadForm(ignoreProposeKeyword_, 0xC0B, "TTM ignore propose keyword");
+    }
+
     // Marriage-related faction getters (from Skyrim.esm)
     RE::TESFaction* FormCache::GetMarriagePotentialFaction() {
         return LoadSkyrimForm<RE::TESFaction>(0x19809, "marriage potential faction");

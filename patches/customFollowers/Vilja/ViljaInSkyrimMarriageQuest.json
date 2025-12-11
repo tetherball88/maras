@@ -1,0 +1,17 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Vilja custom follower with custom marriage quest",
+    "version": "1.0",
+    "author": "MARAS",
+    "notes": [
+      "Integration between MARAS and Vilja in Skyrim",
+      "When Vilja's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|EMCompViljaSkyrim.esp|0x4391": {
+    "comment": "Vilja Romance; Possible Sofia marriage",
+    "onStageChange:104": [
+      "promoteToStatus:__formData|EMCompViljaSkyrim.esp|0xD67:Married"
+    ]
+  }
+}

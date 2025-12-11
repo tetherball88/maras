@@ -7,6 +7,8 @@ It covers:
 - Permanent spouse archetype overrides via JSON in `SKSE\Plugins\MARAS\spousesTypes`
 - Adjusting buff values via `SKSE\Plugins\MARAS\bonuses.json`
 - Papyrus integration points (global functions and mod events) for custom relationship systems such as ORomance, OStim Romance, and similar
+- Quest event tracking for custom marriage quest integration
+- Ignore keywords for excluding NPCs from MARAS dialogue/proposals
 
 This is all external configuration and scripting. For in-game per-save overrides, use the MCM instead.
 
@@ -451,7 +453,79 @@ As a result, your mod’s contributions are fully integrated into:
 
 ---
 
-## 5. More Functions in MARAS.psc
+## 5. Ignore Keywords for NPC Exclusions
+
+MARAS provides two keywords that you can distribute to NPCs to control their participation in the relationship system. These are particularly useful for:
+
+- Excluding specific NPCs from MARAS dialogue
+- Integrating with custom marriage mods (like Serana Dialogue Addon)
+- Preventing inappropriate NPCs from being marriage candidates
+
+### 5.1 Available Keywords
+
+**`TTM_IgnoreInitialDialogue` (FormID: 0xC0A)**
+- Prevents the initial dialogue option: *"(M) Ever think we could be something more?"*
+- The NPC can still be registered in MARAS if done via other means
+- Use this for NPCs where the dialogue feels inappropriate and you won't exclude to not see dialogue option
+
+**`TTM_IgnoreProposal` (FormID: 0xC0B)**
+- Allows the NPC to be registered in MARAS but blocks marriage proposals through MARAS
+- The NPC can still become a candidate, accumulate affection, etc.
+- Use this for NPCs with custom marriage systems (via other mods)
+- Combine with Quest Event Tracker to detect custom marriage completion
+
+### 5.2 Distribution Methods
+
+Use any keyword distribution framework to add these keywords to NPCs:
+
+**Spell Perk Item Distributor (SPID)**
+```ini
+; Exclude Serana from MARAS proposals (using SDA custom marriage instead)
+Keyword = TTM_IgnoreProposal|Serana
+
+; Prevent initial dialogue for elderly/children NPCs
+Keyword = TTM_IgnoreInitialDialogue|FemaleOldGrumpy,MaleOldGrumpy,FemaleChild,MaleChild
+```
+
+**Keyword Item Distributor (KID)**
+```ini
+; Same syntax as SPID
+Keyword = TTM_IgnoreInitialDialogue|Grelod
+```
+
+### 5.3 Example: Integration with Custom Marriage Mods
+
+For mods like Serana Dialogue Addon (SDA) that provide their own marriage system:
+
+1. **Add `TTM_IgnoreProposal` keyword** to the NPC via SPID/KID:
+   ```ini
+   Keyword = TTM_IgnoreProposal|Serana
+   ```
+
+2. **Create a Quest Event config** to detect when the custom marriage completes:
+   ```json
+   {
+     "__formData|SDA.esp|0x123456": {
+       "comment": "SDA marriage quest completion",
+       "onStageChange:100": [
+         "promoteToStatus:__formData|Skyrim.esm|0x002B6C:Married"
+       ]
+     }
+   }
+   ```
+
+This way MARAS tracks the marriage but doesn't interfere with the custom mod's proposal system.
+
+For more information on Quest Event Tracking, see [Quest Event Tracker Documentation](QUEST_TRACKER.md).
+
+### 5.4 Example Distribution File
+
+A complete `MARAS_IgnoreNpcs_DISTR.ini` example is included with the mod in the root directory. You can use it as a template for your own keyword distributions.
+
+
+---
+
+## 6. More Functions in MARAS.psc
 
 This document only covers the major integration points most mods will need:
 

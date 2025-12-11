@@ -1,0 +1,15 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Sofia custom follower with custom marriage quest",
+    "notes": [
+      "Integration between MARAS and Sofia - The Funny Fully Voiced Follower",
+      "When Sofia's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|SofiaFollower.esp|0x5167F": {
+    "comment": "Sofia's Wedding; Possible Sofia marriage",
+    "onStageChange:200": [
+      "promoteToStatus:__formData|SofiaFollower.esp|0x12C4:Married"
+    ]
+  }
+}

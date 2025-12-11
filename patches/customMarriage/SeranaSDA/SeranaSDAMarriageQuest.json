@@ -1,0 +1,18 @@
+{
+  "__metaInfo": {
+    "description": "Integration with SDA Serana's custom marriage",
+    "version": "1.0",
+    "author": "MARAS",
+    "notes": [
+      "Integration between MARAS and Serana Dialogue Addon",
+      "When SDA makes Serana soft married MARAS will recognize it and add Serana as spouse"
+    ]
+  },
+
+  "__formData|SeranaDialogAddon.esp|0xB2F967": {
+    "comment": "A New Covenant; Register Serana as spouse",
+    "onStageChange:25": [
+      "promoteToStatus:__formData|Dawnguard.esm|0x2b74:Married"
+    ]
+  }
+}

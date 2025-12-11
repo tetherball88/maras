@@ -53,6 +53,10 @@ namespace MARAS {
         RE::BGSListForm* GetCraftsmanClasses();
         RE::BGSListForm* GetMageClasses();
         RE::BGSListForm* GetWarriorClasses();
+
+        // Keywords getters
+        RE::BGSKeyword* GetIgnoreProposeKeyword();
+
         // Skyrim.esm faction getters
         RE::TESFaction* GetPlayerFaction();
         RE::TESFaction* GetCompanionsFaction();
@@ -128,6 +132,8 @@ namespace MARAS {
         RE::TESGlobal* loveInterestsCount_{nullptr};
         RE::TESGlobal* spousesCount_{nullptr};
         RE::TESGlobal* playerHousesCount_{nullptr};
+        // Keywords (cached)
+        RE::BGSKeyword* ignoreProposeKeyword_{nullptr};
         // (No generic cache; use named getters and Utils::LookupForm inside the .cpp)
     };
 
