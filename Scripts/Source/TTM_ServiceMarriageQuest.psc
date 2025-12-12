@@ -64,6 +64,8 @@ Function ResetMarriageQuests(Actor npc = none, bool complete = false, bool fromO
 
         mainMarr.Reset()
         mainMarr.Stop()
+        ; restore main marriage stage done, some quests/mods uses it to find out if player is "ready to marry"
+        mainMarr.SetStage(10)
         mainMarr.SetStage(15)
     endif
     Quest wedding = TTM_Data.GetMarriageWeddingQuest()
