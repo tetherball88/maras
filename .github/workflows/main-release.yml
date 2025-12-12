@@ -1,4 +1,4 @@
-name: Release (selective zip)
+name: Main Release
 
 on:
   push:
@@ -44,30 +44,3 @@ jobs:
           body: "Automated release for ${{ github.ref_name }}"
           files: |
             out/MARAS_${{ github.ref_name }}.zip
-
-  make-patches-zip:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Read version from file
-        id: get_version
-        run: |
-          VERSION=$(cat patches/version.txt | tr -d '\r\n' | tr -d ' ')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Read version: $VERSION"
-
-      - name: Create patches zip
-        run: |
-          mkdir -p out
-          zip -r "out/MARAS_patches_${{ steps.get_version.outputs.version }}.zip" patches/
-
-      - name: Upload patches to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            out/MARAS_patches_${{ steps.get_version.outputs.version }}.zip

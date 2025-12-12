@@ -1,0 +1,41 @@
+name: Patches Release
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'patches/version.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  make-patches-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from file
+        id: get_version
+        run: |
+          VERSION=$(cat patches/version.txt | tr -d '\r\n' | tr -d ' ')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Read version: $VERSION"
+
+      - name: Create patches zip
+        run: |
+          mkdir -p out
+          zip -r "out/MARAS_patches_${{ steps.get_version.outputs.version }}.zip" patches/
+
+      - name: Create or update patches release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: patches-${{ steps.get_version.outputs.version }}
+          name: Patches ${{ steps.get_version.outputs.version }}
+          body: "Automated patches release for version ${{ steps.get_version.outputs.version }}"
+          files: |
+            out/MARAS_patches_${{ steps.get_version.outputs.version }}.zip
