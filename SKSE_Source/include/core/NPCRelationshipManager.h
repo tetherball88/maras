@@ -88,6 +88,9 @@ namespace MARAS {
         uint32_t engagementDate;  // Game days since start
         uint32_t marriageDate;    // Game days since start
 
+        // Home sandbox marker tracking (replaces PO3's SetLinkedRef and StorageUtil)
+        std::optional<RE::FormID> homeMarker;
+
         // Default constructor
         NPCRelationshipData()
             : formID(0),
@@ -156,6 +159,9 @@ namespace MARAS {
         // Helper to look up override data by reference ID or base actor ID
         const Utils::NPCOverrideData* FindOverrideData(RE::FormID npcFormID) const;
 
+        // Helper to set linked reference for home marker
+        void SetLinkedRefForHomeMarker(RE::FormID npcFormID, RE::FormID markerFormID);
+
     public:
         // Singleton access
         static NPCRelationshipManager& GetSingleton();
@@ -204,11 +210,9 @@ namespace MARAS {
         SkillType GetSkillType(RE::FormID npcFormID) const;
         Temperament GetTemperament(RE::FormID npcFormID) const;
 
-        // Home management
-        bool SetOriginalHome(RE::FormID npcFormID, RE::FormID homeFormID);
-        bool SetCurrentHome(RE::FormID npcFormID, RE::FormID homeFormID);
-        std::optional<RE::FormID> GetOriginalHome(RE::FormID npcFormID) const;
-        std::optional<RE::FormID> GetCurrentHome(RE::FormID npcFormID) const;
+        // Home marker management (replaces PO3's SetLinkedRef and StorageUtil)
+        bool SetHomeMarker(RE::FormID npcFormID, RE::FormID markerFormID);
+        std::optional<RE::FormID> GetHomeMarker(RE::FormID npcFormID) const;
 
         // Type determination methods (with override support)
         SocialClass DetermineSocialClass(RE::FormID npcFormID);
@@ -247,7 +251,7 @@ namespace MARAS {
 
         // SKSE serialization support
         bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization);
+        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
         void Revert();
 
         // Debug/logging

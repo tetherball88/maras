@@ -750,6 +750,30 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
+    // Home marker management (replaces PO3's SetLinkedRef and StorageUtil)
+    // ========================================
+
+    RE::TESObjectREFR* GetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc) {
+        if (!npc) {
+            return nullptr;
+        }
+
+        auto markerOpt = NPCRelationshipManager::GetSingleton().GetHomeMarker(npc->GetFormID());
+        return markerOpt.has_value() ? RE::TESForm::LookupByID<RE::TESObjectREFR>(markerOpt.value()) : nullptr;
+    }
+
+    bool SetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc, RE::TESObjectREFR* marker) {
+        if (!npc) {
+            MARAS_LOG_WARN("SetTrackedNpcHomeMarker: null NPC provided");
+            return false;
+        }
+
+        auto& manager = NPCRelationshipManager::GetSingleton();
+        RE::FormID markerID = marker ? marker->GetFormID() : 0;
+        return manager.SetHomeMarker(npc->GetFormID(), markerID);
+    }
+
+    // ========================================
     // NPC Type and Status Queries
     // ========================================
 
@@ -1034,6 +1058,10 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetNpcBeds", "MARAS", GetNpcBeds);
         vm->RegisterFunction("GetNpcOriginalHouseCenterMarker", "MARAS", GetNpcOriginalHouseCenterMarker);
 
+        // Home marker management
+        vm->RegisterFunction("GetTrackedNpcHomeMarker", "MARAS", GetTrackedNpcHomeMarker);
+        vm->RegisterFunction("SetTrackedNpcHomeMarker", "MARAS", SetTrackedNpcHomeMarker);
+
         // Spouse buff/service bindings
         vm->RegisterFunction("GetSpouseMultiplier", "MARAS", GetSpouseMultiplier);
         vm->RegisterFunction("GetFollowersMultipliers", "MARAS", GetFollowersMultipliers);
@@ -1070,7 +1098,7 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetBonusPerkUnit", "MARAS", GetBonusPerkUnit);
         vm->RegisterFunction("GetBonusPerkDescription", "MARAS", GetBonusPerkDescription);
 
-        MARAS_LOG_INFO("Registered {} MARAS Papyrus functions", 42);
+        MARAS_LOG_INFO("Registered {} MARAS Papyrus functions", 44);
         return true;
     }
 

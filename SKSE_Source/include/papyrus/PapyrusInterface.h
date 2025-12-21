@@ -83,6 +83,10 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::TESObjectREFR*> GetNpcBeds(RE::StaticFunctionTag*, RE::Actor* npc);
     RE::TESObjectREFR* GetNpcOriginalHouseCenterMarker(RE::StaticFunctionTag*, RE::Actor* npc);
 
+    // Home marker management (replaces PO3's SetLinkedRef and StorageUtil)
+    RE::TESObjectREFR* GetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc);
+    bool SetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc, RE::TESObjectREFR* marker);
+
     // Marriage difficulty calculation
     float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment,
                                          float mostGold, float housesOwned, float horsesOwned, float questsCompleted,

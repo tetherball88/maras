@@ -144,6 +144,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText("$TTM_MCM_TT_LogLevel")
     elseif(option == mcm.oid_SkipNextWeddings)
         mcm.SetInfoText("$TTM_MCM_TT_SkipWedding")
+    elseif(option == mcm.oid_AffectionDecayMult)
+        mcm.SetInfoText("$TTM_MCM_TT_AffectionDecayMult")
     elseif(option == mcm.oid_SettingsCheatDebugSpell)
         mcm.SetInfoText("$TTM_MCM_TT_DebugSpell")
     elseif(option == mcm.oid_EnablePolygamyToggle)

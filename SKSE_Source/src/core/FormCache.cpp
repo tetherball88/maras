@@ -68,6 +68,14 @@ namespace MARAS {
         return LazyLoadForm(ignoreProposeKeyword_, 0xC0B, "TTM ignore propose keyword");
     }
 
+    RE::BGSKeyword* FormCache::GetHomeSandboxKeyword() {
+        return LazyLoadForm(homeSandboxKeyword_, 0x6B, "home sandbox keyword");
+    }
+
+    RE::TESObjectSTAT* FormCache::GetHomeSandboxMarkerStatic() {
+        return LazyLoadForm(homeSandboxMarkerStatic_, 0x76, "home sandbox marker static");
+    }
+
     // Marriage-related faction getters (from Skyrim.esm)
     RE::TESFaction* FormCache::GetMarriagePotentialFaction() {
         return LoadSkyrimForm<RE::TESFaction>(0x19809, "marriage potential faction");

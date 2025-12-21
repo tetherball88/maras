@@ -174,16 +174,17 @@ namespace {
         std::uint32_t type, version, length;
         while (serialization->GetNextRecordInfo(type, version, length)) {
             if (type == MARAS::Serialization::kNPCRelationshipData) {
-                if (version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Invalid data version {} (expected {})", version,
+                // Support both version 1 (old saves) and version 2 (new saves with homeMarker)
+                if (version != 1 && version != MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Unsupported data version {} (expected 1 or {})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }
 
-                if (!manager.Load(serialization)) {
+                if (!manager.Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load NPC relationship data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded NPC relationship data");
+                    MARAS_LOG_INFO("Successfully loaded NPC relationship data (version {})", version);
                 }
             } else if (type == MARAS::Serialization::kSpouseHierarchyData) {
                 if (version != MARAS::Serialization::kDataVersion) {

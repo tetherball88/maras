@@ -28,7 +28,7 @@ Function Maintenance()
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
     TTM_Conditions conditions = _self as TTM_Conditions
     TTM_ServiceIntimateMoments intimateMoments = _self as TTM_ServiceIntimateMoments
-
+    MigrateOldNpcHomeMarkers()
 
     ; check if SkyrimNet present
     ; otherwise all SkyrimNet related logic will be bypassed
@@ -190,4 +190,25 @@ endEvent
 
 Function OnStartedDialogue(Actor npc)
     TTM_ServiceAffection.AddDialogueStartedAffection(npc)
+EndFunction
+
+; One time migration to new markers, registering them in cpp code
+Function MigrateOldNpcHomeMarkers()
+    if(StorageUtil.GetIntValue(none, "TTM_NewNpcHomeMarkers", 0) == 0)
+        Actor[] npcs = MARAS.GetNPCsByStatus("all")
+        int i = 0
+        int count = 0
+        while(i < npcs.Length)
+            ObjectReference npcHomeMarker = StorageUtil.GetFormValue(npcs[i], "HomeMarker") as ObjectReference
+            if(npcHomeMarker)
+                MARAS.SetTrackedNpcHomeMarker(npcs[i], npcHomeMarker)
+                Utility.Wait(1.0)
+                count += 1
+            endif
+            i += 1
+        endwhile
+        Debug.Notification("MARAS: Checked "+npcs.Length+" NPCs and migrated " + count + " home markers.")
+    endif
+
+    StorageUtil.SetIntValue(none, "TTM_NewNpcHomeMarkers", 1)
 EndFunction

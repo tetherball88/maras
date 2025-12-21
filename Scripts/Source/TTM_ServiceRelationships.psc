@@ -181,14 +181,18 @@ EndFunction
    SECTION: trackedNpcs map
 ============================== /;
 ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
-    if(StorageUtil.HasFormValue(npc, "HomeMarker"))
-        return StorageUtil.GetFormValue(npc, "HomeMarker") as ObjectReference
+    ObjectReference npcHomeMarker = MARAS.GetTrackedNpcHomeMarker(npc)
+
+    if(!npcHomeMarker)
+        npcHomeMarker = StorageUtil.GetFormValue(npc, "HomeMarker") as ObjectReference
+        if(!npcHomeMarker)
+            npcHomeMarker = npc.PlaceAtMe(TTM_Data.GetHomeSandboxMarkerStatic(), 1, true)
+        endif
+
+        MARAS.SetTrackedNpcHomeMarker(npc, npcHomeMarker)
     endif
 
-    ObjectReference homeMarker = npc.PlaceAtMe(TTM_Data.GetHomeSandboxMarkerStatic(), 1, true)
-    PO3_SKSEFunctions.SetLinkedRef(npc, homeMarker, TTM_Data.GetHomeSandboxKeyword())
-    StorageUtil.SetFormValue(npc, "HomeMarker", homeMarker)
-    return homeMarker
+    return npcHomeMarker
 EndFunction
 
 Function SetTrackedNpcHome(Actor npc, Location home) global
@@ -198,7 +202,6 @@ EndFunction
 Location Function GetTrackedNpcHome(Actor npc) global
     return StorageUtil.GetFormValue(npc, "HomeLocation") as Location
 EndFunction
-
 
 Function SetLastTimeSharedIncome(Actor npc) global
     StorageUtil.SetFloatValue(npc, "LastTimeSharedIncome", Utility.GetCurrentGameTime())

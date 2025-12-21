@@ -16,6 +16,8 @@
 #include "utils/FormUtils.h"
 #include "utils/JsonOverrideLoader.h"
 
+#include <RE/E/ExtraLinkedRef.h>
+
 namespace MARAS {
 
     NPCRelationshipManager& NPCRelationshipManager::GetSingleton() {
@@ -24,6 +26,30 @@ namespace MARAS {
     }
 
     // Private helper methods
+    void NPCRelationshipManager::SetLinkedRefForHomeMarker(RE::FormID npcFormID, RE::FormID markerFormID) {
+        auto npcRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(npcFormID);
+        auto markerRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(markerFormID);
+        auto homeSandboxKeyword = FormCache::GetSingleton().GetHomeSandboxKeyword();
+
+        if (npcRef && markerRef && homeSandboxKeyword) {
+            // Get or create ExtraLinkedRef
+            auto extraLinkedRef = npcRef->extraList.GetByType<RE::ExtraLinkedRef>();
+            if (!extraLinkedRef) {
+                extraLinkedRef = RE::BSExtraData::Create<RE::ExtraLinkedRef>();
+                npcRef->extraList.Add(extraLinkedRef);
+            }
+
+            // Add the linked reference to the array
+            RE::ExtraLinkedRef::LinkedRef linkedRef;
+            linkedRef.keyword = homeSandboxKeyword;
+            linkedRef.refr = markerRef;
+            extraLinkedRef->linkedRefs.push_back(linkedRef);
+        } else {
+            MARAS_LOG_WARN("Failed to set linked ref for NPC {:08X}: npc={}, marker={}, keyword={}",
+                          npcFormID, npcRef != nullptr, markerRef != nullptr, homeSandboxKeyword != nullptr);
+        }
+    }
+
     void NPCRelationshipManager::RemoveFromAllBuckets(RE::FormID npcFormID) {
         candidates.erase(npcFormID);
         engaged.erase(npcFormID);
@@ -379,6 +405,33 @@ namespace MARAS {
         return data ? data->temperament : Temperament::Proud;
     }
 
+    // ========================================
+    // Home Marker Management
+    // ========================================
+
+    bool NPCRelationshipManager::SetHomeMarker(RE::FormID npcFormID, RE::FormID markerFormID) {
+        if (!EnsureRegistered(npcFormID)) {
+            MARAS_LOG_WARN("SetHomeMarker: NPC {:08X} not registered", npcFormID);
+            return false;
+        }
+
+        auto& data = npcData[npcFormID];
+        data.homeMarker = markerFormID;
+
+        // Create the linked reference relationship
+        if (markerFormID != 0) {
+            SetLinkedRefForHomeMarker(npcFormID, markerFormID);
+            MARAS_LOG_DEBUG("Set home marker {:08X} for NPC {:08X} and created linked ref", markerFormID, npcFormID);
+        }
+
+        return true;
+    }
+
+    std::optional<RE::FormID> NPCRelationshipManager::GetHomeMarker(RE::FormID npcFormID) const {
+        auto data = GetNPCData(npcFormID);
+        return data ? data->homeMarker : std::nullopt;
+    }
+
     // Statistics
     size_t NPCRelationshipManager::GetTotalRegisteredCount() const { return allRegistered.size(); }
 
@@ -439,7 +492,9 @@ namespace MARAS {
                 !serialization->WriteRecordData(data.currentHome.has_value()) ||
                 (data.currentHome.has_value() && !serialization->WriteRecordData(data.currentHome.value())) ||
                 !serialization->WriteRecordData(data.engagementDate) ||
-                !serialization->WriteRecordData(data.marriageDate)) {
+                !serialization->WriteRecordData(data.marriageDate) ||
+                !serialization->WriteRecordData(data.homeMarker.has_value()) ||
+                (data.homeMarker.has_value() && !serialization->WriteRecordData(data.homeMarker.value()))) {
                 MARAS_LOG_ERROR("Failed to write data for NPC {:08X}", formID);
                 return false;
             }
@@ -449,7 +504,7 @@ namespace MARAS {
         return true;
     }
 
-    bool NPCRelationshipManager::Load(SKSE::SerializationInterface* serialization) {
+    bool NPCRelationshipManager::Load(SKSE::SerializationInterface* serialization, std::uint32_t version) {
         if (!serialization) {
             MARAS_LOG_ERROR("Serialization interface is null");
             return false;
@@ -463,11 +518,15 @@ namespace MARAS {
             return false;
         }
 
-        std::uint32_t npcCount;
+        // Version 1: magic, npcCount, data (no homeMarker)
+        // Version 2: magic, npcCount, data (with homeMarker)
+        std::uint32_t npcCount = 0;
         if (!serialization->ReadRecordData(npcCount)) {
             MARAS_LOG_ERROR("Failed to read NPC count");
             return false;
         }
+
+        MARAS_LOG_INFO("Loading {} NPC records (data version {})", npcCount, version);
 
         for (std::uint32_t i = 0; i < npcCount; ++i) {
             RE::FormID oldFormID = 0, newFormID = 0;
@@ -497,6 +556,15 @@ namespace MARAS {
                 std::uint32_t discard32 = 0;
                 if (!serialization->ReadRecordData(discard32) || !serialization->ReadRecordData(discard32))
                     return false;
+                // homeMarker flag and maybe value (only in version 2+)
+                if (version >= 2) {
+                    bool hasHomeMarker = false;
+                    if (!serialization->ReadRecordData(hasHomeMarker)) return false;
+                    if (hasHomeMarker) {
+                        RE::FormID discardForm = 0;
+                        if (!serialization->ReadRecordData(discardForm)) return false;
+                    }
+                }
                 continue;
             }
 
@@ -544,9 +612,28 @@ namespace MARAS {
                 return false;
             }
 
+            // Read optional homeMarker (only in version 2+)
+            if (version >= 2) {
+                bool hasHomeMarker = false;
+                if (!serialization->ReadRecordData(hasHomeMarker)) return false;
+                if (hasHomeMarker) {
+                    RE::FormID oldMarker = 0, resolvedMarker = 0;
+                    if (!serialization->ReadRecordData(oldMarker)) return false;
+                    if (oldMarker != 0 && serialization->ResolveFormID(oldMarker, resolvedMarker)) {
+                        data.homeMarker = resolvedMarker;
+                    }
+                }
+            }
+
             npcData[newFormID] = data;
             allRegistered.insert(newFormID);
             AddToBucket(newFormID, data.status);
+
+            // Recreate the SetLinkedRef relationship after loading from save
+            if (data.homeMarker.has_value()) {
+                SetLinkedRefForHomeMarker(newFormID, data.homeMarker.value());
+                MARAS_LOG_INFO("Restored linked ref for NPC {:08X} to marker {:08X}", newFormID, data.homeMarker.value());
+            }
         }
 
         MARAS_LOG_INFO("Successfully loaded {} NPC relationship records", npcData.size());

@@ -414,6 +414,29 @@ bool Function IsHouseSharedWithPlayer(Cell currentCell) global native
 /;
 bool Function HasSpouseSharedHouseWithPlayer(Actor spouse) global native
 
+;/ ========================================
+   SECTION: Home Marker Management (replaces PO3's SetLinkedRef and StorageUtil)
+   ====================================== /;
+
+;/ GetTrackedNpcHomeMarker
+
+  Get the home sandbox marker for a tracked NPC.
+
+  @param npc - Actor to get marker for
+  @return ObjectReference - The home marker reference or None
+/;
+ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global native
+
+;/ SetTrackedNpcHomeMarker
+
+  Manually set the home sandbox marker for a tracked NPC.
+
+  @param npc - Actor to set marker for
+  @param marker - ObjectReference marker to set
+  @return True on success
+/;
+bool Function SetTrackedNpcHomeMarker(Actor npc, ObjectReference marker) global native
+
 ;/ Log overall statistics about the marriage system /;
 Function LogNPCStatistics() global native
 

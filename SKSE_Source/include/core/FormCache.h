@@ -90,6 +90,10 @@ namespace MARAS {
 
         // Special keyword getters
         RE::BGSKeyword* GetClothingRichKeyword();
+        RE::BGSKeyword* GetHomeSandboxKeyword();
+
+        // Static object getters
+        RE::TESObjectSTAT* GetHomeSandboxMarkerStatic();
 
     private:
         FormCache() = default;
@@ -136,6 +140,9 @@ namespace MARAS {
         RE::TESGlobal* playerHousesCount_{nullptr};
         // Keywords (cached)
         RE::BGSKeyword* ignoreProposeKeyword_{nullptr};
+        RE::BGSKeyword* homeSandboxKeyword_{nullptr};
+        // Static objects (cached)
+        RE::TESObjectSTAT* homeSandboxMarkerStatic_{nullptr};
         // (No generic cache; use named getters and Utils::LookupForm inside the .cpp)
     };
 

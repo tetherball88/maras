@@ -8,7 +8,9 @@ namespace MARAS {
         constexpr std::uint32_t kMarasPluginID = 'MARS';
 
         // Current version of our serialization format
-        constexpr std::uint32_t kDataVersion = 1;
+        // Version 1: Original format
+        // Version 2: Added homeMarker field to NPCRelationshipData
+        constexpr std::uint32_t kDataVersion = 2;
 
         // Record types for different data chunks
         constexpr std::uint32_t kNPCRelationshipData = 'NPCR';
