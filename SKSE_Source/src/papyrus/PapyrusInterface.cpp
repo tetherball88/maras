@@ -543,6 +543,14 @@ namespace MARAS::PapyrusInterface {
         MARAS::AffectionService::GetSingleton().ApplyDailyAffectionsForAll();
     }
 
+    void SetAffectionDecayMultiplier(RE::StaticFunctionTag*, float multiplier) {
+        MARAS::AffectionService::GetSingleton().SetDecayMultiplier(multiplier);
+    }
+
+    float GetAffectionDecayMultiplier(RE::StaticFunctionTag*) {
+        return MARAS::AffectionService::GetSingleton().GetDecayMultiplier();
+    }
+
     // ========================================
     // Player house bindings
     // ========================================
@@ -1037,6 +1045,8 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("SetPermanentAffection", "MARAS", SetPermanentAffection);
         vm->RegisterFunction("SetAffectionMinMax", "MARAS", SetAffectionMinMax);
         vm->RegisterFunction("ApplyDailyAffection", "MARAS", ApplyDailyAffection);
+        vm->RegisterFunction("SetAffectionDecayMultiplier", "MARAS", SetAffectionDecayMultiplier);
+        vm->RegisterFunction("GetAffectionDecayMultiplier", "MARAS", GetAffectionDecayMultiplier);
 
         // NPC Type and Status Queries
         vm->RegisterFunction("GetNpcStatusName", "MARAS", GetNpcStatusName);

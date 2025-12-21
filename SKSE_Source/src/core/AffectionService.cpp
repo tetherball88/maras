@@ -174,6 +174,10 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Saved {} last affection day records", dayCount);
 
+        // Write decay multiplier
+        if (!serialization->WriteRecordData(decayMultiplier_)) return false;
+        MARAS_LOG_INFO("Saved affection decay multiplier: {}", decayMultiplier_);
+
         return true;
     }
 
@@ -223,6 +227,14 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Loaded {} last affection day records", lastAffectionDay_.size());
 
+        // Load decay multiplier (optional for backwards compatibility)
+        if (!serialization->ReadRecordData(decayMultiplier_)) {
+            MARAS_LOG_WARN("Could not read decay multiplier, using default value 1.0");
+            decayMultiplier_ = 1.0f;
+        } else {
+            MARAS_LOG_INFO("Loaded affection decay multiplier: {}", decayMultiplier_);
+        }
+
         return true;
     }
 
@@ -231,6 +243,7 @@ namespace MARAS {
         dailyAffection_.clear();
         minMaxByType_.clear();
         lastAffectionDay_.clear();
+        decayMultiplier_ = 1.0f;
         MARAS_LOG_INFO("Reverted affection service state");
     }
 
@@ -301,6 +314,13 @@ namespace MARAS {
         }
     }
 
+    void AffectionService::SetDecayMultiplier(float multiplier) {
+        decayMultiplier_ = std::clamp(multiplier, 0.0f, 2.0f);
+        MARAS_LOG_INFO("Affection decay multiplier set to {}", decayMultiplier_);
+    }
+
+    float AffectionService::GetDecayMultiplier() const { return decayMultiplier_; }
+
     // Private helper methods
 
     RE::Actor* AffectionService::ValidateActor(FormID formID, const char* context) {
@@ -365,6 +385,11 @@ namespace MARAS {
     }
 
     float AffectionService::CalculateLonelinessDecay(FormID npcFormID, bool isFollowing) const {
+        // If decay is disabled (multiplier = 0), return 0
+        if (decayMultiplier_ <= 0.0f) {
+            return 0.0f;
+        }
+
         // If following player, they gain affection instead of losing it
         if (isFollowing) {
             MARAS_LOG_INFO("NPC {:08X} is following player, applying positive loneliness affection", npcFormID);
@@ -376,7 +401,7 @@ namespace MARAS {
         auto npcData = manager.GetNPCData(npcFormID);
         if (!npcData) {
             MARAS_LOG_WARN("No NPC data found for {:08X}, using default decay", npcFormID);
-            return -kDefaultDecayPerDay;
+            return -(kDefaultDecayPerDay * decayMultiplier_);
         }
         if (npcData->status != RelationshipStatus::Married && npcData->status != RelationshipStatus::Engaged) {
             // Only married and engaged NPCs experience loneliness decay
@@ -415,11 +440,14 @@ namespace MARAS {
             mult *= kEngagedDecayMultiplier;
         }
 
+        // Apply user-configured decay multiplier
+        mult *= decayMultiplier_;
+
         // Calculate final decay (negative value)
         float decay = -(perDay * mult);
 
-        MARAS_LOG_DEBUG("Loneliness decay for NPC {:08X}: perDay={}, mult={}, final={}", npcFormID, perDay, mult,
-                        decay);
+        MARAS_LOG_DEBUG("Loneliness decay for NPC {:08X}: perDay={}, mult={}, decayMult={}, final={}", npcFormID,
+                        perDay, mult / decayMultiplier_, decayMultiplier_, decay);
 
         return decay;
     }

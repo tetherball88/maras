@@ -51,6 +51,10 @@ namespace MARAS {
         // Handle day change event for decay logic
         void OnDayChanged();
 
+        // Decay multiplier configuration
+        void SetDecayMultiplier(float multiplier);
+        float GetDecayMultiplier() const;
+
     private:
         AffectionService() = default;
 
@@ -75,6 +79,9 @@ namespace MARAS {
 
         // Track last game day when NPC received affection
         std::unordered_map<FormID, float> lastAffectionDay_;
+
+        // Decay multiplier (0.0 = disabled, 1.0 = default, 2.0 = double)
+        float decayMultiplier_ = 1.0f;
     };
 
 }  // namespace MARAS

@@ -64,6 +64,8 @@ namespace MARAS::PapyrusInterface {
     void SetPermanentAffection(RE::StaticFunctionTag*, RE::Actor* npc, int amount);
     void SetAffectionMinMax(RE::StaticFunctionTag*, std::string type, int minVal, int maxVal);
     void ApplyDailyAffection(RE::StaticFunctionTag*);
+    void SetAffectionDecayMultiplier(RE::StaticFunctionTag*, float multiplier);
+    float GetAffectionDecayMultiplier(RE::StaticFunctionTag*);
 
     // Player house papyrus bindings
     bool RegisterPlayerHouseCell(RE::StaticFunctionTag*, RE::BGSLocation* loc, RE::TESObjectREFR* homeMarker);

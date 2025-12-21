@@ -235,6 +235,12 @@ Function SetAffectionMinMax(string type, int minVal, int maxVal) global native
 ;/ Apply all daily affection to permanent for all registered NPCs (should be called once per in-game day) /;
 Function ApplyDailyAffection() global native
 
+;/ Set the multiplier for daily affection decay (0.0 = disabled, 1.0 = default, 2.0 = double) /;
+Function SetAffectionDecayMultiplier(float multiplier) global native
+
+;/ Get the current affection decay multiplier /;
+float Function GetAffectionDecayMultiplier() global native
+
 ;/ ========================================
    SECTION: Player House Functions (native C++)
    ====================================== /;

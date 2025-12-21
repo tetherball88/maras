@@ -37,6 +37,7 @@ EndFunction
 Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption("$TTM_MCM_HeaderSettings")
     mcm.oid_SkipNextWeddings = mcm.AddToggleOption("$TTM_MCM_SkipWedding", TTM_Data.GetSkipWedding())
+    mcm.oid_AffectionDecayMult = mcm.AddSliderOption("$TTM_MCM_AffectionDecayMult", MARAS.GetAffectionDecayMultiplier(), "{1}x")
     mcm.AddHeaderOption("$TTM_MCM_HeaderAIDialogues")
     string[] genderOptions = GetGendersOptions()
     int hasSkyrimNet = 0
@@ -149,6 +150,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText("$TTM_MCM_TT_EnablePolygamy")
     elseif(option == mcm.oid_MinRelRankForDial)
         mcm.SetInfoText("$TTM_MCM_TT_MinRelRank")
+    elseif(option == mcm.oid_AffectionDecayMult)
+        mcm.SetInfoText("$TTM_MCM_TT_AffectionDecayMult")
     endif
 EndFunction
 
@@ -202,6 +205,9 @@ Function OnOptionDefault(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_MinRelRankForDial)
         mcm.TTM_MinRelRankForDial.SetValue(-4)
         mcm.SetSliderOptionValue(option, -4, "{0}")
+    elseif(option == mcm.oid_AffectionDecayMult)
+        MARAS.SetAffectionDecayMultiplier(1.0)
+        mcm.SetSliderOptionValue(option, 1.0, "{1}x")
     endif
 EndFunction
 
@@ -219,6 +225,11 @@ Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
         mcm.SetSliderDialogDefaultValue(-4)
         mcm.SetSliderDialogRange(-4, 4)
         mcm.SetSliderDialogInterval(1)
+    elseif(option == mcm.oid_AffectionDecayMult)
+        mcm.SetSliderDialogStartValue(MARAS.GetAffectionDecayMultiplier())
+        mcm.SetSliderDialogDefaultValue(1.0)
+        mcm.SetSliderDialogRange(0.0, 2.0)
+        mcm.SetSliderDialogInterval(0.1)
     endif
 EndFunction
 
@@ -226,5 +237,8 @@ Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
     if(option == mcm.oid_MinRelRankForDial)
         mcm.TTM_MinRelRankForDial.SetValue(value)
         mcm.SetSliderOptionValue(option, value, "{0}")
+    elseif(option == mcm.oid_AffectionDecayMult)
+        MARAS.SetAffectionDecayMultiplier(value)
+        mcm.SetSliderOptionValue(option, value, "{1}x")
     endif
 EndFunction

@@ -21,6 +21,7 @@ int property oid_ConfirmAcceptProposal auto
 int property oid_ConfirmBreakupEngagement auto
 int property oid_ConfirmDivorce auto
 int property oid_ConfirmDivorceDuringLowAffectionQuest auto
+int property oid_AffectionDecayMult auto
 
 int property oid_SearchNpc auto
 int property oid_SearchFilterAll auto
