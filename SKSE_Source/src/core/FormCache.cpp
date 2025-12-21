@@ -131,6 +131,8 @@ namespace MARAS {
 
     RE::BGSListForm* FormCache::GetWarriorClasses() { return LazyLoadForm(warriorClasses_, 0xe, "warrior classes"); }
 
+    RE::BGSListForm* FormCache::GetSpouseMerchantFactions() { return LazyLoadForm(spouseMerchantFactions_, 0xc16, "spouse merchant factions"); }
+
     // TT_MARAS.esp Globals
     RE::TESGlobal* FormCache::GetLoveInterestsCount() {
         return LazyLoadForm(loveInterestsCount_, 0x4f, "LoveInterestsCount global");

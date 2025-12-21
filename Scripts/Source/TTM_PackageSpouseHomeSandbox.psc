@@ -14,6 +14,7 @@ EndFunction
 Function Fragment_0(Actor akActor)
 ;BEGIN CODE
 TTM_Debug.trace("Start TTM spouse home package for " + TTM_Utils.GetActorName(akActor))
+MiscUtil.PrintConsole("LinkedRef:"+TTM_Data.GetHomeSandboxKeyword()+":"+akActor.GetLinkedRef(TTM_Data.GetHomeSandboxKeyword()))
 ;END CODE
 EndFunction
 ;END FRAGMENT

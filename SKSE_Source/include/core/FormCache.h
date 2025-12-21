@@ -53,6 +53,7 @@ namespace MARAS {
         RE::BGSListForm* GetCraftsmanClasses();
         RE::BGSListForm* GetMageClasses();
         RE::BGSListForm* GetWarriorClasses();
+        RE::BGSListForm* GetSpouseMerchantFactions();
 
         // Keywords getters
         RE::BGSKeyword* GetIgnoreProposeKeyword();
@@ -128,6 +129,7 @@ namespace MARAS {
         RE::BGSListForm* craftsmanClasses_{nullptr};
         RE::BGSListForm* mageClasses_{nullptr};
         RE::BGSListForm* warriorClasses_{nullptr};
+        RE::BGSListForm* spouseMerchantFactions_{nullptr};
         // Globals (cached)
         RE::TESGlobal* loveInterestsCount_{nullptr};
         RE::TESGlobal* spousesCount_{nullptr};

@@ -52,6 +52,52 @@ namespace MARAS {
         }
     }
 
+    void PlayerHouseService::AddMerchantFactionsToTenant(RE::FormID tenantFormID) {
+        auto merchantFactionsFormList = FormCache::GetSingleton().GetSpouseMerchantFactions();
+        if (!merchantFactionsFormList) {
+            MARAS_LOG_WARN("AddMerchantFactionsToTenant: spouse merchant factions formlist not found");
+            return;
+        }
+
+        auto actor = RE::TESForm::LookupByID<RE::Actor>(tenantFormID);
+        if (!actor) {
+            MARAS_LOG_WARN("AddMerchantFactionsToTenant: could not find Actor for tenant {:08X}", tenantFormID);
+            return;
+        }
+
+        // Iterate through all forms in the formlist and add them as factions
+        for (std::uint32_t i = 0; i < merchantFactionsFormList->forms.size(); ++i) {
+            auto form = merchantFactionsFormList->forms[i];
+            if (auto faction = form ? form->As<RE::TESFaction>() : nullptr) {
+                actor->AddToFaction(faction, kDefaultFactionRank);
+                MARAS_LOG_DEBUG("Added merchant faction {:08X} to tenant {:08X}", faction->GetFormID(), tenantFormID);
+            }
+        }
+    }
+
+    void PlayerHouseService::RemoveMerchantFactionsFromTenant(RE::FormID tenantFormID) {
+        auto merchantFactionsFormList = FormCache::GetSingleton().GetSpouseMerchantFactions();
+        if (!merchantFactionsFormList) {
+            MARAS_LOG_WARN("RemoveMerchantFactionsFromTenant: spouse merchant factions formlist not found");
+            return;
+        }
+
+        auto actor = RE::TESForm::LookupByID<RE::Actor>(tenantFormID);
+        if (!actor) {
+            MARAS_LOG_WARN("RemoveMerchantFactionsFromTenant: could not find Actor for tenant {:08X}", tenantFormID);
+            return;
+        }
+
+        // Iterate through all forms in the formlist and remove them as factions
+        for (std::uint32_t i = 0; i < merchantFactionsFormList->forms.size(); ++i) {
+            auto form = merchantFactionsFormList->forms[i];
+            if (auto faction = form ? form->As<RE::TESFaction>() : nullptr) {
+                MARAS::Utils::RemoveFromFaction(actor, faction);
+                MARAS_LOG_DEBUG("Removed merchant faction {:08X} from tenant {:08X}", faction->GetFormID(), tenantFormID);
+            }
+        }
+    }
+
     void PlayerHouseService::AddTenantToHouse(RE::FormID tenantFormID, RE::FormID houseFormID) {
         auto& tenants = houseTenants_[houseFormID];
         if (std::find(tenants.begin(), tenants.end(), tenantFormID) == tenants.end()) {
@@ -127,11 +173,13 @@ namespace MARAS {
             }
             // Move: remove from old house (retain faction semantics: remove then re-add)
             RemoveTenantFaction(tenantFormID);
+            RemoveMerchantFactionsFromTenant(tenantFormID);
             RemoveTenantFromHouse(tenantFormID);
         }
 
         AddTenantToHouse(tenantFormID, playerHouseFormID);
         AddTenantFaction(tenantFormID);
+        AddMerchantFactionsToTenant(tenantFormID);
         MARAS_LOG_DEBUG("Registered tenant {:08X} in player house {:08X}", tenantFormID, playerHouseFormID);
         return true;
     }
@@ -149,6 +197,7 @@ namespace MARAS {
         // are still in an inconsistent state.
         RemoveTenantFromHouse(tenantFormID);
         RemoveTenantFaction(tenantFormID);
+        RemoveMerchantFactionsFromTenant(tenantFormID);
         MARAS_LOG_DEBUG("Removed tenant {:08X} from player house {:08X}", tenantFormID, houseFormID);
         return true;
     }
