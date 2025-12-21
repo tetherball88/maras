@@ -122,6 +122,9 @@ namespace MARAS {
         auto player = RE::PlayerCharacter::GetSingleton();
         auto& manager = NPCRelationshipManager::GetSingleton();
 
+        // Get CurrentFollowerFaction
+        static auto* currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84E);
+
         for (auto& handle : highActorHandles) {
             auto actor = handle.get();
             if (!actor) continue;
@@ -137,6 +140,12 @@ namespace MARAS {
             // Native teammate flag
             if (actor->IsPlayerTeammate()) {
                 MARAS_LOG_INFO("Actor {:08X} is a native teammate", actor->GetFormID());
+                isTeammate = true;
+            }
+
+            // Check CurrentFollowerFaction
+            if (!isTeammate && currentFollowerFaction && actor->IsInFaction(currentFollowerFaction)) {
+                MARAS_LOG_INFO("Actor {:08X} is in CurrentFollowerFaction", actor->GetFormID());
                 isTeammate = true;
             }
 

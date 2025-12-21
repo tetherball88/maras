@@ -18,7 +18,8 @@ Function CheckPlayerHouseLocation() global
     Actor player = TTM_Data.GetPlayer()
     Location currentLoc = player.GetCurrentLocation()
     TTM_Debug.trace("CheckPlayerHouseLocation:"+currentLoc.GetName())
-    if(currentLoc.HasKeywordString("LocTypePlayerHouse"))
+    ObjectReference houseMarker = MARAS.GetHouseMarker(currentLoc)
+    if(currentLoc.HasKeywordString("LocTypePlayerHouse") && houseMarker == none)
         Static homeMarker = TTM_Data.GetHomeSandboxMarkerStatic()
         ; Place marker as persistent so the reference FormID can be resolved later by the plugin
         ObjectReference placedMarker = player.PlaceAtMe(homeMarker, 1, true)
@@ -94,9 +95,7 @@ Function ReleaseSpouseFromPlayerHome(Actor spouse, string reason = "") global
         endif
     endif
     TTM_Debug.trace("ReleaseSpouseFromPlayerHome:spouse:"+spouse+":reason:"+reason)
-    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
-    ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
-    spouse.EvaluatePackage()
+    RemoveSpouseHouseSandboxPackage(spouse)
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, none)
     MARAS.RemoveTenantFromPlayerHouse(spouse)
 EndFunction
@@ -112,14 +111,23 @@ Function MoveSpouseToHouse(Actor spouse, Location houseLoc ) global
     TTM_Debug.trace("MoveSpouseToHouse:houseLoc:"+houseLoc.GetName()+":marker:"+houseMarker)
     spouseMarker.MoveTo(houseMarker)
 
-    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
-
-    ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
-    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 5)
-    spouse.EvaluatePackage()
+    AddSpouseHouseSandboxPackage(spouse)
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, houseLoc)
 
     MARAS.RegisterTenantInPlayerHouse(spouse, houseLoc)
 EndFunction
 
+
+Function AddSpouseHouseSandboxPackage(Actor spouse) global
+    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
+    ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
+    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 5)
+    spouse.EvaluatePackage()
+EndFunction
+
+Function RemoveSpouseHouseSandboxPackage(Actor spouse) global
+    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
+    ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
+    spouse.EvaluatePackage()
+EndFunction
 

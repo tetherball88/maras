@@ -50,6 +50,8 @@ Function Maintenance()
     RegisterForModEvent("maras_hierarchy_changed", "OnChangeHierarchyRank")
     RegisterForModEvent("maras_change_affection", "OnSpouseAffectionChanged")
     RegisterForModEvent("maras_teammate_change", "OnTeammateChange")
+    RegisterForModEvent("maras_teammate_added", "OnTeammateAdded")
+    RegisterForModEvent("maras_teammate_removed", "OnTeammateRemoved")
 
      ; ensure player has debug spell and check door perk
 
@@ -149,6 +151,20 @@ EndEvent
 
 Event OnTeammateChange(String eventName, string strArg, float fltArg, Form sender)
     TTM_ServiceBuff.CalculateFollowerMultipliers()
+EndEvent
+
+Event OnTeammateAdded(String eventName, string strArg, float fltArg, Form sender)
+    Actor npc = sender as Actor
+    if(npc.IsInFaction(TTM_Data.GetSpouseHousedFaction()))
+        TTM_ServicePlayerHouse.RemoveSpouseHouseSandboxPackage(npc)
+    endif
+EndEvent
+
+Event OnTeammateRemoved(String eventName, string strArg, float fltArg, Form sender)
+    Actor npc = sender as Actor
+    if(npc.IsInFaction(TTM_Data.GetSpouseHousedFaction()))
+        TTM_ServicePlayerHouse.AddSpouseHouseSandboxPackage(npc)
+    endif
 EndEvent
 
 Event OnMenuOpen(string menuName)
