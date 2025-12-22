@@ -107,33 +107,16 @@ namespace MARAS {
         }
     }
 
-    std::unordered_set<PollingService::FormID> PollingService::GetCurrentTeammates() {
-        std::unordered_set<FormID> teammates;
+    namespace {
+        // Helper function to check if an actor meets teammate criteria
+        bool CheckIsTeammate(RE::Actor* actor) {
+            if (!actor) return false;
 
-        auto processLists = RE::ProcessLists::GetSingleton();
-        if (!processLists) {
-            MARAS_LOG_ERROR("ProcessLists is null");
-            return teammates;
-        }
+            auto player = RE::PlayerCharacter::GetSingleton();
+            if (!player) return false;
 
-        // Get high actors (closest to player)
-        auto& highActorHandles = processLists->highActorHandles;
-
-        auto player = RE::PlayerCharacter::GetSingleton();
-        auto& manager = NPCRelationshipManager::GetSingleton();
-
-        // Get CurrentFollowerFaction
-        static auto* currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84E);
-
-        for (auto& handle : highActorHandles) {
-            auto actor = handle.get();
-            if (!actor) continue;
-            if (!actor->Is3DLoaded()) continue;
-            if (actor->IsDeleted()) continue;
-
-            if (!manager.IsRegistered(actor->GetFormID())) {
-                continue;
-            }
+            // Get CurrentFollowerFaction
+            static auto* currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84E);
 
             bool isTeammate = false;
 
@@ -171,13 +154,60 @@ namespace MARAS {
                 }
             }
 
-            if (isTeammate) {
+            return isTeammate;
+        }
+    }  // namespace
+
+    std::unordered_set<PollingService::FormID> PollingService::GetCurrentTeammates() {
+        std::unordered_set<FormID> teammates;
+
+        auto processLists = RE::ProcessLists::GetSingleton();
+        if (!processLists) {
+            MARAS_LOG_ERROR("ProcessLists is null");
+            return teammates;
+        }
+
+        // Get high actors (closest to player)
+        auto& highActorHandles = processLists->highActorHandles;
+
+        auto& manager = NPCRelationshipManager::GetSingleton();
+
+        for (auto& handle : highActorHandles) {
+            auto actor = handle.get();
+            if (!actor) continue;
+            if (!actor->Is3DLoaded()) continue;
+            if (actor->IsDeleted()) continue;
+
+            if (!manager.IsRegistered(actor->GetFormID())) {
+                continue;
+            }
+
+            if (CheckIsTeammate(actor.get())) {
                 teammates.insert(actor->GetFormID());
             }
         }
 
         MARAS_LOG_DEBUG("Found {} teammates", teammates.size());
         return teammates;
+    }
+
+    bool PollingService::IsPlayerTeammate(RE::Actor* actor) {
+        if (!actor) {
+            MARAS_LOG_WARN("IsPlayerTeammate: null actor provided");
+            return false;
+        }
+
+        if (!actor->Is3DLoaded()) {
+            MARAS_LOG_DEBUG("IsPlayerTeammate: actor {:08X} is not loaded", actor->GetFormID());
+            return false;
+        }
+
+        if (actor->IsDeleted()) {
+            MARAS_LOG_DEBUG("IsPlayerTeammate: actor {:08X} is deleted", actor->GetFormID());
+            return false;
+        }
+
+        return CheckIsTeammate(actor);
     }
 
     float PollingService::GetCurrentGameDay() {

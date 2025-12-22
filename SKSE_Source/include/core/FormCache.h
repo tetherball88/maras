@@ -53,7 +53,6 @@ namespace MARAS {
         RE::BGSListForm* GetCraftsmanClasses();
         RE::BGSListForm* GetMageClasses();
         RE::BGSListForm* GetWarriorClasses();
-        RE::BGSListForm* GetSpouseMerchantFactions();
 
         // Keywords getters
         RE::BGSKeyword* GetIgnoreProposeKeyword();
@@ -65,6 +64,29 @@ namespace MARAS {
         RE::TESFaction* GetBrotherhoodFaction();
         RE::TESFaction* GetCollegeFaction();
         RE::TESFaction* GetBardsFaction();
+
+        // Skyrim merchant factions
+        RE::TESFaction* GetMerchantFaction();
+        RE::TESFaction* GetApothecaryFaction();
+        RE::TESFaction* GetBlacksmithFaction();
+        RE::TESFaction* GetFletcherFaction();
+        RE::TESFaction* GetInnKeeperFaction();
+        RE::TESFaction* GetJewelerFaction();
+        RE::TESFaction* GetMiscFaction();
+        RE::TESFaction* GetSpellFaction();
+        RE::TESFaction* GetTailorFaction();
+        RE::TESFaction* GetHunterFaction();
+
+        // MARAS housed spouses merchant factions
+        RE::TESFaction* GetApothecaryMerchantHousedFaction();
+        RE::TESFaction* GetBlacksmithMerchantHousedFaction();
+        RE::TESFaction* GetFletcherMerchantHousedFaction();
+        RE::TESFaction* GetHunterMerchantHousedFaction();
+        RE::TESFaction* GetInnkeeperMerchantHousedFaction();
+        RE::TESFaction* GetJewelerMerchantHousedFaction();
+        RE::TESFaction* GetMiscMerchantHousedFaction();
+        RE::TESFaction* GetSpellsMerchantHousedFaction();
+        RE::TESFaction* GetTailorMerchantHousedFaction();
 
         // Skyrim.esm quest getters
         RE::TESQuest* GetEastmarchThane();
@@ -133,7 +155,18 @@ namespace MARAS {
         RE::BGSListForm* craftsmanClasses_{nullptr};
         RE::BGSListForm* mageClasses_{nullptr};
         RE::BGSListForm* warriorClasses_{nullptr};
-        RE::BGSListForm* spouseMerchantFactions_{nullptr};
+
+        // MARAS housed merchant factions (cached)
+        RE::TESFaction* apothecaryHouseMerchantFaction_{nullptr};
+        RE::TESFaction* blacksmithHouseMerchantFaction_{nullptr};
+        RE::TESFaction* fletcherHouseMerchantFaction_{nullptr};
+        RE::TESFaction* hunterHouseMerchantFaction_{nullptr};
+        RE::TESFaction* innkeeperHouseMerchantFaction_{nullptr};
+        RE::TESFaction* jewelerHouseMerchantFaction_{nullptr};
+        RE::TESFaction* miscHouseMerchantFaction_{nullptr};
+        RE::TESFaction* spellsHouseMerchantFaction_{nullptr};
+        RE::TESFaction* tailorHouseMerchantFaction_{nullptr};
+
         // Globals (cached)
         RE::TESGlobal* loveInterestsCount_{nullptr};
         RE::TESGlobal* spousesCount_{nullptr};

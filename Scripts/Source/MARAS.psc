@@ -154,6 +154,21 @@ float[] Function GetPermanentMultipliers() global native
 
 Actor[] Function GetCurrentTeammates() global native
 
+;/
+  IsPlayerTeammate
+
+  Check if a specific actor is currently a player teammate using the same logic as GetCurrentTeammates.
+  This checks:
+  - Native teammate flag
+  - CurrentFollowerFaction membership
+  - Follow package active
+  - AI follow target set to player
+
+  @param npc - Actor to check
+  @return True if the actor is currently a teammate
+/;
+bool Function IsPlayerTeammate(Actor npc) global native
+
 
 ;/ ========================================
    SECTION: Affection system bindings (native C++)

@@ -52,7 +52,6 @@ namespace MARAS {
         void AddTenantFaction(RE::FormID tenantFormID);
         void RemoveTenantFaction(RE::FormID tenantFormID);
         void AddMerchantFactionsToTenant(RE::FormID tenantFormID);
-        void RemoveMerchantFactionsFromTenant(RE::FormID tenantFormID);
         RE::TESFaction* GetHousedFaction() const;
 
     public:

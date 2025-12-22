@@ -53,47 +53,65 @@ namespace MARAS {
     }
 
     void PlayerHouseService::AddMerchantFactionsToTenant(RE::FormID tenantFormID) {
-        auto merchantFactionsFormList = FormCache::GetSingleton().GetSpouseMerchantFactions();
-        if (!merchantFactionsFormList) {
-            MARAS_LOG_WARN("AddMerchantFactionsToTenant: spouse merchant factions formlist not found");
-            return;
-        }
-
         auto actor = RE::TESForm::LookupByID<RE::Actor>(tenantFormID);
         if (!actor) {
             MARAS_LOG_WARN("AddMerchantFactionsToTenant: could not find Actor for tenant {:08X}", tenantFormID);
             return;
         }
 
-        // Iterate through all forms in the formlist and add them as factions
-        for (std::uint32_t i = 0; i < merchantFactionsFormList->forms.size(); ++i) {
-            auto form = merchantFactionsFormList->forms[i];
-            if (auto faction = form ? form->As<RE::TESFaction>() : nullptr) {
-                actor->AddToFaction(faction, kDefaultFactionRank);
-                MARAS_LOG_DEBUG("Added merchant faction {:08X} to tenant {:08X}", faction->GetFormID(), tenantFormID);
+        auto& formCache = FormCache::GetSingleton();
+
+        // Define merchant faction mappings: Skyrim faction -> (MARAS housed faction, name)
+        struct MerchantFactionMapping {
+            RE::TESFaction* skyrimFaction;
+            RE::TESFaction* housedFaction;
+            const char* name;
+        };
+
+        std::vector<MerchantFactionMapping> merchantMappings = {
+            {formCache.GetApothecaryFaction(), formCache.GetApothecaryMerchantHousedFaction(), "apothecary"},
+            {formCache.GetBlacksmithFaction(), formCache.GetBlacksmithMerchantHousedFaction(), "blacksmith"},
+            {formCache.GetFletcherFaction(), formCache.GetFletcherMerchantHousedFaction(), "fletcher"},
+            {formCache.GetHunterFaction(), formCache.GetHunterMerchantHousedFaction(), "hunter"},
+            {formCache.GetInnKeeperFaction(), formCache.GetInnkeeperMerchantHousedFaction(), "innkeeper"},
+            {formCache.GetJewelerFaction(), formCache.GetJewelerMerchantHousedFaction(), "jeweler"},
+            {formCache.GetSpellFaction(), formCache.GetSpellsMerchantHousedFaction(), "spells"},
+            {formCache.GetTailorFaction(), formCache.GetTailorMerchantHousedFaction(), "tailor"}
+        };
+
+        // Check if NPC has any Skyrim merchant faction and add corresponding MARAS housed merchant faction
+        bool foundMerchantFaction = false;
+        for (const auto& mapping : merchantMappings) {
+            if (mapping.skyrimFaction && actor->IsInFaction(mapping.skyrimFaction)) {
+                if (mapping.housedFaction && !actor->IsInFaction(mapping.housedFaction)) {
+                    actor->AddToFaction(mapping.housedFaction, kDefaultFactionRank);
+                    MARAS_LOG_DEBUG("Added {} housed merchant faction to tenant {:08X}", mapping.name, tenantFormID);
+                    foundMerchantFaction = true;
+                }
             }
         }
-    }
 
-    void PlayerHouseService::RemoveMerchantFactionsFromTenant(RE::FormID tenantFormID) {
-        auto merchantFactionsFormList = FormCache::GetSingleton().GetSpouseMerchantFactions();
-        if (!merchantFactionsFormList) {
-            MARAS_LOG_WARN("RemoveMerchantFactionsFromTenant: spouse merchant factions formlist not found");
-            return;
-        }
+        // If no Skyrim merchant faction found, add default merchant factions
+        if (!foundMerchantFaction) {
+            if (auto merchantFaction = formCache.GetMerchantFaction()) {
+                if (!actor->IsInFaction(merchantFaction)) {
+                    actor->AddToFaction(merchantFaction, kDefaultFactionRank);
+                    MARAS_LOG_DEBUG("Added merchant faction to tenant {:08X}", tenantFormID);
+                }
+            }
 
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(tenantFormID);
-        if (!actor) {
-            MARAS_LOG_WARN("RemoveMerchantFactionsFromTenant: could not find Actor for tenant {:08X}", tenantFormID);
-            return;
-        }
+            if (auto miscFaction = formCache.GetMiscFaction()) {
+                if (!actor->IsInFaction(miscFaction)) {
+                    actor->AddToFaction(miscFaction, kDefaultFactionRank);
+                    MARAS_LOG_DEBUG("Added misc merchant faction to tenant {:08X}", tenantFormID);
+                }
+            }
 
-        // Iterate through all forms in the formlist and remove them as factions
-        for (std::uint32_t i = 0; i < merchantFactionsFormList->forms.size(); ++i) {
-            auto form = merchantFactionsFormList->forms[i];
-            if (auto faction = form ? form->As<RE::TESFaction>() : nullptr) {
-                MARAS::Utils::RemoveFromFaction(actor, faction);
-                MARAS_LOG_DEBUG("Removed merchant faction {:08X} from tenant {:08X}", faction->GetFormID(), tenantFormID);
+            if (auto miscHousedFaction = formCache.GetMiscMerchantHousedFaction()) {
+                if (!actor->IsInFaction(miscHousedFaction)) {
+                    actor->AddToFaction(miscHousedFaction, kDefaultFactionRank);
+                    MARAS_LOG_DEBUG("Added misc housed merchant faction to tenant {:08X}", tenantFormID);
+                }
             }
         }
     }
@@ -173,7 +191,6 @@ namespace MARAS {
             }
             // Move: remove from old house (retain faction semantics: remove then re-add)
             RemoveTenantFaction(tenantFormID);
-            RemoveMerchantFactionsFromTenant(tenantFormID);
             RemoveTenantFromHouse(tenantFormID);
         }
 
@@ -197,7 +214,6 @@ namespace MARAS {
         // are still in an inconsistent state.
         RemoveTenantFromHouse(tenantFormID);
         RemoveTenantFaction(tenantFormID);
-        RemoveMerchantFactionsFromTenant(tenantFormID);
         MARAS_LOG_DEBUG("Removed tenant {:08X} from player house {:08X}", tenantFormID, houseFormID);
         return true;
     }

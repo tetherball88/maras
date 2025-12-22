@@ -332,6 +332,16 @@ namespace MARAS::PapyrusInterface {
         return result;
     }
 
+    // Check if a specific actor is currently a player teammate
+    bool IsPlayerTeammate(RE::StaticFunctionTag*, RE::Actor* npc) {
+        if (!npc) {
+            MARAS_LOG_WARN("IsPlayerTeammate: null actor provided");
+            return false;
+        }
+
+        return MARAS::PollingService::GetSingleton().IsPlayerTeammate(npc);
+    }
+
     // ========================================
     // Consolidated statistics
     // ========================================
@@ -1016,6 +1026,7 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetNPCsByStatus", "MARAS", GetNPCsByStatus);
         vm->RegisterFunction("GetNPCsByStatusEnum", "MARAS", GetNPCsByStatusEnum);
         vm->RegisterFunction("GetCurrentTeammates", "MARAS", GetCurrentTeammates);
+        vm->RegisterFunction("IsPlayerTeammate", "MARAS", IsPlayerTeammate);
 
         // Consolidated statistics functions
         vm->RegisterFunction("GetStatusCount", "MARAS", GetStatusCount);
@@ -1098,7 +1109,7 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetBonusPerkUnit", "MARAS", GetBonusPerkUnit);
         vm->RegisterFunction("GetBonusPerkDescription", "MARAS", GetBonusPerkDescription);
 
-        MARAS_LOG_INFO("Registered {} MARAS Papyrus functions", 44);
+        MARAS_LOG_INFO("Registered {} MARAS Papyrus functions", 45);
         return true;
     }
 

@@ -111,10 +111,14 @@ Function MoveSpouseToHouse(Actor spouse, Location houseLoc ) global
     TTM_Debug.trace("MoveSpouseToHouse:houseLoc:"+houseLoc.GetName()+":marker:"+houseMarker)
     spouseMarker.MoveTo(houseMarker)
 
-    AddSpouseHouseSandboxPackage(spouse)
+
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, houseLoc)
 
     MARAS.RegisterTenantInPlayerHouse(spouse, houseLoc)
+
+    if(!MARAS.IsPlayerTeammate(spouse))
+        AddSpouseHouseSandboxPackage(spouse)
+    endif
 EndFunction
 
 

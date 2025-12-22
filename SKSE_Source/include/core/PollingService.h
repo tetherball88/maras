@@ -30,6 +30,9 @@ namespace MARAS {
         // Get current teammates from ProcessLists (exposed for external callers)
         std::unordered_set<FormID> GetCurrentTeammates();
 
+        // Check if a specific actor is currently a player teammate
+        bool IsPlayerTeammate(RE::Actor* actor);
+
     private:
         PollingService() = default;
 

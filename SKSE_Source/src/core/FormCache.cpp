@@ -76,6 +76,49 @@ namespace MARAS {
         return LazyLoadForm(homeSandboxMarkerStatic_, 0x76, "home sandbox marker static");
     }
 
+    // MARAS housed spouses merchant factions
+    RE::TESFaction* FormCache::GetApothecaryMerchantHousedFaction() {
+        return LazyLoadForm(apothecaryHouseMerchantFaction_, 0xc0c, "apothecary housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetBlacksmithMerchantHousedFaction() {
+        return LazyLoadForm(blacksmithHouseMerchantFaction_, 0xc0d, "blacksmith housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetFletcherMerchantHousedFaction() {
+        return LazyLoadForm(fletcherHouseMerchantFaction_, 0xc12, "fletcher housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetHunterMerchantHousedFaction() {
+        return LazyLoadForm(hunterHouseMerchantFaction_, 0xc14, "hunter housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetInnkeeperMerchantHousedFaction() {
+        return LazyLoadForm(innkeeperHouseMerchantFaction_, 0xc0e, "innkeeper housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetJewelerMerchantHousedFaction() {
+        return LazyLoadForm(jewelerHouseMerchantFaction_, 0xc13, "jeweler housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetMiscMerchantHousedFaction() {
+        return LazyLoadForm(miscHouseMerchantFaction_, 0xc0f, "misc housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetSpellsMerchantHousedFaction() {
+        return LazyLoadForm(spellsHouseMerchantFaction_, 0xc10, "spells housed merchant faction");
+    }
+    RE::TESFaction* FormCache::GetTailorMerchantHousedFaction() {
+        return LazyLoadForm(tailorHouseMerchantFaction_, 0xc11, "tailor housed merchant faction");
+    }
+
+
+    RE::TESFaction* FormCache::GetMerchantFaction() { return LoadSkyrimForm<RE::TESFaction>(0x51596, "Merchant faction"); }
+
+    // Skyrim merchant factions
+    RE::TESFaction* FormCache::GetApothecaryFaction() { return LoadSkyrimForm<RE::TESFaction>(0x5091c, "Apothecary merchant faction"); }
+    RE::TESFaction* FormCache::GetBlacksmithFaction() { return LoadSkyrimForm<RE::TESFaction>(0x5091d, "Blacksmith merchant faction"); }
+    RE::TESFaction* FormCache::GetFletcherFaction() { return LoadSkyrimForm<RE::TESFaction>(0x51592, "Fletcher merchant faction"); }
+    RE::TESFaction* FormCache::GetInnKeeperFaction() { return LoadSkyrimForm<RE::TESFaction>(0x5091b, "InnKeeper merchant faction"); }
+    RE::TESFaction* FormCache::GetJewelerFaction() { return LoadSkyrimForm<RE::TESFaction>(0x806a9, "Jeweler merchant faction"); }
+    RE::TESFaction* FormCache::GetMiscFaction() { return LoadSkyrimForm<RE::TESFaction>(0x51599, "Misc merchant faction"); }
+    RE::TESFaction* FormCache::GetSpellFaction() { return LoadSkyrimForm<RE::TESFaction>(0x50921, "Spell merchant faction"); }
+    RE::TESFaction* FormCache::GetTailorFaction() { return LoadSkyrimForm<RE::TESFaction>(0xa6c00, "Tailor merchant faction"); } // radiant raiments shop
+    RE::TESFaction* FormCache::GetHunterFaction() { return LoadSkyrimForm<RE::TESFaction>(0xac9c2, "Hunter merchant faction"); }
+
     // Marriage-related faction getters (from Skyrim.esm)
     RE::TESFaction* FormCache::GetMarriagePotentialFaction() {
         return LoadSkyrimForm<RE::TESFaction>(0x19809, "marriage potential faction");
@@ -138,8 +181,6 @@ namespace MARAS {
     RE::BGSListForm* FormCache::GetMageClasses() { return LazyLoadForm(mageClasses_, 0xf, "mage classes"); }
 
     RE::BGSListForm* FormCache::GetWarriorClasses() { return LazyLoadForm(warriorClasses_, 0xe, "warrior classes"); }
-
-    RE::BGSListForm* FormCache::GetSpouseMerchantFactions() { return LazyLoadForm(spouseMerchantFactions_, 0xc16, "spouse merchant factions"); }
 
     // TT_MARAS.esp Globals
     RE::TESGlobal* FormCache::GetLoveInterestsCount() {

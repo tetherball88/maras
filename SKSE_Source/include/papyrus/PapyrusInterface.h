@@ -29,6 +29,9 @@ namespace MARAS::PapyrusInterface {
     // Returns currently-detected teammates (actors following/teammates of the player)
     std::vector<RE::Actor*> GetCurrentTeammates(RE::StaticFunctionTag*);
 
+    // Check if a specific actor is currently a player teammate
+    bool IsPlayerTeammate(RE::StaticFunctionTag*, RE::Actor* npc);
+
     // Consolidated statistics - supports both enum and string type
     int GetStatusCount(RE::StaticFunctionTag*, std::string statusType);
     int GetStatusCountByEnum(RE::StaticFunctionTag*, std::int32_t statusEnum);
