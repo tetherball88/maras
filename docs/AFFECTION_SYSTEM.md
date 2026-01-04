@@ -153,18 +153,37 @@ Base affection for sleeping in the same location:
 
 ### 4.6 Loneliness – The Silent Killer 😶
 
-For **fiancés and spouses** only, affection starts to decay if you don’t visit them:
+For **fiancés and spouses** only, affection starts to decay if you don't visit them:
 
-- If you haven’t given them **any affection-related interactions** for **more than 2 in-game days**, the system starts applying **Loneliness** penalties.
+- If you haven't given them **any affection-related interactions** for **more than 2 in-game days**, the system starts applying **Loneliness** penalties.
 - The decay:
     - Comes from the loneliness category (daily clamped to -4 → +6).
     - **Default decay -3**
     - Temperament adjustments:
-        - **Romantic → -4** - `“You didn’t come by for two days and I noticed.”`
-        - **Humble → -2** - `They’re a bit more forgiving about distance.`
+        - **Romantic → -4** - `"You didn't come by for two days and I noticed."`
+        - **Humble → -2** - `They're a bit more forgiving about distance.`
         - **Independent → -1** `You do you. Just maybe send a letter sometimes.`
     - For spouse following player decay turns into **"together time"**:
         - Each day spent together **together time** adds +6 affection points.
+
+#### Adjustable Decay Multiplier 🎚️
+
+You can control how aggressive affection decay is via the **MCM Settings**:
+
+- Navigate to **MCM > M.A.R.A.S > Settings > Daily affection decay multiplier**
+- Available range: **0.0 to 2.0**
+    - **0.0** = Decay completely disabled (relationships never decay from loneliness)
+    - **1.0** = Default decay (as described above)
+    - **2.0** = Double decay (Sims-like relationship management where you must constantly maintain affection)
+- This multiplier applies to **all decay calculations** above, so:
+    - Setting to 0.5 cuts all decay in half
+    - Setting to 2.0 doubles all decay values
+    - Setting to 0 means you can ignore your spouses forever without consequences (if that's your playstyle)
+
+> **Use cases:**
+> - Set to **0** if you want relationships to be purely gain-based, no penalties for absence
+> - Set to **2.0** if you want a challenging "relationship maintenance simulator" where keeping multiple spouses happy requires serious effort
+> - Leave at **1.0** for the intended balanced experience
 
 On top of that, to keep polygamy remotely manageable:
 

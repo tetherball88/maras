@@ -281,7 +281,7 @@ Use this if:
 
 ---
 
-#### 5. Store Income 💰
+#### 5. Store Income & Merchant Services 💰
 
 > **`Has the store made any money?`**
 
@@ -292,10 +292,37 @@ Requirements:
 
 Effect:
 
-- Once per day, you can collect income from their “small store.”
-- Income depends on the spouse’s **Social Class**:
+- Once per day, you can collect income from their "small store."
+- Income depends on the spouse's **Social Class**:
   - Nobles / wealthy types earn more than beggars.
   - Yes, even a Jarl or East Empire Company figure is technically running a little side hustle for you.
+
+**Merchant Services:**
+
+When a spouse is assigned to one of your houses, they also become a **merchant** (like vanilla spouse merchants), allowing you to buy and sell items with them.
+
+- M.A.R.A.S supports **multiple merchant types** based on the spouse's vanilla merchant faction (if they have one):
+  - **Apothecary** – Potions, ingredients, alchemical supplies
+  - **Blacksmith** – Weapons, armor, smithing materials
+  - **Fletcher** – Bows, arrows, ranged equipment
+  - **Hunter** – Pelts, hunting supplies, basic provisions
+  - **Innkeeper** – Food, drinks, basic items
+  - **Jeweler** – Jewelry, gems, precious metals
+  - **Tailor** – Clothing, fabrics, accessories
+  - **Spell Merchant** – Spell tomes, scrolls, magical items
+  - **Misc Merchant** – General goods (default for spouses without specialized merchant type)
+
+**Shared Merchant Inventory:**
+
+- Each **merchant type shares the same merchant chest** with other spouses of that type.
+- Example: If you have 3 Blacksmith spouses assigned to different houses, they all share the same inventory.
+- This means selling items to one Blacksmith spouse makes those items available when trading with your other Blacksmith spouses.
+
+**Follower Behavior:**
+
+- If a spouse assigned to your house becomes your **follower**, they will **drop their house sandboxing** and join you.
+- When you **release them from following**, they will **return to their assigned house** and resume sandboxing/merchant services.
+- This check happens every **15 seconds** for performance reasons, so there may be a 0-15 second delay when asking them to follow or releasing them.
 
 ---
 

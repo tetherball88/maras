@@ -100,18 +100,22 @@ With **SkyrimNet**, this becomes even cooler: conversations and roleplay can pus
 
 M.A.R.A.S keeps vanilla features and expands on them:
 
-- **Lover’s Radiance** – Sleeping in the same cell as your spouse grants a custom buff.
+- **Lover's Radiance** – Sleeping in the same cell as your spouse grants a custom buff.
 - Ask your spouse to:
   - Cook meals for you.
   - Move into one of your **registered player homes**.
   - Let you move into **their** home.
 - When a spouse moves in with you:
   - They physically live and wander around your house.
-  - They open a **small shop**, generating some passive income.
+  - They become **merchants** (like vanilla spouse merchants), with specialized types:
+    - **Apothecary, Blacksmith, Fletcher, Hunter, Innkeeper, Jeweler, Tailor, Spell Merchant,** or **Misc Merchant**
+    - Each merchant type shares the same inventory chest with other spouses of that type
+  - They generate passive income based on their social class.
+- **Follower integration**: If a spouse assigned to your house becomes your follower, they'll temporarily stop sandboxing and join you. When released, they return to their assigned house (15-second polling cycle).
 
 To register a player home, just **visit your owned house** after installing the mod; M.A.R.A.S will quietly mark it as a valid home.
 
-> ⚠️ If you move a quest NPC into your house and they’re chilling by your alchemy table instead of being in their throne room, don’t blame the mod when a quest stalls. You can always “release” them back to their normal life.
+> ⚠️ If you move a quest NPC into your house and they're chilling by your alchemy table instead of being in their throne room, don't blame the mod when a quest stalls. You can always "release" them back to their normal life.
 
 ---
 

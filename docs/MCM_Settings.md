@@ -27,7 +27,7 @@ This page explains what each **MCM option** does in M.A.R.A.S so you know exactl
 
 **What it does:**
 If enabled, you only have to sit through the **full vanilla wedding ceremony once**.
-After that, future marriages will **skip the Wedding Ceremony quest** and just handle the “we’re married now” part.
+After that, future marriages will **skip the Wedding Ceremony quest** and just handle the "we're married now" part.
 
 - **Enabled:**
   - First marriage → full scene.
@@ -36,8 +36,35 @@ After that, future marriages will **skip the Wedding Ceremony quest** and just h
   - Every marriage runs the vanilla wedding quest and ceremony.
 
 **Good for you if:**
-- You’ve seen the wedding scene 47 times already.
-- You’re running a serial spouse dynasty and don’t want to camp in Riften forever.
+- You've seen the wedding scene 47 times already.
+- You're running a serial spouse dynasty and don't want to camp in Riften forever.
+
+---
+
+#### **Daily affection decay multiplier**
+
+**What it does:**
+Controls how fast (or if) affection decays for **fiancés and spouses** when you haven't interacted with them for more than 2 in-game days.
+
+- **Range:** 0.0 to 2.0
+- **Default:** 1.0
+
+**Values:**
+- **0.0** – Decay **completely disabled**. Affection never decreases from loneliness, only from active negative actions (demotions, etc.).
+- **1.0** – **Default decay rate**. Standard relationship maintenance as designed.
+- **2.0** – **Double decay**. Relationships deteriorate twice as fast, turning M.A.R.A.S into a Sims-like relationship management challenge.
+
+**How it affects gameplay:**
+- At **0.0**: You can ignore your spouses indefinitely without affection loss. Relationships are purely gain-based.
+- At **1.0**: Standard experience. You need to check in on spouses periodically (gifts, talking, sleeping together) to maintain affection.
+- At **2.0**: High-maintenance mode. Managing multiple spouses becomes significantly more challenging as they lose affection faster.
+
+**Good for you if:**
+- **0.0** – You want relationships without the "neglect penalty," or you're doing a playthrough where you're frequently away for long stretches.
+- **1.0** – You want the intended balanced experience.
+- **2.0** – You want a challenging relationship simulator where maintaining a large harem requires serious dedication.
+
+> **Note:** This multiplier applies to all loneliness decay calculations. The base decay values are still influenced by temperament (Romantic, Humble, Independent, etc.) and spouse count, but the final result is multiplied by this setting.
 
 ---
 
