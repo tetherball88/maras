@@ -1,0 +1,21 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Astrid custom follower with custom marriage quest",
+    "notes": [
+      "Integration between MARAS and Astrid - Heart of Ice",
+      "When Astrid's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|SM_Astrid.esp|0x8440": {
+    "comment": "Astrid's Wedding; Possible Astrid marriage",
+    "onStageChange:100": [
+      "promoteToStatus:__formData|SM_Astrid.esp|0x5900:Married"
+    ],
+    "onStageChange:200": [
+      "promoteToStatus:__formData|SM_Astrid.esp|0x5900:Married"
+    ],
+    "onStageChange:300": [
+      "promoteToStatus:__formData|SM_Astrid.esp|0x5900:Married"
+    ]
+  }
+}

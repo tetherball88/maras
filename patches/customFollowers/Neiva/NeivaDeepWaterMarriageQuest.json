@@ -1,0 +1,15 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Neiva custom follower with custom marriage quest",
+    "notes": [
+      "Integration between MARAS and Neiva",
+      "When Neiva's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|Neiva_Deep_Water_Follower_1_Form.esp|0x2A7109": {
+    "comment": "Neiva's Wedding; Possible Neiva marriage",
+    "onStageChange:250": [
+      "promoteToStatus:__formData|Neiva_Deep_Water_Follower_1_Form.esp|0x800:Married"
+    ]
+  }
+}
