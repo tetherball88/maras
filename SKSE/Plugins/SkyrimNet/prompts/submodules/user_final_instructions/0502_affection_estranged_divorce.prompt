@@ -1,4 +1,4 @@
-{% if not isTimePaused and get_quest_stage("TTM_AffectionEstrangedDivorce", true) == 10 and render_mode == "full" %}
+{% if not isTimePaused and get_quest_stage("TTM_AffectionEstrangedDivorce", true) == 10 and render_mode == "full" and not decnpc(npc.UUID).isVirtual %}
     {% set npcData = decnpc(npc.UUID) %}
     {% set npcName = npcData.name %}
     {{npcName}} and {{player.name}} are in a marriage crisis, deciding in this single conversation whether to reconcile or divorce. {{npcName}} must base {{npcData.possessivePronoun}} feelings and final choice only on the words spoken now. {{npcData.subjectivePronoun}} must not ask {{player.name}} for proof through future actions, waiting periods, in-game tasks, or conditions like "proving it over time". Any decision to reconcile or divorce must be made and clearly stated in this dialogue, expressed as emotional needs and choices in the moment, not as future tests.

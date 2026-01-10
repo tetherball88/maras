@@ -1,4 +1,4 @@
-{% if not isTimePaused and (render_mode == "full" or render_mode == "transform" or render_mode == "thoughts" or render_mode == "dialogue_target") %}
+{% if not isTimePaused and (render_mode == "full" or render_mode == "transform" or render_mode == "thoughts" or render_mode == "dialogue_target") and not decnpc(actorUUID).isVirtual %}
     {% set factionRank = get_faction_rank(actorUUID, "TTM_TrackedNpcs") %}
     {% set npcName = decnpc(actorUUID).name %}
     {% set householdData = get_household(actorUUID) %}

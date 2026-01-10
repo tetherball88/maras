@@ -1,4 +1,4 @@
-{% if not isTimePaused and is_in_faction(npc.UUID, "TTM_TrackedNpcs") and render_mode == "full" %}
+{% if not isTimePaused and is_in_faction(npc.UUID, "TTM_TrackedNpcs") and render_mode == "full" and not decnpc(npc.UUID).isVirtual %}
     {% set npcName = decnpc(npc.UUID).name %}
     {% set factionRank = get_faction_rank(npc.UUID, "TTM_TrackedNpcs") %}
     {% if factionRank != 1 and factionRank != 2 %}
