@@ -59,7 +59,8 @@ namespace MARAS {
         Married = 2,
         Divorced = 3,
         Jilted = 4,
-        Deceased = 5,
+        // Note: Deceased (5) was removed - NPCs are now unregistered on death
+        // Don't use 5 as it may be used in external Papyrus scripts for backward compatibility
         // Unknown is used as a default/absent value when no stored data exists
         Unknown = 255
     };
@@ -71,7 +72,7 @@ namespace MARAS {
                   "SkillType enum exceeds uint8_t range");
     static_assert(static_cast<uint8_t>(Temperament::_Count) <= 255,
                   "Temperament enum exceeds uint8_t range");
-    static_assert(static_cast<uint8_t>(RelationshipStatus::Deceased) < 255,
+    static_assert(static_cast<uint8_t>(RelationshipStatus::Jilted) < 255,
                   "RelationshipStatus valid values must be less than Unknown sentinel");
 
     // Lightweight data structure for NPC information
@@ -124,7 +125,6 @@ namespace MARAS {
         std::unordered_set<RE::FormID> married;
         std::unordered_set<RE::FormID> divorced;
         std::unordered_set<RE::FormID> jilted;
-        std::unordered_set<RE::FormID> deceased;
 
         // Detailed data storage
         std::unordered_map<RE::FormID, NPCRelationshipData> npcData;
@@ -185,14 +185,12 @@ namespace MARAS {
         bool IsMarried(RE::FormID npcFormID) const;
         bool IsDivorced(RE::FormID npcFormID) const;
         bool IsJilted(RE::FormID npcFormID) const;
-        bool IsDeceased(RE::FormID npcFormID) const;
 
         // Status transitions
         bool PromoteToEngaged(RE::FormID npcFormID);
         bool PromoteToMarried(RE::FormID npcFormID);
         bool PromoteToDivorced(RE::FormID npcFormID);  // From married
         bool PromoteToJilted(RE::FormID npcFormID);    // From engaged
-        bool PromoteToDeceased(RE::FormID npcFormID);  // From any status
 
         // Bulk retrievals
         std::vector<RE::FormID> GetAllRegisteredNPCs() const;
@@ -201,7 +199,6 @@ namespace MARAS {
         std::vector<RE::FormID> GetAllMarried() const;
         std::vector<RE::FormID> GetAllDivorced() const;
         std::vector<RE::FormID> GetAllJilted() const;
-        std::vector<RE::FormID> GetAllDeceased() const;
 
         // Data access
         const NPCRelationshipData* GetNPCData(RE::FormID npcFormID) const;
@@ -244,7 +241,6 @@ namespace MARAS {
         size_t GetMarriedCount() const;
         size_t GetDivorcedCount() const;
         size_t GetJiltedCount() const;
-        size_t GetDeceasedCount() const;
 
         // Save/Load support
         void Clear();

@@ -325,11 +325,22 @@ namespace MARAS {
             // Resolve saved formIDs to current load-order IDs
             RE::FormID resolved = 0;
             if (savedId != 0 && serialization->ResolveFormID(savedId, resolved)) {
-                ranks_[i] = resolved;
+                // Skip dead or invalid actors
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(resolved);
+                if (!actor || actor->IsDead()) {
+                    MARAS_LOG_INFO("SpouseHierarchyManager::Load - skipping dead/invalid actor {:08X}", resolved);
+                    ranks_[i] = 0;
+                } else {
+                    ranks_[i] = resolved;
+                }
             } else {
                 ranks_[i] = 0;  // unresolved or empty
             }
         }
+
+        // Fill any gaps left by skipped dead actors
+        FillGaps();
+
         // After loading ranks, apply faction ranks to actors
         for (size_t i = 0; i < ranks_.size(); ++i) {
             if (ranks_[i] != 0) {

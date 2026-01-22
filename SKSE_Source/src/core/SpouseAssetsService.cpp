@@ -269,11 +269,30 @@ namespace MARAS {
                 if (!serialization->ReadRecordData(savedSid)) return false;
                 RE::FormID resolvedSid = 0;
                 if (savedSid != 0 && serialization->ResolveFormID(savedSid, resolvedSid)) {
+                    // Skip dead or invalid actors
+                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(resolvedSid);
+                    if (!actor || actor->IsDead()) {
+                        MARAS_LOG_INFO("SpouseAssetsService::Load - skipping dead/invalid actor {:08X}", resolvedSid);
+                        continue;
+                    }
                     data.sharingSpouses.insert(resolvedSid);
                 }
             }
 
-            sharedHomes_.emplace(cellId, std::move(data));
+            // Only store if there are still valid sharing spouses
+            if (!data.sharingSpouses.empty()) {
+                sharedHomes_.emplace(cellId, std::move(data));
+            } else {
+                // Restore original public state if all spouses were dead
+                if (data.originalPublicRecorded && !data.originalPublicState) {
+                    if (auto form = RE::TESForm::LookupByID(cellId)) {
+                        if (auto cell = form->As<RE::TESObjectCELL>()) {
+                            cell->SetPublic(false);
+                            MARAS_LOG_INFO("SpouseAssetsService::Load - restored cell {:08X} public=false (all spouses dead)", cellId);
+                        }
+                    }
+                }
+            }
         }
 
         MARAS_LOG_INFO("SpouseAssetsService: loaded {} shared homes", sharedHomes_.size());

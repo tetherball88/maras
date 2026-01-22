@@ -51,6 +51,9 @@ namespace MARAS {
         // Handle day change event for decay logic
         void OnDayChanged();
 
+        // Remove all data for a specific NPC (called when NPC is unregistered)
+        void RemoveNPCData(FormID npcFormID);
+
         // Decay multiplier configuration
         void SetDecayMultiplier(float multiplier);
         float GetDecayMultiplier() const;

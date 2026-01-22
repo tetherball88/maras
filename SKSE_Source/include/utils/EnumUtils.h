@@ -77,8 +77,6 @@ namespace MARAS::Utils {
                 return "Divorced";
             case RelationshipStatus::Jilted:
                 return "Jilted";
-            case RelationshipStatus::Deceased:
-                return "Deceased";
             default:
                 return "Unknown";
         }

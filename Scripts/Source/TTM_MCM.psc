@@ -30,7 +30,6 @@ int property oid_SearchFilterFiance auto
 int property oid_SearchFilterSpouse auto
 int property oid_SearchFilterJilted auto
 int property oid_SearchFilterDivorced auto
-int property oid_SearchFilterDeceased auto
 
 int property oid_ReturnToExplore auto
 int property oid_NpcPageSkillType auto

@@ -120,8 +120,19 @@ namespace MARAS {
             return false;
         }
 
-        auto status = Utils::StringToRelationshipStatus(statusKeyword);
         auto& manager = NPCRelationshipManager::GetSingleton();
+
+        // Handle "deceased" as a special case - unregister the NPC entirely
+        if (Utils::ToLower(statusKeyword) == "deceased") {
+            bool success = manager.UnregisterNPC(npc->GetFormID());
+            if (success) {
+                MARAS_LOG_INFO("promoteToStatus: Unregistered deceased NPC {} (0x{:08X}) via quest event ({})",
+                               npc->GetName(), npc->GetFormID(), context);
+            }
+            return success;
+        }
+
+        auto status = Utils::StringToRelationshipStatus(statusKeyword);
 
         bool success = false;
         switch (status) {
@@ -140,9 +151,10 @@ namespace MARAS {
             case RelationshipStatus::Jilted:
                 success = manager.PromoteToJilted(npc->GetFormID());
                 break;
-            case RelationshipStatus::Deceased:
-                success = manager.PromoteToDeceased(npc->GetFormID());
-                break;
+            default:
+                MARAS_LOG_WARN("promoteToStatus: Unknown status '{}' for NPC {} (0x{:08X})",
+                               statusKeyword, npc->GetName(), npc->GetFormID());
+                return false;
         }
 
         if (success) {

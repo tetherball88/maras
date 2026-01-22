@@ -122,6 +122,7 @@ Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
             TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(npc, "deceased")
         endif
     endif
+    MARAS.UnregisterNPC(npc)
     ; re-check marriage related quests and stop if any were ongoing for killed npc
     TTM_ServiceMarriageQuest.ResetMarriageQuests(npc)
 

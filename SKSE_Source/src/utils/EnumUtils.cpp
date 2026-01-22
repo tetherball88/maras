@@ -64,7 +64,7 @@ namespace MARAS::Utils {
         if (lower == "married") return RelationshipStatus::Married;
         if (lower == "divorced") return RelationshipStatus::Divorced;
         if (lower == "jilted") return RelationshipStatus::Jilted;
-        if (lower == "deceased") return RelationshipStatus::Deceased;
+        // Note: "deceased" is no longer a RelationshipStatus - NPCs are unregistered on death
 
         return RelationshipStatus::Candidate;
     }

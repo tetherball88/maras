@@ -28,12 +28,6 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     string temperament = MARAS.GetNpcCurrentTypeName(npc, "temperament")
     int count = MARAS.GetStatusCount("married")
     string status = MARAS.GetNpcStatusName(npc)
-    bool isDeceased = MARAS.IsNPCStatus(npc, "deceased")
-    string deceased = ""
-
-    if(isDeceased)
-        deceased = "(deceased)"
-    endif
 
     bool isCandidate = MARAS.IsNPCStatus(npc, "candidate")
     bool isFiance = MARAS.IsNPCStatus(npc, "engaged")
@@ -43,8 +37,8 @@ Function RenderLeftColumn(TTM_MCM mcm) global
 
     mcm.oid_ReturnToExplore = mcm.AddTextOption("", "$TTM_MCM_ReturnToExplore")
     mcm.AddHeaderOption("$TTM_MCM_NpcDataHeader{" + TTM_Utils.GetActorName(npc) + "}")
-    mcm.AddTextOption("$TTM_MCM_NpcStatus", status+deceased)
-    if(isSpouse && !isDeceased)
+    mcm.AddTextOption("$TTM_MCM_NpcStatus", status)
+    if(isSpouse)
         if(count == 1)
             mcm.oid_NpcPageRank = mcm.AddTextOption("$TTM_MCM_NpcRankHierarchy", "$TTM_MCM_NpcRankOnly")
         else
@@ -73,7 +67,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.oid_NpcPageSkillType = mcm.AddMenuOption("$TTM_MCM_NpcSkillType", skillType)
     mcm.oid_NpcPageTemperament = mcm.AddMenuOption("$TTM_MCM_NpcTemperament", temperament)
 
-    if(isSpouse && !isDeceased)
+    if(isSpouse)
         Location playerHouse = TTM_ServiceRelationships.GetTrackedNpcHome(npc)
         string playerHouseName = playerHouse.GetName()
         if(playerHouse == none)
@@ -90,13 +84,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
             if(TTM_Data.GetMarasCheckSpouseHomeQuest().IsRunning() && !spouseShareHome)
                 mcm.AddTextOption("$TTM_MCM_NpcShareHomeRunning", "")
             else
-                if(!isDeceased)
-                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("$TTM_MCM_NpcShareTheirHome", spouseShareHome)
-                elseif(TTM_ServiceRelationships.GetKilledByPlayer(npc))
-                    mcm.oid_NpcPageShareTheirHome = mcm.AddTextOption("$TTM_MCM_NpcKilledByPlayer{" + TTM_Utils.GetActorName(npc) + "}", "")
-                else
-                    mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("$TTM_MCM_NpcInheritedHome", spouseShareHome)
-                endif
+                mcm.oid_NpcPageShareTheirHome = mcm.AddToggleOption("$TTM_MCM_NpcShareTheirHome", spouseShareHome)
             endif
         endif
     endif

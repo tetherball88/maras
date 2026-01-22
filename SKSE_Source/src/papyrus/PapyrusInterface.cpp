@@ -126,14 +126,15 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
+        auto lower = ToLower(statusType);
+        auto& manager = NPCRelationshipManager::GetSingleton();
+
         // Special case for "any"
-        if (ToLower(statusType) == "any") {
-            auto& manager = NPCRelationshipManager::GetSingleton();
+        if (lower == "any") {
             return manager.IsRegistered(npc->GetFormID());
         }
 
         auto status = Utils::StringToRelationshipStatus(statusType);
-        auto& manager = NPCRelationshipManager::GetSingleton();
         switch (status) {
             case RelationshipStatus::Candidate:
                 return manager.IsCandidate(npc->GetFormID());
@@ -145,10 +146,9 @@ namespace MARAS::PapyrusInterface {
                 return manager.IsDivorced(npc->GetFormID());
             case RelationshipStatus::Jilted:
                 return manager.IsJilted(npc->GetFormID());
-            case RelationshipStatus::Deceased:
-                return manager.IsDeceased(npc->GetFormID());
+            default:
+                return false;
         }
-        return false;
     }
 
     bool IsNPCStatusByEnum(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t statusEnum) {
@@ -157,18 +157,18 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
+        auto& manager = NPCRelationshipManager::GetSingleton();
+
         // Special case for -1 = "any"
         if (statusEnum == -1) {
-            auto& manager = NPCRelationshipManager::GetSingleton();
             return manager.IsRegistered(npc->GetFormID());
         }
 
-        if (statusEnum < 0 || statusEnum > 5) {
+        if (statusEnum < 0 || statusEnum > 4) {
             MARAS_LOG_WARN("IsNPCStatusByEnum: invalid status enum {}", statusEnum);
             return false;
         }
 
-        auto& manager = NPCRelationshipManager::GetSingleton();
         switch (static_cast<RelationshipStatus>(statusEnum)) {
             case RelationshipStatus::Candidate:
                 return manager.IsCandidate(npc->GetFormID());
@@ -180,10 +180,9 @@ namespace MARAS::PapyrusInterface {
                 return manager.IsDivorced(npc->GetFormID());
             case RelationshipStatus::Jilted:
                 return manager.IsJilted(npc->GetFormID());
-            case RelationshipStatus::Deceased:
-                return manager.IsDeceased(npc->GetFormID());
+            default:
+                return false;
         }
-        return false;
     }
 
     // ========================================
@@ -196,8 +195,10 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
-        auto status = Utils::StringToRelationshipStatus(statusType);
+        auto lower = ToLower(statusType);
         auto& manager = NPCRelationshipManager::GetSingleton();
+
+        auto status = Utils::StringToRelationshipStatus(statusType);
         switch (status) {
             case RelationshipStatus::Engaged:
                 return manager.PromoteToEngaged(npc->GetFormID());
@@ -207,10 +208,10 @@ namespace MARAS::PapyrusInterface {
                 return manager.PromoteToDivorced(npc->GetFormID());
             case RelationshipStatus::Jilted:
                 return manager.PromoteToJilted(npc->GetFormID());
-            case RelationshipStatus::Deceased:
-                return manager.PromoteToDeceased(npc->GetFormID());
+            default:
+                MARAS_LOG_WARN("PromoteNPCToStatus: invalid status '{}'", statusType);
+                return false;
         }
-        return false;
     }
 
     bool PromoteNPCToStatusByEnum(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t statusEnum) {
@@ -219,12 +220,13 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
-        if (statusEnum < 0 || statusEnum > 5) {
+        auto& manager = NPCRelationshipManager::GetSingleton();
+
+        if (statusEnum < 1 || statusEnum > 4) {
             MARAS_LOG_WARN("PromoteNPCToStatusByEnum: invalid status enum {}", statusEnum);
             return false;
         }
 
-        auto& manager = NPCRelationshipManager::GetSingleton();
         switch (static_cast<RelationshipStatus>(statusEnum)) {
             case RelationshipStatus::Engaged:
                 return manager.PromoteToEngaged(npc->GetFormID());
@@ -234,10 +236,9 @@ namespace MARAS::PapyrusInterface {
                 return manager.PromoteToDivorced(npc->GetFormID());
             case RelationshipStatus::Jilted:
                 return manager.PromoteToJilted(npc->GetFormID());
-            case RelationshipStatus::Deceased:
-                return manager.PromoteToDeceased(npc->GetFormID());
+            default:
+                return false;
         }
-        return false;
     }
 
     // ========================================
@@ -262,9 +263,10 @@ namespace MARAS::PapyrusInterface {
 
     std::vector<RE::Actor*> GetNPCsByStatus(RE::StaticFunctionTag*, std::string statusType) {
         auto& manager = NPCRelationshipManager::GetSingleton();
+        auto lower = ToLower(statusType);
 
         // Special case for "all"
-        if (ToLower(statusType) == "all") {
+        if (lower == "all") {
             return ConvertFormIDsToActors(manager.GetAllRegisteredNPCs());
         }
 
@@ -280,10 +282,9 @@ namespace MARAS::PapyrusInterface {
                 return ConvertFormIDsToActors(manager.GetAllDivorced());
             case RelationshipStatus::Jilted:
                 return ConvertFormIDsToActors(manager.GetAllJilted());
-            case RelationshipStatus::Deceased:
-                return ConvertFormIDsToActors(manager.GetAllDeceased());
+            default:
+                return {};
         }
-        return {};
     }
 
     std::vector<RE::Actor*> GetNPCsByStatusEnum(RE::StaticFunctionTag*, std::int32_t statusEnum) {
@@ -294,7 +295,7 @@ namespace MARAS::PapyrusInterface {
             return ConvertFormIDsToActors(manager.GetAllRegisteredNPCs());
         }
 
-        if (statusEnum < 0 || statusEnum > 5) {
+        if (statusEnum < 0 || statusEnum > 4) {
             MARAS_LOG_WARN("GetNPCsByStatusEnum: invalid status enum {}", statusEnum);
             return {};
         }
@@ -310,10 +311,9 @@ namespace MARAS::PapyrusInterface {
                 return ConvertFormIDsToActors(manager.GetAllDivorced());
             case RelationshipStatus::Jilted:
                 return ConvertFormIDsToActors(manager.GetAllJilted());
-            case RelationshipStatus::Deceased:
-                return ConvertFormIDsToActors(manager.GetAllDeceased());
+            default:
+                return {};
         }
-        return {};
     }
 
     // Returns the currently-detected teammates (actors following the player or flagged as teammates)
@@ -348,9 +348,10 @@ namespace MARAS::PapyrusInterface {
 
     int GetStatusCount(RE::StaticFunctionTag*, std::string statusType) {
         auto& manager = NPCRelationshipManager::GetSingleton();
+        auto lower = ToLower(statusType);
 
         // Special case for "all"
-        if (ToLower(statusType) == "all") {
+        if (lower == "all") {
             return static_cast<int>(manager.GetTotalRegisteredCount());
         }
 
@@ -366,10 +367,9 @@ namespace MARAS::PapyrusInterface {
                 return static_cast<int>(manager.GetDivorcedCount());
             case RelationshipStatus::Jilted:
                 return static_cast<int>(manager.GetJiltedCount());
-            case RelationshipStatus::Deceased:
-                return static_cast<int>(manager.GetDeceasedCount());
+            default:
+                return 0;
         }
-        return 0;
     }
 
     int GetStatusCountByEnum(RE::StaticFunctionTag*, std::int32_t statusEnum) {
@@ -380,7 +380,7 @@ namespace MARAS::PapyrusInterface {
             return static_cast<int>(manager.GetTotalRegisteredCount());
         }
 
-        if (statusEnum < 0 || statusEnum > 5) {
+        if (statusEnum < 0 || statusEnum > 4) {
             MARAS_LOG_WARN("GetStatusCountByEnum: invalid status enum {}", statusEnum);
             return 0;
         }
@@ -396,10 +396,9 @@ namespace MARAS::PapyrusInterface {
                 return static_cast<int>(manager.GetDivorcedCount());
             case RelationshipStatus::Jilted:
                 return static_cast<int>(manager.GetJiltedCount());
-            case RelationshipStatus::Deceased:
-                return static_cast<int>(manager.GetDeceasedCount());
+            default:
+                return 0;
         }
-        return 0;
     }
 
     // ========================================

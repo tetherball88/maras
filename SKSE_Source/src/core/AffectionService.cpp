@@ -198,6 +198,14 @@ namespace MARAS {
                 MARAS_LOG_WARN("AffectionService::Load - could not resolve FormID {:08X}, skipping", oldFormID);
                 continue;
             }
+
+            // Skip dead or invalid actors
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(newFormID);
+            if (!actor || actor->IsDead()) {
+                MARAS_LOG_INFO("AffectionService::Load - skipping dead/invalid actor {:08X}", newFormID);
+                continue;
+            }
+
             permanentAffection_[newFormID] = amount;
         }
 
@@ -222,6 +230,13 @@ namespace MARAS {
                                oldFormID);
                 continue;
             }
+
+            // Skip dead or invalid actors
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(newFormID);
+            if (!actor || actor->IsDead()) {
+                continue;
+            }
+
             lastAffectionDay_[newFormID] = day;
         }
 
@@ -245,6 +260,13 @@ namespace MARAS {
         lastAffectionDay_.clear();
         decayMultiplier_ = 1.0f;
         MARAS_LOG_INFO("Reverted affection service state");
+    }
+
+    void AffectionService::RemoveNPCData(FormID npcFormID) {
+        permanentAffection_.erase(npcFormID);
+        dailyAffection_.erase(npcFormID);
+        lastAffectionDay_.erase(npcFormID);
+        MARAS_LOG_DEBUG("Removed affection data for NPC {:08X}", npcFormID);
     }
 
     float AffectionService::GetMultiplierForValue(int permanentAffection) const {

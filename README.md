@@ -48,7 +48,6 @@ Each tracked NPC moves through several states:
 - **Jilted** – Miss the wedding or break up during the engagement and they become jilted. They won’t forget. You can try again later—but chances will suffer. 💔
 - **Married** – Finish (or skip) the ceremony and you’re officially spouses under M.A.R.A.S. Congrats, you’ve unlocked a new tier of responsibility and perks.
 - **Divorced** – You can divorce them via dialogue. After some time (and emotional cooldown), you can try proposing again.
-- **Deceased** – If a spouse dies (and **you** weren’t the one who “accidentally” fireballed them), you receive a mourning letter and a small inheritance.
 
 Already married in your save? M.A.R.A.S politely scans your file and **auto-registers** your vanilla spouse.
 

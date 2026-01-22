@@ -35,8 +35,8 @@ bool Function SetNpcCharacteristics(Actor npc, string factionType, int rank) glo
   Check NPC relationship status using string type.
 
   @param npc - The Actor to check
-  @param statusType - "any", "candidate", "engaged", "married", "divorced", "jilted", "deceased" (case-insensitive)
-  @param statusEnum - -1=any, 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted, 5=Deceased
+  @param statusType - "any", "candidate", "engaged", "married", "divorced", "jilted" (case-insensitive)
+  @param statusEnum - -1=any, 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted
   @return True if NPC has the specified status
 /;
 bool Function IsNPCStatus(Actor npc, string statusType) global native
@@ -46,8 +46,8 @@ bool Function IsNPCStatusByEnum(Actor npc, int statusEnum) global native
   Promote/demote NPC to a relationship status using string type.
 
   @param npc - The Actor to promote/demote
-  @param statusType - "candidate", "engaged", "married", "divorced", "jilted", "deceased" (case-insensitive)
-  @param statusEnum - 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted, 5=Deceased
+  @param statusType - "candidate", "engaged", "married", "divorced", "jilted" (case-insensitive)
+  @param statusEnum - 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted
   @return True if successfully changed status
 /;
 bool Function PromoteNPCToStatus(Actor npc, string statusType) global native
@@ -56,8 +56,8 @@ bool Function PromoteNPCToStatusByEnum(Actor npc, int statusEnum) global native
 ;/
   Get all NPCs with a specific status using string type.
 
-  @param statusType - "all", "candidate", "engaged", "married", "divorced", "jilted", "deceased" (case-insensitive)
-  @param statusEnum - -1=all, 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted, 5=Deceased
+  @param statusType - "all", "candidate", "engaged", "married", "divorced", "jilted" (case-insensitive)
+  @param statusEnum - -1=all, 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted
   @return Array of FormIDs for NPCs with the specified status
 /;
 Actor[] Function GetNPCsByStatus(string statusType) global native
@@ -66,8 +66,8 @@ Actor[] Function GetNPCsByStatusEnum(int statusEnum) global native
 ;/
   Get count of NPCs with specific status using string type.
 
-  @param statusType - "all", "candidate", "engaged", "married", "divorced", "jilted", "deceased" (case-insensitive)
-  @param statusEnum - -1=all, 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted, 5=Deceased
+  @param statusType - "all", "candidate", "engaged", "married", "divorced", "jilted" (case-insensitive)
+  @param statusEnum - -1=all, 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted
   @return Count of NPCs with the specified status
 /;
 int Function GetStatusCount(string statusType) global native
@@ -468,7 +468,7 @@ Function LogNPCDetails(Actor npc) global native
   Get the current relationship status of an NPC as a string.
 
   @param npc - Actor to query
-  @return string representing the status: "Candidate", "Engaged", "Married", "Divorced", "Jilted", "Deceased", or "Unknown"
+  @return string representing the status: "Candidate", "Engaged", "Married", "Divorced", "Jilted", or "Unknown"
 /;
 string Function GetNpcStatusName(Actor npc) global native
 
@@ -478,7 +478,7 @@ string Function GetNpcStatusName(Actor npc) global native
   Get the current relationship status of an NPC as an enum value.
 
   @param npc - Actor to query
-  @return int enum: 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted, 5=Deceased, -1=Unknown/Not Registered
+  @return int enum: 0=Candidate, 1=Engaged, 2=Married, 3=Divorced, 4=Jilted, -1=Unknown/Not Registered
 /;
 int Function GetNpcStatusEnum(Actor npc) global native
 

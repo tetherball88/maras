@@ -52,8 +52,7 @@ Great for: hopping between multiple NPCs to check their affection, rank, or hous
 
 You’ll see a line like:
 
-- **“Their status is”** → `candidate`, `engaged`, `married`, `jilted`, `divorced`, `deceased`, etc.
-- If they’ve died, you’ll also see `(deceased)` tagged on.
+- **“Their status is”** → `candidate`, `engaged`, `married`, `jilted`, `divorced`, etc.
 
 This tells you where they sit in the **M.A.R.A.S relationship pipeline**.
 
@@ -197,8 +196,6 @@ If the NPC is **married**, you get options related to **their original home**:
 - If they have a home and nothing is blocking it:
   - A toggle:
     **“Share their home with player:”** (for living spouses)
-    or
-    **“Inhereted home from deceased spouse”** (for dead spouses you didn’t kill).
 
 - If they have no home or were killed by you:
   - A message like: they have no home or you can’t use their property.

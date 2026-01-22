@@ -14,7 +14,7 @@ project(MARAS VERSION 0.0.1 LANGUAGES CXX)
 #
 # To do this automatically, set the `SKYRIM_FOLDER` environment variable
 # to the path of your Skyrim Special Edition folder
-set(MOD_FOLDER_NAME "M.A.R.A.S")
+set(MOD_FOLDER_NAME "M.A.R.A.S Dev")
 # set(SKYRIM_MODS_FOLDER "C:\\path\\to\\your\\mods\\folder")
 
 # If you're using Mod Organizer 2 or Vortex, you might want this to go inside

@@ -17,14 +17,6 @@ bool Function GetSearchAll() global
     return searchAll == 1
 EndFunction
 
-string[] Function GetAliveDeceasedOptions() global
-    string[] options = new string[3]
-    options[0] = "$TTM_MCM_FilterAll"
-    options[1] = "$TTM_MCM_FilterAlive"
-    options[2] = "$TTM_MCM_FilterDeceased"
-    return options
-EndFunction
-
 Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption("$TTM_MCM_HeaderExplore")
     mcm.oid_SearchNpc = mcm.AddInputOption("$TTM_MCM_SearchNPC", "")
@@ -44,9 +36,6 @@ Function RenderRightColumn(TTM_MCM mcm) global
     mcm.oid_SearchFilterSpouse = mcm.AddToggleOption("$TTM_MCM_FilterShowSpouses", TTM_MCM_State._GetMcmBool("searchSpouses"), disableOtherFilters)
     mcm.oid_SearchFilterJilted = mcm.AddToggleOption("$TTM_MCM_FilterShowJilted", TTM_MCM_State._GetMcmBool("searchJilted"), disableOtherFilters)
     mcm.oid_SearchFilterDivorced = mcm.AddToggleOption("$TTM_MCM_FilterShowDivorced", TTM_MCM_State._GetMcmBool("searchDivorced"), disableOtherFilters)
-    mcm.AddEmptyOption()
-    string[] options = GetAliveDeceasedOptions()
-    mcm.oid_SearchFilterDeceased = mcm.AddMenuOption("$TTM_MCM_FilterAliveDeceased", options[TTM_MCM_State._GetMcmInt("searchDeceased")])
 EndFunction
 
 Function RenderNpcsList(TTM_MCM mcm) global
@@ -58,7 +47,6 @@ Function RenderNpcsList(TTM_MCM mcm) global
     bool searchSpouses = TTM_MCM_State._GetMcmBool("searchSpouses")
     bool searchJilted = TTM_MCM_State._GetMcmBool("searchJilted")
     bool searchDivorced = TTM_MCM_State._GetMcmBool("searchDivorced")
-    int searchDeceased = TTM_MCM_State._GetMcmInt("searchDeceased")
 
     Actor[] npcs = MARAS.GetNPCsByStatus("all")
     int i = 0
@@ -66,23 +54,18 @@ Function RenderNpcsList(TTM_MCM mcm) global
     while(i < npcs.Length)
         Actor npc = npcs[i]
         bool skipNpc = false
-        bool isDeceased = MARAS.IsNPCStatus(npc, "deceased")
-        if((searchDeceased == 1 && isDeceased) || (searchDeceased == 2 && !isDeceased))
-            skipNpc = true
-        else
-            if(!searchAll)
-                string status = MARAS.GetNpcStatusName(npc)
-                if(status == "candidate")
-                    skipNpc = !searchCandidates
-                elseif(status == "engaged")
-                    skipNpc = !searchFiances
-                elseif(status == "married")
-                    skipNpc = !searchSpouses
-                elseif(status == "jilted")
-                    skipNpc = !searchJilted
-                elseif(status == "divorced")
-                    skipNpc = !searchDivorced
-                endif
+        string status = MARAS.GetNpcStatusName(npc)
+        if(!searchAll)
+            if(status == "candidate")
+                skipNpc = !searchCandidates
+            elseif(status == "engaged")
+                skipNpc = !searchFiances
+            elseif(status == "married")
+                skipNpc = !searchSpouses
+            elseif(status == "jilted")
+                skipNpc = !searchJilted
+            elseif(status == "divorced")
+                skipNpc = !searchDivorced
             endif
         endif
         if(!skipNpc)
@@ -125,9 +108,6 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_SearchFilterDivorced)
         TTM_MCM_State._SetMcmBool("searchDivorced", !TTM_MCM_State._GetMcmBool("searchDivorced"))
         mcm.ForcePageReset()
-    elseif(option == mcm.oid_SearchFilterDeceased)
-        TTM_MCM_State._SetMcmBool("searchDeceased", !TTM_MCM_State._GetMcmBool("searchDeceased"))
-        mcm.ForcePageReset()
     endif
 EndFunction
 
@@ -144,7 +124,6 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_SearchFilterSpouse)
     elseif(option == mcm.oid_SearchFilterJilted)
     elseif(option == mcm.oid_SearchFilterDivorced)
-    elseif(option == mcm.oid_SearchFilterDeceased)
     endif
 
 EndFunction
@@ -168,27 +147,7 @@ Function OnOptionInputAccept(TTM_MCM mcm, int option, string value) global
 EndFunction
 
 Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
-    string[] options
-    int start
-    int default
-    if(option == mcm.oid_SearchFilterDeceased)
-        options = GetAliveDeceasedOptions()
-        start = TTM_MCM_State._GetMcmInt("searchDeceased")
-        default = 0
-    endif
-    mcm.SetMenuDialogOptions(options)
-    mcm.SetMenuDialogStartIndex(start)
-    mcm.SetMenuDialogDefaultIndex(default)
 EndFunction
 
 Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
-    string opt
-    if(option == mcm.oid_SearchFilterDeceased)
-        string[] options = GetAliveDeceasedOptions()
-        opt = options[index]
-        TTM_MCM_State._SetMcmInt("searchDeceased", index)
-        mcm.ForcePageReset()
-    endif
-
-    mcm.SetMenuOptionValue(option, opt)
 EndFunction

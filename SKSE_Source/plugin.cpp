@@ -174,9 +174,9 @@ namespace {
         std::uint32_t type, version, length;
         while (serialization->GetNextRecordInfo(type, version, length)) {
             if (type == MARAS::Serialization::kNPCRelationshipData) {
-                // Support both version 1 (old saves) and version 2 (new saves with homeMarker)
-                if (version != 1 && version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Unsupported data version {} (expected 1 or {})", version,
+                // Support version 1 (original), 2 (added homeMarker), 3 (removed deceased tracking)
+                if (version < 1 || version > MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Unsupported data version {} (expected 1-{})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }
@@ -187,8 +187,8 @@ namespace {
                     MARAS_LOG_INFO("Successfully loaded NPC relationship data (version {})", version);
                 }
             } else if (type == MARAS::Serialization::kSpouseHierarchyData) {
-                if (version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Invalid spouse hierarchy data version {} (expected {})", version,
+                if (version < 1 || version > MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid spouse hierarchy data version {} (expected 1-{})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }
@@ -199,8 +199,8 @@ namespace {
                     MARAS_LOG_INFO("Successfully loaded spouse hierarchy data");
                 }
             } else if (type == MARAS::Serialization::kAffectionData) {
-                if (version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Invalid affection data version {} (expected {})", version,
+                if (version < 1 || version > MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid affection data version {} (expected 1-{})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }
@@ -211,8 +211,8 @@ namespace {
                     MARAS_LOG_INFO("Successfully loaded affection data");
                 }
             } else if (type == MARAS::Serialization::kPlayerHouseData) {
-                if (version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Invalid player house data version {} (expected {})", version,
+                if (version < 1 || version > MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid player house data version {} (expected 1-{})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }
@@ -223,8 +223,8 @@ namespace {
                     MARAS_LOG_INFO("Successfully loaded player house data");
                 }
             } else if (type == MARAS::Serialization::kSpouseAssetsData) {
-                if (version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Invalid spouse assets data version {} (expected {})", version,
+                if (version < 1 || version > MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid spouse assets data version {} (expected 1-{})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }
@@ -235,8 +235,8 @@ namespace {
                     MARAS_LOG_INFO("Successfully loaded spouse assets data");
                 }
             } else if (type == MARAS::Serialization::kPluginSettingsData) {
-                if (version != MARAS::Serialization::kDataVersion) {
-                    MARAS_LOG_ERROR("Invalid plugin settings data version {} (expected {})", version,
+                if (version < 1 || version > MARAS::Serialization::kDataVersion) {
+                    MARAS_LOG_ERROR("Invalid plugin settings data version {} (expected 1-{})", version,
                                     MARAS::Serialization::kDataVersion);
                     continue;
                 }

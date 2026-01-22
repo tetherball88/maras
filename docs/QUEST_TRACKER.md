@@ -132,7 +132,6 @@ Promotes the specified NPC to a specific relationship status.
 - `Married` - Married to player
 - `Divorced` - Divorced from player
 - `Jilted` - Rejected by player
-- `Deceased` - Dead
 
 **Examples:**
 ```json

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <exception>
 
+#include "core/AffectionService.h"
 #include "core/FormCache.h"
 #include "core/NPCTypeDeterminer.h"
 #include "core/Serialization.h"
@@ -56,7 +57,6 @@ namespace MARAS {
         married.erase(npcFormID);
         divorced.erase(npcFormID);
         jilted.erase(npcFormID);
-        deceased.erase(npcFormID);
     }
 
     void NPCRelationshipManager::AddToBucket(RE::FormID npcFormID, RelationshipStatus status) {
@@ -76,8 +76,8 @@ namespace MARAS {
             case RelationshipStatus::Jilted:
                 jilted.insert(npcFormID);
                 break;
-            case RelationshipStatus::Deceased:
-                deceased.insert(npcFormID);
+            case RelationshipStatus::Unknown:
+            default:
                 break;
         }
     }
@@ -99,8 +99,8 @@ namespace MARAS {
             case RelationshipStatus::Jilted:
                 jilted.erase(npcFormID);
                 break;
-            case RelationshipStatus::Deceased:
-                deceased.erase(npcFormID);
+            case RelationshipStatus::Unknown:
+            default:
                 break;
         }
     }
@@ -303,6 +303,13 @@ namespace MARAS {
 
         // Ensure spouse hierarchy is updated if this NPC was present
         SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
+
+        // Release any shared house/assets (important for deceased NPCs to clean up properly)
+        SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcFormID);
+
+        // Clear affection data for this NPC
+        AffectionService::GetSingleton().RemoveNPCData(npcFormID);
+
         // Recalculate globals after removal
         RecalculateAndUpdateGlobals();
         MARAS_LOG_INFO("Unregistered NPC {} ({:08X})", Utils::GetNPCName(npcFormID), npcFormID);
@@ -321,8 +328,6 @@ namespace MARAS {
     bool NPCRelationshipManager::IsDivorced(RE::FormID npcFormID) const { return divorced.contains(npcFormID); }
 
     bool NPCRelationshipManager::IsJilted(RE::FormID npcFormID) const { return jilted.contains(npcFormID); }
-
-    bool NPCRelationshipManager::IsDeceased(RE::FormID npcFormID) const { return deceased.contains(npcFormID); }
 
     // Status transitions
     bool NPCRelationshipManager::PromoteToEngaged(RE::FormID npcFormID) {
@@ -343,11 +348,6 @@ namespace MARAS {
 
     bool NPCRelationshipManager::PromoteToJilted(RE::FormID npcFormID) {
         return ChangeStatusCommon(npcFormID, RelationshipStatus::Jilted, nullptr);
-    }
-
-    bool NPCRelationshipManager::PromoteToDeceased(RE::FormID npcFormID) {
-        return ChangeStatusCommon(npcFormID, RelationshipStatus::Deceased,
-                                  [](RE::FormID id) { SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(id); });
     }
 
     // Bulk retrievals
@@ -373,10 +373,6 @@ namespace MARAS {
 
     std::vector<RE::FormID> NPCRelationshipManager::GetAllJilted() const {
         return std::vector<RE::FormID>(jilted.begin(), jilted.end());
-    }
-
-    std::vector<RE::FormID> NPCRelationshipManager::GetAllDeceased() const {
-        return std::vector<RE::FormID>(deceased.begin(), deceased.end());
     }
 
     // Data access
@@ -445,8 +441,6 @@ namespace MARAS {
 
     size_t NPCRelationshipManager::GetJiltedCount() const { return jilted.size(); }
 
-    size_t NPCRelationshipManager::GetDeceasedCount() const { return deceased.size(); }
-
     // Save/Load support
     void NPCRelationshipManager::Clear() {
         allRegistered.clear();
@@ -455,7 +449,6 @@ namespace MARAS {
         married.clear();
         divorced.clear();
         jilted.clear();
-        deceased.clear();
         npcData.clear();
 
         MARAS_LOG_INFO("Cleared all NPC relationship data");
@@ -520,6 +513,7 @@ namespace MARAS {
 
         // Version 1: magic, npcCount, data (no homeMarker)
         // Version 2: magic, npcCount, data (with homeMarker)
+        // Version 3: removed isDeceased - deceased NPCs are now unregistered instead of tracked
         std::uint32_t npcCount = 0;
         if (!serialization->ReadRecordData(npcCount)) {
             MARAS_LOG_ERROR("Failed to read NPC count");
@@ -528,49 +522,16 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Loading {} NPC records (data version {})", npcCount, version);
 
+        constexpr std::uint8_t kOldDeceasedValue = 5;
+
         for (std::uint32_t i = 0; i < npcCount; ++i) {
+            // Step 1: Read FormID (don't bail early - we need to consume all data to stay aligned)
             RE::FormID oldFormID = 0, newFormID = 0;
-            if (!serialization->ReadRecordData(oldFormID) || !serialization->ResolveFormID(oldFormID, newFormID)) {
-                MARAS_LOG_WARN("Could not resolve FormID {:08X}, skipping NPC", oldFormID);
-                // Consume the rest of this NPC's record to stay aligned
-                std::uint8_t discard8 = 0;
-                // socialClass, skillType, temperament, status
-                for (int k = 0; k < 4; ++k) {
-                    if (!serialization->ReadRecordData(discard8)) return false;
-                }
-                // originalHome flag and maybe value
-                bool hasOrig = false;
-                if (!serialization->ReadRecordData(hasOrig)) return false;
-                if (hasOrig) {
-                    RE::FormID discardForm = 0;
-                    if (!serialization->ReadRecordData(discardForm)) return false;
-                }
-                // currentHome flag and maybe value
-                bool hasCurr = false;
-                if (!serialization->ReadRecordData(hasCurr)) return false;
-                if (hasCurr) {
-                    RE::FormID discardForm = 0;
-                    if (!serialization->ReadRecordData(discardForm)) return false;
-                }
-                // engagementDate, marriageDate
-                std::uint32_t discard32 = 0;
-                if (!serialization->ReadRecordData(discard32) || !serialization->ReadRecordData(discard32))
-                    return false;
-                // homeMarker flag and maybe value (only in version 2+)
-                if (version >= 2) {
-                    bool hasHomeMarker = false;
-                    if (!serialization->ReadRecordData(hasHomeMarker)) return false;
-                    if (hasHomeMarker) {
-                        RE::FormID discardForm = 0;
-                        if (!serialization->ReadRecordData(discardForm)) return false;
-                    }
-                }
-                continue;
-            }
+            if (!serialization->ReadRecordData(oldFormID)) return false;
+            bool formIDValid = serialization->ResolveFormID(oldFormID, newFormID);
 
+            // Step 2: Read ALL record data to keep stream aligned
             NPCRelationshipData data;
-            data.formID = newFormID;
-
             std::uint8_t enumValue = 0;
 
             if (!serialization->ReadRecordData(enumValue)) return false;
@@ -582,10 +543,9 @@ namespace MARAS {
             if (!serialization->ReadRecordData(enumValue)) return false;
             data.temperament = static_cast<Temperament>(enumValue);
 
-            if (!serialization->ReadRecordData(enumValue)) return false;
-            data.status = static_cast<RelationshipStatus>(enumValue);
+            std::uint8_t statusValue = 0;
+            if (!serialization->ReadRecordData(statusValue)) return false;
 
-            // Read optional originalHome
             bool hasOriginalHome = false;
             if (!serialization->ReadRecordData(hasOriginalHome)) return false;
             if (hasOriginalHome) {
@@ -625,6 +585,34 @@ namespace MARAS {
                 }
             }
 
+            // Step 3: Validate before storing (all data consumed, stream is aligned)
+
+            if (!formIDValid) {
+                MARAS_LOG_WARN("Could not resolve FormID {:08X}, skipping NPC", oldFormID);
+                continue;
+            }
+
+            if (statusValue == kOldDeceasedValue) {
+                MARAS_LOG_INFO("Migration: Skipping deceased NPC {:08X} from old save format", newFormID);
+                continue;
+            }
+
+            auto* form = RE::TESForm::LookupByID(newFormID);
+            auto* actor = form ? form->As<RE::Actor>() : nullptr;
+            if (!actor) {
+                MARAS_LOG_WARN("FormID {:08X} is not a valid Actor (recycled?), skipping", newFormID);
+                continue;
+            }
+
+            if (actor->IsDead()) {
+                MARAS_LOG_INFO("Actor {:08X} is dead, skipping", newFormID);
+                continue;
+            }
+
+            // Step 4: All checks passed - store the data
+            data.formID = newFormID;
+            data.status = static_cast<RelationshipStatus>(statusValue);
+
             npcData[newFormID] = data;
             allRegistered.insert(newFormID);
             AddToBucket(newFormID, data.status);
@@ -637,6 +625,10 @@ namespace MARAS {
         }
 
         MARAS_LOG_INFO("Successfully loaded {} NPC relationship records", npcData.size());
+
+        // Recalculate globals to account for any skipped dead/invalid NPCs
+        RecalculateAndUpdateGlobals();
+
         return true;
     }
 
@@ -654,7 +646,6 @@ namespace MARAS {
         MARAS_LOG_INFO("  Married: {}", GetMarriedCount());
         MARAS_LOG_INFO("  Divorced: {}", GetDivorcedCount());
         MARAS_LOG_INFO("  Jilted: {}", GetJiltedCount());
-        MARAS_LOG_INFO("  Deceased: {}", GetDeceasedCount());
     }
 
     // Recalculate and update TT_MARAS.esp globals used by scripts (LoveInterestsCount and SpousesCount)
@@ -957,10 +948,9 @@ namespace MARAS {
                 MARAS_LOG_DEBUG("Removed NPC {:08X} from engagement factions", npcFormID);
                 break;
 
-            case RelationshipStatus::Deceased:
             case RelationshipStatus::Unknown:
             default:
-                // No faction changes for deceased or unknown status
+                // No faction changes for unknown status
                 break;
         }
     }
