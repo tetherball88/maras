@@ -10,14 +10,15 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 
      UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
     int i = 0
-    string[] statuses = new string[5]
+    string[] statuses = new string[6]
     statuses[0] = "candidate"
     statuses[1] = "engaged"
     statuses[2] = "married"
     statuses[3] = "divorced"
     statuses[4] = "jilted"
+    statuses[5] = "unregister"
 
-    while(i < 5)
+    while(i < 6)
         listMenu.AddEntryItem("Change status to: " + statuses[i])
         i += 1
     endwhile
@@ -27,5 +28,10 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 
     TTM_Debug.debug("TTM_Debug_ToggleSpouseEffect: Changing status of " + TTM_Utils.GetActorName(akTarget) + " from " + status + " to " + statuses[choice])
 
-    MARAS.PromoteNPCToStatusByEnum(akTarget, choice)
+    if(choice < 5)
+        MARAS.PromoteNPCToStatusByEnum(akTarget, choice)
+    else
+        MARAS.UnregisterNPC(akTarget)
+    endif
+
 EndEvent
