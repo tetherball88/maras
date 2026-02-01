@@ -21,6 +21,7 @@ Function Maintenance() global
     endif
     RegisterActions()
     RegisterDecorators()
+    UpdatePapyrusUtilHousehold()
 EndFunction
 
 Function RegisterActions() global
@@ -146,7 +147,6 @@ EndFunction
 
 Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("proposal_chance", "TTM_ServiceSkyrimNet", "GetMarriageChance")
-    SkyrimNetApi.RegisterDecorator("get_household", "TTM_ServiceSkyrimNet", "GetHousehold")
 EndFunction
 
 string Function GetMarriageChance(Actor akActor) global
@@ -163,57 +163,6 @@ string Function GetMarriageChance(Actor akActor) global
     json += "\"chance\": " + TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(akActor)
 
     return json + "}"
-EndFunction
-
-string Function GetHousehold(Actor akActor) global
-    Actor player = TTM_Data.GetPlayer()
-    if(akActor == player)
-        return "{\"current\": \"\",\"future\": \"\", \"exPartner\": \"\"}"
-    endif
-    string exPartner = GenerateExPartnerLine(akActor)
-
-    string current = "\"current\":"
-    string future = "\"future\":"
-
-    if(MARAS.IsNPCStatus(akActor, "any"))
-        Actor[] coSpouses = MARAS.GetNPCsByStatus("married")
-        Actor[] futureCoSpouses = MARAS.GetNPCsByStatus("engaged")
-        current += "\"" + TTM_Utils.GetActorsNamesJson(coSpouses, akActor) + "\""
-        future += "\""+TTM_Utils.GetActorsNamesJson(futureCoSpouses, akActor)+"\""
-    else
-        current += "\"\""
-        future += "\"\""
-    endif
-    return "{"+current+", "+future+", "+exPartner+"}"
-EndFunction
-
-
-string Function GenerateExPartnerLine(Actor akActor) global
-    Actor player = TTM_Data.GetPlayer()
-    Actor existingSpouse = TTM_ServiceRelationsFinder.GetExistingSpouse(akActor)
-    Actor existingCourting = TTM_ServiceRelationsFinder.GetExistingCourting(akActor)
-    bool isTracking = MARAS.IsNPCStatus(akActor, "any")
-    string finalLine = ""
-
-    if(isTracking) ; NPC's perspective (involved with player)
-        if(existingSpouse)
-            finalLine = BuildLine(akActor, akActor, "married", existingSpouse)
-        elseif(existingCourting)
-            finalLine = BuildLine(akActor, akActor, "courting", existingCourting)
-        endif
-    else ; Ex-partner's perspective (their partner got involved with player)
-        if(existingSpouse)
-            finalLine = BuildLine(akActor, existingSpouse, "married", akActor)
-        elseif(existingCourting)
-            finalLine = BuildLine(akActor, existingCourting, "courting", akActor)
-       endif
-    endif
-
-    if(finalLine == "")
-        return "\"exPartner\": \"\""
-    endif
-
-    return "\"exPartner\": \"" + finalLine + "\""
 EndFunction
 
 string Function BuildLine(Actor akActor, Actor playerPartner, string originalRelationType, Actor originalPartner = none) global
@@ -284,3 +233,44 @@ EndFunction
 string Function GetActionProp(string keyName) global
     return JsonUtil.GetPathStringValue("../MARAS/actions.json", "." + keyName)
 EndFunction
+
+Function UpdatePapyrusUtilHousehold() global
+    StorageUtil.ClearAllPrefix("TTM_Household_")
+    if(!TTM_Data.GetHasSkyrimNet())
+        return
+    endif
+    Actor[] all = MARAS.GetNPCsByStatus("all")
+    int i = 0
+    while(i < all.Length)
+        Actor npc = all[i]
+        CheckExPartner(npc)
+        if(MARAS.IsNPCStatus(npc, "married"))
+            StorageUtil.StringListAdd(none, "TTM_Household_Spouses", TTM_Utils.GetActorName(npc))
+        elseif(MARAS.IsNPCStatus(npc, "engaged"))
+            StorageUtil.StringListAdd(none, "TTM_Household_Fiances", TTM_Utils.GetActorName(npc))
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+
+Function CheckExPartner(Actor npc) global
+    Actor existingSpouse = TTM_ServiceRelationsFinder.GetExistingSpouse(npc)
+    Actor existingCourting = TTM_ServiceRelationsFinder.GetExistingCourting(npc)
+    bool isTracking = MARAS.IsNPCStatus(npc, "any")
+    string spouseFinalLine = ""
+    string exPartnerFinalLine = ""
+
+    if(existingSpouse)
+        spouseFinalLine = BuildLine(npc, npc, "married", existingSpouse)
+        exPartnerFinalLine = BuildLine(npc, existingSpouse, "married", npc)
+        StorageUtil.SetStringValue(existingSpouse, "TTM_Household_ExPartner", exPartnerFinalLine)
+    elseif(existingCourting)
+        spouseFinalLine = BuildLine(npc, npc, "courting", existingCourting)
+        exPartnerFinalLine = BuildLine(npc, existingCourting, "courting", npc)
+        StorageUtil.SetStringValue(existingCourting, "TTM_Household_ExPartner", exPartnerFinalLine)
+    endif
+    StorageUtil.SetStringValue(npc, "TTM_Household_ExPartner", spouseFinalLine)
+
+EndFunction
+

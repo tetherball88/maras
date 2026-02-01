@@ -99,6 +99,9 @@ Event OnRelationshipChanged(String EventName, String status, Float statusEnum, F
     elseif(status == "divorced")
         TTM_ServiceRelationships.MakeNpcDivorced(npcA)
     endif
+
+    ; attemptm to update player's household data for SkyrimNet prompts
+    TTM_ServiceSkyrimNet.UpdatePapyrusUtilHousehold()
 EndEvent
 
 

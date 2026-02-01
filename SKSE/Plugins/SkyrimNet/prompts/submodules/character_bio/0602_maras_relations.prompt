@@ -1,14 +1,38 @@
 {% if not isTimePaused and (render_mode == "full" or render_mode == "transform" or render_mode == "thoughts" or render_mode == "dialogue_target") and not decnpc(actorUUID).isVirtual %}
     {% set factionRank = get_faction_rank(actorUUID, "TTM_TrackedNpcs") %}
     {% set npcName = decnpc(actorUUID).name %}
-    {% set householdData = get_household(actorUUID) %}
+    {% set exPartner = papyrus_util("GetStringValue", actorUUID, "TTM_Household_ExPartner") %}
+    {% set spousesArr = papyrus_util("GetStringList", null, "TTM_Household_Spouses") %}
+    {% set hasSpouses = length(spousesArr) > 0 %}
+    {% set spouses = "" %}
+    {% for spouse in spousesArr %}
+        {% if spouse != npcName %}
+            {% if spouses != "" %}
+                {% set spouses = spouses + ", " + spouse %}
+            {% else %}
+                {% set spouses = spouse %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    {% set fiancesArr = papyrus_util("GetStringList", null, "TTM_Household_Fiances") %}
+    {% set hasFiances = length(fiancesArr) > 0 %}
+    {% set fiances = "" %}
+    {% for fiance in fiancesArr %}
+        {% if fiance != npcName %}
+            {% if fiances != "" %}
+                {% set fiances = fiances + ", " + fiance %}
+            {% else %}
+                {% set fiances = fiance %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
     {% if is_in_faction(npc.UUID, "TTM_TrackedNpcs") %}
         {% set affectionRank = get_faction_rank(actorUUID, "TTM_SpouseAffection") %}
         {% if factionRank >= 0 %}
             ### Marital life
             {% if render_mode != "dialogue_target" %}
-                {% if householdData.exPartner != "" %}
-                    {{householdData.exPartner}}
+                {% if exPartner != "" %}
+                    {{exPartner}}
                 {% endif %}
                 {% if affectionRank >= 75 %}
                     {% if factionRank == 0 %}
@@ -64,14 +88,14 @@
                 {% if factionRank == 0 %}
                     {{npcName}} has no current or previous marital relationship with {{player.name}}.
                 {% else if factionRank == 1 %}
-                    {% if householdData.current != "" or householdData.future != "" %}
-                        {{npcName}} is engaged to {{player.name}}{% if householdData.current != "" %} and will become part of {{player.name}}'s polygamous marriage as a co-spouse alongside {{householdData.current}}{% endif %}{% if householdData.future != "" %}. {{npcName}}, along with fellow fiancé(s) {{householdData.future}}, will all be co-spouses in the same marriage to {{player.name}}{% endif %}
+                    {% if hasSpouses or hasFiances %}
+                        {{npcName}} is engaged to {{player.name}}{% if hasSpouses %} and will become part of {{player.name}}'s polygamous marriage as a co-spouse alongside {{spouses}}{% endif %}{% if hasFiances %}. {{npcName}}, along with fellow fiancé(s) {{fiances}}, will all be co-spouses in the same marriage to {{player.name}}{% endif %}
                     {% else %}
                         {{npcName}} is engaged to {{player.name}} and they are looking forward to their wedding.
                     {% endif %}
                 {% else if factionRank == 2 %}
-                    {% if householdData.current != "" or householdData.future != "" %}
-                        {{npcName}} is one of {{player.name}}'s spouses in a polygamous marriage{% if householdData.current != "" and render_mode == "full" %}. {{npcName}} shares this marriage as co-spouse with {{householdData.current}} - they are all married to {{player.name}} together as one household{% endif %}.{% if householdData.future != "" and render_mode == "full" %} Their soon-to-be co-spouse(s) {{householdData.future}} will join this shared marriage{% endif %}.
+                    {% if hasSpouses or hasFiances %}
+                        {{npcName}} is one of {{player.name}}'s spouses in a polygamous marriage{% if hasSpouses and render_mode == "full" %}. {{npcName}} shares this marriage as co-spouse with {{spouses}} - they are all married to {{player.name}} together as one household{% endif %}.{% if hasFiances and render_mode == "full" %} Their soon-to-be co-spouse(s) {{fiances}} will join this shared marriage{% endif %}.
                     {% else %}
                         {{npcName}} is married to {{player.name}} and they are happily building their life together.
                     {% endif %}
@@ -85,7 +109,7 @@
                 {% endif %}
             {% else %}
                 {% set targetName = decnpc(responseTarget.UUID).name %}
-                {% set targetFactionRank = get_household(responseTarget.UUID) %}
+                {% set targetFactionRank = get_faction_rank(responseTarget.UUID, "TTM_TrackedNpcs") %}
                 {% if targetFactionRank == 1 %}
                     {% if factionRank == 1 %}
                         {{npcName}} and {{targetName}} are both engaged to {{player.name}} and will become co-spouses in a polygamous marriage.
@@ -101,8 +125,8 @@
                 {% endif %}
             {% endif %}
         {% endif %}
-    {% else if householdData.exPartner != "" %}
+    {% else if exPartner != "" %}
         ## IMPORTANT RELATIONSHIP UPDATE:
-        {{householdData.exPartner}}
+        {{exPartner}}
     {% endif %}
 {% endif %}

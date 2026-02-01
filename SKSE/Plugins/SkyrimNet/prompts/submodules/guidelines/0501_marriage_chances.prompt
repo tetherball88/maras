@@ -8,13 +8,14 @@
             {% set allowPolygamy = true %}
             {{player.name}} is known to walk a blessed path, one that allows multiple spouses through divine sanction. Most who understand this view it with respect, not judgment.
             {% if get_global_value("TTM_LoveInterestsCount") >= 1.0 %}
-                {% set coSpousesData = get_household(npc.UUID) %}
-                {% if coSpousesData.current != "" and render_mode == "full" %}{{player.name}} is married to {{coSpousesData.current}}.{% endif %}
-                {% if coSpousesData.future != "" and render_mode == "full" %}{{player.name}} is currently engaged with {{coSpousesData.future}}.{% endif %}
+                {% set spousesArr = papyrus_util("GetStringList", null, "TTM_Household_Spouses") %}
+                {% if length(spousesArr) > 0 and render_mode == "full" %}{{player.name}} is married to {{join(spousesArr, ", ")}}.{% endif %}
+                {% set fiancesArr = papyrus_util("GetStringList", null, "TTM_Household_Fiances") %}
+                {% if length(fiancesArr) > 0 and render_mode == "full" %}{{player.name}} is currently engaged with {{join(fiancesArr, ", ")}}.{% endif %}
             {% endif %}
         {% endif %}
         {% if not allowPolygamy and get_global_value("TTM_LoveInterestsCount") >= 1.0 %}
-            {{npcName}} might respond with confusion or hesitation - {{player.name}} seems already committed.
+            {{npcName}} might respond with confusion - {{player.name}} is already committed.
         {% else %}
             {% set chanceData = proposal_chance(npc.UUID) %}
             {% if chanceData.chance != -1 %}
