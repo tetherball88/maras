@@ -70,7 +70,7 @@
             "perk": "__formData|TT_MARAS.esp|0x3a",
             "type": "spell",
             "unit": "%",
-            "value": 5
+            "value": 0.05
         }
     ],
     "outcast": [
