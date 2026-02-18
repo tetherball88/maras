@@ -1,0 +1,33 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Kaidan custom follower with custom marriage quest",
+    "notes": [
+      "Integration between MARAS and Kaidan Revoiced - Community Edition",
+      "When Kaidan's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|0Kaidan.esp|0x217e07": {
+    "comment": "Kaidan's Wedding, small",
+    "onStageChange:30": [
+      "promoteToStatus:__formData|0Kaidan.esp|0x2f9a:Married"
+    ]
+  },
+  "__formData|0Kaidan.esp|0x23a8bd": {
+    "comment": "Kaidan's Wedding, big",
+    "onStageChange:30": [
+      "promoteToStatus:__formData|0Kaidan.esp|0x2f9a:Married"
+    ]
+  },
+  "__formData|Kaidan - Immersive Features.esp|0xec87c": {
+    "comment": "Kaidan's Wedding, big IF",
+    "onStageChange:30": [
+      "promoteToStatus:__formData|0Kaidan.esp|0x2f9a:Married"
+    ]
+  },
+  "__formData|Kaidan - Immersive Features.esp|0x46db25": {
+    "comment": "Kaidan's Wedding, big WR",
+    "onStageChange:30": [
+      "promoteToStatus:__formData|0Kaidan.esp|0x2f9a:Married"
+    ]
+  }
+}

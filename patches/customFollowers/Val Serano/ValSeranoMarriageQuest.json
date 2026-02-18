@@ -1,0 +1,15 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Val Serano custom follower with custom marriage quest",
+    "notes": [
+      "Integration between MARAS and Val Serano - Community Edition",
+      "When Val Serano's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|AX ValSerano.esp|0x9b2444": {
+    "comment": "Val Serano's Wedding",
+    "onStageChange:130": [
+      "promoteToStatus:__formData|AX ValSerano.esp|0xAA0F:Married"
+    ]
+  }
+}
