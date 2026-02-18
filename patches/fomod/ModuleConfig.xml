@@ -477,7 +477,7 @@ This values can be modified later in json file - SKSE\Plugins\MARAS\spousesTypes
 						</plugin>
 					</plugins>
 				</group>
-                                <group name="Kaidan AIO" type="SelectAny">
+                <group name="Kaidan AIO" type="SelectAny">
 					<plugins order="Explicit">
 						<plugin name="Marriage Quest Integration">
 							<description>Requires Kaidan 2 (AIO + Immersive Features) - https://www.nexusmods.com/skyrimspecialedition/mods/19075 https://kaidanmod.com/all-in-one-installer/ &#13;&#10;
@@ -544,7 +544,7 @@ This values can be modified later in json file - SKSE\Plugins\MARAS\spousesTypes
 						</plugin>
 					</plugins>
 				</group>
-                <group name="Kaidan AIO" type="SelectAny">
+                <group name="Kaidan KRCE" type="SelectAny">
 					<plugins order="Explicit">
 						<plugin name="Marriage Quest Integration">
 							<description>Requires Kaidan Revoiced - Community Expansion (KRCE) - https://www.nexusmods.com/skyrimspecialedition/mods/135345 &#13;&#10;
@@ -773,7 +773,7 @@ Instead it will use Serana's custom romance/marriage quest, and M.A.R.A.S will r
 								<type name="Recommended"/>
 							</typeDescriptor>
 						</plugin>
-						<plugin name="Valerika">
+						<plugin name="Valerica">
 							<description>Social class - rulers</description>
 							<files>
 								<file source="npcOverrides\Valerica.json" destination="SKSE\Plugins\MARAS\spousesTypes\Valerica.json" priority="0" />
