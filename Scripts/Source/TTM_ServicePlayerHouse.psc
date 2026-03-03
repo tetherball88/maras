@@ -125,7 +125,7 @@ EndFunction
 Function AddSpouseHouseSandboxPackage(Actor spouse) global
     Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
     ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
-    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 5)
+    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 100)
     spouse.EvaluatePackage()
 EndFunction
 

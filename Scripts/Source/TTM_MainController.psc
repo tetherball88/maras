@@ -178,6 +178,12 @@ Event OnMenuOpen(string menuName)
         TTM_Debug.debug("MainController:OnMenuOpen: Dialogue Menu with " + TTM_Utils.GetActorName(akActor))
         if(MARAS.IsNPCStatus(akActor, "any") && akActor.IsInDialogueWithPlayer())
             OnStartedDialogue(akActor)
+            bool notMarried = !MARAS.IsNPCStatus(akActor, "married")
+            bool notEngaged = !MARAS.IsNPCStatus(akActor, "engaged")
+            ; calculate and apply NoAIMarriage if applicable for this dialogue partner
+            if(!TTM_Data.GetHasSkyrimNet() && notMarried && notEngaged)
+                TTM_Data.GetSetGameNoAIMarriageGlobal(akActor)
+            endif
         endif
     elseif(menuName == "GiftMenu")
         TTM_ServiceGift.OnGiftMenuOpen()

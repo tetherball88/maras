@@ -23,9 +23,6 @@ Actor akSpeaker = akSpeakerRef as Actor
             MARAS.PromoteNPCToStatus(akSpeaker, "divorced")
         endif
     elseif(PromptKey == "maras_non_marriage_management")
-        if(!TTM_Data.GetHasSkyrimNet() && !MARAS.IsNPCStatus(akSpeaker, "married"))
-            TTM_Data.GetSetGameNoAIMarriageGlobal(akSpeaker)
-        endif
     endif
 
     if(UseAI)

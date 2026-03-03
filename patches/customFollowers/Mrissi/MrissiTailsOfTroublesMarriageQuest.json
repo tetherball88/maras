@@ -11,7 +11,7 @@
   "__formData|MrissiTailOfTroubles.esp|0x30DCA3": {
     "comment": "Ceremonial Turmoil; Possible M'rissi marriage",
     "onStageChange:125": [
-      "promoteToStatus:Mri:Married"
+      "promoteToStatus|MrissiTailOfTroubles.esp|0xAA19:Married"
     ]
   }
 }
