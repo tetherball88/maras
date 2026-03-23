@@ -29,6 +29,7 @@ Function Maintenance()
     TTM_Conditions conditions = _self as TTM_Conditions
     TTM_ServiceIntimateMoments intimateMoments = _self as TTM_ServiceIntimateMoments
     MigrateOldNpcHomeMarkers()
+    TTM_ServicePlayerHouse.CleanPapyrusUtilPackages()
 
     ; check if SkyrimNet present
     ; otherwise all SkyrimNet related logic will be bypassed
@@ -154,20 +155,6 @@ EndEvent
 
 Event OnTeammateChange(String eventName, string strArg, float fltArg, Form sender)
     TTM_ServiceBuff.CalculateFollowerMultipliers()
-EndEvent
-
-Event OnTeammateAdded(String eventName, string strArg, float fltArg, Form sender)
-    Actor npc = sender as Actor
-    if(npc.IsInFaction(TTM_Data.GetSpouseHousedFaction()))
-        TTM_ServicePlayerHouse.RemoveSpouseHouseSandboxPackage(npc)
-    endif
-EndEvent
-
-Event OnTeammateRemoved(String eventName, string strArg, float fltArg, Form sender)
-    Actor npc = sender as Actor
-    if(npc.IsInFaction(TTM_Data.GetSpouseHousedFaction()))
-        TTM_ServicePlayerHouse.AddSpouseHouseSandboxPackage(npc)
-    endif
 EndEvent
 
 Event OnMenuOpen(string menuName)

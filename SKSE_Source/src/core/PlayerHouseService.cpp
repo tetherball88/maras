@@ -6,6 +6,7 @@
 #include <string>
 
 #include "core/FormCache.h"
+#include "core/PackageOverrideService.h"
 #include "utils/ActorUtils.h"
 #include "utils/FormUtils.h"
 
@@ -197,6 +198,7 @@ namespace MARAS {
         AddTenantToHouse(tenantFormID, playerHouseFormID);
         AddTenantFaction(tenantFormID);
         AddMerchantFactionsToTenant(tenantFormID);
+        PackageOverrideService::GetSingleton().RegisterActor(tenantFormID);
         MARAS_LOG_DEBUG("Registered tenant {:08X} in player house {:08X}", tenantFormID, playerHouseFormID);
         return true;
     }
@@ -213,6 +215,7 @@ namespace MARAS {
         // might trigger code that queries the player-house mappings while they
         // are still in an inconsistent state.
         RemoveTenantFromHouse(tenantFormID);
+        PackageOverrideService::GetSingleton().UnregisterActor(tenantFormID);
         RemoveTenantFaction(tenantFormID);
         MARAS_LOG_DEBUG("Removed tenant {:08X} from player house {:08X}", tenantFormID, houseFormID);
         return true;
@@ -353,6 +356,11 @@ namespace MARAS {
         }
 
         MARAS_LOG_INFO("Loaded {} player houses", houseCount);
+
+        // Rebuild package overrides now that tenant data is restored.
+        // PackageOverrideService already has m_baseSandboxPkgID set from LoadConfig (kDataLoaded).
+        PackageOverrideService::GetSingleton().RebuildFromTenants();
+
         return true;
     }
 

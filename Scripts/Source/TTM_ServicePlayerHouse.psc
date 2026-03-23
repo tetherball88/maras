@@ -95,7 +95,6 @@ Function ReleaseSpouseFromPlayerHome(Actor spouse, string reason = "") global
         endif
     endif
     TTM_Debug.trace("ReleaseSpouseFromPlayerHome:spouse:"+spouse+":reason:"+reason)
-    RemoveSpouseHouseSandboxPackage(spouse)
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, none)
     MARAS.RemoveTenantFromPlayerHouse(spouse)
 EndFunction
@@ -115,23 +114,8 @@ Function MoveSpouseToHouse(Actor spouse, Location houseLoc ) global
     TTM_ServiceRelationships.SetTrackedNpcHome(spouse, houseLoc)
 
     MARAS.RegisterTenantInPlayerHouse(spouse, houseLoc)
-
-    if(!MARAS.IsPlayerTeammate(spouse))
-        AddSpouseHouseSandboxPackage(spouse)
-    endif
 EndFunction
 
-
-Function AddSpouseHouseSandboxPackage(Actor spouse) global
-    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
-    ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
-    ActorUtil.AddPackageOverride(spouse, spousePlayerHomeSandbox, 100)
-    spouse.EvaluatePackage()
+Function CleanPapyrusUtilPackages() global
+    ActorUtil.RemoveAllPackageOverride(TTM_Data.GetHomeSandboxPackage())
 EndFunction
-
-Function RemoveSpouseHouseSandboxPackage(Actor spouse) global
-    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
-    ActorUtil.RemovePackageOverride(spouse, spousePlayerHomeSandbox)
-    spouse.EvaluatePackage()
-EndFunction
-

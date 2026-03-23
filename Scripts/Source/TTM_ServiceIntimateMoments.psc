@@ -18,22 +18,6 @@ EndFunction
 
 Event OStimEnd(string eventName, string json, float numArg, Form sender)
     TTM_Debug.trace("TTM_ServiceIntimateMoments:OStimEnd:"+json)
-    Actor[] Actors = OJSON.GetActors(Json)
-    Faction housedFaction = TTM_Data.GetSpouseHousedFaction()
-    Package spousePlayerHomeSandbox = TTM_Data.GetHomeSandboxPackage()
-
-    int i = 0
-    while(i < actors.Length)
-        Actor akActor = actors[i]
-
-        if(akActor.IsInFaction(housedFaction) && akActor.GetCurrentPackage() != spousePlayerHomeSandbox)
-            ActorUtil.RemovePackageOverride(akActor, spousePlayerHomeSandbox)
-            ActorUtil.AddPackageOverride(akActor, spousePlayerHomeSandbox, 5)
-            akActor.EvaluatePackage()
-        endif
-
-        i += 1
-    endwhile
 EndEvent
 
 float Function GetNpcPlayerIntimacy(Actor npc)

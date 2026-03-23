@@ -76,6 +76,10 @@ namespace MARAS {
         return LazyLoadForm(homeSandboxMarkerStatic_, 0x76, "home sandbox marker static");
     }
 
+    RE::TESPackage* FormCache::GetHomeSandboxPackage() {
+        return LazyLoadForm(homeSandboxPackage_, 0x6a, "home sandbox package");
+    }
+
     // MARAS housed spouses merchant factions
     RE::TESFaction* FormCache::GetApothecaryMerchantHousedFaction() {
         return LazyLoadForm(apothecaryHouseMerchantFaction_, 0xc0c, "apothecary housed merchant faction");

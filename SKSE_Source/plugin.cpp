@@ -10,6 +10,7 @@
 #include "core/LoggingService.h"
 #include "core/MarriageDifficulty.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PackageOverrideService.h"
 #include "core/PlayerHouseService.h"
 #include "core/PollingService.h"
 #include "core/QuestEventHandler.h"
@@ -257,6 +258,7 @@ namespace {
         MARAS::PlayerHouseService::GetSingleton().Revert();
         MARAS::SpouseAssetsService::GetSingleton().Revert();
         MARAS::LoggingService::GetSingleton().Revert();
+        MARAS::PackageOverrideService::GetSingleton().Revert();  // clears in-memory registry; rebuilt by Papyrus on kPostLoadGame
 
         // Load marriage difficulty configuration for new game
         MARAS::MarriageDifficulty::LoadConfig();
@@ -286,6 +288,10 @@ SKSEPluginLoad(const LoadInterface* skse) {
     if (const auto* messaging = SKSE::GetMessagingInterface()) {
         if (!messaging->RegisterListener([](SKSE::MessagingInterface::Message* message) {
                 switch (message->type) {
+                    case SKSE::MessagingInterface::kPostLoad:
+                        MARAS::PackageOverrideService::InstallHooks();
+                        break;
+
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
                         break;
@@ -335,6 +341,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
                                            questEventFolder.string());
                         }
 
+                        // Load package override suppression patterns from INI
+                        MARAS::PackageOverrideService::GetSingleton().LoadConfig();
+
                         // Register quest event sinks
                         auto* scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
                         if (scriptEventSourceHolder) {
@@ -344,7 +353,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                                 MARAS::QuestStageEventSink::GetSingleton());
                             MARAS_LOG_INFO("Registered quest event sinks");
                         } else {
-                            MARAS_LOG_ERROR("Failed to get ScriptEventSourceHolder for quest event registration");
+                            MARAS_LOG_ERROR("Failed to get ScriptEventSourceHolder for event sink registration");
                         }
 
                         // Register update event sink for polling service

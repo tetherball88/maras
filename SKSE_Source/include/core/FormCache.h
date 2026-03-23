@@ -117,6 +117,9 @@ namespace MARAS {
         // Static object getters
         RE::TESObjectSTAT* GetHomeSandboxMarkerStatic();
 
+        // Package getters
+        RE::TESPackage* GetHomeSandboxPackage();
+
     private:
         FormCache() = default;
         ~FormCache() = default;
@@ -176,6 +179,8 @@ namespace MARAS {
         RE::BGSKeyword* homeSandboxKeyword_{nullptr};
         // Static objects (cached)
         RE::TESObjectSTAT* homeSandboxMarkerStatic_{nullptr};
+        // Packages (cached)
+        RE::TESPackage* homeSandboxPackage_{nullptr};
         // (No generic cache; use named getters and Utils::LookupForm inside the .cpp)
     };
 
