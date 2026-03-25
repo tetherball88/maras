@@ -474,6 +474,11 @@ MARAS provides two keywords that you can distribute to NPCs to control their par
 - Use this for NPCs with custom marriage systems (via other mods)
 - Combine with Quest Event Tracker to detect custom marriage completion
 
+**`TTM_UseNpcVoiceInMisc` (FormID: 0xc20)**
+- Allows NPC to ignore MARAS post-marriage dialogues(greetings/goodbyes) and use their custom voiced lines instead
+- Can be configured through MCM
+- Doesn't change anything for vanilla npcs with vanilla marriage voice types
+
 ### 5.2 Distribution Methods
 
 Use any keyword distribution framework to add these keywords to NPCs:

@@ -158,6 +158,10 @@ Use this page to:
 
 ---
 
+### 🎭 Use NPC's own voice in dialogues
+
+This adds/removes the `TTM_UseNpcVoiceInMisc` keyword to the NPC, which tells M.A.R.A.S to let them use their own voice instead of the voiceless dialogue line when they would normally be forced into it.
+
 ### 🏠 Assigned Player’s Home (Spouses Only)
 
 If the NPC is **married** and **alive**, you’ll see:

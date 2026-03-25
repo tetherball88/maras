@@ -265,6 +265,8 @@ Result:
 - The spouse gets an **AI package** to sandbox there:
   - They actually live in your house, wander around, sit, eat, etc.
 
+[Guide on package overrides](./PACKAGE_OVERRIDE.md)
+
 **Tip:** This is great for keeping track of them… but risky if they’re also important for a quest. See below.
 
 ---

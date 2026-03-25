@@ -325,7 +325,7 @@ namespace MARAS {
                 return candidate;
             }
 
-            MARAS_LOG_INFO("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+            MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                             actor->GetFormID(),
                             candidate ? (candidate->GetFormEditorID() ? candidate->GetFormEditorID() : "?") : "null",
                             candidate ? candidate->GetFormID() : 0);
