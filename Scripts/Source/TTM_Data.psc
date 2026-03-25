@@ -169,6 +169,10 @@ Keyword Function GetIgnoreProposeKeyword() global
     return Game.GetFormFromFile(0xc0b, "TT_MARAS.esp") as Keyword
 EndFunction
 
+Keyword Function GetUseNpcVoiceInMiscKeyword() global
+    return Game.GetFormFromFile(0xc20, "TT_MARAS.esp") as Keyword
+EndFunction
+
 ;/ ==============================
    SECTION: ARMORS
 ============================== /;

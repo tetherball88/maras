@@ -40,6 +40,7 @@ int property oid_CandidateChance auto
 int property oid_NpcPageAffection auto
 int property oid_NpcPagePlayerHome auto
 int property oid_NpcPageShareTheirHome auto
+int property oid_NpcPageUseNpcVoice auto
 
 string property SearchValueNpc auto
 string property SearchValueLover auto

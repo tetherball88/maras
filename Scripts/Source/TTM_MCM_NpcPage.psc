@@ -18,6 +18,7 @@ Function CleanMcmOids(TTM_MCM mcm) global
     mcm.oid_NpcPageTemperament = -1
     mcm.oid_NpcPagePlayerHome = -1
     mcm.oid_NpcPageShareTheirHome = -1
+    mcm.oid_NpcPageUseNpcVoice = -1
 EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
@@ -66,6 +67,9 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.oid_NpcPageSocialClass = mcm.AddMenuOption("$TTM_MCM_NpcSocialClass", socialClass)
     mcm.oid_NpcPageSkillType = mcm.AddMenuOption("$TTM_MCM_NpcSkillType", skillType)
     mcm.oid_NpcPageTemperament = mcm.AddMenuOption("$TTM_MCM_NpcTemperament", temperament)
+
+    bool hasUseNpcVoice = MARAS.HasNpcKeyword(npc, TTM_Data.GetUseNpcVoiceInMiscKeyword())
+    mcm.oid_NpcPageUseNpcVoice = mcm.AddToggleOption("$TTM_MCM_NpcUseNpcVoice", hasUseNpcVoice)
 
     if(isSpouse)
         Location playerHouse = TTM_ServiceRelationships.GetTrackedNpcHome(npc)
@@ -138,6 +142,15 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
 
     if(option == mcm.oid_ReturnToExplore)
         mcm.Navigate("Explore")
+    elseif(option == mcm.oid_NpcPageUseNpcVoice)
+        Keyword useNpcVoiceKw = TTM_Data.GetUseNpcVoiceInMiscKeyword()
+        if(MARAS.HasNpcKeyword(npc, useNpcVoiceKw))
+            MARAS.RemoveNpcKeyword(npc, useNpcVoiceKw)
+            mcm.SetToggleOptionValue(option, false)
+        else
+            MARAS.AddNpcKeyword(npc, useNpcVoiceKw)
+            mcm.SetToggleOptionValue(option, true)
+        endif
     elseif(option == mcm.oid_NpcPageShareTheirHome)
         if(ShareHomeIsAvailable(npc) == 1)
             return
@@ -197,6 +210,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText(tooltip)
     elseif(option == mcm.oid_NpcPageAffection)
         mcm.SetInfoText("$TTM_MCM_TT_NpcAffection")
+    elseif(option == mcm.oid_NpcPageUseNpcVoice)
+        mcm.SetInfoText("$TTM_MCM_TT_NpcUseNpcVoice{" + TTM_Utils.GetActorName(npc) + "}")
     elseif(option == mcm.oid_NpcPagePlayerHome)
         mcm.SetInfoText("$TTM_MCM_TT_NpcPlayerHome{" + TTM_Utils.GetActorName(npc) + "}")
     elseif(option == mcm.oid_NpcPageShareTheirHome)

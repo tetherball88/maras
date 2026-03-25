@@ -81,6 +81,11 @@ namespace MARAS::PapyrusInterface {
     RE::BGSLocation* GetTenantHouse(RE::StaticFunctionTag*, RE::Actor* npc);
     int CountPlayerHouses(RE::StaticFunctionTag*);
 
+    // Keyword management
+    bool HasNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword);
+    bool AddNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword);
+    bool RemoveNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword);
+
     // Home cell helpers
     RE::TESObjectCELL* GetNpcOriginalHouse(RE::StaticFunctionTag*, RE::Actor* npc);
     std::vector<RE::TESObjectREFR*> GetNpcBeds(RE::StaticFunctionTag*, RE::Actor* npc);

@@ -1002,6 +1002,44 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
+    // Keyword management bindings
+    // ========================================
+
+    bool HasNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword) {
+        if (!npc || !keyword) {
+            MARAS_LOG_WARN("HasNpcKeyword: null argument(s) provided");
+            return false;
+        }
+        return npc->HasKeyword(keyword);
+    }
+
+    bool AddNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword) {
+        if (!npc || !keyword) {
+            MARAS_LOG_WARN("AddNpcKeyword: null argument(s) provided");
+            return false;
+        }
+        auto base = npc->GetActorBase();
+        if (!base) {
+            MARAS_LOG_WARN("AddNpcKeyword: actor has no base data for form {:08X}", npc->GetFormID());
+            return false;
+        }
+        return base->AddKeyword(keyword);
+    }
+
+    bool RemoveNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword) {
+        if (!npc || !keyword) {
+            MARAS_LOG_WARN("RemoveNpcKeyword: null argument(s) provided");
+            return false;
+        }
+        auto base = npc->GetActorBase();
+        if (!base) {
+            MARAS_LOG_WARN("RemoveNpcKeyword: actor has no base data for form {:08X}", npc->GetFormID());
+            return false;
+        }
+        return base->RemoveKeyword(keyword);
+    }
+
+    // ========================================
     // Registration function for SKSE
     // ========================================
 
@@ -1108,7 +1146,12 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetBonusPerkUnit", "MARAS", GetBonusPerkUnit);
         vm->RegisterFunction("GetBonusPerkDescription", "MARAS", GetBonusPerkDescription);
 
-        MARAS_LOG_INFO("Registered {} MARAS Papyrus functions", 45);
+        // Keyword management
+        vm->RegisterFunction("HasNpcKeyword", "MARAS", HasNpcKeyword);
+        vm->RegisterFunction("AddNpcKeyword", "MARAS", AddNpcKeyword);
+        vm->RegisterFunction("RemoveNpcKeyword", "MARAS", RemoveNpcKeyword);
+
+        MARAS_LOG_INFO("Registered {} MARAS Papyrus functions", 48);
         return true;
     }
 

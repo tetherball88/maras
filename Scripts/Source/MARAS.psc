@@ -452,6 +452,34 @@ ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global native
 /;
 bool Function SetTrackedNpcHomeMarker(Actor npc, ObjectReference marker) global native
 
+;/ ========================================
+   SECTION: Keyword Management (native C++)
+   ====================================== /;
+
+;/ HasNpcKeyword
+  Check whether the selected NPC (or their base record) has a specific keyword.
+  @param npc - The Actor to check
+  @param kw  - The Keyword form to look for
+  @return True if the keyword is present
+/;
+bool Function HasNpcKeyword(Actor npc, Keyword kw) global native
+
+;/ AddNpcKeyword
+  Add a keyword to the NPC's base record at runtime.
+  @param npc - The Actor to modify
+  @param kw  - The Keyword form to add
+  @return True on success
+/;
+bool Function AddNpcKeyword(Actor npc, Keyword kw) global native
+
+;/ RemoveNpcKeyword
+  Remove a keyword from the NPC's base record at runtime.
+  @param npc - The Actor to modify
+  @param kw  - The Keyword form to remove
+  @return True if the keyword was removed
+/;
+bool Function RemoveNpcKeyword(Actor npc, Keyword kw) global native
+
 ;/ Log overall statistics about the marriage system /;
 Function LogNPCStatistics() global native
 
