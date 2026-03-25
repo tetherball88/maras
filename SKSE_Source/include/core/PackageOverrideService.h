@@ -43,7 +43,7 @@ namespace MARAS {
 
         // Load suppression patterns from INI.
         // Should be called once at kDataLoaded.
-        void LoadConfig(std::string_view iniPath = "Data/SKSE/Plugins/MARAS/PackageOverrides.ini");
+        void LoadConfig(std::string_view iniPath = "Data/SKSE/Plugins/PackageOverrides.ini");
 
         // One-time initialisation: store the base sandbox package and rebuild the registry
         // from current PlayerHouseService tenants.  Called automatically from LoadConfig
