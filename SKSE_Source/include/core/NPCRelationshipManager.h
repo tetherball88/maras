@@ -92,6 +92,9 @@ namespace MARAS {
         // Home sandbox marker tracking (replaces PO3's SetLinkedRef and StorageUtil)
         std::optional<RE::FormID> homeMarker;
 
+        // Keywords added at runtime that must be re-applied on load
+        std::unordered_set<RE::FormID> addedKeywords;
+
         // Default constructor
         NPCRelationshipData()
             : formID(0),
@@ -210,6 +213,10 @@ namespace MARAS {
         // Home marker management (replaces PO3's SetLinkedRef and StorageUtil)
         bool SetHomeMarker(RE::FormID npcFormID, RE::FormID markerFormID);
         std::optional<RE::FormID> GetHomeMarker(RE::FormID npcFormID) const;
+
+        // Keyword persistence — track keywords added at runtime so they survive reloads
+        bool AddTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID);
+        bool RemoveTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID);
 
         // Type determination methods (with override support)
         SocialClass DetermineSocialClass(RE::FormID npcFormID);

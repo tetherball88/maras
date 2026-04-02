@@ -1023,7 +1023,11 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("AddNpcKeyword: actor has no base data for form {:08X}", npc->GetFormID());
             return false;
         }
-        return base->AddKeyword(keyword);
+        if (!base->AddKeyword(keyword)) {
+            return false;
+        }
+        NPCRelationshipManager::GetSingleton().AddTrackedKeyword(npc->GetFormID(), keyword->GetFormID());
+        return true;
     }
 
     bool RemoveNpcKeyword(RE::StaticFunctionTag*, RE::Actor* npc, RE::BGSKeyword* keyword) {
@@ -1036,7 +1040,11 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("RemoveNpcKeyword: actor has no base data for form {:08X}", npc->GetFormID());
             return false;
         }
-        return base->RemoveKeyword(keyword);
+        if (!base->RemoveKeyword(keyword)) {
+            return false;
+        }
+        NPCRelationshipManager::GetSingleton().RemoveTrackedKeyword(npc->GetFormID(), keyword->GetFormID());
+        return true;
     }
 
     // ========================================

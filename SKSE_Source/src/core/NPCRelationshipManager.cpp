@@ -428,6 +428,24 @@ namespace MARAS {
         return data ? data->homeMarker : std::nullopt;
     }
 
+    bool NPCRelationshipManager::AddTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID) {
+        auto it = npcData.find(npcFormID);
+        if (it == npcData.end()) {
+            return false;
+        }
+        it->second.addedKeywords.insert(keywordFormID);
+        return true;
+    }
+
+    bool NPCRelationshipManager::RemoveTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID) {
+        auto it = npcData.find(npcFormID);
+        if (it == npcData.end()) {
+            return false;
+        }
+        it->second.addedKeywords.erase(keywordFormID);
+        return true;
+    }
+
     // Statistics
     size_t NPCRelationshipManager::GetTotalRegisteredCount() const { return allRegistered.size(); }
 
@@ -490,6 +508,18 @@ namespace MARAS {
                 (data.homeMarker.has_value() && !serialization->WriteRecordData(data.homeMarker.value()))) {
                 MARAS_LOG_ERROR("Failed to write data for NPC {:08X}", formID);
                 return false;
+            }
+            // Write added keywords (version 3+)
+            auto kwCount = static_cast<std::uint32_t>(data.addedKeywords.size());
+            if (!serialization->WriteRecordData(kwCount)) {
+                MARAS_LOG_ERROR("Failed to write keyword count for NPC {:08X}", formID);
+                return false;
+            }
+            for (auto kwID : data.addedKeywords) {
+                if (!serialization->WriteRecordData(kwID)) {
+                    MARAS_LOG_ERROR("Failed to write keyword {:08X} for NPC {:08X}", kwID, formID);
+                    return false;
+                }
             }
         }
 
@@ -585,6 +615,19 @@ namespace MARAS {
                 }
             }
 
+            // Read added keywords (version 3+)
+            if (version >= 3) {
+                std::uint32_t kwCount = 0;
+                if (!serialization->ReadRecordData(kwCount)) return false;
+                for (std::uint32_t k = 0; k < kwCount; ++k) {
+                    RE::FormID oldKw = 0, resolvedKw = 0;
+                    if (!serialization->ReadRecordData(oldKw)) return false;
+                    if (oldKw != 0 && serialization->ResolveFormID(oldKw, resolvedKw)) {
+                        data.addedKeywords.insert(resolvedKw);
+                    }
+                }
+            }
+
             // Step 3: Validate before storing (all data consumed, stream is aligned)
 
             if (!formIDValid) {
@@ -621,6 +664,23 @@ namespace MARAS {
             if (data.homeMarker.has_value()) {
                 SetLinkedRefForHomeMarker(newFormID, data.homeMarker.value());
                 MARAS_LOG_INFO("Restored linked ref for NPC {:08X} to marker {:08X}", newFormID, data.homeMarker.value());
+            }
+
+            // Re-apply keywords that were added at runtime
+            if (!data.addedKeywords.empty()) {
+                auto* base = actor->GetActorBase();
+                if (base) {
+                    for (auto kwID : data.addedKeywords) {
+                        auto* kwForm = RE::TESForm::LookupByID(kwID);
+                        auto* kw = kwForm ? kwForm->As<RE::BGSKeyword>() : nullptr;
+                        if (kw) {
+                            base->AddKeyword(kw);
+                            MARAS_LOG_DEBUG("Restored keyword {:08X} on NPC {:08X}", kwID, newFormID);
+                        } else {
+                            MARAS_LOG_WARN("Could not resolve keyword {:08X} for NPC {:08X}, skipping", kwID, newFormID);
+                        }
+                    }
+                }
             }
         }
 

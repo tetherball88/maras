@@ -83,7 +83,6 @@ namespace {
         // Store in global variable - this is the SINGLE source of truth
         MARAS::g_Logger = logger;
 
-        logger->info("Logging to {}", logPath.string());
         logger->info("MARAS logger initialized with pattern: [HH:MM:SS] [level] message");
 
         return logger;

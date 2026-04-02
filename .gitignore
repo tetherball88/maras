@@ -24,3 +24,4 @@ cmake-build*/
 *.sln.docstates
 *.7z
 tag-push.bat
+patches/scripts
