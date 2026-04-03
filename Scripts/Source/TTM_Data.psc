@@ -16,7 +16,8 @@ Function SetHasSkyrimNet(bool has) global
     SetBool("HasSkyrimNet", has)
 EndFunction
 bool Function GetHasSkyrimNet() global
-    return GetBool("HasSkyrimNet")
+    return false
+    ; return GetBool("HasSkyrimNet")
 EndFunction
 
 Function SetHasTTLL() global
@@ -118,7 +119,9 @@ EndFunction
 bool Function GetSetGameNoAIMarriageGlobal(Actor npc) global
     int random = Utility.RandomInt(0, 100)
     int val = 0
-    if(random <= TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc) * 100)
+    float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc) * 100
+    TTM_debug.debug("Random for NoAIMarriage: " + random + " vs chance: " + chance)
+    if(random <= chance)
         val = 1
     endif
     int res = _GetSetGameGlobal(0x15c, "TT_MARAS.esp", val)

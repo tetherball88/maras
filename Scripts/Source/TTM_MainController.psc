@@ -53,6 +53,7 @@ Function Maintenance()
     RegisterForModEvent("maras_teammate_change", "OnTeammateChange")
     RegisterForModEvent("maras_teammate_added", "OnTeammateAdded")
     RegisterForModEvent("maras_teammate_removed", "OnTeammateRemoved")
+    RegisterForModEvent("maras_dialogue_opened", "OnDialogueOpened")
 
      ; ensure player has debug spell and check door perk
 
@@ -65,7 +66,6 @@ Function Maintenance()
     intimateMoments.Maintenance()
     TTM_ServiceSkyrimNet.Maintenance()
 
-    RegisterForMenu("Dialogue Menu")
     RegisterForMenu("GiftMenu")
 
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
@@ -158,21 +158,7 @@ Event OnTeammateChange(String eventName, string strArg, float fltArg, Form sende
 EndEvent
 
 Event OnMenuOpen(string menuName)
-    if(menuName == "Dialogue Menu")
-        Actor player = TTM_Data.GetPlayer()
-        ObjectReference ref = Game.GetCurrentCrosshairRef()
-        Actor akActor = ref as Actor
-        TTM_Debug.debug("MainController:OnMenuOpen: Dialogue Menu with " + TTM_Utils.GetActorName(akActor))
-        if(MARAS.IsNPCStatus(akActor, "any") && akActor.IsInDialogueWithPlayer())
-            OnStartedDialogue(akActor)
-            bool notMarried = !MARAS.IsNPCStatus(akActor, "married")
-            bool notEngaged = !MARAS.IsNPCStatus(akActor, "engaged")
-            ; calculate and apply NoAIMarriage if applicable for this dialogue partner
-            if(!TTM_Data.GetHasSkyrimNet() && notMarried && notEngaged)
-                TTM_Data.GetSetGameNoAIMarriageGlobal(akActor)
-            endif
-        endif
-    elseif(menuName == "GiftMenu")
+    if(menuName == "GiftMenu")
         TTM_ServiceGift.OnGiftMenuOpen()
     endif
 endEvent
@@ -184,9 +170,22 @@ Event OnMenuClose(string menuName)
     endif
 endEvent
 
-Function OnStartedDialogue(Actor npc)
-    TTM_ServiceAffection.AddDialogueStartedAffection(npc)
-EndFunction
+Event OnDialogueOpened(string eventName, string strArg, float fltArg, Form sender)
+    Actor player = TTM_Data.GetPlayer()
+    Actor akActor = sender as Actor
+    TTM_Debug.debug("OnDialogueOpened: Dialogue Menu with " + TTM_Utils.GetActorName(akActor))
+    if(MARAS.IsNPCStatus(akActor, "any"))
+        TTM_ServiceAffection.AddDialogueStartedAffection(akActor)
+        bool notMarried = !MARAS.IsNPCStatus(akActor, "married")
+        bool notEngaged = !MARAS.IsNPCStatus(akActor, "engaged")
+        ; calculate and apply NoAIMarriage if applicable for this dialogue partner
+        if(!TTM_Data.GetHasSkyrimNet() && notMarried && notEngaged)
+            TTM_Debug.debug("Checking NoAIMarriage for " + TTM_Utils.GetActorName(akActor))
+            bool res = TTM_Data.GetSetGameNoAIMarriageGlobal(akActor)
+            TTM_Debug.debug("Applied NoAIMarriage for " + TTM_Utils.GetActorName(akActor) + ": " + res)
+        endif
+    endif
+EndEvent
 
 ; One time migration to new markers, registering them in cpp code
 Function MigrateOldNpcHomeMarkers()

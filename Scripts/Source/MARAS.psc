@@ -636,3 +636,27 @@ int Function DetermineTemperament(Actor npc) global native
 /;
 ; Event (String eventName, string strArg, float fltArg, Form sender)
 ; EndEvent
+
+;/
+    Fires when the player opens a dialogue with an NPC.
+    Sent by the native SKSE plugin (DialogueEventSink) when "Dialogue Menu" opens and
+    the speaking NPC has been successfully resolved from MenuTopicManager.
+    Resolution is retried up to 5 times via PollingService::Update() in case
+    MenuTopicManager lags behind the menu open event.
+
+    NOT fired for:
+      - Talking activators (no Actor cast possible)
+      - Scripted forced scenes where player is not the initiator (speaker will still
+        be set but may be a non-interactive scene partner)
+
+    @param EventName - "maras_dialogue_opened"
+    @param strArg   - unused (empty string)
+    @param fltArg   - unused (0.0)
+    @param sender   - Form of the NPC the player is speaking with (cast to Actor)
+/;
+; Event (String eventName, string strArg, float fltArg, Form sender)
+;   Actor npc = sender as Actor
+;   if npc
+;       ; ... handle dialogue opened with npc
+;   endIf
+; EndEvent

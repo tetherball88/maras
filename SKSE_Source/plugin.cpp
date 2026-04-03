@@ -6,6 +6,7 @@
 #include "PCH.h"
 #include "core/AffectionService.h"
 #include "core/BonusesService.h"
+#include "core/DialogueEventSink.h"
 #include "core/HomeCellService.h"
 #include "core/LoggingService.h"
 #include "core/MarriageDifficulty.h"
@@ -359,7 +360,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         auto ui = RE::UI::GetSingleton();
                         if (ui) {
                             ui->AddEventSink(UpdateEventSink::GetSingleton());
+                            ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::DialogueEventSink::GetSingleton());
                             MARAS_LOG_INFO("Registered polling service update event sink");
+                            MARAS_LOG_INFO("Registered dialogue event sink");
                         } else {
                             MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
                         }
