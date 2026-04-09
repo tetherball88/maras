@@ -16,8 +16,8 @@ Function SetHasSkyrimNet(bool has) global
     SetBool("HasSkyrimNet", has)
 EndFunction
 bool Function GetHasSkyrimNet() global
-    return false
-    ; return GetBool("HasSkyrimNet")
+    ; return false
+    return GetBool("HasSkyrimNet")
 EndFunction
 
 Function SetHasTTLL() global
