@@ -1,0 +1,15 @@
+{
+  "__metaInfo": {
+    "description": "Integration with Mirai custom follower with custom marriage quest",
+    "notes": [
+      "Integration between MARAS and Mirai - The Funny Fully Voiced Follower",
+      "When Mirai's marriage quest makes them married it will be registered withing MARAS as well"
+    ]
+  },
+  "__formData|zMirai.esp|0xc528f": {
+    "comment": "Mirai marriage",
+    "onStageChange:95": [
+      "promoteToStatus:__formData|zMirai.esp|0xd61:Married"
+    ]
+  }
+}
