@@ -25,3 +25,6 @@ cmake-build*/
 *.7z
 tag-push.bat
 patches/scripts
+/prisma-src
+1.json
+run_request.js

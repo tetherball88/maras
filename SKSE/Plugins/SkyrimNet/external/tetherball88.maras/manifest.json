@@ -1,0 +1,27 @@
+{
+    "id": "tetherball88.maras",
+    "type": "bundle",
+    "title": "M.A.R.A.S",
+    "tagline": "Dynamic marriage, dating, and relationship management for SkyrimNet.",
+    "description": "Comprehensive relationship system for SkyrimNet AI: dating, lovers, engagements, marriage, open relationships, and divorce with dynamic evaluations, AI dialogue actions, and bio context.",
+    "author": "tetherball88",
+    "tags": [
+        "marriage",
+        "relationships",
+        "romance",
+        "dating",
+        "immersion",
+        "character_bio"
+    ],
+    "nsfw": false,
+    "icon": "heart",
+    "version": "0.11.0",
+    "min_skyrimnet_version": "0.25.0",
+    "mods": [
+        {
+            "name": "TT_MARAS",
+            "file": "TT_MARAS.esp",
+            "required": true
+        }
+    ]
+}
