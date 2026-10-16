@@ -1,0 +1,8 @@
+FormKey: 000343:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCheatingIntimidate
+Name:
+  TargetLanguage: English
+  Value: "[Intimidate] Tell me the truth, or you'll regret it."
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

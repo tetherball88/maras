@@ -1,0 +1,8 @@
+FormKey: 0005E0:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_AllChildrenLeaveTopic
+Name:
+  TargetLanguage: English
+  Value: Go on and take your friends outside. I have some things to take care of in here.
+Branch: 0005DF:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

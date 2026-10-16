@@ -1,0 +1,7 @@
+FormKey: 0005A6:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterTalking
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 0005A7:TT_MARAS.esp

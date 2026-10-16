@@ -1,0 +1,8 @@
+FormKey: 00005B:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyUragStartTopic
+Name:
+  TargetLanguage: English
+  Value: (M) Can you translate an old temple scroll for me?
+Branch: 00005A:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

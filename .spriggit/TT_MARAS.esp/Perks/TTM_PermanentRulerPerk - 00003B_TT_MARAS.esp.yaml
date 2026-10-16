@@ -1,0 +1,14 @@
+FormKey: 00003B:TT_MARAS.esp
+EditorID: TTM_PermanentRulerPerk
+Name:
+  TargetLanguage: English
+  Value: Speech of Sovereigns
+Description:
+  TargetLanguage: English
+  Value: Being wed to a figure of influence sharpens your rhetoric, increasing your Speech skill
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000045:TT_MARAS.esp

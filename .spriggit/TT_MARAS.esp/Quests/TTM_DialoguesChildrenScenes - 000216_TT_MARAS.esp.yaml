@@ -1,0 +1,41 @@
+FormKey: 000216:TT_MARAS.esp
+EditorID: TTM_DialoguesChildrenScenes
+Flags:
+- AllowRepeatedStages
+Priority: 60
+Stages:
+- Flags:
+  - StartUpStage
+NextAliasID: 4
+Aliases:
+- Name: Child1
+  Flags:
+  - Optional
+  - StoresText
+  - AllowReserved
+  VoiceTypes: Null
+- ID: 1
+  Name: Child2
+  Flags:
+  - Optional
+  - StoresText
+  - AllowReserved
+  VoiceTypes: Null
+- ID: 2
+  Name: SceneMarker1
+  Flags:
+  - Optional
+  - AllowReserved
+  External:
+    Quest: 0002BC:TT_MARAS.esp
+    AliasID: 24
+  VoiceTypes: Null
+- ID: 3
+  Name: SceneMarker2
+  Flags:
+  - Optional
+  - AllowReserved
+  External:
+    Quest: 0002BC:TT_MARAS.esp
+    AliasID: 25
+  VoiceTypes: Null

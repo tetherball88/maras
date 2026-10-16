@@ -1,0 +1,4 @@
+kind: lists
+name: My list
+blacklist:
+  - TT_MARAS.esp

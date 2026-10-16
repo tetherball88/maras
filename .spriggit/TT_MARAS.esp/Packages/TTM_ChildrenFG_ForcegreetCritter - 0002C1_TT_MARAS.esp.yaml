@@ -1,0 +1,130 @@
+FormKey: 0002C1:TT_MARAS.esp
+EditorID: TTM_ChildrenFG_ForcegreetCritter
+Flags:
+- PreferredSpeed
+Type: Package
+PreferredSpeed: FastWalk
+InterruptFlags:
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnTypeIndex: 0
+    ActorValue: Variable07
+  ComparisonValue: 5
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 03C1C4:Skyrim.esm
+DataInputVersion: 18
+Data:
+- Key: 7
+  Value:
+    MutagenObjectType: PackageDataTopic
+    Topics:
+    - MutagenObjectType: TopicReference
+      Reference: 0001D6:TT_MARAS.esp
+- Key: 8
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 17
+      Radius: 16
+- Key: 17
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Type: SingleRef
+    Target:
+      MutagenObjectType: PackageTargetSpecificReference
+      Reference: 000014:Skyrim.esm
+- Key: 22
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationTarget
+        Link: 000014:Skyrim.esm
+      Radius: 5000
+- Key: 26
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 29
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 30
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 31
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 32
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 33
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 34
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 36
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 40
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 62
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 17
+      Radius: 512
+- Key: 65
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 67
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 50
+- Key: 69
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 75
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationTarget
+        Link: 000014:Skyrim.esm
+      Radius: 200
+- Key: 79
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 81
+  Value:
+    MutagenObjectType: PackageDataBool
+XnamMarker: 0x52
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

@@ -1,0 +1,7 @@
+FormKey: 0001FE:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_FGInitialBranch
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 0001FF:TT_MARAS.esp

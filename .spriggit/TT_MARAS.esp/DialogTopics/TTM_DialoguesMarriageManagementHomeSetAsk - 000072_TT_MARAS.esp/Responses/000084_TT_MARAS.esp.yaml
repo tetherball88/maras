@@ -1,0 +1,40 @@
+FormKey: 000084:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerSpouseManagement
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: manage_spouse_set_new_home_ask
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerSpouseManagement
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerSpouseManagement
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - InvisibleContinue
+PreviousDialog: 000083:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000087:TT_MARAS.esp
+ResponseData: 002F4D:HearthFires.esm
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 25
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThan
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 0000C2:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0CCE4F:Skyrim.esm
+  ComparisonValue: 1

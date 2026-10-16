@@ -1,0 +1,18 @@
+FormKey: 00033B:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 0002E1:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: If you say so. But it stings a little.
+  ScriptNotes: ''
+  Edits: ''

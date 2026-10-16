@@ -1,0 +1,18 @@
+FormKey: 0001C2:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 0001C1:TT_MARAS.esp
+FavorLevel: None
+ResponseData: 000303:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetPCIsSexConditionData
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

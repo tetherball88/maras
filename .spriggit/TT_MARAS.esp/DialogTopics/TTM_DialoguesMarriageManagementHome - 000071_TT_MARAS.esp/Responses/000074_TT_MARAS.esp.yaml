@@ -1,0 +1,24 @@
+FormKey: 000074:TT_MARAS.esp
+Flags:
+  Flags:
+  - NoLipFile
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000078:TT_MARAS.esp
+- 00007C:TT_MARAS.esp
+- 00002F:TT_MARAS.esp
+- 000072:TT_MARAS.esp
+- 000153:TT_MARAS.esp
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Let's hear it. Where are you thinking?
+  ScriptNotes: ''
+  Edits: ''

@@ -1,0 +1,13 @@
+FormKey: 00002A:TT_MARAS.esp
+EditorID: TTM_FollowerCraftsmanAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Craftsman
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+Type: Ability
+Effects:
+- BaseEffect: 000014:TT_MARAS.esp
+  Data:
+    Magnitude: 3

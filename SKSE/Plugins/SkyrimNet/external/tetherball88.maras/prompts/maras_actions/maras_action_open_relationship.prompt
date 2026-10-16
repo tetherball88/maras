@@ -1,0 +1,13 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set openCandidates = ttm_get_open_relationship_candidates(npc.UUID) %}
+{% set exclusivePartners = ttm_get_exclusive_main_partners(npc.UUID) %}
+
+{% if openCandidates != "" %}Available partners to open relationship with: {{openCandidates}}{% endif %}
+
+Open Relationship = mutually agrees to permit secondary casual partners (lovers) without it being considered cheating or infidelity.
+{% if exclusivePartners != "" %}
+Current exclusive main partner(s): {{exclusivePartners}}. Opening the relationship allows secondary lovers without it counting as cheating on {{exclusivePartners}}.
+{% endif %}
+USE ONLY when {{speakingNpc.name}} agrees or proposes to open their relationship with a committed partner (dating, engaged, or married) who is present.
+NEVER use for proposing marriage, dating, casual sex, or breaking up.
+

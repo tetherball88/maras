@@ -1,9 +1,5 @@
 #pragma once
 
-#include <filesystem>
-#include <string>
-#include <nlohmann/json.hpp>
-
 #include "core/QuestEventHandler.h"
 
 namespace MARAS {

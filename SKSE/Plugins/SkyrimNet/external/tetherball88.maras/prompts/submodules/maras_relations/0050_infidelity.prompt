@@ -1,0 +1,29 @@
+{% if ttm_is_registered(actorUUID) %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+
+    {% if length(profile.infidelity) > 0 %}
+        ## Infidelity involving {{npcName}}
+        {% for affair in profile.infidelity %}
+            {% if affair.status == "ongoing" %}
+                {% if affair.actor_role == "cheater" and affair.is_secret %}
+                    {{affair.cheater.name}} is secretly cheating on {{affair.victim.name}} with {{affair.affair_partner.name}}; {{affair.victim.name}} does not know about the affair.
+                {% elif affair.actor_role == "cheater" %}
+                    {{affair.cheater.name}} is cheating on {{affair.victim.name}} with {{affair.affair_partner.name}}, and {{affair.victim.name}} knows about the affair.
+                {% elif affair.actor_role == "affair_partner" and affair.is_secret %}
+                    {{affair.affair_partner.name}} is {{affair.cheater.name}}'s secret affair partner while {{affair.cheater.name}} cheats on {{affair.victim.name}}; {{affair.victim.name}} does not know about the affair.
+                {% elif affair.actor_role == "affair_partner" %}
+                    {{affair.affair_partner.name}} is {{affair.cheater.name}}'s affair partner while {{affair.cheater.name}} cheats on {{affair.victim.name}}, and {{affair.victim.name}} knows about the affair.
+                {% else %}
+                    {{affair.victim.name}} knows that {{affair.cheater.name}} is cheating on {{affair.victim.name}} with {{affair.affair_partner.name}}.
+                {% endif %}
+            {% elif affair.status == "ended_breakup" %}
+                {{affair.cheater.name}} cheated on {{affair.victim.name}} with {{affair.affair_partner.name}}, but {{affair.cheater.name}} and {{affair.affair_partner.name}} ended the affair on their own{% if affair.is_secret %} without {{affair.victim.name}} ever finding out{% else %}; {{affair.victim.name}} knows about the past affair{% endif %}.
+            {% elif affair.status == "ended_victim_split" %}
+                {{affair.cheater.name}} cheated on {{affair.victim.name}} with {{affair.affair_partner.name}}; it stopped being an affair when {{affair.cheater.name}} and {{affair.victim.name}} separated{% if affair.is_secret %}, and {{affair.victim.name}} never learned about it{% endif %}.
+            {% elif affair.status == "ended_confronted" %}
+                {{affair.cheater.name}} cheated on {{affair.victim.name}} with {{affair.affair_partner.name}} until {{affair.victim.name}} confronted {{affair.cheater.name}} and made the affair stop.
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+{% endif %}

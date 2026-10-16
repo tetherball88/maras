@@ -1,0 +1,8 @@
+FormKey: 0005C9:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIDatingToEngagedTopic
+Name:
+  TargetLanguage: English
+  Value: Our time together means everything to me. Will you marry me?
+Branch: 0000C3:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

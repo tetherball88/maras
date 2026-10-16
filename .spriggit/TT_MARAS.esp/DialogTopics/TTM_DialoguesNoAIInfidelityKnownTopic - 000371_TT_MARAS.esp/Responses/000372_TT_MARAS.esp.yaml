@@ -1,0 +1,32 @@
+FormKey: 000372:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000357:TT_MARAS.esp
+- 000355:TT_MARAS.esp
+- 000373:TT_MARAS.esp
+- 00036A:TT_MARAS.esp
+Responses:
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: So you know. I won't pretend otherwise. Say what you came to say.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 0005A5:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0002BD:TT_MARAS.esp
+  ComparisonValue: 1

@@ -1,0 +1,8 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set breakupCandidates = ttm_get_breakup_dating_candidates(npc.UUID) %}
+
+{% if breakupCandidates != "" %}Available actors for dating breakup: {{breakupCandidates}}{% endif %}
+
+Ending a dating relationship is irreversible.
+USE WHEN {{speakingNpc.name}} accepts or initiates breaking up or ending their committed romantic relationship.
+NEVER confuse with ending a lovers relationship, calling off an engagement or divorce.

@@ -103,29 +103,29 @@ bool Function GetConfirmMcm(string type) global
 EndFunction
 
 Function SetConfirmAcceptProposal(bool val) global
-    return _SetMcmBool("ConfirmAcceptProposal", val)
+    MARAS.SetSettingBool("confirmAcceptProposal", val)
 EndFunction
 bool Function GetConfirmAcceptProposal() global
-    return GetConfirmMcm("ConfirmAcceptProposal")
+    return MARAS.GetSettingBool("confirmAcceptProposal")
 EndFunction
 
 Function SetConfirmBreakupEngagement(bool val) global
-    return _SetMcmBool("ConfirmBreakupEngagement", val)
+    MARAS.SetSettingBool("confirmBreakupEngagement", val)
 EndFunction
 bool Function GetConfirmBreakupEngagement() global
-    return GetConfirmMcm("ConfirmBreakupEngagement")
+    return MARAS.GetSettingBool("confirmBreakupEngagement")
 EndFunction
 
 Function SetConfirmDivorce(bool val) global
-    return _SetMcmBool("ConfirmDivorce", val)
+    MARAS.SetSettingBool("confirmDivorce", val)
 EndFunction
 bool Function GetConfirmDivorce() global
-    return GetConfirmMcm("ConfirmDivorce")
+    return MARAS.GetSettingBool("confirmDivorce")
 EndFunction
 
 Function SetConfirmDivorceDuringLowAffectionQuest(bool val) global
-    return _SetMcmBool("ConfirmDivorceDuringLowAffectionQuest", val)
+    MARAS.SetSettingBool("confirmDivorceDuringLowAffectionQuest", val)
 EndFunction
 bool Function GetConfirmDivorceDuringLowAffectionQuest() global
-    return GetConfirmMcm("ConfirmDivorceDuringLowAffectionQuest")
+    return MARAS.GetSettingBool("confirmDivorceDuringLowAffectionQuest")
 EndFunction

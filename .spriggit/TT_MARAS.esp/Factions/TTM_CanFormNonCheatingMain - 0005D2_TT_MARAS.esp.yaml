@@ -1,0 +1,6 @@
+FormKey: 0005D2:TT_MARAS.esp
+EditorID: TTM_CanFormNonCheatingMain
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

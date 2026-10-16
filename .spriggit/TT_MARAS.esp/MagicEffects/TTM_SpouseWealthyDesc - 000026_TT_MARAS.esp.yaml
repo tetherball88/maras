@@ -1,0 +1,20 @@
+FormKey: 000026:TT_MARAS.esp
+EditorID: TTM_SpouseWealthyDesc
+Name:
+  TargetLanguage: English
+  Value: Merchant's Dowry
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Health
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Sharing wealth brings prosperity, increasing your sell prices by <mag>%

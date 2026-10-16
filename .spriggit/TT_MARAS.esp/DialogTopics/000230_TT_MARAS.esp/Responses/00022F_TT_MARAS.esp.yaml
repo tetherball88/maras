@@ -1,0 +1,17 @@
+FormKey: 00022F:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 75
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: You... you take that back!
+  ScriptNotes: ''
+  Edits: ''

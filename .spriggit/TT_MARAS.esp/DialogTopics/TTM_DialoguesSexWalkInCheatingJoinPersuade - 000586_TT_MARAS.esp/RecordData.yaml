@@ -1,0 +1,8 @@
+FormKey: 000586:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkInCheatingJoinPersuade
+Name:
+  TargetLanguage: English
+  Value: Come on, give it a chance. I'm still yours. This doesn't change that.
+Branch: 000557:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

@@ -1,0 +1,10 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set discoverCandidates = ttm_get_discover_child_paternity_candidates(npc.UUID) %}
+
+{% if discoverCandidates != "" %}Available children about whom paternity truth is discovered/learned: {{discoverCandidates}}{% endif %}
+
+USE WHEN {{speakingNpc.name}} learns, discovers, or finds out the truth about a child's (born or unborn/pregnancy) true biological parentage (e.g. noticing undeniable physical differences or trait resemblances in a born child, hearing confessions, hearing rumors, observing interactions, or confronting the situation and realizing the truth).
+- If {{speakingNpc.name}} is the presumed father: realizes or confirms that he is NOT the child's (or unborn baby's) biological father.
+- If {{speakingNpc.name}} is the biological father: realizes or confirms that he IS the true biological father of the child (or unborn baby).
+- Specify the exact child name (or unborn child description) and mother when multiple children exist.
+NEVER use if {{speakingNpc.name}} has not learned or uncovered new truth regarding a child's paternity.

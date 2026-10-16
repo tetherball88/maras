@@ -1,0 +1,9 @@
+FormKey: 00002F:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHomeLeaveAtSpouse
+Name:
+  TargetLanguage: English
+  Value: I won't be relying on your house for a while.
+Priority: 10
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

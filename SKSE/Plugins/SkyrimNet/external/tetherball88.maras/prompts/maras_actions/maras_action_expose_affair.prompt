@@ -1,0 +1,11 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set exposeCandidates = ttm_get_expose_affair_candidates(npc.UUID) %}
+
+{% if exposeCandidates != "" %}Eligible victims nearby to expose affair to: {{exposeCandidates}}{% endif %}
+
+USE WHEN {{speakingNpc.name}} (the affair partner) verbally exposes, reveals, or reveals their secret romantic or physical affair with someone's spouse/partner directly to that victim.
+USE ONLY WHEN {{speakingNpc.name}} has explicitly and verbally broken the secret to the victim partner in current conversation.
+- Specify the victim partner's name and the cheating partner's name.
+- Provide a brief 1st-person explanation of {{speakingNpc.name}}'s motive (e.g., guilt, demanding the cheater leave their spouse, gloating, or demanding the truth come out).
+NEVER use if {{speakingNpc.name}} is not an affair partner in an active secret affair.
+NEVER use if {{speakingNpc.name}} is merely hinting or thinking rather than directly exposing the affair to the partner.

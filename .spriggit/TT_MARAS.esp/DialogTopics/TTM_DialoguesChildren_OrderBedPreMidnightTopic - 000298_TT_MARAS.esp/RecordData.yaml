@@ -1,0 +1,9 @@
+FormKey: 000298:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_OrderBedPreMidnightTopic
+Name:
+  TargetLanguage: English
+  Value: It's time for bed,
+Priority: 27
+Branch: 000297:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

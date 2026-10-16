@@ -1,0 +1,52 @@
+FormKey: 00014F:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_non_marriage_management
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - NoLipFile
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000135:TT_MARAS.esp
+- 0000F1:TT_MARAS.esp
+- 0005D3:TT_MARAS.esp
+- 0005D6:TT_MARAS.esp
+- 0005C7:TT_MARAS.esp
+- 0000D1:TT_MARAS.esp
+- 0005C8:TT_MARAS.esp
+- 0005C9:TT_MARAS.esp
+- 00006D:TT_MARAS.esp
+- 000261:TT_MARAS.esp
+- 000353:TT_MARAS.esp
+- 0005DA:TT_MARAS.esp
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Of course. What's on your mind?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000060:TT_MARAS.esp

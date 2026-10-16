@@ -1,0 +1,8 @@
+FormKey: 000127:TT_MARAS.esp
+EditorID: TTM_AffectionEstrangedDivorceIntroTopic
+Name:
+  TargetLanguage: English
+  Value: (M) I came as soon as I heard. What's going on?
+Branch: 000126:TT_MARAS.esp
+Quest: 00011A:TT_MARAS.esp
+SubtypeName: CUST

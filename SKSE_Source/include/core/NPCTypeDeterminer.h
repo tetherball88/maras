@@ -1,9 +1,5 @@
-﻿#pragma once
+#pragma once
 
-#include <functional>
-#include <optional>
-
-#include "RE/Skyrim.h"
 #include "core/NPCRelationshipManager.h"  // for enum types
 
 namespace MARAS {

@@ -1,0 +1,35 @@
+FormKey: 00034D:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_no_ai_or_persuade_fail
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags:
+  ResetHours: 24
+PreviousDialog: 00034C:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000349:TT_MARAS.esp
+- 00034E:TT_MARAS.esp
+Responses:
+- Emotion: Disgust
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: You keep pushing, and I keep saying no. Please stop.
+  ScriptNotes: ''
+  Edits: ''

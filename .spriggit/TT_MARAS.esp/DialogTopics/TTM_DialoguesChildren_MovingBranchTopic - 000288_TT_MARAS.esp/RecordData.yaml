@@ -1,0 +1,8 @@
+FormKey: 000288:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_MovingBranchTopic
+Name:
+  TargetLanguage: English
+  Value: It's time for us to move.
+Branch: 000287:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

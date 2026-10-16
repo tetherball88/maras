@@ -1,0 +1,8 @@
+FormKey: 0005C8:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAILoverToEngagedTopic
+Name:
+  TargetLanguage: English
+  Value: Being lovers isn't enough anymore. Will you marry me?
+Branch: 0000C3:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

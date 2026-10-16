@@ -1,0 +1,7 @@
+FormKey: 0000DC:TT_MARAS.esp
+EditorID: TTM_DialoguesReconcile
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 0000E0:TT_MARAS.esp

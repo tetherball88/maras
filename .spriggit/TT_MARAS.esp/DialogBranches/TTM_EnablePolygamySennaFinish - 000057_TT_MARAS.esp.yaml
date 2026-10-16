@@ -1,0 +1,7 @@
+FormKey: 000057:TT_MARAS.esp
+EditorID: TTM_EnablePolygamySennaFinish
+Quest: 00005C:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 000058:TT_MARAS.esp

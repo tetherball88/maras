@@ -1,0 +1,112 @@
+FormKey: 000376:TT_MARAS.esp
+EditorID: TTM_ChildrenNonPlayerFollowParent
+Flags:
+- UnlockDoorsAtPackageStart
+- UnlockDoorsAtPackageEnd
+Type: Package
+PreferredSpeed: Run
+InterruptFlags:
+- HellosToPlayer
+- RandomConversations
+- ObserveCombatBehavior
+- GreetCorpseBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- AggroRadiusBehavior
+- AllowIdleChatter
+- WorldInteractions
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+PackageTemplate: 06C872:Skyrim.esm
+DataInputVersion: 11
+Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationKeyword
+        Link: 000377:TT_MARAS.esp
+      Radius: 10000
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 3
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 4
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 5
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 7
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 14
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 25
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 27
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 29
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 50
+- Key: 32
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Type: SingleRef
+    Target:
+      MutagenObjectType: PackageTargetLinkedReference
+      Keyword: 000377:TT_MARAS.esp
+- Key: 34
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: NearPackageStart
+- Key: 36
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationKeyword
+        Link: 00006B:TT_MARAS.esp
+      Radius: 512
+- Key: 38
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+XnamMarker: 0x27
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

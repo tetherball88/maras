@@ -1,0 +1,9 @@
+FormKey: 000113:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHierarchy2
+Name:
+  TargetLanguage: English
+  Value: You'll stand third among us.
+Priority: 80
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

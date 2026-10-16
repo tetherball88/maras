@@ -1,0 +1,17 @@
+FormKey: 000166:TT_MARAS.esp
+EditorID: TTM_PacifyFianceOrSpouseEffect
+Name:
+  TargetLanguage: English
+  Value: TTM_PacifyFianceOrSpouseEffect
+Flags:
+- Recover
+- Detrimental
+- HideInUI
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Aggression
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English

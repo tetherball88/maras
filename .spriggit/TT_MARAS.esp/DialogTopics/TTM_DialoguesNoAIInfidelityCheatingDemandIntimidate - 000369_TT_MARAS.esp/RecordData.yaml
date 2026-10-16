@@ -1,0 +1,8 @@
+FormKey: 000369:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCheatingDemandIntimidate
+Name:
+  TargetLanguage: English
+  Value: "[Intimidate] End it, or you'll lose me. I'm not asking again."
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

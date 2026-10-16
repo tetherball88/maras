@@ -1,0 +1,8 @@
+FormKey: 00023C:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_AgreeKeepPet
+Name:
+  TargetLanguage: English
+  Value: Sure. When I don't need him, he can stay with you.
+Branch: 000235:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

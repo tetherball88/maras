@@ -1,0 +1,20 @@
+FormKey: 000025:TT_MARAS.esp
+EditorID: TTM_SpouseMiddleDesc
+Name:
+  TargetLanguage: English
+  Value: Steady Kinship
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Health
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Your stable domestic life encourages learning, increasing skill experience gained by <mag>%

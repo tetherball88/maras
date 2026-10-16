@@ -1,13 +1,11 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
-#include <string>
-#include <unordered_map>
-#include <vector>
+#include "PCH.h"
 
 namespace MARAS {
 
     struct BonusEntry {
+        std::string name;
         std::string description;
         int effectIndex = 0;
         std::string perk;  // store raw string from JSON; will be resolved to form at lookup

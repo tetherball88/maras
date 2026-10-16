@@ -1,0 +1,39 @@
+FormKey: 00012B:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 00012A:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 00011B:TT_MARAS.esp
+- 000131:TT_MARAS.esp
+- 000125:TT_MARAS.esp
+Responses:
+- Emotion: Disgust
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: You think I don't notice how you look at them? How they smile at you? Don't lie to me - I can feel when you've been with someone else.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageConditionData
+    Quest: 00011A:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000118:TT_MARAS.esp
+  ComparisonValue: 2
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 0000C4:TT_MARAS.esp

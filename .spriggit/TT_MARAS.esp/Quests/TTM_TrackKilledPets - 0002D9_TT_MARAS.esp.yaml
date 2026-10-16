@@ -1,0 +1,31 @@
+FormKey: 0002D9:TT_MARAS.esp
+EditorID: TTM_TrackKilledPets
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestTrackKilledPetsWI
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: childreLogicQst
+      Object: 000C25:TT_MARAS.esp
+  Versioning:
+  - Break0
+  ExtraBindDataVersion: 0
+  FileName: ''
+Flags:
+- AllowRepeatedStages
+Event: KILL
+EventConditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    RunOnType: EventData
+    RunOnTypeIndex: 12626
+    Faction: 0002BB:TT_MARAS.esp
+  ComparisonValue: 1
+Stages:
+- Index: 1
+  Flags:
+  - KeepInstanceDataFromHereOn
+  LogEntries:
+  - Flags: []
+NextAliasID: 6

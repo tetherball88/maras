@@ -1,12 +1,7 @@
 #include "core/BonusesService.h"
 
-#include <spdlog/spdlog.h>
-
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-
 #include "utils/Common.h"
+#include "utils/StringUtils.h"
 
 namespace MARAS {
 
@@ -22,9 +17,8 @@ namespace MARAS {
             if (!j.is_object()) return false;
 
             for (auto it = j.begin(); it != j.end(); ++it) {
-                std::string key = it.key();
                 // normalize keys to lowercase for case-insensitive lookup
-                std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return std::tolower(c); });
+                std::string key = StringUtils::ToLowerStd(it.key());
                 const auto& arr = it.value();
 
                 if (!arr.is_array()) continue;
@@ -32,6 +26,8 @@ namespace MARAS {
                 std::vector<BonusEntry> list;
                 for (const auto& elem : arr) {
                     BonusEntry be;
+                    if (elem.contains("name") && elem["name"].is_string())
+                        be.name = elem["name"].get<std::string>();
                     if (elem.contains("description") && elem["description"].is_string())
                         be.description = elem["description"].get<std::string>();
                     if (elem.contains("effectIndex") && elem["effectIndex"].is_number_integer())
@@ -93,13 +89,13 @@ namespace MARAS {
     void BonusesService::Clear() { data_.clear(); }
 
     int BonusesService::GetBonusCount(const std::string& type) const {
-        auto it = data_.find(type);
+        auto it = data_.find(StringUtils::ToLowerStd(type));
         if (it == data_.end()) return 0;
         return static_cast<int>(it->second.size());
     }
 
     const BonusEntry* BonusesService::GetBonusEntry(const std::string& type, int index) const {
-        auto it = data_.find(type);
+        auto it = data_.find(StringUtils::ToLowerStd(type));
         if (it == data_.end()) return nullptr;
         if (index < 0 || static_cast<size_t>(index) >= it->second.size()) return nullptr;
         return &it->second[static_cast<size_t>(index)];

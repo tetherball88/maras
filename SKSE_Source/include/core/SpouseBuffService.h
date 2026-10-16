@@ -1,10 +1,5 @@
 #pragma once
 
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -21,6 +16,9 @@ namespace MARAS {
 
         // Returns a vector of permanent multipliers aggregated by social class.
         static std::vector<float> GetPermanentMultipliers();
+
+        // Returns complete household buffs JSON snapshot for Prisma UI
+        static nlohmann::json GetHouseholdBuffsSnapshot();
     };
 
 }  // namespace MARAS

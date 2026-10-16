@@ -1,0 +1,9 @@
+FormKey: 000C26:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_AskKidsTopic
+Name:
+  TargetLanguage: English
+  Value: How are the kids?
+Priority: 30
+Branch: 000C27:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

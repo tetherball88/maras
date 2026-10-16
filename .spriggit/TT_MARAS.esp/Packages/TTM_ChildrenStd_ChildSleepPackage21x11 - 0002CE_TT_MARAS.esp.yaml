@@ -1,0 +1,115 @@
+FormKey: 0002CE:TT_MARAS.esp
+EditorID: TTM_ChildrenStd_ChildSleepPackage21x11
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_ChildrenPackages
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: GameHour
+      Object: 000038:Skyrim.esm
+  ScriptFragments:
+    FileName: TTM_ChildrenPackages
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_ChildrenPackages
+      FragmentName: Fragment_0
+Type: Package
+PreferredSpeed: Jog
+InterruptFlags:
+- HellosToPlayer
+- ObserveCombatBehavior
+- GreetCorpseBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- WorldInteractions
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: 21
+ScheduleMinute: -1
+Unknown3: 0x000000
+ScheduleDurationInMinutes: 660
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 019717:Skyrim.esm
+DataInputVersion: 6
+Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForLocation
+        Data: 4
+      Radius: 3000
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Target:
+      MutagenObjectType: PackageTargetObjectType
+      Type: TouchActorEffects
+- Key: 2
+  Value:
+    MutagenObjectType: PackageDataObjectList
+    Data: 0
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 8
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 11
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 13
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 15
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 17
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 18
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 19
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 20
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 21
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 22
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 24
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 50
+- Key: 25
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 26
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 300
+XnamMarker: 0x1B
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

@@ -1,13 +1,18 @@
 #include "core/PollingService.h"
 
-#include <spdlog/spdlog.h>
-
-#include <algorithm>
-
 #include "RE/A/AIProcess.h"
+#include "RE/P/PackageLocation.h"
+#include "RE/T/TESDataHandler.h"
+#include "RE/T/TESPackage.h"
 #include "core/AffectionService.h"
+#include "core/FactionService.h"
+#include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PlayerChildrenService.h"
+#include "core/MatchmakingService.h"
+#include "utils/ActorUtils.h"
 #include "utils/Common.h"
+#include "utils/Settings.h"
 
 namespace MARAS {
 
@@ -20,10 +25,23 @@ namespace MARAS {
         auto now = std::chrono::steady_clock::now();
         lastTeammateCheck_ = now;
         lastDayCheck_ = now;
+        lastChildOrderCheck_ = now;
 
         // Initialize/reset state to current values to prevent false change events
         previousTeammates_ = GetCurrentTeammates();
         previousGameDay_ = GetCurrentGameDay();
+
+        SanitizePlayerFactions();
+
+        // Check auto-marriage on load in case an engagement matured while away
+        if (previousGameDay_ >= 0.0f) {
+            if (auto* taskInterface = SKSE::GetTaskInterface()) {
+                float day = previousGameDay_;
+                taskInterface->AddTask([day]() {
+                    NPCRelationshipManager::GetSingleton().CheckAutoMarriageForEngagedNPCs(day);
+                });
+            }
+        }
 
         if (!initialized_) {
             initialized_ = true;
@@ -43,23 +61,34 @@ namespace MARAS {
 
     void PollingService::Update() {
         if (!initialized_) return;
-        if (RE::UI::GetSingleton()->GameIsPaused()) {
-            MARAS_LOG_DEBUG("Game is paused; skipping PollingService update");
+        auto* ui = RE::UI::GetSingleton();
+        if (!ui || ui->GameIsPaused()) {
+            MARAS_LOG_TRACE("Game is paused; skipping PollingService update");
             return;
         }
 
         auto now = std::chrono::steady_clock::now();
 
-        // Check teammates every 15 seconds
+        // Check teammates and sanitize player factions every 15 seconds
         if (now - lastTeammateCheck_ >= kTeammateCheckInterval) {
             CheckTeammateChanges();
+            SanitizePlayerFactions();
             lastTeammateCheck_ = now;
         }
 
-        // Check day change every 60 seconds
+        // Check day changes every 5 seconds
         if (now - lastDayCheck_ >= kDayCheckInterval) {
             CheckDayChanged();
             lastDayCheck_ = now;
+        }
+
+        // Check child order expirations every 5 seconds
+        if (now - lastChildOrderCheck_ >= kChildOrderCheckInterval) {
+            const float currentDay = GetCurrentGameDay();
+            if (currentDay >= 0.0f) {
+                PlayerChildrenService::GetSingleton().Tick(currentDay);
+            }
+            lastChildOrderCheck_ = now;
         }
     }
 
@@ -94,6 +123,13 @@ namespace MARAS {
 
     void PollingService::CheckDayChanged() {
         float currentDay = GetCurrentGameDay();
+        if (currentDay < 0.0f) {
+            return;
+        }
+        if (previousGameDay_ < 0.0f) {
+            previousGameDay_ = currentDay;
+            return;
+        }
 
         // Check if day has changed (comparing integer part)
         if (static_cast<int>(currentDay) != static_cast<int>(previousGameDay_)) {
@@ -102,61 +138,23 @@ namespace MARAS {
             // Notify AffectionService to process decay
             AffectionService::GetSingleton().OnDayChanged();
 
+            // Roll forcegreet chance for children households once per game day
+            PlayerChildrenService::GetSingleton().RollForcegreetForHousehold();
+
+            // Trigger scheduled matchmaking check
+            MatchmakingService::GetSingleton().TryScheduledMatchmaking(currentDay);
+
+            // Daily paternity discovery roll for active secret paternity intrigue
+            NPCRelationshipManager::GetSingleton().CheckPaternitySecretsDailyTick(currentDay);
+
+            // Check auto-marriage for engaged NPC couples after 5 days
+            NPCRelationshipManager::GetSingleton().CheckAutoMarriageForEngagedNPCs(currentDay);
+
             SendDayChangeEvent(currentDay);
             previousGameDay_ = currentDay;
         }
     }
 
-    namespace {
-        // Helper function to check if an actor meets teammate criteria
-        bool CheckIsTeammate(RE::Actor* actor) {
-            if (!actor) return false;
-
-            auto player = RE::PlayerCharacter::GetSingleton();
-            if (!player) return false;
-
-            // Get CurrentFollowerFaction
-            static auto* currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x5C84E);
-
-            bool isTeammate = false;
-
-            // Native teammate flag
-            if (actor->IsPlayerTeammate()) {
-                MARAS_LOG_INFO("Actor {:08X} is a native teammate", actor->GetFormID());
-                isTeammate = true;
-            }
-
-            // Check CurrentFollowerFaction
-            if (!isTeammate && currentFollowerFaction && actor->IsInFaction(currentFollowerFaction)) {
-                MARAS_LOG_INFO("Actor {:08X} is in CurrentFollowerFaction", actor->GetFormID());
-                isTeammate = true;
-            }
-
-            // Also treat actors running a follow package as teammates
-            if (!isTeammate) {
-                if (auto* pkg = actor->GetCurrentPackage()) {
-                    if (pkg->packData.packType == RE::PACKAGE_TYPE::kFollow) {
-                        MARAS_LOG_INFO("Actor {:08X} is following player via package", actor->GetFormID());
-                        isTeammate = true;
-                    }
-                }
-                auto& runtimeData = actor->GetActorRuntimeData();
-                if (RE::AIProcess* ai = runtimeData.currentProcess) {
-                    // Only consider as teammate if the actor's follow target is the player
-                    if (auto targetRef = RE::TESObjectREFR::LookupByHandle(ai->followTarget)) {
-                        if (!targetRef) {
-                            MARAS_LOG_INFO("Actor {:08X} follow target is null", actor->GetFormID());
-                        } else if (targetRef.get() == player) {
-                            MARAS_LOG_INFO("Actor {:08X} is following player via AI state", actor->GetFormID());
-                            isTeammate = true;
-                        }
-                    }
-                }
-            }
-
-            return isTeammate;
-        }
-    }  // namespace
 
     std::unordered_set<PollingService::FormID> PollingService::GetCurrentTeammates() {
         std::unordered_set<FormID> teammates;
@@ -182,32 +180,13 @@ namespace MARAS {
                 continue;
             }
 
-            if (CheckIsTeammate(actor.get())) {
+            if (Utils::IsPlayerFollower(actor.get())) {
                 teammates.insert(actor->GetFormID());
             }
         }
 
-        MARAS_LOG_DEBUG("Found {} teammates", teammates.size());
+        // MARAS_LOG_DEBUG("Found {} teammates", teammates.size());
         return teammates;
-    }
-
-    bool PollingService::IsPlayerTeammate(RE::Actor* actor) {
-        if (!actor) {
-            MARAS_LOG_WARN("IsPlayerTeammate: null actor provided");
-            return false;
-        }
-
-        if (!actor->Is3DLoaded()) {
-            MARAS_LOG_DEBUG("IsPlayerTeammate: actor {:08X} is not loaded", actor->GetFormID());
-            return false;
-        }
-
-        if (actor->IsDeleted()) {
-            MARAS_LOG_DEBUG("IsPlayerTeammate: actor {:08X} is deleted", actor->GetFormID());
-            return false;
-        }
-
-        return CheckIsTeammate(actor);
     }
 
     float PollingService::GetCurrentGameDay() {
@@ -267,6 +246,10 @@ namespace MARAS {
         SKSE::ModCallbackEvent modEvent("maras_day_changed", "", newDay, nullptr);
         eventSource->SendEvent(&modEvent);
         MARAS_LOG_INFO("Sent maras_day_changed event for day {}", newDay);
+    }
+
+    void PollingService::SanitizePlayerFactions() {
+        FactionService::GetSingleton().SanitizePlayerMarriedFaction();
     }
 
 }  // namespace MARAS

@@ -1,0 +1,24 @@
+name: "ttm_open_relationship_change"
+description: "Direct narration when a couple opens or closes their relationship in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_open_relationship_change"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and {{event_json.parentB}} discuss the new boundaries of their relationship in a way that fits their personalities and feelings toward each other."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6

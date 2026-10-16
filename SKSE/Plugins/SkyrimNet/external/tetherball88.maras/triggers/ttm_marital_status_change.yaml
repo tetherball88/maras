@@ -1,0 +1,32 @@
+name: "ttm_marital_status_change"
+description: "Direct narration when marital or relationship status changes in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_marital_status_change"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+    - fieldPath: "newStatus"
+      operator: "not_equals"
+      value: "lover"
+      caseSensitive: false
+    - fieldPath: "newStatus"
+      operator: "not_equals"
+      value: "engaged"
+      caseSensitive: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and their partner react to their relationship status changing to {{event_json.newStatus}} in a way that fits their personalities and history together."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6

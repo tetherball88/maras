@@ -1,0 +1,6 @@
+FormKey: 0002BB:TT_MARAS.esp
+EditorID: TTM_PlayerChildPet
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

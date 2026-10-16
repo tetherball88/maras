@@ -1,0 +1,26 @@
+FormKey: 00030F:TT_MARAS.esp
+EditorID: TTM_ChildrenDialogues_ThanksWow
+Flags: {}
+PreviousDialog: 00030E:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 100
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Wha... seriously? No way... With this, I... I could buy everything in the market! Wow! Thanks!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

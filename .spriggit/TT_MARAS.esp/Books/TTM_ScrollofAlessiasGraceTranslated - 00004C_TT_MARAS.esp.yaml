@@ -1,0 +1,40 @@
+FormKey: 00004C:TT_MARAS.esp
+EditorID: TTM_ScrollofAlessiasGraceTranslated
+Name:
+  TargetLanguage: English
+  Value: Scroll of Alessia's Grace(Translated)
+Model:
+  File: Clutter\Books\Note02.nif
+  Data: 0x020000000000000000000000
+BookText:
+  TargetLanguage: English
+  Value: >-
+    <font size="19">
+
+    (Recovered fragment, Temple Codex Year 113, Alessian Reformation)
+
+
+    Let none say the flame of love burns only for one hearth, for the flame gifted by Akatosh is eternal, and eternal fire may warm many without dying.
+
+
+    To bear the Dragon Soul is to carry the Breath of the First Fire - it does not diminish when given, but grows.
+
+
+    The soul of such a one is not split, but vast - a vessel of harmony, not division. And so love, too, may be multiplied through divine grace, where mortal limits would crack.
+
+
+    Let those who are touched by the Dragon's Flame and walk in Mara's light fear no judgment. For love that is true is never against the gods.
+
+
+    Thus the Rite of Multiple Union was once offered to Alessia's chosen, that their soul might bind more than one in the light of the Divines, without harm or jealousy.
+
+
+    Though the Rite was later hidden, its truth remains - and truth, like flame, may be rekindled.
+
+    </font>
+PickUpSound: 0C7A54:Skyrim.esm
+Teaches:
+  MutagenObjectType: BookTeachesNothing
+InventoryArt: 01541B:Skyrim.esm
+Description:
+  TargetLanguage: English

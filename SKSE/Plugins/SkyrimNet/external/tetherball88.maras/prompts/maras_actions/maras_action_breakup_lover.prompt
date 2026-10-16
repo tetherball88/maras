@@ -1,0 +1,8 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set breakupCandidates = ttm_get_breakup_lover_candidates(npc.UUID) %}
+
+{% if breakupCandidates != "" %}Available actors for lovers breakup: {{breakupCandidates}}{% endif %}
+
+Ending a lovers relationship is irreversible.
+USE ONLY when {{speakingNpc.name}} accepts or initiates a lovers breakup.
+NEVER confuse with ending a dating relationship, calling off an engagement or divorce.

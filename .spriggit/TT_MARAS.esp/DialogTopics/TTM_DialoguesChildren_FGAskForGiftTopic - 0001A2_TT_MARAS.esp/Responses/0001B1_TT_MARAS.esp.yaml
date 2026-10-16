@@ -1,0 +1,50 @@
+FormKey: 0001B1:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerChildren
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: DialogueType
+      Data: Gift_Topic
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerChildren
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerChildren
+      FragmentName: Fragment_0
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerChildren
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - Random
+  - WalkAway
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 0001A3:TT_MARAS.esp
+- 0001A1:TT_MARAS.esp
+- 0001A5:TT_MARAS.esp
+- 0001A6:TT_MARAS.esp
+Responses:
+- Emotion: Happy
+  EmotionValue: 25
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Did you bring me anything?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+WalkAwayTopic: 0001A5:TT_MARAS.esp

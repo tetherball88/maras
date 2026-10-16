@@ -1,0 +1,9 @@
+FormKey: 000119:TT_MARAS.esp
+EditorID: TTM_SpouseAffection
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseAffection
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

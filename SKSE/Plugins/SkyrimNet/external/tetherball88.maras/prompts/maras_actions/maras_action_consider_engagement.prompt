@@ -1,0 +1,15 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set loversBecomingEx = ttm_get_lovers_becoming_ex(npc.UUID) %}
+{% set datingPartner = ttm_get_dating_partner(npc.UUID) %}
+
+Engagement is a serious, binding commitment that definitively leads to marriage — more formal than dating, the final step before marriage.
+{% if loversBecomingEx != "" %}
+NOTE: {{speakingNpc.name}} currently has lover(s): {{loversBecomingEx}}. Accepting this engagement proposal will end those lover arrangements — they will become ex-lovers.
+{% endif %}
+USE ONLY when somebody explicitly proposed engagement to {{speakingNpc.name}}.
+{% if datingPartner != "" %}
+NEVER accept an engagement proposal from anyone other than {{datingPartner}}.
+{% endif %}
+NEVER use for flirting, compliments, or any proposal not leading to marriage.
+NEVER confuse with proposing a dating relationship (romantic, less formal) or lovers relationship (sexual, casual).
+

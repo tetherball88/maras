@@ -1,0 +1,20 @@
+FormKey: 000032:TT_MARAS.esp
+EditorID: TTM_IncreaseMagickaRateEffect
+Name:
+  TargetLanguage: English
+  Value: Arcane Union
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: MagickaRateMult
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Fighting beside a practiced spellcaster renews your focus, allowing magicka to regenerate faster by <mag> %

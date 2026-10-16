@@ -1,0 +1,9 @@
+FormKey: 000151:TT_MARAS.esp
+EditorID: TTM_SharedInfo
+Name:
+  TargetLanguage: English
+  Value: TTM_SharedInfo
+Quest: 000067:TT_MARAS.esp
+Category: Misc
+Subtype: SharedInfo
+SubtypeName: IDAT

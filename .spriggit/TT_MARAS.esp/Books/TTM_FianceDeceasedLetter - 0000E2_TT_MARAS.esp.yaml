@@ -1,0 +1,30 @@
+FormKey: 0000E2:TT_MARAS.esp
+EditorID: TTM_FianceDeceasedLetter
+Name:
+  TargetLanguage: English
+  Value: Letter of Unfulfilled Union
+Model:
+  File: Clutter\Books\Note01.nif
+  Data: 0x020000000000000000000000
+BookText:
+  TargetLanguage: English
+  Value: >-
+    To <Alias=Player>,
+
+
+    Child of Mara, I bring grievous news. Your betrothed, <Alias=Victim>, has been taken from this world before the vows could be spoken.
+
+
+    Though your union was not yet sealed, the promise between you was sacred in the eyes of the Lady of Love. Take comfort that such devotion, even unfulfilled, is not lost - for love's spirit endures beyond the veil of death.
+
+
+    May Mara's compassion guide you through this sorrow, and may you find peace in the memory of what might have been.
+
+
+    - Maramal, Priest of Mara, Riften
+PickUpSound: 0C7A54:Skyrim.esm
+Teaches:
+  MutagenObjectType: BookTeachesNothing
+InventoryArt: 097788:Skyrim.esm
+Description:
+  TargetLanguage: English

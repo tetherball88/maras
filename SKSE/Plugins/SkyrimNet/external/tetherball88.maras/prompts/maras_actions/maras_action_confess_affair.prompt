@@ -1,0 +1,11 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set confessCandidates = ttm_get_confess_affair_candidates(npc.UUID) %}
+
+{% if confessCandidates != "" %}Eligible partners nearby to confess affair to: {{confessCandidates}}{% endif %}
+
+USE WHEN {{speakingNpc.name}} verbally confesses, admits, or comes clean about their secret romantic or physical affair/infidelity directly to their partner or spouse.
+USE ONLY WHEN {{speakingNpc.name}} has explicitly and verbally spoken the confession to their partner in current conversation.
+- Specify the victim partner's name and the affair partner's name.
+- Provide a brief 1st-person explanation of {{speakingNpc.name}}'s reasons, remorse, guilt, or circumstances.
+NEVER use if {{speakingNpc.name}} is merely thinking, suspecting, or talking about someone else's affair.
+NEVER use if the partner is not present or if the affair is already publicly known to the partner.

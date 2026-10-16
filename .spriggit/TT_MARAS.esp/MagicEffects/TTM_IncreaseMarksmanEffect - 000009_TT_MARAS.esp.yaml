@@ -1,0 +1,20 @@
+FormKey: 000009:TT_MARAS.esp
+EditorID: TTM_IncreaseMarksmanEffect
+Name:
+  TargetLanguage: English
+  Value: Wildsight Bond
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: MarksmanModifier
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: With a seasoned ranger by your side, your instincts sharpen and your aim steadies, increasing ranged damage by <mag>%

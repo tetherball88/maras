@@ -1,0 +1,80 @@
+[system]
+## Context
+{% if formerSpouseUUID != 0 %}
+You are the GameMaster AI for Skyrim. Evaluate an ongoing paternity situation following a divorce.
+
+- Mother: {{ motherName }} ({{ motherRace }})
+- Former Spouse (ex-partner): {{ formerSpouseName }} ({{ formerSpouseRace }})
+- True Biological Father: {{ bioFatherName }} ({{ bioFatherRace }})
+{% else %}
+You are the GameMaster AI for Skyrim. Evaluate an ongoing paternity situation.
+
+- Mother: {{ motherName }} ({{ motherRace }})
+- True Biological Father: {{ bioFatherName }} ({{ bioFatherRace }})
+{% endif %}
+- Child / Pregnancy Context:
+{% if isPregnancy %}
+  - Mother is currently pregnant with {{ bioFatherName }}'s unborn child.
+{% else %}
+  - Child: {{ childName }} (Age: {{ childAgeDays }} days)
+{% endif %}
+
+## Character Profiles & Psychology
+
+### Mother: {{ motherName }}
+{% if motherUUID != 0 %}
+{{ render_character_profile("ttm_gm_with_recent_events", motherUUID) }}
+{% endif %}
+
+
+### Biological Father: {{ bioFatherName }}
+{% if bioFatherUUID != 0 %}
+{{ render_character_profile("ttm_gm_with_recent_events", bioFatherUUID) }}
+{% endif %}
+
+{% if formerSpouseUUID != 0 %}
+### Former Spouse: {{ formerSpouseName }}
+{{ render_character_profile("ttm_gm_with_recent_events", formerSpouseUUID) }}
+{% endif %}
+
+
+## Evaluation Guidelines
+Evaluate the character profiles, personality traits, and morality of {{ bioFatherName }} and {{ motherName }}.
+{% if formerSpouseUUID != 0 %}
+Now that {{ motherName }} is divorced from {{ formerSpouseName }}, determine whether {{ bioFatherName }} steps in to claim his biological child, marry {{ motherName }}, and take responsibility as a family.
+{% else %}
+Determine whether {{ bioFatherName }} steps in to claim his biological child, marry {{ motherName }}, and take responsibility as a family.
+{% endif %}
+
+1. **Bio Father Steps In** (`"bio_father_steps_in"`):
+   - `true`: Biological father steps forward, claims the child, and marries the mother.
+   - `false`: Biological father remains uninvolved, refuses commitment, or neglects paternal responsibility.
+
+2. **Reason** (`"reason"`):
+   - Brief explanation of the biological father's choice and the mother's acceptance (1-2 sentences).
+
+3. **Summary** (`"summary"`):
+   - 1-2 sentence dramatic narrative summary.
+
+---
+
+## Output Format
+Return a single raw JSON object. No markdown formatting, no code fences. Must start with `{` and end with `}`.
+
+{% raw %}
+{
+  "bio_father_steps_in": boolean,
+  "reason": "Brief explanation of why the biological father steps in or refuses.",
+  "summary": "1-2 sentence narrative describing the step-in decision."
+}
+{% endraw %}
+[end system]
+
+[user]
+{% if formerSpouseUUID != 0 %}
+Evaluate whether biological father {{ bioFatherName }} steps in to marry {{ motherName }} following her divorce from {{ formerSpouseName }}.
+{% else %}
+Evaluate whether biological father {{ bioFatherName }} steps in to marry {{ motherName }} for their child.
+{% endif %}
+Return raw JSON only. No markdown. Start with `{`, end with `}`.
+[end user]

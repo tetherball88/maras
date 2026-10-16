@@ -37,6 +37,11 @@ ReferenceAlias Property Alias_Senna Auto
 ReferenceAlias Property Alias_OldScrollContainer Auto
 ;END ALIAS PROPERTY
 
+;BEGIN ALIAS PROPERTY OldScrollContainerLoc
+;ALIAS PROPERTY TYPE LocationAlias
+LocationAlias Property Alias_OldScrollContainerLoc Auto
+;END ALIAS PROPERTY
+
 ;BEGIN FRAGMENT Fragment_18
 Function Fragment_18()
 ;BEGIN CODE
@@ -176,7 +181,9 @@ Function Fragment_21()
     endif
     TTM_EnablePolygamyToggle.SetValue(1)
     TTM_Debug.trace("TTM_QuestEnablePolygamy:Removes player from married faction so player can re-marry")
+    TTM_ServiceSkyrimNet.RegisterPlayerGotPolygamyBlessing(Alias_CurrentSpouse.GetActorReference())
     self.CompleteQuest()
+    Stop()
 ;END CODE
 EndFunction
 ;END FRAGMENT
@@ -190,5 +197,29 @@ Event OnUpdateGameTime()
         TTM_Debug.trace("TTM_QuestEnablePolygamy:Player waited for translation")
 	endif
 EndEvent
+
+Function StopAndReset()
+	UnregisterForUpdateGameTime()
+	Actor player = TTM_Data.GetPlayer()
+	ObjectReference oldRef = Alias_OldScroll.GetReference()
+	if(oldRef)
+		if(player && player.GetItemCount(oldRef.GetBaseObject()) > 0)
+			player.RemoveItem(oldRef.GetBaseObject(), player.GetItemCount(oldRef.GetBaseObject()), true)
+		endif
+		oldRef.Disable()
+	endif
+
+	ObjectReference transRef = Alias_OldScrollTranslated.GetReference()
+	if(transRef)
+		if(player && player.GetItemCount(transRef.GetBaseObject()) > 0)
+			player.RemoveItem(transRef.GetBaseObject(), player.GetItemCount(transRef.GetBaseObject()), true)
+		endif
+		transRef.Disable()
+	endif
+
+	Stop()
+	Reset()
+	TTM_Debug.info("TTM_QuestEnablePolygamy: Quest stopped and reset")
+EndFunction
 
 GlobalVariable Property TTM_EnablePolygamyToggle  Auto

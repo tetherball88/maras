@@ -1,0 +1,125 @@
+FormKey: 00011A:TT_MARAS.esp
+EditorID: TTM_AffectionEstrangedDivorce
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestAffectionEstrangedDivorce
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Spouse
+      Object: 00011A:TT_MARAS.esp
+      Alias: 0
+  FileName: TTM_QuestAffectionEstrangedDivorce
+  Fragments:
+  - Unknown2: 1
+    ScriptName: TTM_QuestAffectionEstrangedDivorce
+    FragmentName: Fragment_0
+  - Stage: 10
+    Unknown2: 1
+    ScriptName: TTM_QuestAffectionEstrangedDivorce
+    FragmentName: Fragment_4
+  - Stage: 100
+    Unknown2: 1
+    ScriptName: TTM_QuestAffectionEstrangedDivorce
+    FragmentName: Fragment_5
+  - Stage: 150
+    Unknown2: 1
+    ScriptName: TTM_QuestAffectionEstrangedDivorce
+    FragmentName: Fragment_8
+  - Stage: 200
+    Unknown2: 1
+    ScriptName: TTM_QuestAffectionEstrangedDivorce
+    FragmentName: Fragment_6
+  Aliases:
+  - Property:
+      Name: ''
+      Object: 00011A:TT_MARAS.esp
+      Alias: 0
+    Scripts:
+    - Name: defaultaliasondeathscript
+      Properties:
+      - MutagenObjectType: ScriptIntProperty
+        Name: StageToSetOnDeath
+        Data: 200
+Name:
+  TargetLanguage: English
+  Value: 'Marriage: The Last Word'
+Priority: 60
+Event: SCPT
+EventConditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetEventDataConditionData
+    Member: Keyword
+    Record: 000121:TT_MARAS.esp
+  ComparisonValue: 1
+Stages:
+- Flags:
+  - StartUpStage
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: I've received troubling news - <Alias=Spouse>, my spouse, seems deeply unhappy and may be preparing to leave. I should return home and speak with <Alias.PronounObj=Spouse> before it's too late.
+- Index: 10
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: <Alias=Spouse> has lost faith in you. This may be your last chance to make things right.
+- Index: 100
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: I managed to reach my spouse before things fell apart. It won't be easy, but <Alias.Pronoun=Spouse>'s chosen to stay - for now, that's enough. I should take better care to keep our bond strong before it fades again.
+- Index: 150
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Things seem to have improved between us. Whatever distance was growing has eased, and the tension has passed. Maybe I managed to fix things before it became too late.
+- Index: 200
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: It's over. <Alias=Spouse> has left, and there's no taking back what's been said - or left unsaid. Some wounds don't heal, and some choices can't be undone.
+Objectives:
+- Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Return home to speak with <Alias=Spouse>.
+  Targets:
+  - {}
+- Index: 10
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Chat with <Alias=Spouse> and try to convince
+NextAliasID: 1
+Aliases:
+- Name: Spouse
+  Flags:
+  - AllowReuseInQuest
+  - StoresText
+  - AllowReserved
+  Conditions:
+  - MutagenObjectType: ConditionGlobal
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      Faction: 000007:TT_MARAS.esp
+    ComparisonValue: 000060:TT_MARAS.esp
+  - MutagenObjectType: ConditionFloat
+    CompareOperator: LessThan
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      Faction: 000119:TT_MARAS.esp
+    ComparisonValue: 25
+  - MutagenObjectType: ConditionFloat
+    CompareOperator: GreaterThanOrEqualTo
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      Faction: 000119:TT_MARAS.esp
+  Factions:
+  - 000C22:TT_MARAS.esp
+  VoiceTypes: Null

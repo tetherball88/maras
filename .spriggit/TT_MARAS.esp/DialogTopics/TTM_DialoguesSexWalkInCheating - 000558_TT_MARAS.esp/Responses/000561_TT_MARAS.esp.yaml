@@ -1,0 +1,28 @@
+FormKey: 000561:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+PreviousDialog: 000560:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 00056E:TT_MARAS.esp
+- 00057F:TT_MARAS.esp
+- 00058D:TT_MARAS.esp
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Don't stop on my account. I just wanted to see it for myself.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 0005A3:TT_MARAS.esp
+  ComparisonValue: 1

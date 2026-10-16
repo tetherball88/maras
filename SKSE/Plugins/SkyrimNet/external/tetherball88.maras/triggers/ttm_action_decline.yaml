@@ -1,0 +1,24 @@
+name: "ttm_action_decline"
+description: "Reaction when a relationship proposal or action is declined in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_action_decline"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+    - fieldPath: "speaker"
+      operator: "not_equals"
+      value: ""
+
+audience: "triggering_actor"
+response:
+  type: "direct_narration"
+  content: "An action or relationship change {{originator}} just attempted was declined or did not go through. Have {{originator}} stay in character — acknowledge the situation naturally given what they know about {{player.name}}, do not repeat the attempt immediately, and continue naturally."
+enabled: true
+cooldownSeconds: 30
+priority: 3

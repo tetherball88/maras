@@ -1,0 +1,9 @@
+FormKey: 00007F:TT_MARAS.esp
+EditorID: TTM_SpouseNoInitialHome
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseNoInitialHome
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

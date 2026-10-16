@@ -1,0 +1,8 @@
+FormKey: 0001A1:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_FGAskForGiftResponse
+Name:
+  TargetLanguage: English
+  Value: Yes, I did.
+Branch: 00019E:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

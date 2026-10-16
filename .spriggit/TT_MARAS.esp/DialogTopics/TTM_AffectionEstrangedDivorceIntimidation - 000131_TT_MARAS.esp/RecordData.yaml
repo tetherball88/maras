@@ -1,0 +1,8 @@
+FormKey: 000131:TT_MARAS.esp
+EditorID: TTM_AffectionEstrangedDivorceIntimidation
+Name:
+  TargetLanguage: English
+  Value: You're overreacting. You'll regret walking away from me. (Intimidate)
+Branch: 000126:TT_MARAS.esp
+Quest: 00011A:TT_MARAS.esp
+SubtypeName: CUST

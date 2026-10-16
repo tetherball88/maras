@@ -35,6 +35,10 @@
         "divorcedPenalty": 20.0,
         "playerKillerPenalty": 50.0
     },
+    "bonuses": {
+        "datingBonus": -15.0,
+        "loverBonus": -30.0
+    },
     "multipliers": {
         "marriedCountMultiplier": 2.0,
         "divorcedCountMultiplier": 1.0,

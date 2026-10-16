@@ -1,285 +1,153 @@
-## M.A.R.A.S – Marry Anyone, Rule All Skyrim 💍🐉
+# 💍🐉 M.A.R.A.S — Marriage, Affection, Romance & Adoption in Skyrim
 
-M.A.R.A.S (Marry Anyone, Rule All Skyrim) is a dynamic, **ESL-flagged light** marriage overhaul that lets you **marry literally anyone** in Skyrim—jarls, bandits, necromancers, that one shopkeeper who keeps ripping you off… you name it. Build relationships, juggle multiple spouses, unlock powerful buffs, and try not to emotionally (or politically) destabilize the entire province in the process. The mod itself is **SFW**, but it can hook into NSFW/relationship frameworks if *you* choose to install them. With great love comes great responsibility… and occasionally, great chaos. 😇
+## 1. General Overview ✨🏰
 
----
+Ever looked at a Jarl, a grumpy blacksmith, a chaotic necromancer, or that one shopkeeper who keeps ripping you off and thought: *"Yeah, I can fix them"*?
 
-### Requirements ⚙️
+**M.A.R.A.S** is a full-scale, **SKSE-powered** and **ESL-flagged** romance, marriage, family, and social simulation overhaul for Skyrim. It doesn't just let you **romance and marry literally any adult NPC in the province**—it turns all of Skyrim into a living, breathing soap opera where **both you and NPCs** can date, hook up, propose, marry, build a polygamous dynasty, share houses, adopt unlimited kids, have biological babies, cheat Behind Closed Doors™, get caught red-handed, and suffer financially ruinous divorces. 😇🔥
+
+Whether you want a wholesome monogamous life with a doubled spouse buff, a carefully ranked harem of twelve spouses funding your adventures, or to play Cupid (or homewrecker) for the townsfolk of Whiterun from an in-game **Prisma UI Dashboard (`Alt + B`)**, M.A.R.A.S hands you the rings and lets you live with the consequences.
+
+> [!NOTE]
+> **SFW Core with Optional Adult & AI Hooks:** M.A.R.A.S itself is completely **SFW** out of the box, and its `TT_MARAS.esp` plugin is **ESL-flagged** (so it takes zero full load-order slots). If you *choose* to pair it with **SkyrimNet**, **Fertility Mode Reloaded / Beeing Female**, or intimacy frameworks (**OStim / SexLab**), M.A.R.A.S seamlessly hooks into them for AI-voiced romance, pregnancies, and intimacy tracking!
+
+### ⚙️ Requirements & Integrations
 
 **Hard Requirements**
+- [SKSE64](https://skse.silverlock.org/)
+- [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444)
+- [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718) *(powers the interactive in-game `Alt + B` Dashboard)*
 - [SkyUI](https://www.nexusmods.com/skyrimspecialedition/mods/12604)
 - [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561)
 - [PapyrusUtil SE](https://www.nexusmods.com/skyrimspecialedition/mods/13048)
 - [powerofthree's Papyrus Extender](https://www.nexusmods.com/skyrimspecialedition/mods/22854)
 
 **Optional Integrations (Highly Recommended, Totally Optional)**
-- [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin/tree/main) – AI-powered chats with NPCs, smarter proposals, and fully voiced custom lines 🤖🗣️
-- [Relations Finder](https://www.nexusmods.com/skyrimspecialedition/mods/158980) – Knows who’s dating whom, who’s married, who’s “it’s complicated,” and factors that into proposal chances 💔
-- [Lover’s Ledger](https://www.nexusmods.com/skyrimspecialedition/mods/158983) – Tracks intimate relationships and feeds that into acceptance logic 😏
+- 🤖 **[SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin/tree/main)** — Turns romance into real AI-powered conversations! Flirt, propose, negotiate open relationships, confess affairs, or let the AI play matchmaker for the entire province with custom voice acting.
+- 🤰 **Fertility Mode Reloaded (FMR) / Beeing Female NG** — Adds full biological pregnancy, childbirth, racial phenotype inheritance, and secret paternity drama to both Player and NPC relationships.
+  - ⚠️ **Fertility Mode Reloaded**: **v1.0.7+ (CRITICAL)**
+  - ⚠️ **Beeing Female NG**: **v3.6.4+ (CRITICAL)**
+- 💋 **OStim Standalone / SexLab** — Automatically rewards affection for intimate moments with partners—and triggers secret affairs or bedroom walk-in confrontations if you stray!
 
-> **Note:** M.A.R.A.S itself doesn’t add NSFW content. Some of the optional mods you choose to pair with it might.
-> **Plugin Info:** ESL-flagged light plugin – does **not** consume a full load order slot.
+> [!WARNING]
+> **CRITICAL FERTILITY FRAMEWORK VERSION REQUIREMENTS:**
+> If you choose to use an optional fertility framework with M.A.R.A.S, you **MUST** ensure you are running the latest versions:
+> - **Fertility Mode Reloaded (FMR)**: **v1.0.7 or higher** is strictly required.
+> - **Beeing Female NG**: **v3.6.4 or higher** is strictly required.
+> 
+> Older versions of either mod lack necessary lifecycle ModEvents, pass incomplete parameters, or contain incompatible data structures, which will break pregnancy detection, birth progression, and child actor spawning!
+
+### 🧩 Compatibility at a Glance
+- **Non-Destructive by Design**: M.A.R.A.S does **not** edit vanilla NPC records or overwrite vanilla marriage quests. It layers its C++ relationship engine and AI package overrides cleanly at runtime.
+- **Freedom to Make Questionable Choices**: The game still runs its original quests! If you marry **Vittoria Vici**, the Dark Brotherhood still has a contract on her. If you move a Jarl into Breezehome and forget to uncheck *"Stay at Home"*, don't be surprised when they're sipping mead in your kitchen instead of sitting on their throne. 😉
 
 ---
 
-### Features 🎉
+## 2. Player-Friendly Features & Gameplay Guide 🎉💘
 
-#### Marry Anyone (Yes, Anyone)
+Want the complete shortcut cheat sheet and step-by-step walkthrough? Start here:
+👉 **[The Ultimate M.A.R.A.S Player Guide](docs/player/PLAYER_GUIDE.md)**
 
-If they exist in Skyrim and aren’t a sabre cat, M.A.R.A.S can probably marry them.
+---
 
-- Works on **any NPC**, regardless of vanilla marriage flags.
-- New dialogue options are clearly tagged with **“(M)”** so you can spot them easily.
-- By default, **no NPC is tracked** until you open with:
+### 🖥️ The In-Game Dashboard (`Alt + B`)
+Forget digging through ten layers of slow menus! Press **`Alt + B`** anytime during gameplay to pause the world and open the **M.A.R.A.S Dashboard**:
+- Inspect your **Household**, **Spouse Hierarchy**, **Homes**, **Children**, and live **Household Buffs**.
+- Browse a searchable directory of **every NPC in Skyrim**, view their relationship tree, check their mood, or teleport straight to a lost spouse or kid.
+- Play Cupid in the **Matchmaking** tab—pair up any two NPCs manually or let the AI suggest matches!
+- 📖 **Read more:** **[UI Dashboard Guide](docs/player/UI_DASHBOARD_GUIDE.md)**
+
+---
+
+### 💞 Romance Anyone, Any Way You Want (Plus NPC-to-NPC Couples!)
+If they're an adult NPC in Skyrim and not a sabre cat, they're fair game:
+- **Start with a Spark**: No NPC is cluttered with romance menus until you break the ice with:
   > `(M) Ever think we could be something more?`
-
-Once you say that line, that NPC is officially on the M.A.R.A.S radar. What happens next is up to you (and to the dice 👀).
-
-> ⚠️ Pro tip: Marrying a bandit chief, your assassination target, or someone who’s supposed to hate you forever may confuse quests. The mod lets you make bad decisions; it does not protect you *from* them.
-
----
-
-#### Relationship States: From “Hi” to “We’re Complicated”
-
-Each tracked NPC moves through several states:
-
-- **Candidate** – After the first `(M)` dialogue, they begin gathering **affection** over time and through your interactions.
-- **Engaged** – Propose when you feel the vibes are right. If they accept, vanilla **wedding quest & scene** start (with an option to skip if you’ve already done it once).
-- **Jilted** – Miss the wedding or break up during the engagement and they become jilted. They won’t forget. You can try again later—but chances will suffer. 💔
-- **Married** – Finish (or skip) the ceremony and you’re officially spouses under M.A.R.A.S. Congrats, you’ve unlocked a new tier of responsibility and perks.
-- **Divorced** – You can divorce them via dialogue. After some time (and emotional cooldown), you can try proposing again.
-
-Already married in your save? M.A.R.A.S politely scans your file and **auto-registers** your vanilla spouse.
+- **Flexible Relationship Ladder**: Take things at your own pace! From **Candidate**, you can hook up as **Casual Lovers** *(friends with benefits!)*, go steady with **Exclusive Dating**, or skip the courtship and propose straight from **Candidate** $\rightarrow$ **Engaged** $\rightarrow$ **Married**—or crash and burn into **Ex-Lover**, **Ex-Dating**, **Jilted** *(left at the altar!)*, or **Divorced**.
+- **Proposals That Actually Care Who You Are**: Gone are the days of "wear amulet, get spouse." NPCs evaluate your **Affection**, **Speech**, **Wealth**, **Owned Homes**, **Quest Fame**, and **Guild Alignment** against their own social standing before saying yes.
+- **A Living World of NPC Couples**: Existing vanilla couples are automatically imported, and background **Matchmaking** lets single NPCs across Skyrim date, get engaged, and marry each other on their own!
+- 📖 **Read more:** **[Relationship Overview & Matchmaking Guide](docs/player/RELATIONSHIP_OVERVIEW.md)**
 
 ---
 
-#### Affection System ❤️
-
-Think of affection as relationship XP:
-
-- You **gain affection** by talking, gifting, and generally not being a terrible partner.
-- For fiancés and spouses, affection **decays over time** if you ignore them. (Yes, disappearing for 30 in-game days has consequences 😅.)
-- When affection drops, spouses may:
-  - Refuse to share their home.
-  - Move out of *your* home.
-  - Stop giving you income or cooking for you.
-  - Eventually… **divorce you** if you totally neglect them.
-
-Affection is baked into proposal chances and some buff behavior, so treat your partners better than your inventory clutter.
+### ❤️ Affection, Open Relationships, Cheating & Alimony Drama
+Getting the ring is only half the battle—keeping it is where the fun begins:
+- **Affection & Daily Moods (`0–100`)**: Earn love by talking daily, giving gifts tailored to their tastes, traveling together as followers, or sharing a bed. Ignore your spouse for weeks while dungeon-delving, and their mood will slide from *Happy* to *Unhappy* to *Estranged*.
+- **"Marriage: The Last Word" & Divorce Settlements**: Let a spouse's affection drop below `25` and you have **3 in-game days** to save your marriage before they serve you divorce papers—complete with a **Divorce Settlement bill** based on your gold, houses, horses, and cleared dungeons (backed by Hold guards if you refuse to pay!). 🚓💸
+- **Open Relationships & Secret Affairs**: Negotiate an **Open Relationship** if your partner's temperament allows it—or risk a **Secret Affair**! Just watch out: if your partner walks into the room mid-act, or if your side lover exposes you, you'll face a full confrontation.
+- 📖 **Read more:** **[Affection System Guide](docs/player/AFFECTION_SYSTEM.md)**
 
 ---
 
-#### Marriage Chances: Not Just "Wear Amulet, Get Spouse"
-
-Proposals in M.A.R.A.S are not "equip Mara's Amulet, win instantly" anymore.
-
-The acceptance chance is influenced by things like:
-
-- Level difference between you and the NPC.
-- Your **wealth** and **prestige** (thane, guild master, Dragonborn, etc).
-- NPC's **social class** and any **existing relationships** (married, courting, secret lover…).
-- Your **Speech skill** and current **affection**.
-- Faction/ethical alignment (a proud jarl might not be thrilled about a Dark Brotherhood sweetheart).
-- Whether they've been **jilted** or **divorced** by you before.
-- Whether you've killed a fiancé or spouse in the past (yikes).
-- Optional: **Lover's Ledger** intimacy scores.
-
-No fixed thresholds, no "100% or nothing":
-
-- You can succeed with **1%** if luck is on your side.
-- You can fail at **90%** because the gods of RNG weren't impressed.
-
-With **SkyrimNet**, this becomes even cooler: conversations and roleplay can push NPCs past what raw stats would suggest.
-
-> For advanced users: All marriage difficulty parameters can be customized via `marriageDifficultyConfig.json`. See [Marriage Difficulty Configuration Guide](docs/MarriageDifficultyConfig.md) for the complete technical reference.
+### 👑 Polygamy, Spouse Hierarchy & 14 Unique Buffs
+Why stop at one spouse when Mara herself can bless your ambition?
+- **"The Flame Divides Not"**: Unlock **Polygamy** through an immersive mini-quest (be married, absorb a Dragon Soul, and sleep) or with a single click in the Dashboard settings.
+- **Rank Your Household (`1st` to `4th+`)**: Promote your favorite spouses to the top of your **Spouse Hierarchy** for maximum buff power and store income—or stay **Monogamous** with a single spouse to enjoy a massive **`2.0x` Permanent Buff bonus**!
+- **Personality Archetypes That Matter**: Every NPC has a **Social Class** (*Outcast* to *Rulers*), **Skill Type** (*Warrior, Mage, Rogue, Craftsman, Ranger, Orator*), and **Temperament** (*Proud, Humble, Jealous, Romantic, Independent*). Together, they grant **8 Permanent Household Buffs** and **6 Follower Combat Buffs**!
+- 📖 **Read more:** **[Archetypes, Hierarchy & Buffs Guide](docs/player/ARCHETYPES_AND_BUFFS.md)**
 
 ---
 
-#### Married Life: Buffs, Homes, and Domestic Shenanigans 🏡
-
-M.A.R.A.S keeps vanilla features and expands on them:
-
-- **Lover's Radiance** – Sleeping in the same cell as your spouse grants a custom buff.
-- Ask your spouse to:
-  - Cook meals for you.
-  - Move into one of your **registered player homes**.
-  - Let you move into **their** home.
-- When a spouse moves in with you:
-  - They physically live and wander around your house.
-  - They become **merchants** (like vanilla spouse merchants), with specialized types:
-    - **Apothecary, Blacksmith, Fletcher, Hunter, Innkeeper, Jeweler, Tailor, Spell Merchant,** or **Misc Merchant**
-    - Each merchant type shares the same inventory chest with other spouses of that type
-  - They generate passive income based on their social class.
-- **Follower integration**: If a spouse assigned to your house becomes your follower, they'll temporarily stop sandboxing and join you. When released, they return to their assigned house (15-second polling cycle).
-
-To register a player home, just **visit your owned house** after installing the mod; M.A.R.A.S will quietly mark it as a valid home.
-
-> ⚠️ If you move a quest NPC into your house and they're chilling by your alchemy table instead of being in their throne room, don't blame the mod when a quest stalls. You can always "release" them back to their normal life.
+### 🏡 Homes, Spouse Stores & "I Married Into the Blue Palace"
+- **Move Spouses Into Your Homes**: Assign spouses to any vanilla or modded player home. Toggle **"Stay at Home"** off anytime for Jarls, merchants, or quest NPCs so they keep their daytime jobs without breaking quests!
+- **9 Specialized Home Merchants**: Housed spouses open their own shop right at home—acting as an **Apothecary, Blacksmith, Fletcher, Hunter, Innkeeper, Jeweler, Tailor, Spell Merchant,** or **Misc Merchant** while generating daily passive gold based on their Social Class.
+- **Live in *Their* House Legally**: Ask a happy spouse (`Affection > 50`) to share their home and gain legal ownership access to their bed, doors, and containers—yes, even if they live in a palace! 👑
 
 ---
 
-#### Using Your Spouse’s Home (a.k.a. “I Married Into the Blue Palace”) 👑
-
-If you ask your spouse to share their home, you get:
-
-- Free access to their **home cell**.
-- Access to their **bed** and **containers**—without stealing.
-
-So if you marry someone who considers the **Blue Palace** home, congratulations:
-
-- You now have a key to nobility.
-- You can walk freely in restricted areas.
-- You *could* strip the place bare… though Mara maybe wouldn’t approve.
-
-Nothing stops you from using those privileges to access places like **Pelagius Wing**… but you probably know which places are better left alone if this isn’t your first Skyrim rodeo. 😉
+### 👶 Unlimited Adoptions, Pregnancies & Secret Paternity
+Build a true Skyrim dynasty—or a daytime talk-show scandal:
+- **Unlimited Child Adoptions**: Bypass the vanilla 2-child cap! Adopt orphans into your household—or assign orphans to **NPC couples** across Skyrim via the Dashboard.
+- **Kids, Critters & Pets**: Manage your children's allowances, chores, pets, and wild critters right from the Dashboard.
+- **Fertility Mode Reloaded (FMR) & Beeing Female Integration**: Track pregnancies from conception to birth, watch children grow from **Infant $\rightarrow$ Child $\rightarrow$ Youth Training $\rightarrow$ Adult Follower**, and navigate **Secret Paternity** drama! If a baby is born from an affair with a noticeably different racial phenotype (like an Orc baby born to two Nord spouses 😬), the presumed father might start asking very uncomfortable questions!
+- 📖 **Read more:** **[Kids, Adoption & Fertility Guide](docs/player/FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md)**
 
 ---
 
-#### Polygamy: “The Flame Divides Not” 🔥💞
-
-What’s the point of being able to marry anyone if you can’t *theoretically* marry everyone? (Joke. Please don’t actually try everyone. Probably. Maybe.)
-
-Polygamy is:
-
-- **Disabled by default**
-- Completely **optional**
-- Unlocked by either:
-  - Completing the quest **“The Flame Divides Not”** (requires being married, consuming a dragon soul, and sleeping).
-  - Or via MCM cheat: **Settings > Cheats > Enable polygamy (bypasses quest)**.
-
-This starts the quest **“The Flame Divides Not”** (or bypasses it if using the cheat). Once unlocked, the universe shrugs and accepts the Dragonborn’s unconventional lifestyle.
-
-Polygamy rules:
-
-- You can have **as many spouses as you want** (performance and sanity permitting).
-- All spouses are handled by an SKSE plugin.
-- Affection becomes serious business:
-  - Every spouse has their own affection.
-  - Multiple neglected spouses = cascading divorces. 🧨
-- Buffs are managed via a **hierarchy system**:
-  - Promote spouses to improve their buff strength and affection.
-  - Demote spouses and watch their affection drop (sometimes dramatically).
-
-Buff strength scales like this:
-
-- **Single spouse** – 2× buff strength.
-- **Multiple spouses**:
-  - 1st spouse: 1×
-  - 2nd spouse: 0.5×
-  - 3rd spouse: 0.25×
-  - 4th+ spouses: 0.1× each
-
-So no, you can’t stack 30 spouses for god-tier infinite buffs. You *can* stack 30 spouses for maximum drama, though.
+### 🤖 SkyrimNet AI Integration: Voice, Memory & Autonomous Drama
+Pair M.A.R.A.S with **SkyrimNet** to bring every conversation to life:
+- **Real-Time TTS Voice Acting for All Unvoiced Dialogue**: With SkyrimNet installed, every unvoiced M.A.R.A.S dialogue line is **voiced in-game in real time** using your selected TTS engine! *(Even if you don't want AI chat or autonomous LLM behavior, you can disable all other SkyrimNet functionality and keep **only TTS** enabled just to have every NPC fully voiced!)* 🎙️🗣️
+- **Natural AI Proposals & Breakups**: Charm, persuade, or argue with NPCs in real time. NPCs can accept proposals, demand an open relationship, confess to cheating, or dump you mid-conversation!
+- **Rich Relationship Memory**: NPCs remember who they're dating, who their step-kids are, who cheated on whom, and which secrets they *aren't* supposed to know yet.
+- 📖 **Read more:** **[SkyrimNet AI Integration Guide](docs/player/SKYRIMNET_INTEGRATION_GUIDE.md)**
 
 ---
 
-#### Spouse Archetypes & Buffs: Who You Marry Actually Matters 🧠
+## 3. Modder & Advanced User Reference 🛠️📐
 
-Each spouse is given three core characteristics based on their in-game class, factions, and tags:
+This section provides technical documentation for mod authors, patch creators, and advanced users who wish to customize M.A.R.A.S via JSON configurations, Papyrus scripts, native C++ APIs, or SkyrimNet prompt decorators.
 
-- **Social Class**
-  - Outcast
-  - Poverty
-  - Working
-  - Middle
-  - Wealthy
-  - Religious
-  - Nobles
-  - Rulers
+### 3.1 Configuration & Modding Guides
+- **[Advanced Configuration & Modding](docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md)** — Overview of JSON configuration files (`SKSE/Plugins/MARAS/`), NPC archetype overrides, and external mod integration points.
+- **[Marriage Difficulty Configuration](docs/modder/MarriageDifficultyConfig.md)** — Technical specification for `marriageDifficultyConfig.json` formulas, weights, social class multipliers, and acceptance probability curves.
+- **[Archetypes & Buffs Technical Reference](docs/modder/ARCHETYPES_AND_BUFFS.md)** — Deterministic archetype classification rules, `BuffsConfig.json` schema, and spell/perk effect magnitudes.
+- **[AI Package Override System](docs/modder/PACKAGE_OVERRIDE.md)** — JSON schema and condition evaluation rules for dynamic AI package injection (`PackageOverrideService`).
+- **[Quest Event Tracker Configuration](docs/modder/QUEST_TRACKER.md)** — Declarative JSON quest stage hooks (`QuestEventHandler`) for triggering relationship transitions or affection changes on quest events.
 
-- **Skill Type**
-  - Warrior
-  - Mage
-  - Rogue
-  - Craftsman
-  - Ranger
-  - Orator
+### 3.2 System Architecture & Cross-Layer References
+- **[System Architecture Overview](docs/modder/ARCHITECTURE.md)** — High-level architecture across the SKSE C++23 plugin (`MARAS.dll`), `TT_MARAS.esp` engine mirrors, Papyrus event layer, and Prisma UI frontend, including `'MARS'` v4 SKSE co-save serialization.
+- **[Public API & Prisma UI Bridge Reference](docs/modder/API_AND_PRISMA_BRIDGE_REFERENCE.md)** — Complete reference for the `MARAS.psc` Papyrus native interface, `MARAS_PublicAPI.h` C/C++ interop header, SKSE `ModCallbackEvent` payloads, and Prisma UI JS-to-C++ bridge endpoints.
+- **[Relationship Dynamics Technical Guide](docs/modder/RELATIONSHIP_DYNAMICS_GUIDE.md)** — Canonical `PairKey` state machine, exclusivity/polygamy rules, directional `CheatingRecord` tracking, and autonomous NPC matchmaking pipelines.
+- **[Household & Children Architecture](docs/modder/HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md)** — Player house registration, tenant sandboxing, guardian vs. biological lineage slot neutrality, and marriage/divorce/death custody resolution.
+- **[Fertility Mode Reloaded Integration Architecture](docs/modder/FERTILITY_MODE_RELOADED_INTEGRATION.md)** — FMR StorageUtil polling, synthetic child ID lifecycle (`0xFF700001+`), racial phenotype tier classification, and dual-edge paternity secrecy (`isSecretForPartner` / `isSecretForBioFather`).
+- **[SkyrimNet & AI Integration Reference](docs/modder/SKYRIMNET_AND_AI_INTEGRATION.md)** — Registered prompt decorators (`ttm_*`), perspective-bound secret masking rules, YAML custom actions, and event triggers.
 
-- **Temperament**
-  - Proud
-  - Humble
-  - Jealous
-  - Romantic
-  - Independent
-
-These traits affect:
-
-- How much affection your actions generate.
-- What buffs you get from that spouse.
-
-Buff types:
-
-1. **Permanent buffs** – Always active while married to that NPC; mostly influenced by **Social Class**.
-2. **Temporary (Follower) buffs** – Only active while the spouse is following you:
-   - Works with vanilla followers, mod followers, and temporary quest followers or “tag-alongs.”
-   - Influenced by **Skill Type**.
-
-In short: you’re not just collecting rings—you’re building a **roster of archetypes**. Want a noble ruler with political perks, a craftsman spouse for utility, and a ranger for field support? Go for it. Just remember: more power = more affection bars to babysit.
-
----
-
-#### SkyrimNet Integration: Smarter, Chattier, More Alive 💬
-
-M.A.R.A.S runs great without SkyrimNet, but together they’re kind of a power couple:
-
-1. **Conversation-Based Proposals**
-   - Without SkyrimNet: proposal success = stats + affection + RNG.
-   - With SkyrimNet: your *actual* conversations matter.
-   - You can persuade, charm, or roleplay your way into marriage—even if the base numbers are against you.
-
-2. **Voices for Everyone**
-   - Normally:
-     - Vanilla-marriage voice types use existing audio where possible.
-     - Everyone else (and all new M.A.R.A.S lines) use silent subtitles.
-   - With SkyrimNet (+ DBVO integration):
-     - All those silent lines get **generated voice acting**.
-     - You can even opt out of vanilla lines and let the AI generate unique responses, giving each spouse more distinct personality.
-
-3. **AI-Driven Relationship Actions (with Safety Nets)**
-   - The AI can accept proposals, break engagements, or initiate divorces during natural conversations.
-   - **Action confirmations** (enabled by default in MCM) give you a final say before major relationship changes happen.
-   - Disable confirmations if you want full AI autonomy and maximum drama.
-
-Result: your marriages feel more like relationships and less like menu options.
-
----
-
-### Compatibility 🧩
-
-- **Safe by design**:
-  - Does **not** alter vanilla marriage quests or the wedding scene.
-  - Does **not** mass-edit NPC marriage data.
-  - Only known direct edit: a single chest in **Ragnvald** dungeon.
-  - Aims to avoid conflicts and crashes by layering its own systems on top of vanilla instead of overwriting them.
-
-- **Relationship Overhauls & Romance Mods**:
-  - M.A.R.A.S does **not** natively read or honor custom romance states from:
-    - OStim Romance
-    - ORomance
-    - Other relationship frameworks
-  - If you built a whole love story in ORomance, M.A.R.A.S will politely ignore that and work with its own affection and relationship data. (Integration hooks are possible.)
-
-- **Quests & World**:
-  - The game still runs its original quests:
-    - Marry **Vittoria Vici**, and the Dark Brotherhood will *still* want her dead.
-    - Marry an enemy, and some quests may assume they should be hostile.
-  - Moving important NPCs to your homes or giving yourself unauthorized palace access can cause odd quest behaviors—use common sense and the tools provided to undo risky assignments.
-
-Overall, M.A.R.A.S is designed as a **big, flexible, mostly non-destructive marriage framework**: it lets you reshape Skyrim’s social landscape while keeping vanilla content intact as much as possible. Just remember: you asked for “marry anyone, rule all Skyrim”—nobody said ruling would be simple. 😉
-
-## Documentation Index
-
-If you want more detail than this overview, see:
-
-### For Players
-- [Player Guide](docs/PLAYER_GUIDE.md) – moment-to-moment gameplay: how to start relationships, engagement, polygamy, divorce, etc.
-- [Affection System – Deep Dive](docs/AFFECTION_SYSTEM.md) – the full 0–100 affection model, daily caps, decay, and how it affects chances and buffs.
-- [Archetypes & Buffs](docs/ARCHETYPES_AND_BUFFS.md) – social classes, skill types, temperaments, and the buffs they give you.
-- [MCM Settings Guide](docs/MCM_Settings.md) – global settings, AI dialogue toggles, logging, and cheats.
-- [NPC Explorer MCM](docs/MCM_NPC.md) – per-NPC status, affection, archetypes, hierarchy, homes, and beds.
-- [Current Buffs MCM](docs/MCM_BUFF.md) – live view of your current permanent and follower buffs.
-
-### For Advanced Users & Modders
-- [Marriage Difficulty Configuration Guide](docs/MarriageDifficultyConfig.md) – complete reference for customizing marriage difficulty calculation via JSON.
-- [Advanced Configuration & Modding](docs/ADVANCED_CONFIGURATION_AND_MODDING.md) – JSON archetype overrides, buff tuning, and Papyrus integration points.
-
+### 3.3 C++ Core Services Reference (`docs/modder/services/`)
+- **[NPCRelationshipManager](docs/modder/services/NPCRelationshipManager.md)** — Pair-keyed relationship state machine, profile/candidate registration, vanilla `BGSRelationship` scanning, infidelity records, and child registry.
+- **[AffectionService](docs/modder/services/AffectionService.md)** — Permanent affection storage (`0–100`), daily interaction caps, status-scaled decay, and estrangement thresholds.
+- **[MatchmakingService](docs/modder/services/MatchmakingService.md)** — Autonomous background NPC-to-NPC pairing, compatibility scoring, 5-day engagement auto-marriage, and SkyrimNet LLM batch matchmaking.
+- **[MarriageDifficulty](docs/modder/services/MarriageDifficulty.md)** — Proposal acceptance probability engine and modifier breakdown calculation.
+- **[SpouseHierarchyManager](docs/modder/services/SpouseHierarchyManager.md)** — Polygamous spouse ranking (`1st`–`4th+`), rank multiplier calculation, and promotion/demotion affection adjustments.
+- **[SpouseBuffService](docs/modder/services/SpouseBuffService.md)** — Calculation and application of permanent Social Class buffs and follower Skill Type buffs.
+- **[BonusesService](docs/modder/services/BonusesService.md)** — Low-level effect and ActorValue modifier definitions loaded from `BuffsConfig.json`.
+- **[PlayerHouseService](docs/modder/services/PlayerHouseService.md)** — Player home discovery, cell registration, and spouse tenant assignment.
+- **[SpouseAssetsService](docs/modder/services/SpouseAssetsService.md)** — Spouse home sharing, cell/door ownership unlocking, and bed ownership transfer.
+- **[PlayerChildrenService](docs/modder/services/PlayerChildrenService.md)** — Child home assignments, pet/critter management, and adult child follower transitions.
+- **[DeceasedRegistry](docs/modder/services/DeceasedRegistry.md)** — Archival of deceased partners and children, widower/orphan resolution, and inheritance eligibility.
+- **[FactionService](docs/modder/services/FactionService.md)** — Engine faction synchronization and external faction-change interception.
+- **[PackageOverrideService](docs/modder/services/PackageOverrideService.md)** — Runtime AI package override evaluation and injection for housed spouses and children.
+- **[PollingService](docs/modder/services/PollingService.md)** — Periodic background tick coordinator for follower state, FMR pregnancy diffs, and daily maintenance.
+- **[QuestEventHandler](docs/modder/services/QuestEventHandler.md)** — Quest start/stop/stage listener and declarative command executor.
+- **[SkyrimNetIntegration](docs/modder/services/SkyrimNetIntegration.md)** — SkyrimNet C++ decorator registration, perspective-masked JSON profile builders, and AI action handlers.
+- **[NPCIndex](docs/modder/services/NPCIndex.md)** — Fast lookup index mapping `TESNPC` Base FormIDs to placed `Actor` Reference FormIDs.
+- **[NPCTypeDeterminer](docs/modder/services/NPCTypeDeterminer.md)** — Heuristic classifier for Social Class, Skill Type, and Temperament.

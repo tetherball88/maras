@@ -1,0 +1,9 @@
+FormKey: 00004E:TT_MARAS.esp
+EditorID: TTM_SpouseSkillType
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseSkillType
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

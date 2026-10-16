@@ -1,0 +1,9 @@
+FormKey: 000111:TT_MARAS.esp
+EditorID: TTM_SpouseHierarchy
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseHierarchy
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

@@ -1,0 +1,20 @@
+FormKey: 000028:TT_MARAS.esp
+EditorID: TTM_SpouseReligiousDesc
+Name:
+  TargetLanguage: English
+  Value: Blessing of Union
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Health
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Living under divine guidance shields you from harm, increasing your magic resistance by <mag>%

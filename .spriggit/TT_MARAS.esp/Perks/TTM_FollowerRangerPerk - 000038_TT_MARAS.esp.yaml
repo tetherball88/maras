@@ -1,0 +1,14 @@
+FormKey: 000038:TT_MARAS.esp
+EditorID: TTM_FollowerRangerPerk
+Name:
+  TargetLanguage: English
+  Value: Wildsight Bond
+Description:
+  TargetLanguage: English
+  Value: With a seasoned ranger by your side, your instincts sharpen and your aim steadies, increasing ranged damage
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000044:TT_MARAS.esp

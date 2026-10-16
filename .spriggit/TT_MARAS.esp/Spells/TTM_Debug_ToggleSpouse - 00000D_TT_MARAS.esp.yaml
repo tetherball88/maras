@@ -1,0 +1,15 @@
+FormKey: 00000D:TT_MARAS.esp
+EditorID: TTM_Debug_ToggleSpouse
+Name:
+  TargetLanguage: English
+  Value: TTM_Debug_ToggleSpouse
+MenuDisplayObject: 06F747:Skyrim.esm
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+CastType: FireAndForget
+TargetType: TargetActor
+Range: 24
+Effects:
+- BaseEffect: 00000C:TT_MARAS.esp
+  Data: {}

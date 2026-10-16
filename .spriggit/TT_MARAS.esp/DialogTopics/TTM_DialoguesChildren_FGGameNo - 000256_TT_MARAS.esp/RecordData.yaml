@@ -1,0 +1,8 @@
+FormKey: 000256:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_FGGameNo
+Name:
+  TargetLanguage: English
+  Value: Not right now.
+Branch: 000249:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

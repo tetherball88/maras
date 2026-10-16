@@ -1,0 +1,52 @@
+FormKey: 000030:TT_MARAS.esp
+EditorID: TTM_CheckSpouseHome
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestCheckSpouseHome
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Spouse
+      Object: 000030:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_SpouseHomeCenter
+      Object: 000030:TT_MARAS.esp
+      Alias: 4
+  FileName: TTM_QuestCheckSpouseHome
+  Fragments:
+  - Unknown2: 1
+    ScriptName: TTM_QuestCheckSpouseHome
+    FragmentName: Fragment_0
+Flags:
+- AllowRepeatedStages
+Priority: 40
+Type: Misc
+Stages:
+- Flags:
+  - StartUpStage
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: '....'
+Objectives:
+- Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Check spouse's home.
+  Targets:
+  - AliasID: 4
+NextAliasID: 8
+Aliases:
+- Name: Spouse
+  Flags:
+  - Optional
+  - AllowReserved
+  - Protected
+  VoiceTypes: Null
+- ID: 4
+  Name: SpouseHomeCenter
+  Flags:
+  - Optional
+  - AllowReserved
+  VoiceTypes: Null

@@ -1,0 +1,29 @@
+FormKey: 0000D0:TT_MARAS.esp
+EditorID: TTM_LoversRadianceEffect
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TimedAbilityScript
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: pAbilityToRemove
+      Object: 0000DA:TT_MARAS.esp
+    - MutagenObjectType: ScriptIntProperty
+      Name: pHoursToWait
+      Data: 8
+Name:
+  TargetLanguage: English
+  Value: Lover's Radiance
+Flags:
+- Recover
+SecondActorValueWeight: 1
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: MagickaRateMult
+  Type: DualValueModifier
+SecondActorValue: StaminaRateMult
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: The love you share renews your spirit. Stamina and Magicka regenerate <mag>% faster, and shouts recover <mag>% more quickly.

@@ -1,0 +1,6 @@
+FormKey: 00028A:TT_MARAS.esp
+EditorID: TTM_PlayerChildBothParents
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

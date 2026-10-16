@@ -32,6 +32,8 @@ Function RenderRightColumn(TTM_MCM mcm) global
     endif
     mcm.oid_SearchFilterAll = mcm.AddToggleOption("$TTM_MCM_FilterShowAll", searchAll)
     mcm.oid_SearchFilterCandidate = mcm.AddToggleOption("$TTM_MCM_FilterShowCandidates", TTM_MCM_State._GetMcmBool("searchCandidates"), disableOtherFilters)
+    mcm.oid_SearchFilterDating = mcm.AddToggleOption("$TTM_MCM_FilterShowDating", TTM_MCM_State._GetMcmBool("searchDating"), disableOtherFilters)
+    mcm.oid_SearchFilterLover = mcm.AddToggleOption("$TTM_MCM_FilterShowLovers", TTM_MCM_State._GetMcmBool("searchLovers"), disableOtherFilters)
     mcm.oid_SearchFilterFiance = mcm.AddToggleOption("$TTM_MCM_FilterShowFiances", TTM_MCM_State._GetMcmBool("searchFiances"), disableOtherFilters)
     mcm.oid_SearchFilterSpouse = mcm.AddToggleOption("$TTM_MCM_FilterShowSpouses", TTM_MCM_State._GetMcmBool("searchSpouses"), disableOtherFilters)
     mcm.oid_SearchFilterJilted = mcm.AddToggleOption("$TTM_MCM_FilterShowJilted", TTM_MCM_State._GetMcmBool("searchJilted"), disableOtherFilters)
@@ -43,6 +45,8 @@ Function RenderNpcsList(TTM_MCM mcm) global
     string searchValue = TTM_MCM_State.GetSearchValueNpc()
     bool searchAll = GetSearchAll()
     bool searchCandidates = TTM_MCM_State._GetMcmBool("searchCandidates")
+    bool searchDating = TTM_MCM_State._GetMcmBool("searchDating")
+    bool searchLovers = TTM_MCM_State._GetMcmBool("searchLovers")
     bool searchFiances = TTM_MCM_State._GetMcmBool("searchFiances")
     bool searchSpouses = TTM_MCM_State._GetMcmBool("searchSpouses")
     bool searchJilted = TTM_MCM_State._GetMcmBool("searchJilted")
@@ -58,6 +62,10 @@ Function RenderNpcsList(TTM_MCM mcm) global
         if(!searchAll)
             if(status == "candidate")
                 skipNpc = !searchCandidates
+            elseif(status == "dating")
+                skipNpc = !searchDating
+            elseif(status == "lover")
+                skipNpc = !searchLovers
             elseif(status == "engaged")
                 skipNpc = !searchFiances
             elseif(status == "married")
@@ -96,6 +104,12 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
     elseif(option == mcm.oid_SearchFilterCandidate)
         TTM_MCM_State._SetMcmBool("searchCandidates", !TTM_MCM_State._GetMcmBool("searchCandidates"))
         mcm.ForcePageReset()
+    elseif(option == mcm.oid_SearchFilterDating)
+        TTM_MCM_State._SetMcmBool("searchDating", !TTM_MCM_State._GetMcmBool("searchDating"))
+        mcm.ForcePageReset()
+    elseif(option == mcm.oid_SearchFilterLover)
+        TTM_MCM_State._SetMcmBool("searchLovers", !TTM_MCM_State._GetMcmBool("searchLovers"))
+        mcm.ForcePageReset()
     elseif(option == mcm.oid_SearchFilterFiance)
         TTM_MCM_State._SetMcmBool("searchFiances", !TTM_MCM_State._GetMcmBool("searchFiances"))
         mcm.ForcePageReset()
@@ -120,6 +134,8 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         mcm.SetInfoText("$TTM_MCM_TT_ViewNpcData{" + TTM_Utils.GetActorName(npc) + "}")
     elseif(option == mcm.oid_SearchFilterAll)
     elseif(option == mcm.oid_SearchFilterCandidate)
+    elseif(option == mcm.oid_SearchFilterDating)
+    elseif(option == mcm.oid_SearchFilterLover)
     elseif(option == mcm.oid_SearchFilterFiance)
     elseif(option == mcm.oid_SearchFilterSpouse)
     elseif(option == mcm.oid_SearchFilterJilted)

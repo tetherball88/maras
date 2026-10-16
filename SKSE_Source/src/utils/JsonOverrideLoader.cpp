@@ -1,137 +1,199 @@
 #include "utils/JsonOverrideLoader.h"
 
-#include <fstream>
-#include <nlohmann/json.hpp>
-
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
+#include "utils/StringUtils.h"
 
 namespace MARAS::Utils {
 
     // Static member initialization
     JsonOverrideLoader::LoadStatistics JsonOverrideLoader::s_lastStats{};
 
-    bool JsonOverrideLoader::LoadOverridesFromFolder(const std::string& folderPath, OverrideMap& outOverrides) {
+    bool JsonOverrideLoader::ScanFormDataJsonFolder(const std::string& folderPath,
+                                                    std::string_view logContext,
+                                                    size_t& outTotalFiles,
+                                                    size_t& outSuccessfulFiles,
+                                                    size_t& outTotalEntries,
+                                                    size_t& outValidEntries,
+                                                    size_t& outInvalidFormKeys,
+                                                    const FormEntryCallback& onEntry) {
         namespace fs = std::filesystem;
 
-        s_lastStats = LoadStatistics{};
+        outTotalFiles = 0;
+        outSuccessfulFiles = 0;
+        outTotalEntries = 0;
+        outValidEntries = 0;
+        outInvalidFormKeys = 0;
 
         if (!fs::exists(folderPath) || !fs::is_directory(folderPath)) {
-            MARAS_LOG_ERROR("Override folder does not exist: {}", folderPath);
+            MARAS_LOG_ERROR("[{}] Config folder does not exist: {}", logContext, folderPath);
             return false;
         }
 
-        MARAS_LOG_INFO("Loading overrides from folder: {}", folderPath);
+        MARAS_LOG_INFO("[{}] Loading JSON configurations from folder: {}", logContext, folderPath);
 
         try {
             for (const auto& entry : fs::directory_iterator(folderPath)) {
                 if (IsValidJsonFile(entry.path())) {
-                    s_lastStats.totalFiles++;
+                    outTotalFiles++;
 
-                    if (LoadOverridesFromFile(entry.path().string(), outOverrides)) {
-                        s_lastStats.successfulFiles++;
+                    if (ScanFormDataJsonFile(entry.path(), logContext, outTotalEntries, outValidEntries, outInvalidFormKeys,
+                                             onEntry)) {
+                        outSuccessfulFiles++;
                     }
                 }
             }
         } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("Error scanning override folder '{}': {}", folderPath, e.what());
+            MARAS_LOG_ERROR("[{}] Error scanning folder '{}': {}", logContext, folderPath, e.what());
             return false;
         }
+
+        return outSuccessfulFiles > 0;
+    }
+
+    bool JsonOverrideLoader::ScanFormDataJsonFile(const std::filesystem::path& filePath,
+                                                  std::string_view logContext,
+                                                  size_t& ioTotalEntries,
+                                                  size_t& ioValidEntries,
+                                                  size_t& ioInvalidFormKeys,
+                                                  const FormEntryCallback& onEntry) {
+        if (!IsValidJsonFile(filePath)) {
+            MARAS_LOG_WARN("[{}] Invalid JSON file: {}", logContext, filePath.string());
+            return false;
+        }
+
+        MARAS_LOG_DEBUG("[{}] Loading JSON file: {}", logContext, filePath.string());
+
+        try {
+            std::ifstream file(filePath);
+            if (!file.is_open()) {
+                MARAS_LOG_ERROR("[{}] Cannot open file: {}", logContext, filePath.string());
+                return false;
+            }
+
+            nlohmann::json json = nlohmann::json::parse(file, nullptr, false, true);
+            if (json.is_discarded()) {
+                MARAS_LOG_ERROR("[{}] Failed to parse JSON syntax in file: {}", logContext, filePath.string());
+                return false;
+            }
+
+            if (!json.is_object()) {
+                MARAS_LOG_ERROR("[{}] JSON file is not an object: {}", logContext, filePath.string());
+                return false;
+            }
+
+            size_t fileEntries = 0;
+
+            for (const auto& [key, value] : json.items()) {
+                if (key.starts_with("__metaInfo")) {
+                    continue;
+                }
+
+                if (!key.starts_with("__formData|")) {
+                    MARAS_LOG_WARN("[{}] Ignoring non-form key: {}", logContext, key);
+                    continue;
+                }
+
+                ioTotalEntries++;
+
+                auto parsedKey = ParseFormKey(key);
+                if (!parsedKey.isValid) {
+                    ioInvalidFormKeys++;
+                    MARAS_LOG_WARN("[{}] Failed to parse form key: {}", logContext, key);
+                    continue;
+                }
+
+                if (onEntry && onEntry(key, parsedKey, value)) {
+                    ioValidEntries++;
+                    fileEntries++;
+                }
+            }
+
+            MARAS_LOG_INFO("[{}] Loaded {} entries from file: {}", logContext, fileEntries, filePath.string());
+            return true;
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("[{}] Failed to load JSON from '{}': {}", logContext, filePath.string(), e.what());
+            return false;
+        }
+    }
+
+    bool JsonOverrideLoader::LoadOverridesFromFolder(const std::string& folderPath, OverrideMap& outOverrides) {
+        s_lastStats = LoadStatistics{};
+
+        const bool ok = ScanFormDataJsonFolder(
+            folderPath, "JsonOverrideLoader", s_lastStats.totalFiles, s_lastStats.successfulFiles,
+            s_lastStats.totalOverrides, s_lastStats.validOverrides, s_lastStats.invalidFormKeys,
+            [&](const std::string& key, const ParsedFormKey& parsedKey, const nlohmann::json& value) {
+                auto* form = LookupForm<RE::TESForm>(parsedKey.localFormID, parsedKey.pluginName, "JsonOverrideLoader");
+                if (!form) {
+                    s_lastStats.unresolvedForms++;
+                    MARAS_LOG_WARN("Form not found for key: {}", key);
+                    return false;
+                }
+
+                const FormID resolvedFormID = form->GetFormID();
+                NPCOverrideData overrideData = ParseOverrideObject(value);
+                if (!ValidateOverrideData(overrideData)) {
+                    MARAS_LOG_WARN("Invalid override data for form {:08X}", resolvedFormID);
+                    return false;
+                }
+
+                if (!overrideData.HasAnyOverride()) {
+                    return false;
+                }
+
+                MARAS_LOG_DEBUG("Loaded override for {:08X}: social={}, skill={}, temperament={}", resolvedFormID,
+                                overrideData.socialClass.empty() ? "none" : overrideData.socialClass,
+                                overrideData.skillType.empty() ? "none" : overrideData.skillType,
+                                overrideData.temperament.empty() ? "none" : overrideData.temperament);
+
+                outOverrides[resolvedFormID] = std::move(overrideData);
+                return true;
+            });
 
         MARAS_LOG_INFO("Override loading complete. Files: {}/{}, Overrides: {}/{}, Invalid keys: {}, Unresolved: {}",
                        s_lastStats.successfulFiles, s_lastStats.totalFiles, s_lastStats.validOverrides,
                        s_lastStats.totalOverrides, s_lastStats.invalidFormKeys, s_lastStats.unresolvedForms);
 
-        return s_lastStats.successfulFiles > 0;
+        return ok;
     }
 
     bool JsonOverrideLoader::LoadOverridesFromFile(const std::string& filePath, OverrideMap& outOverrides) {
-        if (!IsValidJsonFile(filePath)) {
-            MARAS_LOG_WARN("Invalid JSON file: {}", filePath);
-            return false;
-        }
-
-        MARAS_LOG_DEBUG("Loading overrides from file: {}", filePath);
-
-        try {
-            return ParseJsonFile(filePath, outOverrides);
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("Failed to load overrides from '{}': {}", filePath, e.what());
-            return false;
-        }
+        return ParseJsonFile(filePath, outOverrides);
     }
 
     bool JsonOverrideLoader::ParseJsonFile(const std::string& filePath, OverrideMap& outOverrides) {
-        std::ifstream file(filePath);
-        if (!file.is_open()) {
-            MARAS_LOG_ERROR("Cannot open file: {}", filePath);
-            return false;
-        }
+        return ScanFormDataJsonFile(
+            filePath, "JsonOverrideLoader", s_lastStats.totalOverrides, s_lastStats.validOverrides,
+            s_lastStats.invalidFormKeys,
+            [&](const std::string& key, const ParsedFormKey& parsedKey, const nlohmann::json& value) {
+                auto* form = LookupForm<RE::TESForm>(parsedKey.localFormID, parsedKey.pluginName, "JsonOverrideLoader");
+                if (!form) {
+                    s_lastStats.unresolvedForms++;
+                    MARAS_LOG_WARN("Form not found for key: {}", key);
+                    return false;
+                }
 
-        nlohmann::json json;
-        file >> json;
+                const FormID resolvedFormID = form->GetFormID();
+                NPCOverrideData overrideData = ParseOverrideObject(value);
+                if (!ValidateOverrideData(overrideData)) {
+                    MARAS_LOG_WARN("Invalid override data for form {:08X}", resolvedFormID);
+                    return false;
+                }
 
-        if (!json.is_object()) {
-            MARAS_LOG_ERROR("JSON file is not an object: {}", filePath);
-            return false;
-        }
+                if (!overrideData.HasAnyOverride()) {
+                    return false;
+                }
 
-        size_t fileOverrides = 0;
-
-        for (const auto& [key, value] : json.items()) {
-            // Skip metadata entries
-            if (key.starts_with("__metaInfo")) {
-                continue;
-            }
-
-            // Only process form data keys
-            if (!key.starts_with("__formData|")) {
-                MARAS_LOG_WARN("Ignoring non-form key: {}", key);
-                continue;
-            }
-
-            s_lastStats.totalOverrides++;
-
-            // Parse the form key
-            auto formID = ParseAndResolveFormKey(key);
-            if (!formID.has_value()) {
-                s_lastStats.invalidFormKeys++;
-                MARAS_LOG_WARN("Failed to parse form key: {}", key);
-                continue;
-            }
-
-            // Verify form exists
-            auto form = RE::TESForm::LookupByID(formID.value());
-            if (!form) {
-                s_lastStats.unresolvedForms++;
-                MARAS_LOG_WARN("Form not found for ID {:08X} from key: {}", formID.value(), key);
-                continue;
-            }
-
-            // Parse override data
-            NPCOverrideData overrideData = ParseOverrideObject(value);
-
-            if (!ValidateOverrideData(overrideData)) {
-                MARAS_LOG_WARN("Invalid override data for form {:08X}", formID.value());
-                continue;
-            }
-
-            // Only store if there are actual overrides
-            if (overrideData.HasAnyOverride()) {
-                MARAS_LOG_DEBUG("Loaded override for {:08X}: social={}, skill={}, temperament={}", formID.value(),
+                MARAS_LOG_DEBUG("Loaded override for {:08X}: social={}, skill={}, temperament={}", resolvedFormID,
                                 overrideData.socialClass.empty() ? "none" : overrideData.socialClass,
                                 overrideData.skillType.empty() ? "none" : overrideData.skillType,
                                 overrideData.temperament.empty() ? "none" : overrideData.temperament);
 
-                outOverrides[formID.value()] = std::move(overrideData);
-                s_lastStats.validOverrides++;
-                fileOverrides++;
-            }
-        }
-
-        MARAS_LOG_INFO("Loaded {} overrides from file: {}", fileOverrides, filePath);
-        return true;
+                outOverrides[resolvedFormID] = std::move(overrideData);
+                return true;
+            });
     }
 
     NPCOverrideData JsonOverrideLoader::ParseOverrideObject(const nlohmann::json& jsonObj) {
@@ -161,20 +223,11 @@ namespace MARAS::Utils {
     }
 
     bool JsonOverrideLoader::ValidateOverrideData(const NPCOverrideData& data) {
-        // Helper lambda for case-insensitive comparison
-        auto caseInsensitiveEquals = [](std::string_view a, std::string_view b) {
-            return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](char ca, char cb) {
-                unsigned char ua = static_cast<unsigned char>(ca);
-                unsigned char ub = static_cast<unsigned char>(cb);
-                return std::tolower(ua) == std::tolower(ub);
-            });
-        };
-
         // Validate social class
         if (!data.socialClass.empty()) {
             auto socialClass = StringToSocialClass(data.socialClass);
             auto expected = SocialClassToString(socialClass);
-            if (!caseInsensitiveEquals(expected, data.socialClass)) {
+            if (!StringUtils::CaseInsensitiveEquals(expected, data.socialClass)) {
                 MARAS_LOG_WARN("Invalid social class: {}", data.socialClass);
                 return false;
             }
@@ -184,7 +237,7 @@ namespace MARAS::Utils {
         if (!data.skillType.empty()) {
             auto skillType = StringToSkillType(data.skillType);
             auto expected = SkillTypeToString(skillType);
-            if (!caseInsensitiveEquals(expected, data.skillType)) {
+            if (!StringUtils::CaseInsensitiveEquals(expected, data.skillType)) {
                 MARAS_LOG_WARN("Invalid skill type: {}", data.skillType);
                 return false;
             }
@@ -194,7 +247,7 @@ namespace MARAS::Utils {
         if (!data.temperament.empty()) {
             auto temperament = StringToTemperament(data.temperament);
             auto expected = TemperamentToString(temperament);
-            if (!caseInsensitiveEquals(expected, data.temperament)) {
+            if (!StringUtils::CaseInsensitiveEquals(expected, data.temperament)) {
                 MARAS_LOG_WARN("Invalid temperament: {}", data.temperament);
                 return false;
             }

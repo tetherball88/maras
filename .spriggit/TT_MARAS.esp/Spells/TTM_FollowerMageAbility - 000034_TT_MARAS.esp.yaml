@@ -1,0 +1,13 @@
+FormKey: 000034:TT_MARAS.esp
+EditorID: TTM_FollowerMageAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Mage
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+Type: Ability
+Effects:
+- BaseEffect: 000032:TT_MARAS.esp
+  Data:
+    Magnitude: 10

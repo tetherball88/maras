@@ -1,21 +1,20 @@
 #include "core/SpouseAssetsService.h"
 
-#include <cstdint>
-#include <functional>
-
 #include "core/FormCache.h"
 #include "core/HomeCellService.h"
+#include "core/NPCIndex.h"
+#include "services/ActorService.h"
 #include "utils/Common.h"
 
 namespace MARAS {
 
     namespace {
-        // Helper to lookup an actor by formID
+        // Helper to lookup an actor by formID via NPCIndex
         inline RE::Actor* LookupActor(RE::FormID id) {
             if (id == 0) {
                 return nullptr;
             }
-            return RE::TESForm::LookupByID<RE::Actor>(id);
+            return NPCIndex::GetSingleton().GetActorFromFormId(id);
         }
 
         // Iterate all bed references registered for an NPC and apply a function
@@ -30,6 +29,44 @@ namespace MARAS {
                 }
             }
         }
+
+        // Captures original cell public flag if not yet recorded and ensures cell is set public
+        void ApplyCellSharedPublicState(RE::FormID cellFormID, RegisteredCellData& data) {
+            auto* form = RE::TESForm::LookupByID(cellFormID);
+            if (!form) {
+                MARAS_LOG_WARN("SpouseAssetsService: could not lookup cell {:08X} to apply public state", cellFormID);
+                return;
+            }
+            auto* cell = form->As<RE::TESObjectCELL>();
+            if (!cell) {
+                MARAS_LOG_WARN("SpouseAssetsService: cell {:08X} form is not a TESObjectCELL", cellFormID);
+                return;
+            }
+
+            std::uint16_t flags = cell->cellFlags.underlying();
+            bool isPublic = (flags & static_cast<std::uint16_t>(RE::TESObjectCELL::Flag::kPublicArea)) != 0;
+            if (!data.originalPublicRecorded) {
+                data.originalPublicRecorded = true;
+                data.originalPublicState = isPublic;
+            }
+            if (!isPublic) {
+                cell->SetPublic(true);
+                MARAS_LOG_INFO("SpouseAssetsService: set cell {:08X} public=true (was private)", cellFormID);
+            }
+        }
+
+        // Restores original cell public flag if it was originally private
+        void RestoreCellOriginalPublicState(RE::FormID cellFormID, const RegisteredCellData& data) {
+            if (!data.originalPublicRecorded || data.originalPublicState) {
+                return;
+            }
+            if (auto* form = RE::TESForm::LookupByID(cellFormID)) {
+                if (auto* cell = form->As<RE::TESObjectCELL>()) {
+                    cell->SetPublic(false);
+                    MARAS_LOG_INFO("SpouseAssetsService: restored cell {:08X} public=false", cellFormID);
+                }
+            }
+        }
     }  // namespace
 
     SpouseAssetsService& SpouseAssetsService::GetSingleton() {
@@ -37,7 +74,10 @@ namespace MARAS {
         return instance;
     }
 
-    SpouseAssetsService::SpouseAssetsService() { sharedHomes_.clear(); }
+    SpouseAssetsService::SpouseAssetsService() {
+        sharedHomes_.clear();
+        originalBedOwners_.clear();
+    }
 
     // Note: door queries are provided by HomeCellService; this service doesn't store door lists.
 
@@ -54,51 +94,10 @@ namespace MARAS {
             return false;
         }
 
-        auto it = sharedHomes_.find(homeCell);
-        if (it == sharedHomes_.end()) {
-            RegisteredCellData data;
-            data.sharingSpouses.insert(npcFormID);
-            data.sharedWithPlayer = true;
-
-            // Record original public state for the cell (if available) and set public if originally private
-            if (auto form = RE::TESForm::LookupByID(homeCell)) {
-                if (auto cell = form->As<RE::TESObjectCELL>()) {
-                    std::uint16_t flags = cell->cellFlags.underlying();
-                    bool isPublic = (flags & static_cast<std::uint16_t>(RE::TESObjectCELL::Flag::kPublicArea)) != 0;
-                    data.originalPublicRecorded = true;
-                    data.originalPublicState = isPublic;
-                    if (!isPublic) {
-                        cell->SetPublic(true);
-                        MARAS_LOG_INFO("ShareHouseWithPlayer: set cell {:08X} public=true (was private)", homeCell);
-                    }
-                } else {
-                    MARAS_LOG_WARN("ShareHouseWithPlayer: cell {:08X} form is not a TESObjectCELL", homeCell);
-                }
-            } else {
-                MARAS_LOG_WARN("ShareHouseWithPlayer: could not lookup cell {:08X} to record public state", homeCell);
-            }
-
-            sharedHomes_.emplace(homeCell, std::move(data));
-        } else {
-            // Ensure original public state is recorded for existing entry
-            if (!it->second.originalPublicRecorded) {
-                if (auto form = RE::TESForm::LookupByID(homeCell)) {
-                    if (auto cell = form->As<RE::TESObjectCELL>()) {
-                        std::uint16_t flags = cell->cellFlags.underlying();
-                        bool isPublic = (flags & static_cast<std::uint16_t>(RE::TESObjectCELL::Flag::kPublicArea)) != 0;
-                        it->second.originalPublicRecorded = true;
-                        it->second.originalPublicState = isPublic;
-                        if (!isPublic) {
-                            cell->SetPublic(true);
-                            MARAS_LOG_INFO("ShareHouseWithPlayer: set cell {:08X} public=true (was private)", homeCell);
-                        }
-                    }
-                }
-            }
-
-            it->second.sharingSpouses.insert(npcFormID);
-            it->second.sharedWithPlayer = true;
-        }
+        auto& data = sharedHomes_[homeCell];
+        ApplyCellSharedPublicState(homeCell, data);
+        data.sharingSpouses.insert(npcFormID);
+        data.sharedWithPlayer = true;
 
         // Transfer owned beds to player faction using HomeCellService data
         ShareFurniture(npcFormID);
@@ -131,14 +130,7 @@ namespace MARAS {
                     data.sharedWithPlayer = !data.sharingSpouses.empty();
                     // If no more spouses sharing this home, restore original public state if needed
                     if (!data.sharedWithPlayer) {
-                        if (data.originalPublicRecorded && !data.originalPublicState) {
-                            if (auto form = RE::TESForm::LookupByID(home)) {
-                                if (auto cell = form->As<RE::TESObjectCELL>()) {
-                                    cell->SetPublic(false);
-                                    MARAS_LOG_INFO("StopShareHouseWithPlayer: restored cell {:08X} public=false", home);
-                                }
-                            }
-                        }
+                        RestoreCellOriginalPublicState(home, data);
                         sharedHomes_.erase(it);
                     }
                 }
@@ -156,17 +148,7 @@ namespace MARAS {
 
                     data.sharedWithPlayer = !data.sharingSpouses.empty();
                     if (!data.sharedWithPlayer) {
-                        // Restore original public state if we recorded it and it was originally private
-                        if (data.originalPublicRecorded && !data.originalPublicState) {
-                            if (auto form = RE::TESForm::LookupByID(it->first)) {
-                                if (auto cell = form->As<RE::TESObjectCELL>()) {
-                                    cell->SetPublic(false);
-                                    MARAS_LOG_INFO("StopShareHouseWithPlayer: restored cell {:08X} public=false",
-                                                   it->first);
-                                }
-                            }
-                        }
-
+                        RestoreCellOriginalPublicState(it->first, data);
                         it = sharedHomes_.erase(it);
                         continue;
                     }
@@ -219,10 +201,17 @@ namespace MARAS {
 
     bool SpouseAssetsService::Load(SKSE::SerializationInterface* serialization) {
         if (!serialization) return false;
-        sharedHomes_.clear();
+        Revert();
+
+        constexpr std::uint32_t kMaxRecords = 10000;
 
         std::uint32_t cellCount = 0;
         if (!serialization->ReadRecordData(cellCount)) return false;
+        if (cellCount > kMaxRecords) {
+            MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt cellCount {}", cellCount);
+            return false;
+        }
+
         for (std::uint32_t i = 0; i < cellCount; ++i) {
             RE::FormID savedCell = 0;
             if (!serialization->ReadRecordData(savedCell)) return false;
@@ -239,6 +228,7 @@ namespace MARAS {
                 if (!serialization->ReadRecordData(origState)) return false;
                 std::uint32_t sharingCount = 0;
                 if (!serialization->ReadRecordData(sharingCount)) return false;
+                if (sharingCount > kMaxRecords) return false;
                 for (std::uint32_t j = 0; j < sharingCount; ++j) {
                     RE::FormID discard = 0;
                     if (!serialization->ReadRecordData(discard)) return false;
@@ -264,13 +254,17 @@ namespace MARAS {
             // sharing spouses
             std::uint32_t sharingCount = 0;
             if (!serialization->ReadRecordData(sharingCount)) return false;
+            if (sharingCount > kMaxRecords) {
+                MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt sharingCount {}", sharingCount);
+                return false;
+            }
             for (std::uint32_t j = 0; j < sharingCount; ++j) {
                 RE::FormID savedSid = 0;
                 if (!serialization->ReadRecordData(savedSid)) return false;
                 RE::FormID resolvedSid = 0;
                 if (savedSid != 0 && serialization->ResolveFormID(savedSid, resolvedSid)) {
                     // Skip dead or invalid actors
-                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(resolvedSid);
+                    auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(resolvedSid);
                     if (!actor || actor->IsDead()) {
                         MARAS_LOG_INFO("SpouseAssetsService::Load - skipping dead/invalid actor {:08X}", resolvedSid);
                         continue;
@@ -279,19 +273,17 @@ namespace MARAS {
                 }
             }
 
-            // Only store if there are still valid sharing spouses
+            // Only store and re-apply if there are still valid sharing spouses
             if (!data.sharingSpouses.empty()) {
+                data.sharedWithPlayer = true;
+                ApplyCellSharedPublicState(cellId, data);
+                for (auto spouseId : data.sharingSpouses) {
+                    ShareFurniture(spouseId);
+                }
                 sharedHomes_.emplace(cellId, std::move(data));
             } else {
                 // Restore original public state if all spouses were dead
-                if (data.originalPublicRecorded && !data.originalPublicState) {
-                    if (auto form = RE::TESForm::LookupByID(cellId)) {
-                        if (auto cell = form->As<RE::TESObjectCELL>()) {
-                            cell->SetPublic(false);
-                            MARAS_LOG_INFO("SpouseAssetsService::Load - restored cell {:08X} public=false (all spouses dead)", cellId);
-                        }
-                    }
-                }
+                RestoreCellOriginalPublicState(cellId, data);
             }
         }
 
@@ -310,8 +302,18 @@ namespace MARAS {
             return;
         }
 
-        // Use HomeCellService recorded beds for this NPC
-        ForEachNpcBed(actor, [playerFaction](RE::TESObjectREFR* ref) { ref->extraList.SetOwner(playerFaction); });
+        // Record original bed owner before transferring to player faction
+        ForEachNpcBed(actor, [this, playerFaction](RE::TESObjectREFR* ref) {
+            const RE::FormID bedID = ref->GetFormID();
+            if (!originalBedOwners_.contains(bedID)) {
+                if (auto* origOwner = ref->extraList.GetOwner()) {
+                    if (origOwner != playerFaction) {
+                        originalBedOwners_[bedID] = origOwner->GetFormID();
+                    }
+                }
+            }
+            ref->extraList.SetOwner(playerFaction);
+        });
     }
 
     void SpouseAssetsService::StopShareFurniture(RE::FormID npcFormID) {
@@ -320,13 +322,62 @@ namespace MARAS {
         auto actor = LookupActor(npcFormID);
         if (!actor) return;
 
-        // Restore those bed refs back to the actor
-        ForEachNpcBed(actor, [actor](RE::TESObjectREFR* ref) { ref->extraList.SetOwner(actor->GetActorBase()); });
+        auto actorBase = ActorSvc::GetActorBase(npcFormID);
+
+        ForEachNpcBed(actor, [this, actorBase](RE::TESObjectREFR* ref) {
+            const RE::FormID bedID = ref->GetFormID();
+            RE::TESForm* restoredOwner = nullptr;
+            auto it = originalBedOwners_.find(bedID);
+            if (it != originalBedOwners_.end()) {
+                restoredOwner = RE::TESForm::LookupByID(it->second);
+                originalBedOwners_.erase(it);
+            }
+            if (!restoredOwner) {
+                restoredOwner = actorBase;
+            }
+            if (restoredOwner) {
+                ref->extraList.SetOwner(restoredOwner);
+            }
+        });
     }
 
     void SpouseAssetsService::Revert() {
+        for (const auto& [cellID, data] : sharedHomes_) {
+            for (auto spouseID : data.sharingSpouses) {
+                StopShareFurniture(spouseID);
+            }
+            RestoreCellOriginalPublicState(cellID, data);
+        }
         sharedHomes_.clear();
+        originalBedOwners_.clear();
         MARAS_LOG_INFO("SpouseAssetsService: reverted data");
+    }
+
+    nlohmann::json SpouseAssetsService::DumpJson() const {
+        nlohmann::json j = nlohmann::json::array();
+        for (const auto& [cellID, data] : sharedHomes_) {
+            nlohmann::json h;
+            h["cellFormId"] = std::format("{:08X}", cellID);
+            std::string cellName = "";
+            if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(cellID)) {
+                if (cell->GetName()) cellName = cell->GetName();
+            }
+            h["cellName"] = cellName;
+            h["sharedWithPlayer"] = data.sharedWithPlayer;
+            h["originalPublicRecorded"] = data.originalPublicRecorded;
+            h["originalPublicState"] = data.originalPublicState;
+
+            nlohmann::json spousesArray = nlohmann::json::array();
+            for (auto spouseID : data.sharingSpouses) {
+                nlohmann::json s;
+                s["formId"] = std::format("{:08X}", spouseID);
+                s["name"] = ActorSvc::GetName(spouseID);
+                spousesArray.push_back(s);
+            }
+            h["sharingSpouses"] = spousesArray;
+            j.push_back(h);
+        }
+        return j;
     }
 
 }  // namespace MARAS

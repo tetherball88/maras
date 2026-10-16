@@ -1,0 +1,24 @@
+name: "ttm_child_grew_up"
+description: "Direct narration when a child grows up from infancy to child age in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_grew_up"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and nearby family members comment on {{event_json.child}} growing out of infancy into a young child in a way that fits their personalities."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 8

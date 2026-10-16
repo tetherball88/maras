@@ -1,0 +1,19 @@
+{% if get_global_value("TTM_EnablePolygamyToggle") == 1 %}
+    {% if is_in_faction(actorUUID, "TTM_TrackedNpcs") %}
+        {% set npcName = decnpc(actorUUID).name %}
+        {% set relationsRank = get_faction_rank(actorUUID, "TTM_TrackedNpcs") %}
+
+        {% if render_mode != "dialogue_target" %}
+            {% if relationsRank >= 1 and relationsRank <= 2  %}
+                {{npcName}} has accepted {{player.name}}'s practice of taking multiple spouses, which is accepted in Skyrim{% if get_quest_stage("MQ104", false) >= 90 %}, especially for the Dragonborn{% endif %}. This doesn't mean you necessarily adore your co-spouses - you might be close friends with some, merely cordial with others, or even harbor rivalries, all while respecting the arrangement you've agreed to.
+            {% endif %}
+        {% endif %}
+    {% endif %}
+
+    {% if actorUUID == player.UUID %}
+        {{player.name}} practices taking multiple spouses, which is accepted in Skyrim{% if get_quest_stage("MQ104", false) >= 90 %}, especially for the Dragonborn{% endif %}.
+    {% endif %}
+{% endif %}
+
+
+

@@ -1,0 +1,8 @@
+FormKey: 00058D:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkInCheatingContinue
+Name:
+  TargetLanguage: English
+  Value: I'm not stopping. Let's be honest, this isn't working. We're over.
+Branch: 000557:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

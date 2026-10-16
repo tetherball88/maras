@@ -1,0 +1,13 @@
+FormKey: 000043:TT_MARAS.esp
+EditorID: TTM_FollowerWarriorAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Warrior
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+Type: Ability
+Effects:
+- BaseEffect: 000005:TT_MARAS.esp
+  Data:
+    Magnitude: 5

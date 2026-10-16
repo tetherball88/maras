@@ -1,0 +1,14 @@
+FormKey: 00011D:TT_MARAS.esp
+EditorID: TTM_AffectionThresholds_Content
+Parent: 00011C:TT_MARAS.esp
+PreviousSibling: Null
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetEventDataConditionData
+    Member: Keyword
+    Record: 00011F:TT_MARAS.esp
+  ComparisonValue: 1
+Flags:
+- Random
+MaxConcurrentQuests: 1

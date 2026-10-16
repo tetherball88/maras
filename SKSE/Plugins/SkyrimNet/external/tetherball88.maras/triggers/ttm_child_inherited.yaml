@@ -1,0 +1,24 @@
+name: "ttm_child_inherited"
+description: "Direct narration when child custody is inherited following a parent's death in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_inherited"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and nearby family members react to {{originator}} taking custody and guardianship of {{event_json.child}} following the death of {{event_json.child}}'s parent in a way that fits their personalities."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6

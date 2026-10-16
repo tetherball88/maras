@@ -1,0 +1,30 @@
+FormKey: 0000FB:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 00015E:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Anger
+  EmotionValue: 100
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: We have nothing to talk about. I can't believe what you did to me.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0CCE4E:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasMagicEffectConditionData
+    MagicEffect: 000103:TT_MARAS.esp
+  ComparisonValue: 1

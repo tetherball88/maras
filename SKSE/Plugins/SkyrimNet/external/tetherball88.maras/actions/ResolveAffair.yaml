@@ -1,0 +1,34 @@
+# customCategory: TTM_CategoryRelationship
+name: ResolveAffair
+description: "{{render_template(\"maras_actions/maras_action_resolve_affair\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: ResolveAffair
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (cheater or victim declaring resolution)
+  - type: dynamic
+    name: partnerName
+    description: Display name of the partner to resolve the affair with.
+    useNearbyActors: false
+  - type: dynamic
+    name: affairPartnerName
+    description: Display name of the third-party affair partner involved.
+    useNearbyActors: false
+  - type: dynamic
+    name: resolution
+    description: Chosen resolution outcome ('confronted', 'allowed', or 'breakup').
+    useNearbyActors: false
+  - type: dynamic
+    name: reasoning
+    description: Explain decision from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+    useNearbyActors: false
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_resolve_affair_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""

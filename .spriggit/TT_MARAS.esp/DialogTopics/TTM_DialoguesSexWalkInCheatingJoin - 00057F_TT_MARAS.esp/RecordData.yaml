@@ -1,0 +1,8 @@
+FormKey: 00057F:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkInCheatingJoin
+Name:
+  TargetLanguage: English
+  Value: Don't go. Come here. Join us.
+Branch: 000557:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

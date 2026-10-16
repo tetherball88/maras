@@ -1,0 +1,6 @@
+FormKey: 000264:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_ConfirmNightGame
+Priority: 34
+Branch: 000262:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

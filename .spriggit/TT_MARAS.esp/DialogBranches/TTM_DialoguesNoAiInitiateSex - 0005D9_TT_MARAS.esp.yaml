@@ -1,0 +1,7 @@
+FormKey: 0005D9:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAiInitiateSex
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 0005DA:TT_MARAS.esp

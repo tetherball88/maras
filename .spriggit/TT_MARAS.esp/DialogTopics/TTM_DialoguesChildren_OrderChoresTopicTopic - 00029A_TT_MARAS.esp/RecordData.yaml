@@ -1,0 +1,9 @@
+FormKey: 00029A:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_OrderChoresTopicTopic
+Name:
+  TargetLanguage: English
+  Value: Go do your chores.
+Priority: 28
+Branch: 000299:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

@@ -1,0 +1,7 @@
+FormKey: 000213:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_FGPetBailout
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 000214:TT_MARAS.esp

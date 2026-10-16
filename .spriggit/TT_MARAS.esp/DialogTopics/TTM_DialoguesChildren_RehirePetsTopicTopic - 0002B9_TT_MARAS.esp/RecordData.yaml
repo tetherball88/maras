@@ -1,0 +1,8 @@
+FormKey: 0002B9:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_RehirePetsTopicTopic
+Name:
+  TargetLanguage: English
+  Value: C'mon boy, come with me.
+Branch: 0002B8:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

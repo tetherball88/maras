@@ -1,0 +1,14 @@
+FormKey: 000040:TT_MARAS.esp
+EditorID: TTM_PermanentPovertyPerk
+Name:
+  TargetLanguage: English
+  Value: Enduring Hearts
+Description:
+  TargetLanguage: English
+  Value: Enduring hardship together fosters resilience, allowing stamina to regenerate faster
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000048:TT_MARAS.esp

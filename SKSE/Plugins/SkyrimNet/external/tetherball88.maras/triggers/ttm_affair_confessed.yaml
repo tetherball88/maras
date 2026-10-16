@@ -1,0 +1,24 @@
+name: "ttm_affair_confessed"
+description: "Direct narration when an actor confesses an affair to their partner in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_affair_confessed"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and {{event_json.victim}} address {{originator}}'s affair confession directly in a way that fits their personalities and relationship history."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 9

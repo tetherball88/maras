@@ -1,11 +1,5 @@
 #pragma once
 
-#include <shared_mutex>
-#include <string>
-#include <string_view>
-#include <unordered_set>
-#include <vector>
-
 #include "PCH.h"
 
 namespace MARAS {
@@ -51,16 +45,28 @@ namespace MARAS {
         // after cosave restore.
         void SetBaseSandboxPackage(RE::FormID pkgID);
 
-        // Register an actor with the currently configured base package.
+        // Register an actor with the currently configured base sandbox package (0x6A).
         // Immediately injects the package on the live actor (unless they are a player
         // teammate, in which case injection is deferred until their follow package ends).
         void RegisterActor(RE::FormID actorID);
+
+        // Register a child pet/critter with the pet/critter sandbox package (0xC0).
+        void RegisterPetCritter(RE::FormID actorID);
+
+        // Register a non-player child with the follow parent package (0x376).
+        void RegisterNonPlayerChild(RE::FormID actorID);
+
+        // Register an actor with an explicit package override.
+        void RegisterActorWithPackage(RE::FormID actorID, RE::FormID packageID);
 
         // Remove an actor from management and strip the base package override.
         void UnregisterActor(RE::FormID actorID);
 
         // Returns true if the actor is currently managed by this service.
         bool IsRegistered(RE::FormID actorID) const;
+
+        // Get effective base package FormID for a registered actor (0 if not registered).
+        RE::FormID GetBasePackageForActor(RE::FormID actorID) const;
 
         // Rebuild the registry from PlayerHouseService tenant data using the stored
         // base package.  Called automatically after cosave restore.
@@ -81,13 +87,9 @@ namespace MARAS {
         // Returns true if questEditorID matches any pattern in the quest whitelist.
         bool MatchesQuestWhitelist(const char* questEditorID) const;
 
-        // Checks a pattern vector (must be lower-cased) against a lower-cased editorID.
-        static bool MatchesPatternList(std::string_view editorIDLower,
+        // Checks a pattern vector (lower-cased) against text (case-insensitive, zero heap allocations).
+        static bool MatchesPatternList(std::string_view text,
                                        const std::vector<std::string>& patterns);
-
-        // Simple wildcard match: * matches any sequence of characters.
-        // Both text and pattern must be lower-cased before calling.
-        static bool WildcardMatch(std::string_view text, std::string_view pattern);
 
         // Run the sandbox package immediately on the actor via SetRunOncePackage + EvaluatePackage.
         void ReassertBasePackage(RE::Actor* actor, RE::TESPackage* basePkg);
@@ -96,11 +98,15 @@ namespace MARAS {
 
         mutable std::shared_mutex m_mutex;
 
-        // Set of actor FormIDs currently managed by this service
-        std::unordered_set<RE::FormID> m_registry;
+        // Map of actor FormIDs to custom base package FormIDs (0 = use m_baseSandboxPkgID)
+        std::unordered_map<RE::FormID, RE::FormID> m_registry;
 
         // Base sandbox package — resolved from FormCache at LoadConfig (hardcoded 0x6A)
         RE::FormID m_baseSandboxPkgID{0};
+        // Pet/critter sandbox package — resolved from FormCache at LoadConfig (hardcoded 0xC0)
+        RE::FormID m_petCritterSandboxPkgID{0};
+        // Non-player child follow package — resolved from FormCache at LoadConfig (hardcoded 0x376)
+        RE::FormID m_nonPlayerChildFollowPkgID{0};
 
         // Patterns loaded from INI (all lower-cased for case-insensitive comparison)
         std::vector<std::string> m_whitelistPatterns;        // allowed by package editor ID

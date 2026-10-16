@@ -1,0 +1,26 @@
+# customCategory: TTM_CategoryRelationship
+name: DiscoverChildPaternity
+description: "{{render_template(\"maras_actions/maras_action_discover_child_paternity\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: DiscoverChildPaternity
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (triggering entity, father discovering truth about child)
+  - type: dynamic
+    name: childName
+    description: Display name of the child whose paternity truth is discovered/learned.
+    useNearbyActors: false
+  - type: dynamic
+    name: motherName
+    description: Display name of the mother of the child, if known.
+    useNearbyActors: false
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_discover_child_paternity_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""

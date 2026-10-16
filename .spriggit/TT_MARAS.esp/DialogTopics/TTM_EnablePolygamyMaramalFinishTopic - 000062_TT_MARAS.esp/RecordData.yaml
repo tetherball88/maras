@@ -1,0 +1,8 @@
+FormKey: 000062:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyMaramalFinishTopic
+Name:
+  TargetLanguage: English
+  Value: (M) I've returned with the translated scroll.
+Branch: 000061:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

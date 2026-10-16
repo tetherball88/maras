@@ -1,0 +1,26 @@
+FormKey: 0001E3:TT_MARAS.esp
+Flags:
+  Flags:
+  - WalkAway
+PreviousDialog: 0001E2:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 0001DA:TT_MARAS.esp
+- 0001DB:TT_MARAS.esp
+- 0001D7:TT_MARAS.esp
+ResponseData: 000325:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 047496:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+Prompt:
+  TargetLanguage: English
+  Value: Aventus...
+WalkAwayTopic: 0001DB:TT_MARAS.esp

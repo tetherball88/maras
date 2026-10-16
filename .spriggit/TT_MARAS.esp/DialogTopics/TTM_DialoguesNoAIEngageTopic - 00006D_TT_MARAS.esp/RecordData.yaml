@@ -1,0 +1,9 @@
+FormKey: 00006D:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIEngageTopic
+Name:
+  TargetLanguage: English
+  Value: I want to spend my life with you. Will you marry me?
+Priority: 100
+Branch: 0000C3:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

@@ -1,11 +1,6 @@
 #pragma once
 
-#include <cstdint>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-
+#include "PCH.h"
 #include "core/Serialization.h"
 
 namespace MARAS {
@@ -22,7 +17,7 @@ namespace MARAS {
 
         // Permanent accessors
         int GetPermanentAffection(FormID npcFormID) const;
-        void SetPermanentAffection(FormID npcFormID, int amount);
+        void SetPermanentAffection(FormID npcFormID, int amount, bool sendEvent = true);
 
         // Min/Max per-type clamp configuration
         void SetAffectionMinMax(const std::string& type, int minVal, int maxVal);
@@ -36,6 +31,9 @@ namespace MARAS {
         bool Save(SKSE::SerializationInterface* serialization) const;
         bool Load(SKSE::SerializationInterface* serialization);
         void Revert();
+
+        // Data dump
+        nlohmann::json DumpJson() const;
 
         // Affection multiplier helpers
         // Compute multiplier factor from a permanent affection value (0..100)
@@ -59,7 +57,7 @@ namespace MARAS {
         float GetDecayMultiplier() const;
 
     private:
-        AffectionService() = default;
+        AffectionService();
 
         // Helper methods
         static RE::Actor* ValidateActor(FormID formID, const char* context);
@@ -69,7 +67,7 @@ namespace MARAS {
         void UpdateAffectionFaction(RE::Actor* actor, FormID npcFormID, int affectionValue);
         void SendAffectionChangeEvent(FormID npcFormID, const std::string& threshold, int delta);
         int CalculateTotalDailyDelta(const std::unordered_map<std::string, float>& dailyByType) const;
-        float CalculateLonelinessDecay(FormID npcFormID, bool isFollowing) const;
+        float CalculateLonelinessDecay(FormID npcFormID, bool isFollowing, size_t activePartnerCount) const;
 
         // permanent affection per NPC
         std::unordered_map<FormID, int> permanentAffection_;
@@ -82,9 +80,6 @@ namespace MARAS {
 
         // Track last game day when NPC received affection
         std::unordered_map<FormID, float> lastAffectionDay_;
-
-        // Decay multiplier (0.0 = disabled, 1.0 = default, 2.0 = double)
-        float decayMultiplier_ = 1.0f;
     };
 
 }  // namespace MARAS

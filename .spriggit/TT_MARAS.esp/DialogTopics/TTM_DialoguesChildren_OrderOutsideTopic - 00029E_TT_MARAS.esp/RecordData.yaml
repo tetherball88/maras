@@ -1,0 +1,9 @@
+FormKey: 00029E:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_OrderOutsideTopic
+Name:
+  TargetLanguage: English
+  Value: Go play outside.
+Priority: 30
+Branch: 00029D:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

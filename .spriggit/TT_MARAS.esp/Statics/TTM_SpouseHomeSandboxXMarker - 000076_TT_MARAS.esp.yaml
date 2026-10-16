@@ -1,0 +1,12 @@
+FormKey: 000076:TT_MARAS.esp
+MajorRecordFlagsRaw: 8388608
+EditorID: TTM_SpouseHomeSandboxXMarker
+SkyrimMajorRecordFlags:
+- 0x800000
+Model:
+  File: MarkerX.nif
+  Data: 0x020000000000000000000000
+MaxAngle: 90
+Unused: 0x000000
+MajorFlags:
+- IsMarker

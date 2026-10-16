@@ -1,0 +1,8 @@
+FormKey: 000373:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCheatingDemandGiveUp
+Name:
+  TargetLanguage: English
+  Value: I'm too tired to fight about it. Do what you want.
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

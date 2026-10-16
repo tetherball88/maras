@@ -1,0 +1,20 @@
+FormKey: 000037:TT_MARAS.esp
+EditorID: TTM_FollowerRoguePerk
+Name:
+  TargetLanguage: English
+  Value: Shared Shadows
+Description:
+  TargetLanguage: English
+  Value: Your partner's silent footsteps teach you subtlety, increasing your sneak effectiveness
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 00004A:TT_MARAS.esp
+- MutagenObjectType: PerkEntryPointModifyValue
+  Priority: 1
+  EntryPoint: ModDetectionSneakSkill
+  PerkConditionTabCount: 2
+  Modification: Add
+  Value: 5

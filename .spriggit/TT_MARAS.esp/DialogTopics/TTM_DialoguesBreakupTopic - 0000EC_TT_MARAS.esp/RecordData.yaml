@@ -1,0 +1,9 @@
+FormKey: 0000EC:TT_MARAS.esp
+EditorID: TTM_DialoguesBreakupTopic
+Name:
+  TargetLanguage: English
+  Value: (M) We need to talk about... us. (Breakup)
+Priority: 10
+Branch: 0000DB:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

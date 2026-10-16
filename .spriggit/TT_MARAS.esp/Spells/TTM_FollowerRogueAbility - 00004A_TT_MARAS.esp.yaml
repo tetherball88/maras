@@ -1,0 +1,13 @@
+FormKey: 00004A:TT_MARAS.esp
+EditorID: TTM_FollowerRogueAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Rogue
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+Type: Ability
+Effects:
+- BaseEffect: 00000A:TT_MARAS.esp
+  Data:
+    Magnitude: 5

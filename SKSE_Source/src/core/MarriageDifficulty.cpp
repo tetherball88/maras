@@ -1,19 +1,14 @@
 #include "core/MarriageDifficulty.h"
 
-#include <spdlog/spdlog.h>
-
-#include <algorithm>
-#include <cctype>
-#include <chrono>
-#include <filesystem>
-#include <fstream>
-
+#include "core/LoggingService.h"
+#include "services/ActorService.h"
 #include "core/AffectionService.h"
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
+#include "utils/StringUtils.h"
 
 namespace MARAS {
 
@@ -82,7 +77,7 @@ namespace MARAS {
             return 0.0f;
         }
 
-        MARAS_LOG_DEBUG("Calculating marriage success chance for NPC: {}", npc->GetDisplayFullName());
+        MARAS_LOG_DEBUG("Calculating marriage success chance for NPC: {}", ActorSvc::GetName(npc->GetFormID()));
 
         auto player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
@@ -123,6 +118,22 @@ namespace MARAS {
             MARAS_LOG_DEBUG("Applied divorced penalty");
         }
 
+        // Dating bonus
+        if (manager.IsDating(npc->GetFormID())) {
+            float datingBonus = GetParam("datingBonus");
+            if (datingBonus == 0.0f) datingBonus = -15.0f;
+            complexity += datingBonus;
+            MARAS_LOG_DEBUG("Applied dating bonus: {}", datingBonus);
+        }
+
+        // Lover bonus
+        if (manager.IsLover(npc->GetFormID())) {
+            float loverBonus = GetParam("loverBonus");
+            if (loverBonus == 0.0f) loverBonus = -30.0f;
+            complexity += loverBonus;
+            MARAS_LOG_DEBUG("Applied lover bonus: {}", loverBonus);
+        }
+
         // Player killer penalty
         if (playerKiller) {
             complexity += GetParam("playerKillerPenalty");
@@ -153,8 +164,8 @@ namespace MARAS {
 
         // Relationship rank bonus - get actual relationship rank between NPC and player
         int relationshipRank = 0;
-        if (auto npcBase = npc->GetActorBase()) {
-            if (auto playerBase = player->GetActorBase()) {
+        if (auto npcBase = ActorSvc::GetActorBase(npc->GetFormID())) {
+            if (auto playerBase = ActorSvc::GetActorBase(kPlayerFormID)) {
                 if (auto relationship = RE::BGSRelationship::GetRelationship(npcBase, playerBase)) {
                     relationshipRank = static_cast<int>(relationship->level.underlying());
                 }
@@ -197,7 +208,7 @@ namespace MARAS {
 
         MARAS_LOG_INFO(
             "Marriage difficulty calculation completed for {} in {} microseconds (chance: {:.3f}; difficulty: {:.2f})",
-            npc->GetDisplayFullName(), duration.count(), chance, difficulty);
+            ActorSvc::GetName(npc->GetFormID()), duration.count(), chance, difficulty);
 
         return chance;
     }
@@ -225,6 +236,8 @@ namespace MARAS {
             in >> j;
 
             config_.clear();
+            config_["datingBonus"] = -15.0f;
+            config_["loverBonus"] = -30.0f;
 
             // Load difficulty calculation parameters
             if (j.contains("difficultyCalculation")) {
@@ -283,13 +296,20 @@ namespace MARAS {
                     config_["prestigeDeltaMultiplier"] = p["deltaMultiplier"].get<float>();
             }
 
-            // Load penalties
+            // Load penalties & bonuses
             if (j.contains("penalties")) {
                 auto& pen = j["penalties"];
                 if (pen.contains("jiltedPenalty")) config_["jiltedPenalty"] = pen["jiltedPenalty"].get<float>();
                 if (pen.contains("divorcedPenalty")) config_["divorcedPenalty"] = pen["divorcedPenalty"].get<float>();
                 if (pen.contains("playerKillerPenalty"))
                     config_["playerKillerPenalty"] = pen["playerKillerPenalty"].get<float>();
+                if (pen.contains("datingBonus")) config_["datingBonus"] = pen["datingBonus"].get<float>();
+                if (pen.contains("loverBonus")) config_["loverBonus"] = pen["loverBonus"].get<float>();
+            }
+            if (j.contains("bonuses")) {
+                auto& bon = j["bonuses"];
+                if (bon.contains("datingBonus")) config_["datingBonus"] = bon["datingBonus"].get<float>();
+                if (bon.contains("loverBonus")) config_["loverBonus"] = bon["loverBonus"].get<float>();
             }
 
             // Load multipliers
@@ -307,6 +327,8 @@ namespace MARAS {
                     config_["relationshipRankMultiplier"] = m["relationshipRankMultiplier"].get<float>();
                 if (m.contains("affectionMultiplier"))
                     config_["affectionMultiplier"] = m["affectionMultiplier"].get<float>();
+                if (m.contains("datingBonus")) config_["datingBonus"] = m["datingBonus"].get<float>();
+                if (m.contains("loverBonus")) config_["loverBonus"] = m["loverBonus"].get<float>();
             }
 
             // Load guild parameters
@@ -399,7 +421,11 @@ namespace MARAS {
         MARAS_LOG_DEBUG("Dragonborn bonus: {}", dragonbornBonus);
 
         // Thane holds
-        int thaneHolds = GetThaneHolds();
+        float thaneHolds = static_cast<float>(GetThaneHolds());
+        const float maxThaneHolds = GetParam("prestigeMaxThaneHolds");
+        if (maxThaneHolds > 0.0f) {
+            thaneHolds = std::min(thaneHolds, maxThaneHolds);
+        }
         float thaneScore = thaneHolds * GetParam("prestigeThaneHoldValue");
         result += thaneScore;
         MARAS_LOG_DEBUG("Thane holds: {}, score: {}", thaneHolds, thaneScore);
@@ -413,8 +439,11 @@ namespace MARAS {
         MARAS_LOG_DEBUG("Guild leader bonus: {}", guildLeaderBonus);
 
         // Wealth
-        float wealthScore =
-            ClampValue(mostGold / GetParam("prestigeMostGoldDivisor"), 0.0f, GetParam("prestigeMostGoldClampMax"));
+        const float goldDivisor = GetParam("prestigeMostGoldDivisor");
+        float wealthScore = 0.0f;
+        if (goldDivisor > 0.0f) {
+            wealthScore = ClampValue(mostGold / goldDivisor, 0.0f, GetParam("prestigeMostGoldClampMax"));
+        }
         result += wealthScore;
         MARAS_LOG_DEBUG("Wealth score: {} (from {} gold)", wealthScore, mostGold);
 
@@ -448,7 +477,7 @@ namespace MARAS {
         if (!player || !npc) return 0.0f;
 
         auto socialClass = GetManager().GetSocialClass(npc->GetFormID());
-        std::string spouseClass = Utils::ToLower(Utils::SocialClassToString(socialClass));
+        std::string spouseClass = StringUtils::ToLowerStd(Utils::SocialClassToString(socialClass));
 
         GuildModifiers modifiers;
         auto& cache = GetCache();

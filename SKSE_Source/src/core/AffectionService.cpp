@@ -1,15 +1,15 @@
 #include "core/AffectionService.h"
 
-#include <spdlog/spdlog.h>
-
-#include <algorithm>
-#include <cmath>
-
 #include "core/FormCache.h"
+#include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "services/ActorService.h"
+#include "ui/PrismaUIDataBridge.h"
+#include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
+#include "utils/Settings.h"
 
 namespace MARAS {
 
@@ -42,19 +42,49 @@ namespace MARAS {
         constexpr float kDecayRomantic = 4.0f;
         constexpr float kDecayDefault = 3.0f;
 
-        // Spouse count multipliers for decay
+        // Partner count multipliers for decay (polyamory dampening)
         constexpr int kSpouseCountHigh = 7;
         constexpr int kSpouseCountMedium = 5;
         constexpr int kSpouseCountLow = 3;
         constexpr float kSpouseMultHigh = 0.5f;
         constexpr float kSpouseMultMedium = 0.6f;
         constexpr float kSpouseMultLow = 0.75f;
-        constexpr float kEngagedDecayMultiplier = 0.5f;
+
+        // Relationship tier decay multipliers
+        constexpr float kEngagedDecayMultiplier = 0.75f;
+        constexpr float kDatingDecayMultiplier = 0.5f;
+        constexpr float kLoverDecayMultiplier = 0.25f;
+
+        // Open relationship decay multipliers by temperament
+        constexpr float kOpenRelMultIndependent = 0.50f;
+        constexpr float kOpenRelMultHumble = 0.75f;
+        constexpr float kOpenRelMultProud = 0.90f;
+        constexpr float kOpenRelMultRomantic = 1.15f;
+        constexpr float kOpenRelMultJealous = 1.35f;
+
+        // Known ongoing cheating decay multipliers by temperament
+        constexpr float kCheatingMultIndependent = 1.25f;
+        constexpr float kCheatingMultHumble = 1.35f;
+        constexpr float kCheatingMultRomantic = 1.50f;
+        constexpr float kCheatingMultProud = 1.75f;
+        constexpr float kCheatingMultJealous = 2.00f;
     }  // namespace
 
     AffectionService& AffectionService::GetSingleton() {
         static AffectionService instance;
         return instance;
+    }
+
+    AffectionService::AffectionService() {
+        // Default per-type daily clamp bounds
+        minMaxByType_ = {
+            {"intimacy", {-22, 22}},
+            {"gift", {0, 15}},
+            {"dialoguestarted", {0, 5}},
+            {"slept", {0, 8}},
+            {"promotion", {-24, 24}},
+            {"loneliness", {-16, 6}},
+        };
     }
 
     void AffectionService::AddAffection(FormID npcFormID, float amount, const std::string& type) {
@@ -65,8 +95,10 @@ namespace MARAS {
         auto key = NormalizeType(type);
         dailyAffection_[npcFormID][key] += amount;
 
-        // Record that this NPC received affection today
-        RecordAffectionInteraction(npcFormID);
+        // Only record positive, non-loneliness interactions as player attention
+        if (amount > 0.0f && key != "loneliness") {
+            RecordAffectionInteraction(npcFormID);
+        }
 
         MARAS_LOG_DEBUG("AddAffection: NPC {:08X} += {} ({}) (daily now {})", npcFormID, amount, key,
                         dailyAffection_[npcFormID][key]);
@@ -85,7 +117,7 @@ namespace MARAS {
         return (it == permanentAffection_.end()) ? 0 : it->second;
     }
 
-    void AffectionService::SetPermanentAffection(FormID npcFormID, int amount) {
+    void AffectionService::SetPermanentAffection(FormID npcFormID, int amount, bool sendEvent) {
         auto actor = ValidateActor(npcFormID, "SetPermanentAffection");
         if (!actor) {
             return;
@@ -104,10 +136,12 @@ namespace MARAS {
         // Update faction rank
         UpdateAffectionFaction(actor, npcFormID, clamped);
 
-        // Send event if threshold changed
-        if (oldThreshold != newThreshold) {
+        // Send event if threshold changed and event sending requested
+        if (sendEvent && oldThreshold != newThreshold) {
             SendAffectionChangeEvent(npcFormID, newThreshold, clamped - oldVal);
         }
+
+        PrismaUIDataBridge::GetSingleton().OnAffectionChanged(npcFormID, clamped);
     }
 
     void AffectionService::SetAffectionMinMax(const std::string& type, int minVal, int maxVal) {
@@ -129,15 +163,11 @@ namespace MARAS {
     }
 
     void AffectionService::ApplyDailyAffectionsForAll() {
-        auto& manager = NPCRelationshipManager::GetSingleton();
-        auto all = manager.GetAllRegisteredNPCs();
-
-        for (auto npcFormID : all) {
-            auto it = dailyAffection_.find(npcFormID);
-            if (it == dailyAffection_.end()) continue;
+        for (auto& [npcFormID, typeMap] : dailyAffection_) {
+            if (typeMap.empty()) continue;
 
             int original = GetPermanentAffection(npcFormID);
-            int deltaTotal = CalculateTotalDailyDelta(it->second);
+            int deltaTotal = CalculateTotalDailyDelta(typeMap);
 
             if (deltaTotal != 0) {
                 int updated = ClampAffection(original + deltaTotal);
@@ -147,7 +177,7 @@ namespace MARAS {
             }
 
             // Clear daily after applying
-            it->second.clear();
+            typeMap.clear();
         }
     }
 
@@ -174,10 +204,6 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Saved {} last affection day records", dayCount);
 
-        // Write decay multiplier
-        if (!serialization->WriteRecordData(decayMultiplier_)) return false;
-        MARAS_LOG_INFO("Saved affection decay multiplier: {}", decayMultiplier_);
-
         return true;
     }
 
@@ -186,9 +212,15 @@ namespace MARAS {
 
         Revert();
 
+        constexpr std::uint32_t kMaxRecords = 100000;
+
         // Load permanent affection
         std::uint32_t count = 0;
         if (!serialization->ReadRecordData(count)) return false;
+        if (count > kMaxRecords) {
+            MARAS_LOG_ERROR("AffectionService::Load - corrupt permanent affection count {}", count);
+            return false;
+        }
 
         for (std::uint32_t i = 0; i < count; ++i) {
             RE::FormID oldFormID = 0, newFormID = 0;
@@ -200,13 +232,15 @@ namespace MARAS {
             }
 
             // Skip dead or invalid actors
-            auto* actor = RE::TESForm::LookupByID<RE::Actor>(newFormID);
+            auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
             if (!actor || actor->IsDead()) {
                 MARAS_LOG_INFO("AffectionService::Load - skipping dead/invalid actor {:08X}", newFormID);
                 continue;
             }
 
-            permanentAffection_[newFormID] = amount;
+            int clamped = ClampAffection(amount);
+            permanentAffection_[newFormID] = clamped;
+            UpdateAffectionFaction(actor, newFormID, clamped);
         }
 
         MARAS_LOG_INFO("Loaded {} permanent affection records", permanentAffection_.size());
@@ -216,6 +250,10 @@ namespace MARAS {
         if (!serialization->ReadRecordData(dayCount)) {
             MARAS_LOG_WARN("Could not read last affection day count, continuing without it");
             return true;  // Not fatal, might be old save
+        }
+        if (dayCount > kMaxRecords) {
+            MARAS_LOG_ERROR("AffectionService::Load - corrupt last affection day count {}", dayCount);
+            return false;
         }
 
         for (std::uint32_t i = 0; i < dayCount; ++i) {
@@ -232,7 +270,7 @@ namespace MARAS {
             }
 
             // Skip dead or invalid actors
-            auto* actor = RE::TESForm::LookupByID<RE::Actor>(newFormID);
+            auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
             if (!actor || actor->IsDead()) {
                 continue;
             }
@@ -242,23 +280,13 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Loaded {} last affection day records", lastAffectionDay_.size());
 
-        // Load decay multiplier (optional for backwards compatibility)
-        if (!serialization->ReadRecordData(decayMultiplier_)) {
-            MARAS_LOG_WARN("Could not read decay multiplier, using default value 1.0");
-            decayMultiplier_ = 1.0f;
-        } else {
-            MARAS_LOG_INFO("Loaded affection decay multiplier: {}", decayMultiplier_);
-        }
-
         return true;
     }
 
     void AffectionService::Revert() {
         permanentAffection_.clear();
         dailyAffection_.clear();
-        minMaxByType_.clear();
         lastAffectionDay_.clear();
-        decayMultiplier_ = 1.0f;
         MARAS_LOG_INFO("Reverted affection service state");
     }
 
@@ -310,11 +338,18 @@ namespace MARAS {
 
     void AffectionService::OnDayChanged() {
         auto& manager = NPCRelationshipManager::GetSingleton();
-        auto allNPCs = manager.GetAllRegisteredNPCs();
 
-        MARAS_LOG_INFO("Processing affection decay for {} NPCs on day change", allNPCs.size());
+        // Married, engaged, dating, and lover partners of the player experience loneliness decay
+        std::unordered_set<RE::FormID> uniquePartners;
+        for (auto id : manager.GetAllMarried(kPlayerFormID)) uniquePartners.insert(id);
+        for (auto id : manager.GetAllEngaged(kPlayerFormID)) uniquePartners.insert(id);
+        for (auto id : manager.GetAllDating(kPlayerFormID)) uniquePartners.insert(id);
+        for (auto id : manager.GetAllLovers(kPlayerFormID)) uniquePartners.insert(id);
 
-        for (auto npcFormID : allNPCs) {
+        const size_t activePartnerCount = uniquePartners.size();
+        MARAS_LOG_INFO("Processing affection decay for {} player partner(s) on day change", activePartnerCount);
+
+        for (auto npcFormID : uniquePartners) {
             float daysSince = GetDaysSinceLastAffection(npcFormID);
 
             // Only apply decay if no affection received for more than the threshold
@@ -322,11 +357,11 @@ namespace MARAS {
                 continue;
             }
 
-            // Check if NPC is currently following (teammate)
-            auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-            bool isFollowing = actor && actor->IsPlayerTeammate();
+            // Check if NPC is currently following (teammate/follower)
+            auto actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
+            bool isFollowing = actor && Utils::IsPlayerFollower(actor);
 
-            float lonelinessAffection = CalculateLonelinessDecay(npcFormID, isFollowing);
+            float lonelinessAffection = CalculateLonelinessDecay(npcFormID, isFollowing, activePartnerCount);
 
             if (lonelinessAffection != 0.0f) {
                 AddAffection(npcFormID, lonelinessAffection, "loneliness");
@@ -334,26 +369,31 @@ namespace MARAS {
                                 lonelinessAffection, npcFormID, daysSince, isFollowing);
             }
         }
+
+        // Commit all daily affection deltas (gifts, dialogue, intimacy, quests, loneliness) to permanent affection
+        ApplyDailyAffectionsForAll();
     }
 
     void AffectionService::SetDecayMultiplier(float multiplier) {
-        decayMultiplier_ = std::clamp(multiplier, 0.0f, 2.0f);
-        MARAS_LOG_INFO("Affection decay multiplier set to {}", decayMultiplier_);
+        Settings::GetSingleton().affectionDecayMultiplier = std::clamp(multiplier, 0.0f, 2.0f);
+        MARAS_LOG_INFO("Affection decay multiplier set to {}", Settings::GetSingleton().affectionDecayMultiplier);
     }
 
-    float AffectionService::GetDecayMultiplier() const { return decayMultiplier_; }
+    float AffectionService::GetDecayMultiplier() const {
+        return Settings::GetSingleton().affectionDecayMultiplier;
+    }
 
     // Private helper methods
 
     RE::Actor* AffectionService::ValidateActor(FormID formID, const char* context) {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(formID);
+        auto actor = NPCIndex::GetSingleton().GetActorFromFormId(formID);
         if (!actor) {
             MARAS_LOG_ERROR("{}: Cannot find actor for FormID {:08X}", context, formID);
         }
         return actor;
     }
 
-    std::string AffectionService::NormalizeType(const std::string& type) { return Utils::ToLower(type); }
+    std::string AffectionService::NormalizeType(const std::string& type) { return StringUtils::ToLowerStd(type); }
 
     std::string AffectionService::GetAffectionThreshold(int affectionValue) {
         if (affectionValue >= kThresholdHappy) return "happy";
@@ -367,14 +407,19 @@ namespace MARAS {
     void AffectionService::UpdateAffectionFaction(RE::Actor* actor, FormID npcFormID, int affectionValue) {
         auto faction = FormCache::GetSingleton().GetAffectionFaction();
         if (faction) {
-            actor->AddToFaction(faction, static_cast<std::int8_t>(affectionValue));
+            Utils::AddToFaction(actor, faction, static_cast<std::int8_t>(affectionValue));
             MARAS_LOG_DEBUG("UpdateAffectionFaction: set faction {:08X} rank {} for NPC {:08X}", faction->GetFormID(),
                             affectionValue, npcFormID);
         }
     }
 
     void AffectionService::SendAffectionChangeEvent(FormID npcFormID, const std::string& threshold, int delta) {
+        if (npcFormID == 0) return;
         auto npcForm = RE::TESForm::LookupByID(npcFormID);
+        if (!npcForm) {
+            MARAS_LOG_WARN("Could not find form for FormID {:08X} to send affection change event", npcFormID);
+            return;
+        }
         auto eventSource = SKSE::GetModCallbackEventSource();
         if (eventSource) {
             float diff = static_cast<float>(delta);
@@ -406,9 +451,11 @@ namespace MARAS {
         return deltaTotal;
     }
 
-    float AffectionService::CalculateLonelinessDecay(FormID npcFormID, bool isFollowing) const {
+    float AffectionService::CalculateLonelinessDecay(FormID npcFormID, bool isFollowing,
+                                                     size_t activePartnerCount) const {
+        float decayMult = Settings::GetSingleton().affectionDecayMultiplier;
         // If decay is disabled (multiplier = 0), return 0
-        if (decayMultiplier_ <= 0.0f) {
+        if (decayMult <= 0.0f) {
             return 0.0f;
         }
 
@@ -418,21 +465,37 @@ namespace MARAS {
             return kFollowingAffectionBonus;
         }
 
-        // Get NPC's temperament
+        // Get NPC's relationship data with the player
         auto& manager = NPCRelationshipManager::GetSingleton();
-        auto npcData = manager.GetNPCData(npcFormID);
+        auto npcData = manager.GetNPCData(npcFormID, kPlayerFormID);
         if (!npcData) {
-            MARAS_LOG_WARN("No NPC data found for {:08X}, using default decay", npcFormID);
-            return -(kDefaultDecayPerDay * decayMultiplier_);
-        }
-        if (npcData->status != RelationshipStatus::Married && npcData->status != RelationshipStatus::Engaged) {
-            // Only married and engaged NPCs experience loneliness decay
             return 0.0f;
         }
 
+        float statusMult = 0.0f;
+        switch (npcData->status) {
+            case RelationshipStatus::Married:
+                statusMult = 1.0f;
+                break;
+            case RelationshipStatus::Engaged:
+                statusMult = kEngagedDecayMultiplier;
+                break;
+            case RelationshipStatus::Dating:
+                statusMult = kDatingDecayMultiplier;
+                break;
+            case RelationshipStatus::Lover:
+                statusMult = kLoverDecayMultiplier;
+                break;
+            default:
+                // Only married, engaged, dating, and lover NPCs experience loneliness decay
+                return 0.0f;
+        }
+
+        const Temperament temperament = manager.GetTemperament(npcFormID);
+
         // Base decay per day based on temperament
         float perDay = kDecayDefault;
-        switch (npcData->temperament) {
+        switch (temperament) {
             case Temperament::Independent:
                 perDay = kDecayIndependent;
                 break;
@@ -447,31 +510,127 @@ namespace MARAS {
                 break;
         }
 
-        // Apply multiplier based on spouse count
-        int spouseCount = static_cast<int>(manager.GetAllMarried().size());
-        float mult = 1.0f;
-        if (spouseCount >= kSpouseCountHigh) {
-            mult = kSpouseMultHigh;
-        } else if (spouseCount >= kSpouseCountMedium) {
-            mult = kSpouseMultMedium;
-        } else if (spouseCount >= kSpouseCountLow) {
-            mult = kSpouseMultLow;
+        // Apply multiplier based on active partner count (all active partners: Married, Engaged, Dating, Lovers)
+        float polyMult = 1.0f;
+        if (activePartnerCount >= kSpouseCountHigh) {
+            polyMult = kSpouseMultHigh;
+        } else if (activePartnerCount >= kSpouseCountMedium) {
+            polyMult = kSpouseMultMedium;
+        } else if (activePartnerCount >= kSpouseCountLow) {
+            polyMult = kSpouseMultLow;
         }
 
-        if (npcData->status == RelationshipStatus::Engaged) {
-            mult *= kEngagedDecayMultiplier;
+        // Open relationship multiplier (for main-tier relationships marked as open)
+        float openRelMult = 1.0f;
+        if (NPCRelationshipManager::IsMainTier(npcData->status) && npcData->isOpen) {
+            switch (temperament) {
+                case Temperament::Independent:
+                    openRelMult = kOpenRelMultIndependent;
+                    break;
+                case Temperament::Humble:
+                    openRelMult = kOpenRelMultHumble;
+                    break;
+                case Temperament::Proud:
+                    openRelMult = kOpenRelMultProud;
+                    break;
+                case Temperament::Romantic:
+                    openRelMult = kOpenRelMultRomantic;
+                    break;
+                case Temperament::Jealous:
+                    openRelMult = kOpenRelMultJealous;
+                    break;
+                default:
+                    openRelMult = 1.0f;
+                    break;
+            }
         }
 
-        // Apply user-configured decay multiplier
-        mult *= decayMultiplier_;
+        // Known ongoing cheating multiplier (either partner having an active discovered affair on this pair)
+        bool hasKnownOngoingCheating = false;
+        for (const auto& rec : npcData->cheatingRecords) {
+            if (rec.affairStatus == AffairStatus::Ongoing && !rec.isSecret &&
+                ((rec.cheaterID == npcFormID && rec.victimID == kPlayerFormID) ||
+                 (rec.cheaterID == kPlayerFormID && rec.victimID == npcFormID))) {
+                hasKnownOngoingCheating = true;
+                break;
+            }
+        }
+
+        float cheatingMult = 1.0f;
+        if (hasKnownOngoingCheating) {
+            switch (temperament) {
+                case Temperament::Independent:
+                    cheatingMult = kCheatingMultIndependent;
+                    break;
+                case Temperament::Humble:
+                    cheatingMult = kCheatingMultHumble;
+                    break;
+                case Temperament::Romantic:
+                    cheatingMult = kCheatingMultRomantic;
+                    break;
+                case Temperament::Proud:
+                    cheatingMult = kCheatingMultProud;
+                    break;
+                case Temperament::Jealous:
+                    cheatingMult = kCheatingMultJealous;
+                    break;
+                default:
+                    cheatingMult = 1.0f;
+                    break;
+            }
+        }
+
+        float mult = polyMult * statusMult * openRelMult * cheatingMult * decayMult;
 
         // Calculate final decay (negative value)
         float decay = -(perDay * mult);
 
-        MARAS_LOG_DEBUG("Loneliness decay for NPC {:08X}: perDay={}, mult={}, decayMult={}, final={}", npcFormID,
-                        perDay, mult / decayMultiplier_, decayMultiplier_, decay);
+        MARAS_LOG_DEBUG(
+            "Loneliness decay for NPC {:08X}: perDay={}, statusMult={}, polyMult={}, openRelMult={}, cheatingMult={}, "
+            "decayMult={}, final={}",
+            npcFormID, perDay, statusMult, polyMult, openRelMult, cheatingMult, decayMult, decay);
 
         return decay;
+    }
+
+    nlohmann::json AffectionService::DumpJson() const {
+        nlohmann::json j;
+        j["decayMultiplier"] = GetDecayMultiplier();
+
+        nlohmann::json permArray = nlohmann::json::array();
+        for (const auto& [formID, val] : permanentAffection_) {
+            nlohmann::json a;
+            a["formId"] = std::format("{:08X}", formID);
+            a["name"] = ActorSvc::GetName(formID);
+            a["value"] = val;
+            auto dayIt = lastAffectionDay_.find(formID);
+            a["lastAffectionDay"] = (dayIt != lastAffectionDay_.end()) ? dayIt->second : -1.0f;
+            a["daysSinceLastAffection"] = GetDaysSinceLastAffection(formID);
+            permArray.push_back(a);
+        }
+        j["permanentAffection"] = permArray;
+
+        nlohmann::json dailyArray = nlohmann::json::array();
+        for (const auto& [formID, typeMap] : dailyAffection_) {
+            nlohmann::json d;
+            d["formId"] = std::format("{:08X}", formID);
+            d["name"] = ActorSvc::GetName(formID);
+            nlohmann::json typesObj = nlohmann::json::object();
+            for (const auto& [tName, amt] : typeMap) {
+                typesObj[tName] = amt;
+            }
+            d["types"] = typesObj;
+            dailyArray.push_back(d);
+        }
+        j["dailyAffection"] = dailyArray;
+
+        nlohmann::json minMaxObj = nlohmann::json::object();
+        for (const auto& [tName, range] : minMaxByType_) {
+            minMaxObj[tName] = { {"min", range.first}, {"max", range.second} };
+        }
+        j["minMaxByType"] = minMaxObj;
+
+        return j;
     }
 
 }  // namespace MARAS

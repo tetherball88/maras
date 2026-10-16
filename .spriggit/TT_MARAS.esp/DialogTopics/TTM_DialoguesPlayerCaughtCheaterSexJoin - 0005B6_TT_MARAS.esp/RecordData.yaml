@@ -1,0 +1,8 @@
+FormKey: 0005B6:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterSexJoin
+Name:
+  TargetLanguage: English
+  Value: Don't stop on my account. Mind if I join you two?
+Branch: 0005AA:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

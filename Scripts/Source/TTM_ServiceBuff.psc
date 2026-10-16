@@ -76,9 +76,14 @@ Function UpdatePerk(string type, int index, float multiplier) global
     Trace("UpdatePerk:"+type+":"+index+":"+bonusPerk+":"+bonusType+":"+bonusValue+":"+multiplier)
     if(bonusType == "spell")
         Spell bonusSpell = bonusPerk.GetNthEntrySpell(bonusPerkEffIndex)
-        newVal = bonusValue * multiplier
-        oldVal = bonusSpell.GetNthEffectMagnitude(0)
-        UpdateSpellEffect(bonusSpell, newVal)
+        if(bonusSpell)
+            newVal = bonusValue * multiplier
+            oldVal = bonusSpell.GetNthEffectMagnitude(0)
+            UpdateSpellEffect(bonusSpell, newVal)
+        else
+            Trace("TTM_ServiceBuff:UpdatePerk:Spell not found:"+bonusPerk+ "("+bonusPerk.GetNumEntries()+")" +" index:"+bonusPerkEffIndex)
+        endif
+
     elseif(bonusType == "multiply")
         newVal = (bonusValue / 100) * multiplier
         oldVal = bonusPerk.GetNthEntryValue(0, 0) - 1

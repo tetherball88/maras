@@ -1,0 +1,16 @@
+FormKey: 0000F0:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Okay. You had me worried for a second.
+  ScriptNotes: ''
+  Edits: ''

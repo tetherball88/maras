@@ -1,0 +1,21 @@
+FormKey: 000165:TT_MARAS.esp
+EditorID: TTMSkipWedding
+Description:
+  TargetLanguage: English
+  Value: >-
+    Do you want skip Wedding Ceremony next time you get married? You can set in MCM to always skip weddings.
+
+    "Don't show it again" - proceed with Ceremony always, unless you select MCM to always skip.
+INAM: 0x00000000
+Flags:
+- MessageBox
+MenuButtons:
+- Text:
+    TargetLanguage: English
+    Value: Yes
+- Text:
+    TargetLanguage: English
+    Value: No
+- Text:
+    TargetLanguage: English
+    Value: Don't show it again

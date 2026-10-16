@@ -1,0 +1,7 @@
+FormKey: 00005E:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyUragFinish
+Quest: 00005C:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 00005F:TT_MARAS.esp

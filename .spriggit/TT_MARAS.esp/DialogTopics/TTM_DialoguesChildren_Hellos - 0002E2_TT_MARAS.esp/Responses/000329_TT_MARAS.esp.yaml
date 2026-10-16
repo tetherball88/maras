@@ -1,0 +1,20 @@
+FormKey: 000329:TT_MARAS.esp
+Flags:
+  ResetHours: 1.9999084
+PreviousDialog: 0002F9:TT_MARAS.esp
+FavorLevel: None
+ResponseData: 000328:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetPCIsSexConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

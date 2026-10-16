@@ -1,0 +1,20 @@
+FormKey: 000024:TT_MARAS.esp
+EditorID: TTM_SpouseOutcastDesc
+Name:
+  TargetLanguage: English
+  Value: Kiss of the Knife
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Health
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: A life on the fringe teaches you to strike unseen, increasing sneak attack damage by <mag>%

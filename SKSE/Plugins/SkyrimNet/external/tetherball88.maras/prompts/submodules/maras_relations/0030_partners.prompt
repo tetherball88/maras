@@ -1,0 +1,102 @@
+{% if ttm_is_registered(actorUUID) %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+
+    {% if length(profile.current_relationships) > 0 %}
+        {% set spouses = [] %}
+        {% set fiancees = [] %}
+        {% set datingPartners = [] %}
+        {% set lovers = [] %}
+        {% set openRelationships = [] %}
+        {% for rel in profile.current_relationships %}
+            {% if rel.status == "married" %}
+                {% set spouses = append(spouses, rel.partner.name) %}
+            {% elif rel.status == "engaged" %}
+                {% set fiancees = append(fiancees, rel.partner.name) %}
+            {% elif rel.status == "dating" %}
+                {% set datingPartners = append(datingPartners, rel.partner.name) %}
+            {% elif rel.status == "lover" %}
+                {% set lovers = append(lovers, rel.partner.name) %}
+            {% endif %}
+            {% if existsIn(rel, "is_open") and rel.is_open %}
+                {% set openRelationships = append(openRelationships, rel.partner.name) %}
+            {% endif %}
+        {% endfor %}
+
+        ## {{npcName}}'s current relationships
+        {% if length(spouses) > 0 %}
+            {{npcName}} is married to {{join(spouses, ", ")}}.
+        {% endif %}
+        {% if length(fiancees) > 0 %}
+            {{npcName}} is engaged to {{join(fiancees, ", ")}}.
+        {% endif %}
+        {% if length(datingPartners) > 0 %}
+            {{npcName}} is dating {{join(datingPartners, ", ")}}.
+        {% endif %}
+        {% if length(lovers) > 0 %}
+            {{npcName}} is lovers with {{join(lovers, ", ")}}.
+        {% endif %}
+        {% for partnerName in openRelationships %}
+            {{npcName}} and {{partnerName}} are in an open relationship.
+        {% endfor %}
+    {% endif %}
+
+    {% if length(profile.player_co_partners) > 0 %}
+        {% set coSpouses = [] %}
+        {% set prospectiveCoSpouses = [] %}
+        {% set existingSpousesForFiancee = [] %}
+        {% set coFiancees = [] %}
+        {% set playerDatingPartners = [] %}
+        {% set playerLovers = [] %}
+        {% for rel in profile.player_co_partners %}
+            {% if profile.player_relationship_status == "married" %}
+                {% if rel.player_relationship_status == "married" %}
+                    {% set coSpouses = append(coSpouses, rel.person.name) %}
+                {% elif rel.player_relationship_status == "engaged" %}
+                    {% set prospectiveCoSpouses = append(prospectiveCoSpouses, rel.person.name) %}
+                {% elif rel.player_relationship_status == "dating" %}
+                    {% set playerDatingPartners = append(playerDatingPartners, rel.person.name) %}
+                {% elif rel.player_relationship_status == "lover" %}
+                    {% set playerLovers = append(playerLovers, rel.person.name) %}
+                {% endif %}
+            {% elif profile.player_relationship_status == "engaged" %}
+                {% if rel.player_relationship_status == "married" %}
+                    {% set existingSpousesForFiancee = append(existingSpousesForFiancee, rel.person.name) %}
+                {% elif rel.player_relationship_status == "engaged" %}
+                    {% set coFiancees = append(coFiancees, rel.person.name) %}
+                {% elif rel.player_relationship_status == "dating" %}
+                    {% set playerDatingPartners = append(playerDatingPartners, rel.person.name) %}
+                {% elif rel.player_relationship_status == "lover" %}
+                    {% set playerLovers = append(playerLovers, rel.person.name) %}
+                {% endif %}
+            {% else %}
+                {% if rel.player_relationship_status == "married" %}
+                    {% set existingSpousesForFiancee = append(existingSpousesForFiancee, rel.person.name) %}
+                {% elif rel.player_relationship_status == "engaged" %}
+                    {% set prospectiveCoSpouses = append(prospectiveCoSpouses, rel.person.name) %}
+                {% elif rel.player_relationship_status == "dating" %}
+                    {% set playerDatingPartners = append(playerDatingPartners, rel.person.name) %}
+                {% elif rel.player_relationship_status == "lover" %}
+                    {% set playerLovers = append(playerLovers, rel.person.name) %}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+
+        ## {{npcName}}'s household connections through {{player.name}}
+        {% if length(coSpouses) > 0 %}
+            {{npcName}} and {{join(coSpouses, ", ")}} share a marriage to {{player.name}} as co-spouses.
+        {% endif %}
+        {% if length(prospectiveCoSpouses) > 0 %}
+            {{join(prospectiveCoSpouses, ", ")}} {% if length(prospectiveCoSpouses) > 1 %}are{% else %}is{% endif %} engaged to {{player.name}} and will become {{npcName}}'s prospective co-spouse{% if length(prospectiveCoSpouses) > 1 %}s{% endif %}.
+        {% endif %}
+        {% if length(existingSpousesForFiancee) > 0 %}
+            {{player.name}} is married to {{join(existingSpousesForFiancee, ", ")}}, who will be {{npcName}}'s co-spouse{% if length(existingSpousesForFiancee) > 1 %}s{% endif %} once {{npcName}} and {{player.name}} marry.
+        {% endif %}
+        {% if length(coFiancees) > 0 %}
+            {{npcName}} and {{join(coFiancees, ", ")}} are both engaged to {{player.name}} as prospective co-spouses.
+        {% endif %}
+        {% if length(playerDatingPartners) > 0 or length(playerLovers) > 0 %}
+            Through {{player.name}}, {{npcName}} is also connected to {{player.name}}'s {% if length(playerDatingPartners) > 0 %}dating partner{% if length(playerDatingPartners) > 1 %}s{% endif %} ({{join(playerDatingPartners, ", ")}}){% endif %}{% if length(playerDatingPartners) > 0 and length(playerLovers) > 0 %}; and {% endif %}{% if length(playerLovers) > 0 %}lover{% if length(playerLovers) > 1 %}s{% endif %} ({{join(playerLovers, ", ")}}){% endif %}.
+        {% endif %}
+    {% endif %}
+{% endif %}

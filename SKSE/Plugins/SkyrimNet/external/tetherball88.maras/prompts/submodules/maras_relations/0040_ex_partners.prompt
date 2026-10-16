@@ -1,0 +1,19 @@
+{% if ttm_is_registered(actorUUID) %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+
+    {% if length(profile.past_relationships) > 0 %}
+        ## {{npcName}}'s past relationships
+        {% for rel in profile.past_relationships %}
+            {% if rel.status == "divorced" %}
+                {{npcName}} is divorced from {{rel.partner.name}}.
+            {% elif rel.status == "jilted" %}
+                {{npcName}} and {{rel.partner.name}} were engaged, but the engagement was called off.
+            {% elif rel.status == "exdating" %}
+                {{npcName}} previously dated {{rel.partner.name}}.
+            {% elif rel.status == "exlover" %}
+                {{npcName}} and {{rel.partner.name}} were formerly lovers.
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+{% endif %}

@@ -1,0 +1,13 @@
+FormKey: 000049:TT_MARAS.esp
+EditorID: TTM_PermanentOutcastAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Outcast Class
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+Type: Ability
+Effects:
+- BaseEffect: 000024:TT_MARAS.esp
+  Data:
+    Magnitude: 10

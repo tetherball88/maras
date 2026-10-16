@@ -1,0 +1,20 @@
+FormKey: 000027:TT_MARAS.esp
+EditorID: TTM_IncreaseCarryWeightMaxEffect
+Name:
+  TargetLanguage: English
+  Value: Labor's Legacy
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: CarryWeight
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Hard-working roots carry their weight, increasing your carry capacity <mag> points

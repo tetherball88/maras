@@ -1,0 +1,9 @@
+FormKey: 000072:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHomeSetAsk
+Name:
+  TargetLanguage: English
+  Value: I'd like us to move somewhere else.
+Priority: 100
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

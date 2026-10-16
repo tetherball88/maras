@@ -1,0 +1,9 @@
+FormKey: 000066:TT_MARAS.esp
+EditorID: TTM_SpouseSocialClass
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseSocialClass
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

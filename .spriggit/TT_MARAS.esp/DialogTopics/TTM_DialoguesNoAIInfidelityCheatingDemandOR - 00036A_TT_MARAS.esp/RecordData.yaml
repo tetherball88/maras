@@ -1,0 +1,8 @@
+FormKey: 00036A:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCheatingDemandOR
+Name:
+  TargetLanguage: English
+  Value: Fine. Then let's make it open. I'll see others too.
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

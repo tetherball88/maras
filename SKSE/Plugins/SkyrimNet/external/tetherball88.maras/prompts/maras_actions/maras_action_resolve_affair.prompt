@@ -1,0 +1,14 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set resolveCandidates = ttm_get_resolve_affair_candidates(npc.UUID) %}
+
+{% if resolveCandidates != "" %}Eligible partners nearby to resolve exposed affair with: {{resolveCandidates}}{% endif %}
+
+USE WHEN {{speakingNpc.name}} and their partner verbally decide upon and settle the resolution of a known, exposed affair in their relationship.
+USE ONLY WHEN an explicit decision has been spoken regarding how the relationship will proceed after the infidelity.
+Resolution choices:
+- "confronted": Cheater agrees to cut all ties with the affair partner and commit to reconciling with their partner.
+- "allowed": Partner forgives or permits the secondary relationship, mutually transitioning their relationship into an open relationship.
+- "breakup": Either party decides the betrayal is unforgivable and declares a breakup or divorce ending their primary relationship.
+- Provide a concise 1st-person explanation of the decision.
+NEVER use if the affair is still an unexposed secret.
+NEVER use if no concrete resolution has been agreed upon or declared.

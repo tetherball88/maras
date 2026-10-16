@@ -1,0 +1,8 @@
+FormKey: 000371:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityKnownTopic
+Name:
+  TargetLanguage: English
+  Value: TTM_DialoguesNoAIInfidelityKnownTopic
+Branch: 000370:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

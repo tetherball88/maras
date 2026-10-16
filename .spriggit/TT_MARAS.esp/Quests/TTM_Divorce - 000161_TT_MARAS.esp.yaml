@@ -1,0 +1,67 @@
+FormKey: 000161:TT_MARAS.esp
+EditorID: TTM_Divorce
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestDivorce
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_DivorceLetter
+      Object: 000161:TT_MARAS.esp
+      Alias: 2
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Spouse
+      Object: 000161:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: pWIcourier
+      Object: 039F82:Skyrim.esm
+  FileName: TTM_QuestDivorce
+  Fragments:
+  - Unknown2: 1
+    ScriptName: TTM_QuestDivorce
+    FragmentName: Fragment_0
+  Aliases:
+  - Property:
+      Name: ''
+      Object: 000161:TT_MARAS.esp
+      Alias: 2
+    Scripts:
+    - Name: TTM_QuestDivorceOnAcquireDivorceLetter
+Flags:
+- AllowRepeatedStages
+Event: SCPT
+EventConditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetEventDataConditionData
+    Member: Keyword
+    Record: 000160:TT_MARAS.esp
+  ComparisonValue: 1
+Stages:
+- Flags:
+  - StartUpStage
+  - KeepInstanceDataFromHereOn
+  LogEntries:
+  - Flags: []
+NextAliasID: 6
+Aliases:
+- Name: Spouse
+  Flags:
+  - AllowDisabled
+  - StoresText
+  - AllowReserved
+  FindMatchingRefFromEvent:
+    FromEvent: SCPT
+    EventData: 12626
+  VoiceTypes: Null
+- ID: 2
+  Name: DivorceLetter
+  Flags:
+  - Optional
+  - StoresText
+  - UsesStoredText
+  CreateReferenceToObject:
+    Object: 000162:TT_MARAS.esp
+    Create: In
+    Level: 4
+  VoiceTypes: Null

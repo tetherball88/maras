@@ -1,0 +1,8 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set breakupCandidates = ttm_get_breakup_engagement_candidates(npc.UUID) %}
+
+{% if breakupCandidates != "" %}Available actors for calling off engagement: {{breakupCandidates}}{% endif %}
+
+Calling off an engagement is irreversible.
+USE ONLY when {{speakingNpc.name}} accepts or initiates calling off an engagement.
+NEVER confuse with ending a dating relationship, a lovers relationship or divorce.

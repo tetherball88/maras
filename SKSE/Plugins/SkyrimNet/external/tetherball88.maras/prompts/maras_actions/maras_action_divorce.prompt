@@ -1,0 +1,8 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set divorceCandidates = ttm_get_divorce_candidates(npc.UUID) %}
+
+{% if divorceCandidates != "" %}Available actors for divorce: {{divorceCandidates}}{% endif %}
+
+Divorce permanently ends a marriage and is irreversible.
+USE ONLY when {{speakingNpc.name}} accepts or initiates a divorce.
+NEVER confuse with ending a dating relationship, lovers relationship, or calling off an engagement.

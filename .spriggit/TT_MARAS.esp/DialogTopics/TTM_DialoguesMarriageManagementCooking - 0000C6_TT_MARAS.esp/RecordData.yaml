@@ -1,0 +1,9 @@
+FormKey: 0000C6:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementCooking
+Name:
+  TargetLanguage: English
+  Value: Would you mind cooking something for me?
+Priority: 70
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

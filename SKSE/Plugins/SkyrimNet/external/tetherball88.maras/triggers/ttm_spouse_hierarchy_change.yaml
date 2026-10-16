@@ -1,0 +1,24 @@
+name: "ttm_spouse_hierarchy_change"
+description: "Direct narration when a spouse is promoted or demoted in the household hierarchy in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_spouse_hierarchy_change"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have the affected spouse react to {{originator}}'s decision to change their rank in the household hierarchy in a way that fits their personality and standing."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 5

@@ -1,0 +1,9 @@
+FormKey: 000138:TT_MARAS.esp
+EditorID: TTM_DialoguesNonMarriageManagementTopic
+Name:
+  TargetLanguage: English
+  Value: (M) May I have a word with you?
+Priority: 100
+Branch: 000137:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

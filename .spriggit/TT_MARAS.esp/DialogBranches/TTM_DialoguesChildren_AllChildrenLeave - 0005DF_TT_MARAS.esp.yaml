@@ -1,0 +1,7 @@
+FormKey: 0005DF:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_AllChildrenLeave
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 0005E0:TT_MARAS.esp

@@ -1,0 +1,9 @@
+FormKey: 0000E0:TT_MARAS.esp
+EditorID: TTM_DialoguesBreakupReconcileAccept
+Name:
+  TargetLanguage: English
+  Value: (M) I made mistakes, and I regret them. I still care - can we start over?
+Priority: 100
+Branch: 0000DC:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

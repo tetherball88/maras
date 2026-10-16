@@ -1,0 +1,26 @@
+FormKey: 00030D:TT_MARAS.esp
+EditorID: TTM_ChildrenDialogues_ThanksSmall
+Flags: {}
+PreviousDialog: 00030C:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Disgust
+  EmotionValue: 25
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: All right. Thanks.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

@@ -1,0 +1,9 @@
+FormKey: 0002BD:TT_MARAS.esp
+EditorID: TTM_SpouseCheating
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseCheating
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

@@ -1,0 +1,26 @@
+FormKey: 00000C:TT_MARAS.esp
+EditorID: TTM_Debug_ToggleSpouseEffect
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_Debug_ToggleSpouseEffect
+Name:
+  TargetLanguage: English
+  Value: TTM_Debug_ToggleSpouseEffect
+Flags:
+- NoHitEvent
+- NoDuration
+- NoMagnitude
+- NoArea
+- Painless
+- NoHitEffect
+MagicSkill: Alteration
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  Type: Script
+CastType: FireAndForget
+TargetType: TargetActor
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English

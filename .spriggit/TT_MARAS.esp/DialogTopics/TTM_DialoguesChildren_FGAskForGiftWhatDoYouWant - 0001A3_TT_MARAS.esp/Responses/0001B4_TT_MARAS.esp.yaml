@@ -1,0 +1,32 @@
+FormKey: 0001B4:TT_MARAS.esp
+Flags:
+  Flags:
+  - SayOnce
+  - WalkAway
+PreviousDialog: 0001B3:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 0001A4:TT_MARAS.esp
+- 0001A1:TT_MARAS.esp
+- 0001A5:TT_MARAS.esp
+- 0001A6:TT_MARAS.esp
+Responses:
+- Emotion: Happy
+  EmotionValue: 10
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Well, sweets are always good. Or a new outfit. Or... or maybe a wooden sword? All my friends have swords.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 013AE8:Skyrim.esm
+  ComparisonValue: 1
+WalkAwayTopic: 0001A5:TT_MARAS.esp

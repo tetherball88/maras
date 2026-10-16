@@ -1,0 +1,9 @@
+FormKey: 0000EF:TT_MARAS.esp
+EditorID: TTM_DialoguesBreakupCancel
+Name:
+  TargetLanguage: English
+  Value: Forget it. That wasn't serious.
+Priority: 10
+Branch: 0000DB:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

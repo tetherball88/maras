@@ -1,0 +1,12 @@
+FormKey: 000102:TT_MARAS.esp
+EditorID: TTM_BreakupCooldownAbility
+Name:
+  TargetLanguage: English
+  Value: BreakupCooldown
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+Type: Ability
+Effects:
+- BaseEffect: 000103:TT_MARAS.esp
+  Data: {}

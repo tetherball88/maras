@@ -1,0 +1,28 @@
+customCategory: TTM_CategoryRelationship
+name: CloseRelationship
+description: "{{render_template(\"maras_actions/maras_action_close_relationship\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: SetOpenRelationshipChange
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: partner
+    description: Display name of the partner to close the relationship with.
+    useNearbyActors: false
+  - type: static
+    name: isOpen
+    value: false
+  - type: dynamic
+    name: reasoning
+    description: Explain decision from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_close_relationship_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""

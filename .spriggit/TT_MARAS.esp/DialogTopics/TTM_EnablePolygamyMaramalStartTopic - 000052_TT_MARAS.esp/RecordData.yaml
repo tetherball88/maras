@@ -1,0 +1,8 @@
+FormKey: 000052:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyMaramalStartTopic
+Name:
+  TargetLanguage: English
+  Value: (M) Since my marriage, I've felt something in me still reaching outward.
+Branch: 000051:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

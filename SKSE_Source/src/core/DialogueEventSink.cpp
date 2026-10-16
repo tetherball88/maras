@@ -1,5 +1,6 @@
 #include "core/DialogueEventSink.h"
 
+#include "core/NPCRelationshipManager.h"
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -9,43 +10,68 @@ namespace MARAS {
         return &singleton;
     }
 
+    bool DialogueEventSink::TryResolveDeferredSpeaker() {
+        if (!waitingForSpeaker_.load(std::memory_order_acquire)) {
+            return false;
+        }
+
+        auto* ui = RE::UI::GetSingleton();
+        if (!ui || !ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
+            if (waitingForSpeaker_.exchange(false, std::memory_order_acq_rel)) {
+                MARAS_LOG_DEBUG("DialogueEventSink: menu closed before speaker resolved, aborting");
+            }
+            return false;
+        }
+
+        auto* tm = RE::MenuTopicManager::GetSingleton();
+        if (!tm) {
+            return false;
+        }
+
+        auto speakerRef = tm->speaker.get();
+        if (!speakerRef) {
+            return false;
+        }
+
+        auto* npc = speakerRef->As<RE::Actor>();
+        if (!npc) {
+            waitingForSpeaker_.store(false, std::memory_order_release);
+            MARAS_LOG_DEBUG("DialogueEventSink: deferred speaker {:08X} is not an Actor, stopping wait", speakerRef->GetFormID());
+            return false;
+        }
+
+        if (npc == RE::PlayerCharacter::GetSingleton()) {
+            waitingForSpeaker_.store(false, std::memory_order_release);
+            MARAS_LOG_DEBUG("DialogueEventSink: deferred speaker is the player, skipping");
+            return false;
+        }
+
+        if (waitingForSpeaker_.exchange(false, std::memory_order_acq_rel)) {
+            MARAS_LOG_DEBUG("DialogueEventSink: resolved deferred speaker {:08X} ({})", npc->GetFormID(), npc->GetName());
+            SendDialogueEvent(npc);
+            return true;
+        }
+        return false;
+    }
+
     RE::BSEventNotifyControl DialogueEventSink::ProcessEvent(
         const RE::MenuOpenCloseEvent*          a_event,
         RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
     {
         if (!a_event) return RE::BSEventNotifyControl::kContinue;
 
-        // If we're waiting for speaker resolution, try on every incoming UI event
-        if (waitingForSpeaker_.load()) {
-            auto* ui = RE::UI::GetSingleton();
-            if (!ui || !ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
-                MARAS_LOG_DEBUG("DialogueEventSink: menu closed before speaker resolved, aborting");
-                waitingForSpeaker_.store(false);
-            } else {
-                auto* tm = RE::MenuTopicManager::GetSingleton();
-                if (tm) {
-                    auto speakerRef = tm->speaker.get();
-                    if (speakerRef) {
-                        auto* npc = speakerRef->As<RE::Actor>();
-                        if (npc && npc != RE::PlayerCharacter::GetSingleton()) {
-                            MARAS_LOG_DEBUG("DialogueEventSink: resolved deferred speaker {:08X} ({})", npc->GetFormID(), npc->GetName());
-                            waitingForSpeaker_.store(false);
-                            SendDialogueEvent(npc);
-                        }
-                    }
-                }
-            }
+        if (a_event->menuName != RE::DialogueMenu::MENU_NAME) {
+            TryResolveDeferredSpeaker();
+            return RE::BSEventNotifyControl::kContinue;
         }
 
-        if (a_event->menuName != RE::DialogueMenu::MENU_NAME)
-            return RE::BSEventNotifyControl::kContinue;
-
         if (!a_event->opening) {
-            waitingForSpeaker_.store(false);
+            waitingForSpeaker_.store(false, std::memory_order_release);
             MARAS_LOG_DEBUG("DialogueEventSink: Dialogue Menu closed");
             return RE::BSEventNotifyControl::kContinue;
         }
 
+        waitingForSpeaker_.store(false, std::memory_order_release);
         MARAS_LOG_DEBUG("DialogueEventSink: Dialogue Menu opened, resolving speaker");
 
         auto* tm = RE::MenuTopicManager::GetSingleton();
@@ -57,7 +83,12 @@ namespace MARAS {
         auto speakerRef = tm->speaker.get();
         if (!speakerRef) {
             MARAS_LOG_DEBUG("DialogueEventSink: speaker handle is empty, waiting for NPC to finish speaking");
-            waitingForSpeaker_.store(true);
+            waitingForSpeaker_.store(true, std::memory_order_release);
+            if (auto* taskInterface = SKSE::GetTaskInterface()) {
+                taskInterface->AddTask([]() {
+                    DialogueEventSink::GetSingleton()->TryResolveDeferredSpeaker();
+                });
+            }
             return RE::BSEventNotifyControl::kContinue;
         }
 
@@ -78,6 +109,8 @@ namespace MARAS {
     }
 
     void DialogueEventSink::SendDialogueEvent(RE::Actor* npc) {
+        NPCRelationshipManager::GetSingleton().UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+
         auto* eventSource = SKSE::GetModCallbackEventSource();
         if (!eventSource) {
             MARAS_LOG_ERROR("DialogueEventSink: ModCallbackEventSource unavailable");

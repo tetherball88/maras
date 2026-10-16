@@ -1,8 +1,8 @@
-﻿#include "core/NPCTypeDeterminer.h"
-
-#include <algorithm>
+#include "core/NPCTypeDeterminer.h"
 
 #include "core/FormCache.h"
+#include "core/NPCIndex.h"
+#include "services/ActorService.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 
@@ -57,66 +57,47 @@ namespace MARAS {
     }
 
     Temperament NPCTypeDeterminer::ComputeTemperament(SocialClass socialClass, SkillType skillType) {
-        int socialClassIndex = static_cast<int>(socialClass);
-        int skillTypeIndex = static_cast<int>(skillType);
+        // Rows: SocialClass (0=Outcast, 1=Poverty, 2=Working, 3=Middle, 4=Wealthy, 5=Religious, 6=Nobles, 7=Rulers)
+        // Cols: SkillType   (0=Warrior, 1=Mage,    2=Rogue,   3=Craftsman, 4=Ranger, 5=Orator)
+        static constexpr Temperament kTemperamentMatrix[8][6] = {
+            // Outcast (0)
+            { Temperament::Independent, Temperament::Jealous,     Temperament::Jealous,     Temperament::Humble,      Temperament::Independent, Temperament::Romantic    },
+            // Poverty (1)
+            { Temperament::Humble,      Temperament::Romantic,    Temperament::Jealous,     Temperament::Independent, Temperament::Proud,       Temperament::Romantic    },
+            // Working (2)
+            { Temperament::Proud,       Temperament::Humble,      Temperament::Romantic,    Temperament::Independent, Temperament::Independent, Temperament::Proud       },
+            // Middle (3)
+            { Temperament::Proud,       Temperament::Romantic,    Temperament::Independent, Temperament::Romantic,    Temperament::Humble,      Temperament::Jealous     },
+            // Wealthy (4)
+            { Temperament::Proud,       Temperament::Jealous,     Temperament::Romantic,    Temperament::Romantic,    Temperament::Independent, Temperament::Jealous     },
+            // Religious (5)
+            { Temperament::Independent, Temperament::Humble,      Temperament::Romantic,    Temperament::Jealous,     Temperament::Humble,      Temperament::Proud       },
+            // Nobles (6)
+            { Temperament::Jealous,     Temperament::Romantic,    Temperament::Independent, Temperament::Proud,       Temperament::Humble,      Temperament::Proud       },
+            // Rulers (7)
+            { Temperament::Proud,       Temperament::Independent, Temperament::Humble,      Temperament::Romantic,    Temperament::Jealous,     Temperament::Independent }
+        };
 
-        // Independent
-        if ((socialClassIndex == 0 && (skillTypeIndex == 0 || skillTypeIndex == 4)) ||
-            (socialClassIndex == 1 && skillTypeIndex == 3) ||
-            (socialClassIndex == 2 && (skillTypeIndex == 3 || skillTypeIndex == 4)) ||
-            (socialClassIndex == 3 && skillTypeIndex == 2) || (socialClassIndex == 4 && skillTypeIndex == 4) ||
-            (socialClassIndex == 5 && skillTypeIndex == 0) || (socialClassIndex == 6 && skillTypeIndex == 2) ||
-            (socialClassIndex == 7 && (skillTypeIndex == 1 || skillTypeIndex == 5))) {
-            return Temperament::Independent;
+        const auto scIdx = static_cast<std::size_t>(socialClass);
+        const auto stIdx = static_cast<std::size_t>(skillType);
+        if (scIdx < std::size(kTemperamentMatrix) && stIdx < std::size(kTemperamentMatrix[0])) {
+            return kTemperamentMatrix[scIdx][stIdx];
         }
-        // Jealous
-        else if ((socialClassIndex == 0 && (skillTypeIndex == 1 || skillTypeIndex == 2)) ||
-                 (socialClassIndex == 1 && skillTypeIndex == 2) || (socialClassIndex == 3 && skillTypeIndex == 5) ||
-                 (socialClassIndex == 4 && (skillTypeIndex == 1 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 5 && skillTypeIndex == 3) || (socialClassIndex == 6 && skillTypeIndex == 0) ||
-                 (socialClassIndex == 7 && skillTypeIndex == 4)) {
-            return Temperament::Jealous;
-        }
-        // Humble
-        else if ((socialClassIndex == 0 && skillTypeIndex == 3) || (socialClassIndex == 1 && skillTypeIndex == 0) ||
-                 (socialClassIndex == 2 && skillTypeIndex == 1) || (socialClassIndex == 3 && skillTypeIndex == 4) ||
-                 (socialClassIndex == 5 && (skillTypeIndex == 1 || skillTypeIndex == 4)) ||
-                 (socialClassIndex == 6 && skillTypeIndex == 4) || (socialClassIndex == 7 && skillTypeIndex == 2)) {
-            return Temperament::Humble;
-        }
-        // Proud
-        else if ((socialClassIndex == 1 && skillTypeIndex == 4) ||
-                 (socialClassIndex == 2 && (skillTypeIndex == 0 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 3 && skillTypeIndex == 0) || (socialClassIndex == 4 && skillTypeIndex == 0) ||
-                 (socialClassIndex == 5 && skillTypeIndex == 5) ||
-                 (socialClassIndex == 6 && (skillTypeIndex == 3 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 7 && skillTypeIndex == 0)) {
-            return Temperament::Proud;
-        }
-        // Romantic
-        else if ((socialClassIndex == 0 && skillTypeIndex == 5) ||
-                 (socialClassIndex == 1 && (skillTypeIndex == 1 || skillTypeIndex == 5)) ||
-                 (socialClassIndex == 2 && skillTypeIndex == 2) ||
-                 (socialClassIndex == 3 && (skillTypeIndex == 1 || skillTypeIndex == 3)) ||
-                 (socialClassIndex == 4 && (skillTypeIndex == 2 || skillTypeIndex == 3)) ||
-                 (socialClassIndex == 5 && skillTypeIndex == 2) || (socialClassIndex == 6 && skillTypeIndex == 1) ||
-                 (socialClassIndex == 7 && skillTypeIndex == 3)) {
-            return Temperament::Romantic;
-        }
-        // Fallback
-        else {
-            MARAS_LOG_DEBUG("Temperament matrix fallback (SC:{}, ST:{}), using Independent", socialClassIndex,
-                            skillTypeIndex);
-            return Temperament::Independent;
-        }
+
+        MARAS_LOG_DEBUG("Temperament matrix fallback (SC:{}, ST:{}), using Independent", scIdx, stIdx);
+        return Temperament::Independent;
     }
 
     // -------------------------- Internal Helpers --------------------------
 
     SocialClass NPCTypeDeterminer::DetermineSocialClassByFaction(RE::FormID npcFormID) {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-        if (!actor) {
-            MARAS_LOG_ERROR("Cannot find actor for FormID {:08X}", npcFormID);
+        auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
+        auto* npcBase = ActorSvc::GetActorBase(npcFormID);
+        if (!npcBase && actor) {
+            npcBase = actor->GetActorBase();
+        }
+        if (!npcBase && !actor) {
+            MARAS_LOG_WARN("Cannot find actor or base for FormID {:08X}", npcFormID);
             return SocialClass::Working;
         }
 
@@ -128,17 +109,9 @@ namespace MARAS {
         auto povertyFactions = FormCache::GetSingleton().GetPovertyFactions();
         auto outcastFactions = FormCache::GetSingleton().GetOutcastFactions();
 
-        if (!actor->GetActorBase() || !actor->GetActorBase()->factions.size()) {
-            MARAS_LOG_DEBUG("No factions found for actor {:08X}, defaulting to Working class", npcFormID);
-            return SocialClass::Working;
-        }
-
-        auto& actorFactions = actor->GetActorBase()->factions;
         int maxClassIndex = -1;
-
-        for (const auto& factionInfo : actorFactions) {
-            if (!factionInfo.faction) continue;
-            auto faction = factionInfo.faction;
+        auto evaluateFaction = [&](RE::TESFaction* faction) {
+            if (!faction) return;
             if (rulerFactions && rulerFactions->HasForm(faction)) {
                 maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Rulers));
             } else if (nobleFactions && nobleFactions->HasForm(faction)) {
@@ -154,11 +127,33 @@ namespace MARAS {
             } else if (outcastFactions && outcastFactions->HasForm(faction)) {
                 maxClassIndex = std::max(maxClassIndex, static_cast<int>(SocialClass::Outcast));
             }
+        };
+
+        std::unordered_set<RE::TESFaction*> removedFactions;
+        if (actor) {
+            if (auto* xFactions = actor->extraList.GetByType<RE::ExtraFactionChanges>()) {
+                for (const auto& factionInfo : xFactions->factionChanges) {
+                    if (!factionInfo.faction) continue;
+                    if (factionInfo.rank < 0) {
+                        removedFactions.insert(factionInfo.faction);
+                    } else {
+                        evaluateFaction(factionInfo.faction);
+                    }
+                }
+            }
+        }
+
+        if (npcBase) {
+            for (const auto& factionInfo : npcBase->factions) {
+                if (!factionInfo.faction || factionInfo.rank < 0) continue;
+                if (removedFactions.contains(factionInfo.faction)) continue;
+                evaluateFaction(factionInfo.faction);
+            }
         }
 
         auto clothingKeyword = FormCache::GetSingleton().GetClothingRichKeyword();
 
-        if (clothingKeyword && maxClassIndex < static_cast<int>(SocialClass::Wealthy)) {
+        if (actor && clothingKeyword && maxClassIndex < static_cast<int>(SocialClass::Wealthy)) {
             using Slot = RE::BGSBipedObjectForm::BipedObjectSlot;
             const Slot slotsToCheck[] = {Slot::kHead,
                                          Slot::kHair,
@@ -212,12 +207,12 @@ namespace MARAS {
     }
 
     std::optional<SkillType> NPCTypeDeterminer::DetermineSkillTypeByClass(RE::FormID npcFormID) {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-        if (!actor || !actor->GetActorBase()) {
-            MARAS_LOG_WARN("Cannot find actor or actor base for FormID {:08X}", npcFormID);
+        auto npcBase = ActorSvc::GetActorBase(npcFormID);
+        if (!npcBase) {
+            MARAS_LOG_WARN("Cannot find actor base for FormID {:08X}", npcFormID);
             return std::nullopt;
         }
-        auto spouseClass = actor->GetActorBase()->npcClass;
+        auto spouseClass = npcBase->npcClass;
         if (!spouseClass) {
             MARAS_LOG_DEBUG("No class found for actor {:08X}", npcFormID);
             return std::nullopt;
@@ -257,13 +252,13 @@ namespace MARAS {
     }
 
     SkillType NPCTypeDeterminer::DetermineSkillTypeBySkills(RE::FormID npcFormID) {
-        auto actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
-        if (!actor) {
-            MARAS_LOG_WARN("Cannot find actor for FormID {:08X} in skill determination", npcFormID);
+        auto npcBase = ActorSvc::GetActorBase(npcFormID);
+        if (!npcBase) {
+            MARAS_LOG_WARN("Cannot find actor base for FormID {:08X} in skill determination", npcFormID);
             return SkillType::Warrior;
         }
         std::array<float, 18> skills{};
-        auto actorValueOwner = actor->GetActorBase()->As<RE::ActorValueOwner>();
+        auto actorValueOwner = npcBase->As<RE::ActorValueOwner>();
         if (!actorValueOwner) {
             MARAS_LOG_WARN("Actor {:08X} does not implement ActorValueOwner interface (actor or base)", npcFormID);
             return SkillType::Warrior;

@@ -46,6 +46,14 @@ Function RegisterCandidateMsg(string npcName) global
     Debug.Notification("$TTM_MSG_RegisterCandidate{" + npcName + "}")
 EndFunction
 
+Function DatingMsg(string npcName) global
+    Debug.Notification("$TTM_MSG_Dating{" + npcName + "}")
+EndFunction
+
+Function LoverMsg(string npcName) global
+    Debug.Notification("$TTM_MSG_Lover{" + npcName + "}")
+EndFunction
+
 Function EngagementMsg(string npcName) global
     Debug.Notification("$TTM_MSG_Engagement{" + npcName + "}")
 EndFunction
@@ -60,6 +68,14 @@ EndFunction
 
 Function JiltedMsg(string npcName) global
     Debug.Notification("$TTM_MSG_Jilted{" + npcName + "}")
+EndFunction
+
+Function ExDatingMsg(string npcName) global
+    Debug.Notification("$TTM_MSG_ExDating{" + npcName + "}")
+EndFunction
+
+Function ExLoverMsg(string npcName) global
+    Debug.Notification("$TTM_MSG_ExLover{" + npcName + "}")
 EndFunction
 
 Function SpouseNoHomeMsg(string npcName) global

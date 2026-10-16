@@ -1,0 +1,7 @@
+FormKey: 0000DB:TT_MARAS.esp
+EditorID: TTM_DialoguesBreakup
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 0000EC:TT_MARAS.esp

@@ -1,0 +1,28 @@
+customCategory: TTM_CategoryRelationship
+name: BreakupDating
+description: "{{render_template(\"maras_actions/maras_action_breakup_dating\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: BreakupRelationship
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: partnerName
+    description: Display name of the partner to break up with.
+    useNearbyActors: false
+  - type: static
+    name: status
+    value: "exdating"
+  - type: dynamic
+    name: reasoning
+    description: Explain decision from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_breakup_dating_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""

@@ -2,9 +2,19 @@ scriptname TTM_ServiceMarriageDifficulty
 
 float Function intimacyAdjustment(Actor npc) global
     float res = 0
-    Actor existingSpouse = TTM_ServiceRelationsFinder.GetExistingSpouse(npc)
-    Actor existingCourting = TTM_ServiceRelationsFinder.GetExistingCourting(npc)
-    Actor[] existingLovers = TTM_ServiceRelationsFinder.GetExistingLovers(npc)
+    Actor[] spouses = MARAS.GetRelationshipPartners(npc, "married")
+    Actor existingSpouse = none
+    if (spouses.Length > 0)
+        existingSpouse = spouses[0]
+    endif
+
+    Actor[] courtings = MARAS.GetRelationshipPartners(npc, "engaged")
+    Actor existingCourting = none
+    if (courtings.Length > 0)
+        existingCourting = courtings[0]
+    endif
+
+    Actor[] existingLovers = MARAS.GetRelationshipPartners(npc, "lover")
 
     int i = 0
 
@@ -48,12 +58,7 @@ float Function intimacyAdjustment(Actor npc) global
 EndFunction
 
 
-float Function calcMarriageSuccessChance(Actor npc) global
-    if(TTM_Data.GetAlwaysSuccessMarriage())
-        TTM_Debug.debug("calcMarriageSuccessChance: Always success enabled, returning 1.0")
-        return 1.0
-    endif
-
+int Function calcMarriageSuccessChance(Actor npc) global
     int mostGold = Game.QueryStat("Most Gold Carried")
     int housesOwned = Game.QueryStat("Houses Owned")
     int horsesOwned = Game.QueryStat("Horses Owned")
@@ -61,7 +66,7 @@ float Function calcMarriageSuccessChance(Actor npc) global
     int dungeonsCleared = Game.QueryStat("Dungeons Cleared")
     int dragonSoulsCollected = Game.QueryStat("Dragon Souls Collected")
 
-    float chance = MARAS.CalculateMarriageSuccessChance(npc, intimacyAdjustment(npc), mostGold, housesOwned, horsesOwned, questsCompleted, dungeonsCleared, dragonSoulsCollected, TTM_Data.GetPlayerKiller())
+    int chance = MARAS.CalculateMarriageSuccessChance(npc, intimacyAdjustment(npc), mostGold, housesOwned, horsesOwned, questsCompleted, dungeonsCleared, dragonSoulsCollected, TTM_Data.GetPlayerKiller()) as int
 
-    return chance
+    return chance * 100
 EndFunction
