@@ -1,0 +1,79 @@
+FormKey: 000021:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerEnablePolygamyQst
+    Properties:
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 40
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerEnablePolygamyQst
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerEnablePolygamyQst
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: The script is ancient - older than any I've studied, even among Dibella's texts.
+  ScriptNotes: ''
+  Edits: ''
+- Emotion: Puzzled
+  EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: This isn't just old temple writing... it's something closer to the divine tongue.
+  ScriptNotes: ''
+  Edits: ''
+- EmotionValue: 50
+  ResponseNumber: 3
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: If anyone can make sense of it, it's the mages in Winterhold.
+  ScriptNotes: ''
+  Edits: ''
+- EmotionValue: 50
+  ResponseNumber: 4
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Seek out their librarian - Urag gro-Shub. He has a mind sharp enough to unseal even this.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageConditionData
+    Quest: 00005C:TT_MARAS.esp
+  ComparisonValue: 30
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    UseAliases: True
+    ReferenceAliasIndex: 1
+  ComparisonValue: 1

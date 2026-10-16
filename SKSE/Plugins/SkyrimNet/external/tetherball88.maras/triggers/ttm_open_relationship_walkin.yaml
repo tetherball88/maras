@@ -1,0 +1,24 @@
+name: "ttm_open_relationship_walkin"
+description: "Direct narration when an actor walks in on their partner having permitted intimacy in an open relationship in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_open_relationship_walkin"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and {{event_json.partner}} react to {{originator}} walking in on {{event_json.partner}} with {{event_json.affairPartner}} in a way that fits their personalities and their open relationship dynamic."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6

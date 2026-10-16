@@ -36,7 +36,7 @@ EndFunction
 
 Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.AddHeaderOption("$TTM_MCM_HeaderSettings")
-    mcm.oid_SkipNextWeddings = mcm.AddToggleOption("$TTM_MCM_SkipWedding", TTM_Data.GetSkipWedding())
+    mcm.oid_SkipNextWeddings = mcm.AddToggleOption("$TTM_MCM_SkipWedding", MARAS.GetSettingBool("skipWedding"))
     mcm.oid_AffectionDecayMult = mcm.AddSliderOption("$TTM_MCM_AffectionDecayMult", MARAS.GetAffectionDecayMultiplier(), "{1}x")
     mcm.AddHeaderOption("$TTM_MCM_HeaderAIDialogues")
     string[] genderOptions = GetGendersOptions()
@@ -44,11 +44,10 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     if(!TTM_Data.GetHasSkyrimNet())
         hasSkyrimNet = 1
     endif
-    mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("$TTM_MCM_StartDialGender", genderOptions[mcm.MCM_StartDialGender.GetValue() as int])
-    mcm.oid_MinRelRankForDial = mcm.AddSliderOption("$TTM_MCM_MinRelRankForDial", mcm.TTM_MinRelRankForDial.GetValue(), "{0}")
+    mcm.oid_SettingsStartDialGender = mcm.AddMenuOption("$TTM_MCM_StartDialGender", genderOptions[MARAS.GetStartDialGender()])
+    mcm.oid_MinRelRankForDial = mcm.AddSliderOption("$TTM_MCM_MinRelRankForDial", MARAS.GetMinRelRankForDial(), "{0}")
     mcm.AddHeaderOption("$TTM_MCM_HeaderSettingsSkyrimNet")
-    mcm.oid_SettingsPreferVanillaAudio= mcm.AddToggleOption("$TTM_MCM_PreferVanillaAudio", mcm.TTM_MCM_PreferVanillaAudio.GetValue(), hasSkyrimNet)
-    mcm.oid_SettingsAllowAIDial = mcm.AddToggleOption("$TTM_MCM_AllowAIDial", mcm.TTM_MCM_AllowAIDial.GetValue(), hasSkyrimNet)
+
     mcm.AddHeaderOption("$TTM_MCM_HeaderSettingsSkyrimNetActionsConfirmation")
     mcm.oid_ConfirmAcceptProposal = mcm.AddToggleOption("$TTM_MCM_ConfirmAcceptProposal", TTM_MCM_State.GetConfirmAcceptProposal(), hasSkyrimNet)
     mcm.oid_ConfirmBreakupEngagement = mcm.AddToggleOption("$TTM_MCM_ConfirmBreakupEngagement", TTM_MCM_State.GetConfirmBreakupEngagement(), hasSkyrimNet)
@@ -61,9 +60,9 @@ Function RenderRightColumn(TTM_MCM mcm) global
     string[] logLevelOptions = GetLogLevelOptions()
     mcm.oid_SettingsLogLevel = mcm.AddMenuOption("$TTM_MCM_LogLevel", logLevelOptions[MARAS.GetLogLevel()])
     string[] logDestinationOptions = GetLogDestinationOptions()
-    mcm.oid_SettingsLogDestination = mcm.AddMenuOption("$TTM_MCM_LogDestination", logDestinationOptions[TTM_Data.GetLogDestination()])
+    mcm.oid_SettingsLogDestination = mcm.AddMenuOption("$TTM_MCM_LogDestination", logDestinationOptions[MARAS.GetSettingInt("logDestination")])
     mcm.AddHeaderOption("$TTM_MCM_HeaderCheats")
-    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("$TTM_MCM_CheatAlwaysSuccess", TTM_Data.GetAlwaysSuccessMarriage())
+    mcm.oid_SettingsCheatAlwaysSuccess = mcm.AddToggleOption("$TTM_MCM_CheatAlwaysSuccess", MARAS.GetSettingBool("alwaysSuccessMarriage"))
     ; Debug Spell toggle: add/remove debug spell to player
     Actor player = TTM_Data.GetPlayer()
     bool hasDebug = false
@@ -71,29 +70,19 @@ Function RenderRightColumn(TTM_MCM mcm) global
         hasDebug = player.HasSpell(TTM_Data.GetDebugSpell())
     endif
     mcm.oid_SettingsCheatDebugSpell = mcm.AddToggleOption("$TTM_MCM_CheatDebugSpell", hasDebug)
-    mcm.oid_EnablePolygamyToggle = mcm.AddToggleOption("$TTM_MCM_EnablePolygamy", mcm.TTM_EnablePolygamyToggle.GetValue() as int)
+    mcm.oid_EnablePolygamyToggle = mcm.AddToggleOption("$TTM_MCM_EnablePolygamy", MARAS.GetEnablePolygamy() as int)
 EndFunction
 
 Function OnOptionSelect(TTM_MCM mcm, int option) global
     if(option == mcm.oid_SettingsStartDialGender)
-    elseif(option == mcm.oid_SettingsPreferVanillaAudio)
-        mcm.SetToggleOptionValue(option, TTM_Utils.ToggleGlobalVariable(mcm.TTM_MCM_PreferVanillaAudio))
-        Quest main = TTM_Data.GetMarasMainQuest()
-        TTM_Conditions conditions = main as TTM_Conditions
-        conditions.Maintenance()
-    elseif(option == mcm.oid_SettingsAllowAIDial)
-        mcm.SetToggleOptionValue(option, TTM_Utils.ToggleGlobalVariable(mcm.TTM_MCM_AllowAIDial))
-        Quest main = TTM_Data.GetMarasMainQuest()
-        TTM_Conditions conditions = main as TTM_Conditions
-        conditions.Maintenance()
     elseif(option == mcm.oid_SkipNextWeddings)
-        bool val = TTM_Data.GetSkipWedding()
+        bool val = MARAS.GetSettingBool("skipWedding")
         mcm.SetToggleOptionValue(option, !val)
-        TTM_Data.SetSkipWedding(!val)
+        MARAS.SetSettingBool("skipWedding", !val)
     elseif(option == mcm.oid_SettingsCheatAlwaysSuccess)
-        bool val = TTM_Data.GetAlwaysSuccessMarriage()
+        bool val = MARAS.GetSettingBool("alwaysSuccessMarriage")
         mcm.SetToggleOptionValue(option, !val)
-        TTM_Data.SetAlwaysSuccessMarriage(!val)
+        MARAS.SetSettingBool("alwaysSuccessMarriage", !val)
     elseif(option == mcm.oid_SettingsCheatDebugSpell)
         Actor player = TTM_Data.GetPlayer()
         Spell debugSpell = TTM_Data.GetDebugSpell()
@@ -108,7 +97,9 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
             endif
         endif
     elseif(option == mcm.oid_EnablePolygamyToggle)
-        mcm.SetToggleOptionValue(option, TTM_Utils.ToggleGlobalVariable(mcm.TTM_EnablePolygamyToggle))
+        bool newVal = !MARAS.GetEnablePolygamy()
+        MARAS.SetEnablePolygamy(newVal)
+        mcm.SetToggleOptionValue(option, newVal)
     elseif(option == mcm.oid_ConfirmAcceptProposal)
         bool newVal = !TTM_MCM_State.GetConfirmAcceptProposal()
         mcm.SetToggleOptionValue(option, newVal)
@@ -125,20 +116,12 @@ Function OnOptionSelect(TTM_MCM mcm, int option) global
         bool newVal = !TTM_MCM_State.GetConfirmDivorceDuringLowAffectionQuest()
         mcm.SetToggleOptionValue(option, newVal)
         TTM_MCM_State.SetConfirmDivorceDuringLowAffectionQuest(newVal)
-    elseif(option == mcm.oid_ConfirmDivorceDuringLowAffectionQuest)
-        bool newVal = !TTM_MCM_State.GetConfirmDivorceDuringLowAffectionQuest()
-        mcm.SetToggleOptionValue(option, newVal)
-        TTM_MCM_State.SetConfirmDivorceDuringLowAffectionQuest(newVal)
     endif
 EndFunction
 
 ; Highlight
 Function OnOptionHighlight(TTM_MCM mcm, int option) global
-    if(option == mcm.oid_SettingsPreferVanillaAudio)
-        mcm.SetInfoText("$TTM_MCM_TT_PreferVanilla")
-    elseif(option == mcm.oid_SettingsAllowAIDial)
-        mcm.SetInfoText("$TTM_MCM_TT_AllowAIDial")
-    elseif(option == mcm.oid_SettingsLogDestination)
+    if(option == mcm.oid_SettingsLogDestination)
         mcm.SetInfoText("$TTM_MCM_TT_LogDestination")
     elseif(option == mcm.oid_SettingsLogLevel)
         mcm.SetInfoText("$TTM_MCM_TT_LogLevel")
@@ -161,7 +144,6 @@ Function OnOptionMenuOpen(TTM_MCM mcm, int option) global
     string[] options
     if(option == mcm.oid_SettingsStartDialGender)
         options = GetGendersOptions()
-        ; TTM_MCM_SettingsPage.OnOptionMenuOpen(a_option)
     elseif(option == mcm.oid_SettingsLogDestination)
         options = GetLogDestinationOptions()
     elseif(option == mcm.oid_SettingsLogLevel)
@@ -172,12 +154,12 @@ EndFunction
 
 Function OnOptionMenuAccept(TTM_MCM mcm, int option, int index) global
     string[] options
-	if(option == mcm.oid_SettingsStartDialGender)
+    if(option == mcm.oid_SettingsStartDialGender)
         options = GetGendersOptions()
-        mcm.MCM_StartDialGender.SetValue(index)
+        MARAS.SetStartDialGender(index)
     elseif(option == mcm.oid_SettingsLogDestination)
         options = GetLogDestinationOptions()
-        TTM_Data.SetLogDestination(index)
+        MARAS.SetSettingInt("logDestination", index)
     elseif(option == mcm.oid_SettingsLogLevel)
         options = GetLogLevelOptions()
         MARAS.SetLogLevel(index)
@@ -190,10 +172,10 @@ EndFunction
 Function OnOptionDefault(TTM_MCM mcm, int option) global
     if(option == mcm.oid_SettingsStartDialGender)
         mcm.SetMenuOptionValue(mcm.oid_SettingsStartDialGender, 0)
-        mcm.MCM_StartDialGender.SetValue(0)
+        MARAS.SetStartDialGender(0)
     elseif(option == mcm.oid_SettingsLogDestination)
         mcm.SetMenuOptionValue(mcm.oid_SettingsLogDestination, 0)
-        TTM_Data.SetLogDestination(0)
+        MARAS.SetSettingInt("logDestination", 0)
     elseif(option == mcm.oid_SettingsLogLevel)
         mcm.SetMenuOptionValue(mcm.oid_SettingsLogLevel, 2)
         MARAS.SetLogLevel(2)
@@ -205,7 +187,7 @@ Function OnOptionDefault(TTM_MCM mcm, int option) global
         endif
         mcm.SetToggleOptionValue(mcm.oid_SettingsCheatDebugSpell, 0)
     elseif(option == mcm.oid_MinRelRankForDial)
-        mcm.TTM_MinRelRankForDial.SetValue(-4)
+        MARAS.SetMinRelRankForDial(-4)
         mcm.SetSliderOptionValue(option, -4, "{0}")
     elseif(option == mcm.oid_AffectionDecayMult)
         MARAS.SetAffectionDecayMultiplier(1.0)
@@ -223,7 +205,7 @@ EndFunction
 
 Function OnOptionSliderOpen(TTM_MCM mcm, int option) global
     if(option == mcm.oid_MinRelRankForDial)
-        mcm.SetSliderDialogStartValue(mcm.TTM_MinRelRankForDial.GetValue())
+        mcm.SetSliderDialogStartValue(MARAS.GetMinRelRankForDial())
         mcm.SetSliderDialogDefaultValue(-4)
         mcm.SetSliderDialogRange(-4, 4)
         mcm.SetSliderDialogInterval(1)
@@ -237,10 +219,11 @@ EndFunction
 
 Function OnOptionSliderAccept(TTM_MCM mcm, int option, float value) global
     if(option == mcm.oid_MinRelRankForDial)
-        mcm.TTM_MinRelRankForDial.SetValue(value)
+        MARAS.SetMinRelRankForDial(value as int)
         mcm.SetSliderOptionValue(option, value, "{0}")
     elseif(option == mcm.oid_AffectionDecayMult)
         MARAS.SetAffectionDecayMultiplier(value)
         mcm.SetSliderOptionValue(option, value, "{1}x")
     endif
 EndFunction
+

@@ -1,0 +1,14 @@
+FormKey: 00003A:TT_MARAS.esp
+EditorID: TTM_FollowerOratorPerk
+Name:
+  TargetLanguage: English
+  Value: Echoed Voice
+Description:
+  TargetLanguage: English
+  Value: Marching with a gifted speaker empowers your voice, reducing shout cooldown time
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000033:TT_MARAS.esp

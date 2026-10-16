@@ -1,0 +1,8 @@
+FormKey: 000163:TT_MARAS.esp
+EditorID: TTM_DivorceBranch
+Parent: 01379A:Skyrim.esm
+PreviousSibling: 00011C:TT_MARAS.esp
+MaxConcurrentQuests: 1
+Quests:
+- Quest: 000161:TT_MARAS.esp
+  HoursUntilReset: 96

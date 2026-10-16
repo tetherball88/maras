@@ -1,0 +1,101 @@
+[system]
+## Role
+You are an expert on The Elder Scrolls universe, especially Skyrim. Your task is to analyze relationship events between characters and create coherent, personal first-person memories for both NPCs involved.
+
+{% if actorAUUID != 0 %}
+  {% set npcA = decnpc(actorAUUID) %}
+  {% set npcA_name = npcA.name %}
+{% else %}
+  {% set npcA_name = actorAName %}
+{% endif %}
+
+{% if actorBUUID != 0 %}
+  {% set npcB = decnpc(actorBUUID) %}
+  {% set npcB_name = npcB.name %}
+{% else %}
+  {% set npcB_name = actorBName %}
+{% endif %}
+
+## Participants
+
+### {{ npcA_name }}
+{% if actorAUUID != 0 %}
+  {{ render_character_profile("ttm_gm", actorAUUID) }}
+{% else %}
+  - **Race:** {{ actorARace }}
+  - **Gender:** {{ actorASex }}
+  - **Current Relationships:**
+  {{ actorARelationships }}
+{% endif %}
+
+### {{ npcB_name }}
+{% if actorBUUID != 0 %}
+  {{ render_character_profile("ttm_gm", actorBUUID) }}
+{% else %}
+  - **Race:** {{ actorBRace }}
+  - **Gender:** {{ actorBSex }}
+  - **Current Relationships:**
+  {{ actorBRelationships }}
+{% endif %}
+
+
+## Context
+- **Relationship Action:** {{ action }}
+- **Relationship Status:** {{ targetStatus }}
+
+## Instructions
+Create two separate, concise first-person memories about this relationship development:
+1. One memory from **{{ npcA_name }}'s perspective** (first-person "I", recollecting their encounter/feelings regarding {{ npcB_name }}).
+2. One memory from **{{ npcB_name }}'s perspective** (first-person "I", recollecting their encounter/feelings regarding {{ npcA_name }}).
+
+### Memory Writing Guidelines:
+- **Perspective**: Write in first-person ("I", "we"), present tense recollection.
+- **Concise & Specific**: 2-4 dense sentences per memory. Include concrete names, places, and actions.
+- **Factual & Grounded**: Prioritize realistic character reactions rooted in Skyrim lore, their respective races, and background over flowery prose.
+- **Emotional Context**: Reflect the nature of the relationship status (e.g., romantic warmth for dating/engagement/marriage, tension for breakups, excitement or secret thrill for casual/cheating lovers).
+
+## Response Format
+Respond ONLY with a raw JSON object. No markdown formatting, no code fences. Must start with `{` and end with `}`:
+
+{% raw %}
+{
+  "memories": [
+    {
+      "actor": "{% endraw %}{{ npcA_name }}{% raw %}",
+      "content": "2-4 sentence memory from {% endraw %}{{ npcA_name }}{% raw %}'s POV. Specific names, locations, actions.",
+      "location": "Full location name (e.g., The Bannered Mare in Whiterun)",
+      "emotion": "joyful|content|neutral|concerned|fearful|angry|disgusted|surprised|sad|traumatized",
+      "importance_score": 0.7,
+      "tags": ["name", "location", "romance", "marriage", "theme"],
+      "type": "RELATIONSHIP|EXPERIENCE|JOY|TRAUMA|KNOWLEDGE"
+    },
+    {
+      "actor": "{% endraw %}{{ npcB_name }}{% raw %}",
+      "content": "2-4 sentence memory from {% endraw %}{{ npcB_name }}{% raw %}'s POV. Specific names, locations, actions.",
+      "location": "Full location name (e.g., The Bannered Mare in Whiterun)",
+      "emotion": "joyful|content|neutral|concerned|fearful|angry|disgusted|surprised|sad|traumatized",
+      "importance_score": 0.7,
+      "tags": ["name", "location", "romance", "marriage", "theme"],
+      "type": "RELATIONSHIP|EXPERIENCE|JOY|TRAUMA|KNOWLEDGE"
+    }
+  ]
+}
+{% endraw %}
+
+### Importance Score Guidelines:
+- **0.7 - 1.0 (High Importance)**: Major life milestones (engagement, wedding/marriage, painful divorce, major betrayal).
+- **0.4 - 0.6 (Moderate Importance)**: Starting to date, casual lover encounter, mutual confession, opening relationship.
+- **0.1 - 0.3 (Low Importance)**: Brief flirtation or minor interaction.
+
+### Tag Guidelines:
+Include 4-8 lowercase tags focusing on:
+- Character names mentioned (e.g., "{{ npcA_name }}", "{{ npcB_name }}")
+- Location (e.g., "whiterun", "bannered mare", "temple of mara")
+- Relationship themes (e.g., "romance", "dating", "marriage", "breakup", "infidelity", "love", "passion")
+
+[end system]
+
+[user]
+Generate two first-person POV memories for {{ npcA_name }} and {{ npcB_name }} regarding their relationship event (Action: {{ action }}, Status: {{ targetStatus }}).
+Return raw JSON only. No markdown. Start with `{`, end with `}`.
+[end user]

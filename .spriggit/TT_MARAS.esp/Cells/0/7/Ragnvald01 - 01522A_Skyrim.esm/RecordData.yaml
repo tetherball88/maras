@@ -1,0 +1,66 @@
+FormKey: 01522A:Skyrim.esm
+IsCompressed: True
+MajorRecordFlagsRaw: 262144
+EditorID: Ragnvald01
+Version2: 3
+SkyrimMajorRecordFlags:
+- Compressed
+Name:
+  TargetLanguage: English
+  Value: Ragnvald Temple
+Flags:
+- IsInteriorCell
+- ShowSky
+Lighting:
+  AmbientColor: '#00323232'
+  DirectionalColor: '#00000000'
+  FogNearColor: '#001E1E1E'
+  FogNear: 340
+  FogFar: 7000
+  DirectionalFade: 1
+  FogPower: 1
+  AmbientColors:
+    DirectionalXPlus: '#003A3021'
+    DirectionalXMinus: '#002F301E'
+    DirectionalYPlus: '#00353220'
+    DirectionalYMinus: '#00352D20'
+    DirectionalZPlus: '#0019160E'
+    DirectionalZMinus: '#00504931'
+    Specular: '#001E1E1E'
+    Scale: 1
+  FogFarColor: '#001E1E1E'
+  FogMax: 1
+  Inherits:
+  - AmbientColor
+  - DirectionalColor
+  - FogColor
+  - FogNear
+  - FogFar
+  - DirectionalRotation
+  - DirectionalFade
+  - ClipDistance
+  - FogPower
+LightingTemplate: 0EDA91:Skyrim.esm
+WaterHeight: 0
+Location: 01928F:Skyrim.esm
+SkyAndWeatherFromRegion: 04D7FD:Skyrim.esm
+AcousticSpace: 01AA4D:Skyrim.esm
+EncounterZone: 03EC57:Skyrim.esm
+Music: 02D4C2:Skyrim.esm
+ImageSpace: 02EDEB:Skyrim.esm
+Persistent:
+- MutagenObjectType: PlacedObject
+  FormKey: 07567C:Skyrim.esm
+  MajorRecordFlagsRaw: 1024
+  Version2: 4
+  SkyrimMajorRecordFlags:
+  - 0x400
+  Base: 020671:Skyrim.esm
+  LocationRefTypes:
+  - 0130F8:Skyrim.esm
+  LocationReference: 01928F:Skyrim.esm
+  Placement:
+    Position: 964.03015, 7744.117, -127.15979
+    Rotation: 0.14749445, 0.03392213, 5.927194
+MajorFlags:
+- 0x40000

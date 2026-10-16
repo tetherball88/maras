@@ -1,9 +1,7 @@
 #include "core/QuestEventConfigLoader.h"
 
-#include <fstream>
-#include <nlohmann/json.hpp>
-
 #include "utils/FormUtils.h"
+#include "utils/JsonOverrideLoader.h"
 
 namespace MARAS {
 
@@ -20,119 +18,81 @@ namespace MARAS {
             return false;
         }
 
-        MARAS_LOG_INFO("Loading quest event configurations from folder: {}", folderPath);
-
         // Clear existing configurations before loading new ones
         manager.ClearConfig();
 
-        try {
-            for (const auto& entry : fs::directory_iterator(folderPath)) {
-                if (IsValidJsonFile(entry.path())) {
-                    s_lastStats.totalFiles++;
-
-                    if (LoadFromFile(entry.path(), manager)) {
-                        s_lastStats.successfulFiles++;
-                    }
+        const bool ok = Utils::JsonOverrideLoader::ScanFormDataJsonFolder(
+            folderPath, "QuestEventConfigLoader", s_lastStats.totalFiles, s_lastStats.successfulFiles,
+            s_lastStats.totalQuests, s_lastStats.validQuests, s_lastStats.invalidFormKeys,
+            [&](const std::string& key, const Utils::ParsedFormKey& parsedKey, const nlohmann::json& value) {
+                auto* quest =
+                    Utils::LookupForm<RE::TESQuest>(parsedKey.localFormID, parsedKey.pluginName, "QuestEventConfigLoader");
+                if (!quest) {
+                    s_lastStats.unresolvedQuests++;
+                    MARAS_LOG_WARN("Quest not found for key: {}", key);
+                    return false;
                 }
-            }
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("Error scanning quest event config folder '{}': {}", folderPath, e.what());
-            return false;
-        }
+
+                const auto questFormID = quest->GetFormID();
+                QuestEventConfig config = ParseQuestConfig(key, value);
+                config.questFormID = questFormID;
+
+                const bool hasHandlers = !config.onStartCommands.empty() || !config.onStopCommands.empty() ||
+                                         !config.onStageChangeCommands.empty();
+
+                if (!hasHandlers) {
+                    MARAS_LOG_WARN("Quest config has no event handlers: {} (0x{:08X})", quest->GetName(), questFormID);
+                    return false;
+                }
+
+                MARAS_LOG_DEBUG("Loaded quest event config for {} (0x{:08X}): onStart={}, onStop={}, stages={}",
+                                quest->GetName(), questFormID, config.onStartCommands.size(),
+                                config.onStopCommands.size(), config.onStageChangeCommands.size());
+
+                manager.questConfigs_[questFormID] = std::move(config);
+                return true;
+            });
 
         MARAS_LOG_INFO("Quest event config loading complete. Files: {}/{}, Quests: {}/{}, Invalid keys: {}, "
                        "Unresolved: {}",
                        s_lastStats.successfulFiles, s_lastStats.totalFiles, s_lastStats.validQuests,
                        s_lastStats.totalQuests, s_lastStats.invalidFormKeys, s_lastStats.unresolvedQuests);
 
-        return s_lastStats.successfulFiles > 0;
+        return ok;
     }
 
     bool QuestEventConfigLoader::LoadFromFile(const std::filesystem::path& filePath, QuestEventManager& manager) {
-        if (!IsValidJsonFile(filePath)) {
-            MARAS_LOG_WARN("Invalid JSON file: {}", filePath.string());
-            return false;
-        }
-
-        MARAS_LOG_DEBUG("Loading quest event config from file: {}", filePath.string());
-
-        try {
-            std::ifstream file(filePath);
-            if (!file.is_open()) {
-                MARAS_LOG_ERROR("Cannot open file: {}", filePath.string());
-                return false;
-            }
-
-            nlohmann::json json;
-            file >> json;
-
-            if (!json.is_object()) {
-                MARAS_LOG_ERROR("JSON file is not an object: {}", filePath.string());
-                return false;
-            }
-
-            size_t fileQuests = 0;
-
-            for (const auto& [key, value] : json.items()) {
-                // Skip metadata entries
-                if (key.starts_with("__metaInfo")) {
-                    continue;
-                }
-
-                // Only process form data keys
-                if (!key.starts_with("__formData|")) {
-                    MARAS_LOG_WARN("Ignoring non-form key: {}", key);
-                    continue;
-                }
-
-                s_lastStats.totalQuests++;
-
-                // Parse the form key
-                auto questFormID = Utils::ParseAndResolveFormKey(key);
-                if (!questFormID.has_value()) {
-                    s_lastStats.invalidFormKeys++;
-                    MARAS_LOG_WARN("Failed to parse form key: {}", key);
-                    continue;
-                }
-
-                // Verify quest exists
-                auto quest = RE::TESForm::LookupByID<RE::TESQuest>(questFormID.value());
+        return Utils::JsonOverrideLoader::ScanFormDataJsonFile(
+            filePath, "QuestEventConfigLoader", s_lastStats.totalQuests, s_lastStats.validQuests,
+            s_lastStats.invalidFormKeys,
+            [&](const std::string& key, const Utils::ParsedFormKey& parsedKey, const nlohmann::json& value) {
+                auto* quest =
+                    Utils::LookupForm<RE::TESQuest>(parsedKey.localFormID, parsedKey.pluginName, "QuestEventConfigLoader");
                 if (!quest) {
                     s_lastStats.unresolvedQuests++;
-                    MARAS_LOG_WARN("Quest not found for ID {:08X} from key: {}", questFormID.value(), key);
-                    continue;
+                    MARAS_LOG_WARN("Quest not found for key: {}", key);
+                    return false;
                 }
 
-                // Parse quest event configuration
+                const auto questFormID = quest->GetFormID();
                 QuestEventConfig config = ParseQuestConfig(key, value);
-                config.questFormID = questFormID.value();
+                config.questFormID = questFormID;
 
-                // Only store if there are actual event handlers
-                bool hasHandlers = !config.onStartCommands.empty() || !config.onStopCommands.empty() ||
-                                   !config.onStageChangeCommands.empty();
+                const bool hasHandlers = !config.onStartCommands.empty() || !config.onStopCommands.empty() ||
+                                         !config.onStageChangeCommands.empty();
 
-                if (hasHandlers) {
-                    MARAS_LOG_DEBUG(
-                        "Loaded quest event config for {} (0x{:08X}): onStart={}, onStop={}, stages={}", quest->GetName(),
-                        questFormID.value(), config.onStartCommands.size(), config.onStopCommands.size(),
-                        config.onStageChangeCommands.size());
-
-                    // Store in manager (direct access to internal map)
-                    manager.questConfigs_[questFormID.value()] = std::move(config);
-                    s_lastStats.validQuests++;
-                    fileQuests++;
-                } else {
-                    MARAS_LOG_WARN("Quest config has no event handlers: {} (0x{:08X})", quest->GetName(),
-                                   questFormID.value());
+                if (!hasHandlers) {
+                    MARAS_LOG_WARN("Quest config has no event handlers: {} (0x{:08X})", quest->GetName(), questFormID);
+                    return false;
                 }
-            }
 
-            MARAS_LOG_INFO("Loaded {} quest event configs from file: {}", fileQuests, filePath.string());
-            return true;
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("Failed to load quest event config from '{}': {}", filePath.string(), e.what());
-            return false;
-        }
+                MARAS_LOG_DEBUG("Loaded quest event config for {} (0x{:08X}): onStart={}, onStop={}, stages={}",
+                                quest->GetName(), questFormID, config.onStartCommands.size(),
+                                config.onStopCommands.size(), config.onStageChangeCommands.size());
+
+                manager.questConfigs_[questFormID] = std::move(config);
+                return true;
+            });
     }
 
     QuestEventConfig QuestEventConfigLoader::ParseQuestConfig(const std::string& formKey, const nlohmann::json& jsonObj) {
@@ -178,7 +138,7 @@ namespace MARAS {
 
         for (const auto& commandValue : commandArray) {
             QuestCommand command = ParseCommand(commandValue);
-            if (!command.commandType.empty() && !command.npcSpecifier.empty()) {
+            if (!command.commandType.empty() && !command.npcSpecifier.empty() && !command.argument.empty()) {
                 commands.push_back(std::move(command));
             } else {
                 MARAS_LOG_WARN("Skipping invalid command: type='{}', npc='{}', arg='{}'", command.commandType,
@@ -220,8 +180,12 @@ namespace MARAS {
             if (commandValue.contains("npc") && commandValue["npc"].is_string()) {
                 command.npcSpecifier = commandValue["npc"].get<std::string>();
             }
-            if (commandValue.contains("arg") && commandValue["arg"].is_string()) {
-                command.argument = commandValue["arg"].get<std::string>();
+            if (commandValue.contains("arg")) {
+                if (commandValue["arg"].is_string()) {
+                    command.argument = commandValue["arg"].get<std::string>();
+                } else if (commandValue["arg"].is_number() || commandValue["arg"].is_boolean()) {
+                    command.argument = commandValue["arg"].dump();
+                }
             }
         } else {
             MARAS_LOG_WARN("Command value is not a string or object");
@@ -231,7 +195,7 @@ namespace MARAS {
     }
 
     bool QuestEventConfigLoader::IsValidJsonFile(const std::filesystem::path& filePath) {
-        return filePath.extension() == ".json" && std::filesystem::is_regular_file(filePath);
+        return Utils::JsonOverrideLoader::IsValidJsonFile(filePath);
     }
 
 }  // namespace MARAS

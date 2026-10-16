@@ -1,0 +1,6 @@
+FormKey: 0005C4:TT_MARAS.esp
+EditorID: TTM_CheatingNpcCaughtMidAct
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

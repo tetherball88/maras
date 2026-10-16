@@ -1,0 +1,40 @@
+FormKey: 0002DB:TT_MARAS.esp
+EditorID: TTM_TrackNewAdoption
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestTrackNewAdoption
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Child
+      Object: 0002DB:TT_MARAS.esp
+      Alias: 6
+  FileName: TTM_QuestTrackNewAdoption
+  Fragments:
+  - Unknown2: 1
+    ScriptName: TTM_QuestTrackNewAdoption
+    FragmentName: Fragment_0
+Flags:
+- AllowRepeatedStages
+Priority: 50
+Event: SCPT
+EventConditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetEventDataConditionData
+    Member: Keyword
+    Record: 003F6D:HearthFires.esm
+  ComparisonValue: 1
+Stages:
+- Flags:
+  - StartUpStage
+  LogEntries:
+  - Flags: []
+NextAliasID: 7
+Aliases:
+- ID: 6
+  Name: Child
+  Flags: []
+  FindMatchingRefFromEvent:
+    FromEvent: SCPT
+    EventData: 12626
+  VoiceTypes: Null

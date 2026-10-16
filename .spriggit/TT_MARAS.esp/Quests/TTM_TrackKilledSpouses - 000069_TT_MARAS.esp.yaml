@@ -1,0 +1,158 @@
+FormKey: 000069:TT_MARAS.esp
+EditorID: TTM_TrackKilledSpouses
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestTrackKilledSpouses
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_ExLetter
+      Object: 000069:TT_MARAS.esp
+      Alias: 5
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_FianceLetter
+      Object: 000069:TT_MARAS.esp
+      Alias: 4
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Killer
+      Object: 000069:TT_MARAS.esp
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Maramal
+      Object: 000069:TT_MARAS.esp
+      Alias: 3
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_SpouseLetter
+      Object: 000069:TT_MARAS.esp
+      Alias: 2
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Victim
+      Object: 000069:TT_MARAS.esp
+      Alias: 0
+  - Name: TTM_QuestTrackKilledSpousesWI
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: pWIcourier
+      Object: 039F82:Skyrim.esm
+  FileName: TTM_QuestTrackKilledSpouses
+  Fragments:
+  - Stage: 1
+    Unknown2: 1
+    ScriptName: TTM_QuestTrackKilledSpouses
+    FragmentName: Fragment_0
+Flags:
+- AllowRepeatedStages
+Event: KILL
+Stages:
+- Index: 1
+  Flags:
+  - KeepInstanceDataFromHereOn
+  LogEntries:
+  - Flags: []
+NextAliasID: 6
+Aliases:
+- Name: Victim
+  Flags:
+  - AllowDead
+  - AllowDisabled
+  - StoresText
+  - AllowReserved
+  FindMatchingRefFromEvent:
+    FromEvent: KILL
+    EventData: 12626
+  Conditions:
+  - MutagenObjectType: ConditionFloat
+    Data:
+      MutagenObjectType: GetInFactionConditionData
+      Faction: 000007:TT_MARAS.esp
+    ComparisonValue: 1
+  VoiceTypes: Null
+- ID: 1
+  Name: Killer
+  Flags:
+  - Optional
+  - AllowReuseInQuest
+  - AllowDisabled
+  - AllowReserved
+  FindMatchingRefFromEvent:
+    FromEvent: KILL
+    EventData: 12882
+  VoiceTypes: Null
+- ID: 3
+  Name: Maramal
+  Flags:
+  - AllowReuseInQuest
+  - AllowDisabled
+  - AllowReserved
+  UniqueActor: 01335B:Skyrim.esm
+  VoiceTypes: Null
+- ID: 2
+  Name: SpouseLetter
+  Flags:
+  - Optional
+  - StoresText
+  - UsesStoredText
+  CreateReferenceToObject:
+    Object: 0000E1:TT_MARAS.esp
+    AliasID: 3
+    Create: In
+    Level: 4
+  Conditions:
+  - MutagenObjectType: ConditionGlobal
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      RunOnType: QuestAlias
+      RunOnTypeIndex: 0
+      Faction: 000007:TT_MARAS.esp
+    ComparisonValue: 000060:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 4
+  Name: FianceLetter
+  Flags:
+  - Optional
+  - StoresText
+  - UsesStoredText
+  CreateReferenceToObject:
+    Object: 0000E2:TT_MARAS.esp
+    AliasID: 3
+    Create: In
+    Level: 4
+  Conditions:
+  - MutagenObjectType: ConditionGlobal
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      RunOnType: QuestAlias
+      RunOnTypeIndex: 0
+      Faction: 000007:TT_MARAS.esp
+    ComparisonValue: 00005D:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 5
+  Name: ExLetter
+  Flags:
+  - Optional
+  - StoresText
+  - UsesStoredText
+  CreateReferenceToObject:
+    Object: 0000E3:TT_MARAS.esp
+    AliasID: 3
+    Create: In
+    Level: 4
+  Conditions:
+  - MutagenObjectType: ConditionGlobal
+    Flags:
+    - OR
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      RunOnType: QuestAlias
+      RunOnTypeIndex: 0
+      Faction: 000007:TT_MARAS.esp
+    ComparisonValue: 000063:TT_MARAS.esp
+  - MutagenObjectType: ConditionGlobal
+    Flags:
+    - OR
+    Data:
+      MutagenObjectType: GetFactionRankConditionData
+      RunOnType: QuestAlias
+      RunOnTypeIndex: 0
+      Faction: 000007:TT_MARAS.esp
+    ComparisonValue: 000077:TT_MARAS.esp
+  VoiceTypes: Null

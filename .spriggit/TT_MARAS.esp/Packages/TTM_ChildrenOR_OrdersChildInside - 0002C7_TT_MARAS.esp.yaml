@@ -1,0 +1,165 @@
+FormKey: 0002C7:TT_MARAS.esp
+EditorID: TTM_ChildrenOR_OrdersChildInside
+Flags:
+- PreferredSpeed
+Type: Package
+PreferredSpeed: Jog
+InterruptFlags:
+- HellosToPlayer
+- RandomConversations
+- ObserveCombatBehavior
+- GreetCorpseBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- AggroRadiusBehavior
+- AllowIdleChatter
+- WorldInteractions
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable06
+  ComparisonValue: 3
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 068B86:Skyrim.esm
+DataInputVersion: 17
+Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 17
+      Radius: 2048
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 3
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 4
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 5
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 7
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 14
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 25
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 27
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 29
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 50
+- Key: 32
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 60
+- Key: 33
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 35
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 18
+      Radius: 2048
+- Key: 37
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 19
+      Radius: 2048
+- Key: 39
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 20
+      Radius: 2048
+- Key: 41
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 60
+- Key: 43
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 60
+- Key: 45
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 60
+- Key: 92
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 94
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 95
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: NearEditorLocation
+- Key: 96
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: NearEditorLocation
+- Key: 97
+  Value:
+    MutagenObjectType: PackageDataFloat
+- Key: 98
+  Value:
+    MutagenObjectType: PackageDataFloat
+XnamMarker: 0x63
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

@@ -1,0 +1,24 @@
+name: "ttm_child_birth"
+description: "Direct narration when a newborn child is delivered in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_birth"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and any present partner or witnesses react to the birth of the newborn in a way that fits their personalities and the circumstances surrounding the child."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 8

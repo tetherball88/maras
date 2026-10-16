@@ -1,0 +1,7 @@
+FormKey: 000273:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_GiveGiftBranch
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 000274:TT_MARAS.esp

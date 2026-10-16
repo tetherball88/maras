@@ -42,31 +42,42 @@ TTM_QuestTrackKilledSpousesWI kmyQuest = __temp as TTM_QuestTrackKilledSpousesWI
     Actor killer = Alias_Killer.GetActorRef()
     Actor victim = Alias_Victim.GetActorRef()
     Actor player = TTM_Data.GetPlayer()
+    bool isPlayerKiller = killer == player
     string victimName = TTM_Utils.GetActorName(victim)
-    if(killer != player)
+    if(!isPlayerKiller)
         ObjectReference letter
         int inheritanceValue = 0
-        if(MARAS.IsNPCStatus(victim, "married"))
+        bool isSpouse = MARAS.IsNPCStatus(victim, "married") || MARAS.WasMarriedTo(victim, player)
+        bool isFiance = MARAS.IsNPCStatus(victim, "engaged") || MARAS.WasEngagedTo(victim, player)
+        bool isEx = MARAS.IsNPCStatus(victim, "divorced") || MARAS.IsNPCStatus(victim, "jilted") || MARAS.WasExOf(victim, player)
+
+        if(isSpouse)
             letter = Alias_SpouseLetter.GetRef()
             int spouseSocialClass = MARAS.GetNpcCurrentTypeEnum(victim, "socialClass")
             inheritanceValue = (spouseSocialClass + 1) * 400
-        elseif(MARAS.IsNPCStatus(victim, "engaged"))
+        elseif(isFiance)
             letter = Alias_FianceLetter.GetRef()
-        elseif(MARAS.IsNPCStatus(victim, "divorced") || MARAS.IsNPCStatus(victim, "jilted"))
+        elseif(isEx)
             letter = Alias_ExLetter.GetRef()
         endif
-        WICourierScript vWICourierScript = kmyquest.pWICourier as WICourierScript
-        vWICourierScript.addItemToContainer(letter)	;add the inheritance letter to the courier so he will deliver it
-        if(inheritanceValue)
-            vWICourierScript.addItemToContainer(TTM_Data.GetGoldMisc(), inheritanceValue)
-        endif
-
+        if(letter)
+            WICourierScript vWICourierScript = kmyquest.pWICourier as WICourierScript
+            vWICourierScript.addItemToContainer(letter)   ;add the inheritance letter to the courier so he will deliver it
+            if(inheritanceValue)
+                vWICourierScript.addItemToContainer(TTM_Data.GetGoldMisc(), inheritanceValue)
+            endif
             TTM_Debug.debug("TTM_QuestTrackKilledSpouses:VictimSpouse:"+victimName+":Letter:"+letter)
+        else
+            TTM_Debug.debug("TTM_QuestTrackKilledSpouses:VictimSpouse:"+victimName+":NoLetterFound")
+        endif
     else
         TTM_Debug.debug("TTM_QuestTrackKilledSpouses:VictimSpouse:"+victimName+":YouAreKiller:NoInheritance")
     endif
 
+    TTM_ServiceRelationships.MakeNpcDeceased(victim, isPlayerKiller)
+
     kmyquest.SetNextEventGlobals()
+    Reset()
     stop()
 ;END CODE
 EndFunction

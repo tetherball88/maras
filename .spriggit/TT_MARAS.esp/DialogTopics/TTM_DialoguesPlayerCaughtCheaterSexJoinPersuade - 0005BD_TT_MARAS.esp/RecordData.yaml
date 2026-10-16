@@ -1,0 +1,8 @@
+FormKey: 0005BD:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterSexJoinPersuade
+Name:
+  TargetLanguage: English
+  Value: Trust me. We're already here, so why not do it together?
+Branch: 0005AA:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

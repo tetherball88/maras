@@ -1,0 +1,24 @@
+name: "ttm_affair_exposed"
+description: "Direct narration when an affair is exposed to the betrayed partner by a third party in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_affair_exposed"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{event_json.victim}} and the involved parties react to {{originator}} exposing the affair with {{event_json.cheater}} in a way that fits their personalities and relationship dynamics."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 9

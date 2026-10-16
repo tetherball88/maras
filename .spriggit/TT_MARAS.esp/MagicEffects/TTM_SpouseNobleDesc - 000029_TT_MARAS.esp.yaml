@@ -1,0 +1,20 @@
+FormKey: 000029:TT_MARAS.esp
+EditorID: TTM_SpouseNobleDesc
+Name:
+  TargetLanguage: English
+  Value: Aristocratic Favor
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Health
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Your noble ties ease every transaction, reducing store prices by <mag>%

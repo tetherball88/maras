@@ -1,0 +1,8 @@
+FormKey: 00056E:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkInCheatingSorry
+Name:
+  TargetLanguage: English
+  Value: Stop. Stop! I'm sorry, this is over. I never meant for you to see this.
+Branch: 000557:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

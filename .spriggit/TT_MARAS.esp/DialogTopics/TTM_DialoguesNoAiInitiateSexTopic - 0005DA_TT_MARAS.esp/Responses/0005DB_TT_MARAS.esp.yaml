@@ -1,0 +1,144 @@
+FormKey: 0005DB:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_no_ai_initiate_sex
+    - MutagenObjectType: ScriptBoolProperty
+      Name: UseAI
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - Goodbye
+  ResetHours: 11.999817
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Now that's an offer I can't refuse. Lead the way.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 0005DD:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00002E:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00018C:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00018B:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000077:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000063:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 75
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetRandomPercentConditionData
+  ComparisonValue: 90
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 75
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetRandomPercentConditionData
+  ComparisonValue: 75
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 25
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetRandomPercentConditionData
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 25
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetRandomPercentConditionData
+  ComparisonValue: 20

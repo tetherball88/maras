@@ -1,0 +1,8 @@
+FormKey: 000368:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCheatingDemandPersuade
+Name:
+  TargetLanguage: English
+  Value: '[Persuade] Choose me. Not them. Me.'
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

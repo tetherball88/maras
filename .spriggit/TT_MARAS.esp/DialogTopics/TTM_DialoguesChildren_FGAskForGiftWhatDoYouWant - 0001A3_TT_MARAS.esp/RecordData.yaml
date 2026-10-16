@@ -1,0 +1,8 @@
+FormKey: 0001A3:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_FGAskForGiftWhatDoYouWant
+Name:
+  TargetLanguage: English
+  Value: What would you like?
+Branch: 00019E:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

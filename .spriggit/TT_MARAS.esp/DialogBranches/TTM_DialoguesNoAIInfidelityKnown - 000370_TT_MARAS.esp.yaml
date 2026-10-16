@@ -1,0 +1,7 @@
+FormKey: 000370:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityKnown
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 000371:TT_MARAS.esp

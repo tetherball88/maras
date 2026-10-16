@@ -1,0 +1,47 @@
+FormKey: 0002E3:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  ResetHours: 11.999817
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Anger
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Braith is a big meanie. She keeps telling Lars 'n me what to do. I don't wanna play with her anymore.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000C25:TT_MARAS.esp
+    VariableName: ::lastChildAdoptedTimestamp_var
+  ComparisonValue: 000039:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInCurrentLocConditionData
+    Location: 018A56:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsIDConditionData
+    Object: 013BA9:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

@@ -1,0 +1,7 @@
+FormKey: 000557:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkIn
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 000558:TT_MARAS.esp

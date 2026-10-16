@@ -1,0 +1,43 @@
+FormKey: 00025C:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerChildren
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: DialogueType
+      Data: Game_Bedtime
+    - MutagenObjectType: ScriptFloatProperty
+      Name: OrderId
+      Data: 5
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerChildren
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerChildren
+      FragmentName: Fragment_0
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerChildren
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+ResponseData: 000323:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThan
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 000038:Skyrim.esm
+  ComparisonValue: 21
+Prompt:
+  TargetLanguage: English
+  Value: Isn't it past your bedtime?

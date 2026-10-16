@@ -1,0 +1,8 @@
+FormKey: 000058:TT_MARAS.esp
+EditorID: TTM_EnablePolygamySennaFinishTopic
+Name:
+  TargetLanguage: English
+  Value: (M) I found the scroll, but I can't read it.
+Branch: 000057:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

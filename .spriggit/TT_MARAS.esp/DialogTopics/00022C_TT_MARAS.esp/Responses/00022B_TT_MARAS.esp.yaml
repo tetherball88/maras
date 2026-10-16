@@ -1,0 +1,17 @@
+FormKey: 00022B:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Anger
+  EmotionValue: 65
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Draugr-breath!
+  ScriptNotes: ''
+  Edits: ''

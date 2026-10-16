@@ -1,10 +1,14 @@
 #include "core/QuestEventHandler.h"
 
 #include "core/AffectionService.h"
+#include "core/DeceasedRegistry.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/NPCIndex.h"
 #include "core/QuestEventConfigLoader.h"
+#include "services/ActorService.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
+#include "utils/StringUtils.h"
 
 namespace MARAS {
 
@@ -89,21 +93,21 @@ namespace MARAS {
                         command.npcSpecifier, command.argument, quest->GetFormID(), context);
 
         // Relationship & Affection commands
-        if (command.commandType == "promoteToStatus") {
+        if (StringUtils::CaseInsensitiveEquals(command.commandType, "promoteToStatus")) {
             return ExecutePromoteToStatus(command.npcSpecifier, command.argument, quest, context);
-        } else if (command.commandType == "setAffection") {
+        } else if (StringUtils::CaseInsensitiveEquals(command.commandType, "setAffection")) {
             return ExecuteSetAffection(command.npcSpecifier, command.argument, quest, context);
-        } else if (command.commandType == "changeAffection") {
+        } else if (StringUtils::CaseInsensitiveEquals(command.commandType, "changeAffection")) {
             return ExecuteChangeAffection(command.npcSpecifier, command.argument, quest, context);
-        } else if (command.commandType == "addDailyAffection") {
+        } else if (StringUtils::CaseInsensitiveEquals(command.commandType, "addDailyAffection")) {
             return ExecuteAddDailyAffection(command.npcSpecifier, command.argument, quest, context);
         }
         // NPC Attribute commands
-        else if (command.commandType == "setSocialClass") {
+        else if (StringUtils::CaseInsensitiveEquals(command.commandType, "setSocialClass")) {
             return ExecuteSetSocialClass(command.npcSpecifier, command.argument, quest, context);
-        } else if (command.commandType == "setSkillType") {
+        } else if (StringUtils::CaseInsensitiveEquals(command.commandType, "setSkillType")) {
             return ExecuteSetSkillType(command.npcSpecifier, command.argument, quest, context);
-        } else if (command.commandType == "setTemperament") {
+        } else if (StringUtils::CaseInsensitiveEquals(command.commandType, "setTemperament")) {
             return ExecuteSetTemperament(command.npcSpecifier, command.argument, quest, context);
         } else {
             MARAS_LOG_ERROR("Unknown command type: {}", command.commandType);
@@ -113,23 +117,28 @@ namespace MARAS {
 
     bool QuestEventManager::ExecutePromoteToStatus(const std::string& npcSpecifier, const std::string& statusKeyword,
                                                     RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("promoteToStatus: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
         }
 
+        const std::string npcName = ActorSvc::GetName(npcFormID);
         auto& manager = NPCRelationshipManager::GetSingleton();
 
-        // Handle "deceased" as a special case - unregister the NPC entirely
-        if (Utils::ToLower(statusKeyword) == "deceased") {
-            bool success = manager.UnregisterNPC(npc->GetFormID());
-            if (success) {
-                MARAS_LOG_INFO("promoteToStatus: Unregistered deceased NPC {} (0x{:08X}) via quest event ({})",
-                               npc->GetName(), npc->GetFormID(), context);
+        // Handle "deceased" as a special case - archive in DeceasedRegistry and clean up active relationship state
+        if (StringUtils::CaseInsensitiveEquals(statusKeyword, "deceased")) {
+            if (auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID)) {
+                DeceasedRegistry::GetSingleton().RecordDeceasedAdult(actor, false, nullptr);
             }
-            return success;
+            bool success = manager.HandleNPCDeath(npcFormID);
+            if (!success) {
+                manager.EvaluateChildCustodyOnDeath(npcFormID);
+            }
+            MARAS_LOG_INFO("promoteToStatus: Processed deceased transition for NPC {} (0x{:08X}) via quest event ({})",
+                           npcName, npcFormID, context);
+            return true;
         }
 
         auto status = Utils::StringToRelationshipStatus(statusKeyword);
@@ -137,29 +146,41 @@ namespace MARAS {
         bool success = false;
         switch (status) {
             case RelationshipStatus::Candidate:
-                success = manager.RegisterAsCandidate(npc->GetFormID());
+                success = manager.RegisterAsCandidate(npcFormID);
+                break;
+            case RelationshipStatus::Dating:
+                success = manager.PromoteToDating(npcFormID);
+                break;
+            case RelationshipStatus::Lover:
+                success = manager.PromoteToLover(npcFormID);
                 break;
             case RelationshipStatus::Engaged:
-                success = manager.PromoteToEngaged(npc->GetFormID());
+                success = manager.PromoteToEngaged(npcFormID);
                 break;
             case RelationshipStatus::Married:
-                success = manager.PromoteToMarried(npc->GetFormID());
+                success = manager.PromoteToMarried(npcFormID);
                 break;
             case RelationshipStatus::Divorced:
-                success = manager.PromoteToDivorced(npc->GetFormID());
+                success = manager.PromoteToDivorced(npcFormID);
                 break;
             case RelationshipStatus::Jilted:
-                success = manager.PromoteToJilted(npc->GetFormID());
+                success = manager.PromoteToJilted(npcFormID);
+                break;
+            case RelationshipStatus::ExDating:
+                success = manager.PromoteToExDating(npcFormID);
+                break;
+            case RelationshipStatus::ExLover:
+                success = manager.PromoteToExLover(npcFormID);
                 break;
             default:
                 MARAS_LOG_WARN("promoteToStatus: Unknown status '{}' for NPC {} (0x{:08X})",
-                               statusKeyword, npc->GetName(), npc->GetFormID());
+                               statusKeyword, npcName, npcFormID);
                 return false;
         }
 
         if (success) {
             MARAS_LOG_INFO("promoteToStatus: Promoted {} (0x{:08X}) to status '{}' via quest event ({})",
-                           npc->GetName(), npc->GetFormID(), statusKeyword, context);
+                           npcName, npcFormID, statusKeyword, context);
         }
 
         return success;
@@ -167,8 +188,8 @@ namespace MARAS {
 
     bool QuestEventManager::ExecuteSetAffection(const std::string& npcSpecifier, const std::string& value,
                                                  RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("setAffection: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
@@ -177,10 +198,10 @@ namespace MARAS {
         try {
             int affectionValue = std::stoi(value);
             auto& affectionService = AffectionService::GetSingleton();
-            affectionService.SetPermanentAffection(npc->GetFormID(), affectionValue);
+            affectionService.SetPermanentAffection(npcFormID, affectionValue);
 
-            MARAS_LOG_INFO("setAffection: Set affection for {} (0x{:08X}) to {} via quest event ({})", npc->GetName(),
-                           npc->GetFormID(), affectionValue, context);
+            MARAS_LOG_INFO("setAffection: Set affection for {} (0x{:08X}) to {} via quest event ({})",
+                           ActorSvc::GetName(npcFormID), npcFormID, affectionValue, context);
             return true;
         } catch (const std::exception& e) {
             MARAS_LOG_ERROR("setAffection: Invalid affection value '{}': {}", value, e.what());
@@ -190,8 +211,8 @@ namespace MARAS {
 
     bool QuestEventManager::ExecuteChangeAffection(const std::string& npcSpecifier, const std::string& delta,
                                                     RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("changeAffection: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
@@ -201,13 +222,13 @@ namespace MARAS {
             int deltaValue = std::stoi(delta);
             auto& affectionService = AffectionService::GetSingleton();
 
-            int currentAffection = affectionService.GetPermanentAffection(npc->GetFormID());
+            int currentAffection = affectionService.GetPermanentAffection(npcFormID);
             int newAffection = currentAffection + deltaValue;
 
-            affectionService.SetPermanentAffection(npc->GetFormID(), newAffection);
+            affectionService.SetPermanentAffection(npcFormID, newAffection);
 
             MARAS_LOG_INFO("changeAffection: Changed affection for {} (0x{:08X}) by {} ({} -> {}) via quest event ({})",
-                           npc->GetName(), npc->GetFormID(), deltaValue, currentAffection, newAffection, context);
+                           ActorSvc::GetName(npcFormID), npcFormID, deltaValue, currentAffection, newAffection, context);
             return true;
         } catch (const std::exception& e) {
             MARAS_LOG_ERROR("changeAffection: Invalid delta value '{}': {}", delta, e.what());
@@ -217,8 +238,8 @@ namespace MARAS {
 
     bool QuestEventManager::ExecuteAddDailyAffection(const std::string& npcSpecifier, const std::string& amount,
                                                       RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("addDailyAffection: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
@@ -229,10 +250,10 @@ namespace MARAS {
             auto& affectionService = AffectionService::GetSingleton();
 
             // Add to daily affection with "quest" type
-            affectionService.AddAffection(npc->GetFormID(), affectionAmount, "quest");
+            affectionService.AddAffection(npcFormID, affectionAmount, "quest");
 
             MARAS_LOG_INFO("addDailyAffection: Added {} daily affection for {} (0x{:08X}) via quest event ({})",
-                           affectionAmount, npc->GetName(), npc->GetFormID(), context);
+                           affectionAmount, ActorSvc::GetName(npcFormID), npcFormID, context);
             return true;
         } catch (const std::exception& e) {
             MARAS_LOG_ERROR("addDailyAffection: Invalid amount value '{}': {}", amount, e.what());
@@ -242,24 +263,25 @@ namespace MARAS {
 
     bool QuestEventManager::ExecuteSetSocialClass(const std::string& npcSpecifier, const std::string& className,
                                                    RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("setSocialClass: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
         }
 
+        const std::string npcName = ActorSvc::GetName(npcFormID);
         auto socialClass = Utils::StringToSocialClass(className);
         auto& manager = NPCRelationshipManager::GetSingleton();
 
-        bool success = manager.SetSocialClass(npc->GetFormID(), static_cast<std::int8_t>(socialClass));
+        bool success = manager.SetSocialClass(npcFormID, static_cast<std::int8_t>(socialClass));
 
         if (success) {
             MARAS_LOG_INFO("setSocialClass: Set social class for {} (0x{:08X}) to '{}' via quest event ({})",
-                           npc->GetName(), npc->GetFormID(), className, context);
+                           npcName, npcFormID, className, context);
         } else {
-            MARAS_LOG_ERROR("setSocialClass: Failed to set social class for {} (0x{:08X}) to '{}'", npc->GetName(),
-                            npc->GetFormID(), className);
+            MARAS_LOG_ERROR("setSocialClass: Failed to set social class for {} (0x{:08X}) to '{}'", npcName,
+                            npcFormID, className);
         }
 
         return success;
@@ -267,24 +289,25 @@ namespace MARAS {
 
     bool QuestEventManager::ExecuteSetSkillType(const std::string& npcSpecifier, const std::string& skillName,
                                                  RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("setSkillType: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
         }
 
+        const std::string npcName = ActorSvc::GetName(npcFormID);
         auto skillType = Utils::StringToSkillType(skillName);
         auto& manager = NPCRelationshipManager::GetSingleton();
 
-        bool success = manager.SetSkillType(npc->GetFormID(), static_cast<std::int8_t>(skillType));
+        bool success = manager.SetSkillType(npcFormID, static_cast<std::int8_t>(skillType));
 
         if (success) {
             MARAS_LOG_INFO("setSkillType: Set skill type for {} (0x{:08X}) to '{}' via quest event ({})",
-                           npc->GetName(), npc->GetFormID(), skillName, context);
+                           npcName, npcFormID, skillName, context);
         } else {
-            MARAS_LOG_ERROR("setSkillType: Failed to set skill type for {} (0x{:08X}) to '{}'", npc->GetName(),
-                            npc->GetFormID(), skillName);
+            MARAS_LOG_ERROR("setSkillType: Failed to set skill type for {} (0x{:08X}) to '{}'", npcName,
+                            npcFormID, skillName);
         }
 
         return success;
@@ -292,100 +315,49 @@ namespace MARAS {
 
     bool QuestEventManager::ExecuteSetTemperament(const std::string& npcSpecifier, const std::string& temperamentName,
                                                    RE::TESQuest* quest, const std::string& context) {
-        auto npc = ResolveNPC(npcSpecifier, quest);
-        if (!npc) {
+        const RE::FormID npcFormID = ResolveNPC(npcSpecifier, quest);
+        if (npcFormID == 0) {
             MARAS_LOG_ERROR("setTemperament: Could not resolve NPC '{}' for quest 0x{:08X}", npcSpecifier,
                             quest->GetFormID());
             return false;
         }
 
+        const std::string npcName = ActorSvc::GetName(npcFormID);
         auto temperament = Utils::StringToTemperament(temperamentName);
         auto& manager = NPCRelationshipManager::GetSingleton();
 
-        bool success = manager.SetTemperament(npc->GetFormID(), static_cast<std::int8_t>(temperament));
+        bool success = manager.SetTemperament(npcFormID, static_cast<std::int8_t>(temperament));
 
         if (success) {
             MARAS_LOG_INFO("setTemperament: Set temperament for {} (0x{:08X}) to '{}' via quest event ({})",
-                           npc->GetName(), npc->GetFormID(), temperamentName, context);
+                           npcName, npcFormID, temperamentName, context);
         } else {
-            MARAS_LOG_ERROR("setTemperament: Failed to set temperament for {} (0x{:08X}) to '{}'", npc->GetName(),
-                            npc->GetFormID(), temperamentName);
+            MARAS_LOG_ERROR("setTemperament: Failed to set temperament for {} (0x{:08X}) to '{}'", npcName,
+                            npcFormID, temperamentName);
         }
 
         return success;
     }
 
-    RE::Actor* QuestEventManager::ResolveNPC(const std::string& npcSpecifier, RE::TESQuest* quest) const {
+    RE::FormID QuestEventManager::ResolveNPC(const std::string& npcSpecifier, RE::TESQuest* quest) const {
         if (!quest) {
-            return nullptr;
+            return 0;
         }
 
         // Strategy 1: Check if it's a form key (starts with "__formData|")
         if (npcSpecifier.starts_with("__formData|")) {
             auto formID = Utils::ParseAndResolveFormKey(npcSpecifier);
-            if (formID.has_value()) {
-                auto* form = RE::TESForm::LookupByID(formID.value());
-                if (form) {
-                    // Try as direct Actor reference first
-                    auto* actor = form->As<RE::Actor>();
-                    if (actor) {
-                        MARAS_LOG_DEBUG("Resolved NPC via form key (reference) '{}': {} (0x{:08X})", npcSpecifier,
-                                        actor->GetName(), actor->GetFormID());
-                        return actor;
-                    }
-
-                    // Try as base actor (ACHR base) and find a reference in the world
-                    auto* actorBase = form->As<RE::TESNPC>();
-                    if (actorBase) {
-                        MARAS_LOG_DEBUG("Form key '{}' is a base actor, searching for reference...", npcSpecifier);
-
-                        // Search through all actor process lists to find one with this base
-                        auto* processLists = RE::ProcessLists::GetSingleton();
-                        if (processLists) {
-                            // Helper lambda to search through an actor handle array
-                            auto searchHandles = [&](const RE::BSTArray<RE::ActorHandle>& handles) -> RE::Actor* {
-                                for (auto& actorHandle : handles) {
-                                    auto foundActorPtr = actorHandle.get();
-                                    auto* foundActor = foundActorPtr.get();
-                                    if (foundActor && foundActor->GetActorBase() == actorBase) {
-                                        return foundActor;
-                                    }
-                                }
-                                return nullptr;
-                            };
-
-                            // Search all four actor lists (high priority first for performance)
-                            RE::Actor* foundActor = nullptr;
-                            if (!foundActor)
-                                foundActor = searchHandles(processLists->highActorHandles);
-                            if (!foundActor)
-                                foundActor = searchHandles(processLists->middleHighActorHandles);
-                            if (!foundActor)
-                                foundActor = searchHandles(processLists->middleLowActorHandles);
-                            if (!foundActor)
-                                foundActor = searchHandles(processLists->lowActorHandles);
-
-                            if (foundActor) {
-                                MARAS_LOG_DEBUG("Found reference for base actor '{}': {} (0x{:08X})", npcSpecifier,
-                                                foundActor->GetName(), foundActor->GetFormID());
-                                return foundActor;
-                            }
-                        }
-
-                        MARAS_LOG_ERROR("Form key '{}' is a base actor (0x{:08X}) but no active reference found in world",
-                                        npcSpecifier, formID.value());
-                    } else {
-                        MARAS_LOG_ERROR("Form key '{}' resolved to 0x{:08X} but is neither Actor nor TESNPC",
-                                        npcSpecifier, formID.value());
-                    }
-                } else {
-                    MARAS_LOG_ERROR("Form key '{}' resolved to 0x{:08X} but form not found", npcSpecifier,
-                                    formID.value());
+            if (formID.has_value() && formID.value() != 0) {
+                RE::FormID resolvedID = NPCIndex::GetSingleton().GetRefID(formID.value());
+                if (resolvedID == 0) {
+                    resolvedID = formID.value();
                 }
-            } else {
-                MARAS_LOG_ERROR("Failed to parse form key: {}", npcSpecifier);
+                MARAS_LOG_DEBUG("Resolved NPC via form key '{}': {} (0x{:08X})", npcSpecifier,
+                                ActorSvc::GetName(resolvedID), resolvedID);
+                return resolvedID;
             }
-            return nullptr;
+            MARAS_LOG_ERROR("Failed to parse or resolve form key: {}", npcSpecifier);
+            return 0;
         }
 
         // Strategy 2: Treat it as an alias name and search quest aliases
@@ -399,7 +371,7 @@ namespace MARAS {
                         if (actor) {
                             MARAS_LOG_DEBUG("Resolved NPC via alias '{}': {} (0x{:08X})", npcSpecifier,
                                             actor->GetName(), actor->GetFormID());
-                            return actor;
+                            return actor->GetFormID();
                         } else {
                             MARAS_LOG_ERROR("Alias '{}' reference is not an Actor", npcSpecifier);
                         }
@@ -409,13 +381,25 @@ namespace MARAS {
                 } else {
                     MARAS_LOG_ERROR("Alias '{}' is not a reference alias", npcSpecifier);
                 }
-                return nullptr;
+                return 0;
             }
         }
 
-        MARAS_LOG_ERROR("Could not find alias named '{}' in quest {} (0x{:08X})", npcSpecifier, quest->GetName(),
-                        quest->GetFormID());
-        return nullptr;
+        // Strategy 3: Try resolving by name directly via NPCIndex
+        if (auto* actor = NPCIndex::GetSingleton().FindActorByName(npcSpecifier)) {
+            MARAS_LOG_DEBUG("Resolved NPC via name search '{}': {} (0x{:08X})", npcSpecifier,
+                            actor->GetName(), actor->GetFormID());
+            return actor->GetFormID();
+        }
+        if (auto entry = NPCIndex::GetSingleton().FindByName(npcSpecifier); entry && entry->refFormID != 0) {
+            MARAS_LOG_DEBUG("Resolved NPC via index name search '{}': {} (0x{:08X})", npcSpecifier,
+                            entry->nameDisplay, entry->refFormID);
+            return entry->refFormID;
+        }
+
+        MARAS_LOG_ERROR("Could not resolve NPC '{}' in quest {} (0x{:08X}) via form key, alias, or name",
+                        npcSpecifier, quest->GetName(), quest->GetFormID());
+        return 0;
     }
 
     // ========================================
@@ -433,12 +417,20 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
+        auto& manager = QuestEventManager::GetSingleton();
+        const auto* config = manager.GetConfigForQuest(event->formID);
+        if (!config) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        if (event->started ? config->onStartCommands.empty() : config->onStopCommands.empty()) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
         auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(event->formID);
         if (!quest) {
             return RE::BSEventNotifyControl::kContinue;
         }
-
-        auto& manager = QuestEventManager::GetSingleton();
 
         if (event->started) {
             manager.ExecuteQuestStartCommands(quest);
@@ -464,12 +456,22 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
+        auto& manager = QuestEventManager::GetSingleton();
+        const auto* config = manager.GetConfigForQuest(event->formID);
+        if (!config) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        auto stageIt = config->onStageChangeCommands.find(event->stage);
+        if (stageIt == config->onStageChangeCommands.end() || stageIt->second.empty()) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
         auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(event->formID);
         if (!quest) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        auto& manager = QuestEventManager::GetSingleton();
         manager.ExecuteQuestStageCommands(quest, event->stage);
 
         return RE::BSEventNotifyControl::kContinue;

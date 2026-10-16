@@ -1,0 +1,20 @@
+FormKey: 00003F:TT_MARAS.esp
+EditorID: TTM_PermanentMiddlePerk
+Name:
+  TargetLanguage: English
+  Value: Steady Kinship
+Description:
+  TargetLanguage: English
+  Value: Your stable domestic life encourages learning, increasing skill experience gained
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000031:TT_MARAS.esp
+- MutagenObjectType: PerkEntryPointModifyValue
+  Priority: 1
+  EntryPoint: ModSkillUse
+  PerkConditionTabCount: 1
+  Modification: Multiply
+  Value: 1.02

@@ -1,0 +1,43 @@
+FormKey: 0000B6:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 0000B5:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Happy
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: You should tell the priest we're getting married. They'll take things from there.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0CCE4D:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00005D:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageDoneConditionData
+    Quest: 074793:Skyrim.esm
+    Stage: 30
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageDoneConditionData
+    Quest: 074793:Skyrim.esm
+    Stage: 20
+  ComparisonValue: 1

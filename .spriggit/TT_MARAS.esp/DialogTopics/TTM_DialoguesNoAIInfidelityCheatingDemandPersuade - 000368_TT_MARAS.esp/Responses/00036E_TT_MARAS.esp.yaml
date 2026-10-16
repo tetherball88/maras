@@ -1,0 +1,119 @@
+FormKey: 00036E:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_no_ai_cheating_demand_persuade_success
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_2
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: "...Hearing you say it like that, I can't ignore it. All right. I'll end it with them."
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0002BD:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 75
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnType: Target
+    ActorValue: Speech
+  ComparisonValue: 0D16A4:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 75
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnType: Target
+    ActorValue: Speech
+  ComparisonValue: 0D16A5:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 25
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnType: Target
+    ActorValue: Speech
+  ComparisonValue: 0D16A5:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 25
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnType: Target
+    ActorValue: Speech
+  ComparisonValue: 0D1953:Skyrim.esm

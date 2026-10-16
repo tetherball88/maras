@@ -1,0 +1,29 @@
+FormKey: 00015F:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 100
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: The nerve of you, showing your face here. Did you think I'd forgotten how you discarded me?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasMagicEffectConditionData
+    MagicEffect: 000103:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 047A00:Skyrim.esm

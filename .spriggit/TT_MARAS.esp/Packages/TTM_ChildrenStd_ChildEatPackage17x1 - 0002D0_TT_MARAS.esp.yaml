@@ -1,0 +1,136 @@
+FormKey: 0002D0:TT_MARAS.esp
+EditorID: TTM_ChildrenStd_ChildEatPackage17x1
+Type: Package
+PreferredSpeed: Run
+InterruptFlags:
+- HellosToPlayer
+- RandomConversations
+- ObserveCombatBehavior
+- GreetCorpseBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- AggroRadiusBehavior
+- AllowIdleChatter
+- WorldInteractions
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: 17
+ScheduleMinute: -1
+Unknown3: 0x000000
+ScheduleDurationInMinutes: 60
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: DoesNotExistConditionData
+    RunOnType: QuestAlias
+    RunOnTypeIndex: 15
+  ComparisonValue: 1
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 019714:Skyrim.esm
+DataInputVersion: 8
+Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 15
+      Radius: 256
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Target:
+      MutagenObjectType: PackageTargetObjectType
+      Type: Creatures
+- Key: 4
+  Value:
+    MutagenObjectType: PackageDataObjectList
+    Data: 0
+- Key: 5
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Target:
+      MutagenObjectType: PackageTargetObjectType
+      Type: SelfActorEffects
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataObjectList
+    Data: 0
+- Key: 8
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 10
+  Value:
+    MutagenObjectType: PackageDataInt
+    Data: 1
+- Key: 12
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 14
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 16
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 21
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 23
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 25
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 26
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 27
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 28
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 29
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 30
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 32
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 25
+- Key: 33
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 35
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 300
+XnamMarker: 0x24
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

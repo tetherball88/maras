@@ -1,0 +1,9 @@
+FormKey: 0002DA:TT_MARAS.esp
+EditorID: TTM_AdoptionHandler
+Parent: 01379A:Skyrim.esm
+PreviousSibling: 000163:TT_MARAS.esp
+QuestFlags:
+- SharesEvent
+MaxConcurrentQuests: 0
+Quests:
+- Quest: 0002DB:TT_MARAS.esp

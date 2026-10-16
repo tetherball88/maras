@@ -1,0 +1,32 @@
+customCategory: TTM_CategoryRelationship
+name: ConsiderLoverProposal
+description: "{{render_template(\"maras_actions/maras_action_consider_lover\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: ConsiderRelationshipChange
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (triggering entity). Npc who is considering the proposal.
+  - type: dynamic
+    name: partner
+    description: Display name of the actor who proposed to {{decnpc(npc.UUID).name}}.
+    useNearbyActors: false
+  - type: dynamic
+    name: decision
+    description: "'accept' or 'reject'"
+  - type: static
+    name: targetStatus
+    value: "lover"
+  - type: dynamic
+    name: reasoning
+    description: Explain decision from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_propose_lover_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""
+

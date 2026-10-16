@@ -1,0 +1,31 @@
+FormKey: 000003:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_enable_candidate
+    - MutagenObjectType: ScriptBoolProperty
+      Name: UseAI
+      Data: True
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - Goodbye
+  - NoLipFile
+PreviousDialog: Null
+FavorLevel: None
+ResponseData: 000152:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 0000C4:TT_MARAS.esp
+  ComparisonValue: 1

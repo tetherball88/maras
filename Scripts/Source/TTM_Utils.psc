@@ -1,6 +1,9 @@
 scriptname TTM_Utils
 
 string Function GetActorName(actor akActor) global
+    if (!akActor)
+      return "Unknown"
+    endif
     if akActor == TTM_Data.GetPlayer()
       return akActor.GetActorBase().GetName()
     else
@@ -11,6 +14,11 @@ EndFunction
 Actor Function GetActorAlias(Quest qst, string name) global
     ReferenceAlias al = qst.GetAliasByName(name) as ReferenceAlias
     return al.GetActorRef()
+EndFunction
+
+Function SetActorAlias(Quest qst, string name, Actor akActor) global
+    ReferenceAlias al = qst.GetAliasByName(name) as ReferenceAlias
+    al.ForceRefTo(akActor)
 EndFunction
 
 int Function ToggleGlobalVariable(GlobalVariable gVar) global
@@ -86,40 +94,42 @@ Function ReinforceEnablePolygamySpouseAlias() global
     endif
 EndFunction
 
-bool Function ShowAIConfirmationMessage(string type, Actor npc) global
-    if(!TTM_Data.GetHasSkyrimNet())
-        return false
-    endif
+; bool Function ShowAIConfirmationMessage(string type, Actor npc) global
+;     if(!TTM_Data.GetHasSkyrimNet())
+;         return false
+;     endif
 
-    if(!TTM_MCM_State.GetConfirmMcm(type))
-        return true
-    endif
+;     if(!MARAS.GetSettingBool(type))
+;         return true
+;     endif
 
-    string actorName = GetActorName(npc)
-    string msg = actorName + " "
-    if(type == "ConfirmAcceptProposal")
-        msg += "accepted your proposal."
-    elseif(type == "ConfirmBreakupEngagement")
-        msg += "wants to breakup with you."
-    elseif(type == "ConfirmDivorce")
-        msg += "wants a divorce."
-    elseif(type == "ConfirmDivorceDuringLowAffectionQuest")
-        msg = "decided to divorce you after you neglected them."
-    endif
+;     string actorName = GetActorName(npc)
+;     string msg = actorName + " "
+;     if(type == "ConfirmAcceptProposal")
+;         msg += "accepted your proposal."
+;     elseif(type == "ConfirmBreakupEngagement")
+;         msg += "wants to breakup with you."
+;     elseif(type == "ConfirmDivorce")
+;         msg += "wants a divorce."
+;     elseif(type == "ConfirmDivorceDuringLowAffectionQuest")
+;         msg = "decided to divorce you after you neglected them."
+;     elseif(type == "ConfirmSetRelationshipStatus")
+;         msg += "wants to change relationship status."
+;     endif
 
-    string[] buttons = new string[2]
-    buttons[0] = "$TTM_MSG_ConfirmActionYes"
-    buttons[1] = "$TTM_MSG_ConfirmActionNo"
+;     string[] buttons = new string[2]
+;     buttons[0] = "$TTM_MSG_ConfirmActionYes"
+;     buttons[1] = "$TTM_MSG_ConfirmActionNo"
 
-    int buttonIndex = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int
+;     int buttonIndex = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int
 
-    if(buttonIndex == 0)
-        return true
-    elseif(buttonIndex == 1)
-        StorageUtil.SetFloatValue(npc, "TTM_ConfirmationActionCooldown." + type, Utility.GetCurrentGameTime())
-        return false
-    endif
-EndFunction
+;     if(buttonIndex == 0)
+;         return true
+;     elseif(buttonIndex == 1)
+;         StorageUtil.SetFloatValue(npc, "TTM_ConfirmationActionCooldown." + type, Utility.GetCurrentGameTime())
+;         return false
+;     endif
+; EndFunction
 
 bool Function OpenMisclickedMenu(string type, Actor npc) global
     UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
@@ -145,4 +155,106 @@ EndFunction
 bool Function ActionConfirmationCooldownPassed(string type, Actor npc, int cooldownInDays = 1) global
     float lastActionTime = StorageUtil.GetFloatValue(npc, "TTM_ConfirmationActionCooldown." + type, 0.0)
     return Utility.GetCurrentGameTime() >= lastActionTime + cooldownInDays
+EndFunction
+
+Actor Function ChooseSpouseToAdoptWithMsg(int page = 0) global
+    if(page < 0)
+        page = 0
+    endif
+    int perPage = 10
+    Actor[] spouses = MARAS.GetNPCsByStatus("married")
+    int count = spouses.Length
+
+    if(count < 1)
+        return none
+    endif
+    UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
+
+    int startIdx = page * perPage
+    int endIdx = startIdx + perPage
+    if(endIdx > count)
+        endIdx = count
+    endif
+
+    int menuIdx = 0
+    int i = startIdx
+
+    while(i < endIdx)
+        string spouseName = GetActorName(spouses[i])
+        StorageUtil.FormListAdd(none, "SpouseToAdoptWithChoiceCache", spouses[i])
+        listMenu.AddEntryItem(spouseName)
+        menuIdx += 1
+        i += 1
+    endwhile
+
+    int prevIdx = -1
+    int nextIdx = -1
+    if(page > 0)
+        prevIdx = listMenu.AddEntryItem("Previous page")
+    endif
+    if(endIdx < count)
+        nextIdx = listMenu.AddEntryItem("Next page")
+    endif
+    listMenu.AddEntryItem("Cancel")
+
+    listMenu.OpenMenu()
+    int choice = listMenu.GetResultInt()
+    Actor spouseChoice = StorageUtil.FormListGet(none, "SpouseToAdoptWithChoiceCache", choice) as Actor
+
+    if(spouseChoice)
+        StorageUtil.FormListClear(none, "SpouseToAdoptWithChoiceCache")
+        return spouseChoice
+    elseif(choice == prevIdx)
+        return ChooseSpouseToAdoptWithMsg(page - 1)
+    elseif(choice == nextIdx)
+        return ChooseSpouseToAdoptWithMsg(page + 1)
+    endif
+
+    StorageUtil.FormListClear(none, "SpouseToAdoptWithChoiceCache")
+EndFunction
+
+Location Function GetSpouseMigrationPlayerHouse() global
+    Location playerHouseLoc = GetChildMigrationPlayerHouse()
+    if(playerHouseLoc)
+        return playerHouseLoc
+    endif
+
+    RelationshipMarriageSpouseHouseScript marFinQst = TTM_Data.GetMarriageFinQuest() as RelationshipMarriageSpouseHouseScript
+    if(marFinQst.IsRunning())
+        int spouseHouseId = marFinQst.SpouseCurrentHome
+        ObjectReference spouseHouseRef = TTM_ServicePlayerHouse.TrnaslateVanillaSpousePlayerHouseToLoc(spouseHouseId)
+        playerHouseLoc = spouseHouseRef.GetCurrentLocation()
+        if(playerHouseLoc && spouseHouseRef)
+            TTM_ServicePlayerHouse.RegisterPlayerHouseLocation(playerHouseLoc, spouseHouseRef)
+            return playerHouseLoc
+        endif
+    endif
+
+    return none
+EndFunction
+
+string Function GetChildNameByParents(Actor mother, Actor father, int gender = -1) global
+    if(gender == -1)
+        gender = Utility.RandomInt(0, 1)
+    endif
+    Race raceForName = mother.GetRace()
+    if(Utility.RandomInt(0,1) == 0 && father)
+        raceForName = father.GetRace()
+    endif
+    return MARAS.GenerateRandomChildName(raceForName, gender == 1)
+EndFunction
+
+Location Function GetChildMigrationPlayerHouse() global
+    Quest childSandboxQst = TTM_Data.GetOriginalChildrenSandboxQuest()
+    if(childSandboxQst.IsRunning())
+        LocationAlias playerHouseAlias = childSandboxQst.GetAliasByName("CurrentHomeLocation") as LocationAlias
+        Location playerHouseLoc = playerHouseAlias.GetLocation()
+        if(playerHouseLoc.HasKeywordString("LocTypePlayerHouse"))
+            ReferenceAlias playerHouseAliasRef = childSandboxQst.GetAliasByName("Bed1") as ReferenceAlias
+            ObjectReference houseRef = playerHouseAliasRef.GetRef()
+            TTM_ServicePlayerHouse.RegisterPlayerHouseLocation(playerHouseLoc, houseRef)
+            return playerHouseLoc
+        endif
+    endif
+    return none
 EndFunction

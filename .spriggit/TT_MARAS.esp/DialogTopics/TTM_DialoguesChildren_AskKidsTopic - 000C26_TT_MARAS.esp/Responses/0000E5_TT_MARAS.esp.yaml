@@ -1,0 +1,28 @@
+FormKey: 0000E5:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000176:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Just fine, love. The weather here is wonderful, perfect for playing outdoors.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: LocationHasKeywordConditionData
+    Keyword: 0FC1A3:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000C24:TT_MARAS.esp
+  ComparisonValue: 1

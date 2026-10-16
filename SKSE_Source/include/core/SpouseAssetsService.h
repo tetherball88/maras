@@ -1,10 +1,5 @@
 #pragma once
 
-#include <map>
-#include <set>
-#include <string>
-#include <vector>
-
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -40,13 +35,17 @@ namespace MARAS {
         bool Load(SKSE::SerializationInterface* serialization);
         void Revert();
 
+        // Data dump
+        nlohmann::json DumpJson() const;
+
     private:
         // Helpers to transfer/restore furniture ownership (use HomeCellService data)
         void ShareFurniture(RE::FormID npcFormID);
         void StopShareFurniture(RE::FormID npcFormID);
 
         // Data
-        std::map<RE::FormID, RegisteredCellData> sharedHomes_;  // cellFormID -> data
+        std::map<RE::FormID, RegisteredCellData> sharedHomes_;          // cellFormID -> data
+        std::unordered_map<RE::FormID, RE::FormID> originalBedOwners_;  // bedRefID -> original owner FormID
     };
 
 }  // namespace MARAS

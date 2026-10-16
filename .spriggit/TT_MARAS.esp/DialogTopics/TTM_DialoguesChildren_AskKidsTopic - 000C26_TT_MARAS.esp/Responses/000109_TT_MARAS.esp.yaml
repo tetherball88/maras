@@ -1,0 +1,36 @@
+FormKey: 000109:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 0000E5:TT_MARAS.esp
+FavorLevel: None
+ResponseData: 00891C:HearthFires.esm
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: LocationHasKeywordConditionData
+    Keyword: 0FC1A3:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInCurrentLocConditionData
+    Location: 018A5A:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000C24:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 004D8B:HearthFires.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 017FDE:HearthFires.esm
+  ComparisonValue: 1

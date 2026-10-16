@@ -1,0 +1,31 @@
+FormKey: 000C10:TT_MARAS.esp
+EditorID: TTM_ServicesSpouseSpells
+Flags:
+- Vendor
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorBuySellList: 0937A1:Skyrim.esm
+MerchantContainer: 0C6454:Skyrim.esm
+VendorValues:
+  EndHour: 24
+VendorLocation:
+  Target:
+    MutagenObjectType: LocationFallback
+    Type: NearSelf
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 050921:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: LocationHasKeywordConditionData
+    Keyword: 0FC1A3:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 00006C:TT_MARAS.esp
+  ComparisonValue: 1

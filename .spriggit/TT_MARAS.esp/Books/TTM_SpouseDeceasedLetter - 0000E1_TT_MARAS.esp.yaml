@@ -1,0 +1,31 @@
+FormKey: 0000E1:TT_MARAS.esp
+EditorID: TTM_SpouseDeceasedLetter
+Name:
+  TargetLanguage: English
+  Value: Letter of Mourning
+Model:
+  File: Clutter\Books\Note01.nif
+  Data: 0x020000000000000000000000
+BookText:
+  TargetLanguage: English
+  Value: >-
+    To <Alias=Player>,
+
+
+    In the grace of the Divine Mother, Mara, I write to you with the heaviest of hearts. Word has reached the Temple that your beloved, <Alias=Victim>, has departed this life.
+
+
+    In their passing, they have left behind tokens and possessions meant for you - the fruits of your shared labors and the bond sanctified before the Nine. These have been set aside for your care. If there were property or holdings shared between you, I urge you to see them tended with wisdom and remembrance.
+
+
+    Know that Mara weeps with you, even as She blesses the love that was, and ever shall be, between two souls once joined.
+
+
+    - Maramal, Priest of Mara, Riften
+PickUpSound: 0C7A54:Skyrim.esm
+Teaches:
+  MutagenObjectType: BookTeachesNothing
+InventoryArt: 097788:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''

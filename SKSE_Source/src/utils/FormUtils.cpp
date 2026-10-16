@@ -1,36 +1,38 @@
 #include "utils/FormUtils.h"
 
-#include <algorithm>
-#include <regex>
-#include <sstream>
-
 namespace MARAS::Utils {
 
     ParsedFormKey ParseFormKey(std::string_view formKey) {
         // Expected format: "__formData|PluginName|0xFormID"
-        static const std::regex formKeyRegex(R"(__formData\|([^|]+)\|(0x[0-9A-Fa-f]+))");
-
-        std::string keyStr(formKey);
-        std::smatch matches;
-
-        if (std::regex_match(keyStr, matches, formKeyRegex)) {
-            if (matches.size() >= 3) {
-                std::string pluginName = matches[1].str();
-                std::string hexFormID = matches[2].str();
-
-                auto formID = HexStringToFormID(hexFormID);
-                if (formID.has_value()) {
-                    MARAS_LOG_DEBUG("Parsed form key: {} -> {}|{:08X}", formKey, pluginName, formID.value());
-                    return ParsedFormKey(pluginName, formID.value());
-                } else {
-                    MARAS_LOG_ERROR("Invalid form ID in key: {}", formKey);
-                }
-            }
-        } else {
+        constexpr std::string_view kPrefix = "__formData|";
+        if (!formKey.starts_with(kPrefix)) {
             MARAS_LOG_WARN("Invalid form key format: {}", formKey);
+            return {};
         }
 
-        return ParsedFormKey();  // Invalid
+        std::string_view rest = formKey.substr(kPrefix.size());
+        auto pipePos = rest.find('|');
+        if (pipePos == std::string_view::npos || pipePos == 0 || pipePos + 1 >= rest.size()) {
+            MARAS_LOG_WARN("Invalid form key format: {}", formKey);
+            return {};
+        }
+
+        std::string_view pluginName = rest.substr(0, pipePos);
+        std::string_view hexFormID = rest.substr(pipePos + 1);
+        if (hexFormID.find('|') != std::string_view::npos ||
+            !(hexFormID.starts_with("0x") || hexFormID.starts_with("0X"))) {
+            MARAS_LOG_WARN("Invalid form key format: {}", formKey);
+            return {};
+        }
+
+        auto formID = HexStringToFormID(hexFormID);
+        if (!formID.has_value()) {
+            MARAS_LOG_ERROR("Invalid form ID in key: {}", formKey);
+            return {};
+        }
+
+        MARAS_LOG_TRACE("Parsed form key: {} -> {}|{:08X}", formKey, pluginName, *formID);
+        return ParsedFormKey(pluginName, *formID);
     }
 
     std::optional<RE::FormID> ParseAndResolveFormKey(std::string_view formKey) {
@@ -39,41 +41,33 @@ namespace MARAS::Utils {
             return std::nullopt;
         }
 
-        // Verify the plugin is loaded
-        auto dataHandler = RE::TESDataHandler::GetSingleton();
-        if (!dataHandler) {
-            MARAS_LOG_ERROR("Cannot access TESDataHandler");
-            return std::nullopt;
-        }
-
-        // Check if the plugin is loaded
-        const auto* file = dataHandler->LookupModByName(parsed.pluginName);
-        if (!file) {
-            MARAS_LOG_ERROR("Plugin '{}' is not loaded", parsed.pluginName);
-            return std::nullopt;
-        }
-
-        // Use the simplified approach - just get the form and return its ID
-        auto form = LookupForm<RE::TESForm>(parsed.localFormID, parsed.pluginName);
+        auto form = LookupForm<RE::TESForm>(parsed.localFormID, parsed.pluginName, "ParseAndResolveFormKey");
         return form ? std::make_optional(form->GetFormID()) : std::nullopt;
     }
 
     std::optional<RE::FormID> HexStringToFormID(std::string_view hexStr) {
-        std::string str(hexStr);
+        std::string_view trimmed = hexStr;
 
-        // Remove "0x" prefix if present
-        if (str.size() >= 2 && str.substr(0, 2) == "0x") {
-            str = str.substr(2);
+        // Remove "0x" or "0X" prefix if present
+        if (trimmed.size() >= 2 && trimmed[0] == '0' && (trimmed[1] == 'x' || trimmed[1] == 'X')) {
+            trimmed.remove_prefix(2);
         }
 
-        // Convert hex string to FormID
-        try {
-            RE::FormID formID = std::stoul(str, nullptr, 16);
-            return formID;
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("Failed to parse hex string '{}': {}", hexStr, e.what());
+        if (trimmed.empty()) {
+            MARAS_LOG_ERROR("Failed to parse empty hex string '{}'", hexStr);
             return std::nullopt;
         }
+
+        RE::FormID formID = 0;
+        const char* begin = trimmed.data();
+        const char* end = begin + trimmed.size();
+        auto [ptr, ec] = std::from_chars(begin, end, formID, 16);
+        if (ec != std::errc{} || ptr != end) {
+            MARAS_LOG_ERROR("Failed to parse hex string '{}'", hexStr);
+            return std::nullopt;
+        }
+
+        return formID;
     }
 
     std::string FormIDToHexString(RE::FormID formID) { return fmt::format("0x{:08X}", formID); }

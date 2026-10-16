@@ -1,0 +1,198 @@
+FormKey: 000C2F:TT_MARAS.esp
+EditorID: TTM_NpcsScenesDating
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_NpcsScenesEnd
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc1Alias
+      Object: 000378:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc1PartnerAlias
+      Object: 000378:TT_MARAS.esp
+      Alias: 2
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc2Alias
+      Object: 000378:TT_MARAS.esp
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc2PartnerAlias
+      Object: 000378:TT_MARAS.esp
+      Alias: 3
+  ScriptFragments:
+    FileName: TTM_NpcsScenesEnd
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_NpcsScenesEnd
+      FragmentName: Fragment_0
+Flags:
+- Interruptable
+Phases:
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  Unused2: {}
+  EditorWidth: 200
+- Name: ''
+  CompletionConditions:
+  - MutagenObjectType: ConditionFloat
+    Data:
+      MutagenObjectType: IsSceneActionCompleteConditionData
+      Scene: 000C2F:TT_MARAS.esp
+      SceneActionIndex: 8
+    ComparisonValue: 1
+  Unused2: {}
+  EditorWidth: 200
+Actors:
+- Flags: []
+  BehaviorFlags:
+  - DeathEnd
+  - CombatEnd
+  - DialogueEnd
+- ID: 1
+  Flags: []
+  BehaviorFlags:
+  - DeathEnd
+  - CombatEnd
+  - DialogueEnd
+Actions:
+- Name: ''
+  ActorID: 0
+  Index: 1
+  Flags:
+  - FaceTarget
+  StartPhase: 0
+  EndPhase: 0
+  Topic: 00037A:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 1
+  Index: 2
+  Flags:
+  - FaceTarget
+  StartPhase: 1
+  EndPhase: 1
+  Topic: 00037C:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 0
+  Index: 3
+  Flags:
+  - FaceTarget
+  StartPhase: 2
+  EndPhase: 2
+  Topic: 000382:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 1
+  Index: 4
+  Flags:
+  - FaceTarget
+  StartPhase: 3
+  EndPhase: 3
+  Topic: 000384:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 0
+  Index: 5
+  Flags:
+  - FaceTarget
+  StartPhase: 4
+  EndPhase: 4
+  Topic: 000386:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 1
+  Index: 6
+  Flags:
+  - FaceTarget
+  StartPhase: 5
+  EndPhase: 5
+  Topic: 000388:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 0
+  Index: 7
+  Flags:
+  - FaceTarget
+  StartPhase: 6
+  EndPhase: 6
+  Topic: 00039F:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Name: ''
+  ActorID: 1
+  Index: 8
+  Flags:
+  - FaceTarget
+  StartPhase: 7
+  EndPhase: 7
+  Topic: 0003A5:TT_MARAS.esp
+  HeadtrackActorID: -1
+  LoopingMax: 10
+  LoopingMin: 1
+  Emotion: Neutral
+  EmotionValue: 0
+- Type: Package
+  Name: ''
+  ActorID: 1
+  Index: 9
+  StartPhase: 0
+  EndPhase: 7
+  Packages:
+  - 00038A:TT_MARAS.esp
+- Type: Package
+  Name: ''
+  ActorID: 0
+  Index: 10
+  StartPhase: 0
+  EndPhase: 7
+  Packages:
+  - 0003AA:TT_MARAS.esp
+Quest: 000378:TT_MARAS.esp
+LastActionIndex: 10
+VNAM: 0x03000000030000000300000003000000

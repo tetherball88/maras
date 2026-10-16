@@ -1,0 +1,15 @@
+customCategory: TTM_CategoryRelationship
+name: ManageRelationships
+description: "Actions to manage relationships between actors available for this actor actions: {{ttm_get_available_actions(npc.UUID)}}"
+parameterMapping:
+  - type: dynamic
+    name: intent
+    description: What you intended to do when selected this action. For example, npc A propose to npc B, npc X accept or reject proposal, npc Y divorce npc Z.
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_available_actions
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: "none"

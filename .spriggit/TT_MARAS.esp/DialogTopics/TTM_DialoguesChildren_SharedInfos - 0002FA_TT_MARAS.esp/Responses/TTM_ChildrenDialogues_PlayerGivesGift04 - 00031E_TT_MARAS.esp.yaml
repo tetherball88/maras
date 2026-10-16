@@ -1,0 +1,32 @@
+FormKey: 00031E:TT_MARAS.esp
+EditorID: TTM_ChildrenDialogues_PlayerGivesGift04
+Flags: {}
+PreviousDialog: 00031D:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Happy
+  EmotionValue: 75
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Wow, thanks Papa!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+    RunOnTypeIndex: 0
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

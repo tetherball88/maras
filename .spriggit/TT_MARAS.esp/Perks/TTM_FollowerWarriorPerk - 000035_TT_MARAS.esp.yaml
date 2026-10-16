@@ -1,0 +1,14 @@
+FormKey: 000035:TT_MARAS.esp
+EditorID: TTM_FollowerWarriorPerk
+Name:
+  TargetLanguage: English
+  Value: Bond of Steel
+Description:
+  TargetLanguage: English
+  Value: With your spouse at your side in battle, your melee attack damage is increased
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000043:TT_MARAS.esp

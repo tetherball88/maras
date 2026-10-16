@@ -1,0 +1,16 @@
+FormKey: 00026E:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+ResponseData: 000302:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0042A7:HearthFires.esm
+  ComparisonValue: 1
+Prompt:
+  TargetLanguage: English
+  Value: Sorry, no, I've changed my mind.

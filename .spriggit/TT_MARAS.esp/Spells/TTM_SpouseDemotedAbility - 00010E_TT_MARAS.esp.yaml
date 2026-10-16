@@ -1,0 +1,13 @@
+FormKey: 00010E:TT_MARAS.esp
+EditorID: TTM_SpouseDemotedAbility
+Name:
+  TargetLanguage: English
+  Value: BreakupCooldown
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''
+Type: Ability
+Effects:
+- BaseEffect: 00010D:TT_MARAS.esp
+  Data: {}

@@ -1,0 +1,33 @@
+FormKey: 000367:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_no_ai_cr_intimidate_fail
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - Goodbye
+  ResetHours: 24
+PreviousDialog: 000366:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: You'd threaten me over this? Then walk. See if I stop you!
+  ScriptNotes: ''
+  Edits: ''

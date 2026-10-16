@@ -1,0 +1,8 @@
+FormKey: 000206:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_FGNameCallingBreakup1
+Name:
+  TargetLanguage: English
+  Value: Cut it out, both of you.
+Branch: 000204:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

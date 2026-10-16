@@ -1,0 +1,113 @@
+FormKey: 000378:TT_MARAS.esp
+EditorID: TTM_NpcsScenes
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_NpcsScenes
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: CheatingCaughtScene
+      Object: 000A26:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: CheatingDiscoveredScene
+      Object: 00049B:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: CheatingScene
+      Object: 0004BB:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: DatingScene
+      Object: 000C2F:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: EngagedScene
+      Object: 000D38:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: LoversScene
+      Object: 000D37:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MarriedScene
+      Object: 000D39:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc1Alias
+      Object: 000378:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc1PartnerAlias
+      Object: 000378:TT_MARAS.esp
+      Alias: 2
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc2Alias
+      Object: 000378:TT_MARAS.esp
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: npc2PartnerAlias
+      Object: 000378:TT_MARAS.esp
+      Alias: 3
+    - MutagenObjectType: ScriptObjectProperty
+      Name: OpenRelationshipScene
+      Object: 000D3A:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayersPartnerWalkInCheating
+      Object: 000378:TT_MARAS.esp
+      Alias: 4
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayersPartnerWalkInOpenRelationship
+      Object: 000378:TT_MARAS.esp
+      Alias: 5
+    - MutagenObjectType: ScriptIntProperty
+      Name: sceneIdx
+      Data: -1
+  Versioning:
+  - Break0
+  ExtraBindDataVersion: 0
+  FileName: ''
+Flags:
+- StartGameEnabled
+- 0x10
+- RunOnce
+Priority: 100
+NextAliasID: 6
+Aliases:
+- Name: Npc1
+  Flags:
+  - Optional
+  Factions:
+  - 0005A5:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 1
+  Name: Npc2
+  Flags:
+  - Optional
+  Factions:
+  - 0005A5:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 2
+  Name: Npc1Partner
+  Flags:
+  - Optional
+  - StoresText
+  - UsesStoredText
+  VoiceTypes: Null
+- ID: 3
+  Name: Npc2Partner
+  Flags:
+  - Optional
+  - StoresText
+  - UsesStoredText
+  VoiceTypes: Null
+- ID: 4
+  Name: PlayersPartnerWalkInCheating
+  Flags:
+  - Optional
+  Factions:
+  - 0005A3:TT_MARAS.esp
+  PackageData:
+  - 00056C:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 5
+  Name: PlayersPartnerWalkInOpenRelationship
+  Flags:
+  - Optional
+  Factions:
+  - 0005A4:TT_MARAS.esp
+  PackageData:
+  - 00056D:TT_MARAS.esp
+  VoiceTypes: Null

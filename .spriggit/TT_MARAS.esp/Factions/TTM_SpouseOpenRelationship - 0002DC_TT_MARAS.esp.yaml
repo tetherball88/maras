@@ -1,0 +1,9 @@
+FormKey: 0002DC:TT_MARAS.esp
+EditorID: TTM_SpouseOpenRelationship
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseOpenRelationship
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

@@ -1,0 +1,29 @@
+FormKey: 00050A:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 0004F9:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Disgust
+  EmotionValue: 20
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Doesn't look like you hate it that much.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    ReferenceAliasIndex: 2
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000378:TT_MARAS.esp
+    VariableName: ::sceneIdx_var
+  ComparisonValue: 4

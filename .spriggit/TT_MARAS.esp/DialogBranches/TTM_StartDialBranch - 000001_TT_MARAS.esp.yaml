@@ -1,0 +1,7 @@
+FormKey: 000001:TT_MARAS.esp
+EditorID: TTM_StartDialBranch
+Quest: 000800:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 000002:TT_MARAS.esp

@@ -1,0 +1,14 @@
+FormKey: 000031:TT_MARAS.esp
+EditorID: TTM_PermanentMiddleAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Middle Class
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''
+Type: Ability
+Effects:
+- BaseEffect: 000025:TT_MARAS.esp
+  Data:
+    Magnitude: 2

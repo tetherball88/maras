@@ -1,0 +1,8 @@
+FormKey: 00033F:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCheatingPersuade
+Name:
+  TargetLanguage: English
+  Value: "[Persuade] Please. I'd rather hear the truth from you."
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

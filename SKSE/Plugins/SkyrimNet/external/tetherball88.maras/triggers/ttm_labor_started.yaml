@@ -1,0 +1,24 @@
+name: "ttm_labor_started"
+description: "Direct narration when a mother enters active labor and delivery in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_labor_started"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and any nearby partner or companions react immediately to {{originator}} going into active labor and beginning delivery."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 8

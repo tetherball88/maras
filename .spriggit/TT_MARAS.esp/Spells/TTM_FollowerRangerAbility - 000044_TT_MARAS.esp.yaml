@@ -1,0 +1,14 @@
+FormKey: 000044:TT_MARAS.esp
+EditorID: TTM_FollowerRangerAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Ranger
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''
+Type: Ability
+Effects:
+- BaseEffect: 000009:TT_MARAS.esp
+  Data:
+    Magnitude: 5

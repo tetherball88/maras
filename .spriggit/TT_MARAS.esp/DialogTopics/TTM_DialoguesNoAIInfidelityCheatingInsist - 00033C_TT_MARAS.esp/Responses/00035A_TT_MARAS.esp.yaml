@@ -1,0 +1,67 @@
+FormKey: 00035A:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_no_ai_cheating_insist_success
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000357:TT_MARAS.esp
+- 000355:TT_MARAS.esp
+- 000373:TT_MARAS.esp
+- 00036A:TT_MARAS.esp
+Responses:
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: "...Enough. I can't keep lying to you. Yes, there's someone else. I'm sorry."
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0002BD:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetRandomPercentConditionData
+  ComparisonValue: 66
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetRandomPercentConditionData
+  ComparisonValue: 25

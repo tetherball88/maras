@@ -1,0 +1,7 @@
+FormKey: 00028F:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_NeverSpeakToYouAgainBranch
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 000290:TT_MARAS.esp

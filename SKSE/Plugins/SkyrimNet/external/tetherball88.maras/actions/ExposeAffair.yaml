@@ -1,0 +1,30 @@
+# customCategory: TTM_CategoryRelationship
+name: ExposeAffair
+description: "{{render_template(\"maras_actions/maras_action_expose_affair\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: ExposeAffair
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (affair partner exposing affair)
+  - type: dynamic
+    name: victimName
+    description: Display name of the partner who was cheated on and to whom affair is exposed.
+    useNearbyActors: false
+  - type: dynamic
+    name: cheaterName
+    description: Display name of the cheating partner with whom speaker had the affair.
+    useNearbyActors: false
+  - type: dynamic
+    name: reasoning
+    description: Motive for exposing affair from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+    useNearbyActors: false
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_expose_affair_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""

@@ -1,0 +1,9 @@
+FormKey: 00007C:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHomeUnSet
+Name:
+  TargetLanguage: English
+  Value: You can head back to your own home whenever you'd like.
+Priority: 20
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

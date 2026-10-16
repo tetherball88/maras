@@ -1,0 +1,43 @@
+FormKey: 000064:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerEnablePolygamyQst
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_enable_polygamy_current_spouse
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 80
+    - MutagenObjectType: ScriptBoolProperty
+      Name: UseAI
+      Data: True
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerEnablePolygamyQst
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerEnablePolygamyQst
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - NoLipFile
+PreviousDialog: Null
+FavorLevel: None
+ResponseData: 000152:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageConditionData
+    Quest: 00005C:TT_MARAS.esp
+  ComparisonValue: 70
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    ReferenceAliasIndex: 10
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 0000C4:TT_MARAS.esp
+  ComparisonValue: 1

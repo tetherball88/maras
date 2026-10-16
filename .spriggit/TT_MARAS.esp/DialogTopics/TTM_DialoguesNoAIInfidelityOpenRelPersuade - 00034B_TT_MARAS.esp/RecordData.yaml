@@ -1,0 +1,8 @@
+FormKey: 00034B:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityOpenRelPersuade
+Name:
+  TargetLanguage: English
+  Value: "[Persuade] We'd be honest with each other. Nothing would change between us."
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

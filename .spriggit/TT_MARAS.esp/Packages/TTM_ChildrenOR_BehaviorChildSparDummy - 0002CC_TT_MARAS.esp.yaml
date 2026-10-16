@@ -1,0 +1,146 @@
+FormKey: 0002CC:TT_MARAS.esp
+EditorID: TTM_ChildrenOR_BehaviorChildSparDummy
+Flags:
+- PreferredSpeed
+Type: Package
+PreferredSpeed: Jog
+InterruptFlags:
+- HellosToPlayer
+- ObserveCombatBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- AggroRadiusBehavior
+- WorldInteractions
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable06
+  ComparisonValue: 1.1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetDisabledConditionData
+    RunOnType: QuestAlias
+    RunOnTypeIndex: 13
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: IsWeaponInListConditionData
+    FormList: 007B74:HearthFires.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: IsWeaponInListConditionData
+    FormList: 007B75:HearthFires.esm
+  ComparisonValue: 1
+CombatStyle: 007B73:HearthFires.esm
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 0F7F4A:Skyrim.esm
+DataInputVersion: 13
+Data:
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Target:
+      MutagenObjectType: PackageTargetObjectType
+      Type: Furniture
+- Key: 3
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 13
+      Radius: 128
+- Key: 4
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Type: SingleRef
+    Target:
+      MutagenObjectType: PackageTargetAlias
+      Alias: 13
+- Key: 5
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 7
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 8
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 9
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 10
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 11
+  Value:
+    MutagenObjectType: PackageDataInt
+- Key: 12
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 1
+- Key: 13
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 2
+- Key: 14
+  Value:
+    MutagenObjectType: PackageDataInt
+    Data: 3
+- Key: 15
+  Value:
+    MutagenObjectType: PackageDataInt
+    Data: 6
+- Key: 16
+  Value:
+    MutagenObjectType: PackageDataFloat
+- Key: 17
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 25
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 28
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Type: SingleRef
+    Target:
+      MutagenObjectType: PackageTargetSelf
+- Key: 30
+  Value:
+    MutagenObjectType: PackageDataInt
+    Data: 350
+- Key: 32
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 34
+  Value:
+    MutagenObjectType: PackageDataBool
+XnamMarker: 0x23
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

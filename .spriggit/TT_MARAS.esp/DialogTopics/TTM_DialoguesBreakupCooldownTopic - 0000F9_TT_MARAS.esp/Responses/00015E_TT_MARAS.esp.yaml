@@ -1,0 +1,30 @@
+FormKey: 00015E:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 00015F:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 100
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I can't believe you're speaking to me, after what you've done. You broke my heart.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0CCD78:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasMagicEffectConditionData
+    MagicEffect: 000103:TT_MARAS.esp
+  ComparisonValue: 1

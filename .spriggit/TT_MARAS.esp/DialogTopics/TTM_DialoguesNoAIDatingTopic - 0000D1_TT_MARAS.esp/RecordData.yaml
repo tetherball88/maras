@@ -1,0 +1,8 @@
+FormKey: 0000D1:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIDatingTopic
+Name:
+  TargetLanguage: English
+  Value: My heart is drawn to you. Could we share more than friendship?
+Branch: 0000C3:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

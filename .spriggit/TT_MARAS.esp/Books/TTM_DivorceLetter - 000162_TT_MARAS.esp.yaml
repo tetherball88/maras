@@ -1,0 +1,27 @@
+FormKey: 000162:TT_MARAS.esp
+EditorID: TTM_DivorceLetter
+Name:
+  TargetLanguage: English
+  Value: Divorce Settlement
+Model:
+  File: Clutter\Books\Note01.nif
+  Data: 0x020000000000000000000000
+BookText:
+  TargetLanguage: English
+  Value: >-
+    To <Alias=Player>,
+
+
+    Under the Skyrim Marital Property Act (4E "Love Hurts, Pay Gold" Edition), my client <Alias=Spouse> hereby serves notice of divorce and claims the agreed-upon divorce settlement, payable in gold and to be collected by local guards at your next hold entrance. Failure to pay may result in additional fines, colder stares from guards, and half the town knowing exactly why you're single again.
+
+
+    Signed,
+
+    Counsel for <Alias=Spouse>, Certified Skyrim Marital Advocate
+PickUpSound: 0C7A54:Skyrim.esm
+Teaches:
+  MutagenObjectType: BookTeachesNothing
+InventoryArt: 097788:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''

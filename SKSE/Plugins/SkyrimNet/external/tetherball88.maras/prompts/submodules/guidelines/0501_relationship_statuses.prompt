@@ -1,0 +1,14 @@
+{% if render_mode == "full" %}
+    RELATIONSHIP STATUS SCALE (low to high commitment):
+    0. Hookup  — one or a few sexual encounters, no ongoing bond, purely physical, may never repeat
+    1. Lover   — recurring sexual partners, low emotional investment, NOT exclusive, NOT a couple
+    2. Dating  — recurring sexual/romantic partners WITH emotional commitment and some exclusivity, but not publicly declared or formalized
+    3. Engaged — publicly committed, intends marriage
+    4. Married — fully committed, legally/socially bonded
+
+    IMPORTANT: This scale intentionally differs from real-world colloquial usage.
+    "Lover" here is LESS committed than "Dating" — it is the casual/physical tier.
+    "Dating" here is MORE committed than "Lover" — it includes emotional attachment and quasi-exclusivity.
+    Do not apply real-world assumptions where "lover" implies devotion or "dating" implies casualness.
+{% endif %}
+

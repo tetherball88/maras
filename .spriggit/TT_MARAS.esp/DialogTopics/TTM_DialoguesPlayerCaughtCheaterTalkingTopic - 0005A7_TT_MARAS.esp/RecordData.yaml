@@ -1,0 +1,8 @@
+FormKey: 0005A7:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterTalkingTopic
+Name:
+  TargetLanguage: English
+  Value: TTM_DialoguesPlayerCaughtCheaterTalkingTopic
+Branch: 0005A6:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

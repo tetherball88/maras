@@ -1,0 +1,55 @@
+FormKey: 000148:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerAffectionDivorceQst
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_affection_estranged_divorce_persuasion_fail
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 200
+    - MutagenObjectType: ScriptBoolProperty
+      Name: UseAI
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerAffectionDivorceQst
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerAffectionDivorceQst
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 000130:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 70
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: It's all right. You don't have to pretend anymore. I'll be gone before sunset.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnType: Target
+    ActorValue: Speech
+  ComparisonValue: 0D16A5:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000118:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 0000C4:TT_MARAS.esp

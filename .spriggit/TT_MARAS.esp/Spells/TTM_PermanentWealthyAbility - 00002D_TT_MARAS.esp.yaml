@@ -1,0 +1,14 @@
+FormKey: 00002D:TT_MARAS.esp
+EditorID: TTM_PermanentWealthyAbility
+Name:
+  TargetLanguage: English
+  Value: Spouse Wealthy Class
+EquipmentType: 013F44:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''
+Type: Ability
+Effects:
+- BaseEffect: 000026:TT_MARAS.esp
+  Data:
+    Magnitude: 5

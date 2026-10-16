@@ -1,15 +1,11 @@
 Scriptname TTM_MCM extends SKI_ConfigBase
 
 GlobalVariable Property MCM_StartDialGender auto
-GlobalVariable Property TTM_MCM_PreferVanillaAudio  Auto
-GlobalVariable Property TTM_MCM_AllowAIDial  Auto
 GlobalVariable Property TTM_EnablePolygamyToggle Auto
 GlobalVariable Property TTM_MinRelRankForDial Auto
 
 
 int property oid_SettingsStartDialGender auto
-int property oid_SettingsAllowAIDial auto
-int property oid_SettingsPreferVanillaAudio auto
 int property oid_SettingsLogLevel auto
 int property oid_SettingsLogDestination auto
 int property oid_SettingsCheatAlwaysSuccess auto
@@ -26,6 +22,8 @@ int property oid_AffectionDecayMult auto
 int property oid_SearchNpc auto
 int property oid_SearchFilterAll auto
 int property oid_SearchFilterCandidate auto
+int property oid_SearchFilterDating auto
+int property oid_SearchFilterLover auto
 int property oid_SearchFilterFiance auto
 int property oid_SearchFilterSpouse auto
 int property oid_SearchFilterJilted auto
@@ -78,12 +76,7 @@ Event OnPageReset(string page)
         oneTimeUpdate = true
     endif
 
-    if(TTM_MCM_PreferVanillaAudio == none)
-        TTM_MCM_PreferVanillaAudio = Game.GetFormFromFile(0x18, "TT_MARAS.esp") as GlobalVariable
-    endif
-    if(TTM_MCM_AllowAIDial == none)
-        TTM_MCM_AllowAIDial = Game.GetFormFromFile(0x1c, "TT_MARAS.esp") as GlobalVariable
-    endif
+
     if(page == "$TTM_MCM_PageExplore")
         string subPage = TTM_MCM_State.GetCurrentPage()
         if(subPage == "Npc")

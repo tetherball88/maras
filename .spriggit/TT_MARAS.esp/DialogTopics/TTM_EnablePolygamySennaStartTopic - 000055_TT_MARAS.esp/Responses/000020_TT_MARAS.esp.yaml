@@ -1,0 +1,66 @@
+FormKey: 000020:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerEnablePolygamyQst
+    Properties:
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 20
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerEnablePolygamyQst
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerEnablePolygamyQst
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Love shaped by a Dragonborn soul? That's no common bond.
+  ScriptNotes: ''
+  Edits: ''
+- EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: There is a legend - of a scroll penned in Alessia's time, speaking of sacred unions beyond one heart alone.
+  ScriptNotes: ''
+  Edits: ''
+- EmotionValue: 50
+  ResponseNumber: 3
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: They say it lies in Ragnvald, where old truths sleep in stone. If you would walk that path, that's where it begins.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageConditionData
+    Quest: 00005C:TT_MARAS.esp
+  ComparisonValue: 10
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    UseAliases: True
+    ReferenceAliasIndex: 1
+  ComparisonValue: 1

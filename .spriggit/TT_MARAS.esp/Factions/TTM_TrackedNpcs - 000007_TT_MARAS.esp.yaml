@@ -1,0 +1,9 @@
+FormKey: 000007:TT_MARAS.esp
+EditorID: TTM_TrackedNpcs
+Name:
+  TargetLanguage: English
+  Value: TTM_TrackedNpcs
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

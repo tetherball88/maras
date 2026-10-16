@@ -1,0 +1,8 @@
+FormKey: 000055:TT_MARAS.esp
+EditorID: TTM_EnablePolygamySennaStartTopic
+Name:
+  TargetLanguage: English
+  Value: (M) Maramal sent me. I seek insight into love and Dragonborn souls.
+Branch: 000054:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

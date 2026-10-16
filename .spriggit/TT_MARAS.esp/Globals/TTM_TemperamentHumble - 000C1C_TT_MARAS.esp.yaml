@@ -1,0 +1,9 @@
+MutagenObjectType: GlobalShort
+FormKey: 000C1C:TT_MARAS.esp
+MajorRecordFlagsRaw: 64
+EditorID: TTM_TemperamentHumble
+SkyrimMajorRecordFlags:
+- 0x40
+MajorFlags:
+- Constant
+Data: 1

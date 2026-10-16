@@ -1,0 +1,347 @@
+FormKey: 00005C:TT_MARAS.esp
+EditorID: TTM_EnablePolygamy
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestEnablePolygamy
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_CurrentSpouse
+      Object: 00005C:TT_MARAS.esp
+      Alias: 10
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Maramal
+      Object: 00005C:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_OldScroll
+      Object: 00005C:TT_MARAS.esp
+      Alias: 8
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_OldScrollContainer
+      Object: 00005C:TT_MARAS.esp
+      Alias: 9
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_OldScrollTranslated
+      Object: 00005C:TT_MARAS.esp
+      Alias: 11
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Senna
+      Object: 00005C:TT_MARAS.esp
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Urag
+      Object: 00005C:TT_MARAS.esp
+      Alias: 6
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TTM_EnablePolygamyToggle
+      Object: 000006:TT_MARAS.esp
+  FileName: TTM_QuestEnablePolygamy
+  Fragments:
+  - Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_23
+  - Stage: 10
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_14
+  - Stage: 20
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_15
+  - Stage: 25
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_22
+  - Stage: 30
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_16
+  - Stage: 40
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_17
+  - Stage: 50
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_18
+  - Stage: 52
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_25
+  - Stage: 55
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_24
+  - Stage: 60
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_19
+  - Stage: 70
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_20
+  - Stage: 80
+    Unknown2: 1
+    ScriptName: TTM_QuestEnablePolygamy
+    FragmentName: Fragment_21
+  Aliases:
+  - Property:
+      Name: ''
+      Object: 00005C:TT_MARAS.esp
+      Alias: 8
+    Scripts:
+    - Name: DefaultOnReadSetQuestStage
+      Properties:
+      - MutagenObjectType: ScriptObjectProperty
+        Name: myQuest
+        Object: 00005C:TT_MARAS.esp
+      - MutagenObjectType: ScriptIntProperty
+        Name: myStage
+        Data: 30
+    - Name: defaultsetstageonplayeracquire
+      Properties:
+      - MutagenObjectType: ScriptIntProperty
+        Name: preReqStage
+        Data: 20
+      - MutagenObjectType: ScriptIntProperty
+        Name: StageToSet
+        Data: 25
+  - Property:
+      Name: ''
+      Object: 00005C:TT_MARAS.esp
+      Alias: 11
+    Scripts:
+    - Name: DefaultOnReadSetQuestStage
+      Properties:
+      - MutagenObjectType: ScriptObjectProperty
+        Name: myQuest
+        Object: 00005C:TT_MARAS.esp
+      - MutagenObjectType: ScriptIntProperty
+        Name: myStage
+        Data: 60
+    - Name: defaultsetstageonplayeracquire
+      Properties:
+      - MutagenObjectType: ScriptIntProperty
+        Name: preReqStage
+        Data: 52
+      - MutagenObjectType: ScriptIntProperty
+        Name: StageToSet
+        Data: 55
+Name:
+  TargetLanguage: English
+  Value: The Flame Divides Not
+Flags:
+- RunOnce
+- WarnOnAliasFillFailure
+Priority: 50
+Stages:
+- Flags:
+  - StartUpStage
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Since your bond at Mara's altar... something within you hums against it, not in defiance, but in expansion. As if one flame is not enough.
+- Index: 10
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Maramal recognized that my soul may not fit the bounds of ordinary rites. He spoke of old debates within the Temple and suggested I speak with the priestesses of Dibella, who hold broader views on love and union.
+- Index: 20
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Senna told me of an ancient scroll - the Scroll of Alessia's Grace - said to speak of divine souls capable of multiple sacred bonds. She believes it may still rest in the ruins of Ragnvald in the Reach. I'll need to search for it there.
+- Index: 25
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: I've found the scroll in Ragnvald, but the writing is old and unreadable. I should inspect it more closely before seeking help.
+- Index: 30
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: I recovered the scroll from deep within Ragnvald, but I can't read the writing. The text is in an ancient language, unreadable to me. I should bring it back to Senna - maybe she can help.
+- Index: 40
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Senna couldn't read the scroll - the language is older than anything she's seen. She recommended I take it to the College of Winterhold. Urag gro-Shub might be able to translate it.
+- Index: 50
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Urag recognized the script as ancient Alessian and agreed to translate the scroll. He said it would take about a day. I should come back later and see what he's found.
+- Index: 52
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Urag should have finished translating the scroll by now. I should return to him and see what he found.
+- Index: 55
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Urag completed the translation. The scroll speaks of divine souls and their capacity to love and bind beyond mortal limitations. I should read it myself before returning to the Temple.
+- Index: 60
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: The scroll speaks of divine souls - like mine - capable of loving and bonding without division. It describes a rite once offered to Alessia's line. I should return this to Maramal.
+- Index: 70
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: Maramal read the scroll and acknowledged its truth. He believes that, as Dragonborn, I may be granted a Divine Exception under Mara's light. But before he will bless this new path, I must speak to my current spouse - Mara's rites demand that love must not be imposed, but shared in truth.
+- Index: 80
+  Flags:
+  - ShutDownStage
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: I shared what I've learned with my spouse. They understand this is not a betrayal, but a blessing - and that my heart remains whole with them. With their trust and Mara's grace, I may now open my soul to others in sacred union.
+Objectives:
+- Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Seek Maramal's guidance at the Temple of Mara.
+  Targets:
+  - {}
+- Index: 10
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Speak to the priestesses of Dibella in Markarth.
+  Targets:
+  - AliasID: 1
+- Index: 20
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Retrieve the Scroll of Alessia's Grace from Ragnvald.
+  Targets:
+  - AliasID: 8
+- Index: 25
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Examine the ancient scroll.
+- Index: 30
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Bring the scroll to Senna.
+  Targets:
+  - AliasID: 1
+- Index: 40
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Take the scroll to Urag gro-Shub for translation.
+  Targets:
+  - AliasID: 6
+- Index: 50
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Wait one day for the translation.
+- Index: 52
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Speak to Urag gro-Shub to receive the translated scroll.
+  Targets:
+  - AliasID: 6
+- Index: 55
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Read the translated Scroll of Alessia's Grace.
+- Index: 60
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Bring the translated scroll to Maramal in Riften.
+  Targets:
+  - {}
+- Index: 70
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Speak to your spouse about the Divine Exception.
+  Targets:
+  - AliasID: 10
+NextAliasID: 12
+Aliases:
+- Name: Maramal
+  Flags:
+  - AllowReuseInQuest
+  - AllowReserved
+  UniqueActor: 01335B:Skyrim.esm
+  VoiceTypes: Null
+- ID: 1
+  Name: Senna
+  Flags:
+  - AllowReuseInQuest
+  - AllowReserved
+  UniqueActor: 0133B7:Skyrim.esm
+  VoiceTypes: Null
+- ID: 6
+  Name: Urag
+  Flags:
+  - AllowReuseInQuest
+  - AllowReserved
+  UniqueActor: 01C193:Skyrim.esm
+  VoiceTypes: Null
+- ID: 9
+  Name: OldScrollContainer
+  Flags:
+  - AllowReuseInQuest
+  - AllowReserved
+  ForcedReference: 07567C:Skyrim.esm
+  VoiceTypes: Null
+- ID: 8
+  Name: OldScroll
+  Flags:
+  - AllowDisabled
+  CreateReferenceToObject:
+    Object: 00004D:TT_MARAS.esp
+    AliasID: 9
+    Create: In
+  VoiceTypes: Null
+- ID: 11
+  Name: OldScrollTranslated
+  Flags:
+  - AllowDisabled
+  - InitiallyDisabled
+  CreateReferenceToObject:
+    Object: 00004C:TT_MARAS.esp
+    AliasID: 6
+    Create: In
+  VoiceTypes: Null
+- ID: 10
+  Name: CurrentSpouse
+  Flags:
+  - Optional
+  - AllowReserved
+  Conditions:
+  - MutagenObjectType: ConditionFloat
+    Data:
+      MutagenObjectType: GetIsIDConditionData
+      Object: 000007:Skyrim.esm
+  - MutagenObjectType: ConditionFloat
+    Data:
+      MutagenObjectType: GetInFactionConditionData
+      Faction: 0C6472:Skyrim.esm
+    ComparisonValue: 1
+  VoiceTypes: Null

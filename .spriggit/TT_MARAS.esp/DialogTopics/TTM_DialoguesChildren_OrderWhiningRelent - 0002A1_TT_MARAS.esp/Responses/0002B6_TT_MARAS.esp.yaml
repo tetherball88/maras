@@ -1,0 +1,19 @@
+FormKey: 0002B6:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+  - Random
+PreviousDialog: 0002B5:TT_MARAS.esp
+FavorLevel: None
+ResponseData: 000304:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetPCIsSexConditionData
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0042A7:HearthFires.esm
+  ComparisonValue: 1

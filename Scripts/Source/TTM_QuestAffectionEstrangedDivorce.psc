@@ -40,7 +40,6 @@ Function Fragment_4()
 ; stage 10
     SetObjectiveCompleted(0)
     SetObjectiveDisplayed(10)
-    TTM_ServiceSkyrimNet.RegisterAffectionEstrangedDivorceResolutionAction()
     RegisterForSingleUpdateGameTime(3 * 24)
 ;END CODE
 EndFunction
@@ -76,7 +75,6 @@ Function FinishQuest(bool success = true)
     else
         FailAllObjectives()
     endif
-    TTM_ServiceSkyrimNet.UnregisterAffectionEstrangedDivorceResolutionAction()
     Stop()
 EndFunction
 

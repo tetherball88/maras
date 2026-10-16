@@ -1,0 +1,24 @@
+name: "ttm_dating_proposal"
+description: "Direct narration when a dating, lover, or engagement proposal is accepted or rejected in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_dating_proposal"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have the involved parties respond naturally to the outcome of {{originator}}'s relationship proposal in a way that fits their personalities, without immediately repeating the proposal."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6

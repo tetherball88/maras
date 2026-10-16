@@ -1,0 +1,8 @@
+FormKey: 000591:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkInOpenRelationshipJoin
+Name:
+  TargetLanguage: English
+  Value: Don't just stand there. Come and join us.
+Branch: 000557:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

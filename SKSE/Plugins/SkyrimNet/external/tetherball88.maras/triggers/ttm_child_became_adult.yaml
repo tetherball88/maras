@@ -1,0 +1,24 @@
+name: "ttm_child_became_adult"
+description: "Direct narration when a child completes training and comes of age as an adult in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_became_adult"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and nearby family members remark on {{event_json.child}} completing training and reaching adulthood in a way that fits their personalities and family dynamic."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 8

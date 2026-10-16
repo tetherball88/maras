@@ -1,0 +1,22 @@
+FormKey: 00026A:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000269:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000266:TT_MARAS.esp
+- 000268:TT_MARAS.esp
+ResponseData: 00030C:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable06
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+Prompt:
+  TargetLanguage: English
+  Value: Let's play a game.

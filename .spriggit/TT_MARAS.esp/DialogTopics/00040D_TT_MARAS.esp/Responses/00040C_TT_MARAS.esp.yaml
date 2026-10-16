@@ -1,0 +1,26 @@
+FormKey: 00040C:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Do you know what I thought when I woke up today?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000378:TT_MARAS.esp
+    VariableName: ::sceneIdx_var

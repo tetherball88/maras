@@ -1,0 +1,17 @@
+FormKey: 00025E:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000266:TT_MARAS.esp
+- 000268:TT_MARAS.esp
+ResponseData: 00030B:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+Prompt:
+  TargetLanguage: English
+  Value: Sure.

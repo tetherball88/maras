@@ -1,12 +1,6 @@
 #pragma once
 
-#include <chrono>
-#include <cstdint>
-#include <unordered_set>
-
-namespace RE {
-    using FormID = std::uint32_t;
-}
+#include "PCH.h"
 
 namespace MARAS {
 
@@ -30,8 +24,6 @@ namespace MARAS {
         // Get current teammates from ProcessLists (exposed for external callers)
         std::unordered_set<FormID> GetCurrentTeammates();
 
-        // Check if a specific actor is currently a player teammate
-        bool IsPlayerTeammate(RE::Actor* actor);
 
     private:
         PollingService() = default;
@@ -39,6 +31,7 @@ namespace MARAS {
         // Polling logic
         void CheckTeammateChanges();
         void CheckDayChanged();
+        void SanitizePlayerFactions();
 
         // Get current in-game day
         float GetCurrentGameDay();
@@ -49,8 +42,9 @@ namespace MARAS {
         void SendDayChangeEvent(float newDay);
 
         // Timing
-        TimePoint lastTeammateCheck_;
-        TimePoint lastDayCheck_;
+        TimePoint lastTeammateCheck_{};
+        TimePoint lastDayCheck_{};
+        TimePoint lastChildOrderCheck_{};
 
         // State tracking
         std::unordered_set<FormID> previousTeammates_;
@@ -58,7 +52,8 @@ namespace MARAS {
 
         // Intervals (in milliseconds)
         static constexpr std::chrono::milliseconds kTeammateCheckInterval{15000};  // 15 seconds
-        static constexpr std::chrono::milliseconds kDayCheckInterval{60000};       // 60 seconds
+        static constexpr std::chrono::milliseconds kDayCheckInterval{5000};       // 5 seconds
+        static constexpr std::chrono::milliseconds kChildOrderCheckInterval{5000};  // 5 seconds
 
         bool initialized_ = false;
     };

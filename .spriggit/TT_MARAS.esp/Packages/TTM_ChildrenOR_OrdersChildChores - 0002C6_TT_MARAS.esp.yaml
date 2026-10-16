@@ -1,0 +1,73 @@
+FormKey: 0002C6:TT_MARAS.esp
+EditorID: TTM_ChildrenOR_OrdersChildChores
+Flags:
+- PreferredSpeed
+Type: Package
+PreferredSpeed: Jog
+InterruptFlags:
+- ObserveCombatBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: DoesNotExistConditionData
+    RunOnType: QuestAlias
+    RunOnTypeIndex: 24
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable06
+  ComparisonValue: 4
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 017723:Skyrim.esm
+DataInputVersion: 3
+Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Type: SingleRef
+    Target:
+      MutagenObjectType: PackageTargetAlias
+      Alias: 22
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataFloat
+    Data: 150
+- Key: 2
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 4
+  Value:
+    MutagenObjectType: PackageDataBool
+    Data: True
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 8
+  Value:
+    MutagenObjectType: PackageDataBool
+XnamMarker: 0x09
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

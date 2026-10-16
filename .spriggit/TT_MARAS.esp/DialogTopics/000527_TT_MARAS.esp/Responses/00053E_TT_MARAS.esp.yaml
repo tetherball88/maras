@@ -1,0 +1,28 @@
+FormKey: 00053E:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000535:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 70
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Gods. I didn't hear you.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000378:TT_MARAS.esp
+    VariableName: ::sceneIdx_var
+  ComparisonValue: 2

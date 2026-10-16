@@ -1,7 +1,7 @@
 scriptname TTM_Debug
 
 Function log(string msg) global
-    int logDestination = TTM_Data.GetLogDestination()
+    int logDestination = MARAS.GetSettingInt("logDestination")
     if(logDestination == 0)
         WriteToFile(msg)
     elseif(logDestination == 1)
@@ -22,6 +22,13 @@ Function debug(string msg) global
     int logLevel = MARAS.GetLogLevel()
     if(logLevel <= 1)
         log("[maras(debug)]: " + msg)
+    endif
+EndFunction
+
+Function info(string msg) global
+    int logLevel = MARAS.GetLogLevel()
+    if(logLevel <= 2)
+        log("[maras(info)]: " + msg)
     endif
 EndFunction
 

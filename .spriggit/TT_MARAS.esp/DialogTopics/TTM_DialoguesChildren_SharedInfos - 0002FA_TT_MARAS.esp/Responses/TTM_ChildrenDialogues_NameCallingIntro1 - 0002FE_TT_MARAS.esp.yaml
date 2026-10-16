@@ -1,0 +1,29 @@
+FormKey: 0002FE:TT_MARAS.esp
+EditorID: TTM_ChildrenDialogues_NameCallingIntro1
+Flags: {}
+PreviousDialog: 00009A:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Oh, um, Hi Papa!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

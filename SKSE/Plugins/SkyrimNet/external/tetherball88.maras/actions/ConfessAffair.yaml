@@ -1,0 +1,30 @@
+# customCategory: TTM_CategoryRelationship
+name: ConfessAffair
+description: "{{render_template(\"maras_actions/maras_action_confess_affair\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: ConfessAffair
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (cheater confessing affair)
+  - type: dynamic
+    name: victimName
+    description: Display name of the partner who was cheated on and to whom confession is made.
+    useNearbyActors: false
+  - type: dynamic
+    name: affairPartnerName
+    description: Display name of the lover/person the speaker had the secret affair with.
+    useNearbyActors: false
+  - type: dynamic
+    name: reasoning
+    description: Explain confession from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+    useNearbyActors: false
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_confess_affair_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""

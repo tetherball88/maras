@@ -1,0 +1,65 @@
+FormKey: 000068:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerEnablePolygamyQst
+    Properties:
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 70
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerEnablePolygamyQst
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerEnablePolygamyQst
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I have read it... and its truth cannot be denied.
+  ScriptNotes: ''
+  Edits: ''
+- EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: The Divine has spoken before, and now again through you. But Mara's grace demands honesty.
+  ScriptNotes: ''
+  Edits: ''
+- EmotionValue: 50
+  ResponseNumber: 3
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Before I grant this Exception, speak with your spouse - let the bond remain whole, not hidden.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageConditionData
+    Quest: 00005C:TT_MARAS.esp
+  ComparisonValue: 60
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    UseAliases: True
+  ComparisonValue: 1

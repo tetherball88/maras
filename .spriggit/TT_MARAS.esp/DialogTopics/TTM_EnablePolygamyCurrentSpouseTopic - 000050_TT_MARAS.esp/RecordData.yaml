@@ -1,0 +1,8 @@
+FormKey: 000050:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyCurrentSpouseTopic
+Name:
+  TargetLanguage: English
+  Value: (M) There's something I need to share with you... about us.
+Branch: 000065:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

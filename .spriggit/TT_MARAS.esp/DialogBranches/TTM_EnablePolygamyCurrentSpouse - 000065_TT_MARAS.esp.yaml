@@ -1,0 +1,7 @@
+FormKey: 000065:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyCurrentSpouse
+Quest: 00005C:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 000050:TT_MARAS.esp

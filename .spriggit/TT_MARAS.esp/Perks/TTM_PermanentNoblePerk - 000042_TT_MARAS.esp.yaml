@@ -1,0 +1,20 @@
+FormKey: 000042:TT_MARAS.esp
+EditorID: TTM_PermanentNoblePerk
+Name:
+  TargetLanguage: English
+  Value: Aristocratic Favor
+Description:
+  TargetLanguage: English
+  Value: Your noble ties ease every transaction, reducing store prices
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 00002B:TT_MARAS.esp
+- MutagenObjectType: PerkEntryPointModifyValue
+  Priority: 1
+  EntryPoint: ModBuyPrices
+  PerkConditionTabCount: 2
+  Modification: Multiply
+  Value: 0.95

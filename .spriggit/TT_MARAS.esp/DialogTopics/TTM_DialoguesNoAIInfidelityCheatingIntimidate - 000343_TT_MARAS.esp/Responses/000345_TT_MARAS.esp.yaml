@@ -1,0 +1,41 @@
+FormKey: 000345:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_no_ai_cheating_intimidate_fail
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+Flags:
+  ResetHours: 24
+PreviousDialog: 000344:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 0002E0:TT_MARAS.esp
+- 00033C:TT_MARAS.esp
+- 00033F:TT_MARAS.esp
+Responses:
+- Emotion: Anger
+  EmotionValue: 70
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Don't threaten me. I have nothing to say to you.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0002BD:TT_MARAS.esp

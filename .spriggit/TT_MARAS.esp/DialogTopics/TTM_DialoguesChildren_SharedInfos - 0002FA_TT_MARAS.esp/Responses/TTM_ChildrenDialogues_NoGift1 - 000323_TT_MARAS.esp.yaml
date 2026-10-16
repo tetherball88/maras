@@ -1,0 +1,26 @@
+FormKey: 000323:TT_MARAS.esp
+EditorID: TTM_ChildrenDialogues_NoGift1
+Flags: {}
+PreviousDialog: 000322:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 25
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Aww...
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

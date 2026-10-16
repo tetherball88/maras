@@ -1,0 +1,207 @@
+{
+    "schema_version": 2,
+    "actor": {
+        "uuid": 1058291,
+        "name": "Lydia"
+    },
+    "family": [
+        {
+            "other_parent": {
+                "uuid": 14,
+                "name": "Player"
+            },
+            "children": [
+                {
+                    "uuid": 2049102,
+                    "name": "Sofie",
+                    "is_adopted": true,
+                    "current_parents": {
+                        "uuids": [14, 1058291],
+                        "names": "Player and Lydia"
+                    },
+                    "biological_parents": {
+                        "uuids": [3048192, 3048193],
+                        "names": "Wilhelm and Greta"
+                    },
+                    "step_parents": {
+                        "uuids": [14],
+                        "names": "Player"
+                    },
+                    "critter": {
+                        "uuid": 4019283,
+                        "name": "Mr. Whiskers",
+                        "type": "fox"
+                    },
+                    "pet": {
+                        "uuid": 4019284,
+                        "name": "Barnaby",
+                        "type": "meeko dog"
+                    }
+                }
+            ],
+            "children_names_summary": "Sofie"
+        }
+    ],
+    "non_custodial_children": [],
+    "current_relationships": [
+        {
+            "partner": {
+                "uuid": 14,
+                "name": "Player"
+            },
+            "status": "married",
+            "is_open": true,
+            "permission": "primary"
+        },
+        {
+            "partner": {
+                "uuid": 1042819,
+                "name": "Erik the Slayer"
+            },
+            "status": "lover",
+            "permission": "open_primary",
+            "permission_source": {
+                "uuid": 14,
+                "name": "Player"
+            }
+        }
+    ],
+    "player_relationship_status": "married",
+    "player_co_partners": [
+        {
+            "person": {
+                "uuid": 1082341,
+                "name": "Ysolda"
+            },
+            "role": "co_spouse",
+            "player_relationship_status": "married"
+        },
+        {
+            "person": {
+                "uuid": 1074820,
+                "name": "Aela the Huntress"
+            },
+            "role": "co_partner",
+            "player_relationship_status": "engaged"
+        },
+        {
+            "person": {
+                "uuid": 1065921,
+                "name": "Saadia"
+            },
+            "role": "co_partner",
+            "player_relationship_status": "lover"
+        }
+    ],
+    "past_relationships": [
+        {
+            "partner": {
+                "uuid": 1039281,
+                "name": "Mikael"
+            },
+            "status": "divorced"
+        }
+    ],
+    "infidelity": [
+        {
+            "actor_role": "cheater",
+            "cheater": {
+                "uuid": 1058291,
+                "name": "Lydia"
+            },
+            "affair_partner": {
+                "uuid": 1096412,
+                "name": "Sven"
+            },
+            "victim": {
+                "uuid": 14,
+                "name": "Player"
+            },
+            "status": "ongoing",
+            "type": "lover",
+            "incident_count": 2,
+            "last_timestamp": 87,
+            "is_secret": true
+        },
+        {
+            "actor_role": "affair_partner",
+            "cheater": {
+                "uuid": 1042819,
+                "name": "Erik the Slayer"
+            },
+            "affair_partner": {
+                "uuid": 1058291,
+                "name": "Lydia"
+            },
+            "victim": {
+                "uuid": 1092184,
+                "name": "Mjoll the Lioness"
+            },
+            "status": "ongoing",
+            "type": "lover",
+            "incident_count": 1,
+            "last_timestamp": 90,
+            "is_secret": false
+        },
+        {
+            "actor_role": "victim",
+            "cheater": {
+                "uuid": 14,
+                "name": "Player"
+            },
+            "affair_partner": {
+                "uuid": 1065921,
+                "name": "Saadia"
+            },
+            "victim": {
+                "uuid": 1058291,
+                "name": "Lydia"
+            },
+            "status": "ended_confronted",
+            "type": "dating",
+            "incident_count": 3,
+            "last_timestamp": 74,
+            "is_secret": false
+        },
+        {
+            "actor_role": "cheater",
+            "cheater": {
+                "uuid": 1058291,
+                "name": "Lydia"
+            },
+            "affair_partner": {
+                "uuid": 1028331,
+                "name": "Faendal"
+            },
+            "victim": {
+                "uuid": 14,
+                "name": "Player"
+            },
+            "status": "ended_breakup",
+            "type": "casual",
+            "incident_count": 1,
+            "last_timestamp": 63,
+            "is_secret": true
+        },
+        {
+            "actor_role": "cheater",
+            "cheater": {
+                "uuid": 1058291,
+                "name": "Lydia"
+            },
+            "affair_partner": {
+                "uuid": 1027122,
+                "name": "Balimund"
+            },
+            "victim": {
+                "uuid": 1039281,
+                "name": "Mikael"
+            },
+            "status": "ended_victim_split",
+            "type": "dating",
+            "incident_count": 2,
+            "last_timestamp": 48,
+            "is_secret": false
+        }
+    ]
+}

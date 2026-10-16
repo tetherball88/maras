@@ -1,0 +1,142 @@
+{% if ttm_is_registered(actorUUID) %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+
+    {% if existsIn(profile, "parents") %}
+        ## {{npcName}}'s parentage & family background
+        {% set parents = profile.parents %}
+        {% set myChildRelation = "child" %}
+        {% if existsIn(parents, "relation") %}
+            {% set myChildRelation = parents.relation %}
+        {% elif existsIn(parents, "gender") %}
+            {% if parents.gender == "female" %}{% set myChildRelation = "daughter" %}{% else %}{% set myChildRelation = "son" %}{% endif %}
+        {% endif %}
+        {% set bioRelation = "child" %}
+        {% if existsIn(parents, "gender") and parents.gender == "female" %}
+            {% set bioRelation = "daughter" %}
+        {% elif existsIn(parents, "gender") and parents.gender == "male" %}
+            {% set bioRelation = "son" %}
+        {% elif myChildRelation == "stepdaughter" or myChildRelation == "daughter" %}
+            {% set bioRelation = "daughter" %}
+        {% elif myChildRelation == "stepson" or myChildRelation == "son" %}
+            {% set bioRelation = "son" %}
+        {% endif %}
+        {% if existsIn(parents, "stage") and parents.stage == "adult" %}
+            {{npcName}} is a grown adult {{myChildRelation}} (completed training, now an adult follower).
+        {% elif existsIn(parents, "stage") and parents.stage == "training" %}
+            {{npcName}} is a {{myChildRelation}} currently away from home undergoing training{% if existsIn(parents, "training_location") %} at {{parents.training_location}}{% endif %}.
+        {% elif existsIn(parents, "stage") and parents.stage == "infant" %}
+            {{npcName}} is a newborn infant {{myChildRelation}} currently in swaddling clothes.
+        {% elif existsIn(parents, "stage") and parents.stage == "unborn" %}
+            {{npcName}} is an unborn {{myChildRelation}} currently in gestation.
+        {% else %}
+            {{npcName}} is a young {{myChildRelation}} living at home with the family.
+        {% endif %}
+        {% if existsIn(parents, "is_adopted") and parents.is_adopted %}
+            {% if existsIn(parents, "current_parents") %}
+                {{npcName}} was adopted and is being raised by {{parents.current_parents.names}} (adoptive parents).
+            {% elif existsIn(parents, "mother") and existsIn(parents, "father") %}
+                {{npcName}} was adopted and is being raised by {{parents.mother.name}} and {{parents.father.name}} (adoptive parents).
+            {% elif existsIn(parents, "mother") %}
+                {{npcName}} was adopted and is being raised by {{parents.mother.name}} (adoptive mother).
+            {% elif existsIn(parents, "father") %}
+                {{npcName}} was adopted and is being raised by {{parents.father.name}} (adoptive father).
+            {% else %}
+                {{npcName}} is an adopted {{myChildRelation}}.
+            {% endif %}
+            {% if existsIn(parents, "biological_parents") %}
+                Their biological parents are {{parents.biological_parents.names}}.
+            {% elif existsIn(parents, "bio_mother") and existsIn(parents, "bio_father") %}
+                Their biological mother is {{parents.bio_mother.name}} and biological father is {{parents.bio_father.name}}.
+            {% elif existsIn(parents, "bio_mother") %}
+                Their biological mother is {{parents.bio_mother.name}} (biological father unknown).
+            {% elif existsIn(parents, "bio_father") %}
+                Their biological father is {{parents.bio_father.name}} (biological mother unknown).
+            {% else %}
+                Their biological parentage is unknown (orphan).
+            {% endif %}
+        {% else %}
+            {% if existsIn(parents, "stage") and (parents.stage == "unborn" or parents.stage == "infant") %}
+                {% if existsIn(parents, "mother") and existsIn(parents, "father") %}
+                    {{npcName}} is the {{myChildRelation}} of {{parents.mother.name}} and {{parents.father.name}}.
+                {% elif existsIn(parents, "mother") %}
+                    {{npcName}} is the {{myChildRelation}} of {{parents.mother.name}}.
+                {% elif existsIn(parents, "current_parents") %}
+                    {{npcName}} is the {{myChildRelation}} of {{parents.current_parents.names}}.
+                {% endif %}
+            {% elif existsIn(parents, "paternity_secret") and parents.paternity_secret.is_secret %}
+                {% if existsIn(parents, "mother") and existsIn(parents, "father") %}
+                    {{npcName}} is raised as the {{myChildRelation}} of {{parents.mother.name}} and {{parents.father.name}}, believing {{parents.father.name}} is their biological father.
+                {% elif existsIn(parents, "current_parents") %}
+                    {{npcName}} is raised by {{parents.current_parents.names}}.
+                {% elif existsIn(parents, "father") %}
+                    {{npcName}} is raised by {{parents.father.name}}.
+                {% elif existsIn(parents, "mother") %}
+                    {{npcName}} is raised by {{parents.mother.name}}.
+                {% endif %}
+            {% elif existsIn(parents, "step_parents") %}
+                {% if existsIn(parents, "biological_parents") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.biological_parents.names}}.
+                {% elif existsIn(parents, "bio_mother") and existsIn(parents, "bio_father") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.bio_mother.name}} and {{parents.bio_father.name}}.
+                {% elif existsIn(parents, "bio_mother") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.bio_mother.name}}.
+                {% elif existsIn(parents, "bio_father") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.bio_father.name}}.
+                {% elif existsIn(parents, "mother") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.mother.name}}.
+                {% endif %}
+                {% if existsIn(parents, "current_parents") %}
+                    In the household, {{npcName}} is raised by {{parents.current_parents.names}}, with {{parents.step_parents.names}} acting as step-parent.
+                {% else %}
+                    {{parents.step_parents.names}} is their step-parent.
+                {% endif %}
+            {% else %}
+                {% if existsIn(parents, "mother") and existsIn(parents, "father") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.mother.name}} and {{parents.father.name}}, who are raising them together.
+                {% elif existsIn(parents, "biological_parents") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.biological_parents.names}}.
+                {% elif existsIn(parents, "mother") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.mother.name}}, who is raising them as a single parent{% if existsIn(parents, "bio_father") %} (biological father: {{parents.bio_father.name}}){% endif %}.
+                {% elif existsIn(parents, "father") %}
+                    {{npcName}} is the biological {{bioRelation}} of {{parents.father.name}}, who is raising them as a single parent{% if existsIn(parents, "bio_mother") %} (biological mother: {{parents.bio_mother.name}}){% endif %}.
+                {% elif existsIn(parents, "current_parents") %}
+                    {{npcName}} is the {{myChildRelation}} of {{parents.current_parents.names}}.
+                {% endif %}
+            {% endif %}
+        {% endif %}
+        {% if existsIn(parents, "paternity_secret") and existsIn(parents.paternity_secret, "mother_partner") and parents.paternity_secret.mother_partner.name != "" and parents.paternity_secret.mother_partner.name != "None" and not (existsIn(parents, "stage") and (parents.stage == "unborn" or parents.stage == "infant")) %}
+            {% set pSecret = parents.paternity_secret %}
+            {% set pPartnerName = "" %}
+            {% if existsIn(pSecret, "mother_partner") and pSecret.mother_partner.name != "" and pSecret.mother_partner.name != "None" %}
+                {% set pPartnerName = pSecret.mother_partner.name %}
+            {% elif existsIn(parents, "father") and parents.father.name != "" and parents.father.name != "None" %}
+                {% set pPartnerName = parents.father.name %}
+            {% endif %}
+            {% set pSecBio = existsIn(pSecret, "is_secret_for_bio_father") and pSecret.is_secret_for_bio_father %}
+            {% set pSecPartner = existsIn(pSecret, "is_secret_for_partner") and pSecret.is_secret_for_partner %}
+            {% if pSecret.is_secret %}
+                {% if pSecPartner and pSecBio %}
+                    {{npcName}} believes {{pPartnerName}} is their biological father, completely unaware that their true biological father is actually {{pSecret.biological_father.name}}. Their mother is keeping this secret from {{npcName}}, {{pPartnerName}}, and {{pSecret.biological_father.name}}.
+                {% elif pSecPartner %}
+                    {{npcName}} believes {{pPartnerName}} is their biological father, completely unaware that their true biological father is actually {{pSecret.biological_father.name}}. {{pSecret.biological_father.name}} knows the truth, while {{npcName}} and {{pPartnerName}} remain completely unaware.
+                {% elif pSecBio %}
+                    {{npcName}} believes {{pPartnerName}} is their biological father, unaware that their true biological father is actually {{pSecret.biological_father.name}}. {{pPartnerName}} knows the truth, but {{npcName}} and {{pSecret.biological_father.name}} have not been told.
+                {% else %}
+                    {{npcName}} believes {{pPartnerName}} is their biological father, unaware that their true biological father is actually {{pSecret.biological_father.name}}, though both fathers are aware of the true biological paternity.
+                {% endif %}
+            {% else %}
+                Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} raised them as a father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone in the family.
+            {% endif %}
+        {% endif %}
+        {% if existsIn(parents, "siblings") %}
+            {{npcName}} has siblings: {{parents.siblings.names}}.
+        {% endif %}
+        {% if existsIn(parents, "pet") %}
+            {{npcName}} has a pet {{parents.pet.type}} named {{parents.pet.name}}.
+        {% endif %}
+        {% if existsIn(parents, "critter") %}
+            {{npcName}} keeps a captured pet {{parents.critter.type}} named {{parents.critter.name}}.
+        {% endif %}
+    {% endif %}
+{% endif %}

@@ -1,0 +1,30 @@
+FormKey: 0005CF:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+  ResetHours: 24
+PreviousDialog: 0005CE:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I care for you, truly, but I'm not ready to bind my life to yours yet.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0005D2:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00010F:TT_MARAS.esp

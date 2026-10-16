@@ -1,0 +1,8 @@
+FormKey: 0002A1:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_OrderWhiningRelent
+Name:
+  TargetLanguage: English
+  Value: Well... all right.
+Branch: 00029F:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

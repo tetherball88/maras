@@ -1,0 +1,20 @@
+FormKey: 000046:TT_MARAS.esp
+EditorID: TTM_IncreaseSpeechEffect
+Name:
+  TargetLanguage: English
+  Value: Speech of Sovereigns
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Speech
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: Being wed to a figure of influence sharpens your rhetoric, increasing your Speech skill by <mag> points

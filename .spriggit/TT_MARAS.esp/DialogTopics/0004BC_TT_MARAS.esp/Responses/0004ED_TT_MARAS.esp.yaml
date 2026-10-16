@@ -1,0 +1,29 @@
+FormKey: 0004ED:TT_MARAS.esp
+Flags: {}
+Topic: 0004B9:TT_MARAS.esp
+PreviousDialog: 0004DD:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Words are easy. I'll need to see it.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    ReferenceAliasIndex: 2
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000378:TT_MARAS.esp
+    VariableName: ::sceneIdx_var
+  ComparisonValue: 2

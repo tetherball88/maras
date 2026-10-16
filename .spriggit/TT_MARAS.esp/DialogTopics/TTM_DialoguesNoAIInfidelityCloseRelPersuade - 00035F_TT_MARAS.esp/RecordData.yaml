@@ -1,0 +1,8 @@
+FormKey: 00035F:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityCloseRelPersuade
+Name:
+  TargetLanguage: English
+  Value: "[Persuade] I'm not asking you to love me less. I'm asking for all of you."
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

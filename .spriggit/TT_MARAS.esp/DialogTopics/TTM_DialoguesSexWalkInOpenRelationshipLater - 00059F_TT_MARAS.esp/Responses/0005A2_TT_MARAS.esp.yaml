@@ -1,0 +1,20 @@
+FormKey: 0005A2:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+  - Random
+  - RandomEnd
+PreviousDialog: 0005A1:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: A few minutes? I can find something to do. Come find me when you're done.
+  ScriptNotes: ''
+  Edits: ''

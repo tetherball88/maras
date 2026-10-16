@@ -1,0 +1,8 @@
+FormKey: 0001DA:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_KeepCritter
+Name:
+  TargetLanguage: English
+  Value: All right. But you're responsible for him.
+Branch: 0001D5:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

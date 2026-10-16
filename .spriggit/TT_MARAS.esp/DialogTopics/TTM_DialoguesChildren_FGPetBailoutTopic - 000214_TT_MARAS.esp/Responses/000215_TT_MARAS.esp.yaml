@@ -1,0 +1,45 @@
+FormKey: 000215:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerChildren
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: DialogueType
+      Data: Pet_Bailout
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerChildren
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerChildren
+      FragmentName: Fragment_0
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerChildren
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - InvisibleContinue
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000179:TT_MARAS.esp
+ResponseData: 000312:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    RunOnType: QuestAlias
+    RunOnTypeIndex: 28
+    Faction: 05C84E:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnTypeIndex: 0
+    ActorValue: Variable07
+  ComparisonValue: 4
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

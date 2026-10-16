@@ -1,0 +1,46 @@
+FormKey: 00003C:TT_MARAS.esp
+EditorID: TTM_PermanentReligiousPerk
+Name:
+  TargetLanguage: English
+  Value: Blessing of Union
+Description:
+  TargetLanguage: English
+  Value: Living under divine guidance shields you from harm, increasing your magic resistance
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 00002C:TT_MARAS.esp
+- MutagenObjectType: PerkEntryPointModifyValue
+  Priority: 1
+  Conditions:
+  - RunOnTabIndex: 1
+    Conditions:
+    - MutagenObjectType: ConditionFloat
+      Flags:
+      - OR
+      Data:
+        MutagenObjectType: HasKeywordConditionData
+        Keyword: 01CEAD:Skyrim.esm
+      ComparisonValue: 1
+    - MutagenObjectType: ConditionFloat
+      Flags:
+      - OR
+      Data:
+        MutagenObjectType: HasKeywordConditionData
+        Keyword: 01CEAE:Skyrim.esm
+      ComparisonValue: 1
+    - MutagenObjectType: ConditionFloat
+      Data:
+        MutagenObjectType: HasKeywordConditionData
+        Keyword: 01CEAF:Skyrim.esm
+      ComparisonValue: 1
+    - MutagenObjectType: ConditionFloat
+      Data:
+        MutagenObjectType: HasKeywordConditionData
+        Keyword: 0B62E4:Skyrim.esm
+  EntryPoint: ModIncomingSpellMagnitude
+  PerkConditionTabCount: 2
+  Modification: Multiply
+  Value: 0.97

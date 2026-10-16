@@ -1,0 +1,8 @@
+FormKey: 000135:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementGiftTopic
+Name:
+  TargetLanguage: English
+  Value: I found something I thought you might like. (Gift)
+Branch: 000134:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

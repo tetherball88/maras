@@ -1,0 +1,7 @@
+FormKey: 0002B8:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_RehirePetsTopic
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 0002B9:TT_MARAS.esp

@@ -1,0 +1,28 @@
+FormKey: 000559:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+PreviousDialog: 00055A:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 00056E:TT_MARAS.esp
+- 00057F:TT_MARAS.esp
+- 00058D:TT_MARAS.esp
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I... I can't believe it. After everything we've shared, you're doing this right in front of me?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 0005A3:TT_MARAS.esp
+  ComparisonValue: 1

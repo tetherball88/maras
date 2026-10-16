@@ -1,0 +1,9 @@
+FormKey: 00006F:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementTopic
+Name:
+  TargetLanguage: English
+  Value: (M) Can we talk about our life together?
+Priority: 100
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

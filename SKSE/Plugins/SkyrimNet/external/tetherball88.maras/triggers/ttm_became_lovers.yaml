@@ -1,0 +1,29 @@
+name: "ttm_became_lovers"
+description: "Direct narration when a couple becomes official lovers in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_marital_status_change"
+      caseSensitive: false
+    - fieldPath: "newStatus"
+      operator: "equals"
+      value: "lover"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and their partner react to becoming official lovers in a way that fits their personalities and bond."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6
+

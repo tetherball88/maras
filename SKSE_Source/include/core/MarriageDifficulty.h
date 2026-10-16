@@ -1,8 +1,5 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
-#include <unordered_map>
-
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -27,7 +24,6 @@ namespace MARAS {
         static float CalculatePlayerPrestige(float mostGold, float housesOwned, float horsesOwned,
                                              float questsCompleted, float dungeonsCleared, float dragonSoulsCollected);
         static float CalculateGuildAlignmentMod(RE::Actor* npc);
-        static bool IsAlwaysSuccessMarriage();
         static bool IsJilted(RE::Actor* npc);
         static bool IsDivorced(RE::Actor* npc);
         static int CountMarried();

@@ -1,0 +1,24 @@
+FormKey: 0001D4:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  - RandomEnd
+  - InvisibleContinue
+Topic: 000178:TT_MARAS.esp
+PreviousDialog: 0001D3:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 00019B:TT_MARAS.esp
+ResponseData: 000312:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnTypeIndex: 0
+    ActorValue: Variable07
+  ComparisonValue: 3
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

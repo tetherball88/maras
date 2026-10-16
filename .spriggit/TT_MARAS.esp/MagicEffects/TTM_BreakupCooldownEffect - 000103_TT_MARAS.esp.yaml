@@ -1,0 +1,24 @@
+FormKey: 000103:TT_MARAS.esp
+EditorID: TTM_BreakupCooldownEffect
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_CooldownSpell
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: currentSpell
+      Object: 000102:TT_MARAS.esp
+Name:
+  TargetLanguage: English
+  Value: TTM_BreakupCooldownEffect
+Flags:
+- Recover
+- HideInUI
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: Health
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: ''

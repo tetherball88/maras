@@ -1,0 +1,60 @@
+FormKey: 000150:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+  ResetHours: 24
+PreviousDialog: 000073:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: That's a heavy promise, and my heart isn't in it. I can't marry you.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasKeywordConditionData
+    Keyword: 000C0B:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0005D2:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    RunOnType: Reference
+    Reference: 000014:Skyrim.esm
+    Faction: 0005D2:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000136:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00010F:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00005D:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000060:TT_MARAS.esp

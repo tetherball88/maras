@@ -1,10 +1,5 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -87,8 +82,8 @@ namespace MARAS {
         bool ExecuteSetTemperament(const std::string& npcSpecifier, const std::string& temperamentName,
                                    RE::TESQuest* quest, const std::string& context);
 
-        // Helper to resolve NPC from specifier (alias name or form key)
-        RE::Actor* ResolveNPC(const std::string& npcSpecifier, RE::TESQuest* quest) const;
+        // Helper to resolve NPC FormID from specifier (alias name, form key, or NPC name)
+        RE::FormID ResolveNPC(const std::string& npcSpecifier, RE::TESQuest* quest) const;
 
         // Configuration storage: quest FormID -> config
         std::unordered_map<RE::FormID, QuestEventConfig> questConfigs_;

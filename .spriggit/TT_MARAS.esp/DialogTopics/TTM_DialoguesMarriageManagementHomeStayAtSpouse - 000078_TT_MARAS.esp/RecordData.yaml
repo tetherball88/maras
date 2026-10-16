@@ -1,0 +1,9 @@
+FormKey: 000078:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHomeStayAtSpouse
+Name:
+  TargetLanguage: English
+  Value: Is your home open to me as well?
+Priority: 90
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

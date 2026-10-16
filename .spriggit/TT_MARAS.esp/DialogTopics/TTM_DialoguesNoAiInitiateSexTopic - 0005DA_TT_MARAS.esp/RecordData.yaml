@@ -1,0 +1,8 @@
+FormKey: 0005DA:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAiInitiateSexTopic
+Name:
+  TargetLanguage: English
+  Value: Come with me. I have a better way we can warm each other up.
+Branch: 0005D9:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

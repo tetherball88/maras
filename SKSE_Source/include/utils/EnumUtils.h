@@ -1,8 +1,6 @@
 #pragma once
 
-#include <string_view>
-
-#include "core/NPCRelationshipManager.h"
+#include "core/RelationshipTypes.h"
 #include "utils/Common.h"
 
 namespace MARAS::Utils {
@@ -27,6 +25,8 @@ namespace MARAS::Utils {
                 return "Nobles";
             case SocialClass::Rulers:
                 return "Rulers";
+            default:
+                break;
         }
         return "Unknown";
     }
@@ -45,6 +45,8 @@ namespace MARAS::Utils {
                 return "Ranger";
             case SkillType::Orator:
                 return "Orator";
+            default:
+                break;
         }
         return "Unknown";
     }
@@ -61,6 +63,8 @@ namespace MARAS::Utils {
                 return "Romantic";
             case Temperament::Independent:
                 return "Independent";
+            default:
+                break;
         }
         return "Unknown";
     }
@@ -77,24 +81,84 @@ namespace MARAS::Utils {
                 return "Divorced";
             case RelationshipStatus::Jilted:
                 return "Jilted";
+            case RelationshipStatus::Dating:
+                return "Dating";
+            case RelationshipStatus::Lover:
+                return "Lover";
+            case RelationshipStatus::ExDating:
+                return "ExDating";
+            case RelationshipStatus::ExLover:
+                return "ExLover";
             default:
                 return "Unknown";
         }
     }
 
-    // String to enum conversions (for potential config file loading)
+    constexpr std::string_view AffairTypeToString(AffairType affairType) {
+        switch (affairType) {
+            case AffairType::Casual:
+                return "Casual";
+            case AffairType::Dating:
+                return "Dating";
+            case AffairType::Lover:
+                return "Lover";
+            default:
+                return "Unknown";
+        }
+    }
+
+    constexpr std::string_view AffairStatusToString(AffairStatus affairStatus) {
+        switch (affairStatus) {
+            case AffairStatus::Ongoing:
+                return "Ongoing";
+            case AffairStatus::EndedBreakup:
+                return "EndedBreakup";
+            case AffairStatus::EndedVictimSplit:
+                return "EndedVictimSplit";
+            case AffairStatus::Allowed:
+                return "Allowed";
+            case AffairStatus::EndedConfronted:
+                return "EndedConfronted";
+            default:
+                return "Unknown";
+        }
+    }
+
+    constexpr std::string_view AffairDiscoveryToString(AffairDiscovery disc) {
+        switch (disc) {
+            case AffairDiscovery::Confessed:
+                return "confessed";
+            case AffairDiscovery::Exposed:
+                return "exposed";
+            case AffairDiscovery::Caught:
+                return "caught";
+            default:
+                return "";
+        }
+    }
+
+    constexpr std::string_view AffairResolutionToString(AffairResolution res) {
+        switch (res) {
+            case AffairResolution::Confronted:
+                return "confronted";
+            case AffairResolution::Allowed:
+                return "allowed";
+            case AffairResolution::Breakup:
+                return "breakup";
+            default:
+                return "";
+        }
+    }
+
+    // String to enum conversions (case-insensitive, zero heap allocations)
 
     SocialClass StringToSocialClass(std::string_view str);
     SkillType StringToSkillType(std::string_view str);
     Temperament StringToTemperament(std::string_view str);
     RelationshipStatus StringToRelationshipStatus(std::string_view str);
-
-    // Utility functions
-
-    // Get NPC name for logging
-    std::string GetNPCName(FormID npcFormID);
-
-    // String utility functions
-    std::string ToLower(std::string_view str);
+    AffairType StringToAffairType(std::string_view str);
+    AffairStatus StringToAffairStatus(std::string_view str);
+    AffairDiscovery StringToAffairDiscovery(std::string_view str);
+    AffairResolution StringToAffairResolution(std::string_view str);
 
 }  // namespace MARAS::Utils

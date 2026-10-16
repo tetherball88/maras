@@ -1,0 +1,17 @@
+FormKey: 000227:TT_MARAS.esp
+Flags: {}
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Anger
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Well, you smell like a Hagraven. And you look like one, too!
+  ScriptNotes: ''
+  Edits: ''

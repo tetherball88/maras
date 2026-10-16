@@ -1,0 +1,8 @@
+FormKey: 00023D:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_BanPet
+Name:
+  TargetLanguage: English
+  Value: No. No pets. Ever.
+Branch: 000235:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

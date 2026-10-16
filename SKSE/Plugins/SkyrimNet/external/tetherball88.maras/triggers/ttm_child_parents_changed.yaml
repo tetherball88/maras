@@ -1,0 +1,24 @@
+name: "ttm_child_parents_changed"
+description: "Direct narration when a child's parents or custody change in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_parents_changed"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and nearby family members address the change in {{event_json.child}}'s parental custody ({{event_json.reason}}) in a way that fits their personalities and family situation."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 5

@@ -1,8 +1,5 @@
 #pragma once
 
-#include <unordered_map>
-#include <vector>
-
 #include "PCH.h"
 #include "core/Serialization.h"
 
@@ -10,62 +7,72 @@ namespace MARAS {
 
     class PlayerHouseService {
     public:
+        struct House {
+            RE::FormID id{0};
+            RE::FormID marker{0};
+            bool initialMoveDone{false};
+            std::vector<RE::FormID> tenants;
+        };
+
+        struct Tenant {
+            RE::FormID house{0};
+            bool stayAtHome{true};
+        };
+
         static PlayerHouseService& GetSingleton();
 
         // Register a player house location and store a custom placed marker for it
         [[nodiscard]] bool RegisterPlayerHouseCell(RE::FormID locationFormID, RE::FormID markerFormID);
 
-        // Returns list of registered player house FormIDs
+        // House queries
         std::vector<RE::FormID> GetAllPlayerHouses() const;
+        std::vector<std::string> GetAllPlayerHousesNames() const;
+        int CountPlayerHouses() const noexcept;
+        RE::FormID GetHouseMarkerFormID(RE::FormID playerHouseFormID) const noexcept;
+        RE::TESObjectREFR* GetHouseMarkerRef(RE::FormID playerHouseFormID) const;
+        static std::string GetHouseName(RE::FormID houseFormID);
+        RE::FormID FindHouseByName(std::string_view name) const;
 
         // Tenant management
-        [[nodiscard]] bool RegisterTenantInPlayerHouse(RE::FormID tenantFormID, RE::FormID playerHouseFormID);
+        [[nodiscard]] bool RegisterTenantInPlayerHouse(RE::FormID tenantFormID, RE::FormID playerHouseFormID, bool stayAtHome = true);
         [[nodiscard]] bool RemoveTenantFromPlayerHouse(RE::FormID tenantFormID);
         std::vector<RE::FormID> GetPlayerHouseTenants(RE::FormID playerHouseFormID) const;
+        void SetTenantStayAtHome(RE::FormID tenantFormID, bool stayAtHome);
+        [[nodiscard]] bool GetTenantStayAtHome(RE::FormID tenantFormID) const;
+        RE::FormID GetTenantHouseFormID(RE::FormID tenantFormID) const noexcept;
+        [[nodiscard]] bool CanRemoveTenant(RE::FormID tenantFormID) const;
+
+        // Main unified method to relocate an entire player-related family unit (specific player spouse + children assigned to that spouse)
+        // Accepts either a child NPC or adult spouse NPC. Strictly enforces player-family boundary and polygamy isolation.
+        // Returns vector of all relocated member FormIDs (spouse and assigned children).
+        std::vector<RE::FormID> RelocateFamilyUnit(RE::FormID npcFormID, RE::FormID playerHouseFormID, bool moveParents = true);
+
+        // Per-house initial move state
+        void SetHouseInitialMoveDone(RE::FormID houseFormID, bool done);
+        bool IsHouseInitialMoveDone(RE::FormID houseFormID) const;
 
         // Serialization
         [[nodiscard]] bool Save(SKSE::SerializationInterface* serialization) const;
-        [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization);
+        [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = Serialization::kDataVersion);
         void Revert();
+
+        // Data dump
+        [[nodiscard]] nlohmann::json DumpJson() const;
 
     private:
         PlayerHouseService();
 
-        // list of house locations (FormIDs)
-        std::vector<RE::FormID> houses_;
+        std::vector<House> houses_;
+        std::unordered_map<RE::FormID, Tenant> tenants_;
 
-        // mapping house -> marker formid
-        std::unordered_map<RE::FormID, RE::FormID> houseMarkers_;
+        House* FindHouse(RE::FormID houseFormID);
+        const House* FindHouse(RE::FormID houseFormID) const;
 
-        // mapping house -> tenants
-        std::unordered_map<RE::FormID, std::vector<RE::FormID>> houseTenants_;
-
-        // reverse mapping tenant -> house (for O(1) lookup)
-        std::unordered_map<RE::FormID, RE::FormID> tenantHouse_;
-
-        // Cached housed faction pointer (mutable so we can lazy fetch in const getters if needed)
-        mutable RE::TESFaction* housedFactionCache_{nullptr};
-
-        // Internal helpers (not exposed publicly)
-        void AddTenantToHouse(RE::FormID tenantFormID, RE::FormID houseFormID);
-        void RemoveTenantFromHouse(RE::FormID tenantFormID);
-        void AddTenantFaction(RE::FormID tenantFormID);
-        void RemoveTenantFaction(RE::FormID tenantFormID);
+        bool UpdateSpouseHomeMarker(RE::FormID spouseFormID, RE::FormID playerHouseFormID);
+        void SetHousedFaction(RE::FormID tenantFormID, bool add);
         void AddMerchantFactionsToTenant(RE::FormID tenantFormID);
-        RE::TESFaction* GetHousedFaction() const;
-
-    public:
-        // Return stored marker FormID for a house (0 if none)
-        RE::FormID GetHouseMarkerFormID(RE::FormID playerHouseFormID) const noexcept;
-
-        // Return list of house names
-        std::vector<std::string> GetAllPlayerHousesNames() const;
-
-        // Return the FormID of the house a tenant is registered in (0 if none)
-        RE::FormID GetTenantHouseFormID(RE::FormID tenantFormID) const noexcept;
-
-        // Return number of registered player houses
-        int CountPlayerHouses() const noexcept;
+        void RemoveMerchantFactionsFromTenant(RE::FormID tenantFormID);
+        void ApplyStayAtHome(RE::FormID tenantFormID, bool stayAtHome);
     };
 
 }  // namespace MARAS

@@ -1,18 +1,19 @@
 #include "core/PackageOverrideService.h"
 
-#include <algorithm>
-#include <cctype>
-#include <fstream>
-#include <sstream>
-#include <string>
-
 #include "RE/B/BGSScene.h"
 #include "RE/B/BGSSceneAction.h"
 #include "RE/B/BGSSceneActionPackage.h"
 #include "core/FormCache.h"
+#include "core/ChildrenFleeService.h"
+#include "core/NPCIndex.h"
+#include "core/NPCRelationshipManager.h"
+#include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/PollingService.h"
+#include "services/ActorService.h"
+#include "utils/ActorUtils.h"
 #include "utils/Common.h"
+#include "utils/StringUtils.h"
 
 namespace MARAS {
 
@@ -24,20 +25,6 @@ namespace MARAS {
     // ─── Internal helpers ────────────────────────────────────────────────────────
 
     namespace {
-
-        std::string ToLower(std::string_view s) {
-            std::string result(s);
-            std::transform(result.begin(), result.end(), result.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            return result;
-        }
-
-        std::string Trim(std::string_view s) {
-            const auto start = s.find_first_not_of(" \t\r\n");
-            if (start == std::string_view::npos) return {};
-            const auto end = s.find_last_not_of(" \t\r\n");
-            return std::string(s.substr(start, end - start + 1));
-        }
 
         // Returns the quest that owns `pkg` via an actor alias,
         // or nullptr if the package is not alias-driven.
@@ -59,6 +46,83 @@ namespace MARAS {
         int GetQuestPriorityForPackage(RE::ExtraDataList* extraList, RE::TESPackage* pkg) {
             const auto* quest = GetQuestForPackage(extraList, pkg);
             return quest ? static_cast<int>(quest->data.priority) : -1;
+        }
+
+        std::string GetPackageDesc(RE::TESPackage* pkg) {
+            if (!pkg) return "null";
+            const char* edid = pkg->GetFormEditorID();
+            if (edid && edid[0] != '\0') {
+                return edid;
+            }
+            const auto* file = pkg->GetFile(0);
+            if (file && file->fileName && file->fileName[0] != '\0') {
+                return fmt::format("{}~{:08X}", file->fileName, pkg->GetFormID());
+            }
+            return fmt::format("{:08X}", pkg->GetFormID());
+        }
+
+        std::string GetQuestDesc(RE::TESQuest* quest) {
+            if (!quest) return "?";
+            const char* edid = quest->GetFormEditorID();
+            if (edid && edid[0] != '\0') {
+                return edid;
+            }
+            const auto* file = quest->GetFile(0);
+            if (file && file->fileName && file->fileName[0] != '\0') {
+                return fmt::format("{}~{:08X}", file->fileName, quest->GetFormID());
+            }
+            return fmt::format("{:08X}", quest->GetFormID());
+        }
+
+        enum class PackageDecision : std::uint8_t {
+            Follower,
+            NoSandbox,
+            CandidateNullAssertSandbox,
+            AlreadyRunningSandbox,
+            Whitelist,
+            PluginWhitelist,
+            QuestWhitelist,
+            QuestPriorityAllowed,
+            QuestPrioritySuppressed,
+            SuppressedRedirectSandbox
+        };
+
+        struct HookEvalState {
+            RE::FormID candidateID{0};
+            RE::FormID resultID{0};
+            PackageDecision decision{PackageDecision::NoSandbox};
+
+            bool operator==(const HookEvalState& o) const noexcept {
+                return candidateID == o.candidateID && resultID == o.resultID && decision == o.decision;
+            }
+        };
+
+        std::mutex s_evalMutex;
+        std::unordered_map<RE::FormID, HookEvalState> s_lastEvals;
+
+        void InvalidateHookEvalActor(RE::FormID actorID) {
+            std::lock_guard lock(s_evalMutex);
+            s_lastEvals.erase(actorID);
+        }
+
+        void ClearHookEvalCache() {
+            std::lock_guard lock(s_evalMutex);
+            s_lastEvals.clear();
+        }
+
+        template <typename LogFn>
+        void CheckAndLog(RE::FormID actorID, RE::FormID candidateID, RE::FormID resultID,
+                         PackageDecision decision, LogFn&& logFn) {
+            const HookEvalState newState{candidateID, resultID, decision};
+            {
+                std::lock_guard lock(s_evalMutex);
+                auto it = s_lastEvals.find(actorID);
+                if (it != s_lastEvals.end() && it->second == newState) {
+                    return;
+                }
+                s_lastEvals[actorID] = newState;
+            }
+            logFn();
         }
 
     }  // namespace
@@ -83,7 +147,7 @@ namespace MARAS {
             std::istringstream ss(value);
             std::string token;
             while (std::getline(ss, token, ',')) {
-                auto pattern = ToLower(Trim(token));
+                auto pattern = StringUtils::ToLowerStd(StringUtils::TrimView(token));
                 if (!pattern.empty()) {
                     target.push_back(std::move(pattern));
                 }
@@ -93,13 +157,13 @@ namespace MARAS {
         bool inSection = false;
         std::string line;
         while (std::getline(file, line)) {
-            const auto trimmed = Trim(line);
+            const auto trimmed = StringUtils::TrimView(line);
             if (trimmed.empty() || trimmed[0] == ';' || trimmed[0] == '#') continue;
 
             if (trimmed[0] == '[') {
                 const auto end = trimmed.find(']');
-                if (end != std::string::npos) {
-                    const auto sectionName = ToLower(Trim(trimmed.substr(1, end - 1)));
+                if (end != std::string_view::npos) {
+                    const auto sectionName = StringUtils::ToLowerStd(StringUtils::TrimView(trimmed.substr(1, end - 1)));
                     inSection = (sectionName == "packageoverrides");
                 }
                 continue;
@@ -108,10 +172,10 @@ namespace MARAS {
             if (!inSection) continue;
 
             const auto eqPos = trimmed.find('=');
-            if (eqPos == std::string::npos) continue;
+            if (eqPos == std::string_view::npos) continue;
 
-            const auto key = ToLower(Trim(trimmed.substr(0, eqPos)));
-            const auto value = Trim(trimmed.substr(eqPos + 1));
+            const auto key = StringUtils::ToLowerStd(StringUtils::TrimView(trimmed.substr(0, eqPos)));
+            const auto value = StringUtils::TrimStd(trimmed.substr(eqPos + 1));
 
             if (key == "whitelist") {
                 AppendPatterns(value, m_whitelistPatterns);
@@ -147,77 +211,57 @@ namespace MARAS {
         } else {
             MARAS_LOG_WARN("PackageOverrideService: failed to resolve home sandbox package (0x6A) at config load");
         }
+
+        // Resolve the hardcoded pet/critter home sandbox package (TT_MARAS.esp 0xC0) immediately
+        if (auto* petPkg = FormCache::GetSingleton().GetPetCritterHomeSandboxPackage()) {
+            m_petCritterSandboxPkgID = petPkg->GetFormID();
+            MARAS_LOG_INFO("PackageOverrideService: pet/critter sandbox package auto-resolved to {:08X}",
+                           m_petCritterSandboxPkgID);
+        } else {
+            MARAS_LOG_WARN("PackageOverrideService: failed to resolve pet/critter sandbox package (0xC0) at config load");
+        }
+
+        // Resolve the hardcoded non-player child follow package (TT_MARAS.esp 0x376) immediately
+        if (auto* childPkg = FormCache::GetSingleton().GetChildrenNonPlayerFollowParentPackage()) {
+            m_nonPlayerChildFollowPkgID = childPkg->GetFormID();
+            MARAS_LOG_INFO("PackageOverrideService: non-player child follow package auto-resolved to {:08X}",
+                           m_nonPlayerChildFollowPkgID);
+        } else {
+            MARAS_LOG_WARN("PackageOverrideService: failed to resolve non-player child follow package (0x376) at config load");
+        }
     }
 
     // ─── Wildcard matching ───────────────────────────────────────────────────────
 
-    // Classic greedy wildcard: * matches any sequence, ? matches one character.
-    // Both text and pattern must already be lower-cased.
-    bool PackageOverrideService::WildcardMatch(std::string_view text, std::string_view pattern) {
-        size_t t = 0, p = 0;
-        size_t starP = std::string_view::npos, starTSave = 0;
-
-        while (t < text.size()) {
-            if (p < pattern.size() && pattern[p] == '*') {
-                starP = p++;
-                starTSave = t;
-            } else if (p < pattern.size() && (pattern[p] == '?' || pattern[p] == text[t])) {
-                ++p;
-                ++t;
-            } else if (starP != std::string_view::npos) {
-                p = starP + 1;
-                t = ++starTSave;
-            } else {
-                return false;
-            }
-        }
-        // Consume any trailing '*' wildcards
-        while (p < pattern.size() && pattern[p] == '*') ++p;
-        return p == pattern.size();
-    }
-
-    bool PackageOverrideService::MatchesPatternList(std::string_view editorIDLower,
+    bool PackageOverrideService::MatchesPatternList(std::string_view text,
                                                     const std::vector<std::string>& patterns) {
         for (const auto& pattern : patterns) {
-            if (WildcardMatch(editorIDLower, pattern)) return true;
+            if (StringUtils::WildcardMatch(text, pattern, true)) return true;
         }
         return false;
     }
 
     bool PackageOverrideService::MatchesWhitelist(const char* editorIDRaw) const {
         if (!editorIDRaw || *editorIDRaw == '\0') return false;
+        std::shared_lock lock(m_mutex);
         if (m_whitelistPatterns.empty()) return false;
-        const std::string id = ToLower(editorIDRaw);
-        if (MatchesPatternList(id, m_whitelistPatterns)) {
-            MARAS_LOG_DEBUG("PackageOverrideService: '{}' matched whitelist", editorIDRaw);
-            return true;
-        }
-        return false;
+        return MatchesPatternList(editorIDRaw, m_whitelistPatterns);
     }
 
     bool PackageOverrideService::MatchesPluginWhitelist(RE::TESPackage* pkg) const {
-        if (!pkg || m_pluginWhitelistPatterns.empty()) return false;
+        if (!pkg) return false;
         const auto* file = pkg->GetFile(0);
         if (!file || !file->fileName || *file->fileName == '\0') return false;
-        const std::string name = ToLower(file->fileName);
-        if (MatchesPatternList(name, m_pluginWhitelistPatterns)) {
-            MARAS_LOG_DEBUG("PackageOverrideService: '{}' ({:08X}) matched allowed plugin '{}'",
-                            pkg->GetFormEditorID() ? pkg->GetFormEditorID() : "?",
-                            pkg->GetFormID(), file->fileName);
-            return true;
-        }
-        return false;
+        std::shared_lock lock(m_mutex);
+        if (m_pluginWhitelistPatterns.empty()) return false;
+        return MatchesPatternList(file->fileName, m_pluginWhitelistPatterns);
     }
 
     bool PackageOverrideService::MatchesQuestWhitelist(const char* questEditorIDRaw) const {
         if (!questEditorIDRaw || *questEditorIDRaw == '\0') return false;
+        std::shared_lock lock(m_mutex);
         if (m_questWhitelistPatterns.empty()) return false;
-        const std::string id = ToLower(questEditorIDRaw);
-        if (MatchesPatternList(id, m_questWhitelistPatterns)) {
-            MARAS_LOG_DEBUG("PackageOverrideService: quest '{}' matched quest whitelist", questEditorIDRaw);
-            return true;
-        }
-        return false;
+        return MatchesPatternList(questEditorIDRaw, m_questWhitelistPatterns);
     }
 
     // ─── Package injection ───────────────────────────────────────────────────────
@@ -251,24 +295,81 @@ namespace MARAS {
     }
 
     void PackageOverrideService::RegisterActor(RE::FormID actorID) {
+        if (actorID == 0 || IsSyntheticChildID(actorID)) return;
+        RegisterActorWithPackage(actorID, 0);
+    }
+
+    void PackageOverrideService::RegisterPetCritter(RE::FormID actorID) {
+        if (actorID == 0 || IsSyntheticChildID(actorID)) return;
         RE::FormID packageID = 0;
         {
+            std::shared_lock lock(m_mutex);
+            packageID = m_petCritterSandboxPkgID;
+        }
+        if (!packageID) {
+            if (auto* petPkg = FormCache::GetSingleton().GetPetCritterHomeSandboxPackage()) {
+                packageID = petPkg->GetFormID();
+                std::unique_lock lock(m_mutex);
+                m_petCritterSandboxPkgID = packageID;
+            }
+        }
+        if (!packageID) {
+            MARAS_LOG_WARN("PackageOverrideService::RegisterPetCritter: pet/critter sandbox package (0xC0) not resolved, skipping {:08X}",
+                           actorID);
+            return;
+        }
+        RegisterActorWithPackage(actorID, packageID);
+    }
+
+    void PackageOverrideService::RegisterNonPlayerChild(RE::FormID actorID) {
+        if (actorID == 0 || IsSyntheticChildID(actorID)) return;
+        RE::FormID packageID = 0;
+        {
+            std::shared_lock lock(m_mutex);
+            packageID = m_nonPlayerChildFollowPkgID;
+        }
+        if (!packageID) {
+            if (auto* childPkg = FormCache::GetSingleton().GetChildrenNonPlayerFollowParentPackage()) {
+                packageID = childPkg->GetFormID();
+                std::unique_lock lock(m_mutex);
+                m_nonPlayerChildFollowPkgID = packageID;
+            }
+        }
+        if (!packageID) {
+            MARAS_LOG_WARN("PackageOverrideService::RegisterNonPlayerChild: non-player child follow package (0x376) not resolved, skipping {:08X}",
+                           actorID);
+            return;
+        }
+        RegisterActorWithPackage(actorID, packageID);
+    }
+
+    void PackageOverrideService::RegisterActorWithPackage(RE::FormID actorID, RE::FormID targetPackageID) {
+        if (actorID == 0 || IsSyntheticChildID(actorID)) return;
+        RE::FormID packageID = targetPackageID;
+        {
             std::unique_lock lock(m_mutex);
-            packageID = m_baseSandboxPkgID;
             if (!packageID) {
-                MARAS_LOG_WARN("PackageOverrideService::RegisterActor: base package not set yet, deferring {:08X}",
+                if (!m_baseSandboxPkgID) {
+                    if (auto* pkg = FormCache::GetSingleton().GetHomeSandboxPackage()) {
+                        m_baseSandboxPkgID = pkg->GetFormID();
+                    }
+                }
+                packageID = m_baseSandboxPkgID;
+            }
+            if (!packageID) {
+                MARAS_LOG_WARN("PackageOverrideService::RegisterActorWithPackage: base package not set yet, deferring {:08X}",
                                actorID);
-                m_registry.insert(actorID);
+                m_registry[actorID] = targetPackageID;
                 return;
             }
-            m_registry.insert(actorID);
+            m_registry[actorID] = targetPackageID;
         }
 
         // Inject immediately unless the actor is currently following the player —
         // in that case, their follow package will end naturally and kEnd will re-inject.
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID);
         auto* basePkg = RE::TESForm::LookupByID<RE::TESPackage>(packageID);
-        if (actor && basePkg && !actor->IsPlayerTeammate()) {
+        if (actor && basePkg && !Utils::IsPlayerFollower(actor)) {
             ReassertBasePackage(actor, basePkg);
         }
 
@@ -276,10 +377,13 @@ namespace MARAS {
     }
 
     void PackageOverrideService::UnregisterActor(RE::FormID actorID) {
+        if (actorID == 0 || IsSyntheticChildID(actorID)) return;
         {
             std::unique_lock lock(m_mutex);
             if (!m_registry.erase(actorID)) return;
         }
+
+        InvalidateHookEvalActor(actorID);
 
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID);
         if (actor) {
@@ -291,7 +395,16 @@ namespace MARAS {
 
     bool PackageOverrideService::IsRegistered(RE::FormID actorID) const {
         std::shared_lock lock(m_mutex);
-        return m_registry.count(actorID) > 0;
+        return m_registry.find(actorID) != m_registry.end();
+    }
+
+    RE::FormID PackageOverrideService::GetBasePackageForActor(RE::FormID actorID) const {
+        std::shared_lock lock(m_mutex);
+        auto it = m_registry.find(actorID);
+        if (it == m_registry.end()) {
+            return 0;
+        }
+        return (it->second != 0) ? it->second : m_baseSandboxPkgID;
     }
 
     // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -305,128 +418,106 @@ namespace MARAS {
         static RE::TESPackage* thunk(RE::ExtraDataList* pthis, RE::Actor* actor) {
             auto* candidate = func(pthis, actor);
 
-            // MARAS_LOG_INFO("PackageStartHook: thunk fired, actor={} with candidate={}, is in registry={}", actor ? fmt::format("{:08X}", actor->GetFormID()) : "null",
-            //                candidate ? candidate->GetFormEditorID() : "null",
-            //                PackageOverrideService::GetSingleton().IsRegistered(actor ? actor->GetFormID() : 0));
-
             if (!actor || actor->IsPlayerRef()) return candidate;
 
-            auto& svc = PackageOverrideService::GetSingleton();
-
-            {
-                std::shared_lock lock(svc.m_mutex);
-                if (!svc.m_registry.count(actor->GetFormID())) return candidate;
+            // Highest priority: children near an active OStim/SexLab scene flee (applies to any
+            // child, MARAS-registered or not). Cheap atomic gate inside IsFleeing.
+            if (ChildrenFleeService::GetSingleton().IsFleeing(actor->GetFormID())) {
+                if (auto* fleePkg = FormCache::GetSingleton().GetChildrenFleeIntimateScenePackage()) {
+                    return fleePkg;
+                }
             }
 
+            auto& svc = PackageOverrideService::GetSingleton();
+            const RE::FormID actorID = actor->GetFormID();
+
+            RE::FormID sandboxID = 0;
+            int questThreshold = -1;
+            {
+                std::shared_lock lock(svc.m_mutex);
+                auto it = svc.m_registry.find(actorID);
+                if (it == svc.m_registry.end()) return candidate;
+                sandboxID = (it->second != 0) ? it->second : svc.m_baseSandboxPkgID;
+                questThreshold = svc.m_questPriorityThreshold;
+            }
+
+            const RE::FormID candidateID = candidate ? candidate->GetFormID() : 0;
+            const char* rawEditorID = candidate ? candidate->GetFormEditorID() : nullptr;
+            const char* editorID = (rawEditorID && rawEditorID[0] != '\0') ? rawEditorID : nullptr;
+            const std::string candidateName = GetPackageDesc(candidate);
+
             // If the actor is currently a follower, skip sandbox override entirely.
-            if (PollingService::GetSingleton().IsPlayerTeammate(actor)) {
-                MARAS_LOG_DEBUG("PackageStartHook: actor {:08X} is a follower, skipping sandbox override",
-                                actor->GetFormID());
+            if (Utils::IsPlayerFollower(actor)) {
+                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::Follower, [&]() {
+                    MARAS_LOG_DEBUG("PackageStartHook: actor {:08X} is a follower, skipping sandbox override",
+                                    actorID);
+                });
                 return candidate;
             }
 
-            MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
-                            actor->GetFormID(),
-                            candidate ? (candidate->GetFormEditorID() ? candidate->GetFormEditorID() : "?") : "null",
-                            candidate ? candidate->GetFormID() : 0);
-
-
-            // Log vanilla packages from the actor's base form (TESAIForm::aiPackages / PKID records)
-            // if (auto* npc = actor->GetActorBase()) {
-            //     int idx = 0;
-            //     for (auto* pkg : npc->aiPackages.packages) {
-            //         if (pkg) {
-            //             MARAS_LOG_INFO("  vanilla pkg[{}]: '{}' ({:08X})", idx,
-            //                             pkg->GetFormEditorID() ? pkg->GetFormEditorID() : "?",
-            //                             pkg->GetFormID());
-            //         }
-            //         ++idx;
-            //     }
-            //     if (idx == 0) {
-            //         MARAS_LOG_DEBUG("  vanilla pkg: (none)");
-            //     }
-            // }
-
-            // Log packages from quest aliases the actor currently belongs to
-            // if (pthis) {
-            //     if (auto* aliasExtra = pthis->GetByType<RE::ExtraAliasInstanceArray>()) {
-            //         for (auto* aliasData : aliasExtra->aliases) {
-            //             if (!aliasData || !aliasData->instancedPackages || aliasData->instancedPackages->empty()) continue;
-            //             const char* questName = (aliasData->quest && aliasData->quest->GetFormEditorID()) ? aliasData->quest->GetFormEditorID() : "?";
-            //             const RE::FormID questID = aliasData->quest ? aliasData->quest->GetFormID() : 0;
-            //             const char* aName = (aliasData->alias && !aliasData->alias->aliasName.empty()) ? aliasData->alias->aliasName.c_str() : "?";
-            //             for (auto* pkg : *aliasData->instancedPackages) {
-            //                 if (pkg) {
-            //                     MARAS_LOG_INFO("  alias pkg [quest='{}' ({:08X}) alias='{}']: '{}' ({:08X})",
-            //                                     questName, questID, aName,
-            //                                     pkg->GetFormEditorID() ? pkg->GetFormEditorID() : "?",
-            //                                     pkg->GetFormID());
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-
-            // if (auto* scene = actor->GetCurrentScene()) {
-            //     const char* sceneName = scene->GetFormEditorID() ? scene->GetFormEditorID() : "?";
-            //     const RE::FormID sceneID = scene->GetFormID();
-            //     const char* parentQuestName = (scene->parentQuest && scene->parentQuest->GetFormEditorID()) ? scene->parentQuest->GetFormEditorID() : "?";
-            //     const RE::FormID parentQuestID = scene->parentQuest ? scene->parentQuest->GetFormID() : 0;
-            //     MARAS_LOG_INFO("  current scene: '{}' ({:08X}) parentQuest='{}' ({:08X})",
-            //                     sceneName, sceneID, parentQuestName, parentQuestID);
-
-            //     int scenePkgCount = 0;
-            //     for (auto* action : scene->actions) {
-            //         if (!action || action->GetType() != RE::BGSSceneAction::Type::kPackage) continue;
-            //         auto* pkgAction = static_cast<RE::BGSSceneActionPackage*>(action);
-            //         for (auto* pkg : pkgAction->packages) {
-            //             if (!pkg) continue;
-            //             MARAS_LOG_INFO("  scene pkg [actorAliasID={} phases {}->{}]: '{}' ({:08X})",
-            //                             action->actorID,
-            //                             action->startPhase,
-            //                             action->endPhase,
-            //                             pkg->GetFormEditorID() ? pkg->GetFormEditorID() : "?",
-            //                             pkg->GetFormID());
-            //             ++scenePkgCount;
-            //         }
-            //     }
-            //     if (scenePkgCount == 0) {
-            //         MARAS_LOG_INFO("  scene pkg: (none)");
-            //     }
-            // }
-
-            const RE::FormID sandboxID = svc.m_baseSandboxPkgID;
             if (!sandboxID) {
-                MARAS_LOG_WARN("PackageStartHook: sandboxID is 0 for registered actor {:08X}, passing through",
-                               actor->GetFormID());
+                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::NoSandbox, [&]() {
+                    MARAS_LOG_WARN("PackageStartHook: sandboxID is 0 for registered actor {:08X}, passing through",
+                                   actorID);
+                });
                 return candidate;
             }
             if (!candidate) {
                 // null means no override — game would fall back to the actor's vanilla package stack.
                 // For registered tenants this means our sandbox lost; re-assert it.
-                MARAS_LOG_DEBUG("PackageStartHook: candidate is null for registered actor {:08X}, asserting sandbox",
-                                actor->GetFormID());
-                return RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+                auto* sandboxPkg = RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+                const RE::FormID resultID = sandboxPkg ? sandboxPkg->GetFormID() : 0;
+                CheckAndLog(actorID, candidateID, resultID, PackageDecision::CandidateNullAssertSandbox, [&]() {
+                    MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='null' (00000000)", actorID);
+                    MARAS_LOG_DEBUG("PackageStartHook: candidate is null for registered actor {:08X}, asserting sandbox({:08X})",
+                                    actorID, sandboxID);
+                });
+                return sandboxPkg;
             }
-            if (candidate->GetFormID() == sandboxID) {
-                MARAS_LOG_DEBUG("PackageStartHook: actor {:08X} already running sandbox {:08X}, no override needed",
-                                actor->GetFormID(), sandboxID);
+            if (candidateID == sandboxID) {
+                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::AlreadyRunningSandbox, [&]() {
+                    MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                    actorID, candidateName, candidateID);
+                    MARAS_LOG_DEBUG("PackageStartHook: actor {:08X} already running sandbox {:08X}, no override needed",
+                                    actorID, sandboxID);
+                });
                 return candidate;
             }
 
-            const char* editorID = candidate->GetFormEditorID();
-
             // Whitelist takes priority: explicitly permitted packages run freely.
             if (svc.MatchesWhitelist(editorID)) {
-                MARAS_LOG_DEBUG("PackageStartHook: allowing whitelisted '{}' ({:08X}) on actor {:08X}",
-                                editorID ? editorID : "?", candidate->GetFormID(), actor->GetFormID());
+                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::Whitelist, [&]() {
+                    MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                    actorID, candidateName, candidateID);
+                    MARAS_LOG_DEBUG("PackageStartHook: allowing whitelisted '{}' ({:08X}) on actor {:08X}",
+                                    candidateName, candidateID, actorID);
+                });
                 return candidate;
             }
 
             // Plugin whitelist: allow any package whose originating plugin is permitted.
             if (svc.MatchesPluginWhitelist(candidate)) {
-                MARAS_LOG_DEBUG("PackageStartHook: allowing plugin-whitelisted '{}' ({:08X}) on actor {:08X}",
-                                editorID ? editorID : "?", candidate->GetFormID(), actor->GetFormID());
+                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::PluginWhitelist, [&]() {
+                    MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                    actorID, candidateName, candidateID);
+                    MARAS_LOG_DEBUG("PackageStartHook: allowing plugin-whitelisted '{}' ({:08X}) on actor {:08X}",
+                                    candidateName, candidateID, actorID);
+                });
+                return candidate;
+            }
+
+            // Quest whitelist: allow any package whose owning quest matches quest whitelist.
+            auto* quest = GetQuestForPackage(pthis, candidate);
+            const char* rawQuestEdid = quest ? quest->GetFormEditorID() : nullptr;
+            const char* questEdid = (rawQuestEdid && rawQuestEdid[0] != '\0') ? rawQuestEdid : nullptr;
+            if (quest && svc.MatchesQuestWhitelist(questEdid)) {
+                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::QuestWhitelist, [&]() {
+                    MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                    actorID, candidateName, candidateID);
+                    MARAS_LOG_DEBUG("PackageStartHook: allowing '{}' ({:08X}) on actor {:08X} (quest whitelist '{}')",
+                                    candidateName, candidateID, actorID,
+                                    GetQuestDesc(quest));
+                });
                 return candidate;
             }
 
@@ -435,36 +526,40 @@ namespace MARAS {
             //   quest priority >= threshold  →  allow candidate  (threshold is the lower bound)
             //   quest priority <  threshold  →  redirect to sandbox
             //   no quest association         →  fall through to sandbox (not alias-driven)
-            const int questThreshold = svc.m_questPriorityThreshold;
-            if (questThreshold >= 0) {
-                const int questPriority = GetQuestPriorityForPackage(pthis, candidate);
-                if (questPriority >= 0) {
-                    if (questPriority >= questThreshold) {
+            if (questThreshold >= 0 && quest) {
+                const int questPriority = static_cast<int>(quest->data.priority);
+                if (questPriority >= questThreshold) {
+                    CheckAndLog(actorID, candidateID, candidateID, PackageDecision::QuestPriorityAllowed, [&]() {
+                        MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                        actorID, candidateName, candidateID);
                         MARAS_LOG_DEBUG("PackageStartHook: allowing '{}' ({:08X}) on actor {:08X}, quest priority {} >= threshold {}",
-                                        editorID ? editorID : "?", candidate->GetFormID(), actor->GetFormID(),
+                                        candidateName, candidateID, actorID,
                                         questPriority, questThreshold);
-                        return candidate;
-                    } else {
-                        // Priority below threshold — quest whitelist can still rescue it.
-                        auto* quest = GetQuestForPackage(pthis, candidate);
-                        if (quest && svc.MatchesQuestWhitelist(quest->GetFormEditorID())) {
-                            MARAS_LOG_DEBUG("PackageStartHook: allowing '{}' ({:08X}) on actor {:08X} (quest whitelist '{}', priority {} < threshold {})",
-                                            editorID ? editorID : "?", candidate->GetFormID(), actor->GetFormID(),
-                                            quest->GetFormEditorID() ? quest->GetFormEditorID() : "?",
-                                            questPriority, questThreshold);
-                            return candidate;
-                        }
+                    });
+                    return candidate;
+                } else {
+                    auto* sandboxPkg = RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+                    const RE::FormID resultID = sandboxPkg ? sandboxPkg->GetFormID() : 0;
+                    CheckAndLog(actorID, candidateID, resultID, PackageDecision::QuestPrioritySuppressed, [&]() {
+                        MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                        actorID, candidateName, candidateID);
                         MARAS_LOG_DEBUG("PackageStartHook: suppressing '{}' ({:08X}) on actor {:08X}, quest priority {} < threshold {}",
-                                        editorID ? editorID : "?", candidate->GetFormID(), actor->GetFormID(),
+                                        candidateName, candidateID, actorID,
                                         questPriority, questThreshold);
-                        return RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
-                    }
+                    });
+                    return sandboxPkg;
                 }
             }
 
-            MARAS_LOG_DEBUG("PackageStartHook: suppressing '{}' ({:08X}) on actor {:08X}, redirecting to sandbox",
-                            editorID ? editorID : "?", candidate->GetFormID(), actor->GetFormID());
-            return RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+            auto* sandboxPkg = RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+            const RE::FormID resultID = sandboxPkg ? sandboxPkg->GetFormID() : 0;
+            CheckAndLog(actorID, candidateID, resultID, PackageDecision::SuppressedRedirectSandbox, [&]() {
+                MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                actorID, candidateName, candidateID);
+                MARAS_LOG_DEBUG("PackageStartHook: suppressing '{}' ({:08X}) on actor {:08X}, redirecting to sandbox",
+                                candidateName, candidateID, actorID);
+            });
+            return sandboxPkg;
         }
 
         static inline REL::Relocation<decltype(thunk)> func;
@@ -473,7 +568,9 @@ namespace MARAS {
             REL::Relocation<std::uintptr_t> target{RELOCATION_ID(36404, 37398),
                                                    REL::VariantOffset(0x47, 0x47, 0x47)};
             auto& trampoline = SKSE::GetTrampoline();
-            SKSE::AllocTrampoline(14);
+            if (trampoline.empty()) {
+                SKSE::AllocTrampoline(14);
+            }
             func = trampoline.write_branch<5>(target.address(), thunk);
             MARAS_LOG_INFO("PackageOverrideService: PackageStartHook installed at {:016X}", target.address());
         }
@@ -489,59 +586,109 @@ namespace MARAS {
     // Called on every game load after PlayerHouseService cosave data is restored.
     void PackageOverrideService::RebuildFromTenants() {
         RE::FormID packageFormID = 0;
+        RE::FormID petPkgID = 0;
+        RE::FormID childFollowPkgID = 0;
         {
             std::shared_lock lock(m_mutex);
             packageFormID = m_baseSandboxPkgID;
+            petPkgID = m_petCritterSandboxPkgID;
+            childFollowPkgID = m_nonPlayerChildFollowPkgID;
         }
 
+        if (!packageFormID) {
+            if (auto* pkg = FormCache::GetSingleton().GetHomeSandboxPackage()) {
+                packageFormID = pkg->GetFormID();
+            }
+        }
         if (!packageFormID) {
             MARAS_LOG_WARN("PackageOverrideService::RebuildFromTenants: base package not set, skipping");
             return;
         }
 
+        std::unordered_map<RE::FormID, RE::FormID> newRegistry;
+
         // Collect all tenant FormIDs from every registered player house
-        std::vector<RE::FormID> tenantIDs;
         const auto houseIDs = PlayerHouseService::GetSingleton().GetAllPlayerHouses();
         for (auto houseID : houseIDs) {
             const auto tenants = PlayerHouseService::GetSingleton().GetPlayerHouseTenants(houseID);
-            tenantIDs.insert(tenantIDs.end(), tenants.begin(), tenants.end());
-        }
-
-        // Atomically replace the registry
-        {
-            std::unique_lock lock(m_mutex);
-            m_registry.clear();
-            for (auto tenantID : tenantIDs) {
-                m_registry.insert(tenantID);
+            for (auto tenantID : tenants) {
+                if (tenantID == 0 || IsSyntheticChildID(tenantID)) continue;
+                if (PlayerHouseService::GetSingleton().GetTenantStayAtHome(tenantID)) {
+                    newRegistry[tenantID] = 0;  // defaults to m_baseSandboxPkgID (0x6A)
+                }
             }
         }
 
-        MARAS_LOG_INFO("PackageOverrideService: rebuilt registry with {} tenant(s) from {} house(s)",
-                       tenantIDs.size(), houseIDs.size());
-        for (auto id : tenantIDs) {
-            auto* actor = RE::TESForm::LookupByID<RE::Actor>(id);
-            MARAS_LOG_INFO("  registry actor {:08X} ({})", id,
-                           actor ? (actor->GetName() ? actor->GetName() : "?") : "not loaded");
+        // Also collect all pet and critter FormIDs assigned to children
+        if (!petPkgID) {
+            if (auto* petPkg = FormCache::GetSingleton().GetPetCritterHomeSandboxPackage()) {
+                petPkgID = petPkg->GetFormID();
+            }
+        }
+        if (petPkgID != 0) {
+            const auto petCritterIDs = PlayerChildrenService::GetSingleton().GetAllPetAndCritterIDs();
+            for (auto petCritterID : petCritterIDs) {
+                if (petCritterID == 0 || IsSyntheticChildID(petCritterID)) continue;
+                newRegistry[petCritterID] = petPkgID;
+            }
+        }
+
+        // Also collect all non-player 0xFF Stage 2 children
+        if (!childFollowPkgID) {
+            if (auto* childPkg = FormCache::GetSingleton().GetChildrenNonPlayerFollowParentPackage()) {
+                childFollowPkgID = childPkg->GetFormID();
+            }
+        }
+        if (childFollowPkgID != 0) {
+            const auto& allChildren = NPCRelationshipManager::GetSingleton().GetAllChildren();
+            for (const auto& [childID, entry] : allChildren) {
+                if (!IsSyntheticChildID(childID) && (childID >> 24) == 0xFF && entry.stage == ChildStage::Child) {
+                    if (entry.guardianAID != kPlayerFormID && entry.guardianBID != kPlayerFormID) {
+                        newRegistry[childID] = childFollowPkgID;
+                        // Proactively re-assert 0x377 linked reference on save load
+                        RE::FormID targetRefID = NPCRelationshipManager::GetSingleton().ResolveNonPlayerChildTarget(entry);
+                        NPCRelationshipManager::GetSingleton().SetChildSandboxAroundParentLinkedRef(childID, targetRefID);
+                    }
+                }
+            }
+        }
+
+        // Atomically replace the registry while keeping `newRegistry` as a local snapshot for safe iteration
+        {
+            std::unique_lock lock(m_mutex);
+            m_baseSandboxPkgID = packageFormID;
+            if (petPkgID != 0) m_petCritterSandboxPkgID = petPkgID;
+            if (childFollowPkgID != 0) m_nonPlayerChildFollowPkgID = childFollowPkgID;
+            m_registry = newRegistry;
+        }
+
+        MARAS_LOG_INFO("PackageOverrideService: rebuilt registry with {} actor(s) (tenants + pets/critters)",
+                       newRegistry.size());
+        for (const auto& [id, customPkgID] : newRegistry) {
+            MARAS_LOG_INFO("  registry actor {:08X} ({}) -> base package {:08X}", id, ActorSvc::GetName(id),
+                           customPkgID != 0 ? customPkgID : packageFormID);
         }
 
         // Inject the package on any already-loaded actors (skip player teammates)
-        auto* basePkg = RE::TESForm::LookupByID<RE::TESPackage>(packageFormID);
-        if (!basePkg) {
-            MARAS_LOG_WARN("PackageOverrideService::RebuildFromTenants: package {:08X} not found", packageFormID);
-            return;
-        }
-        for (auto tenantID : tenantIDs) {
-            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(tenantID)) {
-                if (!actor->IsPlayerTeammate()) {
-                    ReassertBasePackage(actor, basePkg);
+        for (const auto& [actorID, customPkgID] : newRegistry) {
+            if (actorID == 0 || IsSyntheticChildID(actorID)) continue;
+            RE::FormID effPkgID = (customPkgID != 0) ? customPkgID : packageFormID;
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
+                if (!Utils::IsPlayerFollower(actor)) {
+                    if (auto* pkg = RE::TESForm::LookupByID<RE::TESPackage>(effPkgID)) {
+                        ReassertBasePackage(actor, pkg);
+                    }
                 }
             }
         }
     }
 
     void PackageOverrideService::Revert() {
-        std::unique_lock lock(m_mutex);
-        m_registry.clear();
+        {
+            std::unique_lock lock(m_mutex);
+            m_registry.clear();
+        }
+        ClearHookEvalCache();
         MARAS_LOG_INFO("PackageOverrideService: reverted");
     }
 

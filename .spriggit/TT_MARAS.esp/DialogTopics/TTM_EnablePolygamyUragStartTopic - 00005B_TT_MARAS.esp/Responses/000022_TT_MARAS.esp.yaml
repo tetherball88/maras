@@ -1,0 +1,57 @@
+FormKey: 000022:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerEnablePolygamyQst
+    Properties:
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 50
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerEnablePolygamyQst
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerEnablePolygamyQst
+      FragmentName: Fragment_1
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Hmph. Alessian, by the look of it - old, pompous, and drenched in divine metaphor.
+  ScriptNotes: ''
+  Edits: ''
+- Emotion: Puzzled
+  EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: It'll take a day. Come back then, and don't hover.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageConditionData
+    Quest: 00005C:TT_MARAS.esp
+  ComparisonValue: 40
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+    UseAliases: True
+    ReferenceAliasIndex: 6
+  ComparisonValue: 1

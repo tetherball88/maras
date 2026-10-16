@@ -1,0 +1,33 @@
+FormKey: 0001E5:TT_MARAS.esp
+Flags:
+  Flags:
+  - WalkAway
+PreviousDialog: 0001E4:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 0001DA:TT_MARAS.esp
+- 0001DB:TT_MARAS.esp
+- 0001D7:TT_MARAS.esp
+ResponseData: 000327:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsRaceConditionData
+    RunOnType: QuestAlias
+    RunOnTypeIndex: 29
+    Race: 109C7C:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 013AE9:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+Prompt:
+  TargetLanguage: English
+  Value: A fox?
+WalkAwayTopic: 0001DB:TT_MARAS.esp

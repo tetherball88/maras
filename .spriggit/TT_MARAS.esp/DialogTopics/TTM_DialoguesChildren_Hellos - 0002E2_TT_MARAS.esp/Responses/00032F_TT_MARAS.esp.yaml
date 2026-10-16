@@ -1,0 +1,35 @@
+FormKey: 00032F:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  ResetHours: 11.999817
+PreviousDialog: 00032E:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Fear
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: This place is scary. There are monsters in the swamp. I just know it!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInCurrentLocConditionData
+    Location: 005209:HearthFires.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

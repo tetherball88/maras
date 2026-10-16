@@ -1,0 +1,28 @@
+FormKey: 003F7A:HearthFires.esm
+EditorID: BYOHAdoptionQuestNode
+Version2: 2
+Parent: 01379A:Skyrim.esm
+PreviousSibling: 017045:Skyrim.esm
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetEventDataConditionData
+    Member: Keyword
+    Record: 003F6D:HearthFires.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetEventDataConditionData
+    Member: Keyword
+    Record: 003F79:HearthFires.esm
+  ComparisonValue: 1
+QuestFlags:
+- SharesEvent
+MaxConcurrentQuests: 0
+Quests:
+- Quest: 003F7B:HearthFires.esm
+- Quest: 003F6E:HearthFires.esm

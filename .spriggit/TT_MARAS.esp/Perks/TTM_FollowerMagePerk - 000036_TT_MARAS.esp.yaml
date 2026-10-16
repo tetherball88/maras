@@ -1,0 +1,14 @@
+FormKey: 000036:TT_MARAS.esp
+EditorID: TTM_FollowerMagePerk
+Name:
+  TargetLanguage: English
+  Value: Arcane Union
+Description:
+  TargetLanguage: English
+  Value: Fighting beside a practiced spellcaster renews your focus, allowing magicka to regenerate faster
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000034:TT_MARAS.esp

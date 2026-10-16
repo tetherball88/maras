@@ -1,0 +1,24 @@
+name: "ttm_child_sent_to_training"
+description: "Direct narration when a child is sent away from home for training in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_sent_to_training"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and nearby family members speak about sending {{event_json.child}} away for training in a way that reflects their personalities and views as parents."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 8

@@ -1,11 +1,7 @@
 #include "core/HomeCellService.h"
 
-#include <spdlog/spdlog.h>
-
-#include <chrono>
-#include <sstream>
-
 #include "core/FormCache.h"
+#include "services/ActorService.h"
 #include "utils/FormUtils.h"
 
 namespace MARAS {
@@ -22,11 +18,9 @@ namespace MARAS {
         RE::BGSKeyword* LookupKeyword(RE::FormID formID) { return RE::TESForm::LookupByID<RE::BGSKeyword>(formID); }
 
         // Helper: Check if location has dwelling/house keywords
-        bool IsHomeLocation(RE::BGSLocation* location) {
+        bool IsHomeLocation(RE::BGSLocation* location, const RE::BGSKeyword* kwDwelling,
+                            const RE::BGSKeyword* kwHouse) {
             if (!location) return false;
-
-            auto kwDwelling = LookupKeyword(KEYWORD_DWELLING);
-            auto kwHouse = LookupKeyword(KEYWORD_HOUSE);
 
             if (kwDwelling && location->HasKeyword(kwDwelling)) return true;
             if (kwHouse && location->HasKeyword(kwHouse)) return true;
@@ -34,26 +28,16 @@ namespace MARAS {
             return false;
         }
 
-        // Helper: Check if door requires a key
-        bool DoorRequiresKey(RE::TESObjectREFR& doorRef) {
+        // Helper: Check if door has a house key and is not quest-locked (kRequiresKey)
+        bool IsShareableHouseDoor(RE::TESObjectREFR& doorRef) {
             auto lock = doorRef.GetLock();
-            if (!lock) {
-                // MARAS_LOG_INFO("DoorRequiresKey: Door {:08X} has no lock", doorRef.GetFormID());
-                return false;
-            }
-
-            if (!lock->key) {
-                // MARAS_LOG_INFO("DoorRequiresKey: Door {:08X} has lock but no key", doorRef.GetFormID());
+            if (!lock || !lock->key) {
                 return false;
             }
 
             auto lvl = lock->GetLockLevel(&doorRef);
-            bool notRequiresKey = (lvl != RE::LOCK_LEVEL::kRequiresKey);
-            // MARAS_LOG_INFO("DoorRequiresKey: Door {:08X} has key={:08X}, lockLevel={}, requiresKey={}",
-            //                doorRef.GetFormID(), lock->key->GetFormID(), static_cast<int>(lvl),
-            //                lvl == RE::LOCK_LEVEL::kRequiresKey);
-            // True only when the lock level explicitly requires a key
-            return notRequiresKey;
+            // Exclude quest-locked (kRequiresKey) doors; include pickable/unlocked doors that have a house key
+            return lvl != RE::LOCK_LEVEL::kRequiresKey;
         }
 
         // Helper: Check if furniture is a bed
@@ -121,6 +105,9 @@ namespace MARAS {
             return;
         }
 
+        const auto* kwDwelling = LookupKeyword(KEYWORD_DWELLING);
+        const auto* kwHouse = LookupKeyword(KEYWORD_HOUSE);
+
         size_t scanned = 0;
 
         // Iterate the interiorCells array directly, skipping null entries
@@ -128,7 +115,7 @@ namespace MARAS {
             if (!cell) continue;
 
             auto location = cell->GetLocation();
-            if (!IsHomeLocation(location)) continue;
+            if (!IsHomeLocation(location, kwDwelling, kwHouse)) continue;
 
             // Scan cell contents (single pass) - fills out hdata and records beds/actors
             HomeCellData hdata;
@@ -156,6 +143,7 @@ namespace MARAS {
             RE::TESForm::LookupByID<RE::BGSLocationRefType>(LOCATION_CENTER_MARKER);
 
         bool foundCenterMarker = false;
+        std::vector<RE::TESObjectREFR*> candidateBeds;
 
         // Single pass over references: collect doors, furniture ownership, persistent actors, and center marker
         cell->ForEachReference([&](RE::TESObjectREFR* ref) {
@@ -163,18 +151,18 @@ namespace MARAS {
             auto base = ref->GetBaseObject();
             if (!base) return RE::BSContainer::ForEachResult::kContinue;
 
-            // Process doors that require keys
+            // Process doors that have a shareable house key
             if (base->formType == RE::FormType::Door) {
-                if (DoorRequiresKey(*ref)) {
+                if (IsShareableHouseDoor(*ref)) {
                     outData.doors.push_back(ref->GetFormID());
                 }
             }
 
-            // Process beds with owners
+            // Collect candidate beds to commit only if the cell has at least one persistent actor
             if (base->formType == RE::FormType::Furniture) {
                 if (auto furn = base->As<RE::TESFurniture>()) {
                     if (IsBed(furn)) {
-                        ProcessBedOwnership(*ref);
+                        candidateBeds.push_back(ref);
                     }
                 }
             }
@@ -201,9 +189,14 @@ namespace MARAS {
             return RE::BSContainer::ForEachResult::kContinue;
         });
 
-        if (hasPersistentActor && !outData.centerMarker) {
-            MARAS_LOG_WARN("HomeCellService: Cell {:08X} '{}' has persistent actors but NO center marker found", cellId,
-                           GetFormName(cell));
+        if (hasPersistentActor) {
+            for (auto* bedRef : candidateBeds) {
+                ProcessBedOwnership(*bedRef);
+            }
+            if (!outData.centerMarker) {
+                MARAS_LOG_WARN("HomeCellService: Cell {:08X} '{}' has persistent actors but NO center marker found",
+                               cellId, GetFormName(cell));
+            }
         }
 
         return hasPersistentActor;
@@ -261,7 +254,7 @@ namespace MARAS {
         if (!npc) return {};
 
         // Get the NPC's base form (TESNpc) since bed ownership is stored by base form ID
-        auto baseForm = npc->GetActorBase();
+        auto baseForm = ActorSvc::GetActorBase(npc->GetFormID());
         if (!baseForm) return {};
 
         auto it = bedsWithOwners_.find(baseForm->GetFormID());

@@ -1,0 +1,35 @@
+FormKey: 0002EB:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  ResetHours: 11.999817
+PreviousDialog: 0002EA:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 25
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I wanna go swimming, but the guards keep yelling at me. The canal's not that dirty...
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInCurrentLocConditionData
+    Location: 018A58:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

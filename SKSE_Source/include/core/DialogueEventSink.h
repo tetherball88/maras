@@ -1,22 +1,23 @@
 #pragma once
 
-#include <atomic>
+#include "PCH.h"
 
 namespace MARAS {
 
     // Listens for "Dialogue Menu" open/close events and fires the Papyrus ModCallbackEvent
     // "maras_dialogue_opened" with the speaking NPC as the sender.
     //
-    // The sink receives ALL MenuOpenCloseEvents from RE::UI, not just Dialogue Menu ones.
     // When speaker is empty at open time (NPC still finishing a previous line), a flag is
-    // set and the speaker is resolved on the next incoming MenuOpenCloseEvent instead.
-    // No AddTask, no timer, no separate thread.
+    // set and resolved on the next frame task, input tick, or incoming UI event.
     class DialogueEventSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent> {
     public:
         static DialogueEventSink* GetSingleton();
 
         RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event,
                                               RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override;
+
+        // Attempts to resolve a deferred dialogue speaker if waitingForSpeaker_ is active.
+        bool TryResolveDeferredSpeaker();
 
     private:
         DialogueEventSink() = default;

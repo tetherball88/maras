@@ -1,0 +1,9 @@
+FormKey: 000118:TT_MARAS.esp
+EditorID: TTM_SpouseTemperament
+Name:
+  TargetLanguage: English
+  Value: TTM_SpouseTemperament
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

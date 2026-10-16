@@ -1,0 +1,8 @@
+FormKey: 0001A5:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_NoGift
+Name:
+  TargetLanguage: English
+  Value: Not this time.
+Branch: 00019E:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

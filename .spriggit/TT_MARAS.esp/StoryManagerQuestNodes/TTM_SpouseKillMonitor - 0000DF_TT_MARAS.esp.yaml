@@ -1,0 +1,10 @@
+FormKey: 0000DF:TT_MARAS.esp
+EditorID: TTM_SpouseKillMonitor
+Parent: 013010:Skyrim.esm
+PreviousSibling: 01E491:Skyrim.esm
+QuestFlags:
+- SharesEvent
+MaxConcurrentQuests: 0
+Quests:
+- Quest: 000069:TT_MARAS.esp
+- Quest: 0002D9:TT_MARAS.esp

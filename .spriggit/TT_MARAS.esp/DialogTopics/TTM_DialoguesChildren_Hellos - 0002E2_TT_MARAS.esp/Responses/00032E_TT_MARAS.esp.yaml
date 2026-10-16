@@ -1,0 +1,44 @@
+FormKey: 00032E:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  - SayOnce
+PreviousDialog: 00032D:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Happy
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Papa said we could go fishing! With my help, I'm sure he'll catch something this time!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 0042B4:HearthFires.esm
+    VariableName: ::lastChildAdoptedTimestamp_var
+  ComparisonValue: 000039:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    RunOnTypeIndex: 1
+    Faction: 00028A:TT_MARAS.esp
+  ComparisonValue: 2
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

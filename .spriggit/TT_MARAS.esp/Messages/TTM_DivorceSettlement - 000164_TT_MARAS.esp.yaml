@@ -1,0 +1,7 @@
+FormKey: 000164:TT_MARAS.esp
+EditorID: TTM_DivorceSettlement
+Description:
+  TargetLanguage: English
+  Value: 'Divorce settlement was added: %.0f'
+INAM: 0x00000000
+DisplayTime: 2

@@ -1,10 +1,6 @@
 #pragma once
 
-#include <cstdint>
-
-namespace SKSE {
-    class SerializationInterface;
-}
+#include "PCH.h"
 
 namespace MARAS {
     class LoggingService {
@@ -15,12 +11,8 @@ namespace MARAS {
         void SetLogLevel(int32_t level);
         int32_t GetLogLevel() const;
 
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization);
-        void Revert();
-
     private:
-        LoggingService();
-        int32_t m_logLevel{2};  // default to info
+        LoggingService() = default;
     };
 }
+

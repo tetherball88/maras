@@ -1,0 +1,48 @@
+FormKey: 0000B8:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 0000B7:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Happy
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Our wedding is soon. I'll see you then!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0CCE50:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00005D:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageDoneConditionData
+    Quest: 07404E:Skyrim.esm
+    Stage: 10
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageDoneConditionData
+    Quest: 074793:Skyrim.esm
+    Stage: 100
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetStageDoneConditionData
+    Quest: 074793:Skyrim.esm
+    Stage: 30
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1

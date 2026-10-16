@@ -1,0 +1,7 @@
+FormKey: 0000F8:TT_MARAS.esp
+EditorID: TTM_DialoguesBreakupCooldown
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 0000F9:TT_MARAS.esp

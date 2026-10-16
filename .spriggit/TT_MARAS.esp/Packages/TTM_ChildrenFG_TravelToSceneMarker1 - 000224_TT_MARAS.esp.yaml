@@ -1,0 +1,66 @@
+FormKey: 000224:TT_MARAS.esp
+EditorID: TTM_ChildrenFG_TravelToSceneMarker1
+Flags:
+- PreferredSpeed
+Type: Package
+PreferredSpeed: Jog
+InterruptFlags:
+- 0x400
+- 0x800
+- 0x1000
+- 0x2000
+- 0x4000
+- 0x8000
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable07
+  ComparisonValue: 6
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable07
+  ComparisonValue: 7
+OwnerQuest: 000216:TT_MARAS.esp
+PackageTemplate: 016FAA:Skyrim.esm
+DataInputVersion: 3
+Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataLocation
+    Location:
+      Target:
+        MutagenObjectType: LocationFallback
+        Type: AliasForReference
+        Data: 2
+      Radius: 32
+- Key: 2
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 4
+  Value:
+    MutagenObjectType: PackageDataBool
+XnamMarker: 0x05
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

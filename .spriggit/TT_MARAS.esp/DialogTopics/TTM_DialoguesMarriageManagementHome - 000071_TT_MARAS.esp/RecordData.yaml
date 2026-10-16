@@ -1,0 +1,9 @@
+FormKey: 000071:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHome
+Name:
+  TargetLanguage: English
+  Value: I want to talk about where we're living.
+Priority: 100
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

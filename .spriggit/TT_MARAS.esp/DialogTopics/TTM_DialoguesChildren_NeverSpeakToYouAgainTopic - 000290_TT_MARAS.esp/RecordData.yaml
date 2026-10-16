@@ -1,0 +1,6 @@
+FormKey: 000290:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_NeverSpeakToYouAgainTopic
+Priority: 100
+Branch: 00028F:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

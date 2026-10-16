@@ -1,9 +1,5 @@
 #pragma once
 
-#include <optional>
-#include <string>
-#include <string_view>
-
 #include "utils/Common.h"
 
 namespace MARAS::Utils {
@@ -11,11 +7,11 @@ namespace MARAS::Utils {
     // Structure to hold parsed form key data
     struct ParsedFormKey {
         std::string pluginName;
-        RE::FormID localFormID;
-        bool isValid;
+        RE::FormID localFormID{0};
+        bool isValid{false};
 
-        ParsedFormKey() : localFormID(0), isValid(false) {}
-        ParsedFormKey(const std::string& plugin, RE::FormID formID)
+        ParsedFormKey() = default;
+        ParsedFormKey(std::string_view plugin, RE::FormID formID)
             : pluginName(plugin), localFormID(formID), isValid(true) {}
     };
 
@@ -33,7 +29,7 @@ namespace MARAS::Utils {
 
     // Generic TESDataHandler lookup with error handling - handles both lookup and resolution
     template <typename T>
-    T* LookupForm(RE::FormID localFormID, const std::string& pluginName) {
+    T* LookupForm(RE::FormID localFormID, std::string_view pluginName, std::string_view callerContext = "") {
         auto dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) {
             MARAS_LOG_ERROR("Cannot access TESDataHandler");
@@ -43,24 +39,37 @@ namespace MARAS::Utils {
         // First verify the plugin is loaded
         const auto* file = dataHandler->LookupModByName(pluginName);
         if (!file) {
-            MARAS_LOG_ERROR("Plugin '{}' is not loaded in game", pluginName);
+            MARAS_LOG_ERROR("Plugin '{}' is not loaded in game (requested by context: '{}')",
+                            pluginName, callerContext.empty() ? typeid(T).name() : callerContext);
             return nullptr;
         }
 
-        // Mask off any high bytes to ensure we have a local FormID
-        RE::FormID maskedFormID = localFormID & 0x00FFFFFF;
+        // Mask off high bytes to get the local FormID (12-bit for ESL/light plugins, 24-bit for standard plugins)
+        const bool isLight = file->IsLight();
+        const RE::FormID maskedFormID = isLight ? (localFormID & 0x00000FFFu) : (localFormID & 0x00FFFFFFu);
 
         // Try to lookup the form
         auto form = dataHandler->LookupForm<T>(maskedFormID, pluginName);
         if (!form) {
-            // Try alternative: use file's CompileIndex to build full FormID
-            RE::FormID fullFormID = file->GetCompileIndex() << 24 | maskedFormID;
+            // Try alternative: use file's compile index (or small file compile index for ESL) to build full FormID
+            const RE::FormID fullFormID =
+                isLight ? (0xFE000000u | (static_cast<RE::FormID>(file->GetSmallFileCompileIndex()) << 12) | maskedFormID)
+                        : ((static_cast<RE::FormID>(file->GetCompileIndex()) << 24) | maskedFormID);
             form = RE::TESForm::LookupByID<T>(fullFormID);
             if (form) {
                 return form;
             }
-            MARAS_LOG_WARN("Could not find form {:08X} (full {:08X}, compile index=0x{:02X}) in plugin '{}'",
-                           maskedFormID, fullFormID, file->GetCompileIndex(), pluginName);
+            if (isLight) {
+                MARAS_LOG_WARN(
+                    "Could not find form {:03X} (full {:08X}, light index=0x{:03X}, type='{}') in ESL plugin '{}' (context: '{}')",
+                    maskedFormID, fullFormID, file->GetSmallFileCompileIndex(), typeid(T).name(), pluginName,
+                    callerContext.empty() ? "unspecified" : callerContext);
+            } else {
+                MARAS_LOG_WARN(
+                    "Could not find form {:06X} (full {:08X}, compile index=0x{:02X}, type='{}') in plugin '{}' (context: '{}')",
+                    maskedFormID, fullFormID, file->GetCompileIndex(), typeid(T).name(), pluginName,
+                    callerContext.empty() ? "unspecified" : callerContext);
+            }
             return nullptr;
         }
 
@@ -69,7 +78,7 @@ namespace MARAS::Utils {
 
     // Get global FormID if you need the ID instead of the form object
     template <typename T = RE::TESForm>
-    std::optional<RE::FormID> GetFormID(RE::FormID localFormID, const std::string& pluginName) {
+    std::optional<RE::FormID> GetFormID(RE::FormID localFormID, std::string_view pluginName) {
         auto form = LookupForm<T>(localFormID, pluginName);
         return form ? std::make_optional(form->GetFormID()) : std::nullopt;
     }

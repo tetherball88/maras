@@ -1,0 +1,8 @@
+FormKey: 000153:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagementHomeReturn
+Name:
+  TargetLanguage: English
+  Value: Never mind.
+Branch: 00006E:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

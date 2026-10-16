@@ -1,0 +1,24 @@
+name: "ttm_child_adopted"
+description: "Direct narration when a child is adopted in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_child_adopted"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}} and nearby family members react to adopting {{event_json.child}} into their family in a way that fits their personalities."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 30
+priority: 6

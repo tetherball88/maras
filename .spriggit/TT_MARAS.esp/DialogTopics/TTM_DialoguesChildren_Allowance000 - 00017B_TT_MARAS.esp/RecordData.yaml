@@ -1,0 +1,8 @@
+FormKey: 00017B:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_Allowance000
+Name:
+  TargetLanguage: English
+  Value: RelationshipAdoption000
+Branch: 000177:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

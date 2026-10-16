@@ -132,25 +132,34 @@ Function SkipWedding(Actor fiance) global
 EndFunction
 
 Function CheckOngoingMarriage() global
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage")
-    ; means MARAS mod is already in use and we can skip checking current marriage quests
-    if(MARAS.GetStatusCount("all") != 0)
-        TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage:SKIP")
+    TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckOngoingMarriage")
+    ; Check if we have already performed this initial check for this save
+    if TTM_Data.GetBool("MARAS_MarriageCheckDone")
+        TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckOngoingMarriage:SKIP")
         return
     endif
+    TTM_Data.SetBool("MARAS_MarriageCheckDone", true)
 
     Quest marriageFin = TTM_Data.GetMarriageFinQuest()
     if(marriageFin.IsRunning())
+
         Actor loveInterest = TTM_Utils.GetActorAlias(marriageFin, "LoveInterest")
-        TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage:Married:"+loveInterest)
+        TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckOngoingMarriage:Married:"+loveInterest)
         if(loveInterest)
             bool isStage20Done = marriageFin.GetStageDone(20)
-            MARAS.PromoteNPCToStatus(loveInterest, "married")
+            OnMarriageFinQstStart()
+            loveInterest.SetRelationshipRank(TTM_Data.GetPlayer(), 4)
+            MARAS.PromoteNPCToStatus(loveInterest, "married", sendEvent = false)
+            MARAS.SetPermanentAffection(loveInterest, 100, sendEvent = false)
+            TTM_ServiceRelationships.PacifyFianceOrSpouse(loveInterest)
+            Location playerHouseLoc = TTM_Utils.GetSpouseMigrationPlayerHouse()
+            if(playerHouseLoc)
+                TTM_ServicePlayerHouse.MoveSpouseToHouse(loveInterest, playerHouseLoc, true)
+            endif
             ; player moved to spouse's house
             if(isStage20Done)
                 TTM_ServiceSpouseAssets.StartShareHomeWithPlayer(loveInterest)
             endif
-            OnMarriageFinQstStart()
         endif
         return
     endif
@@ -159,18 +168,22 @@ Function CheckOngoingMarriage() global
     int currentMarriageMainStage = marriageMain.GetCurrentStageID()
     if(currentMarriageMainStage == 20 || currentMarriageMainStage == 30 || TTM_Data.GetMarriageBreakupQuest().GetCurrentStageID() == 100)
         Actor loveInterest = TTM_Utils.GetActorAlias(marriageMain, "LoveInterest")
-        TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage:Engaged:"+loveInterest)
+        TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckOngoingMarriage:Engaged:"+loveInterest)
         if(loveInterest)
-            MARAS.PromoteNPCToStatus(loveInterest, "engaged")
+            loveInterest.SetRelationshipRank(TTM_Data.GetPlayer(), 3)
+            MARAS.PromoteNPCToStatus(loveInterest, "engaged", sendEvent = false)
+            MARAS.SetPermanentAffection(loveInterest, 100, sendEvent = false)
+            TTM_ServiceRelationships.PacifyFianceOrSpouse(loveInterest)
         endif
         return
     endif
 
     if(marriageMain.GetStageDone(250) && TTM_Data.GetMarriageBreakupQuest().GetCurrentStageID() != 100)
         Actor loveInterest = TTM_Utils.GetActorAlias(marriageMain, "LoveInterest")
-        TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckOngoingMarriage:Jilted:"+loveInterest)
+        TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckOngoingMarriage:Jilted:"+loveInterest)
         if(loveInterest)
-            MARAS.PromoteNPCToStatus(loveInterest, "jilted")
+            MARAS.PromoteNPCToStatus(loveInterest, "jilted", sendEvent = false)
+            MARAS.SetPermanentAffection(loveInterest, 0, sendEvent = false)
         endif
         return
     endif
@@ -182,20 +195,6 @@ EndFunction
 Function OnWeddingQstFinish() global
     Actor spouse = TTM_Utils.GetActorAlias(TTM_Data.GetMarriageWeddingQuest(), "LoveInterest")
     TTM_Data.SetPlayerHadWedding()
-    if(!spouse)
-        TTM_Debug.err("TTM_ServiceMarriageQuest:OnWeddingQstFinish:But no spouse was found!")
-        return
-    endif
-    MARAS.PromoteNPCToStatus(spouse, "married")
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:PlayerGotMarried:"+TTM_Utils.GetActorName(spouse))
-    Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
-    Quest main = TTM_Data.GetMarasMainQuest()
-    TTM_MCM mcm = main as TTM_MCM
-    if(enablePolygamyQst.IsCompleted() || mcm.TTM_EnablePolygamyToggle.GetValue() == 1)
-        Actor player = TTM_Data.GetPlayer()
-        player.RemoveFromFaction(TTM_Data.GetMarriedFaction())
-        TTM_Debug.trace("TTM_ServiceMarriageQuest:PlayerGotMarried:RemoveFromMarriedFactionForRemarrying")
-    endif
 EndFunction
 
 ;/
@@ -207,7 +206,7 @@ Function OnWeddingQstCancel() global
         TTM_Debug.warn("TTM_ServiceMarriageQuest:WeddingGotCanceled:But no spouse was found")
         return
     endif
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:WeddingGotCanceled:"+TTM_Utils.GetActorName(spouse))
+    TTM_Debug.debug("TTM_ServiceMarriageQuest:WeddingGotCanceled:"+TTM_Utils.GetActorName(spouse))
     MARAS.PromoteNPCToStatus(spouse, "jilted")
 EndFunction
 
@@ -215,7 +214,7 @@ EndFunction
   Called when the marriage quest stops. Checks for the next fiance.
 /;
 Function OnMarriageQuestStop() global
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:OnMarriageQuestStop")
+    TTM_Debug.debug("TTM_ServiceMarriageQuest:OnMarriageQuestStop")
     ResetMarriageQuests(fromOnstop = true)
     CheckNextFiance()
 EndFunction
@@ -226,7 +225,7 @@ EndFunction
 Function CheckNextFiance() global
     Actor[] fiances = MARAS.GetNPCsByStatus("engaged")
     Actor nextFiance = fiances[0] as Actor
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:CheckNextFiance:"+TTM_Utils.GetActorName(nextFiance))
+    TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckNextFiance:"+TTM_Utils.GetActorName(nextFiance))
     if(nextFiance)
         Utility.Wait(0.3)
         MARAS.PromoteNPCToStatus(nextFiance, "engaged")
@@ -237,11 +236,11 @@ EndFunction
   Called when the marriage fin quest starts. Stops the quest and can start post-marriage logic.
 /;
 Function OnMarriageFinQstStart() global
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:OnMarriageFinQstStart:stops vanilla post marriage quest")
+    TTM_Debug.debug("TTM_ServiceMarriageQuest:OnMarriageFinQstStart:stops vanilla post marriage quest")
     TTM_Data.GetMarriageFinQuest().stop()
 EndFunction
 
 Function OnMarriageBreakupReconcile() global
-    TTM_Debug.trace("TTM_ServiceMarriageQuest:OnMarriageBreakupReconcile")
+    TTM_Debug.debug("TTM_ServiceMarriageQuest:OnMarriageBreakupReconcile")
     MARAS.PromoteNPCToStatus(TTM_Utils.GetActorAlias(TTM_Data.GetMarriageBreakupQuest(), "LoveInterest"), "engaged")
 EndFunction

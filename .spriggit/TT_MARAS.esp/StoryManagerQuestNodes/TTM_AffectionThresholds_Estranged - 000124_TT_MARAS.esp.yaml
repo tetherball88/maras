@@ -1,0 +1,10 @@
+FormKey: 000124:TT_MARAS.esp
+EditorID: TTM_AffectionThresholds_Estranged
+Parent: 00011C:TT_MARAS.esp
+PreviousSibling: 000123:TT_MARAS.esp
+Flags:
+- Random
+MaxConcurrentQuests: 1
+Quests:
+- Quest: 00011A:TT_MARAS.esp
+  HoursUntilReset: 72

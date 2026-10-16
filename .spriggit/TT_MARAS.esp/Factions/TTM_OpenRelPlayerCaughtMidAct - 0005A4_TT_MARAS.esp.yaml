@@ -1,0 +1,6 @@
+FormKey: 0005A4:TT_MARAS.esp
+EditorID: TTM_OpenRelPlayerCaughtMidAct
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

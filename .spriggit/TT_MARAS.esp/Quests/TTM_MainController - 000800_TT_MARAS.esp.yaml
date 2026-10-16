@@ -1,0 +1,96 @@
+FormKey: 000800:TT_MARAS.esp
+EditorID: TTM_MainController
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_Actions
+  - Name: TTM_Conditions
+  - Name: TTM_MainController
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: AdoptionCWSpouse
+      Object: 003F7E:HearthFires.esm
+      Alias: 3
+    - MutagenObjectType: ScriptObjectProperty
+      Name: AdoptionSpouse
+      Object: 0042B4:HearthFires.esm
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoption
+      Object: 0042B4:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionCWSiegeHandler
+      Object: 003F7E:HearthFires.esm
+  - Name: TTM_MCM
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MCM_StartDialGender
+      Object: 00004B:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TTM_EnablePolygamyToggle
+      Object: 000006:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TTM_MinRelRankForDial
+      Object: 0000E4:TT_MARAS.esp
+  - Name: TTM_QuestTracker
+  - Name: TTM_ServiceIntimateMoments
+  FileName: ''
+  Aliases:
+  - Property:
+      Name: ''
+      Object: 000800:TT_MARAS.esp
+      Alias: 5
+    Scripts:
+    - Name: TTM_PlayerScript
+      Properties:
+      - MutagenObjectType: ScriptObjectProperty
+        Name: TTM_LoversRadianceAbility
+        Object: 0000DA:TT_MARAS.esp
+Flags:
+- StartGameEnabled
+- 0x10
+- RunOnce
+Priority: 50
+DialogConditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasKeywordConditionData
+    Keyword: 000C0A:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetRelationshipRankConditionData
+  ComparisonValue: 0000E4:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000007:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasKeywordConditionData
+    Keyword: 013794:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: IsChildConditionData
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 00004B:TT_MARAS.esp
+  ComparisonValue: 2
+- MutagenObjectType: ConditionGlobal
+  Data:
+    MutagenObjectType: SameSexAsPCConditionData
+  ComparisonValue: 00004B:TT_MARAS.esp
+Stages:
+- Flags:
+  - StartUpStage
+NextAliasID: 16
+Aliases:
+- ID: 5
+  Name: PlayerAlias
+  Flags:
+  - MatchingRefInLoadedArea
+  ForcedReference: 000014:Skyrim.esm
+  VoiceTypes: Null

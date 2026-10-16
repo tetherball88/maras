@@ -1,0 +1,9 @@
+FormKey: 000002:TT_MARAS.esp
+EditorID: TTM_MainControllerStartTopic
+Name:
+  TargetLanguage: English
+  Value: (M) Ever think we could be something more?
+Priority: 100
+Branch: 000001:TT_MARAS.esp
+Quest: 000800:TT_MARAS.esp
+SubtypeName: CUST

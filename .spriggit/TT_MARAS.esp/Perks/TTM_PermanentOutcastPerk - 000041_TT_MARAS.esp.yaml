@@ -1,0 +1,20 @@
+FormKey: 000041:TT_MARAS.esp
+EditorID: TTM_PermanentOutcastPerk
+Name:
+  TargetLanguage: English
+  Value: Kiss of the Knife
+Description:
+  TargetLanguage: English
+  Value: A life on the fringe teaches you to strike unseen, increasing sneak attack damage
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000049:TT_MARAS.esp
+- MutagenObjectType: PerkEntryPointModifyValue
+  Priority: 1
+  EntryPoint: ModSneakAttackMult
+  PerkConditionTabCount: 3
+  Modification: Multiply
+  Value: 1.1

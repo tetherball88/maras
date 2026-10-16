@@ -1,0 +1,20 @@
+FormKey: 00003D:TT_MARAS.esp
+EditorID: TTM_PermanentWealthyPerk
+Name:
+  TargetLanguage: English
+  Value: Merchant's Dowry
+Description:
+  TargetLanguage: English
+  Value: Sharing wealth brings prosperity, increasing your sell prices
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 00002D:TT_MARAS.esp
+- MutagenObjectType: PerkEntryPointModifyValue
+  Priority: 1
+  EntryPoint: ModSellPrices
+  PerkConditionTabCount: 2
+  Modification: Multiply
+  Value: 1.05

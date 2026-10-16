@@ -1,0 +1,8 @@
+FormKey: 000349:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityOpenRelNevermind
+Name:
+  TargetLanguage: English
+  Value: Never mind. Forget I said anything.
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

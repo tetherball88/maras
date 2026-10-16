@@ -1,0 +1,8 @@
+FormKey: 0005D6:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAILoverPlayerCheatingTopic
+Name:
+  TargetLanguage: English
+  Value: I'm with someone else, but I still want you. Is that wrong?
+Branch: 0000C3:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

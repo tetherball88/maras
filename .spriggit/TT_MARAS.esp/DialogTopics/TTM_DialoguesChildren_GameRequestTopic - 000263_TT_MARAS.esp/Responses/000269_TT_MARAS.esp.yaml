@@ -1,0 +1,35 @@
+FormKey: 000269:TT_MARAS.esp
+Flags:
+  ResetHours: 8
+PreviousDialog: Null
+FavorLevel: None
+LinkTo:
+- 000264:TT_MARAS.esp
+- 000265:TT_MARAS.esp
+ResponseData: 000310:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable06
+- MutagenObjectType: ConditionFloat
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 000038:Skyrim.esm
+  ComparisonValue: 6
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 000038:Skyrim.esm
+  ComparisonValue: 21
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+Prompt:
+  TargetLanguage: English
+  Value: Let's play a game.

@@ -1,0 +1,8 @@
+FormKey: 000353:TT_MARAS.esp
+EditorID: TTM_DialoguesNoAIInfidelityOpenRel
+Name:
+  TargetLanguage: English
+  Value: Would you accept an open relationship?
+Branch: 000260:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

@@ -1,0 +1,47 @@
+FormKey: 000351:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+  ResetHours: 24
+PreviousDialog: Null
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Unfaithful? I've never hidden the others from you. What did you expect?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 0002BD:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000060:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00005D:TT_MARAS.esp
+- MutagenObjectType: ConditionGlobal
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 00010F:TT_MARAS.esp

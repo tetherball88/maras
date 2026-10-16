@@ -1,0 +1,14 @@
+FormKey: 00003E:TT_MARAS.esp
+EditorID: TTM_PermanentWorkingPerk
+Name:
+  TargetLanguage: English
+  Value: Labor's Legacy
+Description:
+  TargetLanguage: English
+  Value: Hard-working roots carry their weight, increasing your carry capacity
+NumRanks: 1
+Playable: True
+Hidden: True
+Effects:
+- MutagenObjectType: PerkAbilityEffect
+  Ability: 000047:TT_MARAS.esp

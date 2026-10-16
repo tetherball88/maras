@@ -1,0 +1,7 @@
+FormKey: 00006E:TT_MARAS.esp
+EditorID: TTM_DialoguesMarriageManagement
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 00006F:TT_MARAS.esp

@@ -1,0 +1,50 @@
+FormKey: 0002E5:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  ResetHours: 11.999817
+PreviousDialog: 0002E4:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Disgust
+  EmotionValue: 75
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Lars is such a milk-drinker. He can't even stand up to a girl.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionGlobal
+  CompareOperator: LessThan
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000C25:TT_MARAS.esp
+    VariableName: ::lastChildAdoptedTimestamp_var
+  ComparisonValue: 000039:Skyrim.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInCurrentLocConditionData
+    Location: 018A56:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    RunOnType: Reference
+    Reference: 01A68C:Skyrim.esm
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

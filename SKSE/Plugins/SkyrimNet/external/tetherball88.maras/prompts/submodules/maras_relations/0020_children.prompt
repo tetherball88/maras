@@ -1,0 +1,121 @@
+{% if ttm_is_registered(actorUUID) %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+    {% if length(profile.family) > 0 %}
+        ## {{npcName}}'s family
+        {% for group in profile.family %}
+                {% if existsIn(group, "other_parent") %}
+                {{npcName}} and {{group.other_parent.name}} are co-parenting {{group.children_names_summary}}.
+                {% else %}
+                {{npcName}} is raising {{group.children_names_summary}} as a single parent.
+            {% endif %}
+            {% if existsIn(group, "children") %}
+                {% for child in group.children %}
+                    {% set childRelation = "child" %}
+                    {% if existsIn(child, "relation") %}
+                        {% set childRelation = child.relation %}
+                    {% elif existsIn(child, "gender") %}
+                        {% if child.gender == "female" %}{% set childRelation = "daughter" %}{% else %}{% set childRelation = "son" %}{% endif %}
+                    {% endif %}
+                    {% set bioRelation = "child" %}
+                    {% if existsIn(child, "gender") and child.gender == "female" %}
+                        {% set bioRelation = "daughter" %}
+                    {% elif existsIn(child, "gender") and child.gender == "male" %}
+                        {% set bioRelation = "son" %}
+                    {% elif childRelation == "stepdaughter" or childRelation == "daughter" %}
+                        {% set bioRelation = "daughter" %}
+                    {% elif childRelation == "stepson" or childRelation == "son" %}
+                        {% set bioRelation = "son" %}
+                    {% endif %}
+                    {% if existsIn(child, "stage") and child.stage == "unborn" %}
+                        {{child.name}} is an unborn {{childRelation}} currently in gestation in the mother's womb.
+                    {% elif existsIn(child, "stage") and child.stage == "infant" %}
+                        {{child.name}} is a newborn infant {{childRelation}} currently in swaddling clothes.
+                    {% elif existsIn(child, "stage") and child.stage == "training" %}
+                        {{child.name}} is a {{childRelation}} currently away from home undergoing training{% if existsIn(child, "training_location") %} at {{child.training_location}}{% endif %}.
+                    {% elif existsIn(child, "stage") and child.stage == "adult" %}
+                        {{child.name}} is a grown adult {{childRelation}} (who has completed their training and is now an adult follower).
+                    {% endif %}
+                    {% if existsIn(child, "paternity_secret") and existsIn(child.paternity_secret, "mother_partner") and child.paternity_secret.mother_partner.name != "" and child.paternity_secret.mother_partner.name != "None" and child.paternity_secret.mother_partner.uuid != 0 %}
+                        {% set pSecret = child.paternity_secret %}
+                        {% set bioFatherName = pSecret.biological_father.name %}
+                        {% set partnerName = pSecret.mother_partner.name %}
+                        {% set bioMotherName = "" %}
+                        {% if existsIn(child, "bio_mother") %}{% set bioMotherName = child.bio_mother.name %}{% elif existsIn(group, "other_parent") %}{% set bioMotherName = group.other_parent.name %}{% endif %}
+                        {% set secBio = existsIn(pSecret, "is_secret_for_bio_father") and pSecret.is_secret_for_bio_father %}
+                        {% set secPartner = existsIn(pSecret, "is_secret_for_partner") and pSecret.is_secret_for_partner %}
+                        {% if actorUUID == pSecret.biological_father.uuid %}
+                            {% if pSecret.is_secret %}
+                                {% if secBio and secPartner %}
+                                    {{npcName}} has no idea that {{child.name}} is actually their biological {{bioRelation}}, as {{partnerName}} believes the {{bioRelation}} is their own.
+                                {% elif secBio %}
+                                    {{npcName}} has no idea that {{child.name}} is actually their biological {{bioRelation}}, though {{partnerName}} knows the truth.
+                                {% elif secPartner %}
+                                    Secret paternity: {{child.name}} is {{npcName}}'s biological {{bioRelation}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}, but {{partnerName}} believes the {{bioRelation}} is theirs. {{npcName}} knows the truth, while {{partnerName}} remains completely unaware.
+                                {% else %}
+                                    {{child.name}} is {{npcName}}'s biological {{bioRelation}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}, and both {{npcName}} and {{partnerName}} know the truth.
+                                {% endif %}
+                            {% else %}
+                                Paternity truth revealed: {{npcName}} is the true biological father of {{child.name}}{% if bioMotherName != "" %} with biological mother {{bioMotherName}}{% endif %}, though {{partnerName}} was initially presumed to be the father. In the household, {{partnerName}} acts as guardian to {{child.name}}. The truth of their paternity is now openly known to everyone involved.
+                            {% endif %}
+                        {% elif actorUUID == pSecret.mother_partner.uuid %}
+                            {% if pSecret.is_secret %}
+                                {% if secPartner and secBio %}
+                                    {{npcName}} believes {{child.name}} is their own biological {{bioRelation}}, unaware that the true biological father is {{bioFatherName}} (who also does not know of their paternity).
+                                {% elif secPartner %}
+                                    {{npcName}} believes {{child.name}} is their own biological {{bioRelation}}, completely unaware that the true biological father is {{bioFatherName}} (who knows the truth).
+                                {% elif secBio %}
+                                    Paternity truth revealed: {{npcName}} knows that {{child.name}} is not their biological child, but was actually fathered by {{bioFatherName}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}. {{npcName}} acts as guardian, but {{bioFatherName}} has not been told and remains unaware that he is the father.
+                                {% else %}
+                                    Paternity truth revealed: {{npcName}} knows that {{child.name}} is not their biological child, but was fathered by {{bioFatherName}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}. {{npcName}} acts as guardian in the household, and both {{npcName}} and {{bioFatherName}} know the truth.
+                                {% endif %}
+                            {% else %}
+                                Paternity truth revealed: {{npcName}} is {{child.name}}'s guardian and knows {{child.name}} is not their biological child. The true biological parents are {% if bioMotherName != "" %}{{bioMotherName}} and {% endif %}{{bioFatherName}}. In the household, {{npcName}} co-parents {{child.name}} as a guardian, and this truth is now fully known and acknowledged by everyone involved.
+                            {% endif %}
+                        {% else %}
+                            {% if pSecret.is_secret %}
+                                {% if secPartner and secBio %}
+                                    Secret paternity: {{child.name}} is actually the biological {{bioRelation}} of {{bioFatherName}}{% if bioMotherName != "" %} and {{bioMotherName}}{% endif %}, but {{partnerName}} believes the {{bioRelation}} is theirs. {{npcName}} is keeping this a secret from both {{partnerName}} and {{bioFatherName}}{% if existsIn(pSecret, "has_phenotype_mismatch") and pSecret.has_phenotype_mismatch %}; however, noticeable physical differences make the deception fragile{% endif %}.
+                                {% elif secPartner %}
+                                    Secret paternity: {{child.name}} is actually the biological {{bioRelation}} of {{bioFatherName}}{% if bioMotherName != "" %} and {{bioMotherName}}{% endif %}, but {{partnerName}} believes the {{bioRelation}} is theirs. {{bioFatherName}} knows the truth, while {{partnerName}} remains completely unaware{% if existsIn(pSecret, "has_phenotype_mismatch") and pSecret.has_phenotype_mismatch %}; however, noticeable physical differences make the deception fragile{% endif %}.
+                                {% elif secBio %}
+                                    Secret paternity: {{child.name}} is actually the biological {{bioRelation}} of {{bioFatherName}}{% if bioMotherName != "" %} and {{bioMotherName}}{% endif %}, and {{partnerName}} knows this and acts as guardian, but {{bioFatherName}} has not been told that he is the father.
+                                {% else %}
+                                    Paternity truth revealed: {{child.name}}'s true biological father is {{bioFatherName}}{% if bioMotherName != "" %} (biological mother: {{bioMotherName}}){% endif %}, while {{partnerName}} acts as guardian. Both {{partnerName}} and {{bioFatherName}} know the truth.
+                                {% endif %}
+                            {% else %}
+                                Paternity truth revealed: {{child.name}}'s true biological father is {{bioFatherName}}{% if bioMotherName != "" %} (biological mother: {{bioMotherName}}){% endif %}, and {{partnerName}} acts as guardian in the household. Both {{partnerName}} and {{bioFatherName}} are now aware of the true biological paternity.
+                            {% endif %}
+                        {% endif %}
+                    {% elif existsIn(child, "step_parents") and existsIn(child, "biological_parents") %}
+                        {{child.name}} is the biological {{bioRelation}} of {{child.biological_parents.names}}, with {{child.step_parents.names}} acting as step-parent in the household.
+                    {% elif existsIn(child, "is_adopted") and child.is_adopted %}
+                        {{child.name}} is adopted{% if existsIn(child, "biological_parents") %} (biological parents: {{child.biological_parents.names}}){% endif %}.
+                    {% elif existsIn(group, "single_parent") and group.single_parent %}
+                        {% if existsIn(child, "bio_father") and child.bio_father.uuid != 0 and child.bio_father.uuid != actorUUID %}
+                            {{child.name}}'s biological father is {{child.bio_father.name}}.
+                        {% elif existsIn(child, "bio_mother") and child.bio_mother.uuid != 0 and child.bio_mother.uuid != actorUUID %}
+                            {{child.name}}'s biological mother is {{child.bio_mother.name}}.
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    {% if existsIn(profile, "non_custodial_children") and length(profile.non_custodial_children) > 0 %}
+        ## {{npcName}}'s children living elsewhere
+        {% for child in profile.non_custodial_children %}
+            {% set ncBioRelation = "child" %}
+            {% if existsIn(child, "gender") and child.gender == "female" %}
+                {% set ncBioRelation = "daughter" %}
+            {% elif existsIn(child, "gender") and child.gender == "male" %}
+                {% set ncBioRelation = "son" %}
+            {% elif existsIn(child, "relation") and (child.relation == "stepdaughter" or child.relation == "daughter") %}
+                {% set ncBioRelation = "daughter" %}
+            {% elif existsIn(child, "relation") and (child.relation == "stepson" or child.relation == "son") %}
+                {% set ncBioRelation = "son" %}
+            {% endif %}
+            {{npcName}} has a biological {{ncBioRelation}}, {{child.name}}{% if existsIn(child, "other_bio_parent") and child.other_bio_parent.name != "" and child.other_bio_parent.name != "None" %} (other parent: {{child.other_bio_parent.name}}){% endif %}, currently living in the custody of {{child.guardians.names}}.
+        {% endfor %}
+    {% endif %}
+{% endif %}

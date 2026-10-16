@@ -1,11 +1,9 @@
 #pragma once
 
-#include <filesystem>
-#include <nlohmann/json.hpp>
-#include <string>
-#include <unordered_map>
+#include <functional>
 
 #include "utils/Common.h"
+#include "utils/FormUtils.h"
 
 namespace MARAS::Utils {
 
@@ -31,6 +29,28 @@ namespace MARAS::Utils {
 
     class JsonOverrideLoader {
     public:
+        using FormEntryCallback =
+            std::function<bool(const std::string& rawKey, const ParsedFormKey& parsedKey, const nlohmann::json& entryValue)>;
+
+        // Shared helpers for scanning __formData|-keyed JSON files/folders
+        static bool ScanFormDataJsonFolder(const std::string& folderPath,
+                                           std::string_view logContext,
+                                           size_t& outTotalFiles,
+                                           size_t& outSuccessfulFiles,
+                                           size_t& outTotalEntries,
+                                           size_t& outValidEntries,
+                                           size_t& outInvalidFormKeys,
+                                           const FormEntryCallback& onEntry);
+
+        static bool ScanFormDataJsonFile(const std::filesystem::path& filePath,
+                                         std::string_view logContext,
+                                         size_t& ioTotalEntries,
+                                         size_t& ioValidEntries,
+                                         size_t& ioInvalidFormKeys,
+                                         const FormEntryCallback& onEntry);
+
+        static bool IsValidJsonFile(const std::filesystem::path& filePath);
+
         // Load all override files from a directory
         static bool LoadOverridesFromFolder(const std::string& folderPath, OverrideMap& outOverrides);
 
@@ -42,12 +62,12 @@ namespace MARAS::Utils {
 
         // Get statistics about loaded overrides
         struct LoadStatistics {
-            size_t totalFiles;
-            size_t successfulFiles;
-            size_t totalOverrides;
-            size_t validOverrides;
-            size_t invalidFormKeys;
-            size_t unresolvedForms;
+            size_t totalFiles{0};
+            size_t successfulFiles{0};
+            size_t totalOverrides{0};
+            size_t validOverrides{0};
+            size_t invalidFormKeys{0};
+            size_t unresolvedForms{0};
         };
 
         static LoadStatistics GetLastLoadStatistics();
@@ -58,7 +78,6 @@ namespace MARAS::Utils {
         // Helper methods
         static bool ParseJsonFile(const std::string& filePath, OverrideMap& outOverrides);
         static NPCOverrideData ParseOverrideObject(const nlohmann::json& jsonObj);
-        static bool IsValidJsonFile(const std::filesystem::path& filePath);
     };
 
 }  // namespace MARAS::Utils

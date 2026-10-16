@@ -1,0 +1,48 @@
+FormKey: 000141:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerAffectionDivorceQst
+    Properties:
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_affection_estranged_divorce_intimidation_success
+    - MutagenObjectType: ScriptIntProperty
+      Name: StageTarget
+      Data: 100
+    - MutagenObjectType: ScriptBoolProperty
+      Name: UseAI
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerAffectionDivorceQst
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerAffectionDivorceQst
+      FragmentName: Fragment_0
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 00013F:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Puzzled
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Fine, I'll stay. But I'll be watching you - every step.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIntimidateSuccessConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000118:TT_MARAS.esp
+  ComparisonValue: 2

@@ -1,0 +1,24 @@
+name: "ttm_polygamy_blessing"
+description: "Direct narration when the blessing of Mara for polygamy is received in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_polygamy_blessing"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}}'s spouse respond to {{originator}} receiving Mara's blessing for a polygamous marriage in a way that reflects their personality and feelings about the household."
+
+enabled: true
+interrupt: false
+probability: 1
+cooldownSeconds: 60
+priority: 5

@@ -1,0 +1,6 @@
+FormKey: 000C22:TT_MARAS.esp
+EditorID: TTM_AED_SpouseFaction
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

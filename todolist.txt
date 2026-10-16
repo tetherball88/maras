@@ -1,0 +1,2 @@
+- check children link refs and their persistance between loads
+- implement exterior location(for games)

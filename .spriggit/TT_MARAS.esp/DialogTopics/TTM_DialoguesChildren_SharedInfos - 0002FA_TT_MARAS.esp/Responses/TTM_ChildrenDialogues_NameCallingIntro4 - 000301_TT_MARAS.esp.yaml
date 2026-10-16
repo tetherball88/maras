@@ -1,0 +1,32 @@
+FormKey: 000301:TT_MARAS.esp
+EditorID: TTM_ChildrenDialogues_NameCallingIntro4
+Flags: {}
+PreviousDialog: 000300:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Surprise
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Um, hey, Ma! Welcome home!
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    RunOnTypeIndex: 0
+    VoiceTypeOrList: 013AE8:Skyrim.esm
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

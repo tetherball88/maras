@@ -1,0 +1,7 @@
+FormKey: 000126:TT_MARAS.esp
+EditorID: TTM_AffectionEstrangedDivorceIntro
+Quest: 00011A:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 000127:TT_MARAS.esp

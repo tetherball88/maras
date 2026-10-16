@@ -1,0 +1,58 @@
+FormKey: 0002CB:TT_MARAS.esp
+EditorID: TTM_ChildrenOR_BehaviorChildPlayDoll
+Flags:
+- PreferredSpeed
+Type: Package
+PreferredSpeed: Jog
+InterruptFlags:
+- HellosToPlayer
+- ObserveCombatBehavior
+- ReactionToPlayerActions
+- FriendlyFireComments
+- AggroRadiusBehavior
+- WorldInteractions
+ScheduleMonth: -1
+ScheduleDayOfWeek: Any
+ScheduleHour: -1
+ScheduleMinute: -1
+Unknown3: 0x000000
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: DoesNotExistConditionData
+    RunOnType: QuestAlias
+    RunOnTypeIndex: 12
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThan
+  Data:
+    MutagenObjectType: GetItemCountConditionData
+    ItemOrList: 00C1DE:HearthFires.esm
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    ActorValue: Variable06
+  ComparisonValue: 1.2
+CombatStyle: 007B73:HearthFires.esm
+OwnerQuest: 0002BC:TT_MARAS.esp
+PackageTemplate: 0283F0:Skyrim.esm
+DataInputVersion: 1
+Data:
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataTarget
+    Type: SingleRef
+    Target:
+      MutagenObjectType: PackageTargetAlias
+      Alias: 12
+XnamMarker: 0x02
+OnBegin:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnEnd:
+  Topics:
+  - MutagenObjectType: TopicReference
+OnChange:
+  Topics:
+  - MutagenObjectType: TopicReference

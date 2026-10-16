@@ -14,11 +14,10 @@ Function OnGiftMenuClose() global
         string playerName = TTM_Utils.GetActorName(TTM_Data.GetPlayer())
         if(giftItems != "")
             string msg = playerName + " gifted " + giftItems + " to " + TTM_Utils.GetActorName(receiver) + " of total value " + giftValue + "."
-            TTM_ServiceSkyrimNet.DirectNarration(msg, TTM_Data.GetPlayer(), receiver)
+            TTM_ServiceSkyrimNet.RegisterAffectionGift(msg, receiver)
             TTM_ServiceAffection.AddGiftAffection(receiver, giftValue)
             TTM_Debug.trace("TTM_ServiceGift:Gift was given: " + msg)
         else
-            TTM_ServiceSkyrimNet.DirectNarration(playerName + " gifted nothing to " + TTM_Utils.GetActorName(receiver) + ".", TTM_Data.GetPlayer(), receiver)
             TTM_Debug.trace("TTM_ServiceGift:No gift was given.")
         endif
         StorageUtil.ClearAllPrefix("Gift")
@@ -34,6 +33,13 @@ Function OnItemGifted(Form akDestContainer, Form akBaseItem, int aiItemCount) gl
     if(!npcDestination)
         return
     endif
+
+    if(npcDestination.IsInFaction(TTM_Data.GetPlayerChildFaction()))
+        TTM_ServiceChildrenLogic childLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
+        childLogicQst.ChildReceiveGiftItem(npcDestination, akBaseItem, aiItemCount)
+        return
+    endif
+
     if(!MARAS.IsNPCStatus(npcDestination, "any"))
         return
     endif

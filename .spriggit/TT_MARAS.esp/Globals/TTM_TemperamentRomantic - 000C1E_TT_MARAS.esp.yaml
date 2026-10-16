@@ -1,0 +1,9 @@
+MutagenObjectType: GlobalShort
+FormKey: 000C1E:TT_MARAS.esp
+MajorRecordFlagsRaw: 64
+EditorID: TTM_TemperamentRomantic
+SkyrimMajorRecordFlags:
+- 0x40
+MajorFlags:
+- Constant
+Data: 3

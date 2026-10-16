@@ -11,11 +11,41 @@ Function MakeNpcCandidate(Actor npc) global
 EndFunction
 
 ;/
+  Marks an NPC as dating.
+  @param npc The NPC actor
+/;
+Function MakeNpcDating(Actor npc) global
+    Actor player = TTM_Data.GetPlayer()
+    if(npc.GetRelationshipRank(player) < 3)
+        npc.SetRelationshipRank(player, 3)
+    endif
+    TTM_Messages.DatingMsg(TTM_Utils.GetActorName(npc))
+    if(MARAS.GetPermanentAffection(npc) < 80)
+        MARAS.SetPermanentAffection(npc, 80)
+    endif
+EndFunction
+
+;/
+  Marks an NPC as a lover.
+  @param npc The NPC actor
+/;
+Function MakeNpcLover(Actor npc) global
+    Actor player = TTM_Data.GetPlayer()
+    if(npc.GetRelationshipRank(player) < 3)
+        npc.SetRelationshipRank(player, 3)
+    endif
+    TTM_Messages.LoverMsg(TTM_Utils.GetActorName(npc))
+    if(MARAS.GetPermanentAffection(npc) < 70)
+        MARAS.SetPermanentAffection(npc, 70)
+    endif
+EndFunction
+
+;/
   Marks an NPC as engaged and adds to the fiances bucket.
   @param npc The NPC actor
 /;
 Function MakeNpcEngaged(Actor npc) global
-    bool alwaysSkipWeddings = TTM_Data.GetSkipWedding()
+    bool alwaysSkipWeddings = MARAS.GetSettingBool("skipWedding")
     int answerSkipWedding = -1
     if(TTM_Data.GetPlayerHadWedding() && !alwaysSkipWeddings && StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 0)
         answerSkipWedding = TTM_Data.GetSkipWeddingMsg().Show()
@@ -35,9 +65,8 @@ Function MakeNpcEngaged(Actor npc) global
     if(npc.HasSpell(TTM_Data.GetBreakupCooldownSpell()))
         npc.RemoveSpell(TTM_Data.GetBreakupCooldownSpell())
     endif
-    MARAS.SetPermanentAffection(npc, 100)
-
     TTM_Messages.EngagementMsg(TTM_Utils.GetActorName(npc))
+    MARAS.SetPermanentAffection(npc, 100)
 
     PacifyFianceOrSpouse(npc)
 EndFunction
@@ -58,8 +87,9 @@ Function MakeNpcMarried(Actor npc) global
     if(npc.HasSpell(TTM_Data.GetBreakupCooldownSpell()))
         npc.RemoveSpell(TTM_Data.GetBreakupCooldownSpell())
     endif
-    MARAS.SetPermanentAffection(npc, 100)
+
     TTM_Messages.MarriedMsg(TTM_Utils.GetActorName(npc))
+    MARAS.SetPermanentAffection(npc, 100)
 
     if(npc.GetActorValue("Aggression") > 0)
         npc.AddSpell(TTM_Data.GetPacifyFianceOrSpouseSpell())
@@ -103,15 +133,54 @@ Function MakeNpcJilted(Actor npc) global
 EndFunction
 
 ;/
-  Marks an NPC as deceased
+  Marks an NPC as ex-dating, resets affection and cooldown.
   @param npc The NPC actor
 /;
-Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
-    bool spouse = MARAS.IsNPCStatus(npc, "married")
-    bool engaged = MARAS.IsNPCStatus(npc, "engaged")
+Function MakeNpcExDating(Actor npc) global
+    Actor player = TTM_Data.GetPlayer()
+    npc.SetRelationshipRank(player, -1)
+    if(npc.IsInFaction(TTM_Data.GetSpouseCheatingFaction()))
+        SetBrokeupTime(npc)
+        npc.AddSpell(TTM_Data.GetBreakupCooldownSpell())
+    endif
+    MARAS.SetPermanentAffection(npc, 0)
+    PacifyFianceOrSpouse(npc, false)
+    TTM_Messages.ExDatingMsg(TTM_Utils.GetActorName(npc))
+EndFunction
+
+;/
+  Marks an NPC as ex-lover, resets affection and cooldown.
+  @param npc The NPC actor
+/;
+Function MakeNpcExLover(Actor npc) global
+    Actor player = TTM_Data.GetPlayer()
+    npc.SetRelationshipRank(player, -1)
+    if(npc.IsInFaction(TTM_Data.GetSpouseCheatingFaction()))
+        SetBrokeupTime(npc)
+        npc.AddSpell(TTM_Data.GetBreakupCooldownSpell())
+    endif
+    MARAS.SetPermanentAffection(npc, 0)
+    PacifyFianceOrSpouse(npc, false)
+    TTM_Messages.ExLoverMsg(TTM_Utils.GetActorName(npc))
+EndFunction
+
+;/
+  Handles cleanup when an NPC spouse or fiancé dies.
+  @param npc The deceased NPC actor
+  @param isPlayerKiller True if the player was the killer
+/;
+Function HandleSpouseDeath(Actor npc, bool isPlayerKiller) global
+    if(!npc)
+        return
+    endif
+
+    Actor player = TTM_Data.GetPlayer()
+    bool spouse = MARAS.IsNPCStatus(npc, "married") || MARAS.WasMarriedTo(npc, player)
+    bool engaged = MARAS.IsNPCStatus(npc, "engaged") || MARAS.WasEngagedTo(npc, player)
+
     if(spouse || engaged)
         if(spouse)
-            ;re-evaluate spouses bonuses on each spouse removed
+            ; re-evaluate spouse bonuses on each spouse removed
             TTM_ServiceBuff.CalculatePermanentMultipliers()
             TTM_ServiceBuff.CalculateFollowerMultipliers()
         endif
@@ -122,10 +191,18 @@ Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
             TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(npc, "deceased")
         endif
     endif
+
     MARAS.UnregisterNPC(npc)
     ; re-check marriage related quests and stop if any were ongoing for killed npc
     TTM_ServiceMarriageQuest.ResetMarriageQuests(npc)
+EndFunction
 
+;/
+  Marks an NPC as deceased
+  @param npc The NPC actor
+/;
+Function MakeNpcDeceased(Actor npc, bool isPlayerKiller) global
+    HandleSpouseDeath(npc, isPlayerKiller)
 EndFunction
 
 Function ShareIncome(Actor spouse) global
@@ -181,29 +258,6 @@ EndFunction
 ;/ ==============================
    SECTION: trackedNpcs map
 ============================== /;
-ObjectReference Function GetTrackedNpcHomeMarker(Actor npc) global
-    ObjectReference npcHomeMarker = MARAS.GetTrackedNpcHomeMarker(npc)
-
-    if(!npcHomeMarker)
-        npcHomeMarker = StorageUtil.GetFormValue(npc, "HomeMarker") as ObjectReference
-        if(!npcHomeMarker)
-            npcHomeMarker = npc.PlaceAtMe(TTM_Data.GetHomeSandboxMarkerStatic(), 1, true)
-        endif
-
-        MARAS.SetTrackedNpcHomeMarker(npc, npcHomeMarker)
-    endif
-
-    return npcHomeMarker
-EndFunction
-
-Function SetTrackedNpcHome(Actor npc, Location home) global
-    StorageUtil.SetFormValue(npc, "HomeLocation", home)
-EndFunction
-
-Location Function GetTrackedNpcHome(Actor npc) global
-    return StorageUtil.GetFormValue(npc, "HomeLocation") as Location
-EndFunction
-
 Function SetLastTimeSharedIncome(Actor npc) global
     StorageUtil.SetFloatValue(npc, "LastTimeSharedIncome", Utility.GetCurrentGameTime())
 EndFunction

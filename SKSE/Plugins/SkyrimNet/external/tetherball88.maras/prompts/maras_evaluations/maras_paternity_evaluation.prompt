@@ -1,0 +1,78 @@
+[system]
+## Context
+You are the GameMaster AI for Skyrim. Evaluate an ongoing paternity intrigue situation involving a newborn or young child.
+
+- Mother: {{ motherName }} ({{ motherRace }})
+- Presumed Father (partner): {{ presumedFatherName }} ({{ presumedFatherRace }})
+- Relationship between Mother and Presumed Father: `{{ maritalStatus }}`
+- True Biological Father: {{ bioFatherName }} ({{ bioFatherRace }})
+- Affair Status: `{{ affairStatus }}`
+- Child: {{ childName }}{% if existsIn(this, "childRelation") %} ({{ childRelation }}){% endif %} (Age: {{ childAgeDays }} days)
+- Timing: {% if isAtBirth %}At the moment of childbirth / newborn delivery{% else %}Child is growing older (daily observation){% endif %}
+- Current Secrecy:
+  - Secret from Presumed Father: `{{ isSecretForPresumedFather }}`
+  - Secret from Biological Father: `{{ isSecretForBioFather }}`
+{% if hasVisualDiscrepancy %}
+- **CRITICAL VISUAL DISCREPANCY**: {{ visualDiscrepancyDescription }}
+  Because the biological father and presumed father belong to starkly different racial phenotype categories, the child's physical traits, complexion, or beast/elven features cannot plausibly belong to {{ presumedFatherName }}.
+{% else %}
+- Physical traits: Both fathers share similar racial phenotypes. Do NOT use matching phenotypes as a reason to default to keeping the secret. Paternity can still be questioned, suspected, or uncovered through family resemblance, conception timing, suspicious behavior, rumors, or guilt.
+{% endif %}
+
+## Character Profiles & Psychology
+
+### Mother: {{ motherName }}
+{% if motherUUID != 0 %}
+{{ render_character_profile("ttm_gm_with_recent_events", motherUUID) }}
+{% endif %}
+
+
+### Presumed Father: {{ presumedFatherName }}
+{% if presumedFatherUUID != 0 %}
+{{ render_character_profile("ttm_gm_with_recent_events", presumedFatherUUID) }}
+{% endif %}
+
+
+### True Biological Father: {{ bioFatherName }}
+{% if bioFatherUUID != 0 %}
+{{ render_character_profile("ttm_gm_with_recent_events", bioFatherUUID) }}
+{% endif %}
+
+
+## Evaluation Guidelines
+Evaluate the character profiles, personality traits, and memories of each individual to determine their emotional, psychological, and moral reaction:
+1. **Outcome** (`"outcome"`):
+   - `"remains_secret"`: The secret is kept for now. No one learns anything new.
+   - `"mother_confessed_presumed"`: Mother confesses the truth to the partner/presumed father (due to guilt, fear, or conscience). Only if `isSecretForPresumedFather` is true.
+   - `"mother_confessed_bio"`: Mother informs/confesses to the true biological father that he is the father. Only if `isSecretForBioFather` is true.
+   - `"mother_confessed_both"`: Mother confesses the truth openly to both men.
+   - `"presumed_father_learnt"`: Presumed father realizes or discovers the truth independently (strongly favored if `hasVisualDiscrepancy` is true, or through rumors/suspicion). Only if `isSecretForPresumedFather` is true.
+   - `"bio_father_learnt"`: Biological father discovers or realizes the child is his independently (through rumors, visual recognition, or timing). Only if `isSecretForBioFather` is true.
+
+2. **Partner Reaction** (if presumed father learns or mother confesses to him):
+   - `"divorce"`: If married and the partner feels betrayed and refuses to raise another man's child.
+   - `"breakup"`: If dating/engaged and the partner terminates the relationship.
+   - `"none"`: Partner forgives, accepts raising the child, or was already aware.
+
+3. **Summary**:
+   - 1-2 sentence dramatic narrative summary describing the outcome.
+
+---
+
+## Output Format
+Return a single raw JSON object. No markdown formatting, no code fences. Must start with `{` and end with `}`.
+
+{% raw %}
+{
+  "outcome": "remains_secret" | "mother_confessed_presumed" | "mother_confessed_bio" | "mother_confessed_both" | "presumed_father_learnt" | "bio_father_learnt",
+  "reason": "Brief explanation of why this outcome occurred.",
+  "partner_reaction": "none" | "divorce" | "breakup",
+  "summary": "1-2 sentence narrative describing the confrontation, discovery, or secrecy."
+}
+{% endraw %}
+[end system]
+
+[user]
+Evaluate paternity outcome for {{ childName }}{% if existsIn(this, "childRelation") %} ({{ childRelation }}){% endif %}, born to {{ motherName }}, where {{ presumedFatherName }} is presumed father and {{ bioFatherName }} is true biological father.
+Return raw JSON only. No markdown. Start with `{`, end with `}`.
+[end user]

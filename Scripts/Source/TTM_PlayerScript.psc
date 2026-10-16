@@ -3,6 +3,10 @@ Scriptname TTM_PlayerScript extends ReferenceAlias
 import PO3_Events_Form
 
 Spell Property TTM_LoversRadianceAbility auto
+; apply when player sleep in same locatio nwhere his children are
+Spell Property TTM_ChildrenAbility auto
+
+; Scene[] Property TTM_NpcsScenes auto
 
 Event OnInit()
     InitPlayer()
@@ -12,6 +16,8 @@ Event OnPlayerLoadGame()
     InitPlayer()
     TTM_MainController mainController = self.GetOwningQuest() as TTM_MainController
     mainController.Maintenance()
+    TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
+    childrenLogicQst.PlayerLocationChanged(Game.GetPlayer().GetCurrentLocation(), Game.GetPlayer().GetCurrentLocation(), true)
 EndEvent
 
 Function InitPlayer()
@@ -68,5 +74,13 @@ EndFunction
 
 Event OnLocationChange(Location akOldLoc, Location akNewLoc)
     CheckCell()
+    TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
+    childrenLogicQst.PlayerLocationChanged(akNewLoc, akOldLoc)
+    TTM_NpcsScenes npcScenes = TTM_Data.GetMarasNpcsScenesQuest() as TTM_NpcsScenes
+    if(MARAS.IsLocationAllowedForScenes(akNewLoc))
+        npcScenes.SetupSceneOnLocationChange()
+    endif
+
+    npcScenes.RestoreMovedNpcsOnLocationChange()
 EndEvent
 

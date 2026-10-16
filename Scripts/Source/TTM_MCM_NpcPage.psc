@@ -31,6 +31,8 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     string status = MARAS.GetNpcStatusName(npc)
 
     bool isCandidate = MARAS.IsNPCStatus(npc, "candidate")
+    bool isDating = MARAS.IsNPCStatus(npc, "dating")
+    bool isLover = MARAS.IsNPCStatus(npc, "lover")
     bool isFiance = MARAS.IsNPCStatus(npc, "engaged")
     bool isSpouse = MARAS.IsNPCStatus(npc, "married")
     bool isJilted = MARAS.IsNPCStatus(npc, "jilted")
@@ -58,7 +60,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
 
     if(!isFiance && !isSpouse)
         float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc)
-        mcm.oid_CandidateChance = mcm.AddTextOption("$TTM_MCM_NpcChances", 100 * chance)
+        mcm.oid_CandidateChance = mcm.AddTextOption("$TTM_MCM_NpcChances", chance)
     endif
 
     int affection = MARAS.GetPermanentAffection(npc)
@@ -72,7 +74,7 @@ Function RenderLeftColumn(TTM_MCM mcm) global
     mcm.oid_NpcPageUseNpcVoice = mcm.AddToggleOption("$TTM_MCM_NpcUseNpcVoice", hasUseNpcVoice)
 
     if(isSpouse)
-        Location playerHouse = TTM_ServiceRelationships.GetTrackedNpcHome(npc)
+        Location playerHouse = MARAS.GetTenantHouse(npc)
         string playerHouseName = playerHouse.GetName()
         if(playerHouse == none)
             playerHouseName = "$TTM_MCM_NpcHomeUnset"
@@ -194,15 +196,15 @@ Function OnOptionHighlight(TTM_MCM mcm, int option) global
         float chance = TTM_ServiceMarriageDifficulty.calcMarriageSuccessChance(npc)
         string npcName = TTM_Utils.GetActorName(npc)
         string tooltip
-        if(chance >= 0.95)
+        if(chance >= 95)
             tooltip = "$TTM_MCM_TT_ChanceFated{" + npcName + "}"
-        elseif(chance >= 0.8)
+        elseif(chance >= 80)
             tooltip = "$TTM_MCM_TT_ChanceEager{" + npcName + "}"
-        elseif(chance >= 0.6)
+        elseif(chance >= 60)
             tooltip = "$TTM_MCM_TT_ChanceProbably{" + npcName + "}"
-        elseif(chance >= 0.45)
+        elseif(chance >= 45)
             tooltip = "$TTM_MCM_TT_ChanceFence{" + npcName + "}"
-        elseif(chance >= 0.25)
+        elseif(chance >= 25)
             tooltip = "$TTM_MCM_TT_ChanceUnlikely{" + npcName + "}"
         else
             tooltip = "$TTM_MCM_TT_ChanceRefuse{" + npcName + "}"

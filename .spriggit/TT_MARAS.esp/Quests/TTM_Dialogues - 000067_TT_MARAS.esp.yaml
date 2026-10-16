@@ -1,0 +1,36 @@
+FormKey: 000067:TT_MARAS.esp
+EditorID: TTM_Dialogues
+Flags:
+- StartGameEnabled
+- 0x10
+- RunOnce
+Priority: 70
+DialogConditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 1
+NextAliasID: 4
+Aliases:
+- Name: CurrentMarriageTarget
+  Flags:
+  - Optional
+  - AllowReuseInQuest
+  External:
+    Quest: 074793:Skyrim.esm
+    AliasID: 0
+  VoiceTypes: Null
+- ID: 2
+  Type: Location
+  Name: SpouseHome
+  Flags:
+  - Optional
+- ID: 3
+  Name: SpouseHomeCenter
+  Flags:
+  - Optional
+  Location:
+    AliasID: 2
+    RefType: 01BDF1:Skyrim.esm
+  VoiceTypes: Null

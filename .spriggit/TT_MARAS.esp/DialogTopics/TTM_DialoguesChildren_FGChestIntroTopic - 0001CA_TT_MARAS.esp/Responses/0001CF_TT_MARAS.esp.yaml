@@ -1,0 +1,33 @@
+FormKey: 0001CF:TT_MARAS.esp
+Flags:
+  Flags:
+  - Random
+  - InvisibleContinue
+Topic: 000178:TT_MARAS.esp
+PreviousDialog: 0001CE:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 00019B:TT_MARAS.esp
+ResponseData: 000317:TT_MARAS.esp
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetActorValueConditionData
+    RunOnTypeIndex: 0
+    ActorValue: Variable07
+  ComparisonValue: 3
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetPCIsSexConditionData
+    MaleFemaleGender: Female
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsSexConditionData
+    RunOnTypeIndex: 0
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1

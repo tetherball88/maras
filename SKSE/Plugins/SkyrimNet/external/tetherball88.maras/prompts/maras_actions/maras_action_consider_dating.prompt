@@ -1,0 +1,10 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set loversBecomingEx = ttm_get_lovers_becoming_ex(npc.UUID) %}
+
+Dating = committed, semi-exclusive romantic relationship (being a couple / being together). More serious than lovers, less formal than engagement. Does not require eventual marriage.
+{% if loversBecomingEx != "" %}
+NOTE: {{speakingNpc.name}} currently has lover(s): {{loversBecomingEx}}. Accepting this proposal will end those lover arrangements — they will become ex-lovers.
+{% endif %}
+USE WHEN somebody proposed or asked about entering a committed romantic relationship, becoming a couple, or being together with {{speakingNpc.name}}.
+NEVER use for mere casual flirting, compliments, or proposals not about entering a romantic relationship/being together.
+NEVER confuse with lovers (casual/sexual) or engagement (marriage prerequisite).

@@ -1,0 +1,17 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set closeCandidates = ttm_get_close_relationship_candidates(npc.UUID) %}
+{% set openPartners = ttm_get_open_main_partners(npc.UUID) %}
+{% set loversBecomingEx = ttm_get_lovers_becoming_ex(npc.UUID) %}
+
+{% if closeCandidates != "" %}Available partners to close relationship with: {{closeCandidates}}{% endif %}
+
+Closing Relationship = converts an open relationship back into an exclusive, monogamous commitment.
+{% if openPartners != "" %}
+Current open main partner(s): {{openPartners}}.
+{% endif %}
+{% if loversBecomingEx != "" %}
+NOTE: Closing this relationship will end {{speakingNpc.name}}'s current lover arrangement(s) with: {{loversBecomingEx}} — they will become ex-lovers.
+{% endif %}
+USE ONLY when {{speakingNpc.name}} agrees or decides to close an open relationship and return to exclusive monogamy with their partner who is present.
+NEVER use for breaking up, divorce, or general romance proposals.
+

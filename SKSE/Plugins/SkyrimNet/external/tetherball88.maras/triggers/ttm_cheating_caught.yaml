@@ -1,0 +1,24 @@
+name: "ttm_cheating_caught"
+description: "Direct narration when an intimate affair or cheating is caught in the act in MARAS"
+
+eventCriteria:
+  eventType: "ttm_event"
+  schemaConditions:
+    - fieldPath: "type"
+      operator: "equals"
+      value: "ttm_cheating_caught"
+      caseSensitive: false
+    - fieldPath: "skipTrigger"
+      operator: "equals"
+      value: false
+
+audience: "nearby_npcs"
+response:
+  type: "direct_narration"
+  content: "Have {{originator}}, {{event_json.cheater}}, and {{event_json.affairPartner}} react immediately to being caught in the act in a way that stays true to their personalities and relationships."
+
+enabled: true
+interrupt: true
+probability: 1
+cooldownSeconds: 30
+priority: 10

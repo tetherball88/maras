@@ -1,0 +1,40 @@
+FormKey: 0005C3:TT_MARAS.esp
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_DialogueManagerMisc
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: pFDS
+      Object: 05A6DC:Skyrim.esm
+    - MutagenObjectType: ScriptStringProperty
+      Name: PromptKey
+      Data: maras_player_caught_cheater_join__persuade_failure
+  ScriptFragments:
+    MutagenObjectType: ScriptFragments
+    FileName: TTM_DialogueManagerMisc
+    OnBegin:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_0
+    OnEnd:
+      ExtraBindDataVersion: 1
+      ScriptName: TTM_DialogueManagerMisc
+      FragmentName: Fragment_2
+Flags:
+  Flags:
+  - Random
+  - RandomEnd
+PreviousDialog: 0005C2:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I won't, not tonight. Please, just give me some space.
+  ScriptNotes: ''
+  Edits: ''

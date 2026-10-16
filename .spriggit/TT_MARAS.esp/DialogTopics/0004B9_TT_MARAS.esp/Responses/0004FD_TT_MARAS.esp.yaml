@@ -1,0 +1,28 @@
+FormKey: 0004FD:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 0004EC:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I should have ended it before it began. You deserved the truth, and I'm sorry it took this.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsAliasRefConditionData
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetVMQuestVariableConditionData
+    Quest: 000378:TT_MARAS.esp
+    VariableName: ::sceneIdx_var
+  ComparisonValue: 3

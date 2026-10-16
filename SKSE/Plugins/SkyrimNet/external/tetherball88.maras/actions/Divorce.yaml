@@ -1,0 +1,34 @@
+customCategory: TTM_CategoryRelationship
+name: Divorce
+description: "{{render_template(\"maras_actions/maras_action_divorce\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: BreakupRelationship
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: partnerName
+    description: Display name of the partner to divorce with.
+    useNearbyActors: false
+  - type: static
+    name: status
+    value: "divorced"
+  - type: dynamic
+    name: reasoning
+    description: Explain decision from 1st POV of {{decnpc(npc.UUID).name}}. 1 short sentence.
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_divorce_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""
+      - decoratorName: actor_has_keyword
+        arguments:
+          - currentActor
+          - TTM_EAD_CurrentTarget
+        comparisonOperator: ==
+        expectedValue: false

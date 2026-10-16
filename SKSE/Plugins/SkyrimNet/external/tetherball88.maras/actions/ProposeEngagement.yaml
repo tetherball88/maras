@@ -1,0 +1,26 @@
+customCategory: TTM_CategoryRelationship
+name: ProposeEngagement
+description: "{{render_template(\"maras_actions/maras_action_propose_engagement\")}}"
+questEditorId: TTM_MainController
+scriptName: TTM_Actions
+executionFunctionName: ProposeRelationshipChange
+parameterMapping:
+  - type: speaker
+    name: akActor
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: partner
+    description: Display name of the actor who {{decnpc(npc.UUID).name}} is proposing to.
+    useNearbyActors: false
+  - type: static
+    name: targetStatus
+    value: "engaged"
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: ttm_get_propose_engagement_candidates
+        arguments:
+          - currentActor
+        comparisonOperator: "!="
+        expectedValue: ""
+

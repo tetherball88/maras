@@ -1,0 +1,13 @@
+FormKey: 00008C:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+PreviousDialog: 00008B:TT_MARAS.esp
+FavorLevel: None
+ResponseData: 0C57F7:Skyrim.esm
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 0CCD78:Skyrim.esm
+  ComparisonValue: 1

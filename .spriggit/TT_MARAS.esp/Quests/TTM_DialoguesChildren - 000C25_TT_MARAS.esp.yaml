@@ -1,0 +1,273 @@
+FormKey: 000C25:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_ServiceChildrenLogic
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: AnimalCompanion
+      Object: 0750BA:Skyrim.esm
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHAdoptionClothesKeyword
+      Object: 00D823:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHAdoptionToyKeyword
+      Object: 00D824:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptable
+      Object: 004291:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptableFaction
+      Object: 004290:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptableOrphanage
+      Object: 004286:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptableUrchins
+      Object: 004100:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoption_CrittersFemale
+      Object: 013816:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoption_CrittersMale
+      Object: 013815:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoption_PetAllowedRacesList
+      Object: 0192D2:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoption_PetDogsList
+      Object: 0192D7:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_0000
+      Object: 002F5C:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_0025
+      Object: 002F5B:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_0050
+      Object: 002F5D:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_0100
+      Object: 002F5E:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_0250
+      Object: 002F5F:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_0500
+      Object: 002F60:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_1000
+      Object: 002F61:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_Junk
+      Object: 009EE8:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionGifts_Poor
+      Object: 002F5A:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionPlayerGiftChildFemale
+      Object: 007B75:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipAdoptionPlayerGiftChildMale
+      Object: 007B74:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: BYOHRelationshipPotentialPetFaction
+      Object: 0192D6:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ChildOutfit01
+      Object: 06D92E:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ChildOutfit02
+      Object: 0958AC:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ChildOutfit03
+      Object: 0958C1:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ChildOutfit04
+      Object: 000C4C:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ChildOutfit05
+      Object: 000C4D:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild01
+      Object: 06D92C:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild01Female
+      Object: 00D821:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild01Male
+      Object: 00C742:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild02
+      Object: 0467BF:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild02Female
+      Object: 00D81F:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild02Male
+      Object: 00C743:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild03
+      Object: 0467C0:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild03Female
+      Object: 00D81E:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild03Male
+      Object: 00C744:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild04
+      Object: 00C73E:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild04Female
+      Object: 00D820:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild04Male
+      Object: 00C745:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild05
+      Object: 00C740:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild05Female
+      Object: 00D822:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: ClothesChild05Male
+      Object: 00C746:HearthFires.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: CurrentHomeExterior
+      Object: 0002BC:TT_MARAS.esp
+      Alias: 10
+    - MutagenObjectType: ScriptObjectProperty
+      Name: CurrentHomeHouse
+      Object: 0002BC:TT_MARAS.esp
+      Alias: 4
+    - MutagenObjectType: ScriptObjectProperty
+      Name: DialogueFollower
+      Object: 0750BA:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: FavorJobsBeggarMessage
+      Object: 109C1A:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: FavorJobsBeggarsAbility
+      Object: 0EEF58:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Gold001
+      Object: 00000F:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: SceneChild1
+      Object: 000216:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: SceneChild2
+      Object: 000216:TT_MARAS.esp
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: SchedulerSceneMarker1
+      Object: 0002BC:TT_MARAS.esp
+      Alias: 24
+    - MutagenObjectType: ScriptObjectProperty
+      Name: SchedulerSceneMarker2
+      Object: 0002BC:TT_MARAS.esp
+      Alias: 25
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TransientPet
+      Object: 000C25:TT_MARAS.esp
+      Alias: 4
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TTM_DialoguesChildrenScenes_SceneNameCalling01
+      Object: 000217:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TTM_DialoguesChildrenScenes_SceneNameCalling02
+      Object: 000226:TT_MARAS.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: WIGamesHideAndSeek
+      Object: 04B869:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: WIGamesHideAndSeekStart
+      Object: 04B86A:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: WIGamesTag
+      Object: 0AE004:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: WIGamesTagStart
+      Object: 0AE005:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: WIKill05
+      Object: 0ADC8C:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: WINeverFillAliasesFaction
+      Object: 0ABDAE:Skyrim.esm
+  Versioning:
+  - Break0
+  ExtraBindDataVersion: 0
+  FileName: ''
+Flags:
+- StartGameEnabled
+- 0x10
+Priority: 70
+DialogConditions:
+- MutagenObjectType: ConditionFloat
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000C23:TT_MARAS.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionGlobal
+  Flags:
+  - OR
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000060:TT_MARAS.esp
+NextAliasID: 12
+Aliases:
+- ID: 4
+  Name: TransientPet
+  Flags:
+  - Optional
+  Factions:
+  - 0192D6:HearthFires.esm
+  VoiceTypes: Null
+- ID: 5
+  Name: RootedChild001
+  Flags:
+  - Optional
+  VoiceTypes: Null
+- ID: 6
+  Name: PersistMigratedChild001
+  Flags:
+  - Optional
+  - AllowDisabled
+  VoiceTypes: Null
+- ID: 7
+  Name: PersistMigratedChild002
+  Flags:
+  - Optional
+  - AllowDisabled
+  VoiceTypes: Null
+- ID: 8
+  Name: PersistMigratedChild003
+  Flags:
+  - Optional
+  - AllowDisabled
+  VoiceTypes: Null
+- ID: 9
+  Name: PersistMigratedChild004
+  Flags:
+  - Optional
+  - AllowDisabled
+  VoiceTypes: Null
+- ID: 10
+  Name: PersistMigratedChild005
+  Flags:
+  - Optional
+  - AllowDisabled
+  VoiceTypes: Null
+- ID: 11
+  Name: PersistMigratedChild006
+  Flags:
+  - Optional
+  - AllowDisabled
+  VoiceTypes: Null

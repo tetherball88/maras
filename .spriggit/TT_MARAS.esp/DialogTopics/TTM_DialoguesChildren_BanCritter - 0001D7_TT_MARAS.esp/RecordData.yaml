@@ -1,0 +1,8 @@
+FormKey: 0001D7:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_BanCritter
+Name:
+  TargetLanguage: English
+  Value: Absolutely not. No pets. Ever.
+Branch: 0001D5:TT_MARAS.esp
+Quest: 000C25:TT_MARAS.esp
+SubtypeName: CUST

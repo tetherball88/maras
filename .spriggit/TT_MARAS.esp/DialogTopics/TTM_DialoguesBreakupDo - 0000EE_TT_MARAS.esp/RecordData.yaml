@@ -1,0 +1,9 @@
+FormKey: 0000EE:TT_MARAS.esp
+EditorID: TTM_DialoguesBreakupDo
+Name:
+  TargetLanguage: English
+  Value: It's over. I'm sorry, but this is the end of us.
+Priority: 100
+Branch: 0000DB:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

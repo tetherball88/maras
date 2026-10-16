@@ -1,0 +1,7 @@
+FormKey: 000287:TT_MARAS.esp
+EditorID: TTM_DialoguesChildren_MovingBranch
+Quest: 000C25:TT_MARAS.esp
+Category: Player
+Flags:
+- TopLevel
+StartingTopic: 000288:TT_MARAS.esp

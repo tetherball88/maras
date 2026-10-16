@@ -1,0 +1,8 @@
+FormKey: 00005F:TT_MARAS.esp
+EditorID: TTM_EnablePolygamyUragFinishTopic
+Name:
+  TargetLanguage: English
+  Value: (M) Is the translation ready?
+Branch: 00005E:TT_MARAS.esp
+Quest: 00005C:TT_MARAS.esp
+SubtypeName: CUST

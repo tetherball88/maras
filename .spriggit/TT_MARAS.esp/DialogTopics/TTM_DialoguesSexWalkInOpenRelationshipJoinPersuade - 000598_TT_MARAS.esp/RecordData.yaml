@@ -1,0 +1,8 @@
+FormKey: 000598:TT_MARAS.esp
+EditorID: TTM_DialoguesSexWalkInOpenRelationshipJoinPersuade
+Name:
+  TargetLanguage: English
+  Value: Come on, it'll be fun. And I'd really like to have you here with me.
+Branch: 000557:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

@@ -1,0 +1,23 @@
+FormKey: 000005:TT_MARAS.esp
+EditorID: TTM_IncreaseMeleeDamEffect
+Name:
+  TargetLanguage: English
+  Value: Bond of Steel
+Flags:
+- Recover
+- NoHitEvent
+- NoDuration
+- NoArea
+- NoHitEffect
+SecondActorValueWeight: 1
+Archetype:
+  MutagenObjectType: MagicEffectArchetype
+  ActorValue: OneHandedModifier
+  Type: DualValueModifier
+SecondActorValue: TwoHandedModifier
+DualCastScale: 1
+CastingSoundLevel: Normal
+Sounds: []
+Description:
+  TargetLanguage: English
+  Value: With your spouse at your side in battle, your melee attack damage is increased by <mag>%

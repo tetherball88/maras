@@ -1,0 +1,952 @@
+FormKey: 0002BC:TT_MARAS.esp
+EditorID: TTM_ChildrenSandbox
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_ChildrenSandbox
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: childChest
+      Object: 0002BC:TT_MARAS.esp
+      Alias: 14
+    - MutagenObjectType: ScriptObjectProperty
+      Name: childrenLogic
+      Object: 000C25:TT_MARAS.esp
+  FileName: ''
+  Aliases:
+  - Property:
+      Name: ''
+      Object: 0002BC:TT_MARAS.esp
+      Alias: 14
+    Scripts:
+    - Name: BYOHRelationshipAdoptionChest
+      Properties:
+      - MutagenObjectType: ScriptObjectProperty
+        Name: BYOHRelationshipAdoptionScheduler
+        Object: 0002BC:TT_MARAS.esp
+Stages:
+- Flags:
+  - StartUpStage
+NextAliasID: 46
+Aliases:
+- ID: 1
+  Name: Player
+  Flags:
+  - AllowReserved
+  ForcedReference: 000014:Skyrim.esm
+  VoiceTypes: Null
+- ID: 4
+  Type: Location
+  Name: CurrentHomeLocation
+  Flags:
+  - AllowReserved
+  Location:
+    AliasID: 1
+    Keyword: 0FC1A3:Skyrim.esm
+- ID: 6
+  Type: Location
+  Name: CurrentHomeCity
+  Flags:
+  - Optional
+  - AllowReserved
+  AliasIDToForceIntoWhenFilled: 10
+  Location:
+    AliasID: 1
+    Keyword: 013168:Skyrim.esm
+- ID: 8
+  Type: Location
+  Name: CurrentHomestead
+  Flags:
+  - Optional
+  - AllowReserved
+  AliasIDToForceIntoWhenFilled: 10
+  Location:
+    AliasID: 1
+    Keyword: 004D57:HearthFires.esm
+- ID: 10
+  Type: Location
+  Name: CurrentHomeExterior
+  Flags:
+  - Optional
+  - ForcedByAliases
+- ID: 11
+  Name: PetDoor
+  Flags:
+  - Optional
+  Location:
+    AliasID: 10
+    RefType: 01881B:HearthFires.esm
+  VoiceTypes: Null
+- ID: 12
+  Name: DollMarker
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 00D82E:HearthFires.esm
+  VoiceTypes: Null
+- ID: 13
+  Name: PracticeDummy
+  Flags:
+  - Optional
+  - AllowDisabled
+  Location:
+    AliasID: 4
+    RefType: 00425C:HearthFires.esm
+  VoiceTypes: Null
+- ID: 14
+  Name: ChildChest
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 00425D:HearthFires.esm
+  VoiceTypes: Null
+- ID: 15
+  Name: DiningTable
+  Flags:
+  - Optional
+  - AllowDisabled
+  Location:
+    AliasID: 4
+    RefType: 003F7F:HearthFires.esm
+  VoiceTypes: Null
+- ID: 16
+  Name: SandboxOutside
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 00425B:HearthFires.esm
+  VoiceTypes: Null
+- ID: 17
+  Name: SandboxHome
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 004259:HearthFires.esm
+  VoiceTypes: Null
+- ID: 18
+  Name: SandboxHome02
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 004259:HearthFires.esm
+  VoiceTypes: Null
+- ID: 19
+  Name: SandboxHome03
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 004259:HearthFires.esm
+  VoiceTypes: Null
+- ID: 20
+  Name: SandboxHome04
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 004259:HearthFires.esm
+  VoiceTypes: Null
+- ID: 21
+  Name: SandboxRoom
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 00425A:HearthFires.esm
+  VoiceTypes: Null
+- ID: 22
+  Name: PatrolChores1
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 003F30:HearthFires.esm
+  VoiceTypes: Null
+- ID: 23
+  Name: PatrolChores2
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 003F30:HearthFires.esm
+  VoiceTypes: Null
+- ID: 24
+  Name: SceneMarker1
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 00401B:HearthFires.esm
+  VoiceTypes: Null
+- ID: 25
+  Name: SceneMarker2
+  Flags:
+  - Optional
+  Location:
+    AliasID: 4
+    RefType: 00401B:HearthFires.esm
+  VoiceTypes: Null
+- ID: 26
+  Name: Child001
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 27
+  Name: Child002
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 28
+  Name: Child003
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 29
+  Name: Child004
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 30
+  Name: Child005
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 40
+  Name: Child006
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 39
+  Name: Child007
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 38
+  Name: Child008
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 37
+  Name: Child009
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 36
+  Name: Child010
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 35
+  Name: Child011
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 34
+  Name: Child012
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 33
+  Name: Child013
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 32
+  Name: Child014
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 31
+  Name: Child015
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 45
+  Name: Child016
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 44
+  Name: Child017
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 43
+  Name: Child018
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 42
+  Name: Child019
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 41
+  Name: Child020
+  Flags:
+  - Optional
+  - AllowReserved
+  Factions:
+  - 0042B0:HearthFires.esm
+  - 000DB1:Skyrim.esm
+  - 0183A8:HearthFires.esm
+  PackageData:
+  - 0002BE:TT_MARAS.esp
+  - 0002BF:TT_MARAS.esp
+  - 0002C0:TT_MARAS.esp
+  - 0002C1:TT_MARAS.esp
+  - 0002C2:TT_MARAS.esp
+  - 0002C3:TT_MARAS.esp
+  - 0002D7:TT_MARAS.esp
+  - 0002D8:TT_MARAS.esp
+  - 0002C4:TT_MARAS.esp
+  - 0002C5:TT_MARAS.esp
+  - 0002C6:TT_MARAS.esp
+  - 0002C7:TT_MARAS.esp
+  - 0002C8:TT_MARAS.esp
+  - 0002C9:TT_MARAS.esp
+  - 0002CA:TT_MARAS.esp
+  - 0002CB:TT_MARAS.esp
+  - 0002CC:TT_MARAS.esp
+  - 0002CD:TT_MARAS.esp
+  - 0002CE:TT_MARAS.esp
+  - 0002CF:TT_MARAS.esp
+  - 0002D0:TT_MARAS.esp
+  - 0002D1:TT_MARAS.esp
+  - 0002D2:TT_MARAS.esp
+  - 0002D3:TT_MARAS.esp
+  - 0002D4:TT_MARAS.esp
+  - 0002D5:TT_MARAS.esp
+  - 0002D6:TT_MARAS.esp
+  VoiceTypes: Null

@@ -1,0 +1,13 @@
+{% set speakingNpc = decnpc(npc.UUID) %}
+{% set loverCandidates = ttm_get_propose_lover_candidates(npc.UUID) %}
+{% set exclusivePartners = ttm_get_exclusive_main_partners(npc.UUID) %}
+
+{% if loverCandidates != "" %}Available actors for becoming lovers: {{loverCandidates}}{% endif %}
+
+Lovers = casual, recurring sexual arrangement. NOT exclusive, NOT devoted — less serious than dating. Entering it while married/engaged/dating someone else counts as cheating.
+{% if exclusivePartners != ""    %}
+WARNING: {{speakingNpc.name}} is currently in an exclusive relationship with {{exclusivePartners}}. Proposing this lover arrangement WILL count as cheating on {{exclusivePartners}}.
+{% endif %}
+USE ONLY when {{speakingNpc.name}} explicitly proposes becoming lovers.
+NEVER use for flirting, compliments, attraction alone, or a single sexual act (that's a hookup, not lovers).
+NEVER confuse with dating (more committed) or engagement (marriage prerequisite).

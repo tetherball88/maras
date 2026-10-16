@@ -1,0 +1,37 @@
+FormKey: 000092:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000098:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- Emotion: Happy
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Goodbye, my love.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  CompareOperator: GreaterThanOrEqualTo
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000119:TT_MARAS.esp
+  ComparisonValue: 50
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: HasKeywordConditionData
+    Keyword: 000C20:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetIsVoiceTypeConditionData
+    VoiceTypeOrList: 047A00:Skyrim.esm
+- MutagenObjectType: ConditionGlobal
+  Data:
+    MutagenObjectType: GetFactionRankConditionData
+    Faction: 000007:TT_MARAS.esp
+  ComparisonValue: 000060:TT_MARAS.esp
