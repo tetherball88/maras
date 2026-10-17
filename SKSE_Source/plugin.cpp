@@ -203,8 +203,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         break;
 
                     case SKSE::MessagingInterface::kPostLoadGame:
-                    case SKSE::MessagingInterface::kNewGame:
-                        MARAS_LOG_INFO("New game/Load...");
+                    case SKSE::MessagingInterface::kNewGame: {
+                        const bool isNewGame = (message->type == SKSE::MessagingInterface::kNewGame);
+                        MARAS_LOG_INFO("New game/Load (isNewGame={})...", isNewGame);
                         MARAS::NPCIndex::GetSingleton().RefreshIndex();
 
                         // Load runtime-only bonuses.json and marriage difficulty config on game load
@@ -225,13 +226,14 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
                         // Check and trigger initial relationship scan on first load of this save
                         if (!MARAS::Settings::GetSingleton().initialRelationshipScanDone) {
-                            MARAS::NPCRelationshipManager::GetSingleton().ScanExistingRelationships();
+                            MARAS::NPCRelationshipManager::GetSingleton().ScanExistingRelationships(isNewGame);
                             MARAS::Settings::GetSingleton().initialRelationshipScanDone = true;
                         }
 
                         // Log statistics after save data has been loaded
                         MARAS::NPCRelationshipManager::GetSingleton().LogStatistics();
                         break;
+                    }
 
                     case SKSE::MessagingInterface::kDataLoaded: {
                         MARAS_LOG_INFO("Data loaded successfully.");

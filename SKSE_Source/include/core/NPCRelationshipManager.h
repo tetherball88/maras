@@ -343,7 +343,7 @@ namespace MARAS {
         std::vector<std::pair<RE::FormID, RelationshipStatus>> GetActiveRelationships(RE::FormID actorID) const;
 
         // Original relationship tracking & initial scan
-        void ScanExistingRelationships();
+        void ScanExistingRelationships(bool isNewGame = false);
         bool ApplyImportedVanillaStatus(RE::FormID actorA, RE::FormID actorB, RelationshipStatus vanillaStatus, RelationshipStatus targetStatus);
         bool HasMarasMaritalHistory(RE::FormID npcFormID) const;
         RelationshipStatus GetOriginalRelationshipStatus(RE::FormID actorA, RE::FormID actorB) const;

@@ -36,6 +36,7 @@
   - Vanilla **Courting** pairs become `Dating`.
   - Vanilla **Lovers** become `Lover`.
   - Vanilla **Parent-Child** pairs are registered in the child lineage system (automatically pairing the parent's current partner as the second co-guardian and assigning `bioMotherID` / `bioFatherID` based on actor sex).
+  - **Clean Slate for Player on New Game (`kNewGame`)**: When starting a brand-new game (`isNewGame == true`), any `BGSRelationship` records involving the Player (`0x00000007` / `0x00000014`) are ignored so custom followers with plugin-baked `Lover` (Rank 4) relationships do not automatically become the player's lovers at game start. (When loading an existing ongoing save for the first time via `kPostLoadGame`, player-NPC relationships are still imported normally.)
 - **Conflict Resolution with Player Romance**: If an NPC in a vanilla couple has already entered a relationship with the Player (or another partner via M.A.R.A.S), their pre-existing vanilla marriage or courtship is automatically converted to `Divorced` or `Ex-Dating` so they don't remain simultaneously married to their vanilla spouse.
 - **Deferred Loading for Unspawned NPCs**: Many NPCs in Skyrim only exist as Base records until a quest spawns their physical Actor Reference in the world. If either partner (or child) hasn't spawned yet during the initial world scan, the relationship is queued in a **Pending Deferred List** and automatically activates the moment that NPC loads into the game world.
 

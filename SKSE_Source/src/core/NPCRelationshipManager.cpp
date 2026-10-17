@@ -2348,9 +2348,9 @@ namespace MARAS {
         return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/false);
     }
 
-    void NPCRelationshipManager::ScanExistingRelationships() {
+    void NPCRelationshipManager::ScanExistingRelationships(bool isNewGame) {
         auto startTime = std::chrono::steady_clock::now();
-        MARAS_LOG_INFO("Starting scanning of existing in-game relationships (Courting, Spouse, Lover, Parent-Child)...");
+        MARAS_LOG_INFO("Starting scanning of existing in-game relationships (Courting, Spouse, Lover, Parent-Child) [isNewGame={}]...", isNewGame);
 
         auto dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) {
@@ -2374,12 +2374,21 @@ namespace MARAS {
         };
         std::vector<ScannedChildEntry> scannedChildren;
 
+        auto isPlayerForm = [](RE::FormID id) -> bool {
+            return id == kPlayerBaseID || id == kPlayerRefID;
+        };
+
         // Pre-collect set of all vanilla relationship pair keys
         std::unordered_set<RelationshipPairKey, RelationshipPairKeyHash> vanillaPairKeys;
         for (auto* rel : relArray) {
             if (!rel || !rel->npc1 || !rel->npc2) continue;
-            RE::FormID id1 = npcIndex.GetRefID(rel->npc1->GetFormID());
-            RE::FormID id2 = npcIndex.GetRefID(rel->npc2->GetFormID());
+            RE::FormID b1 = rel->npc1->GetFormID();
+            RE::FormID b2 = rel->npc2->GetFormID();
+            if (isNewGame && (isPlayerForm(b1) || isPlayerForm(b2))) {
+                continue;
+            }
+            RE::FormID id1 = npcIndex.GetRefID(b1);
+            RE::FormID id2 = npcIndex.GetRefID(b2);
             if (id1 != 0 && id2 != 0) {
                 vanillaPairKeys.emplace(id1, id2);
             }
@@ -2426,6 +2435,12 @@ namespace MARAS {
 
             RE::FormID baseID1 = npc1Base->GetFormID();
             RE::FormID baseID2 = npc2Base->GetFormID();
+
+            if (isNewGame && (isPlayerForm(baseID1) || isPlayerForm(baseID2))) {
+                MARAS_LOG_INFO("ScanExistingRelationships: Ignoring player-NPC relationship ({:08X} <-> {:08X}) on new game",
+                               baseID1, baseID2);
+                continue;
+            }
 
             auto entry1 = npcIndex.FindByFormID(baseID1);
             auto entry2 = npcIndex.FindByFormID(baseID2);
