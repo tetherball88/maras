@@ -25,7 +25,7 @@ export const GeneralSettings: React.FC = () => {
 
         <SettingRow
           label="Affection Decay Multiplier"
-          description={`Scale daily affection decay rate when not interacting (${settings.affectionDecayMult}x).`}
+          description={`Scale daily affection decay rate when not interacting (${Number(settings.affectionDecayMult.toFixed(2))}x).`}
         >
           <SliderInput
             value={settings.affectionDecayMult}

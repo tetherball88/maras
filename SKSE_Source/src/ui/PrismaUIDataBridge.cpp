@@ -368,11 +368,17 @@ namespace MARAS {
         return profile;
     }
 
+    namespace {
+        inline double RoundFloat(float val, double factor = 100.0) {
+            return std::round(static_cast<double>(val) * factor) / factor;
+        }
+    }
+
     nlohmann::json PrismaUIDataBridge::BuildSettingsJson() {
         auto& settings = Settings::GetSingleton();
         nlohmann::json j;
         j["skipWedding"] = settings.skipWedding;
-        j["affectionDecayMult"] = settings.affectionDecayMultiplier;
+        j["affectionDecayMult"] = RoundFloat(settings.affectionDecayMultiplier);
         j["enablePolygamy"] = settings.GetEnablePolygamy();
         j["disablePolygamyQuest"] = settings.GetDisablePolygamyQuest();
         j["hasSkyrimNet"] = IsSkyrimNetAvailable();
@@ -395,7 +401,7 @@ namespace MARAS {
         j["enableConfirmationModal"] = settings.enableConfirmationModal;
         j["actionsCooldown"] = settings.actionsCooldown;
         j["actionsDeclineCooldown"] = settings.actionsDeclineCooldown;
-        j["skyrimnetActionRadius"] = settings.skyrimnetActionRadius;
+        j["skyrimnetActionRadius"] = RoundFloat(settings.skyrimnetActionRadius);
         j["matchmakingExcludePlayerActivePartners"] = settings.matchmakingExcludePlayerActivePartners;
         j["alwaysSuccess"] = settings.alwaysSuccessMarriage;
         j["logLevel"] = settings.logLevel;
@@ -410,10 +416,10 @@ namespace MARAS {
         j["globalBanCritter"] = settings.IsGlobalCritterBanned();
         j["globalBanPet"] = settings.IsGlobalPetBanned();
         j["paternityBaseChance"] = settings.paternityBaseChance;
-        j["paternityDailyGrowth"] = settings.paternityDailyGrowth;
+        j["paternityDailyGrowth"] = RoundFloat(settings.paternityDailyGrowth);
         j["paternityMaxChance"] = settings.paternityMaxChance;
         j["paternityPhenotypeBaseChance"] = settings.paternityPhenotypeBaseChance;
-        j["paternityPhenotypeDailyGrowth"] = settings.paternityPhenotypeDailyGrowth;
+        j["paternityPhenotypeDailyGrowth"] = RoundFloat(settings.paternityPhenotypeDailyGrowth);
         j["paternityPhenotypeMaxChance"] = settings.paternityPhenotypeMaxChance;
         j["paternityPhenotypeBirthChance"] = settings.paternityPhenotypeBirthChance;
         j["paternityNonSkyrimNetRevealChance"] = settings.paternityNonSkyrimNetRevealChance;
@@ -421,7 +427,7 @@ namespace MARAS {
         j["paternityBioStepUpChance"] = settings.paternityBioStepUpChance;
         j["paternityForceDiceRolls"] = settings.paternityForceDiceRolls;
         j["enableScenes"] = settings.enableScenes;
-        j["scenesCooldownHours"] = settings.scenesCooldownHours;
+        j["scenesCooldownHours"] = RoundFloat(settings.scenesCooldownHours);
         j["enableScenes_Lover"] = settings.enableScenes_Lover;
         j["enableScenes_Dating"] = settings.enableScenes_Dating;
         j["enableScenes_Engaged"] = settings.enableScenes_Engaged;
@@ -678,7 +684,7 @@ namespace MARAS {
             nlohmann::json affObj;
             affObj["formId"] = FormIDToString(formID);
             affObj["permanent"] = affSvc.GetPermanentAffection(formID);
-            affObj["decayMultiplier"] = affSvc.GetDecayMultiplier();
+            affObj["decayMultiplier"] = RoundFloat(affSvc.GetDecayMultiplier());
             affObj["daysSinceLastInteraction"] = std::round(affSvc.GetDaysSinceLastAffection(formID));
             affArray.push_back(affObj);
         }
@@ -772,7 +778,7 @@ namespace MARAS {
         }
 
         detail["affection"]["permanent"] = affSvc.GetPermanentAffection(npcFormID);
-        detail["affection"]["decayMultiplier"] = affSvc.GetDecayMultiplier();
+        detail["affection"]["decayMultiplier"] = RoundFloat(affSvc.GetDecayMultiplier());
         detail["affection"]["daysSinceLastInteraction"] = std::round(affSvc.GetDaysSinceLastAffection(npcFormID));
 
         detail["hierarchyRank"] = hierMgr.GetRank(npcFormID);

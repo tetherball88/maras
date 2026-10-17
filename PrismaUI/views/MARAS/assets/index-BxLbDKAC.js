@@ -17400,7 +17400,7 @@ Defaulting to \`null\`.`;
     showLabel = true,
     className = ""
   }) => {
-    const clampedValue = Math.max(0, Math.min(100, value));
+    const clampedValue = Math.round(Math.max(0, Math.min(100, value)));
     let indicatorColor = "bg-accent";
     if (clampedValue >= 70) {
       indicatorColor = "bg-status-success";
@@ -27293,21 +27293,25 @@ Defaulting to \`null\`.`;
     onChange,
     className = ""
   }) => {
+    const stepStr = step.toString();
+    const decimals = stepStr.includes(".") ? stepStr.split(".")[1].length : 0;
+    const roundToStep = (val) => decimals > 0 ? Number(val.toFixed(decimals)) : Math.round(val);
+    const displayValue = roundToStep(value);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.75rem] ${className} ${disabled ? "opacity-40" : ""}`, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         Slider,
         {
-          value: [value],
+          value: [displayValue],
           min: min2,
           max: max2,
           step,
           disabled,
-          onValueChange: (vals) => onChange(vals[0]),
+          onValueChange: (vals) => onChange(roundToStep(vals[0])),
           className: "flex-1 w-[6rem]"
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-mono font-semibold text-accent-bright min-w-[2.5rem] text-right", children: [
-        value,
+        displayValue,
         unit
       ] })
     ] });
@@ -27407,7 +27411,7 @@ Defaulting to \`null\`.`;
         SettingRow,
         {
           label: "Affection Decay Multiplier",
-          description: `Scale daily affection decay rate when not interacting (${settings.affectionDecayMult}x).`,
+          description: `Scale daily affection decay rate when not interacting (${Number(settings.affectionDecayMult.toFixed(2))}x).`,
           children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             SliderInput,
             {
@@ -28845,6 +28849,7 @@ Defaulting to \`null\`.`;
   const FertilitySettings = () => {
     const settings = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
+    const cleanNum = (val, fallback) => Number((val ?? fallback).toFixed(2));
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Paternity Daily Evaluation Formulas (Shared)", icon: Eye, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-panel-inset/80 border border-border-subtle rounded-lg space-y-[0.625rem]", children: [
@@ -28862,7 +28867,7 @@ Defaulting to \`null\`.`;
                   min: 0,
                   max: 100,
                   step: 1,
-                  value: settings.paternityBaseChance ?? 2,
+                  value: cleanNum(settings.paternityBaseChance, 2),
                   onChange: (e) => updateSetting("paternityBaseChance", Math.max(0, Math.min(100, Number(e.target.value)))),
                   className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                 }
@@ -28882,7 +28887,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 20,
                     step: 0.5,
-                    value: settings.paternityDailyGrowth ?? 2,
+                    value: cleanNum(settings.paternityDailyGrowth, 2),
                     onChange: (e) => updateSetting("paternityDailyGrowth", Math.max(0, Math.min(20, Number(e.target.value)))),
                     className: "w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                   }
@@ -28901,7 +28906,7 @@ Defaulting to \`null\`.`;
                   min: 0,
                   max: 100,
                   step: 1,
-                  value: settings.paternityMaxChance ?? 60,
+                  value: cleanNum(settings.paternityMaxChance, 60),
                   onChange: (e) => updateSetting("paternityMaxChance", Math.max(0, Math.min(100, Number(e.target.value)))),
                   className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                 }
@@ -28947,7 +28952,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    value: settings.paternityPhenotypeBaseChance ?? 15,
+                    value: cleanNum(settings.paternityPhenotypeBaseChance, 15),
                     onChange: (e) => updateSetting("paternityPhenotypeBaseChance", Math.max(0, Math.min(100, Number(e.target.value)))),
                     className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
                   }
@@ -28968,7 +28973,7 @@ Defaulting to \`null\`.`;
                       min: 0,
                       max: 20,
                       step: 0.5,
-                      value: settings.paternityPhenotypeDailyGrowth ?? 4,
+                      value: cleanNum(settings.paternityPhenotypeDailyGrowth, 4),
                       onChange: (e) => updateSetting("paternityPhenotypeDailyGrowth", Math.max(0, Math.min(20, Number(e.target.value)))),
                       className: "w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
                     }
@@ -28988,7 +28993,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    value: settings.paternityPhenotypeMaxChance ?? 80,
+                    value: cleanNum(settings.paternityPhenotypeMaxChance, 80),
                     onChange: (e) => updateSetting("paternityPhenotypeMaxChance", Math.max(0, Math.min(100, Number(e.target.value)))),
                     className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
                   }
@@ -30330,7 +30335,7 @@ Defaulting to \`null\`.`;
       {
         title: "Affection Rating",
         icon: Heart,
-        subtitle: `${currentAffection}%`,
+        subtitle: `${Math.round(currentAffection)}%`,
         className,
         children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem] pt-[0.25rem] flex flex-col justify-between h-full", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -30347,7 +30352,7 @@ Defaulting to \`null\`.`;
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.6875rem] text-foreground-muted pt-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
               "Decay Mult: ",
-              (affectionObj == null ? void 0 : affectionObj.decayMultiplier) ?? 1,
+              Number(((affectionObj == null ? void 0 : affectionObj.decayMultiplier) ?? 1).toFixed(2)),
               "x"
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [

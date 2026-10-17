@@ -14,7 +14,7 @@ export const AffectionBar: React.FC<AffectionBarProps> = ({
   showLabel = true,
   className = '',
 }) => {
-  const clampedValue = Math.max(0, Math.min(100, value))
+  const clampedValue = Math.round(Math.max(0, Math.min(100, value)))
 
   let indicatorColor = 'bg-accent'
   if (clampedValue >= 70) {

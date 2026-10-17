@@ -140,7 +140,7 @@ export const PartnerDetailPanel: React.FC = () => {
                 <SectionCard
                   title="Affection Rating"
                   icon={Heart}
-                  subtitle={`${currentAffection}%`}
+                  subtitle={`${Math.round(currentAffection)}%`}
                 >
                   <div className="space-y-[0.5rem] pt-[0.25rem]">
                     <SliderInput
@@ -153,7 +153,7 @@ export const PartnerDetailPanel: React.FC = () => {
                     />
 
                     <div className="flex items-center justify-between text-[0.6875rem] text-foreground-muted">
-                      <span>Decay Mult: {affectionObj?.decayMultiplier ?? 1.0}x</span>
+                      <span>Decay Mult: {Number((affectionObj?.decayMultiplier ?? 1.0).toFixed(2))}x</span>
                       <span>
                         Last Seen:{' '}
                         {affectionObj?.daysSinceLastInteraction != null

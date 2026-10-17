@@ -22,19 +22,25 @@ export const SliderInput: React.FC<SliderInputProps> = ({
   onChange,
   className = '',
 }) => {
+  const stepStr = step.toString()
+  const decimals = stepStr.includes('.') ? stepStr.split('.')[1].length : 0
+  const roundToStep = (val: number) =>
+    decimals > 0 ? Number(val.toFixed(decimals)) : Math.round(val)
+  const displayValue = roundToStep(value)
+
   return (
     <div className={`flex items-center gap-[0.75rem] ${className} ${disabled ? 'opacity-40' : ''}`}>
       <Slider
-        value={[value]}
+        value={[displayValue]}
         min={min}
         max={max}
         step={step}
         disabled={disabled}
-        onValueChange={(vals) => onChange(vals[0])}
+        onValueChange={(vals) => onChange(roundToStep(vals[0]))}
         className="flex-1 w-[6rem]"
       />
       <span className="text-xs font-mono font-semibold text-accent-bright min-w-[2.5rem] text-right">
-        {value}
+        {displayValue}
         {unit}
       </span>
     </div>

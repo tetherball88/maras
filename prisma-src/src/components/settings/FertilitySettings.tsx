@@ -10,6 +10,8 @@ import { Eye, Dices, Bot } from 'lucide-react'
 export const FertilitySettings: React.FC = () => {
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
+  const cleanNum = (val: number | undefined, fallback: number) =>
+    Number((val ?? fallback).toFixed(2))
 
   return (
     <div className="space-y-[1rem]">
@@ -33,7 +35,7 @@ export const FertilitySettings: React.FC = () => {
                   min={0}
                   max={100}
                   step={1}
-                  value={settings.paternityBaseChance ?? 2}
+                  value={cleanNum(settings.paternityBaseChance, 2)}
                   onChange={(e) => updateSetting('paternityBaseChance' as any, Math.max(0, Math.min(100, Number(e.target.value))))}
                   className="w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                 />
@@ -55,7 +57,7 @@ export const FertilitySettings: React.FC = () => {
                     min={0}
                     max={20}
                     step={0.5}
-                    value={settings.paternityDailyGrowth ?? 2.0}
+                    value={cleanNum(settings.paternityDailyGrowth, 2.0)}
                     onChange={(e) => updateSetting('paternityDailyGrowth' as any, Math.max(0, Math.min(20, Number(e.target.value))))}
                     className="w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                   />
@@ -76,7 +78,7 @@ export const FertilitySettings: React.FC = () => {
                   min={0}
                   max={100}
                   step={1}
-                  value={settings.paternityMaxChance ?? 60}
+                  value={cleanNum(settings.paternityMaxChance, 60)}
                   onChange={(e) => updateSetting('paternityMaxChance' as any, Math.max(0, Math.min(100, Number(e.target.value))))}
                   className="w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                 />
@@ -134,7 +136,7 @@ export const FertilitySettings: React.FC = () => {
                       min={0}
                       max={100}
                       step={1}
-                      value={settings.paternityPhenotypeBaseChance ?? 15}
+                      value={cleanNum(settings.paternityPhenotypeBaseChance, 15)}
                       onChange={(e) => updateSetting('paternityPhenotypeBaseChance' as any, Math.max(0, Math.min(100, Number(e.target.value))))}
                       className="w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
                     />
@@ -157,7 +159,7 @@ export const FertilitySettings: React.FC = () => {
                         min={0}
                         max={20}
                         step={0.5}
-                        value={settings.paternityPhenotypeDailyGrowth ?? 4.0}
+                        value={cleanNum(settings.paternityPhenotypeDailyGrowth, 4.0)}
                         onChange={(e) => updateSetting('paternityPhenotypeDailyGrowth' as any, Math.max(0, Math.min(20, Number(e.target.value))))}
                         className="w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
                       />
@@ -179,7 +181,7 @@ export const FertilitySettings: React.FC = () => {
                       min={0}
                       max={100}
                       step={1}
-                      value={settings.paternityPhenotypeMaxChance ?? 80}
+                      value={cleanNum(settings.paternityPhenotypeMaxChance, 80)}
                       onChange={(e) => updateSetting('paternityPhenotypeMaxChance' as any, Math.max(0, Math.min(100, Number(e.target.value))))}
                       className="w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
                     />

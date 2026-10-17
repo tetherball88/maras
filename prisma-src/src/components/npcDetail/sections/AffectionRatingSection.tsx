@@ -23,7 +23,7 @@ export const AffectionRatingSection: React.FC<AffectionRatingSectionProps> = ({
     <SectionCard
       title="Affection Rating"
       icon={Heart}
-      subtitle={`${currentAffection}%`}
+      subtitle={`${Math.round(currentAffection)}%`}
       className={className}
     >
       <div className="space-y-[0.5rem] pt-[0.25rem] flex flex-col justify-between h-full">
@@ -36,7 +36,7 @@ export const AffectionRatingSection: React.FC<AffectionRatingSectionProps> = ({
           className="w-full"
         />
         <div className="flex items-center justify-between text-[0.6875rem] text-foreground-muted pt-[0.25rem]">
-          <span>Decay Mult: {affectionObj?.decayMultiplier ?? 1.0}x</span>
+          <span>Decay Mult: {Number((affectionObj?.decayMultiplier ?? 1.0).toFixed(2))}x</span>
           <span>
             Last Interaction:{' '}
             {affectionObj?.daysSinceLastInteraction != null
