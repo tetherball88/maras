@@ -418,6 +418,7 @@ namespace MARAS {
         bool PromoteToExDating(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID, bool sendEvent = true);
         bool PromoteToExLover(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID, bool sendEvent = true);
         bool DemoteToCandidate(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID, bool sendEvent = true);
+        bool RemoveRelationship(RE::FormID actorA, RE::FormID actorB);
         bool Breakup(RE::FormID actorA, RE::FormID actorB, bool sendEvent = true);
         bool PromoteToStatusWith(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus status, bool sendEvent = true, bool breakLovers = true);
         int BreakAllLoverConnections(RE::FormID actorID, bool onlyCheating = false);

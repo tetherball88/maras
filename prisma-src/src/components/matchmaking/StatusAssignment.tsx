@@ -11,9 +11,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { ToggleSwitch } from '../shared/ToggleSwitch'
-import { HeartHandshake, ArrowRightLeft, AlertCircle, Check, ShieldOff, ShieldCheck } from 'lucide-react'
-import { useAvailableStatuses } from '../../utils/statusAvailability'
+import { HeartHandshake, ArrowRightLeft, AlertCircle, Check, Trash2 } from 'lucide-react'
+import { useAvailableStatuses, areSameFormId } from '../../utils/statusAvailability'
 
 export const StatusAssignment: React.FC = () => {
   const npcA = useMarasStore((s) => s.matchmakingNpcA)
@@ -22,8 +21,6 @@ export const StatusAssignment: React.FC = () => {
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const assignRelationship = useMarasStore((s) => s.assignRelationshipStatus)
   const removeRelationship = useMarasStore((s) => s.removeRelationship)
-  const bypassRules = useMarasStore((s) => s.bypassStatusRules)
-  const setBypassRules = useMarasStore((s) => s.setBypassStatusRules)
 
   const [selectedTargetStatus, setSelectedTargetStatus] = useState<RelationshipStatus | null>(null)
   const [successFeedback, setSuccessFeedback] = useState(false)
@@ -46,8 +43,8 @@ export const StatusAssignment: React.FC = () => {
   // Find existing pair relationship
   const existingRel = relationships.find(
     (r) =>
-      (r.actorA === npcA && r.actorB === npcB) ||
-      (r.actorA === npcB && r.actorB === npcA),
+      (areSameFormId(r.actorA, npcA) && areSameFormId(r.actorB, npcB)) ||
+      (areSameFormId(r.actorA, npcB) && areSameFormId(r.actorB, npcA)),
   )
 
   const currentStatus = existingRel ? existingRel.status : RelationshipStatus.Candidate
@@ -92,26 +89,6 @@ export const StatusAssignment: React.FC = () => {
               </span>
             )}
           </div>
-        </div>
-
-        {/* Bypass Rules Toggle Card */}
-        <div className="bg-panel-inset border border-border-subtle rounded p-[0.5rem] flex items-center justify-between gap-[0.5rem]">
-          <div className="flex items-center gap-[0.375rem] text-xs min-w-0">
-            {bypassRules ? (
-              <ShieldOff className="w-[1.125em] h-[1.125em] text-status-warning flex-shrink-0" />
-            ) : (
-              <ShieldCheck className="w-[1.125em] h-[1.125em] text-status-success flex-shrink-0" />
-            )}
-            <div className="flex flex-col min-w-0">
-              <span className="font-semibold text-foreground-primary text-xs truncate">
-                Bypass Status Rules
-              </span>
-              <span className="text-[0.625rem] text-foreground-muted truncate">
-                {bypassRules ? 'All statuses unlocked' : 'Enforce progression rules'}
-              </span>
-            </div>
-          </div>
-          <ToggleSwitch checked={bypassRules} onChange={setBypassRules} />
         </div>
 
         {/* Status Selection Buttons */}
@@ -194,14 +171,15 @@ export const StatusAssignment: React.FC = () => {
             )}
           </Button>
 
-          {existingRel && (
+          {existingRel && existingRel.status !== RelationshipStatus.Candidate && (
             <Button
               variant="danger"
               size="sm"
               onClick={handleRemove}
               className="w-full flex items-center justify-center gap-[0.375rem] text-xs"
             >
-              <span>Sever / Remove Relationship</span>
+              <Trash2 className="w-[0.95em] h-[0.95em]" />
+              <span>Remove Relationship Record</span>
             </Button>
           )}
         </div>

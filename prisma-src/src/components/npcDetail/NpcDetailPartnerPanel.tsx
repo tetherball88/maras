@@ -44,6 +44,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
   const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile)
   const setHierarchyRank = useMarasStore((s) => s.setHierarchyRank)
   const assignRelationshipStatus = useMarasStore((s) => s.assignRelationshipStatus)
+  const removeRelationship = useMarasStore((s) => s.removeRelationship)
   const removeChild = useMarasStore((s) => s.removeChild)
 
   const isOpen = Boolean(partnerId)
@@ -238,7 +239,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
               {/* Relationship Status Selector */}
               {currentRel && currentNpcId && partnerId && (
                 <SectionCard title="Relationship Status" icon={Heart}>
-                  <div className="pt-[0.25rem]">
+                  <div className="pt-[0.25rem] space-y-[0.5rem]">
                     <SelectInput
                       value={currentRel.status}
                       options={availableStatusOptions}
@@ -247,6 +248,22 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                       }
                       className="w-full text-xs"
                     />
+                    {(Boolean(
+                      foundRel &&
+                        foundRel.status !== RelationshipStatus.Candidate &&
+                        foundRel.status !== RelationshipStatus.Unknown,
+                    ) ||
+                      isUnofficialAffair) && (
+                      <AppTooltip content="Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate">
+                        <button
+                          onClick={() => removeRelationship(currentNpcId, partnerId)}
+                          className="w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-[0.95em] h-[0.95em]" />
+                          <span>Remove Relationship Record</span>
+                        </button>
+                      </AppTooltip>
+                    )}
                   </div>
                 </SectionCard>
               )}

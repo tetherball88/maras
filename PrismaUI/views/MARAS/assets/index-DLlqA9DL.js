@@ -14550,9 +14550,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     RelationshipStatus.ExLover
   ];
   function checkRelationshipStatusAvailability(actorA, actorB, targetStatus, context) {
-    if (context.bypassRules) {
-      return { available: true };
-    }
     if (areSameFormId(actorA, actorB)) {
       return { available: false, reason: "An actor cannot form a relationship with themselves." };
     }
@@ -14684,8 +14681,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     const ctx = {
       relationships: (context == null ? void 0 : context.relationships) ?? store.relationships,
       npcProfiles: (context == null ? void 0 : context.npcProfiles) ?? store.npcProfiles,
-      enablePolygamy: (context == null ? void 0 : context.enablePolygamy) ?? store.settings.enablePolygamy,
-      bypassRules: (context == null ? void 0 : context.bypassRules) ?? store.bypassStatusRules
+      enablePolygamy: (context == null ? void 0 : context.enablePolygamy) ?? store.settings.enablePolygamy
     };
     if (!actorA || !actorB) {
       return ASSIGNABLE_STATUSES.map((st) => ({
@@ -14742,15 +14738,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const enablePolygamy = useMarasStore((s) => s.settings.enablePolygamy);
-    const bypassRules = useMarasStore((s) => s.bypassStatusRules);
     return reactExports.useMemo(() => {
       return getAvailableStatuses(actorA, actorB, {
         relationships,
         npcProfiles,
-        enablePolygamy,
-        bypassRules
+        enablePolygamy
       });
-    }, [actorA, actorB, relationships, npcProfiles, enablePolygamy, bypassRules]);
+    }, [actorA, actorB, relationships, npcProfiles, enablePolygamy]);
   }
   const isGameBuild = isInGame();
   const initialNpcMap = /* @__PURE__ */ new Map();
@@ -14810,7 +14804,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     selectedNpcRelationsId: PLAYER_FORM_ID,
     matchmakingNpcA: null,
     matchmakingNpcB: null,
-    bypassStatusRules: false,
     detailPanelOpen: false,
     searchQueryA: "",
     searchQueryB: "",
@@ -15139,7 +15132,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }));
     },
     applyAiSuggestions: (npcId) => {
-      const { aiSuggestions, assignRelationshipStatus, removeRelationship, setPairIsOpen } = get();
+      const { aiSuggestions, assignRelationshipStatus, setPairIsOpen } = get();
       const selected = aiSuggestions.filter((s) => s.selected);
       selected.forEach((s) => {
         const primaryActor = s.actorAFormId || npcId;
@@ -15148,8 +15141,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           setPairIsOpen(primaryActor, s.formId, true, true);
         } else if (s.action === "close") {
           setPairIsOpen(primaryActor, s.formId, false, true);
-        } else if (s.action === "breakup") {
-          removeRelationship(primaryActor, s.formId, true);
         } else {
           assignRelationshipStatus(primaryActor, s.formId, s.suggestedStatus, s.dualMemories, true);
         }
@@ -15415,7 +15406,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     setSelectedNpcRelationsId: (id2) => set({ selectedNpcRelationsId: id2 }),
     setMatchmakingNpcA: (id2) => set({ matchmakingNpcA: id2 }),
     setMatchmakingNpcB: (id2) => set({ matchmakingNpcB: id2 }),
-    setBypassStatusRules: (bypassStatusRules) => set({ bypassStatusRules }),
     setDetailPanelOpen: (detailPanelOpen) => set({ detailPanelOpen }),
     setLiveGameData: (data) => {
       set((state) => {
@@ -15652,6 +15642,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     handleRealtimeStatusChanged: (actorA, actorB, status, isOpen) => {
       set((state) => {
+        if (status === RelationshipStatus.Candidate || status === RelationshipStatus.Unknown) {
+          return {
+            relationships: state.relationships.filter(
+              (r2) => !(areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA))
+            )
+          };
+        }
         const pairIndex = state.relationships.findIndex(
           (r2) => areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA)
         );
@@ -15693,11 +15690,21 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     removeRelationship: (actorA, actorB, fromMatchmaking) => {
       sendMarasAction("removeRelationship", { actorA, actorB, fromMatchmaking });
-      set((state) => ({
-        relationships: state.relationships.filter(
-          (r2) => !(areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA))
-        )
-      }));
+      set((state) => {
+        const isMatchingPair = (x2, y2) => areSameFormId(x2, actorA) && areSameFormId(y2, actorB) || areSameFormId(x2, actorB) && areSameFormId(y2, actorA);
+        const shouldClosePartnerDrawer = state.npcDetailId !== null && state.npcDetailPartnerId !== null && isMatchingPair(state.npcDetailId, state.npcDetailPartnerId);
+        const playerPartnerId = areSameFormId(actorA, PLAYER_FORM_ID) ? actorB : areSameFormId(actorB, PLAYER_FORM_ID) ? actorA : null;
+        const nextRanks = playerPartnerId ? state.hierarchyRanks.map((id2) => areSameFormId(id2, playerPartnerId) ? "" : id2) : state.hierarchyRanks;
+        return {
+          relationships: state.relationships.filter((r2) => !isMatchingPair(r2.actorA, r2.actorB)),
+          cheatingRecords: state.cheatingRecords.filter(
+            (c) => !isMatchingPair(c.cheaterId, c.affairPartnerId) && !isMatchingPair(c.cheaterId, c.victimId)
+          ),
+          hierarchyRanks: nextRanks,
+          ...shouldClosePartnerDrawer ? { npcDetailPartnerId: null } : {},
+          statusMsg: "Relationship record removed."
+        };
+      });
     },
     addChild: (child, skipBridge = false) => {
       if (!skipBridge) {
@@ -16725,29 +16732,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }
     ],
     ["path", { d: "m9 12 2 2 4-4", key: "dzmm74" }]
-  ]);
-  /**
-   * @license lucide-react v0.460.0 - ISC
-   *
-   * This source code is licensed under the ISC license.
-   * See the LICENSE file in the root directory of this source tree.
-   */
-  const ShieldOff = createLucideIcon("ShieldOff", [
-    ["path", { d: "m2 2 20 20", key: "1ooewy" }],
-    [
-      "path",
-      {
-        d: "M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71",
-        key: "1jlk70"
-      }
-    ],
-    [
-      "path",
-      {
-        d: "M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264",
-        key: "18rp1v"
-      }
-    ]
   ]);
   /**
    * @license lucide-react v0.460.0 - ISC
@@ -21903,6 +21887,7 @@ Defaulting to \`null\`.`;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
+    const removeRelationship = useMarasStore((s) => s.removeRelationship);
     const [search, setSearch] = reactExports.useState("");
     const [statusFilter, setStatusFilter] = reactExports.useState("all");
     const getActorName = (id2) => {
@@ -21982,9 +21967,22 @@ Defaulting to \`null\`.`;
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: pair.status }),
-                dateVal != null && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(dateVal, currentGameDay) })
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem]", children: [
+                  dateVal != null && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em]" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(dateVal, currentGameDay) })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        removeRelationship(pair.actorA, pair.actorB);
+                      },
+                      className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
+                    }
+                  ) })
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.5rem]", children: [
@@ -23932,7 +23930,8 @@ Defaulting to \`null\`.`;
     status,
     affection,
     isSelected,
-    onClick
+    onClick,
+    onRemove
   }) => {
     const hasAffection = status === RelationshipStatus.Married || status === RelationshipStatus.Engaged || status === RelationshipStatus.Dating || status === RelationshipStatus.Lover;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -23955,8 +23954,19 @@ Defaulting to \`null\`.`;
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-secondary truncate mt-[0.125rem]", children: npc.currentHome || npc.originalHome || "No Home Set" })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-[7rem] flex-shrink-0 flex items-center justify-end gap-[0.5rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-[8.5rem] flex-shrink-0 flex items-center justify-end gap-[0.375rem]", children: [
             hasAffection && /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" }),
+            onRemove && status !== RelationshipStatus.Candidate && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record (Reset to Candidate)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                onClick: (e) => {
+                  e.stopPropagation();
+                  onRemove(e);
+                },
+                className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
+              }
+            ) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: `w-[1em] h-[1em] ${isSelected ? "text-accent" : "text-foreground-muted"}` })
           ] })
         ]
@@ -23969,6 +23979,7 @@ Defaulting to \`null\`.`;
     const affectionData = useMarasStore((s) => s.affectionData);
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const npcDetailId = useMarasStore((s) => s.npcDetailId);
+    const removeRelationship = useMarasStore((s) => s.removeRelationship);
     const [collapsedGroups, setCollapsedGroups] = reactExports.useState({
       [RelationshipStatus.Candidate]: true,
       [RelationshipStatus.Divorced]: true,
@@ -24032,7 +24043,8 @@ Defaulting to \`null\`.`;
               status: r2.status,
               affection: aff,
               isSelected,
-              onClick: () => openNpcDetail(partnerId)
+              onClick: () => openNpcDetail(partnerId),
+              onRemove: r2.status !== RelationshipStatus.Candidate ? () => removeRelationship(PLAYER_FORM_ID, partnerId) : void 0
             },
             partnerId
           );
@@ -25071,22 +25083,6 @@ Defaulting to \`null\`.`;
       )
     ] });
   };
-  const ToggleSwitch = ({
-    checked,
-    onChange,
-    disabled = false,
-    className = ""
-  }) => {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Switch,
-      {
-        checked,
-        onCheckedChange: onChange,
-        disabled,
-        className
-      }
-    );
-  };
   const StatusAssignment = () => {
     const npcA = useMarasStore((s) => s.matchmakingNpcA);
     const npcB = useMarasStore((s) => s.matchmakingNpcB);
@@ -25094,8 +25090,6 @@ Defaulting to \`null\`.`;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const assignRelationship = useMarasStore((s) => s.assignRelationshipStatus);
     const removeRelationship = useMarasStore((s) => s.removeRelationship);
-    const bypassRules = useMarasStore((s) => s.bypassStatusRules);
-    const setBypassRules = useMarasStore((s) => s.setBypassStatusRules);
     const [selectedTargetStatus, setSelectedTargetStatus] = reactExports.useState(null);
     const [successFeedback, setSuccessFeedback] = reactExports.useState(false);
     const statusOptions = useAvailableStatuses(npcA, npcB);
@@ -25112,7 +25106,7 @@ Defaulting to \`null\`.`;
       ] }) });
     }
     const existingRel = relationships.find(
-      (r2) => r2.actorA === npcA && r2.actorB === npcB || r2.actorA === npcB && r2.actorB === npcA
+      (r2) => areSameFormId(r2.actorA, npcA) && areSameFormId(r2.actorB, npcB) || areSameFormId(r2.actorA, npcB) && areSameFormId(r2.actorB, npcA)
     );
     const currentStatus = existingRel ? existingRel.status : RelationshipStatus.Candidate;
     const getName = (id2) => {
@@ -25145,16 +25139,6 @@ Defaulting to \`null\`.`;
           /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: currentStatus }),
           (existingRel == null ? void 0 : existingRel.isOpen) && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 px-[0.25rem] py-[0.0625rem] rounded font-semibold", children: "Open" })
         ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel-inset border border-border-subtle rounded p-[0.5rem] flex items-center justify-between gap-[0.5rem]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-xs min-w-0", children: [
-          bypassRules ? /* @__PURE__ */ jsxRuntimeExports.jsx(ShieldOff, { className: "w-[1.125em] h-[1.125em] text-status-warning flex-shrink-0" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ShieldCheck, { className: "w-[1.125em] h-[1.125em] text-status-success flex-shrink-0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col min-w-0", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary text-xs truncate", children: "Bypass Status Rules" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted truncate", children: bypassRules ? "All statuses unlocked" : "Enforce progression rules" })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ToggleSwitch, { checked: bypassRules, onChange: setBypassRules })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 min-h-0 pr-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold uppercase tracking-wider text-foreground-muted mb-[0.25rem]", children: "Select New Status" }),
@@ -25205,14 +25189,17 @@ Defaulting to \`null\`.`;
             ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Apply Status Change" })
           }
         ),
-        existingRel && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        existingRel && existingRel.status !== RelationshipStatus.Candidate && /* @__PURE__ */ jsxRuntimeExports.jsxs(
           Button,
           {
             variant: "danger",
             size: "sm",
             onClick: handleRemove,
             className: "w-full flex items-center justify-center gap-[0.375rem] text-xs",
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Sever / Remove Relationship" })
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Relationship Record" })
+            ]
           }
         )
       ] })
@@ -26599,6 +26586,22 @@ Defaulting to \`null\`.`;
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-shrink-0", children })
         ]
+      }
+    );
+  };
+  const ToggleSwitch = ({
+    checked,
+    onChange,
+    disabled = false,
+    className = ""
+  }) => {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Switch,
+      {
+        checked,
+        onCheckedChange: onChange,
+        disabled,
+        className
       }
     );
   };
@@ -29530,6 +29533,7 @@ Defaulting to \`null\`.`;
     useMarasStore((s) => s.updateNPCProfile);
     useMarasStore((s) => s.setHierarchyRank);
     const assignRelationshipStatus = useMarasStore((s) => s.assignRelationshipStatus);
+    const removeRelationship = useMarasStore((s) => s.removeRelationship);
     const removeChild = useMarasStore((s) => s.removeChild);
     const isOpen = Boolean(partnerId);
     const isPlayerPartner = partnerId === PLAYER_FORM_ID;
@@ -29643,15 +29647,30 @@ Defaulting to \`null\`.`;
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 p-[0.875rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem] pr-[0.375rem]", children: [
-            currentRel && currentNpcId && partnerId && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Relationship Status", icon: Heart, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              SelectInput,
-              {
-                value: currentRel.status,
-                options: availableStatusOptions,
-                onChange: (val) => assignRelationshipStatus(currentNpcId, partnerId, parseInt(val)),
-                className: "w-full text-xs"
-              }
-            ) }) }),
+            currentRel && currentNpcId && partnerId && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Relationship Status", icon: Heart, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.5rem]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                SelectInput,
+                {
+                  value: currentRel.status,
+                  options: availableStatusOptions,
+                  onChange: (val) => assignRelationshipStatus(currentNpcId, partnerId, parseInt(val)),
+                  className: "w-full text-xs"
+                }
+              ),
+              (Boolean(
+                foundRel && foundRel.status !== RelationshipStatus.Candidate && foundRel.status !== RelationshipStatus.Unknown
+              ) || isUnofficialAffair) && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  onClick: () => removeRelationship(currentNpcId, partnerId),
+                  className: "w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Relationship Record" })
+                  ]
+                }
+              ) })
+            ] }) }),
             hasAffectionWithPlayer && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Affection Rating", icon: Heart, subtitle: `${currentAffection}%`, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem] pt-[0.25rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SliderInput,
@@ -30558,6 +30577,7 @@ Defaulting to \`null\`.`;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
+    const removeRelationship = useMarasStore((s) => s.removeRelationship);
     const validRelationships = relationships.filter((r2) => {
       const partnerId = r2.actorA === currentNpcId ? r2.actorB : r2.actorA;
       return Boolean(partnerId && partnerId !== "" && partnerId !== "00000000" && partnerId !== currentNpcId);
@@ -30638,7 +30658,18 @@ Defaulting to \`null\`.`;
                   ] })
                 ] }),
                 r2.isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold", children: "Open" }),
-                !isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: r2.status })
+                !isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: r2.status }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      removeRelationship(currentNpcId, partnerId);
+                    },
+                    className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
+                  }
+                ) })
               ] })
             ]
           },

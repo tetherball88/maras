@@ -1673,6 +1673,179 @@ namespace MARAS {
         return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Candidate, nullptr, sendEvent);
     }
 
+    bool NPCRelationshipManager::RemoveRelationship(RE::FormID actorA, RE::FormID actorB) {
+        if (actorA == 0 || actorB == 0 || actorA == actorB || actorA == 0x07 || actorB == 0x07) {
+            MARAS_LOG_WARN("NPCRelationshipManager::RemoveRelationship: Invalid actor arguments (actorA={:08X}, actorB={:08X})", actorA, actorB);
+            return false;
+        }
+
+        auto& npcIndex = NPCIndex::GetSingleton();
+        if (actorA != kPlayerFormID) {
+            if (RE::FormID refA = npcIndex.GetRefID(actorA); refA != 0) {
+                actorA = refA;
+            }
+            EnsureRegistered(actorA);
+        }
+        if (actorB != kPlayerFormID) {
+            if (RE::FormID refB = npcIndex.GetRefID(actorB); refB != 0) {
+                actorB = refB;
+            }
+            EnsureRegistered(actorB);
+        }
+
+        if (actorA == actorB) {
+            return false;
+        }
+
+        // Remove any pending deferred relationships between their base IDs
+        RE::FormID baseA = (actorA == kPlayerFormID) ? kPlayerFormID : npcIndex.GetBaseID(actorA);
+        RE::FormID baseB = (actorB == kPlayerFormID) ? kPlayerFormID : npcIndex.GetBaseID(actorB);
+        auto removePendingFor = [&](RE::FormID ownerBase, RE::FormID partnerBase, RE::FormID partnerRef) {
+            if (ownerBase == 0) return;
+            auto it = pendingRelationshipsByBaseID.find(ownerBase);
+            if (it == pendingRelationshipsByBaseID.end()) return;
+            auto& vec = it->second;
+            vec.erase(
+                std::remove_if(vec.begin(), vec.end(),
+                               [&](const PendingRelationshipData& d) {
+                                   return (partnerBase != 0 && d.partnerBaseID == partnerBase) ||
+                                          (partnerRef != 0 && d.partnerRefID == partnerRef);
+                               }),
+                vec.end());
+            if (vec.empty()) {
+                pendingRelationshipsByBaseID.erase(it);
+            }
+        };
+        removePendingFor(baseA, baseB, actorB);
+        removePendingFor(baseB, baseA, actorA);
+
+        // Clean any CheatingRecord across all pairs where (actorA, actorB) is either the (cheater, affairPartner) or (cheater, victim)
+        std::unordered_set<RE::FormID> affectedActors{ actorA, actorB };
+        for (auto& [pairKey, pairData] : relationshipPairs) {
+            auto& records = pairData.cheatingRecords;
+            if (records.empty()) continue;
+            auto oldSize = records.size();
+            for (const auto& rec : records) {
+                bool matchAffair = (rec.cheaterID == actorA && rec.affairPartnerID == actorB) ||
+                                   (rec.cheaterID == actorB && rec.affairPartnerID == actorA);
+                bool matchVictim = (rec.cheaterID == actorA && rec.victimID == actorB) ||
+                                   (rec.cheaterID == actorB && rec.victimID == actorA);
+                if (matchAffair || matchVictim) {
+                    if (rec.cheaterID != 0) affectedActors.insert(rec.cheaterID);
+                    if (rec.victimID != 0) affectedActors.insert(rec.victimID);
+                    if (rec.affairPartnerID != 0) affectedActors.insert(rec.affairPartnerID);
+                }
+            }
+            records.erase(
+                std::remove_if(records.begin(), records.end(),
+                               [actorA, actorB](const CheatingRecord& rec) {
+                                   bool matchAffair = (rec.cheaterID == actorA && rec.affairPartnerID == actorB) ||
+                                                      (rec.cheaterID == actorB && rec.affairPartnerID == actorA);
+                                   bool matchVictim = (rec.cheaterID == actorA && rec.victimID == actorB) ||
+                                                      (rec.cheaterID == actorB && rec.victimID == actorA);
+                                   return matchAffair || matchVictim;
+                               }),
+                records.end());
+            if (records.size() != oldSize) {
+                MARAS_LOG_INFO("RemoveRelationship: Cleaned {} cheating record(s) from pair ({:08X}, {:08X})",
+                               oldSize - records.size(), pairKey.actorA, pairKey.actorB);
+            }
+        }
+
+        if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
+            RE::FormID npcID = (actorA == kPlayerFormID) ? actorB : actorA;
+
+            // Reset the (npcID, Player) pair to a clean Candidate record with no history or flags
+            auto& pairData = GetOrCreatePairData(npcID, kPlayerFormID);
+            pairData.status = RelationshipStatus::Candidate;
+            pairData.originalStatus = RelationshipStatus::Unknown;
+            pairData.isOpen = false;
+            pairData.statusHistory.clear();
+            pairData.cheatingRecords.clear();
+
+            UpdateTrackedFactionRank(npcID, RelationshipStatus::Candidate);
+            ManageFactions(npcID, kPlayerFormID, RelationshipStatus::Candidate);
+
+            SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
+            SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
+            (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+            AffectionService::GetSingleton().RemoveNPCData(npcID);
+        } else {
+            // NPC-to-NPC pair: completely erase the pair record
+            RelationshipPairKey key(actorA, actorB);
+            UnindexPair(key);
+            relationshipPairs.erase(key);
+
+            // Ensure both NPCs remain registered as Candidates with Player if they have no player relationship record yet
+            for (RE::FormID npcID : { actorA, actorB }) {
+                if (GetRelationshipStatus(npcID, kPlayerFormID) == RelationshipStatus::Unknown) {
+                    auto& playerPair = GetOrCreatePairData(npcID, kPlayerFormID);
+                    playerPair.status = RelationshipStatus::Candidate;
+                    UpdateTrackedFactionRank(npcID, RelationshipStatus::Candidate);
+                }
+            }
+
+            ManageFactions(actorA, actorB, RelationshipStatus::Candidate);
+            ManageFactions(actorB, actorA, RelationshipStatus::Candidate);
+        }
+
+        // If a vanilla child had one of (actorA, actorB) auto-inferred as a second bio parent solely from this
+        // relationship during ScanExistingRelationships (without an engine ParentChild BGSRelationship), strip that inferred bio link
+        // before evaluating divorce custody so sole custody goes to the actual parent.
+        auto hasEngineParentChildLink = [](RE::FormID childActorID, RE::FormID parentActorID) -> bool {
+            constexpr RE::FormID kParentChildAssocFormID = 0x000142C6;
+            if (childActorID == 0 || parentActorID == 0) return false;
+            auto* childBase = ActorSvc::GetActorBase(childActorID);
+            auto* parentBase = (parentActorID == kPlayerFormID)
+                                   ? (RE::PlayerCharacter::GetSingleton() ? RE::PlayerCharacter::GetSingleton()->GetActorBase() : nullptr)
+                                   : ActorSvc::GetActorBase(parentActorID);
+            if (!childBase || !parentBase || !childBase->relationships) return false;
+            for (auto* rel : *childBase->relationships) {
+                if (!rel || !rel->assocType) continue;
+                if (rel->assocType->GetFormID() == kParentChildAssocFormID) {
+                    if ((rel->npc1 == parentBase && rel->npc2 == childBase) ||
+                        (rel->npc2 == parentBase && rel->npc1 == childBase)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+        for (auto& [cID, entry] : childrenByID) {
+            if (entry.isBiologicalChild || entry.isAdopted) continue;
+            bool aIsBio = MatchesActor(entry.bioMotherID, actorA) || MatchesActor(entry.bioFatherID, actorA);
+            bool bIsBio = MatchesActor(entry.bioMotherID, actorB) || MatchesActor(entry.bioFatherID, actorB);
+            if (aIsBio && bIsBio) {
+                bool aEngineLink = hasEngineParentChildLink(cID, actorA);
+                bool bEngineLink = hasEngineParentChildLink(cID, actorB);
+                if (aEngineLink && !bEngineLink) {
+                    if (MatchesActor(entry.bioMotherID, actorB)) entry.bioMotherID = 0;
+                    if (MatchesActor(entry.bioFatherID, actorB)) entry.bioFatherID = 0;
+                } else if (bEngineLink && !aEngineLink) {
+                    if (MatchesActor(entry.bioMotherID, actorA)) entry.bioMotherID = 0;
+                    if (MatchesActor(entry.bioFatherID, actorA)) entry.bioFatherID = 0;
+                }
+            }
+        }
+
+        // Resolve custody of any shared children or unborn pregnancies using the Divorce Custody rules
+        EvaluateChildCustodyOnDivorce(actorA, actorB);
+
+        for (RE::FormID id : affectedActors) {
+            if (id != 0) {
+                RefreshPartnerRelationshipFactions(id);
+            }
+        }
+
+        RecalculateAndUpdateGlobals();
+        PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, static_cast<uint8_t>(RelationshipStatus::Candidate));
+
+        MARAS_LOG_INFO("RemoveRelationship: Completely removed relationship record between {} ({:08X}) and {} ({:08X})",
+                       ActorSvc::GetName(actorA), actorA, ActorSvc::GetName(actorB), actorB);
+        return true;
+    }
+
     bool NPCRelationshipManager::Breakup(RE::FormID actorA, RE::FormID actorB, bool sendEvent) {
         if (actorA == 0 || actorB == 0 || actorA == actorB) {
             MARAS_LOG_WARN("NPCRelationshipManager::Breakup: Invalid actor arguments (actorA={:08X}, actorB={:08X})", actorA, actorB);
@@ -2107,7 +2280,18 @@ namespace MARAS {
         if (targetFormID == kPlayerFormID) {
             switch (status) {
                 case RelationshipStatus::Candidate:
+                    SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
+                    SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
+                    SafeRemoveFromFaction(actor, cache.GetMarriedFaction());
+                    SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
+                    SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
+                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
                     SafeAddToFaction(actor, cache.GetMarriagePotentialFaction());
+                    if (GetMarriedCount(kPlayerFormID) == 0) {
+                        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+                            SafeRemoveFromFaction(player, cache.GetMarriedFaction());
+                        }
+                    }
                     break;
                 case RelationshipStatus::Dating:
                 case RelationshipStatus::Lover:

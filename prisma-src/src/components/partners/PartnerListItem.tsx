@@ -2,7 +2,8 @@ import React from 'react'
 import { NPCProfile, RelationshipStatus } from '../../types'
 import { AffectionBar } from '../shared/AffectionBar'
 import { NpcTraitBadges } from '../shared/TraitIcons'
-import { ChevronRight } from 'lucide-react'
+import { AppTooltip } from '../shared/AppTooltip'
+import { ChevronRight, Trash2 } from 'lucide-react'
 
 interface PartnerListItemProps {
   npc: NPCProfile
@@ -10,6 +11,7 @@ interface PartnerListItemProps {
   affection: number
   isSelected: boolean
   onClick: () => void
+  onRemove?: (e: React.MouseEvent) => void
 }
 
 export const PartnerListItem: React.FC<PartnerListItemProps> = ({
@@ -18,6 +20,7 @@ export const PartnerListItem: React.FC<PartnerListItemProps> = ({
   affection,
   isSelected,
   onClick,
+  onRemove,
 }) => {
   const hasAffection =
     status === RelationshipStatus.Married ||
@@ -50,8 +53,21 @@ export const PartnerListItem: React.FC<PartnerListItemProps> = ({
         </div>
       </div>
 
-      <div className="w-[7rem] flex-shrink-0 flex items-center justify-end gap-[0.5rem]">
+      <div className="w-[8.5rem] flex-shrink-0 flex items-center justify-end gap-[0.375rem]">
         {hasAffection && <AffectionBar value={affection} size="sm" />}
+        {onRemove && status !== RelationshipStatus.Candidate && (
+          <AppTooltip content="Remove Relationship Record (Reset to Candidate)">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove(e)
+              }}
+              className="p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-[0.95em] h-[0.95em]" />
+            </button>
+          </AppTooltip>
+        )}
         <ChevronRight className={`w-[1em] h-[1em] ${isSelected ? 'text-accent' : 'text-foreground-muted'}`} />
       </div>
     </div>

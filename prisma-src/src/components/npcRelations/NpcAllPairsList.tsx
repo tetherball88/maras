@@ -8,13 +8,15 @@ import { SearchInput } from '../shared/SearchInput'
 import { SelectInput } from '../shared/SelectInput'
 import { formatGameDay } from '../../utils/dateUtils'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Sparkles, Users, Crown, User, Clock, Heart } from 'lucide-react'
+import { AppTooltip } from '../shared/AppTooltip'
+import { Sparkles, Users, Crown, User, Clock, Heart, Trash2 } from 'lucide-react'
 
 export const NpcAllPairsList: React.FC = () => {
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
+  const removeRelationship = useMarasStore((s) => s.removeRelationship)
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -111,15 +113,28 @@ export const NpcAllPairsList: React.FC = () => {
                   key={idx}
                   className="bg-panel-raised border border-border-subtle hover:border-border-accent rounded-lg p-[0.875rem] flex flex-col justify-between gap-[0.75rem] transition-all hover:shadow-raised"
                 >
-                  {/* Card Header: Status Badge & Date */}
+                  {/* Card Header: Status Badge, Date & Remove */}
                   <div className="flex items-center justify-between border-b border-border-divider pb-[0.5rem]">
                     <StatusBadge status={pair.status} />
-                    {dateVal != null && (
-                      <div className="flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted">
-                        <Clock className="w-[0.875em] h-[0.875em]" />
-                        <span>{formatGameDay(dateVal, currentGameDay)}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-[0.375rem]">
+                      {dateVal != null && (
+                        <div className="flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted">
+                          <Clock className="w-[0.875em] h-[0.875em]" />
+                          <span>{formatGameDay(dateVal, currentGameDay)}</span>
+                        </div>
+                      )}
+                      <AppTooltip content="Remove Relationship Record">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeRelationship(pair.actorA, pair.actorB)
+                          }}
+                          className="p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-[0.95em] h-[0.95em]" />
+                        </button>
+                      </AppTooltip>
+                    </div>
                   </div>
 
                   {/* Card Body: Pair Actors */}

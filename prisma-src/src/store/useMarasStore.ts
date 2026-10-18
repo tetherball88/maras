@@ -62,7 +62,6 @@ interface MarasState {
   selectedNpcRelationsId: string | null
   matchmakingNpcA: string | null
   matchmakingNpcB: string | null
-  bypassStatusRules: boolean
 
   // Search state (Matchmaking Tab & Modal round trip to SKSE)
   searchQueryA: string
@@ -136,7 +135,6 @@ interface MarasState {
   setSelectedNpcRelationsId: (id: string | null) => void
   setMatchmakingNpcA: (id: string | null) => void
   setMatchmakingNpcB: (id: string | null) => void
-  setBypassStatusRules: (bypass: boolean) => void
   detailPanelOpen: boolean
   setDetailPanelOpen: (open: boolean) => void
   setPlayerHomes: (homes: PlayerHouse[]) => void
@@ -279,7 +277,6 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   selectedNpcRelationsId: PLAYER_FORM_ID,
   matchmakingNpcA: null,
   matchmakingNpcB: null,
-  bypassStatusRules: false,
   detailPanelOpen: false,
 
   searchQueryA: '',
@@ -658,7 +655,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   },
 
   applyAiSuggestions: (npcId?: string) => {
-    const { aiSuggestions, assignRelationshipStatus, removeRelationship, setPairIsOpen } = get()
+    const { aiSuggestions, assignRelationshipStatus, setPairIsOpen } = get()
     const selected = aiSuggestions.filter((s) => s.selected)
     selected.forEach((s) => {
       const primaryActor = s.actorAFormId || npcId
@@ -667,8 +664,6 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         setPairIsOpen(primaryActor, s.formId, true, true)
       } else if (s.action === 'close') {
         setPairIsOpen(primaryActor, s.formId, false, true)
-      } else if (s.action === 'breakup') {
-        removeRelationship(primaryActor, s.formId, true)
       } else {
         assignRelationshipStatus(primaryActor, s.formId, s.suggestedStatus, s.dualMemories, true)
       }
@@ -975,7 +970,6 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   setSelectedNpcRelationsId: (id: string | null) => set({ selectedNpcRelationsId: id }),
   setMatchmakingNpcA: (id: string | null) => set({ matchmakingNpcA: id }),
   setMatchmakingNpcB: (id: string | null) => set({ matchmakingNpcB: id }),
-  setBypassStatusRules: (bypassStatusRules: boolean) => set({ bypassStatusRules }),
   setDetailPanelOpen: (detailPanelOpen: boolean) => set({ detailPanelOpen }),
 
   setLiveGameData: (data) => {
@@ -1267,6 +1261,17 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   handleRealtimeStatusChanged: (actorA: string, actorB: string, status: RelationshipStatus, isOpen?: boolean) => {
     set((state) => {
+      if (status === RelationshipStatus.Candidate || status === RelationshipStatus.Unknown) {
+        return {
+          relationships: state.relationships.filter(
+            (r) =>
+              !(
+                (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
+                (areSameFormId(r.actorA, actorB) && areSameFormId(r.actorB, actorA))
+              ),
+          ),
+        }
+      }
       const pairIndex = state.relationships.findIndex(
         (r) =>
           (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
@@ -1311,15 +1316,42 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   removeRelationship: (actorA: string, actorB: string, fromMatchmaking?: boolean) => {
     sendMarasAction('removeRelationship', { actorA, actorB, fromMatchmaking })
-    set((state) => ({
-      relationships: state.relationships.filter(
-        (r) =>
-          !(
-            (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
-            (areSameFormId(r.actorA, actorB) && areSameFormId(r.actorB, actorA))
-          ),
-      ),
-    }))
+    set((state) => {
+      const isMatchingPair = (x: string, y: string) =>
+        (areSameFormId(x, actorA) && areSameFormId(y, actorB)) ||
+        (areSameFormId(x, actorB) && areSameFormId(y, actorA))
+
+      const shouldClosePartnerDrawer =
+        state.npcDetailId !== null &&
+        state.npcDetailPartnerId !== null &&
+        isMatchingPair(state.npcDetailId, state.npcDetailPartnerId)
+
+      const playerPartnerId = areSameFormId(actorA, PLAYER_FORM_ID)
+        ? actorB
+        : areSameFormId(actorB, PLAYER_FORM_ID)
+          ? actorA
+          : null
+
+      const nextRanks: [string, string, string] = playerPartnerId
+        ? (state.hierarchyRanks.map((id) => (areSameFormId(id, playerPartnerId) ? '' : id)) as [
+            string,
+            string,
+            string,
+          ])
+        : state.hierarchyRanks
+
+      return {
+        relationships: state.relationships.filter((r) => !isMatchingPair(r.actorA, r.actorB)),
+        cheatingRecords: state.cheatingRecords.filter(
+          (c) =>
+            !isMatchingPair(c.cheaterId, c.affairPartnerId) &&
+            !isMatchingPair(c.cheaterId, c.victimId),
+        ),
+        hierarchyRanks: nextRanks,
+        ...(shouldClosePartnerDrawer ? { npcDetailPartnerId: null } : {}),
+        statusMsg: 'Relationship record removed.',
+      }
+    })
   },
 
   addChild: (

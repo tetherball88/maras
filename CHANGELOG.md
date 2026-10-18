@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2.alpha - 2026-10-18
+- Added ability to completely remove/clean relationship records in the Prisma UI dashboard (available in My Household -> Partners, Overview -> All Pairs, NPC Detail -> Tracked Relationships / Partner Panel, and Matchmaking -> Manual Match) — wipes the pair's relationship record, status history, open-relationship state, affair/cheating records, and associated marriage/courting factions while keeping NPCs registered as Candidates (Rank 0) and leaving vanilla Skyrim engine relationship ranks untouched. Added automatic child custody and lineage cleanup when removing a relationship record — resolves shared children and unborn pregnancies via the Divorce Custody rules and strips auto-inferred co-parent links for vanilla single-parent children.
+- Removed the "Bypass Status Rules" toggle from the Prisma UI Manual Match panel.
+
 ## 2.0.1 - 2026-10-17
 - Fixed new game initialization importing plugin-baked Player-NPC `BGSRelationship` records (e.g., custom followers with pre-set Lover rank 4) — on a fresh new game, the player now starts with a clean relationship slate while NPC-NPC relationships are still scanned normally.
 - Fixed floating-point numbers displaying excessive decimal places (e.g., `1.7000000476837158x` for Affection Decay Multiplier) across Prisma UI sliders, number inputs, and settings descriptions.

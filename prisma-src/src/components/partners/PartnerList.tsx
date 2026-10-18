@@ -13,6 +13,7 @@ export const PartnerList: React.FC = () => {
   const affectionData = useMarasStore((s) => s.affectionData)
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
   const npcDetailId = useMarasStore((s) => s.npcDetailId)
+  const removeRelationship = useMarasStore((s) => s.removeRelationship)
 
   // Track collapsed status groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<number, boolean>>({
@@ -95,6 +96,11 @@ export const PartnerList: React.FC = () => {
                         affection={aff}
                         isSelected={isSelected}
                         onClick={() => openNpcDetail(partnerId)}
+                        onRemove={
+                          r.status !== RelationshipStatus.Candidate
+                            ? () => removeRelationship(PLAYER_FORM_ID, partnerId)
+                            : undefined
+                        }
                       />
                     )
                   })}

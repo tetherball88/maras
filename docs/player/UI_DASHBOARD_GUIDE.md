@@ -54,6 +54,7 @@ Manage all of your current and former partners in one place:
 - Promote or demote spouses in your **Spouse Hierarchy (`1st`, `2nd`, `3rd`, `4th+`)**.
 - Toggle **Open Relationships** on or off for any committed partner.
 - Assign spouses to live in any of your registered **Player Houses**.
+- **Remove Relationship Record (`🗑️` Button)**: Accidentally imported a custom follower as a `Lover` on an existing save, or want to completely wipe a relationship or ex-partner record without leaving breakup history behind? Click the **Remove Relationship Record** trash icon on any partner row (also available in **Overview $\rightarrow$ All Pairs**, **NPC Detail $\rightarrow$ Partner Panel**, and **Matchmaking $\rightarrow$ Manual Match**) to cleanly erase the M.A.R.A.S relationship record, history, and affair logs while keeping the NPC registered as a **Candidate**!
 
 ### 👶 Children
 Your family roster! Tracks both **Vanilla/Hearthfire adopted kids** and **biological children** (from *Fertility Mode Reloaded* or *BeeingFemale*):
@@ -75,7 +76,7 @@ Feeling like Mara's personal assistant—or a chaotic soap-opera director? The *
 
 ### ✨ Manual Match (Play God with Anyone's Love Life)
 - Pick **NPC A** on the left and **NPC B** on the right (you can even pick **yourself** or search any NPC in Skyrim's entire database!).
-- Instantly set or change their relationship status (**Lover**, **Dating**, **Engaged**, **Married**), break them up (**Ex-Lover**, **Ex-Dating**, **Jilted**, **Divorced**), or toggle their **Open Relationship** status!
+- Instantly set or change their relationship status (**Lover**, **Dating**, **Engaged**, **Married**), break them up (**Ex-Lover**, **Ex-Dating**, **Jilted**, **Divorced**), toggle their **Open Relationship** status, or click **Remove Relationship Record** to wipe the pair's relationship record completely!
 
 ### 🤖 LLM Matchmaking *(Requires SkyrimNet)*
 - Let the **SkyrimNet AI Game Master** scan Skyrim's singles and couples!

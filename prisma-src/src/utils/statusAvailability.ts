@@ -19,7 +19,6 @@ export interface StatusAvailabilityContext {
   relationships: RelationshipPair[]
   npcProfiles: Map<string, NPCProfile>
   enablePolygamy?: boolean
-  bypassRules?: boolean
 }
 
 export function areSameFormId(a?: string | null, b?: string | null): boolean {
@@ -77,10 +76,6 @@ export function checkRelationshipStatusAvailability(
   targetStatus: RelationshipStatus,
   context: StatusAvailabilityContext
 ): { available: boolean; reason?: string; loverType?: 'allowed' | 'cheating' } {
-  if (context.bypassRules) {
-    return { available: true }
-  }
-
   if (areSameFormId(actorA, actorB)) {
     return { available: false, reason: 'An actor cannot form a relationship with themselves.' }
   }
@@ -273,7 +268,6 @@ export function getAvailableStatuses(
     relationships: context?.relationships ?? store.relationships,
     npcProfiles: context?.npcProfiles ?? store.npcProfiles,
     enablePolygamy: context?.enablePolygamy ?? store.settings.enablePolygamy,
-    bypassRules: context?.bypassRules ?? store.bypassStatusRules,
   }
 
   if (!actorA || !actorB) {
@@ -353,14 +347,12 @@ export function useAvailableStatuses(
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const enablePolygamy = useMarasStore((s) => s.settings.enablePolygamy)
-  const bypassRules = useMarasStore((s) => s.bypassStatusRules)
 
   return useMemo(() => {
     return getAvailableStatuses(actorA, actorB, {
       relationships,
       npcProfiles,
       enablePolygamy,
-      bypassRules,
     })
-  }, [actorA, actorB, relationships, npcProfiles, enablePolygamy, bypassRules])
+  }, [actorA, actorB, relationships, npcProfiles, enablePolygamy])
 }

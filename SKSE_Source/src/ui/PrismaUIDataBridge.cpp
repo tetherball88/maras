@@ -1192,13 +1192,15 @@ namespace MARAS {
         RE::FormID actorB = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "actorB")));
 
         if (actorA != 0 && actorB != 0) {
-            NPCRelationshipManager::GetSingleton().DemoteToCandidate(actorA, actorB);
+            NPCRelationshipManager::GetSingleton().RemoveRelationship(actorA, actorB);
             if (GetJsonBool(payload, "fromMatchmaking", false)) {
                 float today = MatchmakingService::GetSingleton().GetCurrentGameDay();
                 MatchmakingService::GetSingleton().RecordNpcCooldown(actorA, today);
                 MatchmakingService::GetSingleton().RecordNpcCooldown(actorB, today);
             }
             SendOverviewData();
+            if (actorA != 0x14) SendNPCDetail(actorA);
+            if (actorB != 0x14) SendNPCDetail(actorB);
         }
     }
 
