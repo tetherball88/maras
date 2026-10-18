@@ -4,7 +4,7 @@
 - Fixed new game initialization importing plugin-baked Player-NPC `BGSRelationship` records (e.g., custom followers with pre-set Lover rank 4) — on a fresh new game, the player now starts with a clean relationship slate while NPC-NPC relationships are still scanned normally.
 - Fixed floating-point numbers displaying excessive decimal places (e.g., `1.7000000476837158x` for Affection Decay Multiplier) across Prisma UI sliders, number inputs, and settings descriptions.
 
-## 2.0 - 2026-XX-XX
+## 2.0 - 2026-10-16
 Major release. See [CHANGELOG_v2.0.md](CHANGELOG_v2.0.md) for the full detailed changelog.
 - Added Prisma UI dashboard — in-game web UI replacing MCM as the primary interface for relationship management, matchmaking, adoption, NPC detail views, and all mod settings. MCM is deprecated.
 - Added Dating and Lover relationship statuses between Candidate and Engaged, with corresponding Ex-Dating and Ex-Lover statuses for ended relationships.

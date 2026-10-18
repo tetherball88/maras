@@ -151,3 +151,15 @@ This section provides technical documentation for mod authors, patch creators, a
 - **[SkyrimNetIntegration](docs/modder/services/SkyrimNetIntegration.md)** — SkyrimNet C++ decorator registration, perspective-masked JSON profile builders, and AI action handlers.
 - **[NPCIndex](docs/modder/services/NPCIndex.md)** — Fast lookup index mapping `TESNPC` Base FormIDs to placed `Actor` Reference FormIDs.
 - **[NPCTypeDeterminer](docs/modder/services/NPCTypeDeterminer.md)** — Heuristic classifier for Social Class, Skill Type, and Temperament.
+
+---
+
+## 4. License & Permissions 📜⚖️
+
+**Copyright © 2025–2026 tetherball88. All Rights Reserved** *(Source-Available — see [LICENSE](LICENSE) for full terms).*
+
+- ✅ **Contributions Welcome:** You are welcome and encouraged to fork this repository on GitHub, inspect the code, and submit **Pull Requests** or bug reports.
+- ✅ **Patches & Third-Party Integrations:** You may freely create and publish compatibility patches, JSON configs, SkyrimNet extensions, and add-on mods that require the official M.A.R.A.S release as a dependency. The public interop files (`SKSE_Source/include/MARAS_PublicAPI.h` and `Scripts/Source/MARAS.psc`) are explicitly provided under the **MIT License** so third-party mods can compile against them freely.
+- ✅ **Translations:** Community translations may be published as standalone translation patches that require the original M.A.R.A.S mod and credit the original page.
+- ❌ **No Standalone Redistribution or Re-uploading:** You may **not** copy, repackage, re-upload, or publish M.A.R.A.S (or modified standalone forks of its DLL, ESP, scripts, or Prisma UI) as your own mod on Nexus Mods or any other platform without explicit written permission from the author.
+
