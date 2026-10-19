@@ -37,15 +37,8 @@ These rules apply to all C++ headers and source files in `SKSE_Source/` (`MARAS.
         EvaluatePaternitySecret(childID);
     }
     ```
-- **UI Confirmation Dialogs (`ConfirmationModal.h`)**:
-  - Default dialog presents **2 buttons**: `[Accept]` and `[Cancel]`. The 3rd button `[Decline (Explain)]` **must only be added** if `MARAS::IsSkyrimNetAvailable() == true`:
-    ```cpp
-    msgData->buttonText.push_back(RE::BSString("Accept"));
-    msgData->buttonText.push_back(RE::BSString("Cancel"));
-    if (MARAS::IsSkyrimNetAvailable()) {
-        msgData->buttonText.push_back(RE::BSString("Decline (Explain)"));
-    }
-    ```
+- **UI Confirmation Dialogs (`ConfirmationModal.h` / `PrismaModalManager.h`)**:
+  - Default confirmation dialog presents **2 buttons**: `[Accept]` and `[Cancel]`. The 3rd button `[Decline (Explain)]` **must only be added** if `MARAS::IsSkyrimNetAvailable() == true`.
 
 ---
 
@@ -63,7 +56,7 @@ These rules apply to all C++ headers and source files in `SKSE_Source/` (`MARAS.
 
 ---
 
-## 5. Thread Safety, Async Tasks & Prisma UI Management
+## 5. Thread Safety, Async Tasks, Prisma UI & `PrismaModalManager`
 
 - **Game Thread Execution**: Never interact with `RE::Actor` state (`EvaluatePackage`, `MoveTo`, `AddSpell`, etc.), UI, Factions, Globals, or Papyrus VM state directly from non-game threads. Always wrap calls in `SKSE::GetTaskInterface()->AddTask(...)`.
 - **Never Capture Raw Form/Actor Pointers in Async Tasks**:
@@ -74,7 +67,23 @@ These rules apply to all C++ headers and source files in `SKSE_Source/` (`MARAS.
   - Initiate async SkyrimNet requests from the main thread using SkyrimNet's async callback mechanism and marshal callback results back via `SKSE::GetTaskInterface()->AddTask`.
 - **No Self-Referencing `std::shared_ptr` Cycles in Async Callbacks**:
   - Never capture a `std::shared_ptr<std::function<...>>` by value inside the lambda stored in that same `shared_ptr` without explicitly resetting it (`*holder = nullptr;`) on all completion and error paths.
-- **Prisma UI Management**: Interactions with Prisma UI are encapsulated in `PrismaUIManager`. Always check `IsAvailable()` and `IsViewValid()` before invoking JavaScript routines, and always include `hasSkyrimNet` and `simulateNoSkyrimNet` in settings payloads sent by `PrismaUIDataBridge`.
+- **Prisma UI Management (`PrismaUIManager`)**:
+  - Interactions with Prisma UI are encapsulated in `PrismaUIManager`. Always check `IsAvailable()` and `IsViewValid()` before invoking JavaScript routines, and always include `hasSkyrimNet` and `simulateNoSkyrimNet` in settings payloads sent by `PrismaUIDataBridge`.
+  - Dashboard visibility (`m_dashboardOpen`) and Modal visibility (`PrismaModalManager::GetSingleton().HasActiveModal()`) are coordinated by `PrismaUIManager::SyncViewVisibilityAndFocus()`. Never call raw `prismaUI->Hide(view)` or `prismaUI->Unfocus(view)` directly when a modal may be active.
+- **Prisma UI Modals (`PrismaModalManager` — `include/ui/PrismaModalManager.h`)**:
+  - **Always use `PrismaModalManager` instead of native Skyrim `RE::MessageBoxMenu` / `RE::MessageBoxData`** when building confirmation popups, retry/cancel prompts, or interactive modal dialogs.
+  - Modals automatically pause the game and focus the view with `FocusMenu` enabled (`prismaUI->Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/false)`) independently of whether the main dashboard is open. Never pass `disableFocusMenu = true` (which disables PrismaUI's Scaleform cursor/input menu and freezes the cursor).
+  - **Building & Showing a Modal**:
+    - Construct a `ModalRequest` (`title`, `subtitle`, `message`, `tone` (`ModalTone::Default / Warning / Danger / Success / Ai`), `size` (`ModalSize::Sm / Md / Lg / Xl`), `controls`, `buttons`, `defaultCancelButtonIndex`).
+    - Add declarative interactive controls via `ModalControl` builders:
+      - `ModalControl::MakeCheckbox(id, label, defaultChecked, description)`
+      - `ModalControl::MakeSelect(id, label, options, defaultValue, description)`
+      - `ModalControl::MakeTextInput(id, label, defaultValue, placeholder, description)`
+      - `ModalControl::MakeInfoBox(id, label, description, tone)`
+      - `ModalControl::MakeChecklist(id, label, items, showSelectAllToggle, description)`: each `ModalChecklistItem` supports `id`, `label`, `subtitle`, `description`, `badgeText`/`badgeTone`, `checked`, and an optional per-row inline dropdown (`selectOptions`, `selectValue`, `selectLabel`).
+    - Add buttons via `ModalButton::Make(id, label, ModalButtonVariant::Primary / Secondary / Danger / Outline / Ghost)`. To require at least $N$ items checked in a checklist before a button is enabled, set `btn.requireChecklistId` and `btn.minCheckedCount`.
+    - Call `PrismaModalManager::GetSingleton().ShowModal(std::move(req), callback)`. The `ModalCallback` (`void(const ModalResponse&)`) always executes on the **SKSE main game thread**.
+    - Read user selections from `ModalResponse`: `resp.buttonId`, `resp.buttonIndex`, `resp.aborted`, `resp.GetBool(controlId)`, `resp.GetString(controlId)`, `resp.GetCheckedItemIds(checklistId)`, `resp.GetUncheckedItemIds(checklistId)`, `resp.IsItemChecked(checklistId, itemId)`, and `resp.GetItemSelectValue(checklistId, itemId)`.
 - **Mutex Locking**: Protect shared service state with internal mutexes (`std::shared_mutex` / `std::mutex`) when accessed concurrently by Papyrus VM worker threads, SkyrimNet prompt decorators, or UI data bridge builders. Never return raw `const char*` pointers into mutex-protected internal `std::unordered_map` strings after releasing the lock.
 
 ---

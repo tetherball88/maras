@@ -254,8 +254,10 @@
     /* dim layer */
     --z-window: 20;
     /* dashboard window */
-    --z-dropdown: 30;
-    /* selects, menus, popovers */
-    --z-tooltip: 40;
+    --z-modal: 50;
+    /* standalone or blocking confirmation modals */
+    --z-dropdown: 60;
+    /* selects, menus, popovers (above both dashboard and modals) */
+    --z-tooltip: 70;
     /* tooltips — always on top */
 }

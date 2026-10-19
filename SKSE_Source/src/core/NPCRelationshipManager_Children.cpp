@@ -383,15 +383,17 @@ namespace MARAS {
         RE::FormID guardianAID = entryOpt ? entryOpt->guardianAID : 0;
         RE::FormID guardianBID = entryOpt ? entryOpt->guardianBID : 0;
 
-        if (auto* faction = FormCache::GetSingleton().GetPlayerChildBothParentsFaction()) {
-            Utils::RemoveFromFaction(childID, faction);
-        }
-        if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
-            Utils::RemoveFromFaction(childID, adoptableFaction);
+        if (!IsSyntheticChildID(childID)) {
+            if (auto* faction = FormCache::GetSingleton().GetPlayerChildBothParentsFaction()) {
+                Utils::RemoveFromFaction(childID, faction);
+            }
+            if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
+                Utils::RemoveFromFaction(childID, adoptableFaction);
+            }
+            RemoveChildSandboxAroundParentLinkedRef(childID);
+            PackageOverrideService::GetSingleton().UnregisterActor(childID);
         }
         PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
-        RemoveChildSandboxAroundParentLinkedRef(childID);
-        PackageOverrideService::GetSingleton().UnregisterActor(childID);
         bool removed = childrenByID.erase(childID) > 0;
         if (removed) {
             if (guardianAID != 0) UpdateSpouseChildrenFaction(guardianAID);

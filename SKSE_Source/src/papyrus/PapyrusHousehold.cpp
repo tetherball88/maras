@@ -41,16 +41,21 @@ namespace MARAS::PapyrusInterface {
         return MARAS::PlayerHouseService::GetSingleton().GetAllPlayerHousesNames();
     }
 
-    bool RegisterTenantInPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse, RE::BGSLocation* playerHouse, bool /*stayAtHome*/) {
+    bool RegisterTenantInPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse, RE::BGSLocation* playerHouse, bool stayAtHome) {
         if (!spouse || !playerHouse) {
             MARAS_LOG_WARN("RegisterTenantInPlayerHouse: null argument(s)");
             return false;
         }
         std::lock_guard lock(GetPapyrusMutex());
-        auto res = MARAS::PlayerHouseService::GetSingleton().RelocateFamilyUnit(spouse->GetFormID(),
-                                                                               playerHouse->GetFormID(),
-                                                                               true);
-        return !res.empty();
+        auto& houseSvc = MARAS::PlayerHouseService::GetSingleton();
+        auto res = houseSvc.RelocateFamilyUnit(spouse->GetFormID(),
+                                               playerHouse->GetFormID(),
+                                               true);
+        if (!res.empty()) {
+            houseSvc.SetTenantStayAtHome(spouse->GetFormID(), stayAtHome);
+            return true;
+        }
+        return false;
     }
 
     bool RemoveTenantFromPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse) {

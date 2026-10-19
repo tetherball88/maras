@@ -100,6 +100,7 @@ namespace MARAS {
         // SkyrimNet scheduled matchmaking toggles
         bool matchmakingEvaluationStep = true;
         bool matchmakingGenerateMemories = true;
+        bool matchmakingConfirmResults = false;
 
         // Dice Roll chance weights (sum enforced = 100 in UI, stored as raw int32_t)
         int32_t diceRollChanceNewDating = 22;        // ~20% normalized

@@ -13,6 +13,19 @@ Function Fragment_6()
 ; stage 200
     Actor spouse = Alias_Spouse.GetActorRef()
     if(spouse)
+        Actor[] mainActors = new Actor[1]
+        mainActors[0] = spouse
+        Actor[] secondaryActors = new Actor[1]
+        secondaryActors[0] = TTM_Data.GetPlayer()
+        int modalResult = MARAS.ShowConfirmationModal("low_affection_divorce", mainActors, secondaryActors)
+        if(!MARAS.IsNPCStatus(spouse, "married"))
+            FinishQuest(false)
+            return
+        endif
+        if(modalResult != 0 && modalResult != 4 && modalResult != 5)
+            self.SetStage(150)
+            return
+        endif
         MARAS.PromoteNPCToStatus(spouse, "divorced")
         MARAS.SetPermanentAffection(spouse, 0)
     endif

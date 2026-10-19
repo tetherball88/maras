@@ -38,17 +38,13 @@ Function RegisterPlayerHouseLocation(Location akLocation, ObjectReference akHous
 EndFunction
 
 ;/
-  Shows a message to choose a house for a spouse, with paging support.
-  @param spouse    The spouse actor to assign a house
-  @param fromIndex The index to start paging from (default 0)
+  Shows the Prisma UI modal to choose a player house (and schedule for spouses) for a spouse or child.
+  @param spouse    The spouse or child actor to assign a house
+  @param page      Unused (kept for signature compatibility)
+  @param isChild   True when choosing a house for a child, false for a spouse
 /;
 Location Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0, bool isChild = false) global
-    if(page < 0)
-        page = 0
-    endif
-    int perPage = 10
-    Location[] playerHomes = MARAS.GetAllPlayerHouses()
-    int count = playerHomes.Length
+    int count = MARAS.CountPlayerHouses()
 
     TTM_Debug.debug("ChooseHomeForSpouseMsg: count = " + count)
 
@@ -56,64 +52,17 @@ Location Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0, bool isChil
         TTM_Messages.PlayerNoHomeMsg()
         return none
     endif
-    UIListMenu listMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
 
-    int startIdx = page * perPage
-    int endIdx = startIdx + perPage
-    if(endIdx > count)
-        endIdx = count
-    endif
-
-    int menuIdx = 0
-    int i = startIdx
-
-    while(i < endIdx)
-        string houseName = playerHomes[i].GetName()
-        StorageUtil.FormListAdd(none, "SpouseHomeChoiceCache", playerHomes[i])
-        listMenu.AddEntryItem(houseName)
-        menuIdx += 1
-        i += 1
-    endwhile
-
-    int prevIdx = -1
-    int nextIdx = -1
-    if(page > 0)
-        prevIdx = listMenu.AddEntryItem("Previous page")
-    endif
-    if(endIdx < count)
-        nextIdx = listMenu.AddEntryItem("Next page")
-    endif
-    listMenu.AddEntryItem("Cancel")
-
-    listMenu.OpenMenu()
-    int choice = listMenu.GetResultInt()
-    Form homeChoice = StorageUtil.FormListGet(none, "SpouseHomeChoiceCache", choice)
-
+    Location homeChoice = MARAS.ShowChooseHomeModal(spouse, isChild)
     if(homeChoice != none)
         if(isChild)
-            MoveChildToHouse(spouse, homeChoice as Location)
+            MoveChildToHouse(spouse, homeChoice)
         else
-            bool stayAtHome = true
-            UIListMenu scheduleMenu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
-            if(scheduleMenu)
-                scheduleMenu.AddEntryItem("Stay at Home")
-                scheduleMenu.AddEntryItem("Keep Original Schedule")
-                scheduleMenu.OpenMenu()
-                int schedChoice = scheduleMenu.GetResultInt()
-                if(schedChoice == 1)
-                    stayAtHome = false
-                endif
-            endif
-            MoveSpouseToHouse(spouse, homeChoice as Location, stayAtHome)
+            MoveSpouseToHouse(spouse, homeChoice, MARAS.GetTenantStayAtHome(spouse))
         endif
-        return homeChoice as Location
-    elseif(choice == prevIdx)
-        ChooseHomeForSpouseMsg(spouse, page - 1, isChild)
-    elseif(choice == nextIdx)
-        ChooseHomeForSpouseMsg(spouse, page + 1, isChild)
+        return homeChoice
     endif
 
-    StorageUtil.FormListClear(none, "SpouseHomeChoiceCache")
     return none
 EndFunction
 

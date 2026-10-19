@@ -26,6 +26,10 @@ Function ProposeRelationshipChange(Actor akActor, Actor partner, string suggeste
 
         int modalResult = MARAS.ShowConfirmationModal(suggestedStatus, mainActors, secondaryActors)
         if (modalResult == 0 || modalResult == 4 || modalResult == 5)
+            if (MARAS.GetNpcStatusNameWith(akActor, partner) != currentStatus || !MARAS.IsAvailableForStatusWith(akActor, partner, suggestedStatus))
+                TTM_Debug.debug("ProposeRelationshipChange(" + suggestedStatus + "): State changed while confirmation was pending; ignoring.")
+                return
+            endif
             bool success = MARAS.PromoteNPCToStatusWith(partner, akActor, suggestedStatus)
             if (!success)
                 TTM_Debug.debug("ProposeRelationshipChange: Action " + suggestedStatus + " blocked by relationship rules.")
@@ -84,6 +88,10 @@ Function ConsiderRelationshipChange(Actor akActor, Actor partner, string decisio
 
         int modalResult = MARAS.ShowConfirmationModal(status, mainActors, secondaryActors)
         if (modalResult == 0 || modalResult == 4 || modalResult == 5)
+            if (MARAS.GetNpcStatusNameWith(akActor, partner) != currentStatus || !MARAS.IsAvailableForStatusWith(partner, akActor, status))
+                TTM_Debug.debug("ConsiderRelationshipChange(" + status + "): State changed while confirmation was pending; ignoring.")
+                return
+            endif
             bool success = MARAS.PromoteNPCToStatusWith(partner, akActor, status)
             if (!success)
                 TTM_Debug.debug("ConsiderRelationshipChange: Action " + status + " blocked by relationship rules.")
@@ -153,6 +161,10 @@ Function BreakupRelationship(Actor akActor, string partnerName, string status, s
 
     int modalResult = MARAS.ShowConfirmationModal(status, mainActors, secondaryActors)
     if (modalResult == 0 || modalResult == 4 || modalResult == 5)
+        if (MARAS.GetNpcStatusNameWith(akActor, partner) != currentStatus || !MARAS.IsAvailableForStatusWith(partner, akActor, status))
+            TTM_Debug.debug("BreakupRelationship(" + status + "): State changed while confirmation was pending; ignoring.")
+            return
+        endif
         bool success = MARAS.PromoteNPCToStatusWith(partner, akActor, status)
         if (!success)
             TTM_Debug.debug("BreakupRelationship: Action " + status + " blocked by relationship rules.")
@@ -170,6 +182,10 @@ Function SetOpenRelationshipChange(Actor akActor, Actor partner, bool isOpen, st
         return
     endif
 
+    string currentStatus = MARAS.GetNpcStatusNameWith(akActor, partner)
+    if (MARAS.GetPairIsOpen(akActor, partner) == isOpen)
+        return
+    endif
     string actionName = "open"
     if(!isOpen)
         actionName = "close"
@@ -187,6 +203,10 @@ Function SetOpenRelationshipChange(Actor akActor, Actor partner, bool isOpen, st
 
     int modalResult = MARAS.ShowConfirmationModal(actionType, mainActors, secondaryActors)
     if (modalResult == 0 || modalResult == 4 || modalResult == 5)
+        if (MARAS.GetNpcStatusNameWith(akActor, partner) != currentStatus || MARAS.GetPairIsOpen(akActor, partner) == isOpen)
+            TTM_Debug.debug("SetOpenRelationshipChange(" + actionType + "): State changed while confirmation was pending; ignoring.")
+            return
+        endif
         MARAS.SetPairIsOpen(akActor, partner, isOpen)
     else
         TTM_Debug.debug("SetOpenRelationshipChange: Action " + actionType + " declined (modalResult=" + modalResult + ")")
@@ -194,11 +214,15 @@ Function SetOpenRelationshipChange(Actor akActor, Actor partner, bool isOpen, st
 EndFunction
 
 Function QuestDivorceResolutionActionExecute(Actor akActor, string decision)
+    Quest estrangedQuest = TTM_Data.GetMarasAffectionEstrangedDivorceQuest()
+    if(!estrangedQuest || !estrangedQuest.IsRunning())
+        return
+    endif
     if(decision == "reconcile")
-        TTM_Data.GetMarasAffectionEstrangedDivorceQuest().SetStage(100)
+        estrangedQuest.SetStage(100)
         return
     elseif(decision == "divorce")
-        TTM_Data.GetMarasAffectionEstrangedDivorceQuest().SetStage(200)
+        estrangedQuest.SetStage(200)
     endif
 EndFunction
 

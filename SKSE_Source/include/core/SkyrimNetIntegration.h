@@ -12,8 +12,26 @@ namespace MARAS {
     // Must be called at kPostPostLoad (after all SKSE plugins are loaded).
     void RegisterSkyrimNetDecorators();
 
+    enum class LLMFailureType : uint8_t {
+        RequestFailed = 0,
+        InvalidJson = 1
+    };
+
+    // Returns a user-friendly title and plain-English troubleshooting explanation for an LLM failure.
+    std::string GetLLMFailureGuidanceTitle(LLMFailureType failureType);
+    std::string GetLLMFailureGuidance(LLMFailureType failureType, std::string_view llmVariant = "gamemaster_evaluation");
+    std::string GetLLMBatchFailureGuidance(bool hasRequestFailure, bool hasInvalidJson, std::string_view llmVariant = "gamemaster_evaluation");
+
+    // Displays a Prisma UI retry/ignore modal when a SkyrimNet LLM request or JSON parse fails.
+    void ShowLLMRetryModal(const std::string& evaluationType,
+                           const std::string& description,
+                           LLMFailureType failureType,
+                           std::function<void()> onRetry,
+                           std::function<void()> onIgnore,
+                           std::string_view llmVariant = "gamemaster_evaluation");
+
     // Sends an LLM prompt to SkyrimNet to evaluate a proposed relationship status change between two actors.
-    // Includes in-game MessageBox retry/ignore modal on LLM request or parse failure.
+    // Includes a Prisma UI retry/ignore modal on LLM request or parse failure.
     bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partnerFormID, const std::string& targetStatus, const std::string& evalId = "");
 
     // Evaluates secret paternity resolution (confession / discovery / remains hidden) for a child.

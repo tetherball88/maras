@@ -1,8 +1,9 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { confirmRemoveChild } from '../../store/useModalStore'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Baby, ChevronRight, Home, HeartHandshake, Sparkles, GraduationCap, Swords } from 'lucide-react'
+import { Baby, ChevronRight, Home, HeartHandshake, Sparkles, GraduationCap, Swords, Trash2 } from 'lucide-react'
 import { AppTooltip } from '../shared/AppTooltip'
 import { formatGameDay } from '../../utils/dateUtils'
 import { getChildRelationshipStatus, resolveIsFemale, getChildGenderNouns } from '../../utils/childUtils'
@@ -16,6 +17,7 @@ export const ChildrenList: React.FC = () => {
   const setActiveTab = useMarasStore((s) => s.setActiveTab)
   const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
+  const removeChild = useMarasStore((s) => s.removeChild)
 
   const children = Array.from(childrenStore.values())
     .filter(
@@ -212,7 +214,20 @@ export const ChildrenList: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-[0.5rem] flex-shrink-0">
+                <div className="flex items-center gap-[0.375rem] flex-shrink-0">
+                  <AppTooltip content="Remove Child Record">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        confirmRemoveChild(child.childId, displayName, () =>
+                          removeChild(child.childId),
+                        )
+                      }}
+                      className="p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-[0.95em] h-[0.95em]" />
+                    </button>
+                  </AppTooltip>
                   <AppTooltip content="View Child Details">
                     <button className="p-[0.25rem] text-foreground-muted hover:text-accent cursor-pointer">
                       <ChevronRight className="w-[1.25em] h-[1.25em]" />
@@ -227,3 +242,4 @@ export const ChildrenList: React.FC = () => {
     </ScrollArea>
   )
 }
+

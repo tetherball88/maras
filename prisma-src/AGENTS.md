@@ -60,27 +60,53 @@ All user-tweakable design tokens live in a single file: **`src/styles/variables.
 
 ## Game Communication (Prisma Bridge)
 
-- ALL game communication (SKSE/Papyrus) goes through one module: `lib/prisma.ts`. Components must NEVER touch `window.*` game APIs directly.
+- ALL game communication (SKSE/Papyrus) goes through one module: `store/prismaBridge.ts`. Components must NEVER touch `window.*` game APIs directly.
 - Data flow:
   ```
-  Game → prisma bridge → Zustand store → components
+  Game → prisma bridge → Zustand store (`useMarasStore` / `useModalStore`) → components
   Components → prisma bridge → Game
   ```
-- The bridge must detect a plain browser (`npm run dev`) and fall back to **mock data**, so the dashboard is fully developable without launching Skyrim.
-- Dashboard open/close is driven by game events (key press handled by the plugin); the bridge dispatches these to the UI store.
+- The bridge must detect a plain browser (`npm run dev`) and fall back to **mock data**, so the dashboard and modals are fully developable without launching Skyrim.
+- Dashboard open/close (`window.openMARAS` / `window.closeMARASView`) and standalone Modal display (`window.showMARASModal` / `window.clearMARASModal`) are independent roots in `App.tsx`.
+
+---
+
+## Standalone & Blocking Modal System (`useModalStore` & `PrismaModalHost`)
+
+M.A.R.A.S uses a standalone Prisma UI modal system (`src/store/useModalStore.ts`, `src/components/modals/PrismaModalHost.tsx`, `src/types/modal.ts`) that renders independently of `<DashboardLayout>`:
+
+1. **Independent Lifecycle**:
+   - In `App.tsx`, `<DashboardLayout>` (`useMarasStore.isOpen`) and `<PrismaModalHost>` (`useModalStore.activeModal !== null`) mount and unmount independently.
+   - Showing a modal when the dashboard is closed must **never** set `useMarasStore.isOpen = true` or mount `<DashboardLayout>`.
+2. **Mandatory Focus Lock, Keyboard Navigation & Non-Dismissibility**:
+   - Modals pause the game in C++ with PrismaUI's `FocusMenu` active (`Focus(view, pauseGame=true, disableFocusMenu=false)`) so both mouse cursor movement and keyboard input work.
+   - Modals **must NEVER** include an `X` close button, **must NEVER** close on backdrop click, and **must NEVER** close on `Escape` (`PrismaModalHost` suppresses `Escape` in capture phase unless a `<Select>` dropdown is open).
+   - `PrismaModalHost` auto-focuses the primary footer button on open and supports full keyboard navigation (`WASD`, Arrow keys, `Tab`/`Shift+Tab` to cycle controls/buttons, and `Enter`/`Space`/`E` to activate).
+   - A modal can **only** be resolved by the user activating one of its footer control buttons (`useModalStore.getState().submitModal(buttonId, buttonIndex, customValues)`), which sends `sendMarasAction('modalResponse', { modalId, buttonId, buttonIndex, values })` to C++.
+3. **Hybrid Rendering (Declarative Schema First, Custom Templates When Needed)**:
+   - **Default (`modalType: 'generic'`)**: Use the built-in declarative controls in `PrismaModalHost.tsx`:
+     - `'infobox'`: Semantic alert callout (`default`, `warning`, `danger`, `success`, `ai`).
+     - `'checkbox'`: Standalone boolean checkbox row (`<Checkbox />`).
+     - `'select'`: Labeled dropdown (`<SelectInput />`).
+     - `'text'`: Labeled text input (`<Input />`).
+     - `'checklist'`: Interactive list of items (`PrismaModalChecklistItem`) with per-row checkboxes, badges, Select All / Deselect All toggle, automatic search filter (`> 8` items), and optional inline per-row `<SelectInput />` dropdowns.
+   - **Custom Templates (`src/components/modals/modalRegistry.ts`)**: Only when a modal requires bespoke layout that cannot be expressed declaratively, register a custom component via `registerModalTemplate(modalType, Component)` accepting `CustomModalTemplateProps` (`{ modal, values, onSubmit }`).
+4. **Z-Index Layering (`variables.css`)**:
+   - Modals use `z-modal` (`--z-modal: 50`), above the dashboard window (`--z-window: 20`).
+   - Dropdowns (`z-dropdown` / `--z-dropdown: 60`) and tooltips (`z-tooltip` / `--z-tooltip: 70`) must always use their higher z-index tokens so selects and tooltips inside a modal render on top of the modal card.
 
 ---
 
 ## Zustand Rules
 
-- One store per domain, kept small (`useUiStore`, `usePlayerStore`, ...).
+- One store per domain, kept small (`useMarasStore`, `useModalStore`, ...).
 - **Always use selectors** — never subscribe to the whole store:
   ```ts
   // ✅ Re-renders only when this value changes
-  const gold = usePlayerStore((s) => s.gold);
+  const activeModal = useModalStore((s) => s.activeModal);
 
   // ❌ Re-renders on any change
-  const store = usePlayerStore();
+  const store = useModalStore();
   ```
 - Use `useShallow` when selecting multiple values.
 - Actions live inside stores; components contain no mutation logic.

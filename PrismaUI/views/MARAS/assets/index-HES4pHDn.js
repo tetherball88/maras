@@ -7835,6 +7835,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     globalBanPet: false,
     skyrimnetActionRadius: 3e3,
     matchmakingExcludePlayerActivePartners: false,
+    matchmakingConfirmResults: false,
     paternityBaseChance: 2,
     paternityDailyGrowth: 2,
     paternityMaxChance: 60,
@@ -7871,317 +7872,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     { formId: "000135E8", name: "Blaise", race: "Breton", gender: "male", isChild: true, pluginName: "HearthFires.esm" },
     { formId: "000135E9", name: "Alesan", race: "Redguard", gender: "male", isChild: true, pluginName: "HearthFires.esm" }
   ];
-  function parsePayload(raw) {
-    if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      if (trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        try {
-          return JSON.parse(trimmed);
-        } catch (e) {
-          console.error("[PrismaBridge] Failed to parse JSON payload:", e);
-        }
-      }
-    }
-    return raw;
-  }
-  function sendMarasAction(action, payload = {}) {
-    const jsonStr = JSON.stringify({ action, payload });
-    if (typeof window !== "undefined" && window.marasAction) {
-      window.marasAction(jsonStr);
-    } else {
-      console.log(`[Standalone Mock Action] ${action}:`, payload);
-    }
-  }
-  function initializePrismaBridge() {
-    if (typeof window === "undefined") return;
-    window.receiveMARASOverview = (raw) => {
-      const data = parsePayload(raw);
-      if (!data || typeof data !== "object") return;
-      console.log("[PrismaBridge] receiveMARASOverview payload:", data);
-      const store = useMarasStore.getState();
-      store.setIsOpen(true);
-      if (data.children && data.npcProfiles) {
-        const childNameMap = /* @__PURE__ */ new Map();
-        data.children.forEach((c) => {
-          if (c.childId && c.name && !c.name.startsWith("NPC_")) {
-            childNameMap.set(c.childId, c.name);
-          }
-        });
-        data.npcProfiles.forEach((prof) => {
-          if (childNameMap.has(prof.formId) && (!prof.name || prof.name.startsWith("NPC_"))) {
-            prof.name = childNameMap.get(prof.formId);
-          }
-        });
-      }
-      store.setLiveGameData({
-        currentGameDay: data.currentGameDay,
-        npcProfiles: data.npcProfiles,
-        relationships: data.relationships,
-        children: data.children,
-        cheatingRecords: data.cheatingRecords,
-        affectionData: data.affectionData,
-        hierarchyRanks: data.hierarchyRanks,
-        playerHomes: data.playerHomes,
-        settings: data.settings
-      });
-      if (data.children) {
-        useMarasStore.setState({ evaluatingChildId: null });
-      }
-    };
-    window.receiveMARASBuffs = (raw) => {
-      const data = parsePayload(raw);
-      console.log("[PrismaBridge] receiveMARASBuffs payload:", data);
-      useMarasStore.getState().setHouseholdBuffs(data);
-    };
-    window.openMARAS = () => {
-      var _a2;
-      console.log("[PrismaBridge] openMARAS called");
-      useMarasStore.getState().setIsOpen(true);
-      (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
-    };
-    window.showMARAS = () => {
-      var _a2;
-      console.log("[PrismaBridge] showMARAS called");
-      useMarasStore.getState().setIsOpen(true);
-      (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
-    };
-    document.addEventListener("mousedown", () => {
-      var _a2;
-      if (!document.hasFocus()) {
-        (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
-      }
-    });
-    document.addEventListener("focusin", () => {
-      var _a2;
-      if (!document.hasFocus()) {
-        (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
-      }
-    });
-    window.addEventListener("beforeunload", () => {
-      flushAllPendingDebouncedActions();
-    });
-    window.addEventListener("pagehide", () => {
-      flushAllPendingDebouncedActions();
-    });
-    window.receiveNPCList = (rawList) => {
-      const list = parsePayload(rawList);
-      if (!Array.isArray(list)) return;
-      console.log("[PrismaBridge] receiveNPCList:", list);
-      const store = useMarasStore.getState();
-      const profiles = list.map((item) => {
-        const existing = store.npcProfiles.get(item.formId);
-        return {
-          formId: item.formId,
-          name: item.name,
-          race: item.race || "Nord",
-          socialClass: (existing == null ? void 0 : existing.socialClass) ?? item.socialClass ?? SocialClass.Middle,
-          skillType: (existing == null ? void 0 : existing.skillType) ?? item.skillType ?? SkillType.Warrior,
-          temperament: (existing == null ? void 0 : existing.temperament) ?? item.temperament ?? Temperament.Proud,
-          currentHome: item.currentHome ?? (existing == null ? void 0 : existing.currentHome),
-          originalHome: item.originalHome ?? (existing == null ? void 0 : existing.originalHome),
-          isChild: item.isChild ?? (existing == null ? void 0 : existing.isChild),
-          stage: item.stage ?? (existing == null ? void 0 : existing.stage),
-          isEphemeral: item.isEphemeral ?? (existing == null ? void 0 : existing.isEphemeral),
-          hasRefID: item.hasRefID ?? (existing == null ? void 0 : existing.hasRefID),
-          trainingLocation: item.trainingLocation ?? (existing == null ? void 0 : existing.trainingLocation),
-          critterBanned: (existing == null ? void 0 : existing.critterBanned) ?? item.critterBanned,
-          petBanned: (existing == null ? void 0 : existing.petBanned) ?? item.petBanned,
-          currentCritter: item.currentCritter !== void 0 ? item.currentCritter : existing == null ? void 0 : existing.currentCritter,
-          currentPet: item.currentPet !== void 0 ? item.currentPet : existing == null ? void 0 : existing.currentPet,
-          pluginName: item.pluginName || (existing == null ? void 0 : existing.pluginName),
-          gender: item.gender ?? (existing == null ? void 0 : existing.gender) ?? "male"
-        };
-      });
-      store.setLiveGameData({ npcProfiles: profiles });
-    };
-    window.receiveNPCDetail = (rawDetail) => {
-      const detail = parsePayload(rawDetail);
-      console.log("[PrismaBridge] receiveNPCDetail:", detail);
-      const store = useMarasStore.getState();
-      if (detail && detail.formId) {
-        const existing = store.npcProfiles.get(detail.formId);
-        let resolvedName = detail.name;
-        if (!resolvedName || resolvedName.startsWith("NPC_")) {
-          if ((existing == null ? void 0 : existing.name) && !existing.name.startsWith("NPC_")) {
-            resolvedName = existing.name;
-          } else {
-            const childMatch = store.children.get(detail.formId);
-            if (childMatch && childMatch.name && !childMatch.name.startsWith("NPC_")) {
-              resolvedName = childMatch.name;
-            }
-          }
-        }
-        const isChild = Boolean((existing == null ? void 0 : existing.isChild) ?? detail.isChild ?? store.children.has(detail.formId));
-        store.updateNPCProfile(
-          detail.formId,
-          {
-            name: resolvedName,
-            race: detail.race,
-            pluginName: detail.pluginName,
-            socialClass: detail.socialClass ?? SocialClass.Middle,
-            skillType: detail.skillType ?? SkillType.Warrior,
-            temperament: detail.temperament ?? Temperament.Proud,
-            currentHome: detail.currentHome,
-            originalHome: detail.originalHome,
-            stayAtHome: detail.stayAtHome,
-            isChild,
-            stage: detail.stage,
-            isEphemeral: detail.isEphemeral,
-            hasRefID: detail.hasRefID,
-            trainingLocation: detail.trainingLocation,
-            critterBanned: detail.critterBanned,
-            petBanned: detail.petBanned,
-            currentCritter: detail.currentCritter,
-            currentPet: detail.currentPet,
-            gender: detail.gender ?? (existing == null ? void 0 : existing.gender) ?? "male"
-          },
-          true
-          // skipBridge = true (incoming from C++)
-        );
-        if (detail.affection && typeof detail.affection.permanent === "number") {
-          store.updateAffection(detail.formId, detail.affection.permanent, true);
-        }
-      }
-    };
-    window.onAffectionChanged = (raw) => {
-      const data = parsePayload(raw);
-      if (!data || !data.formId) return;
-      console.log(`[PrismaBridge] onAffectionChanged for ${data.formId}: ${data.value}`);
-      useMarasStore.getState().updateAffection(data.formId, data.value, true);
-    };
-    window.onStatusChanged = (raw) => {
-      const data = parsePayload(raw);
-      if (!data || !data.actorA || !data.actorB) return;
-      console.log(`[PrismaBridge] onStatusChanged: ${data.actorA} <-> ${data.actorB} = ${data.status} (isOpen: ${data.isOpen})`);
-      useMarasStore.getState().handleRealtimeStatusChanged(data.actorA, data.actorB, data.status, data.isOpen);
-    };
-    window.onHierarchyChanged = (raw) => {
-      const data = raw !== void 0 ? parsePayload(raw) : void 0;
-      console.log("[PrismaBridge] onHierarchyChanged:", data);
-      const ranks = Array.isArray(data) ? data : data == null ? void 0 : data.ranks;
-      if (ranks) {
-        useMarasStore.setState({ hierarchyRanks: ranks });
-      } else {
-        sendMarasAction("fetchOverview");
-      }
-    };
-    window.onChildUpdated = (rawChild) => {
-      const child = parsePayload(rawChild);
-      console.log("[PrismaBridge] onChildUpdated:", child);
-      if (child && child.childId) {
-        useMarasStore.getState().updateChild(child.childId, child, true);
-      }
-    };
-    window.onChildRemoved = (rawData) => {
-      const data = parsePayload(rawData);
-      console.log("[PrismaBridge] onChildRemoved:", data);
-      const childId = typeof data === "string" ? data : data == null ? void 0 : data.childId;
-      if (childId) {
-        useMarasStore.getState().removeChild(childId, true);
-      }
-    };
-    window.onChildPromoted = (oldIdOrData, newId) => {
-      const parsed = parsePayload(oldIdOrData);
-      const resolvedOldId = typeof parsed === "object" && parsed !== null ? parsed.oldId : parsed;
-      const resolvedNewId = typeof parsed === "object" && parsed !== null ? parsed.newId : newId;
-      if (resolvedOldId && resolvedNewId) {
-        console.log(`[PrismaBridge] onChildPromoted: ${resolvedOldId} -> ${resolvedNewId}`);
-        useMarasStore.getState().handleChildPromoted(resolvedOldId, resolvedNewId);
-      }
-    };
-    window.receiveNPCSearchResults = (raw) => {
-      const data = parsePayload(raw);
-      if (!data) return;
-      console.log("[PrismaBridge] receiveNPCSearchResults:", data);
-      const side = (data.side || "A").toLowerCase();
-      useMarasStore.getState().setSearchResults(side, data.results || []);
-    };
-    window.receiveAllSkyrimNPCs = (raw) => {
-      const data = parsePayload(raw);
-      if (!data) return;
-      console.log("[PrismaBridge] receiveAllSkyrimNPCs:", data);
-      useMarasStore.getState().setAllSkyrimNpcs(data.npcs || []);
-    };
-    window.onDataDumpCompleted = (raw) => {
-      const data = parsePayload(raw);
-      if (!data) return;
-      console.log("[PrismaBridge] onDataDumpCompleted:", data);
-      const store = useMarasStore.getState();
-      store.setIsDumpingData(false);
-      store.setLastDumpResult({
-        success: !!data.success,
-        fileName: data.fileName,
-        filePath: data.filePath,
-        absolutePath: data.absolutePath,
-        timestamp: data.timestamp || (/* @__PURE__ */ new Date()).toLocaleString(),
-        error: data.error
-      });
-    };
-    window.onNPCIndexDumpCompleted = (raw) => {
-      const data = parsePayload(raw);
-      if (!data) return;
-      console.log("[PrismaBridge] onNPCIndexDumpCompleted:", data);
-      const store = useMarasStore.getState();
-      store.setIsDumpingNPCIndex(false);
-      store.setLastNPCIndexDumpResult({
-        success: !!data.success,
-        fileName: data.fileName,
-        filePath: data.filePath,
-        absolutePath: data.absolutePath,
-        totalNPCs: data.totalNPCs,
-        timestamp: data.timestamp || (/* @__PURE__ */ new Date()).toLocaleString(),
-        error: data.error
-      });
-    };
-    window.onActionRejected = (raw) => {
-      const data = parsePayload(raw);
-      if (!data) return;
-      console.warn("[PrismaBridge] onActionRejected:", data);
-      const store = useMarasStore.getState();
-      const reason = data.reason || "Operation could not proceed due to relationship rules.";
-      store.setStatusMsg(`Action Blocked: ${reason}`);
-    };
-    window.receiveMatchmakingResults = (rawResultsOrPayload, isGlobal) => {
-      const parsed = parsePayload(rawResultsOrPayload);
-      const results = Array.isArray(parsed) ? parsed : (parsed == null ? void 0 : parsed.results) || [];
-      const resolvedIsGlobal = typeof isGlobal === "boolean" ? isGlobal : !Array.isArray(parsed) ? parsed == null ? void 0 : parsed.isGlobal : void 0;
-      console.log("[PrismaBridge] receiveMatchmakingResults:", results, resolvedIsGlobal);
-      const store = useMarasStore.getState();
-      if (typeof resolvedIsGlobal === "boolean") {
-        store.setMatchmakingScanType(resolvedIsGlobal ? "global" : "target");
-      }
-      const formatted = (results || []).map((item) => ({
-        formId: item.formId || item.actorBFormId,
-        name: item.name || item.actorBName,
-        actorAFormId: item.actorAFormId,
-        actorAName: item.actorAName,
-        suggestedStatus: item.suggestedStatus ?? RelationshipStatus.Dating,
-        action: item.action || "new",
-        targetStatus: item.targetStatus || "dating",
-        selected: item.selected ?? true,
-        compatibilityScore: item.compatibilityScore ?? 85,
-        isCheating: Boolean(item.isCheating ?? item.cheating ?? false),
-        reasoning: item.reasoning || item.memory || "",
-        memory: item.memory || item.reasoning || "",
-        synergyTags: item.synergyTags || ["#AIContext", "#SkyrimLore"]
-      }));
-      store.setAiSuggestions(formatted);
-    };
-    window.receiveMatchmakingSettings = (rawSettings) => {
-      const settings = parsePayload(rawSettings);
-      console.log("[PrismaBridge] receiveMatchmakingSettings:", settings);
-      const store = useMarasStore.getState();
-      store.setMatchmakingSettings(settings);
-    };
-    window.receiveGeneratedMemories = (raw) => {
-      const data = parsePayload(raw);
-      if (!data) return;
-      console.log("[PrismaBridge] receiveGeneratedMemories:", data);
-      const store = useMarasStore.getState();
-      store.receiveGeneratedMemories(data);
-    };
-    console.log("[PrismaBridge] Window callbacks initialized successfully");
-  }
   function r(e) {
     var t2, f2, n2 = "";
     if ("string" == typeof e || "number" == typeof e) n2 += e;
@@ -10658,6 +10348,554 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     return twMerge(clsx(inputs));
   }
   const isInGame = () => true;
+  function buildChecklistValueFromItems(control, itemsMap) {
+    const checkedIds = [];
+    const uncheckedIds = [];
+    const items = control.items || [];
+    for (const item of items) {
+      const state = itemsMap[item.id];
+      if (state == null ? void 0 : state.checked) {
+        checkedIds.push(item.id);
+      } else {
+        uncheckedIds.push(item.id);
+      }
+    }
+    return {
+      checkedIds,
+      uncheckedIds,
+      items: itemsMap
+    };
+  }
+  function initializeControlValues(controls) {
+    var _a2, _b, _c, _d;
+    const initial = {};
+    if (!controls) return initial;
+    for (const ctrl of controls) {
+      if (!ctrl.id) continue;
+      switch (ctrl.type) {
+        case "checkbox":
+          initial[ctrl.id] = Boolean(ctrl.defaultValue ?? false);
+          break;
+        case "select": {
+          const firstOpt = ((_b = (_a2 = ctrl.options) == null ? void 0 : _a2[0]) == null ? void 0 : _b.value) ?? "";
+          initial[ctrl.id] = ctrl.defaultValue !== void 0 && ctrl.defaultValue !== null ? String(ctrl.defaultValue) : firstOpt;
+          break;
+        }
+        case "text":
+          initial[ctrl.id] = ctrl.defaultValue !== void 0 && ctrl.defaultValue !== null ? String(ctrl.defaultValue) : "";
+          break;
+        case "checklist": {
+          const itemsMap = {};
+          for (const item of ctrl.items || []) {
+            const initialSelect = item.selectValue !== void 0 ? item.selectValue : (_d = (_c = item.selectOptions) == null ? void 0 : _c[0]) == null ? void 0 : _d.value;
+            itemsMap[item.id] = {
+              checked: item.checked ?? true,
+              ...initialSelect !== void 0 ? { selectValue: initialSelect } : {}
+            };
+          }
+          initial[ctrl.id] = buildChecklistValueFromItems(ctrl, itemsMap);
+          break;
+        }
+      }
+    }
+    return initial;
+  }
+  const useModalStore = create((set, get) => ({
+    activeModal: null,
+    controlValues: {},
+    isSubmitting: false,
+    onResolve: null,
+    showModal: (modal, onResolve) => {
+      const initialValues = initializeControlValues(modal.controls);
+      set({
+        activeModal: modal,
+        controlValues: initialValues,
+        isSubmitting: false,
+        onResolve: onResolve ?? null
+      });
+    },
+    clearModal: () => {
+      set({
+        activeModal: null,
+        controlValues: {},
+        isSubmitting: false,
+        onResolve: null
+      });
+    },
+    setControlValue: (controlId, value) => {
+      set((state) => ({
+        controlValues: {
+          ...state.controlValues,
+          [controlId]: value
+        }
+      }));
+    },
+    toggleChecklistItem: (controlId, itemId, checked) => {
+      var _a2, _b, _c;
+      const { activeModal, controlValues } = get();
+      if (!activeModal) return;
+      const control = (_a2 = activeModal.controls) == null ? void 0 : _a2.find((c) => c.id === controlId && c.type === "checklist");
+      if (!control) return;
+      const itemDef = (_b = control.items) == null ? void 0 : _b.find((i) => i.id === itemId);
+      if (itemDef == null ? void 0 : itemDef.checkboxDisabled) return;
+      const currentChecklist = controlValues[controlId];
+      const existingItems = (currentChecklist == null ? void 0 : currentChecklist.items) || {};
+      const prevChecked = ((_c = existingItems[itemId]) == null ? void 0 : _c.checked) ?? ((itemDef == null ? void 0 : itemDef.checked) ?? true);
+      const nextChecked = checked !== void 0 ? checked : !prevChecked;
+      const nextItems = {
+        ...existingItems,
+        [itemId]: {
+          ...existingItems[itemId],
+          checked: nextChecked
+        }
+      };
+      set({
+        controlValues: {
+          ...controlValues,
+          [controlId]: buildChecklistValueFromItems(control, nextItems)
+        }
+      });
+    },
+    setAllChecklistItems: (controlId, checked) => {
+      var _a2;
+      const { activeModal, controlValues } = get();
+      if (!activeModal) return;
+      const control = (_a2 = activeModal.controls) == null ? void 0 : _a2.find((c) => c.id === controlId && c.type === "checklist");
+      if (!control) return;
+      const currentChecklist = controlValues[controlId];
+      const existingItems = (currentChecklist == null ? void 0 : currentChecklist.items) || {};
+      const nextItems = { ...existingItems };
+      for (const item of control.items || []) {
+        const prev = existingItems[item.id];
+        nextItems[item.id] = {
+          ...prev,
+          checked: item.checkboxDisabled ? (prev == null ? void 0 : prev.checked) ?? Boolean(item.checked) : checked
+        };
+      }
+      set({
+        controlValues: {
+          ...controlValues,
+          [controlId]: buildChecklistValueFromItems(control, nextItems)
+        }
+      });
+    },
+    setChecklistItemSelectValue: (controlId, itemId, selectValue) => {
+      var _a2;
+      const { activeModal, controlValues } = get();
+      if (!activeModal) return;
+      const control = (_a2 = activeModal.controls) == null ? void 0 : _a2.find((c) => c.id === controlId && c.type === "checklist");
+      if (!control) return;
+      const currentChecklist = controlValues[controlId];
+      const existingItems = (currentChecklist == null ? void 0 : currentChecklist.items) || {};
+      const prev = existingItems[itemId] || { checked: true };
+      const nextItems = {
+        ...existingItems,
+        [itemId]: {
+          ...prev,
+          selectValue
+        }
+      };
+      set({
+        controlValues: {
+          ...controlValues,
+          [controlId]: buildChecklistValueFromItems(control, nextItems)
+        }
+      });
+    },
+    submitModal: (buttonId, buttonIndex, customValues) => {
+      const { activeModal, controlValues, isSubmitting, onResolve } = get();
+      if (!activeModal || isSubmitting) return;
+      set({ isSubmitting: true });
+      const finalValues = customValues ? { ...controlValues, ...customValues } : controlValues;
+      if (onResolve) {
+        set({
+          activeModal: null,
+          controlValues: {},
+          isSubmitting: false,
+          onResolve: null
+        });
+        onResolve(buttonId, buttonIndex, finalValues);
+        return;
+      }
+      sendMarasAction("modalResponse", {
+        modalId: activeModal.modalId,
+        buttonId,
+        buttonIndex,
+        values: finalValues
+      });
+    }
+  }));
+  function confirmRemoveRelationship(actorAName, actorBName, onConfirm) {
+    useModalStore.getState().showModal(
+      {
+        modalId: "confirm_remove_relationship",
+        title: "Remove Relationship Record?",
+        subtitle: `${actorAName} & ${actorBName}`,
+        message: "Are you sure you want to permanently remove this relationship record, its status history, and any associated affair records from M.A.R.A.S tracking?\n\nBoth NPCs will remain registered as Candidates.",
+        size: "sm",
+        tone: "danger",
+        buttons: [
+          { id: "remove", label: "Remove Record", variant: "danger" },
+          { id: "cancel", label: "Cancel", variant: "secondary" }
+        ]
+      },
+      (buttonId) => {
+        if (buttonId === "remove") {
+          onConfirm();
+        }
+      }
+    );
+  }
+  function confirmRemoveChild(childId, childName, onConfirm) {
+    useModalStore.getState().showModal(
+      {
+        modalId: "confirm_remove_child",
+        title: "Remove Child Record?",
+        subtitle: `${childName} (${childId})`,
+        message: "Are you sure you want to permanently remove this child record from M.A.R.A.S household and family tracking?\n\nThis will clear their guardian and lineage assignments in M.A.R.A.S.",
+        size: "sm",
+        tone: "danger",
+        buttons: [
+          { id: "remove", label: "Remove Child Record", variant: "danger" },
+          { id: "cancel", label: "Cancel", variant: "secondary" }
+        ]
+      },
+      (buttonId) => {
+        if (buttonId === "remove") {
+          onConfirm();
+        }
+      }
+    );
+  }
+  function parsePayload(raw) {
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          return JSON.parse(trimmed);
+        } catch (e) {
+          console.error("[PrismaBridge] Failed to parse JSON payload:", e);
+        }
+      }
+    }
+    return raw;
+  }
+  function sendMarasAction(action, payload = {}) {
+    const jsonStr = JSON.stringify({ action, payload });
+    if (typeof window !== "undefined" && window.marasAction) {
+      window.marasAction(jsonStr);
+    } else {
+      console.log(`[Standalone Mock Action] ${action}:`, payload);
+    }
+  }
+  function initializePrismaBridge() {
+    if (typeof window === "undefined") return;
+    window.receiveMARASOverview = (raw) => {
+      const data = parsePayload(raw);
+      if (!data || typeof data !== "object") return;
+      console.log("[PrismaBridge] receiveMARASOverview payload:", data);
+      const store = useMarasStore.getState();
+      if (data.children && data.npcProfiles) {
+        const childNameMap = /* @__PURE__ */ new Map();
+        data.children.forEach((c) => {
+          if (c.childId && c.name && !c.name.startsWith("NPC_")) {
+            childNameMap.set(c.childId, c.name);
+          }
+        });
+        data.npcProfiles.forEach((prof) => {
+          if (childNameMap.has(prof.formId) && (!prof.name || prof.name.startsWith("NPC_"))) {
+            prof.name = childNameMap.get(prof.formId);
+          }
+        });
+      }
+      store.setLiveGameData({
+        currentGameDay: data.currentGameDay,
+        npcProfiles: data.npcProfiles,
+        relationships: data.relationships,
+        children: data.children,
+        cheatingRecords: data.cheatingRecords,
+        affectionData: data.affectionData,
+        hierarchyRanks: data.hierarchyRanks,
+        playerHomes: data.playerHomes,
+        settings: data.settings
+      });
+      if (data.children) {
+        useMarasStore.setState({ evaluatingChildId: null });
+      }
+    };
+    window.receiveMARASBuffs = (raw) => {
+      const data = parsePayload(raw);
+      console.log("[PrismaBridge] receiveMARASBuffs payload:", data);
+      useMarasStore.getState().setHouseholdBuffs(data);
+    };
+    window.openMARAS = () => {
+      var _a2;
+      console.log("[PrismaBridge] openMARAS called");
+      useMarasStore.getState().setIsOpen(true);
+      (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+    };
+    window.showMARAS = () => {
+      var _a2;
+      console.log("[PrismaBridge] showMARAS called");
+      useMarasStore.getState().setIsOpen(true);
+      (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+    };
+    window.closeMARASView = () => {
+      console.log("[PrismaBridge] closeMARASView called");
+      useMarasStore.getState().setIsOpen(false);
+    };
+    window.showMARASModal = (rawModal) => {
+      var _a2;
+      const modal = parsePayload(rawModal);
+      if (!modal || typeof modal !== "object" || !modal.modalId) {
+        console.error("[PrismaBridge] Invalid showMARASModal payload:", rawModal);
+        return;
+      }
+      console.log("[PrismaBridge] showMARASModal:", modal);
+      useModalStore.getState().showModal(modal);
+      (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+    };
+    window.clearMARASModal = () => {
+      console.log("[PrismaBridge] clearMARASModal called");
+      useModalStore.getState().clearModal();
+    };
+    document.addEventListener("mousedown", () => {
+      var _a2;
+      if (!document.hasFocus()) {
+        (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+      }
+    });
+    document.addEventListener("focusin", () => {
+      var _a2;
+      if (!document.hasFocus()) {
+        (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+      }
+    });
+    window.addEventListener("beforeunload", () => {
+      flushAllPendingDebouncedActions();
+    });
+    window.addEventListener("pagehide", () => {
+      flushAllPendingDebouncedActions();
+    });
+    window.receiveNPCList = (rawList) => {
+      const list = parsePayload(rawList);
+      if (!Array.isArray(list)) return;
+      console.log("[PrismaBridge] receiveNPCList:", list);
+      const store = useMarasStore.getState();
+      const profiles = list.map((item) => {
+        const existing = store.npcProfiles.get(item.formId);
+        return {
+          formId: item.formId,
+          name: item.name,
+          race: item.race || "Nord",
+          socialClass: (existing == null ? void 0 : existing.socialClass) ?? item.socialClass ?? SocialClass.Middle,
+          skillType: (existing == null ? void 0 : existing.skillType) ?? item.skillType ?? SkillType.Warrior,
+          temperament: (existing == null ? void 0 : existing.temperament) ?? item.temperament ?? Temperament.Proud,
+          currentHome: item.currentHome ?? (existing == null ? void 0 : existing.currentHome),
+          originalHome: item.originalHome ?? (existing == null ? void 0 : existing.originalHome),
+          isChild: item.isChild ?? (existing == null ? void 0 : existing.isChild),
+          stage: item.stage ?? (existing == null ? void 0 : existing.stage),
+          isEphemeral: item.isEphemeral ?? (existing == null ? void 0 : existing.isEphemeral),
+          hasRefID: item.hasRefID ?? (existing == null ? void 0 : existing.hasRefID),
+          trainingLocation: item.trainingLocation ?? (existing == null ? void 0 : existing.trainingLocation),
+          critterBanned: (existing == null ? void 0 : existing.critterBanned) ?? item.critterBanned,
+          petBanned: (existing == null ? void 0 : existing.petBanned) ?? item.petBanned,
+          currentCritter: item.currentCritter !== void 0 ? item.currentCritter : existing == null ? void 0 : existing.currentCritter,
+          currentPet: item.currentPet !== void 0 ? item.currentPet : existing == null ? void 0 : existing.currentPet,
+          pluginName: item.pluginName || (existing == null ? void 0 : existing.pluginName),
+          gender: item.gender ?? (existing == null ? void 0 : existing.gender) ?? "male"
+        };
+      });
+      store.setLiveGameData({ npcProfiles: profiles });
+    };
+    window.receiveNPCDetail = (rawDetail) => {
+      const detail = parsePayload(rawDetail);
+      console.log("[PrismaBridge] receiveNPCDetail:", detail);
+      const store = useMarasStore.getState();
+      if (detail && detail.formId) {
+        const existing = store.npcProfiles.get(detail.formId);
+        let resolvedName = detail.name;
+        if (!resolvedName || resolvedName.startsWith("NPC_")) {
+          if ((existing == null ? void 0 : existing.name) && !existing.name.startsWith("NPC_")) {
+            resolvedName = existing.name;
+          } else {
+            const childMatch = store.children.get(detail.formId);
+            if (childMatch && childMatch.name && !childMatch.name.startsWith("NPC_")) {
+              resolvedName = childMatch.name;
+            }
+          }
+        }
+        const isChild = Boolean((existing == null ? void 0 : existing.isChild) ?? detail.isChild ?? store.children.has(detail.formId));
+        store.updateNPCProfile(
+          detail.formId,
+          {
+            name: resolvedName,
+            race: detail.race,
+            pluginName: detail.pluginName,
+            socialClass: detail.socialClass ?? SocialClass.Middle,
+            skillType: detail.skillType ?? SkillType.Warrior,
+            temperament: detail.temperament ?? Temperament.Proud,
+            currentHome: detail.currentHome,
+            originalHome: detail.originalHome,
+            stayAtHome: detail.stayAtHome,
+            isChild,
+            stage: detail.stage,
+            isEphemeral: detail.isEphemeral,
+            hasRefID: detail.hasRefID,
+            trainingLocation: detail.trainingLocation,
+            critterBanned: detail.critterBanned,
+            petBanned: detail.petBanned,
+            currentCritter: detail.currentCritter,
+            currentPet: detail.currentPet,
+            gender: detail.gender ?? (existing == null ? void 0 : existing.gender) ?? "male"
+          },
+          true
+          // skipBridge = true (incoming from C++)
+        );
+        if (detail.affection && typeof detail.affection.permanent === "number") {
+          store.updateAffection(detail.formId, detail.affection.permanent, true);
+        }
+      }
+    };
+    window.onAffectionChanged = (raw) => {
+      const data = parsePayload(raw);
+      if (!data || !data.formId) return;
+      console.log(`[PrismaBridge] onAffectionChanged for ${data.formId}: ${data.value}`);
+      useMarasStore.getState().updateAffection(data.formId, data.value, true);
+    };
+    window.onStatusChanged = (raw) => {
+      const data = parsePayload(raw);
+      if (!data || !data.actorA || !data.actorB) return;
+      console.log(`[PrismaBridge] onStatusChanged: ${data.actorA} <-> ${data.actorB} = ${data.status} (isOpen: ${data.isOpen})`);
+      useMarasStore.getState().handleRealtimeStatusChanged(data.actorA, data.actorB, data.status, data.isOpen);
+    };
+    window.onHierarchyChanged = (raw) => {
+      const data = raw !== void 0 ? parsePayload(raw) : void 0;
+      console.log("[PrismaBridge] onHierarchyChanged:", data);
+      const ranks = Array.isArray(data) ? data : data == null ? void 0 : data.ranks;
+      if (ranks) {
+        useMarasStore.setState({ hierarchyRanks: ranks });
+      } else {
+        sendMarasAction("fetchOverview");
+      }
+    };
+    window.onChildUpdated = (rawChild) => {
+      const child = parsePayload(rawChild);
+      console.log("[PrismaBridge] onChildUpdated:", child);
+      if (child && child.childId) {
+        useMarasStore.getState().updateChild(child.childId, child, true);
+      }
+    };
+    window.onChildRemoved = (rawData) => {
+      const data = parsePayload(rawData);
+      console.log("[PrismaBridge] onChildRemoved:", data);
+      const childId = typeof data === "string" ? data : data == null ? void 0 : data.childId;
+      if (childId) {
+        useMarasStore.getState().removeChild(childId, true);
+      }
+    };
+    window.onChildPromoted = (oldIdOrData, newId) => {
+      const parsed = parsePayload(oldIdOrData);
+      const resolvedOldId = typeof parsed === "object" && parsed !== null ? parsed.oldId : parsed;
+      const resolvedNewId = typeof parsed === "object" && parsed !== null ? parsed.newId : newId;
+      if (resolvedOldId && resolvedNewId) {
+        console.log(`[PrismaBridge] onChildPromoted: ${resolvedOldId} -> ${resolvedNewId}`);
+        useMarasStore.getState().handleChildPromoted(resolvedOldId, resolvedNewId);
+      }
+    };
+    window.receiveNPCSearchResults = (raw) => {
+      const data = parsePayload(raw);
+      if (!data) return;
+      console.log("[PrismaBridge] receiveNPCSearchResults:", data);
+      const side = (data.side || "A").toLowerCase();
+      useMarasStore.getState().setSearchResults(side, data.results || []);
+    };
+    window.receiveAllSkyrimNPCs = (raw) => {
+      const data = parsePayload(raw);
+      if (!data) return;
+      console.log("[PrismaBridge] receiveAllSkyrimNPCs:", data);
+      useMarasStore.getState().setAllSkyrimNpcs(data.npcs || []);
+    };
+    window.onDataDumpCompleted = (raw) => {
+      const data = parsePayload(raw);
+      if (!data) return;
+      console.log("[PrismaBridge] onDataDumpCompleted:", data);
+      const store = useMarasStore.getState();
+      store.setIsDumpingData(false);
+      store.setLastDumpResult({
+        success: !!data.success,
+        fileName: data.fileName,
+        filePath: data.filePath,
+        absolutePath: data.absolutePath,
+        timestamp: data.timestamp || (/* @__PURE__ */ new Date()).toLocaleString(),
+        error: data.error
+      });
+    };
+    window.onNPCIndexDumpCompleted = (raw) => {
+      const data = parsePayload(raw);
+      if (!data) return;
+      console.log("[PrismaBridge] onNPCIndexDumpCompleted:", data);
+      const store = useMarasStore.getState();
+      store.setIsDumpingNPCIndex(false);
+      store.setLastNPCIndexDumpResult({
+        success: !!data.success,
+        fileName: data.fileName,
+        filePath: data.filePath,
+        absolutePath: data.absolutePath,
+        totalNPCs: data.totalNPCs,
+        timestamp: data.timestamp || (/* @__PURE__ */ new Date()).toLocaleString(),
+        error: data.error
+      });
+    };
+    window.onActionRejected = (raw) => {
+      const data = parsePayload(raw);
+      if (!data) return;
+      console.warn("[PrismaBridge] onActionRejected:", data);
+      const store = useMarasStore.getState();
+      const reason = data.reason || "Operation could not proceed due to relationship rules.";
+      store.setStatusMsg(`Action Blocked: ${reason}`);
+    };
+    window.receiveMatchmakingResults = (rawResultsOrPayload, isGlobal) => {
+      const parsed = parsePayload(rawResultsOrPayload);
+      const results = Array.isArray(parsed) ? parsed : (parsed == null ? void 0 : parsed.results) || [];
+      const resolvedIsGlobal = typeof isGlobal === "boolean" ? isGlobal : !Array.isArray(parsed) ? parsed == null ? void 0 : parsed.isGlobal : void 0;
+      console.log("[PrismaBridge] receiveMatchmakingResults:", results, resolvedIsGlobal);
+      const store = useMarasStore.getState();
+      if (typeof resolvedIsGlobal === "boolean") {
+        store.setMatchmakingScanType(resolvedIsGlobal ? "global" : "target");
+      }
+      const formatted = (results || []).map((item) => ({
+        formId: item.formId || item.actorBFormId,
+        name: item.name || item.actorBName,
+        actorAFormId: item.actorAFormId,
+        actorAName: item.actorAName,
+        suggestedStatus: item.suggestedStatus ?? RelationshipStatus.Dating,
+        action: item.action || "new",
+        targetStatus: item.targetStatus || "dating",
+        selected: item.selected ?? true,
+        compatibilityScore: item.compatibilityScore ?? 85,
+        isCheating: Boolean(item.isCheating ?? item.cheating ?? false),
+        reasoning: item.reasoning || item.memory || "",
+        memory: item.memory || item.reasoning || "",
+        synergyTags: item.synergyTags || ["#AIContext", "#SkyrimLore"]
+      }));
+      store.setAiSuggestions(formatted);
+    };
+    window.receiveMatchmakingSettings = (rawSettings) => {
+      const settings = parsePayload(rawSettings);
+      console.log("[PrismaBridge] receiveMatchmakingSettings:", settings);
+      const store = useMarasStore.getState();
+      store.setMatchmakingSettings(settings);
+    };
+    window.receiveGeneratedMemories = (raw) => {
+      const data = parsePayload(raw);
+      if (!data) return;
+      console.log("[PrismaBridge] receiveGeneratedMemories:", data);
+      const store = useMarasStore.getState();
+      store.receiveGeneratedMemories(data);
+    };
+    console.log("[PrismaBridge] Window callbacks initialized successfully");
+  }
   var __defProp$q = Object.defineProperty;
   var __name$q = (target, value) => __defProp$q(target, "name", { value, configurable: true });
   var canUseDOM = !!(typeof window !== "undefined" && window.document && window.document.createElement);
@@ -14784,7 +15022,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     pendingAffectionUpdates.clear();
   }
   const useMarasStore = create((set, get) => ({
-    isOpen: true,
+    isOpen: !isGameBuild,
     isInGame: isGameBuild,
     statusMsg: "M.A.R.A.S Core Active",
     activeTab: "overview",
@@ -14838,6 +15076,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       useLLM: true,
       generateMemories: true,
       evaluationStep: true,
+      confirmResults: mockSettings.matchmakingConfirmResults ?? false,
       diceRollChanceNewDating: 22,
       diceRollChanceNewEngaged: 17,
       diceRollChanceNewLoverAllowed: 17,
@@ -15448,10 +15687,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         }
         if (data.settings) {
           updates.settings = { ...state.settings, ...data.settings };
-          if (data.settings.matchmakingExcludePlayerActivePartners !== void 0) {
+          if (data.settings.matchmakingExcludePlayerActivePartners !== void 0 || data.settings.matchmakingConfirmResults !== void 0) {
+            const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings;
             updates.matchmakingSettings = {
-              ...updates.matchmakingSettings ?? state.matchmakingSettings,
-              excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners
+              ...baseMatchSettings,
+              ...data.settings.matchmakingExcludePlayerActivePartners !== void 0 ? { excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners } : {},
+              ...data.settings.matchmakingConfirmResults !== void 0 ? { confirmResults: data.settings.matchmakingConfirmResults } : {}
             };
           }
         }
@@ -17099,15 +17340,15 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     return cx(base, getVariantClassNames, getCompoundVariantClassNames, props === null || props === void 0 ? void 0 : props.class, props === null || props === void 0 ? void 0 : props.className);
   };
   const buttonVariants = cva(
-    "inline-flex items-center justify-center whitespace-nowrap rounded-md text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border cursor-pointer",
+    "inline-flex items-center justify-center whitespace-nowrap rounded-md text-base font-medium transition-colors focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-accent-bright focus-visible:ring-2 focus-visible:ring-accent-bright focus:shadow-glow disabled:pointer-events-none disabled:opacity-50 border cursor-pointer",
     {
       variants: {
         variant: {
-          default: "bg-accent text-foreground-onAccent hover:bg-accent-bright border-accent-bright active:bg-accent-deep shadow-raised",
-          secondary: "bg-panel-raised text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-strong hover:text-accent-bright",
-          outline: "bg-transparent text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-accent hover:text-accent-bright",
-          ghost: "bg-transparent text-foreground-secondary hover:bg-accent-faint hover:text-foreground-primary border-transparent",
-          danger: "bg-status-danger-soft text-status-danger border-status-danger hover:bg-status-danger hover:text-foreground-primary"
+          default: "bg-accent text-foreground-onAccent hover:bg-accent-bright focus:bg-accent-bright border-accent-bright active:bg-accent-deep shadow-raised",
+          secondary: "bg-panel-raised text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-strong hover:text-accent-bright focus:bg-accent-faint focus:border-border-accent focus:text-accent-bright",
+          outline: "bg-transparent text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-accent hover:text-accent-bright focus:bg-accent-faint focus:border-border-accent focus:text-accent-bright",
+          ghost: "bg-transparent text-foreground-secondary hover:bg-accent-faint hover:text-foreground-primary focus:bg-accent-faint focus:text-foreground-primary border-transparent",
+          danger: "bg-status-danger-soft text-status-danger border-status-danger hover:bg-status-danger hover:text-foreground-primary focus:bg-status-danger focus:text-foreground-primary"
         },
         size: {
           default: "h-[2.5rem] px-[1rem] py-[0.5rem]",
@@ -17231,1718 +17472,72 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }
     );
   };
-  const StatCards = () => {
-    const relationships = useMarasStore((s) => s.relationships);
-    const getCount = (status) => {
-      return relationships.filter(
-        (r2) => r2.status === status && (r2.actorA === PLAYER_FORM_ID || r2.actorB === PLAYER_FORM_ID)
-      ).length;
-    };
-    const stats = [
-      { label: "Married", count: getCount(RelationshipStatus.Married), icon: Crown, color: "text-accent-bright" },
-      { label: "Dating", count: getCount(RelationshipStatus.Dating), icon: Heart, color: "text-status-success" },
-      { label: "Lovers", count: getCount(RelationshipStatus.Lover), icon: Flame, color: "text-accent" },
-      { label: "Engaged", count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: "text-status-warning" },
-      { label: "Divorced", count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: "text-status-danger" },
-      { label: "Candidates", count: getCount(RelationshipStatus.Candidate), icon: Users, color: "text-foreground-secondary" }
-    ];
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-[0.75rem]", children: stats.map((stat, i) => {
-      const Icon2 = stat.icon;
-      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          className: "bg-panel-raised border border-border-subtle hover:border-border-strong rounded-md p-[0.75rem] flex flex-col justify-between transition-colors",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-foreground-muted mb-[0.25rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium uppercase tracking-wider", children: stat.label }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { className: `w-[1.125em] h-[1.125em] ${stat.color}` })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `text-2xl font-bold font-mono ${stat.color}`, children: stat.count })
-          ]
-        },
-        i
-      );
-    }) });
-  };
-  var __defProp$a = Object.defineProperty;
-  var __name$a = (target, value) => __defProp$a(target, "name", { value, configurable: true });
-  var PROGRESS_NAME = "Progress";
-  var DEFAULT_MAX = 100;
-  var [createProgressContext, createProgressScope] = /* @__PURE__ */ createContextScope(PROGRESS_NAME);
-  var [ProgressProvider, useProgressContext] = createProgressContext(PROGRESS_NAME);
-  var Progress$1 = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$a(function Progress2(props, forwardedRef) {
-      const {
-        __scopeProgress,
-        value: valueProp = null,
-        max: maxProp,
-        getValueLabel = defaultGetValueLabel,
-        ...progressProps
-      } = props;
-      if ((maxProp || maxProp === 0) && !isValidMaxNumber(maxProp)) {
-        console.error(getInvalidMaxError(`${maxProp}`, "Progress"));
-      }
-      const max2 = isValidMaxNumber(maxProp) ? maxProp : DEFAULT_MAX;
-      if (valueProp !== null && !isValidValueNumber(valueProp, max2)) {
-        console.error(getInvalidValueError(`${valueProp}`, "Progress"));
-      }
-      const value = isValidValueNumber(valueProp, max2) ? valueProp : null;
-      const valueLabel = isNumber(value) ? getValueLabel(value, max2) : void 0;
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(ProgressProvider, { scope: __scopeProgress, value, max: max2, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Primitive.div,
-        {
-          "aria-valuemax": max2,
-          "aria-valuemin": 0,
-          "aria-valuenow": isNumber(value) ? value : void 0,
-          "aria-valuetext": valueLabel,
-          role: "progressbar",
-          "data-state": getProgressState(value, max2),
-          "data-value": value ?? void 0,
-          "data-max": max2,
-          ...progressProps,
-          ref: forwardedRef
-        }
-      ) });
-    }, "Progress")
-  );
-  var INDICATOR_NAME = "ProgressIndicator";
-  var ProgressIndicator = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$a(function ProgressIndicator2(props, forwardedRef) {
-      const { __scopeProgress, ...indicatorProps } = props;
-      const context = useProgressContext(INDICATOR_NAME, __scopeProgress);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Primitive.div,
-        {
-          "data-state": getProgressState(context.value, context.max),
-          "data-value": context.value ?? void 0,
-          "data-max": context.max,
-          ...indicatorProps,
-          ref: forwardedRef
-        }
-      );
-    }, "ProgressIndicator")
-  );
-  function defaultGetValueLabel(value, max2) {
-    return `${Math.round(value / max2 * 100)}%`;
+  const modalTemplateRegistry = /* @__PURE__ */ new Map();
+  function getModalTemplate(modalType) {
+    if (!modalType || modalType === "generic") {
+      return void 0;
+    }
+    return modalTemplateRegistry.get(modalType);
   }
-  __name$a(defaultGetValueLabel, "defaultGetValueLabel");
-  function getProgressState(value, maxValue) {
-    return value == null ? "indeterminate" : value === maxValue ? "complete" : "loading";
-  }
-  __name$a(getProgressState, "getProgressState");
-  function isNumber(value) {
-    return typeof value === "number";
-  }
-  __name$a(isNumber, "isNumber");
-  function isValidMaxNumber(max2) {
-    return isNumber(max2) && !isNaN(max2) && max2 > 0;
-  }
-  __name$a(isValidMaxNumber, "isValidMaxNumber");
-  function isValidValueNumber(value, max2) {
-    return isNumber(value) && !isNaN(value) && value <= max2 && value >= 0;
-  }
-  __name$a(isValidValueNumber, "isValidValueNumber");
-  function getInvalidMaxError(propValue, componentName) {
-    return `Invalid prop \`max\` of value \`${propValue}\` supplied to \`${componentName}\`. Only numbers greater than 0 are valid max values. Defaulting to \`${DEFAULT_MAX}\`.`;
-  }
-  __name$a(getInvalidMaxError, "getInvalidMaxError");
-  function getInvalidValueError(propValue, componentName) {
-    return `Invalid prop \`value\` of value \`${propValue}\` supplied to \`${componentName}\`. The \`value\` prop must be:
-  - a positive number
-  - less than the value passed to \`max\` (or ${DEFAULT_MAX} if no \`max\` prop is set)
-  - \`null\` or \`undefined\` if the progress is indeterminate.
-
-Defaulting to \`null\`.`;
-  }
-  __name$a(getInvalidValueError, "getInvalidValueError");
-  var Root$1 = Progress$1;
-  var Indicator = ProgressIndicator;
-  const Progress = reactExports.forwardRef(({ className, value, indicatorClassName, ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-    Root$1,
+  const checkboxVariants = cva(
+    "inline-flex items-center justify-center shrink-0 rounded-sm border transition-colors focus:outline-none focus:ring-2 focus:ring-accent-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-bright disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
     {
-      ref,
-      className: cn(
-        "relative h-2 w-full overflow-hidden rounded-full bg-panel-inset border border-border-subtle",
-        className
-      ),
-      ...props,
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Indicator,
-        {
-          className: cn("h-full w-full flex-1 bg-accent transition-all", indicatorClassName),
-          style: { transform: `translateX(-${100 - (value || 0)}%)` }
+      variants: {
+        state: {
+          unchecked: "bg-panel-inset border-border-strong hover:border-border-accent hover:bg-accent-faint text-transparent",
+          checked: "bg-accent border-accent-bright text-foreground-onAccent shadow-glow"
+        },
+        size: {
+          default: "w-[1.125rem] h-[1.125rem]",
+          sm: "w-[0.9375rem] h-[0.9375rem]",
+          lg: "w-[1.25rem] h-[1.25rem]"
         }
-      )
-    }
-  ));
-  Progress.displayName = Root$1.displayName;
-  const AffectionBar = ({
-    value,
-    size: size2 = "md",
-    showLabel = true,
-    className = ""
-  }) => {
-    const clampedValue = Math.round(Math.max(0, Math.min(100, value)));
-    let indicatorColor = "bg-accent";
-    if (clampedValue >= 70) {
-      indicatorColor = "bg-status-success";
-    } else if (clampedValue >= 40) {
-      indicatorColor = "bg-accent";
-    } else {
-      indicatorColor = "bg-status-warning";
-    }
-    const heightClass = size2 === "sm" ? "h-[0.375rem]" : size2 === "lg" ? "h-[0.75rem]" : "h-[0.5rem]";
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.5rem] w-full ${className}`, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Progress,
-        {
-          value: clampedValue,
-          className: `flex-1 ${heightClass}`,
-          indicatorClassName: indicatorColor
-        }
-      ),
-      showLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-mono font-semibold text-foreground-secondary min-w-[2.25rem] text-right", children: [
-        clampedValue,
-        "%"
-      ] })
-    ] });
-  };
-  function parseTraitEnum(val, enumObj, defaultValue) {
-    if (val === void 0 || val === null) return defaultValue;
-    if (typeof val === "number") return val in enumObj ? val : defaultValue;
-    if (!isNaN(Number(val))) {
-      const num = Number(val);
-      return num in enumObj ? num : defaultValue;
-    }
-    const lower = String(val).toLowerCase();
-    const keys = Object.keys(enumObj).filter((k2) => isNaN(Number(k2)));
-    const match = keys.find((k2) => k2.toLowerCase() === lower || lower.includes(k2.toLowerCase()));
-    return match !== void 0 ? enumObj[match] : defaultValue;
-  }
-  const parseSocialClass = (val) => parseTraitEnum(val, SocialClass, SocialClass.Middle);
-  const parseSkillType = (val) => parseTraitEnum(val, SkillType, SkillType.Warrior);
-  const parseTemperament = (val) => parseTraitEnum(val, Temperament, Temperament.Proud);
-  const getSocialClassLabel = (sc2) => SocialClass[parseSocialClass(sc2)] || "Middle";
-  const getSkillTypeLabel = (st) => SkillType[parseSkillType(st)] || "Warrior";
-  const getTemperamentLabel = (t2) => Temperament[parseTemperament(t2)] || "Proud";
-  const CUSTOM_ICON_NAMES = {
-    nobles: "noble",
-    rulers: "ruler",
-    working: "middle"
-  };
-  function getTraitIconUrl(category, val, variant = "default") {
-    const dir = variant === "square" ? "./assets/icons/squars" : "./assets/icons";
-    let rawName = "";
-    if (category === "socialClass") {
-      rawName = SocialClass[parseSocialClass(val)];
-    } else if (category === "skillType") {
-      rawName = SkillType[parseSkillType(val)];
-    } else {
-      rawName = Temperament[parseTemperament(val)];
-    }
-    const key = (rawName || "").toLowerCase();
-    const filename = CUSTOM_ICON_NAMES[key] || key;
-    return `${dir}/${filename}.png`;
-  }
-  const getSocialClassIconUrl = (sc2, variant) => getTraitIconUrl("socialClass", sc2, variant);
-  const getSkillTypeIconUrl = (st, variant) => getTraitIconUrl("skillType", st, variant);
-  const getTemperamentIconUrl = (t2, variant) => getTraitIconUrl("temperament", t2, variant);
-  function resolveSize(size2) {
-    if (!size2) return "1em";
-    switch (size2) {
-      case "xs":
-        return "0.875em";
-      case "sm":
-        return "1em";
-      case "md":
-        return "1.25em";
-      case "lg":
-        return "1.5em";
-      case "xl":
-        return "2em";
-      default:
-        return size2;
-    }
-  }
-  const TraitIconBase = React$2.forwardRef(
-    ({
-      iconUrl,
-      label,
-      category,
-      size: size2 = "md",
-      showLabel = false,
-      showTooltip = true,
-      className,
-      style,
-      alt,
-      ...props
-    }, ref) => {
-      const dim = resolveSize(size2);
-      const imgNode = /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "img",
-        {
-          ref,
-          src: iconUrl,
-          alt: alt || label,
-          style: { width: dim, height: dim, ...style },
-          className: cn("object-contain inline-block flex-shrink-0 align-middle", className),
-          ...props
-        }
-      );
-      const contentNode = showLabel ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.375em] text-xs font-medium text-foreground-primary", children: [
-        imgNode,
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
-      ] }) : imgNode;
-      if (showTooltip) {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `${category}: ${label}`, children: contentNode });
-      }
-      return contentNode;
-    }
-  );
-  TraitIconBase.displayName = "TraitIconBase";
-  function TraitBadgeBase({
-    category,
-    label,
-    icon,
-    size: size2 = "md",
-    showIconOnly = false,
-    className
-  }) {
-    const sizeClasses = size2 === "sm" ? showIconOnly ? "p-[0.125rem]" : "text-[0.6875rem] px-[0.375rem] py-[0.125rem] gap-[0.25rem]" : size2 === "md" ? showIconOnly ? "p-[0.25rem]" : "text-xs px-[0.5rem] py-[0.25rem] gap-[0.375rem]" : showIconOnly ? "p-[0.5rem]" : "text-sm px-[0.75rem] py-[0.375rem] gap-[0.5rem]";
-    const badgeNode = /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "span",
-      {
-        className: cn(
-          "inline-flex items-center rounded-md font-medium bg-panel-inset border border-border-subtle text-foreground-secondary hover:border-border-strong transition-colors cursor-pointer",
-          sizeClasses,
-          className
-        ),
-        children: [
-          icon,
-          !showIconOnly && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
-        ]
-      }
-    );
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `${category}: ${label}`, children: badgeNode });
-  }
-  const SocialClassIcon = React$2.forwardRef(
-    (props, ref) => {
-      const sc2 = parseSocialClass(props.value);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        TraitIconBase,
-        {
-          ref,
-          category: "Social Class",
-          label: getSocialClassLabel(sc2),
-          iconUrl: getSocialClassIconUrl(sc2, props.variant),
-          ...props
-        }
-      );
-    }
-  );
-  SocialClassIcon.displayName = "SocialClassIcon";
-  const SkillTypeIcon = React$2.forwardRef(
-    (props, ref) => {
-      const st = parseSkillType(props.value);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        TraitIconBase,
-        {
-          ref,
-          category: "Skill Class",
-          label: getSkillTypeLabel(st),
-          iconUrl: getSkillTypeIconUrl(st, props.variant),
-          ...props
-        }
-      );
-    }
-  );
-  SkillTypeIcon.displayName = "SkillTypeIcon";
-  const TemperamentIcon = React$2.forwardRef(
-    (props, ref) => {
-      const tp = parseTemperament(props.value);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        TraitIconBase,
-        {
-          ref,
-          category: "Temperament",
-          label: getTemperamentLabel(tp),
-          iconUrl: getTemperamentIconUrl(tp, props.variant),
-          ...props
-        }
-      );
-    }
-  );
-  TemperamentIcon.displayName = "TemperamentIcon";
-  const SocialClassBadge = (props) => {
-    const sc2 = parseSocialClass(props.value);
-    const label = getSocialClassLabel(sc2);
-    const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      TraitBadgeBase,
-      {
-        category: "Social Class",
-        label,
-        icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          SocialClassIcon,
-          {
-            value: sc2,
-            size: iconSize,
-            variant: props.variant,
-            className: props.iconClassName,
-            showTooltip: false
-          }
-        ),
-        ...props
-      }
-    );
-  };
-  const SkillTypeBadge = (props) => {
-    const st = parseSkillType(props.value);
-    const label = getSkillTypeLabel(st);
-    const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      TraitBadgeBase,
-      {
-        category: "Skill Class",
-        label,
-        icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          SkillTypeIcon,
-          {
-            value: st,
-            size: iconSize,
-            variant: props.variant,
-            className: props.iconClassName,
-            showTooltip: false
-          }
-        ),
-        ...props
-      }
-    );
-  };
-  const TemperamentBadge = (props) => {
-    const tp = parseTemperament(props.value);
-    const label = getTemperamentLabel(tp);
-    const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      TraitBadgeBase,
-      {
-        category: "Temperament",
-        label,
-        icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          TemperamentIcon,
-          {
-            value: tp,
-            size: iconSize,
-            variant: props.variant,
-            className: props.iconClassName,
-            showTooltip: false
-          }
-        ),
-        ...props
-      }
-    );
-  };
-  const NpcTraitBadges = ({
-    npc,
-    socialClass,
-    skillType,
-    temperament,
-    size: size2 = "sm",
-    variant = "default",
-    showIconOnly = false,
-    className
-  }) => {
-    const sc2 = (npc == null ? void 0 : npc.socialClass) !== void 0 ? npc.socialClass : socialClass;
-    const st = (npc == null ? void 0 : npc.skillType) !== void 0 ? npc.skillType : skillType;
-    const tp = (npc == null ? void 0 : npc.temperament) !== void 0 ? npc.temperament : temperament;
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: cn("inline-flex items-center gap-[0.25rem] flex-wrap", className), children: [
-      sc2 !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(SocialClassBadge, { value: sc2, size: size2, variant, showIconOnly }),
-      st !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(SkillTypeBadge, { value: st, size: size2, variant, showIconOnly }),
-      tp !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(TemperamentBadge, { value: tp, size: size2, variant, showIconOnly })
-    ] });
-  };
-  const HierarchyDisplay = () => {
-    const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks);
-    const npcProfiles = useMarasStore((s) => s.npcProfiles);
-    const affectionData = useMarasStore((s) => s.affectionData);
-    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
-    const rankBadges = [
-      { rank: "1st Spouse", icon: Crown, color: "text-amber-400 border-amber-500/30" },
-      { rank: "2nd Spouse", icon: Medal, color: "text-slate-300 border-slate-400/30" },
-      { rank: "3rd Spouse", icon: Award, color: "text-amber-600 border-amber-700/30" }
-    ];
-    const handleCardClick = (formId) => {
-      if (formId) {
-        openNpcDetail(formId);
-      }
-    };
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.75rem]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-base font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Crown, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          " Spouse Hierarchy (Top 3 Ranks)"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: "Managed via Marriage & Spouse Assets" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-[0.75rem]", children: rankBadges.map((badge, idx) => {
-        var _a2;
-        const formId = hierarchyRanks[idx];
-        const npc = formId ? npcProfiles.get(formId) : null;
-        const affection = formId ? ((_a2 = affectionData.get(formId)) == null ? void 0 : _a2.permanent) ?? 0 : 0;
-        const Icon2 = badge.icon;
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            onClick: () => formId && handleCardClick(formId),
-            className: `bg-panel-raised border rounded-md p-[0.875rem] flex flex-col justify-between transition-all ${formId ? "border-border-strong hover:border-border-accent cursor-pointer hover:shadow-raised" : "border-border-divider border-dashed opacity-60"}`,
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-[0.5rem]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `text-xs font-semibold px-[0.5rem] py-[0.125rem] rounded-full border bg-panel flex items-center gap-[0.25rem] ${badge.color}`, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { className: "w-[1em] h-[1em]" }),
-                  " ",
-                  badge.rank
-                ] }),
-                formId && /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: RelationshipStatus.Married })
-              ] }),
-              npc ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-base font-semibold text-foreground-primary", children: npc.name }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-foreground-secondary mb-[0.25rem] flex items-center gap-[0.25rem] flex-wrap", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.race }),
-                    npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.currentHome || "No Home Set" })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc, size: "md" })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" })
-              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "py-[1rem] text-center text-xs text-foreground-muted italic", children: "Unassigned Rank Slot" })
-            ]
-          },
-          idx
-        );
-      }) })
-    ] });
-  };
-  var __defProp$9 = Object.defineProperty;
-  var __name$9 = (target, value) => __defProp$9(target, "name", { value, configurable: true });
-  var DirectionContext = reactExports.createContext(void 0);
-  function useDirection(localDir) {
-    const globalDir = reactExports.useContext(DirectionContext);
-    return localDir || globalDir || "ltr";
-  }
-  __name$9(useDirection, "useDirection");
-  var __defProp$8 = Object.defineProperty;
-  var __name$8 = (target, value) => __defProp$8(target, "name", { value, configurable: true });
-  function clamp(value, [min2, max2]) {
-    return Math.min(max2, Math.max(min2, value));
-  }
-  __name$8(clamp, "clamp");
-  var __defProp$7 = Object.defineProperty;
-  var __name$7 = (target, value) => __defProp$7(target, "name", { value, configurable: true });
-  function useStateMachine(initialState, machine) {
-    return reactExports.useReducer((state, event) => {
-      const nextState = machine[state][event];
-      return nextState ?? state;
-    }, initialState);
-  }
-  __name$7(useStateMachine, "useStateMachine");
-  var SCROLL_AREA_NAME = "ScrollArea";
-  var [createScrollAreaContext, createScrollAreaScope] = /* @__PURE__ */ createContextScope(SCROLL_AREA_NAME);
-  var [ScrollAreaProvider, useScrollAreaContext] = createScrollAreaContext(SCROLL_AREA_NAME);
-  var ScrollArea$1 = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$7(function ScrollArea2(props, forwardedRef) {
-      const {
-        __scopeScrollArea,
-        type = "hover",
-        dir,
-        scrollHideDelay = 600,
-        ...scrollAreaProps
-      } = props;
-      const [scrollArea, setScrollArea] = reactExports.useState(null);
-      const [viewport, setViewport] = reactExports.useState(null);
-      const [content, setContent] = reactExports.useState(null);
-      const [scrollbarX, setScrollbarX] = reactExports.useState(null);
-      const [scrollbarY, setScrollbarY] = reactExports.useState(null);
-      const [cornerWidth, setCornerWidth] = reactExports.useState(0);
-      const [cornerHeight, setCornerHeight] = reactExports.useState(0);
-      const [scrollbarXEnabled, setScrollbarXEnabled] = reactExports.useState(false);
-      const [scrollbarYEnabled, setScrollbarYEnabled] = reactExports.useState(false);
-      const composedRefs = useComposedRefs(forwardedRef, setScrollArea);
-      const direction = useDirection(dir);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        ScrollAreaProvider,
-        {
-          scope: __scopeScrollArea,
-          type,
-          dir: direction,
-          scrollHideDelay,
-          scrollArea,
-          viewport,
-          onViewportChange: setViewport,
-          content,
-          onContentChange: setContent,
-          scrollbarX,
-          onScrollbarXChange: setScrollbarX,
-          scrollbarXEnabled,
-          onScrollbarXEnabledChange: setScrollbarXEnabled,
-          scrollbarY,
-          onScrollbarYChange: setScrollbarY,
-          scrollbarYEnabled,
-          onScrollbarYEnabledChange: setScrollbarYEnabled,
-          onCornerWidthChange: setCornerWidth,
-          onCornerHeightChange: setCornerHeight,
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            Primitive.div,
-            {
-              dir: direction,
-              ...scrollAreaProps,
-              ref: composedRefs,
-              style: {
-                position: "relative",
-                // Pass corner sizes as CSS vars to reduce re-renders of context consumers
-                "--radix-scroll-area-corner-width": cornerWidth + "px",
-                "--radix-scroll-area-corner-height": cornerHeight + "px",
-                ...props.style
-              }
-            }
-          )
-        }
-      );
-    }, "ScrollArea")
-  );
-  var VIEWPORT_NAME$1 = "ScrollAreaViewport";
-  var ScrollAreaViewport = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$7(function ScrollAreaViewport2(props, forwardedRef) {
-      const { __scopeScrollArea, children, nonce, ...viewportProps } = props;
-      const context = useScrollAreaContext(VIEWPORT_NAME$1, __scopeScrollArea);
-      const ref = reactExports.useRef(null);
-      const composedRefs = useComposedRefs(forwardedRef, ref, context.onViewportChange);
-      return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaViewportStyle, { nonce }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Primitive.div,
-          {
-            "data-radix-scroll-area-viewport": "",
-            ...viewportProps,
-            ref: composedRefs,
-            style: {
-              /**
-               * We don't support `visible` because the intention is to have at least one scrollbar
-               * if this component is used and `visible` will behave like `auto` in that case
-               * https://developer.mozilla.org/en-US/docs/Web/CSS/overflow#description
-               *
-               * We don't handle `auto` because the intention is for the native implementation
-               * to be hidden if using this component. We just want to ensure the node is scrollable
-               * so could have used either `scroll` or `auto` here. We picked `scroll` to prevent
-               * the browser from having to work out whether to render native scrollbars or not,
-               * we tell it to with the intention of hiding them in CSS.
-               */
-              overflowX: context.scrollbarXEnabled ? "scroll" : "hidden",
-              overflowY: context.scrollbarYEnabled ? "scroll" : "hidden",
-              ...props.style
-            },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: context.onContentChange, style: { minWidth: "100%", display: "table" }, children })
-          }
-        )
-      ] });
-    }, "ScrollAreaViewport")
-  );
-  var ScrollAreaViewportStyle = /* @__PURE__ */ reactExports.memo(
-    /* @__PURE__ */ __name$7(function ScrollAreaViewportStyle2({ nonce }) {
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "style",
-        {
-          dangerouslySetInnerHTML: {
-            __html: `[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}`
-          },
-          nonce
-        }
-      );
-    }, "ScrollAreaViewportStyle"),
-    (prevProps, nextProps) => prevProps.nonce === nextProps.nonce
-  );
-  var SCROLLBAR_NAME = "ScrollAreaScrollbar";
-  var ScrollAreaScrollbar = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$7(function ScrollAreaScrollbar2(props, forwardedRef) {
-      const { forceMount, ...scrollbarProps } = props;
-      const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-      const { onScrollbarXEnabledChange, onScrollbarYEnabledChange } = context;
-      const isHorizontal = props.orientation === "horizontal";
-      reactExports.useEffect(() => {
-        isHorizontal ? onScrollbarXEnabledChange(true) : onScrollbarYEnabledChange(true);
-        return () => {
-          isHorizontal ? onScrollbarXEnabledChange(false) : onScrollbarYEnabledChange(false);
-        };
-      }, [isHorizontal, onScrollbarXEnabledChange, onScrollbarYEnabledChange]);
-      return context.type === "hover" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarHover, { ...scrollbarProps, ref: forwardedRef, forceMount }) : context.type === "scroll" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarScroll, { ...scrollbarProps, ref: forwardedRef, forceMount }) : context.type === "auto" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarAuto, { ...scrollbarProps, ref: forwardedRef, forceMount }) : context.type === "always" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarVisible, { ...scrollbarProps, ref: forwardedRef, "data-state": "visible" }) : null;
-    }, "ScrollAreaScrollbar")
-  );
-  var ScrollAreaScrollbarHover = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarHover2(props, forwardedRef) {
-    const { forceMount, ...scrollbarProps } = props;
-    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-    const [visible, setVisible] = reactExports.useState(false);
-    reactExports.useEffect(() => {
-      const scrollArea = context.scrollArea;
-      let hideTimer = 0;
-      if (scrollArea) {
-        const handlePointerEnter = /* @__PURE__ */ __name$7(() => {
-          window.clearTimeout(hideTimer);
-          setVisible(true);
-        }, "handlePointerEnter");
-        const handlePointerLeave = /* @__PURE__ */ __name$7(() => {
-          hideTimer = window.setTimeout(() => setVisible(false), context.scrollHideDelay);
-        }, "handlePointerLeave");
-        scrollArea.addEventListener("pointerenter", handlePointerEnter);
-        scrollArea.addEventListener("pointerleave", handlePointerLeave);
-        return () => {
-          window.clearTimeout(hideTimer);
-          scrollArea.removeEventListener("pointerenter", handlePointerEnter);
-          scrollArea.removeEventListener("pointerleave", handlePointerLeave);
-        };
-      }
-    }, [context.scrollArea, context.scrollHideDelay]);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || visible, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ScrollAreaScrollbarAuto,
-      {
-        "data-state": visible ? "visible" : "hidden",
-        ...scrollbarProps,
-        ref: forwardedRef
-      }
-    ) });
-  }, "ScrollAreaScrollbarHover"));
-  var ScrollAreaScrollbarScroll = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarScroll2(props, forwardedRef) {
-    const { forceMount, ...scrollbarProps } = props;
-    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-    const isHorizontal = props.orientation === "horizontal";
-    const debounceScrollEnd = useDebounceCallback(() => send("SCROLL_END"), 100);
-    const [state, send] = useStateMachine("hidden", {
-      hidden: {
-        SCROLL: "scrolling"
       },
-      scrolling: {
-        SCROLL_END: "idle",
-        POINTER_ENTER: "interacting"
-      },
-      interacting: {
-        SCROLL: "interacting",
-        POINTER_LEAVE: "idle"
-      },
-      idle: {
-        HIDE: "hidden",
-        SCROLL: "scrolling",
-        POINTER_ENTER: "interacting"
-      }
-    });
-    reactExports.useEffect(() => {
-      if (state === "idle") {
-        const hideTimer = window.setTimeout(() => send("HIDE"), context.scrollHideDelay);
-        return () => window.clearTimeout(hideTimer);
-      }
-    }, [state, context.scrollHideDelay, send]);
-    reactExports.useEffect(() => {
-      const viewport = context.viewport;
-      const scrollDirection = isHorizontal ? "scrollLeft" : "scrollTop";
-      if (viewport) {
-        let prevScrollPos = viewport[scrollDirection];
-        const handleScroll2 = /* @__PURE__ */ __name$7(() => {
-          const scrollPos = viewport[scrollDirection];
-          const hasScrollInDirectionChanged = prevScrollPos !== scrollPos;
-          if (hasScrollInDirectionChanged) {
-            send("SCROLL");
-            debounceScrollEnd();
-          }
-          prevScrollPos = scrollPos;
-        }, "handleScroll");
-        viewport.addEventListener("scroll", handleScroll2);
-        return () => viewport.removeEventListener("scroll", handleScroll2);
-      }
-    }, [context.viewport, isHorizontal, send, debounceScrollEnd]);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || state !== "hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ScrollAreaScrollbarVisible,
-      {
-        "data-state": state === "hidden" ? "hidden" : "visible",
-        ...scrollbarProps,
-        ref: forwardedRef,
-        onPointerEnter: composeEventHandlers(props.onPointerEnter, () => send("POINTER_ENTER")),
-        onPointerLeave: composeEventHandlers(props.onPointerLeave, () => send("POINTER_LEAVE"))
-      }
-    ) });
-  }, "ScrollAreaScrollbarScroll"));
-  var ScrollAreaScrollbarAuto = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarAuto2(props, forwardedRef) {
-    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-    const { forceMount, ...scrollbarProps } = props;
-    const [visible, setVisible] = reactExports.useState(false);
-    const isHorizontal = props.orientation === "horizontal";
-    const handleResize = useDebounceCallback(() => {
-      if (context.viewport) {
-        const isOverflowX = context.viewport.offsetWidth < context.viewport.scrollWidth;
-        const isOverflowY = context.viewport.offsetHeight < context.viewport.scrollHeight;
-        setVisible(isHorizontal ? isOverflowX : isOverflowY);
-      }
-    }, 10);
-    useResizeObserver(context.viewport, handleResize);
-    useResizeObserver(context.content, handleResize);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || visible, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ScrollAreaScrollbarVisible,
-      {
-        "data-state": visible ? "visible" : "hidden",
-        ...scrollbarProps,
-        ref: forwardedRef
-      }
-    ) });
-  }, "ScrollAreaScrollbarAuto"));
-  var ScrollAreaScrollbarVisible = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarVisible2(props, forwardedRef) {
-    const { orientation = "vertical", ...scrollbarProps } = props;
-    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-    const thumbRef = reactExports.useRef(null);
-    const pointerOffsetRef = reactExports.useRef(0);
-    const [sizes, setSizes] = reactExports.useState({
-      content: 0,
-      viewport: 0,
-      scrollbar: { size: 0, paddingStart: 0, paddingEnd: 0 }
-    });
-    const thumbRatio = getThumbRatio(sizes.viewport, sizes.content);
-    const commonProps = {
-      ...scrollbarProps,
-      sizes,
-      onSizesChange: setSizes,
-      hasThumb: Boolean(thumbRatio > 0 && thumbRatio < 1),
-      onThumbChange: /* @__PURE__ */ __name$7((thumb) => thumbRef.current = thumb, "onThumbChange"),
-      onThumbPointerUp: /* @__PURE__ */ __name$7(() => pointerOffsetRef.current = 0, "onThumbPointerUp"),
-      onThumbPointerDown: /* @__PURE__ */ __name$7((pointerPos) => pointerOffsetRef.current = pointerPos, "onThumbPointerDown")
-    };
-    function getScrollPosition(pointerPos, dir) {
-      return getScrollPositionFromPointer(pointerPos, pointerOffsetRef.current, sizes, dir);
-    }
-    __name$7(getScrollPosition, "getScrollPosition");
-    if (orientation === "horizontal") {
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        ScrollAreaScrollbarX,
-        {
-          ...commonProps,
-          ref: forwardedRef,
-          onThumbPositionChange: () => {
-            if (context.viewport && thumbRef.current) {
-              const scrollPos = context.viewport.scrollLeft;
-              const offset2 = getThumbOffsetFromScroll(scrollPos, sizes, context.dir);
-              thumbRef.current.style.transform = `translate3d(${offset2}px, 0, 0)`;
-            }
-          },
-          onWheelScroll: (scrollPos) => {
-            if (context.viewport) context.viewport.scrollLeft = scrollPos;
-          },
-          onDragScroll: (pointerPos) => {
-            if (context.viewport) {
-              context.viewport.scrollLeft = getScrollPosition(pointerPos, context.dir);
-            }
-          }
-        }
-      );
-    }
-    if (orientation === "vertical") {
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        ScrollAreaScrollbarY,
-        {
-          ...commonProps,
-          ref: forwardedRef,
-          onThumbPositionChange: () => {
-            if (context.viewport && thumbRef.current) {
-              const scrollPos = context.viewport.scrollTop;
-              const offset2 = getThumbOffsetFromScroll(scrollPos, sizes);
-              thumbRef.current.style.transform = `translate3d(0, ${offset2}px, 0)`;
-            }
-          },
-          onWheelScroll: (scrollPos) => {
-            if (context.viewport) context.viewport.scrollTop = scrollPos;
-          },
-          onDragScroll: (pointerPos) => {
-            if (context.viewport) context.viewport.scrollTop = getScrollPosition(pointerPos);
-          }
-        }
-      );
-    }
-    return null;
-  }, "ScrollAreaScrollbarVisible"));
-  var ScrollAreaScrollbarX = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarX2(props, forwardedRef) {
-    const { sizes, onSizesChange, ...scrollbarProps } = props;
-    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-    const [computedStyle, setComputedStyle] = reactExports.useState();
-    const ref = reactExports.useRef(null);
-    const composeRefs2 = useComposedRefs(forwardedRef, ref, context.onScrollbarXChange);
-    reactExports.useEffect(() => {
-      if (ref.current) setComputedStyle(getComputedStyle(ref.current));
-    }, [ref]);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ScrollAreaScrollbarImpl,
-      {
-        "data-orientation": "horizontal",
-        ...scrollbarProps,
-        ref: composeRefs2,
-        sizes,
-        style: {
-          bottom: 0,
-          left: context.dir === "rtl" ? "var(--radix-scroll-area-corner-width)" : 0,
-          right: context.dir === "ltr" ? "var(--radix-scroll-area-corner-width)" : 0,
-          "--radix-scroll-area-thumb-width": getThumbSize(sizes) + "px",
-          ...props.style
-        },
-        onThumbPointerDown: (pointerPos) => props.onThumbPointerDown(pointerPos.x),
-        onDragScroll: (pointerPos) => props.onDragScroll(pointerPos.x),
-        onWheelScroll: (event, maxScrollPos) => {
-          if (context.viewport) {
-            const scrollPos = context.viewport.scrollLeft + event.deltaX;
-            props.onWheelScroll(scrollPos);
-            if (isScrollingWithinScrollbarBounds(scrollPos, maxScrollPos)) {
-              event.preventDefault();
-            }
-          }
-        },
-        onResize: () => {
-          if (ref.current && context.viewport && computedStyle) {
-            onSizesChange({
-              content: context.viewport.scrollWidth,
-              viewport: context.viewport.offsetWidth,
-              scrollbar: {
-                size: ref.current.clientWidth,
-                paddingStart: toInt(computedStyle.paddingLeft),
-                paddingEnd: toInt(computedStyle.paddingRight)
-              }
-            });
-          }
-        }
-      }
-    );
-  }, "ScrollAreaScrollbarX"));
-  var ScrollAreaScrollbarY = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarY2(props, forwardedRef) {
-    const { sizes, onSizesChange, ...scrollbarProps } = props;
-    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
-    const [computedStyle, setComputedStyle] = reactExports.useState();
-    const ref = reactExports.useRef(null);
-    const composeRefs2 = useComposedRefs(forwardedRef, ref, context.onScrollbarYChange);
-    reactExports.useEffect(() => {
-      if (ref.current) setComputedStyle(getComputedStyle(ref.current));
-    }, [ref]);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ScrollAreaScrollbarImpl,
-      {
-        "data-orientation": "vertical",
-        ...scrollbarProps,
-        ref: composeRefs2,
-        sizes,
-        style: {
-          top: 0,
-          right: context.dir === "ltr" ? 0 : void 0,
-          left: context.dir === "rtl" ? 0 : void 0,
-          bottom: "var(--radix-scroll-area-corner-height)",
-          "--radix-scroll-area-thumb-height": getThumbSize(sizes) + "px",
-          ...props.style
-        },
-        onThumbPointerDown: (pointerPos) => props.onThumbPointerDown(pointerPos.y),
-        onDragScroll: (pointerPos) => props.onDragScroll(pointerPos.y),
-        onWheelScroll: (event, maxScrollPos) => {
-          if (context.viewport) {
-            const scrollPos = context.viewport.scrollTop + event.deltaY;
-            props.onWheelScroll(scrollPos);
-            if (isScrollingWithinScrollbarBounds(scrollPos, maxScrollPos)) {
-              event.preventDefault();
-            }
-          }
-        },
-        onResize: () => {
-          if (ref.current && context.viewport && computedStyle) {
-            onSizesChange({
-              content: context.viewport.scrollHeight,
-              viewport: context.viewport.offsetHeight,
-              scrollbar: {
-                size: ref.current.clientHeight,
-                paddingStart: toInt(computedStyle.paddingTop),
-                paddingEnd: toInt(computedStyle.paddingBottom)
-              }
-            });
-          }
-        }
-      }
-    );
-  }, "ScrollAreaScrollbarY"));
-  var [ScrollbarProvider, useScrollbarContext] = createScrollAreaContext(SCROLLBAR_NAME);
-  var ScrollAreaScrollbarImpl = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaScrollbarImpl2(props, forwardedRef) {
-    const {
-      __scopeScrollArea,
-      sizes,
-      hasThumb,
-      onThumbChange,
-      onThumbPointerUp,
-      onThumbPointerDown,
-      onThumbPositionChange,
-      onDragScroll,
-      onWheelScroll,
-      onResize,
-      ...scrollbarProps
-    } = props;
-    const context = useScrollAreaContext(SCROLLBAR_NAME, __scopeScrollArea);
-    const [scrollbar, setScrollbar] = reactExports.useState(null);
-    const composeRefs2 = useComposedRefs(forwardedRef, setScrollbar);
-    const rectRef = reactExports.useRef(null);
-    const prevWebkitUserSelectRef = reactExports.useRef("");
-    const viewport = context.viewport;
-    const maxScrollPos = sizes.content - sizes.viewport;
-    const handleWheelScroll = useCallbackRef$1(onWheelScroll);
-    const handleThumbPositionChange = useCallbackRef$1(onThumbPositionChange);
-    const handleResize = useDebounceCallback(onResize, 10);
-    function handleDragScroll(event) {
-      if (rectRef.current) {
-        const x2 = event.clientX - rectRef.current.left;
-        const y2 = event.clientY - rectRef.current.top;
-        onDragScroll({ x: x2, y: y2 });
+      defaultVariants: {
+        state: "unchecked",
+        size: "default"
       }
     }
-    __name$7(handleDragScroll, "handleDragScroll");
-    reactExports.useEffect(() => {
-      const handleWheel = /* @__PURE__ */ __name$7((event) => {
-        const element = event.target;
-        const isScrollbarWheel = scrollbar == null ? void 0 : scrollbar.contains(element);
-        if (isScrollbarWheel) handleWheelScroll(event, maxScrollPos);
-      }, "handleWheel");
-      document.addEventListener("wheel", handleWheel, { passive: false });
-      return () => document.removeEventListener("wheel", handleWheel, { passive: false });
-    }, [viewport, scrollbar, maxScrollPos, handleWheelScroll]);
-    reactExports.useEffect(handleThumbPositionChange, [sizes, handleThumbPositionChange]);
-    useResizeObserver(scrollbar, handleResize);
-    useResizeObserver(context.content, handleResize);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ScrollbarProvider,
-      {
-        scope: __scopeScrollArea,
-        scrollbar,
-        hasThumb,
-        onThumbChange: useCallbackRef$1(onThumbChange),
-        onThumbPointerUp: useCallbackRef$1(onThumbPointerUp),
-        onThumbPositionChange: handleThumbPositionChange,
-        onThumbPointerDown: useCallbackRef$1(onThumbPointerDown),
-        children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Primitive.div,
-          {
-            ...scrollbarProps,
-            ref: composeRefs2,
-            style: { position: "absolute", ...scrollbarProps.style },
-            onPointerDown: composeEventHandlers(props.onPointerDown, (event) => {
-              const mainPointer = 0;
-              if (event.button === mainPointer) {
-                const element = event.target;
-                element.setPointerCapture(event.pointerId);
-                rectRef.current = scrollbar.getBoundingClientRect();
-                prevWebkitUserSelectRef.current = document.body.style.webkitUserSelect;
-                document.body.style.webkitUserSelect = "none";
-                if (context.viewport) context.viewport.style.scrollBehavior = "auto";
-                handleDragScroll(event);
-              }
-            }),
-            onPointerMove: composeEventHandlers(props.onPointerMove, handleDragScroll),
-            onPointerUp: composeEventHandlers(props.onPointerUp, (event) => {
-              const element = event.target;
-              if (element.hasPointerCapture(event.pointerId)) {
-                element.releasePointerCapture(event.pointerId);
-              }
-              document.body.style.webkitUserSelect = prevWebkitUserSelectRef.current;
-              if (context.viewport) context.viewport.style.scrollBehavior = "";
-              rectRef.current = null;
-            })
-          }
-        )
-      }
-    );
-  }, "ScrollAreaScrollbarImpl"));
-  var THUMB_NAME$2 = "ScrollAreaThumb";
-  var ScrollAreaThumb = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$7(function ScrollAreaThumb2(props, forwardedRef) {
-      const { forceMount, ...thumbProps } = props;
-      const scrollbarContext = useScrollbarContext(THUMB_NAME$2, props.__scopeScrollArea);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || scrollbarContext.hasThumb, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaThumbImpl, { ref: forwardedRef, ...thumbProps }) });
-    }, "ScrollAreaThumb")
   );
-  var ScrollAreaThumbImpl = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$7(function ScrollAreaThumbImpl2(props, forwardedRef) {
-      const { __scopeScrollArea, style, ...thumbProps } = props;
-      const scrollAreaContext = useScrollAreaContext(THUMB_NAME$2, __scopeScrollArea);
-      const scrollbarContext = useScrollbarContext(THUMB_NAME$2, __scopeScrollArea);
-      const { onThumbPositionChange } = scrollbarContext;
-      const composedRef = useComposedRefs(forwardedRef, scrollbarContext.onThumbChange);
-      const removeUnlinkedScrollListenerRef = reactExports.useRef(void 0);
-      const debounceScrollEnd = useDebounceCallback(() => {
-        if (removeUnlinkedScrollListenerRef.current) {
-          removeUnlinkedScrollListenerRef.current();
-          removeUnlinkedScrollListenerRef.current = void 0;
+  const Checkbox = reactExports.forwardRef(
+    ({ className, checked = false, size: size2, disabled, onCheckedChange, onClick, ...props }, ref) => {
+      const handleClick = (e) => {
+        onClick == null ? void 0 : onClick(e);
+        if (!e.defaultPrevented && !disabled) {
+          onCheckedChange == null ? void 0 : onCheckedChange(!checked);
         }
-      }, 100);
-      reactExports.useEffect(() => {
-        const viewport = scrollAreaContext.viewport;
-        if (viewport) {
-          const handleScroll2 = /* @__PURE__ */ __name$7(() => {
-            debounceScrollEnd();
-            if (!removeUnlinkedScrollListenerRef.current) {
-              const listener = addUnlinkedScrollListener(viewport, onThumbPositionChange);
-              removeUnlinkedScrollListenerRef.current = listener;
-              onThumbPositionChange();
-            }
-          }, "handleScroll");
-          onThumbPositionChange();
-          viewport.addEventListener("scroll", handleScroll2);
-          return () => viewport.removeEventListener("scroll", handleScroll2);
-        }
-      }, [scrollAreaContext.viewport, debounceScrollEnd, onThumbPositionChange]);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Primitive.div,
-        {
-          "data-state": scrollbarContext.hasThumb ? "visible" : "hidden",
-          ...thumbProps,
-          ref: composedRef,
-          style: {
-            width: "var(--radix-scroll-area-thumb-width)",
-            height: "var(--radix-scroll-area-thumb-height)",
-            ...style
-          },
-          onPointerDownCapture: composeEventHandlers(props.onPointerDownCapture, (event) => {
-            const thumb = event.target;
-            const thumbRect = thumb.getBoundingClientRect();
-            const x2 = event.clientX - thumbRect.left;
-            const y2 = event.clientY - thumbRect.top;
-            scrollbarContext.onThumbPointerDown({ x: x2, y: y2 });
-          }),
-          onPointerUp: composeEventHandlers(props.onPointerUp, scrollbarContext.onThumbPointerUp)
-        }
-      );
-    }, "ScrollAreaThumbImpl")
-  );
-  var CORNER_NAME = "ScrollAreaCorner";
-  var ScrollAreaCorner = /* @__PURE__ */ reactExports.forwardRef(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name$7(function ScrollAreaCorner2(props, forwardedRef) {
-      const context = useScrollAreaContext(CORNER_NAME, props.__scopeScrollArea);
-      const hasBothScrollbarsVisible = Boolean(context.scrollbarX && context.scrollbarY);
-      const hasCorner = context.type !== "scroll" && hasBothScrollbarsVisible;
-      return hasCorner ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaCornerImpl, { ...props, ref: forwardedRef }) : null;
-    }, "ScrollAreaCorner")
-  );
-  var ScrollAreaCornerImpl = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$7(function ScrollAreaCornerImpl2(props, forwardedRef) {
-    const { __scopeScrollArea, ...cornerProps } = props;
-    const context = useScrollAreaContext(CORNER_NAME, __scopeScrollArea);
-    const [width, setWidth] = reactExports.useState(0);
-    const [height, setHeight] = reactExports.useState(0);
-    const hasSize = Boolean(width && height);
-    const { onCornerWidthChange, onCornerHeightChange } = context;
-    useResizeObserver(context.scrollbarX, () => {
-      var _a2;
-      const height2 = ((_a2 = context.scrollbarX) == null ? void 0 : _a2.offsetHeight) || 0;
-      context.onCornerHeightChange(height2);
-      setHeight(height2);
-    });
-    useResizeObserver(context.scrollbarY, () => {
-      var _a2;
-      const width2 = ((_a2 = context.scrollbarY) == null ? void 0 : _a2.offsetWidth) || 0;
-      context.onCornerWidthChange(width2);
-      setWidth(width2);
-    });
-    reactExports.useEffect(() => {
-      return () => {
-        onCornerWidthChange(0);
-        onCornerHeightChange(0);
       };
-    }, [onCornerWidthChange, onCornerHeightChange]);
-    return hasSize ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Primitive.div,
-      {
-        ...cornerProps,
-        ref: forwardedRef,
-        style: {
-          width,
-          height,
-          position: "absolute",
-          right: context.dir === "ltr" ? 0 : void 0,
-          left: context.dir === "rtl" ? 0 : void 0,
-          bottom: 0,
-          ...props.style
-        }
-      }
-    ) : null;
-  }, "ScrollAreaCornerImpl"));
-  function toInt(value) {
-    return value ? parseInt(value, 10) : 0;
-  }
-  __name$7(toInt, "toInt");
-  function getThumbRatio(viewportSize, contentSize) {
-    const ratio = viewportSize / contentSize;
-    return isNaN(ratio) ? 0 : ratio;
-  }
-  __name$7(getThumbRatio, "getThumbRatio");
-  function getThumbSize(sizes) {
-    const ratio = getThumbRatio(sizes.viewport, sizes.content);
-    const scrollbarPadding = sizes.scrollbar.paddingStart + sizes.scrollbar.paddingEnd;
-    const thumbSize = (sizes.scrollbar.size - scrollbarPadding) * ratio;
-    return Math.max(thumbSize, 18);
-  }
-  __name$7(getThumbSize, "getThumbSize");
-  function getScrollPositionFromPointer(pointerPos, pointerOffset, sizes, dir = "ltr") {
-    const thumbSizePx = getThumbSize(sizes);
-    const thumbCenter = thumbSizePx / 2;
-    const offset2 = pointerOffset || thumbCenter;
-    const thumbOffsetFromEnd = thumbSizePx - offset2;
-    const minPointerPos = sizes.scrollbar.paddingStart + offset2;
-    const maxPointerPos = sizes.scrollbar.size - sizes.scrollbar.paddingEnd - thumbOffsetFromEnd;
-    const maxScrollPos = sizes.content - sizes.viewport;
-    const scrollRange = dir === "ltr" ? [0, maxScrollPos] : [maxScrollPos * -1, 0];
-    const interpolate = linearScale$1([minPointerPos, maxPointerPos], scrollRange);
-    return interpolate(pointerPos);
-  }
-  __name$7(getScrollPositionFromPointer, "getScrollPositionFromPointer");
-  function getThumbOffsetFromScroll(scrollPos, sizes, dir = "ltr") {
-    const thumbSizePx = getThumbSize(sizes);
-    const scrollbarPadding = sizes.scrollbar.paddingStart + sizes.scrollbar.paddingEnd;
-    const scrollbar = sizes.scrollbar.size - scrollbarPadding;
-    const maxScrollPos = sizes.content - sizes.viewport;
-    const maxThumbPos = scrollbar - thumbSizePx;
-    const scrollClampRange = dir === "ltr" ? [0, maxScrollPos] : [maxScrollPos * -1, 0];
-    const scrollWithoutMomentum = clamp(scrollPos, scrollClampRange);
-    const interpolate = linearScale$1([0, maxScrollPos], [0, maxThumbPos]);
-    return interpolate(scrollWithoutMomentum);
-  }
-  __name$7(getThumbOffsetFromScroll, "getThumbOffsetFromScroll");
-  function linearScale$1(input, output) {
-    return (value) => {
-      if (input[0] === input[1] || output[0] === output[1]) return output[0];
-      const ratio = (output[1] - output[0]) / (input[1] - input[0]);
-      return output[0] + ratio * (value - input[0]);
-    };
-  }
-  __name$7(linearScale$1, "linearScale");
-  function isScrollingWithinScrollbarBounds(scrollPos, maxScrollPos) {
-    return scrollPos > 0 && scrollPos < maxScrollPos;
-  }
-  __name$7(isScrollingWithinScrollbarBounds, "isScrollingWithinScrollbarBounds");
-  var addUnlinkedScrollListener = /* @__PURE__ */ __name$7((node, handler = () => {
-  }) => {
-    let prevPosition = { left: node.scrollLeft, top: node.scrollTop };
-    let rAF = 0;
-    (/* @__PURE__ */ __name$7(function loop() {
-      const position = { left: node.scrollLeft, top: node.scrollTop };
-      const isHorizontalScroll = prevPosition.left !== position.left;
-      const isVerticalScroll = prevPosition.top !== position.top;
-      if (isHorizontalScroll || isVerticalScroll) handler();
-      prevPosition = position;
-      rAF = window.requestAnimationFrame(loop);
-    }, "loop"))();
-    return () => window.cancelAnimationFrame(rAF);
-  }, "addUnlinkedScrollListener");
-  function useDebounceCallback(callback, delay) {
-    const handleCallback = useCallbackRef$1(callback);
-    const debounceTimerRef = reactExports.useRef(0);
-    reactExports.useEffect(() => () => window.clearTimeout(debounceTimerRef.current), []);
-    return reactExports.useCallback(() => {
-      window.clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = window.setTimeout(handleCallback, delay);
-    }, [handleCallback, delay]);
-  }
-  __name$7(useDebounceCallback, "useDebounceCallback");
-  function useResizeObserver(element, onResize) {
-    const handleResize = useCallbackRef$1(onResize);
-    useLayoutEffect2(() => {
-      let rAF = 0;
-      if (element) {
-        const resizeObserver = new ResizeObserver(() => {
-          cancelAnimationFrame(rAF);
-          rAF = window.requestAnimationFrame(handleResize);
-        });
-        resizeObserver.observe(element);
-        return () => {
-          window.cancelAnimationFrame(rAF);
-          resizeObserver.unobserve(element);
-        };
-      }
-    }, [element, handleResize]);
-  }
-  __name$7(useResizeObserver, "useResizeObserver");
-  var Root = ScrollArea$1;
-  var Viewport = ScrollAreaViewport;
-  var Corner = ScrollAreaCorner;
-  const ScrollArea = reactExports.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    Root,
-    {
-      ref,
-      className: cn("relative overflow-hidden", className),
-      ...props,
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Viewport, { className: "h-full w-full rounded-[inherit]", children }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollBar, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Corner, {})
-      ]
-    }
-  ));
-  ScrollArea.displayName = Root.displayName;
-  const ScrollBar = reactExports.forwardRef(({ className, orientation = "vertical", ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-    ScrollAreaScrollbar,
-    {
-      ref,
-      orientation,
-      className: cn(
-        "flex touch-none select-none transition-colors",
-        orientation === "vertical" && "h-full w-2.5 border-l border-l-transparent p-[1px]",
-        orientation === "horizontal" && "h-2.5 flex-col border-t border-t-transparent p-[1px]",
-        className
-      ),
-      ...props,
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaThumb, { className: "relative flex-1 rounded-full bg-border-strong hover:bg-accent" })
-    }
-  ));
-  ScrollBar.displayName = ScrollAreaScrollbar.displayName;
-  const AffectionOverview = () => {
-    const relationships = useMarasStore((s) => s.relationships);
-    const npcProfiles = useMarasStore((s) => s.npcProfiles);
-    const affectionData = useMarasStore((s) => s.affectionData);
-    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
-    const playerRelationships = relationships.filter(
-      (r2) => (r2.actorA === PLAYER_FORM_ID || r2.actorB === PLAYER_FORM_ID) && (r2.status === RelationshipStatus.Married || r2.status === RelationshipStatus.Engaged || r2.status === RelationshipStatus.Dating || r2.status === RelationshipStatus.Lover)
-    );
-    const partners = playerRelationships.map((r2) => {
-      var _a2;
-      const partnerId = r2.actorA === PLAYER_FORM_ID ? r2.actorB : r2.actorA;
-      const npc = npcProfiles.get(partnerId);
-      const aff = ((_a2 = affectionData.get(partnerId)) == null ? void 0 : _a2.permanent) ?? 0;
-      return { partnerId, npc, status: r2.status, affection: aff };
-    }).filter((p2) => p2.npc !== void 0).sort((a, b) => b.affection - a.affection);
-    const handleRowClick = (id2) => {
-      openNpcDetail(id2);
-    };
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex flex-col gap-[0.75rem] h-full", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          " Affection Health"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
-          partners.length,
-          " Partners Tracked"
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: partners.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: "No active partners" }) : partners.map(({ partnerId, npc, status, affection }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          onClick: () => handleRowClick(partnerId),
-          className: "flex items-center gap-[0.75rem] p-[0.5rem] bg-panel-raised border border-border-subtle hover:border-border-accent rounded-md transition-colors cursor-pointer",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-[9rem] flex-shrink-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold text-foreground-primary truncate", children: npc == null ? void 0 : npc.name }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] truncate", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc == null ? void 0 : npc.race }),
-                (npc == null ? void 0 : npc.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[4.5rem]", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
-                ] })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status }) })
-          ]
-        },
-        partnerId
-      )) }) })
-    ] });
-  };
-  function getLatestStatusRecord(pair) {
-    if (!pair || !pair.statusHistory || pair.statusHistory.length === 0) return void 0;
-    return pair.statusHistory[pair.statusHistory.length - 1];
-  }
-  function formatGameDay(day, currentGameDay) {
-    if (day === void 0 || day === null) return "";
-    if (day < 0) return "Historical";
-    if (currentGameDay != null && currentGameDay >= 0) {
-      const diff = Math.floor(currentGameDay - day);
-      if (diff <= 0) return "Today";
-      if (diff === 1) return "1 day ago";
-      if (diff < 7) return `${diff} days ago`;
-      if (diff < 30) {
-        const weeks = Math.floor(diff / 7);
-        return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
-      }
-      if (diff < 365) {
-        const months = Math.floor(diff / 30);
-        return months === 1 ? "1 month ago" : `${months} months ago`;
-      }
-      const years = Math.floor(diff / 365);
-      return years === 1 ? "1 year ago" : `${years} years ago`;
-    }
-    return `Day ${Math.floor(day)}`;
-  }
-  function formatRelationshipDate(date, prefix = "Married", currentGameDay) {
-    if (date === void 0 || date === null) return "";
-    if (date < 0) return `${prefix} (Historical)`;
-    const formatted = formatGameDay(date, currentGameDay);
-    if (formatted === "Today") return `${prefix} Today`;
-    return `${prefix} ${formatted}`;
-  }
-  const ActivityFeed = ({ limit = 5 }) => {
-    const relationships = useMarasStore((s) => s.relationships);
-    const npcProfiles = useMarasStore((s) => s.npcProfiles);
-    const currentGameDay = useMarasStore((s) => s.currentGameDay);
-    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
-    const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
-    const events = [];
-    relationships.forEach((r2) => {
-      r2.statusHistory.forEach((h, histIdx) => {
-        events.push({
-          actorA: r2.actorA,
-          actorB: r2.actorB,
-          fromStatus: h.fromStatus,
-          toStatus: h.toStatus,
-          timestamp: h.timestamp,
-          orderIndex: histIdx
-        });
-      });
-    });
-    events.sort((a, b) => {
-      if (Math.abs(b.timestamp - a.timestamp) > 1e-4) {
-        return b.timestamp - a.timestamp;
-      }
-      return b.orderIndex - a.orderIndex;
-    });
-    const getName = (id2) => {
-      var _a2, _b;
-      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
-      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || "Unknown NPC";
-    };
-    const renderActorName = (actorId) => {
-      const name = getName(actorId);
       return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "span",
+        "button",
         {
-          role: "button",
-          tabIndex: 0,
-          onClick: (e) => {
-            e.stopPropagation();
-            openNpcDetail(actorId);
-          },
-          onKeyDown: (e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              openNpcDetail(actorId);
+          type: "button",
+          role: "checkbox",
+          "aria-checked": checked,
+          disabled,
+          ref,
+          onClick: handleClick,
+          className: cn(
+            checkboxVariants({
+              state: checked ? "checked" : "unchecked",
+              size: size2,
+              className
+            })
+          ),
+          ...props,
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Check,
+            {
+              className: cn(
+                "w-[0.8em] h-[0.8em] stroke-[3] transition-opacity",
+                checked ? "opacity-100" : "opacity-0"
+              )
             }
-          },
-          className: "font-semibold text-foreground-primary hover:text-accent-bright hover:underline cursor-pointer transition-colors",
-          children: name
+          )
         }
       );
-    };
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex flex-col gap-[0.75rem] h-full", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          " Recent Activity Feed"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
-            events.length,
-            " Events"
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              onClick: () => setActiveSubSection("activity"),
-              className: "text-xs text-accent hover:text-accent-bright hover:underline flex items-center gap-[0.25rem] transition-colors cursor-pointer font-medium",
-              children: [
-                "View Full Feed ",
-                /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRight, { className: "w-[0.875em] h-[0.875em]" })
-              ]
-            }
-          )
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: events.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: "No relationship history recorded" }) : events.slice(0, limit).map((ev, idx) => {
-        const toLabel = getStatusLabel(ev.toStatus);
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "flex items-center gap-[0.625rem] p-[0.5rem] bg-panel-raised border-l-2 border-l-accent border border-border-subtle rounded-r-md text-xs",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: ev.toStatus, size: "1.25em" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1", children: [
-                renderActorName(ev.actorA),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary", children: " & " }),
-                renderActorName(ev.actorB),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: " → " }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent font-medium", children: toLabel })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted flex-shrink-0", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em]" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(ev.timestamp, currentGameDay) })
-              ] })
-            ]
-          },
-          idx
-        );
-      }) }) })
-    ] });
-  };
-  const FullActivityFeed = () => {
-    const relationships = useMarasStore((s) => s.relationships);
-    const npcProfiles = useMarasStore((s) => s.npcProfiles);
-    const currentGameDay = useMarasStore((s) => s.currentGameDay);
-    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
-    const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
-    const [searchTerm, setSearchTerm] = reactExports.useState("");
-    const [selectedCategory, setSelectedCategory] = reactExports.useState("all");
-    const allEvents = reactExports.useMemo(() => {
-      const eventsList = [];
-      relationships.forEach((r2, pairIdx) => {
-        r2.statusHistory.forEach((h, histIdx) => {
-          eventsList.push({
-            id: `${pairIdx}-${histIdx}-${h.timestamp}`,
-            actorA: r2.actorA,
-            actorB: r2.actorB,
-            fromStatus: h.fromStatus,
-            toStatus: h.toStatus,
-            timestamp: h.timestamp,
-            orderIndex: histIdx
-          });
-        });
-      });
-      eventsList.sort((a, b) => {
-        if (Math.abs(b.timestamp - a.timestamp) > 1e-4) {
-          return b.timestamp - a.timestamp;
-        }
-        return b.orderIndex - a.orderIndex;
-      });
-      return eventsList;
-    }, [relationships]);
-    const getName = (id2) => {
-      var _a2, _b;
-      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
-      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || `NPC ${id2}`;
-    };
-    const filteredEvents = reactExports.useMemo(() => {
-      return allEvents.filter((ev) => {
-        const nameA = getName(ev.actorA).toLowerCase();
-        const nameB = getName(ev.actorB).toLowerCase();
-        const searchMatch = !searchTerm.trim() || nameA.includes(searchTerm.toLowerCase()) || nameB.includes(searchTerm.toLowerCase()) || getStatusLabel(ev.toStatus).toLowerCase().includes(searchTerm.toLowerCase());
-        if (!searchMatch) return false;
-        if (selectedCategory === "union") {
-          return ev.toStatus === RelationshipStatus.Married || ev.toStatus === RelationshipStatus.Engaged;
-        }
-        if (selectedCategory === "romance") {
-          return ev.toStatus === RelationshipStatus.Dating || ev.toStatus === RelationshipStatus.Lover;
-        }
-        if (selectedCategory === "ended") {
-          return ev.toStatus === RelationshipStatus.Divorced || ev.toStatus === RelationshipStatus.Jilted || ev.toStatus === RelationshipStatus.ExDating || ev.toStatus === RelationshipStatus.ExLover;
-        }
-        return true;
-      });
-    }, [allEvents, searchTerm, selectedCategory, npcProfiles]);
-    const unionCount = reactExports.useMemo(
-      () => allEvents.filter(
-        (e) => e.toStatus === RelationshipStatus.Married || e.toStatus === RelationshipStatus.Engaged
-      ).length,
-      [allEvents]
-    );
-    const romanceCount = reactExports.useMemo(
-      () => allEvents.filter(
-        (e) => e.toStatus === RelationshipStatus.Dating || e.toStatus === RelationshipStatus.Lover
-      ).length,
-      [allEvents]
-    );
-    const endedCount = reactExports.useMemo(
-      () => allEvents.filter(
-        (e) => e.toStatus === RelationshipStatus.Divorced || e.toStatus === RelationshipStatus.Jilted || e.toStatus === RelationshipStatus.ExDating || e.toStatus === RelationshipStatus.ExLover
-      ).length,
-      [allEvents]
-    );
-    const renderActorName = (actorId) => {
-      const name = getName(actorId);
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "span",
-        {
-          role: "button",
-          tabIndex: 0,
-          onClick: (e) => {
-            e.stopPropagation();
-            openNpcDetail(actorId);
-          },
-          onKeyDown: (e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              openNpcDetail(actorId);
-            }
-          },
-          className: "font-semibold text-foreground-primary hover:text-accent-bright hover:underline cursor-pointer transition-colors",
-          children: name
-        }
-      );
-    };
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[1rem] h-full w-full", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-[0.75rem] bg-panel border border-border-subtle rounded-lg p-[1rem]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              onClick: () => setActiveSubSection("dashboard"),
-              className: "p-[0.5rem] rounded-md bg-panel-raised border border-border-subtle text-foreground-muted hover:text-accent-bright hover:bg-accent-soft transition-colors cursor-pointer",
-              title: "Back to Dashboard",
-              children: /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowLeft, { className: "w-[1.125em] h-[1.125em]" })
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-lg font-bold text-foreground-primary flex items-center gap-[0.5rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[1.25em] h-[1.25em] text-accent" }),
-              "Full Activity Feed & Relationship History"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted", children: "Chronological ledger of relationship milestone transitions across Skyrim" })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-semibold px-[0.625rem] py-[0.25rem] bg-accent-soft text-accent-bright rounded-full border border-accent/20", children: [
-          allEvents.length,
-          " Total Events"
-        ] }) })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[0.75rem] flex flex-col md:flex-row items-center justify-between gap-[0.75rem]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-wrap w-full md:w-auto", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted flex items-center gap-[0.25rem] mr-[0.25rem]", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Filter, { className: "w-[0.875em] h-[0.875em]" }),
-            " Filter:"
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              onClick: () => setSelectedCategory("all"),
-              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer ${selectedCategory === "all" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
-              children: [
-                "All (",
-                allEvents.length,
-                ")"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              onClick: () => setSelectedCategory("union"),
-              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "union" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.Engaged }),
-                " Marriages & Engagements (",
-                unionCount,
-                ")"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              onClick: () => setSelectedCategory("romance"),
-              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "romance" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.Lover }),
-                " Dating & Lovers (",
-                romanceCount,
-                ")"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              onClick: () => setSelectedCategory("ended"),
-              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "ended" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.ExLover }),
-                " Divorced & Ended (",
-                endedCount,
-                ")"
-              ]
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative w-full md:w-[12rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[1em] h-[1em] absolute left-[0.625rem] top-[50%] translate-y-[-50%] text-foreground-muted pointer-events-none" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
-            {
-              type: "text",
-              value: searchTerm,
-              onChange: (e) => setSearchTerm(e.target.value),
-              placeholder: "Search by actor or status...",
-              className: "w-full bg-panel-inset border border-border-subtle rounded-md pl-[2rem] pr-[2rem] py-[0.375rem] text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
-            }
-          ),
-          searchTerm && /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              onClick: () => setSearchTerm(""),
-              className: "absolute right-[0.5rem] top-[50%] translate-y-[-50%] text-foreground-muted hover:text-foreground-primary",
-              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[0.875em] h-[0.875em]" })
-            }
-          )
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex-1 flex flex-col overflow-hidden min-h-[22rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-full pr-[0.75rem]", children: filteredEvents.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center py-[4rem] gap-[0.75rem] text-center", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[2.5rem] h-[2.5rem] text-foreground-muted opacity-40" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-foreground-muted font-medium", children: searchTerm || selectedCategory !== "all" ? "No relationship activity matching your current filter" : "No relationship activity history recorded yet" }),
-        (searchTerm || selectedCategory !== "all") && /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: () => {
-              setSearchTerm("");
-              setSelectedCategory("all");
-            },
-            className: "text-xs text-accent hover:underline flex items-center gap-[0.25rem]",
-            children: "Reset filters"
-          }
-        )
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.625rem]", children: filteredEvents.map((ev) => {
-        const fromLabel = getStatusLabel(ev.fromStatus);
-        getStatusLabel(ev.toStatus);
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "flex flex-col sm:flex-row sm:items-center justify-between gap-[0.75rem] p-[0.75rem] bg-panel-raised border-l-4 border-l-accent border border-border-subtle rounded-r-md text-xs hover:border-accent/40 transition-colors",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start sm:items-center gap-[0.75rem]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "p-[0.375rem] bg-panel-inset rounded-md border border-border-subtle flex-shrink-0 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: ev.toStatus, size: "1.5em" }) }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.25rem]", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-wrap text-sm", children: [
-                    renderActorName(ev.actorA),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary font-semibold", children: "&" }),
-                    renderActorName(ev.actorB)
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-foreground-muted text-xs", children: [
-                    ev.timestamp < 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem] text-foreground-secondary", children: "Pre-existing" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem]", children: fromLabel }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "→" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: ev.toStatus })
-                  ] })
-                ] })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] text-foreground-muted text-[0.75rem] self-end sm:self-center", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(ev.timestamp, currentGameDay) })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-inset px-[0.5rem] py-[0.125rem] rounded border border-border-subtle", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Calendar, { className: "w-[0.75em] h-[0.75em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: ev.timestamp < 0 ? "Historical" : `Day ${Math.floor(ev.timestamp)}` })
-                ] })
-              ] })
-            ]
-          },
-          ev.id
-        );
-      }) }) }) })
-    ] });
-  };
+    }
+  );
+  Checkbox.displayName = "Checkbox";
   const Input = reactExports.forwardRef(
     ({ className, type, ...props }, ref) => {
       return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -18960,28 +17555,14 @@ Defaulting to \`null\`.`;
     }
   );
   Input.displayName = "Input";
-  const SearchInput = ({
-    value,
-    placeholder = "Search...",
-    onChange,
-    className = ""
-  }) => {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `relative w-full ${className}`, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[0.875em] h-[0.875em] text-foreground-muted absolute left-[0.5rem] top-1/2 -translate-y-1/2 z-10" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Input,
-        {
-          type: "text",
-          placeholder,
-          value,
-          onChange: (e) => onChange(e.target.value),
-          className: "pl-[1.75rem]"
-        }
-      )
-    ] });
-  };
-  var __defProp$6 = Object.defineProperty;
-  var __name$6 = (target, value) => __defProp$6(target, "name", { value, configurable: true });
+  var __defProp$a = Object.defineProperty;
+  var __name$a = (target, value) => __defProp$a(target, "name", { value, configurable: true });
+  function clamp(value, [min2, max2]) {
+    return Math.min(max2, Math.max(min2, value));
+  }
+  __name$a(clamp, "clamp");
+  var __defProp$9 = Object.defineProperty;
+  var __name$9 = (target, value) => __defProp$9(target, "name", { value, configurable: true });
   // @__NO_SIDE_EFFECTS__
   function createCollection(name) {
     const PROVIDER_NAME2 = name + "CollectionProvider";
@@ -18990,7 +17571,7 @@ Defaulting to \`null\`.`;
       PROVIDER_NAME2,
       { collectionRef: { current: null }, itemMap: /* @__PURE__ */ new Map() }
     );
-    const CollectionProvider = /* @__PURE__ */ __name$6((props) => {
+    const CollectionProvider = /* @__PURE__ */ __name$9((props) => {
       const { scope, children } = props;
       const ref = reactExports.useRef(null);
       const itemMap = reactExports.useRef(/* @__PURE__ */ new Map()).current;
@@ -19039,14 +17620,14 @@ Defaulting to \`null\`.`;
       }, [context.collectionRef, context.itemMap]);
       return getItems;
     }
-    __name$6(useCollection2, "useCollection");
+    __name$9(useCollection2, "useCollection");
     return [
       { Provider: CollectionProvider, Slot: CollectionSlot, ItemSlot: CollectionItemSlot },
       useCollection2,
       createCollectionScope2
     ];
   }
-  __name$6(createCollection, "createCollection");
+  __name$9(createCollection, "createCollection");
   var __instanciated = /* @__PURE__ */ new WeakMap();
   var OrderedDict = (_a = class extends Map {
     constructor(entries) {
@@ -19333,7 +17914,7 @@ Defaulting to \`null\`.`;
       }
       return false;
     }
-  }, _keys = new WeakMap(), __name$6(_a, "OrderedDict"), _a);
+  }, _keys = new WeakMap(), __name$9(_a, "OrderedDict"), _a);
   function at(array, index2) {
     if ("at" in Array.prototype) {
       return Array.prototype.at.call(array, index2);
@@ -19341,18 +17922,18 @@ Defaulting to \`null\`.`;
     const actualIndex = toSafeIndex(array, index2);
     return actualIndex === -1 ? void 0 : array[actualIndex];
   }
-  __name$6(at, "at");
+  __name$9(at, "at");
   function toSafeIndex(array, index2) {
     const length = array.length;
     const relativeIndex = toSafeInteger(index2);
     const actualIndex = relativeIndex >= 0 ? relativeIndex : length + relativeIndex;
     return actualIndex < 0 || actualIndex >= length ? -1 : actualIndex;
   }
-  __name$6(toSafeIndex, "toSafeIndex");
+  __name$9(toSafeIndex, "toSafeIndex");
   function toSafeInteger(number) {
     return number !== number || number === 0 ? 0 : Math.trunc(number);
   }
-  __name$6(toSafeInteger, "toSafeInteger");
+  __name$9(toSafeInteger, "toSafeInteger");
   // @__NO_SIDE_EFFECTS__
   function createCollection2(name) {
     const PROVIDER_NAME2 = name + "CollectionProvider";
@@ -19364,19 +17945,19 @@ Defaulting to \`null\`.`;
         collectionRef: { current: null },
         collectionRefObject: { current: null },
         itemMap: new OrderedDict(),
-        setItemMap: /* @__PURE__ */ __name$6(() => void 0, "setItemMap")
+        setItemMap: /* @__PURE__ */ __name$9(() => void 0, "setItemMap")
       }
     );
-    const CollectionProvider = /* @__PURE__ */ __name$6(({ state, ...props }) => {
+    const CollectionProvider = /* @__PURE__ */ __name$9(({ state, ...props }) => {
       return state ? /* @__PURE__ */ jsxRuntimeExports.jsx(CollectionProviderImpl, { ...props, state }) : /* @__PURE__ */ jsxRuntimeExports.jsx(CollectionInit, { ...props });
     }, "CollectionProvider");
     CollectionProvider.displayName = PROVIDER_NAME2;
-    const CollectionInit = /* @__PURE__ */ __name$6((props) => {
+    const CollectionInit = /* @__PURE__ */ __name$9((props) => {
       const state = useInitCollection();
       return /* @__PURE__ */ jsxRuntimeExports.jsx(CollectionProviderImpl, { ...props, state });
     }, "CollectionInit");
     CollectionInit.displayName = PROVIDER_NAME2 + "Init";
-    const CollectionProviderImpl = /* @__PURE__ */ __name$6((props) => {
+    const CollectionProviderImpl = /* @__PURE__ */ __name$9((props) => {
       const { scope, children, state } = props;
       const ref = reactExports.useRef(null);
       const [collectionElement, setCollectionElement] = reactExports.useState(
@@ -19466,12 +18047,12 @@ Defaulting to \`null\`.`;
     function useInitCollection() {
       return reactExports.useState(new OrderedDict());
     }
-    __name$6(useInitCollection, "useInitCollection");
+    __name$9(useInitCollection, "useInitCollection");
     function useCollection2(scope) {
       const { itemMap } = useCollectionContext(name + "CollectionConsumer", scope);
       return itemMap;
     }
-    __name$6(useCollection2, "useCollection");
+    __name$9(useCollection2, "useCollection");
     const functions = {
       createCollectionScope: createCollectionScope2,
       useCollection: useCollection2,
@@ -19482,7 +18063,7 @@ Defaulting to \`null\`.`;
       functions
     ];
   }
-  __name$6(createCollection2, "createCollection");
+  __name$9(createCollection2, "createCollection");
   function shallowEqual(a, b) {
     if (a === b) return true;
     if (typeof a !== "object" || typeof b !== "object") return false;
@@ -19496,15 +18077,15 @@ Defaulting to \`null\`.`;
     }
     return true;
   }
-  __name$6(shallowEqual, "shallowEqual");
+  __name$9(shallowEqual, "shallowEqual");
   function isElementPreceding(a, b) {
     return !!(b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_PRECEDING);
   }
-  __name$6(isElementPreceding, "isElementPreceding");
+  __name$9(isElementPreceding, "isElementPreceding");
   function sortByDocumentPosition(a, b) {
     return !a[1].element || !b[1].element ? 0 : isElementPreceding(a[1].element, b[1].element) ? -1 : 1;
   }
-  __name$6(sortByDocumentPosition, "sortByDocumentPosition");
+  __name$9(sortByDocumentPosition, "sortByDocumentPosition");
   function getChildListObserver(callback) {
     const observer = new MutationObserver((mutationsList) => {
       for (const mutation of mutationsList) {
@@ -19516,16 +18097,24 @@ Defaulting to \`null\`.`;
     });
     return observer;
   }
-  __name$6(getChildListObserver, "getChildListObserver");
-  var __defProp$5 = Object.defineProperty;
-  var __name$5 = (target, value) => __defProp$5(target, "name", { value, configurable: true });
+  __name$9(getChildListObserver, "getChildListObserver");
+  var __defProp$8 = Object.defineProperty;
+  var __name$8 = (target, value) => __defProp$8(target, "name", { value, configurable: true });
+  var DirectionContext = reactExports.createContext(void 0);
+  function useDirection(localDir) {
+    const globalDir = reactExports.useContext(DirectionContext);
+    return localDir || globalDir || "ltr";
+  }
+  __name$8(useDirection, "useDirection");
+  var __defProp$7 = Object.defineProperty;
+  var __name$7 = (target, value) => __defProp$7(target, "name", { value, configurable: true });
   var count = 0;
   var guards = null;
   function FocusGuards(props) {
     useFocusGuards();
     return props.children;
   }
-  __name$5(FocusGuards, "FocusGuards");
+  __name$7(FocusGuards, "FocusGuards");
   function useFocusGuards() {
     reactExports.useEffect(() => {
       if (!guards) {
@@ -19549,7 +18138,7 @@ Defaulting to \`null\`.`;
       };
     }, []);
   }
-  __name$5(useFocusGuards, "useFocusGuards");
+  __name$7(useFocusGuards, "useFocusGuards");
   function createFocusGuard() {
     const element = document.createElement("span");
     element.setAttribute("data-radix-focus-guard", "");
@@ -19560,14 +18149,14 @@ Defaulting to \`null\`.`;
     element.style.pointerEvents = "none";
     return element;
   }
-  __name$5(createFocusGuard, "createFocusGuard");
-  var __defProp$4 = Object.defineProperty;
-  var __name$4 = (target, value) => __defProp$4(target, "name", { value, configurable: true });
+  __name$7(createFocusGuard, "createFocusGuard");
+  var __defProp$6 = Object.defineProperty;
+  var __name$6 = (target, value) => __defProp$6(target, "name", { value, configurable: true });
   var AUTOFOCUS_ON_MOUNT = "focusScope.autoFocusOnMount";
   var AUTOFOCUS_ON_UNMOUNT = "focusScope.autoFocusOnUnmount";
   var EVENT_OPTIONS = { bubbles: false, cancelable: true };
   var FocusScope = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$4(function FocusScope2(props, forwardedRef) {
+    /* @__PURE__ */ __name$6(function FocusScope2(props, forwardedRef) {
       const {
         loop = false,
         trapped = false,
@@ -19613,9 +18202,9 @@ Defaulting to \`null\`.`;
               if (mutation.removedNodes.length > 0) focus(container);
             }
           };
-          __name$4(handleFocusIn2, "handleFocusIn");
-          __name$4(handleFocusOut2, "handleFocusOut");
-          __name$4(handleMutations2, "handleMutations");
+          __name$6(handleFocusIn2, "handleFocusIn");
+          __name$6(handleFocusOut2, "handleFocusOut");
+          __name$6(handleMutations2, "handleMutations");
           document.addEventListener("focusin", handleFocusIn2);
           document.addEventListener("focusout", handleFocusOut2);
           const mutationObserver = new MutationObserver(handleMutations2);
@@ -19693,18 +18282,18 @@ Defaulting to \`null\`.`;
       if (document.activeElement !== previouslyFocusedElement) return;
     }
   }
-  __name$4(focusFirst, "focusFirst");
+  __name$6(focusFirst, "focusFirst");
   function getTabbableEdges(container) {
     const candidates = getTabbableCandidates(container);
     const first = findVisible(candidates, container);
     const last = findVisible(candidates.reverse(), container);
     return [first, last];
   }
-  __name$4(getTabbableEdges, "getTabbableEdges");
+  __name$6(getTabbableEdges, "getTabbableEdges");
   function getTabbableCandidates(container) {
     const nodes = [];
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT, {
-      acceptNode: /* @__PURE__ */ __name$4((node) => {
+      acceptNode: /* @__PURE__ */ __name$6((node) => {
         const isHiddenInput = node.tagName === "INPUT" && node.type === "hidden";
         if (node.disabled || node.hidden || isHiddenInput) return NodeFilter.FILTER_SKIP;
         return node.tabIndex >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
@@ -19713,7 +18302,7 @@ Defaulting to \`null\`.`;
     while (walker.nextNode()) nodes.push(walker.currentNode);
     return nodes;
   }
-  __name$4(getTabbableCandidates, "getTabbableCandidates");
+  __name$6(getTabbableCandidates, "getTabbableCandidates");
   function findVisible(elements, container) {
     const canUseCheckVisibility = typeof container.checkVisibility === "function" && container.checkVisibility({ checkVisibilityCSS: true });
     for (const element of elements) {
@@ -19723,7 +18312,7 @@ Defaulting to \`null\`.`;
       }
     }
   }
-  __name$4(findVisible, "findVisible");
+  __name$6(findVisible, "findVisible");
   function isHidden(node, { upTo }) {
     if (getComputedStyle(node).visibility === "hidden") return true;
     while (node) {
@@ -19733,11 +18322,11 @@ Defaulting to \`null\`.`;
     }
     return false;
   }
-  __name$4(isHidden, "isHidden");
+  __name$6(isHidden, "isHidden");
   function isSelectableInput(element) {
     return element instanceof HTMLInputElement && "select" in element;
   }
-  __name$4(isSelectableInput, "isSelectableInput");
+  __name$6(isSelectableInput, "isSelectableInput");
   function focus(element, { select = false } = {}) {
     if (element && element.focus) {
       const previouslyFocusedElement = document.activeElement;
@@ -19746,7 +18335,7 @@ Defaulting to \`null\`.`;
         element.select();
     }
   }
-  __name$4(focus, "focus");
+  __name$6(focus, "focus");
   var focusScopesStack = createFocusScopesStack();
   function createFocusScopesStack() {
     let stack = [];
@@ -19766,7 +18355,7 @@ Defaulting to \`null\`.`;
       }
     };
   }
-  __name$4(createFocusScopesStack, "createFocusScopesStack");
+  __name$6(createFocusScopesStack, "createFocusScopesStack");
   function arrayRemove(array, item) {
     const updatedArray = [...array];
     const index2 = updatedArray.indexOf(item);
@@ -19775,13 +18364,13 @@ Defaulting to \`null\`.`;
     }
     return updatedArray;
   }
-  __name$4(arrayRemove, "arrayRemove");
+  __name$6(arrayRemove, "arrayRemove");
   function removeLinks(items) {
     return items.filter((item) => item.tagName !== "A");
   }
-  __name$4(removeLinks, "removeLinks");
-  var __defProp$3 = Object.defineProperty;
-  var __name$3 = (target, value) => __defProp$3(target, "name", { value, configurable: true });
+  __name$6(removeLinks, "removeLinks");
+  var __defProp$5 = Object.defineProperty;
+  var __name$5 = (target, value) => __defProp$5(target, "name", { value, configurable: true });
   function usePrevious(value) {
     const ref = reactExports.useRef({ value, previous: value });
     return reactExports.useMemo(() => {
@@ -19792,7 +18381,7 @@ Defaulting to \`null\`.`;
       return ref.current.previous;
     }, [value]);
   }
-  __name$3(usePrevious, "usePrevious");
+  __name$5(usePrevious, "usePrevious");
   var getDefaultParent = function(originalTarget) {
     if (typeof document === "undefined") {
       return null;
@@ -20572,8 +19161,8 @@ Defaulting to \`null\`.`;
     return reactExports.createElement(RemoveScroll, __assign({}, props, { ref, sideCar: SideCar }));
   });
   ReactRemoveScroll.classNames = RemoveScroll.classNames;
-  var __defProp$2 = Object.defineProperty;
-  var __name$2 = (target, value) => __defProp$2(target, "name", { value, configurable: true });
+  var __defProp$4 = Object.defineProperty;
+  var __name$4 = (target, value) => __defProp$4(target, "name", { value, configurable: true });
   var OPEN_KEYS = [" ", "Enter", "ArrowUp", "ArrowDown"];
   var SELECTION_KEYS = [" ", "Enter"];
   var SELECT_NAME = "Select";
@@ -20626,7 +19215,7 @@ Defaulting to \`null\`.`;
     reactExports.useEffect(() => {
       const associatedForm = form ? trigger == null ? void 0 : trigger.ownerDocument.getElementById(form) : trigger == null ? void 0 : trigger.form;
       if (associatedForm instanceof HTMLFormElement) {
-        const reset = /* @__PURE__ */ __name$2(() => setValue(initialValueRef.current), "reset");
+        const reset = /* @__PURE__ */ __name$4(() => setValue(initialValueRef.current), "reset");
         associatedForm.addEventListener("reset", reset);
         return () => associatedForm.removeEventListener("reset", reset);
       }
@@ -20678,8 +19267,8 @@ Defaulting to \`null\`.`;
       }
     ) }) }) });
   }
-  __name$2(SelectProvider, "SelectProvider");
-  var Select$1 = /* @__PURE__ */ __name$2((props) => {
+  __name$4(SelectProvider, "SelectProvider");
+  var Select$1 = /* @__PURE__ */ __name$4((props) => {
     const { __scopeSelect, children, ...providerProps } = props;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       SelectProvider,
@@ -20700,7 +19289,7 @@ Defaulting to \`null\`.`;
   }, "Select");
   var TRIGGER_NAME$1 = "SelectTrigger";
   var SelectTrigger$1 = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectTrigger2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectTrigger2(props, forwardedRef) {
       const { __scopeSelect, disabled = false, ...triggerProps } = props;
       const popperScope = usePopperScope(__scopeSelect);
       const context = useSelectContext(TRIGGER_NAME$1, __scopeSelect);
@@ -20716,7 +19305,7 @@ Defaulting to \`null\`.`;
           context.onValueChange(nextItem.value);
         }
       });
-      const handleOpen = /* @__PURE__ */ __name$2((pointerEvent) => {
+      const handleOpen = /* @__PURE__ */ __name$4((pointerEvent) => {
         if (!isDisabled) {
           context.onOpenChange(true);
           resetTypeahead();
@@ -20777,7 +19366,7 @@ Defaulting to \`null\`.`;
   );
   var VALUE_NAME = "SelectValue";
   var SelectValue$1 = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectValue2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectValue2(props, forwardedRef) {
       const { __scopeSelect, className, style, children, placeholder = "", ...valueProps } = props;
       const context = useSelectContext(VALUE_NAME, __scopeSelect);
       const { onValueNodeHasChildrenChange } = context;
@@ -20800,7 +19389,7 @@ Defaulting to \`null\`.`;
     }, "SelectValue")
   );
   var SelectIcon = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectIcon2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectIcon2(props, forwardedRef) {
       const { __scopeSelect, children, ...iconProps } = props;
       return /* @__PURE__ */ jsxRuntimeExports.jsx(Primitive.span, { "aria-hidden": true, ...iconProps, ref: forwardedRef, children: children || "▼" });
     }, "SelectIcon")
@@ -20809,13 +19398,13 @@ Defaulting to \`null\`.`;
   var [PortalProvider, usePortalContext] = createSelectContext(PORTAL_NAME, {
     forceMount: void 0
   });
-  var SelectPortal = /* @__PURE__ */ __name$2((props) => {
+  var SelectPortal = /* @__PURE__ */ __name$4((props) => {
     const { __scopeSelect, forceMount, ...portalProps } = props;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(PortalProvider, { scope: props.__scopeSelect, forceMount, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Portal$1, { asChild: true, ...portalProps }) });
   }, "SelectPortal");
   var CONTENT_NAME = "SelectContent";
   var SelectContent$1 = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectContent2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectContent2(props, forwardedRef) {
       const portalContext = usePortalContext(CONTENT_NAME, props.__scopeSelect);
       const { forceMount = portalContext.forceMount, ...contentProps } = props;
       const context = useSelectContext(CONTENT_NAME, props.__scopeSelect);
@@ -20826,7 +19415,7 @@ Defaulting to \`null\`.`;
       return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || context.open, children: ({ present }) => present ? /* @__PURE__ */ jsxRuntimeExports.jsx(SelectContentImpl, { ...contentProps, ref: forwardedRef }) : /* @__PURE__ */ jsxRuntimeExports.jsx(SelectContentFragment, { ...contentProps, fragment }) });
     }, "SelectContent")
   );
-  var SelectContentFragment = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function SelectContentFragment2(props, forwardedRef) {
+  var SelectContentFragment = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$4(function SelectContentFragment2(props, forwardedRef) {
     const { __scopeSelect, children, fragment } = props;
     if (!fragment) return null;
     return reactDomExports.createPortal(
@@ -20839,7 +19428,7 @@ Defaulting to \`null\`.`;
   var Slot = /* @__PURE__ */ createSlot("SelectContent.RemoveScroll");
   var SelectContentImpl = /* @__PURE__ */ reactExports.forwardRef(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name$2(function SelectContentImpl2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectContentImpl2(props, forwardedRef) {
       const { __scopeSelect } = props;
       const {
         position = "item-aligned",
@@ -20905,14 +19494,14 @@ Defaulting to \`null\`.`;
       reactExports.useEffect(() => {
         if (content) {
           let pointerMoveDelta = { x: 0, y: 0 };
-          const handlePointerMove = /* @__PURE__ */ __name$2((event) => {
+          const handlePointerMove = /* @__PURE__ */ __name$4((event) => {
             var _a2, _b;
             pointerMoveDelta = {
               x: Math.abs(Math.round(event.pageX) - (((_a2 = triggerPointerDownPosRef.current) == null ? void 0 : _a2.x) ?? 0)),
               y: Math.abs(Math.round(event.pageY) - (((_b = triggerPointerDownPosRef.current) == null ? void 0 : _b.y) ?? 0))
             };
           }, "handlePointerMove");
-          const handlePointerUp = /* @__PURE__ */ __name$2((event) => {
+          const handlePointerUp = /* @__PURE__ */ __name$4((event) => {
             if (pointerMoveDelta.x <= 10 && pointerMoveDelta.y <= 10) {
               event.preventDefault();
             } else {
@@ -20934,7 +19523,7 @@ Defaulting to \`null\`.`;
         }
       }, [content, onOpenChange, triggerPointerDownPosRef]);
       reactExports.useEffect(() => {
-        const close = /* @__PURE__ */ __name$2(() => onOpenChange(false), "close");
+        const close = /* @__PURE__ */ __name$4(() => onOpenChange(false), "close");
         window.addEventListener("blur", close);
         window.addEventListener("resize", close);
         return () => {
@@ -21075,7 +19664,7 @@ Defaulting to \`null\`.`;
       );
     }, "SelectContentImpl")
   );
-  var SelectItemAlignedPosition = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function SelectItemAlignedPosition2(props, forwardedRef) {
+  var SelectItemAlignedPosition = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$4(function SelectItemAlignedPosition2(props, forwardedRef) {
     const { __scopeSelect, onPlaced, ...popperProps } = props;
     const context = useSelectContext(CONTENT_NAME, __scopeSelect);
     const contentContext = useSelectContentContext(CONTENT_NAME, __scopeSelect);
@@ -21237,7 +19826,7 @@ Defaulting to \`null\`.`;
       }
     );
   }, "SelectItemAlignedPosition"));
-  var SelectPopperPosition = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function SelectPopperPosition2(props, forwardedRef) {
+  var SelectPopperPosition = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$4(function SelectPopperPosition2(props, forwardedRef) {
     const {
       __scopeSelect,
       align = "start",
@@ -21270,12 +19859,12 @@ Defaulting to \`null\`.`;
     );
   }, "SelectPopperPosition"));
   var [SelectViewportProvider, useSelectViewportContext] = createSelectContext(CONTENT_NAME, {});
-  var VIEWPORT_NAME = "SelectViewport";
+  var VIEWPORT_NAME$1 = "SelectViewport";
   var SelectViewport = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectViewport2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectViewport2(props, forwardedRef) {
       const { __scopeSelect, nonce, ...viewportProps } = props;
-      const contentContext = useSelectContentContext(VIEWPORT_NAME, __scopeSelect);
-      const viewportContext = useSelectViewportContext(VIEWPORT_NAME, __scopeSelect);
+      const contentContext = useSelectContentContext(VIEWPORT_NAME$1, __scopeSelect);
+      const viewportContext = useSelectViewportContext(VIEWPORT_NAME$1, __scopeSelect);
       const composedRefs = useComposedRefs(forwardedRef, contentContext.onViewportChange);
       const prevScrollTopRef = reactExports.useRef(0);
       return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
@@ -21341,7 +19930,7 @@ Defaulting to \`null\`.`;
   var [SelectGroupContextProvider, useSelectGroupContext] = createSelectContext(GROUP_NAME);
   var LABEL_NAME = "SelectLabel";
   var SelectLabel$1 = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectLabel2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectLabel2(props, forwardedRef) {
       const { __scopeSelect, ...labelProps } = props;
       const groupContext = useSelectGroupContext(LABEL_NAME, __scopeSelect);
       return /* @__PURE__ */ jsxRuntimeExports.jsx(Primitive.div, { id: groupContext.id, ...labelProps, ref: forwardedRef });
@@ -21350,7 +19939,7 @@ Defaulting to \`null\`.`;
   var ITEM_NAME = "SelectItem";
   var [SelectItemContextProvider, useSelectItemContext] = createSelectContext(ITEM_NAME);
   var SelectItem$1 = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectItem2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectItem2(props, forwardedRef) {
       const {
         __scopeSelect,
         value,
@@ -21372,7 +19961,7 @@ Defaulting to \`null\`.`;
       const composedRefs = useComposedRefs(forwardedRef, handleItemRefCallback);
       const textId = useId();
       const pointerTypeRef = reactExports.useRef("touch");
-      const handleSelect = /* @__PURE__ */ __name$2(() => {
+      const handleSelect = /* @__PURE__ */ __name$4(() => {
         if (!disabled) {
           context.onValueChange(value);
           context.onOpenChange(false);
@@ -21461,7 +20050,7 @@ Defaulting to \`null\`.`;
   );
   var ITEM_TEXT_NAME = "SelectItemText";
   var SelectItemText = /* @__PURE__ */ reactExports.forwardRef(
-    /* @__PURE__ */ __name$2(function SelectItemText2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectItemText2(props, forwardedRef) {
       const { __scopeSelect, className, style, ...itemTextProps } = props;
       const context = useSelectContext(ITEM_TEXT_NAME, __scopeSelect);
       const contentContext = useSelectContentContext(ITEM_TEXT_NAME, __scopeSelect);
@@ -21499,14 +20088,14 @@ Defaulting to \`null\`.`;
   var ITEM_INDICATOR_NAME = "SelectItemIndicator";
   var SelectItemIndicator = /* @__PURE__ */ reactExports.forwardRef(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name$2(function SelectItemIndicator2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectItemIndicator2(props, forwardedRef) {
       const { __scopeSelect, ...itemIndicatorProps } = props;
       const itemContext = useSelectItemContext(ITEM_INDICATOR_NAME, __scopeSelect);
       return itemContext.isSelected ? /* @__PURE__ */ jsxRuntimeExports.jsx(Primitive.span, { "aria-hidden": true, ...itemIndicatorProps, ref: forwardedRef }) : null;
     }, "SelectItemIndicator")
   );
   var SCROLL_UP_BUTTON_NAME = "SelectScrollUpButton";
-  var SelectScrollUpButton$1 = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function SelectScrollUpButton2(props, forwardedRef) {
+  var SelectScrollUpButton$1 = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$4(function SelectScrollUpButton2(props, forwardedRef) {
     const contentContext = useSelectContentContext(SCROLL_UP_BUTTON_NAME, props.__scopeSelect);
     const viewportContext = useSelectViewportContext(SCROLL_UP_BUTTON_NAME, props.__scopeSelect);
     const [canScrollUp, setCanScrollUp] = reactExports.useState(false);
@@ -21517,7 +20106,7 @@ Defaulting to \`null\`.`;
           const canScrollUp2 = viewport.scrollTop > 0;
           setCanScrollUp(canScrollUp2);
         };
-        __name$2(handleScroll2, "handleScroll");
+        __name$4(handleScroll2, "handleScroll");
         const viewport = contentContext.viewport;
         handleScroll2();
         viewport.addEventListener("scroll", handleScroll2);
@@ -21539,7 +20128,7 @@ Defaulting to \`null\`.`;
     ) : null;
   }, "SelectScrollUpButton"));
   var SCROLL_DOWN_BUTTON_NAME = "SelectScrollDownButton";
-  var SelectScrollDownButton$1 = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function SelectScrollDownButton2(props, forwardedRef) {
+  var SelectScrollDownButton$1 = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$4(function SelectScrollDownButton2(props, forwardedRef) {
     const contentContext = useSelectContentContext(SCROLL_DOWN_BUTTON_NAME, props.__scopeSelect);
     const viewportContext = useSelectViewportContext(SCROLL_DOWN_BUTTON_NAME, props.__scopeSelect);
     const [canScrollDown, setCanScrollDown] = reactExports.useState(false);
@@ -21551,7 +20140,7 @@ Defaulting to \`null\`.`;
           const canScrollDown2 = Math.ceil(viewport.scrollTop) < maxScroll;
           setCanScrollDown(canScrollDown2);
         };
-        __name$2(handleScroll2, "handleScroll");
+        __name$4(handleScroll2, "handleScroll");
         const viewport = contentContext.viewport;
         handleScroll2();
         viewport.addEventListener("scroll", handleScroll2);
@@ -21572,7 +20161,7 @@ Defaulting to \`null\`.`;
       }
     ) : null;
   }, "SelectScrollDownButton"));
-  var SelectScrollButtonImpl = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function SelectScrollButtonImpl2(props, forwardedRef) {
+  var SelectScrollButtonImpl = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$4(function SelectScrollButtonImpl2(props, forwardedRef) {
     const { __scopeSelect, onAutoScroll, ...scrollIndicatorProps } = props;
     const contentContext = useSelectContentContext("SelectScrollButton", __scopeSelect);
     const autoScrollTimerRef = reactExports.useRef(null);
@@ -21618,7 +20207,7 @@ Defaulting to \`null\`.`;
   }, "SelectScrollButtonImpl"));
   var SelectSeparator$1 = /* @__PURE__ */ reactExports.forwardRef(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name$2(function SelectSeparator2(props, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectSeparator2(props, forwardedRef) {
       const { __scopeSelect, ...separatorProps } = props;
       return /* @__PURE__ */ jsxRuntimeExports.jsx(Primitive.div, { "aria-hidden": true, ...separatorProps, ref: forwardedRef });
     }, "SelectSeparator")
@@ -21626,7 +20215,7 @@ Defaulting to \`null\`.`;
   var BUBBLE_INPUT_NAME$2 = "SelectBubbleInput";
   var SelectBubbleInput = /* @__PURE__ */ reactExports.forwardRef(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name$2(function SelectBubbleInput2({ __scopeSelect, ...props }, forwardedRef) {
+    /* @__PURE__ */ __name$4(function SelectBubbleInput2({ __scopeSelect, ...props }, forwardedRef) {
       const context = useSelectContext(BUBBLE_INPUT_NAME$2, __scopeSelect);
       const { value, onValueChange, required, disabled, name, autoComplete, form } = context;
       const { nativeOptions, nativeSelectKey } = context;
@@ -21679,11 +20268,11 @@ Defaulting to \`null\`.`;
   function isFunction$2(value) {
     return typeof value === "function";
   }
-  __name$2(isFunction$2, "isFunction");
+  __name$4(isFunction$2, "isFunction");
   function shouldShowPlaceholder(value) {
     return value === "" || value === void 0;
   }
-  __name$2(shouldShowPlaceholder, "shouldShowPlaceholder");
+  __name$4(shouldShowPlaceholder, "shouldShowPlaceholder");
   function useTypeaheadSearch(onSearchChange) {
     const handleSearchChange = useCallbackRef$1(onSearchChange);
     const searchRef = reactExports.useRef("");
@@ -21692,7 +20281,7 @@ Defaulting to \`null\`.`;
       (key) => {
         const search = searchRef.current + key;
         handleSearchChange(search);
-        (/* @__PURE__ */ __name$2(function updateSearch(value) {
+        (/* @__PURE__ */ __name$4(function updateSearch(value) {
           searchRef.current = value;
           window.clearTimeout(timerRef.current);
           if (value !== "") timerRef.current = window.setTimeout(() => updateSearch(""), 1e3);
@@ -21709,7 +20298,7 @@ Defaulting to \`null\`.`;
     }, []);
     return [searchRef, handleTypeaheadSearch, resetTypeahead];
   }
-  __name$2(useTypeaheadSearch, "useTypeaheadSearch");
+  __name$4(useTypeaheadSearch, "useTypeaheadSearch");
   function findNextItem(items, search, currentItem) {
     const isRepeated = search.length > 1 && Array.from(search).every((char) => char === search[0]);
     const normalizedSearch = isRepeated ? search[0] : search;
@@ -21722,11 +20311,11 @@ Defaulting to \`null\`.`;
     );
     return nextItem !== currentItem ? nextItem : void 0;
   }
-  __name$2(findNextItem, "findNextItem");
+  __name$4(findNextItem, "findNextItem");
   function wrapArray(array, startIndex) {
     return array.map((_, index2) => array[(startIndex + index2) % array.length]);
   }
-  __name$2(wrapArray, "wrapArray");
+  __name$4(wrapArray, "wrapArray");
   const Select = Select$1;
   const SelectValue = SelectValue$1;
   const SelectTrigger = reactExports.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -21776,7 +20365,7 @@ Defaulting to \`null\`.`;
     {
       ref,
       className: cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-border-strong bg-panel-raised text-foreground-primary shadow-raised data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "relative z-dropdown max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-border-strong bg-panel-raised text-foreground-primary shadow-raised data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" && "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
       ),
@@ -21881,6 +20470,2304 @@ Defaulting to \`null\`.`;
         ]
       }
     );
+  };
+  const SearchInput = ({
+    value,
+    placeholder = "Search...",
+    onChange,
+    className = ""
+  }) => {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `relative w-full ${className}`, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[0.875em] h-[0.875em] text-foreground-muted absolute left-[0.5rem] top-1/2 -translate-y-1/2 z-10" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Input,
+        {
+          type: "text",
+          placeholder,
+          value,
+          onChange: (e) => onChange(e.target.value),
+          className: "pl-[1.75rem]"
+        }
+      )
+    ] });
+  };
+  const modalContainerVariants = cva(
+    "w-full max-h-[86vh] rounded-lg border border-border-strong bg-window shadow-window flex flex-col overflow-hidden relative text-foreground-primary font-ui focus:outline-none",
+    {
+      variants: {
+        size: {
+          sm: "max-w-[28rem]",
+          md: "max-w-[36rem]",
+          lg: "max-w-[48rem]",
+          xl: "max-w-[58rem]"
+        }
+      },
+      defaultVariants: {
+        size: "md"
+      }
+    }
+  );
+  const toneIconContainerVariants = cva(
+    "p-[0.5rem] rounded-full border flex items-center justify-center shrink-0",
+    {
+      variants: {
+        tone: {
+          default: "bg-accent-soft text-accent border-border-accent",
+          ai: "bg-accent-soft text-accent-bright border-border-accent",
+          warning: "bg-status-warning-soft text-status-warning border-status-warning",
+          danger: "bg-status-danger-soft text-status-danger border-status-danger",
+          success: "bg-status-success-soft text-status-success border-status-success"
+        }
+      },
+      defaultVariants: {
+        tone: "default"
+      }
+    }
+  );
+  const infoBoxVariants = cva(
+    "p-[0.75rem] rounded-md border flex items-start gap-[0.625rem] text-xs",
+    {
+      variants: {
+        tone: {
+          default: "bg-panel-inset border-border-subtle text-foreground-secondary",
+          ai: "bg-accent-faint border-border-accent text-foreground-primary",
+          warning: "bg-status-warning-soft border-status-warning text-foreground-primary",
+          danger: "bg-status-danger-soft border-status-danger text-foreground-primary",
+          success: "bg-status-success-soft border-status-success text-foreground-primary"
+        }
+      },
+      defaultVariants: {
+        tone: "default"
+      }
+    }
+  );
+  const itemBadgeVariants = cva(
+    "px-[0.5rem] py-[0.125rem] rounded-sm text-xs font-semibold border shrink-0",
+    {
+      variants: {
+        tone: {
+          default: "bg-panel-inset text-foreground-secondary border-border-subtle",
+          accent: "bg-accent-soft text-accent-bright border-border-accent",
+          warning: "bg-status-warning-soft text-status-warning border-status-warning",
+          danger: "bg-status-danger-soft text-status-danger border-status-danger",
+          success: "bg-status-success-soft text-status-success border-status-success"
+        }
+      },
+      defaultVariants: {
+        tone: "default"
+      }
+    }
+  );
+  function renderToneIcon(tone = "default", className = "w-[1.25em] h-[1.25em]") {
+    switch (tone) {
+      case "warning":
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className });
+      case "danger":
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(ShieldAlert, { className });
+      case "success":
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className });
+      case "ai":
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className });
+      case "default":
+      default:
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className });
+    }
+  }
+  const ModalChecklistRow = React$2.memo(
+    ({ controlId, item, checked, selectValue, onToggle, onSelectChange }) => {
+      var _a2;
+      const handleRowClick = () => {
+        if (!item.checkboxDisabled) {
+          onToggle(controlId, item.id);
+        }
+      };
+      const handleCheckboxChange = () => {
+        if (!item.checkboxDisabled) {
+          onToggle(controlId, item.id);
+        }
+      };
+      const handleSelectValueChange = (val) => {
+        onSelectChange(controlId, item.id, val);
+      };
+      const hasSelect = Boolean(item.selectOptions && item.selectOptions.length > 0);
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          onClick: handleRowClick,
+          className: cn(
+            "flex items-start justify-between gap-[0.75rem] p-[0.75rem] rounded-md border transition-colors focus-within:border-border-accent focus-within:shadow-glow",
+            checked ? "bg-accent-faint border-border-strong" : "bg-panel-inset border-border-divider hover:border-border-subtle",
+            !item.checkboxDisabled && "cursor-pointer"
+          ),
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-[0.75rem] min-w-0 flex-1", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.125rem]", onClick: (e) => e.stopPropagation(), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Checkbox,
+                {
+                  checked,
+                  disabled: item.checkboxDisabled,
+                  onCheckedChange: handleCheckboxChange
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.25rem] min-w-0 flex-1", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] flex-wrap", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: cn(
+                        "text-sm font-semibold truncate",
+                        checked ? "text-foreground-primary" : "text-foreground-secondary"
+                      ),
+                      children: item.label
+                    }
+                  ),
+                  item.badgeText && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: itemBadgeVariants({
+                        tone: item.badgeTone || "default"
+                      }),
+                      children: item.badgeText
+                    }
+                  )
+                ] }),
+                item.subtitle && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted leading-tight", children: item.subtitle }),
+                item.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-secondary leading-normal mt-[0.125rem]", children: item.description })
+              ] })
+            ] }),
+            hasSelect && item.selectOptions && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "flex items-center gap-[0.5rem] shrink-0 self-center",
+                onClick: (e) => e.stopPropagation(),
+                children: [
+                  item.selectLabel && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: item.selectLabel }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    SelectInput,
+                    {
+                      value: selectValue ?? item.selectValue ?? ((_a2 = item.selectOptions[0]) == null ? void 0 : _a2.value) ?? "",
+                      options: item.selectOptions,
+                      onChange: handleSelectValueChange,
+                      className: "min-w-[8rem]"
+                    }
+                  )
+                ]
+              }
+            )
+          ]
+        }
+      );
+    }
+  );
+  ModalChecklistRow.displayName = "ModalChecklistRow";
+  const ChecklistControlSection = ({ control }) => {
+    const checklistValue = useModalStore(
+      (s) => s.controlValues[control.id]
+    );
+    const toggleChecklistItem = useModalStore((s) => s.toggleChecklistItem);
+    const setAllChecklistItems = useModalStore((s) => s.setAllChecklistItems);
+    const setChecklistItemSelectValue = useModalStore((s) => s.setChecklistItemSelectValue);
+    const [filterQuery, setFilterQuery] = reactExports.useState("");
+    const items = control.items || [];
+    const checkedCount = (checklistValue == null ? void 0 : checklistValue.checkedIds.length) ?? 0;
+    const totalCount = items.length;
+    const allChecked = totalCount > 0 && checkedCount === totalCount;
+    const filteredItems = filterQuery.trim().length === 0 ? items : items.filter((item) => {
+      const q2 = filterQuery.toLowerCase();
+      return item.label.toLowerCase().includes(q2) || item.subtitle && item.subtitle.toLowerCase().includes(q2) || item.description && item.description.toLowerCase().includes(q2) || item.badgeText && item.badgeText.toLowerCase().includes(q2);
+    });
+    const handleToggleItem = reactExports.useCallback(
+      (ctrlId, itemId) => {
+        toggleChecklistItem(ctrlId, itemId);
+      },
+      [toggleChecklistItem]
+    );
+    const handleSelectChange = reactExports.useCallback(
+      (ctrlId, itemId, val) => {
+        setChecklistItemSelectValue(ctrlId, itemId, val);
+      },
+      [setChecklistItemSelectValue]
+    );
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.5rem]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.5rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
+          control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold uppercase tracking-wide text-foreground-secondary", children: control.label }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.5rem] py-[0.125rem] rounded-full bg-panel-inset border border-border-subtle text-xs text-accent-bright font-semibold", children: [
+            checkedCount,
+            " / ",
+            totalCount,
+            " Selected"
+          ] })
+        ] }),
+        control.showSelectAllToggle !== false && totalCount > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            type: "button",
+            variant: "ghost",
+            size: "sm",
+            onClick: () => setAllChecklistItems(control.id, !allChecked),
+            className: "text-xs h-[1.75rem] px-[0.625rem]",
+            children: allChecked ? "Deselect All" : "Select All"
+          }
+        )
+      ] }),
+      control.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted leading-normal", children: control.description }),
+      items.length > 8 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SearchInput,
+        {
+          value: filterQuery,
+          onChange: setFilterQuery,
+          placeholder: "Filter items..."
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-[20rem] overflow-y-auto pr-[0.25rem] flex flex-col gap-[0.5rem]", children: filteredItems.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] rounded-md bg-panel-inset border border-border-divider text-center text-xs text-foreground-muted", children: control.emptyMessage || "No matching items found." }) : filteredItems.map((item) => {
+        const itemState = checklistValue == null ? void 0 : checklistValue.items[item.id];
+        const isChecked = (itemState == null ? void 0 : itemState.checked) ?? Boolean(item.checked);
+        const currentSelectVal = (itemState == null ? void 0 : itemState.selectValue) ?? item.selectValue;
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ModalChecklistRow,
+          {
+            controlId: control.id,
+            item,
+            checked: isChecked,
+            selectValue: currentSelectVal,
+            onToggle: handleToggleItem,
+            onSelectChange: handleSelectChange
+          },
+          item.id
+        );
+      }) })
+    ] });
+  };
+  const ScalarControlSection = ({ control }) => {
+    const value = useModalStore((s) => s.controlValues[control.id]);
+    const setControlValue = useModalStore((s) => s.setControlValue);
+    if (control.type === "infobox") {
+      const tone = control.tone || "default";
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: infoBoxVariants({ tone }), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Info, { className: "w-[1.25em] h-[1.25em] shrink-0 mt-[0.125rem] text-accent" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.25rem]", children: [
+          control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-xs text-foreground-primary", children: control.label }),
+          control.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs leading-normal text-foreground-secondary whitespace-pre-line", children: control.description })
+        ] })
+      ] });
+    }
+    if (control.type === "checkbox") {
+      const checked = Boolean(value);
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          onClick: () => {
+            if (!control.disabled) {
+              setControlValue(control.id, !checked);
+            }
+          },
+          className: cn(
+            "flex items-start gap-[0.75rem] p-[0.75rem] rounded-md border transition-colors focus-within:border-border-accent focus-within:shadow-glow",
+            checked ? "bg-accent-faint border-border-strong" : "bg-panel-inset border-border-subtle hover:border-border-strong",
+            !control.disabled && "cursor-pointer"
+          ),
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.125rem]", onClick: (e) => e.stopPropagation(), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Checkbox,
+              {
+                checked,
+                disabled: control.disabled,
+                onCheckedChange: (next) => setControlValue(control.id, next)
+              }
+            ) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.125rem]", children: [
+              control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium text-foreground-primary", children: control.label }),
+              control.description && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted leading-normal", children: control.description })
+            ] })
+          ]
+        }
+      );
+    }
+    if (control.type === "select") {
+      const strVal = value !== void 0 && value !== null ? String(value) : "";
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.375rem]", children: [
+        control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-xs font-semibold text-foreground-secondary", children: control.label }),
+        control.description && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: control.description }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SelectInput,
+          {
+            value: strVal,
+            options: control.options || [],
+            disabled: control.disabled,
+            onChange: (val) => setControlValue(control.id, val),
+            className: "w-full"
+          }
+        )
+      ] });
+    }
+    if (control.type === "text") {
+      const strVal = value !== void 0 && value !== null ? String(value) : "";
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.375rem]", children: [
+        control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-xs font-semibold text-foreground-secondary", children: control.label }),
+        control.description && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: control.description }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Input,
+          {
+            value: strVal,
+            disabled: control.disabled,
+            placeholder: control.placeholder,
+            onChange: (e) => setControlValue(control.id, e.target.value)
+          }
+        )
+      ] });
+    }
+    return null;
+  };
+  const GenericModalContent = ({ modal }) => {
+    const controlValues = useModalStore((s) => s.controlValues);
+    const isSubmitting = useModalStore((s) => s.isSubmitting);
+    const submitModal = useModalStore((s) => s.submitModal);
+    const tone = modal.tone || "default";
+    const paragraphs = modal.message ? modal.message.split("\n").filter((line) => line.trim().length > 0) : [];
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "px-[1.25rem] py-[1rem] border-b border-border-divider bg-panel-raised flex items-center gap-[0.875rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: toneIconContainerVariants({ tone }), children: renderToneIcon(tone, "w-[1.25em] h-[1.25em]") }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col min-w-0", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-bold text-accent-bright leading-tight truncate", children: modal.title || "M.A.R.A.S Confirmation" }),
+          modal.subtitle && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted truncate mt-[0.125rem]", children: modal.subtitle })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[1.25rem] flex-1 min-h-0 overflow-y-auto flex flex-col gap-[1rem]", children: [
+        paragraphs.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-[0.5rem]", children: paragraphs.map((p2, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "p",
+          {
+            className: "text-base text-foreground-primary leading-normal",
+            children: p2
+          },
+          idx
+        )) }),
+        modal.controls && modal.controls.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-[0.875rem]", children: modal.controls.map(
+          (ctrl) => ctrl.type === "checklist" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChecklistControlSection, { control: ctrl }, ctrl.id) : /* @__PURE__ */ jsxRuntimeExports.jsx(ScalarControlSection, { control: ctrl }, ctrl.id)
+        ) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "px-[1.25rem] py-[0.875rem] bg-panel-raised border-t border-border-divider flex items-center justify-between gap-[0.75rem] flex-wrap", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted select-none", children: "Navigate: WASD / Arrows / Tab • Select: Enter / Space / E" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end gap-[0.625rem] flex-wrap ml-auto", children: modal.buttons.map((btn, idx) => {
+          let requirementUnmet = false;
+          if (btn.requireChecklistId && (btn.minCheckedCount ?? 0) > 0) {
+            const checklist = controlValues[btn.requireChecklistId];
+            const checkedCount = (checklist == null ? void 0 : checklist.checkedIds.length) ?? 0;
+            if (checkedCount < (btn.minCheckedCount ?? 0)) {
+              requirementUnmet = true;
+            }
+          }
+          const isDisabled = Boolean(btn.disabled || isSubmitting || requirementUnmet);
+          const buttonEl = /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Button,
+            {
+              type: "button",
+              "data-modal-footer-btn": "true",
+              "data-modal-btn-index": idx,
+              variant: btn.variant || (idx === 0 ? "default" : "secondary"),
+              disabled: isDisabled,
+              onClick: () => submitModal(btn.id, idx),
+              children: btn.label
+            },
+            btn.id || idx
+          );
+          if (btn.tooltip) {
+            return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: btn.tooltip, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex", children: buttonEl }) }, btn.id || idx);
+          }
+          return buttonEl;
+        }) })
+      ] })
+    ] });
+  };
+  function getFocusableModalElements(container) {
+    if (!container) return [];
+    const nodes = container.querySelectorAll(
+      'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"]):not(:disabled)'
+    );
+    return Array.from(nodes).filter(
+      (el2) => !el2.hasAttribute("disabled") && el2.getAttribute("aria-hidden") !== "true"
+    );
+  }
+  function getFooterModalButtons(container) {
+    if (!container) return [];
+    const nodes = container.querySelectorAll(
+      'button[data-modal-footer-btn="true"]:not(:disabled)'
+    );
+    return Array.from(nodes).filter((el2) => !el2.hasAttribute("disabled"));
+  }
+  function focusAndScrollIntoView(el2) {
+    if (!el2) return;
+    el2.focus();
+    el2.scrollIntoView({ block: "nearest" });
+  }
+  const PrismaModalHost = ({ style }) => {
+    const activeModal = useModalStore((s) => s.activeModal);
+    const controlValues = useModalStore((s) => s.controlValues);
+    const submitModal = useModalStore((s) => s.submitModal);
+    const modalRef = reactExports.useRef(null);
+    reactExports.useEffect(() => {
+      if (!activeModal) return;
+      const focusInitialElement = () => {
+        const container = modalRef.current;
+        if (!container) return;
+        const footerBtns = getFooterModalButtons(container);
+        if (footerBtns.length > 0) {
+          focusAndScrollIntoView(footerBtns[0]);
+          return;
+        }
+        const focusables = getFocusableModalElements(container);
+        if (focusables.length > 0) {
+          focusAndScrollIntoView(focusables[0]);
+          return;
+        }
+        container.focus();
+      };
+      focusInitialElement();
+      const rafId = window.requestAnimationFrame(focusInitialElement);
+      const handleKeyDownCapture = (e) => {
+        const isListboxOpen = Boolean(document.querySelector('[role="listbox"]'));
+        if (e.key === "Escape") {
+          if (!isListboxOpen) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          return;
+        }
+        if (isListboxOpen) {
+          return;
+        }
+        const container = modalRef.current;
+        if (!container) return;
+        const activeEl = document.activeElement;
+        const isTextInput = activeEl !== null && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.isContentEditable);
+        const focusables = getFocusableModalElements(container);
+        const footerBtns = getFooterModalButtons(container);
+        const cycleFocus = (list, step) => {
+          if (list.length === 0) return;
+          const currentIdx = activeEl ? list.indexOf(activeEl) : -1;
+          let nextIdx;
+          if (currentIdx === -1) {
+            nextIdx = step > 0 ? 0 : list.length - 1;
+          } else {
+            nextIdx = (currentIdx + step + list.length) % list.length;
+          }
+          focusAndScrollIntoView(list[nextIdx]);
+        };
+        if (isTextInput) {
+          if (e.key === "Tab") {
+            e.preventDefault();
+            e.stopPropagation();
+            cycleFocus(focusables, e.shiftKey ? -1 : 1);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            e.stopPropagation();
+            cycleFocus(focusables, 1);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            e.stopPropagation();
+            cycleFocus(focusables, -1);
+          } else if (e.key === "Enter" && footerBtns.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            focusAndScrollIntoView(footerBtns[0]);
+          }
+          return;
+        }
+        if (e.ctrlKey || e.altKey || e.metaKey) {
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          e.stopPropagation();
+          cycleFocus(focusables, e.shiftKey ? -1 : 1);
+          return;
+        }
+        if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+          e.preventDefault();
+          e.stopPropagation();
+          const inFooter = (activeEl == null ? void 0 : activeEl.getAttribute("data-modal-footer-btn")) === "true";
+          cycleFocus(inFooter && footerBtns.length > 0 ? footerBtns : focusables, 1);
+          return;
+        }
+        if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+          e.preventDefault();
+          e.stopPropagation();
+          const inFooter = (activeEl == null ? void 0 : activeEl.getAttribute("data-modal-footer-btn")) === "true";
+          cycleFocus(inFooter && footerBtns.length > 0 ? footerBtns : focusables, -1);
+          return;
+        }
+        if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
+          e.preventDefault();
+          e.stopPropagation();
+          cycleFocus(focusables, 1);
+          return;
+        }
+        if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
+          e.preventDefault();
+          e.stopPropagation();
+          cycleFocus(focusables, -1);
+          return;
+        }
+        if (e.key === "e" || e.key === "E") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (activeEl && container.contains(activeEl) && activeEl !== container) {
+            activeEl.click();
+          } else if (footerBtns.length > 0) {
+            focusAndScrollIntoView(footerBtns[0]);
+            footerBtns[0].click();
+          }
+          return;
+        }
+        if (e.key === "Enter" || e.key === " ") {
+          if (!activeEl || !container.contains(activeEl) || activeEl === container) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (footerBtns.length > 0) {
+              focusAndScrollIntoView(footerBtns[0]);
+              footerBtns[0].click();
+            }
+          }
+        }
+      };
+      window.addEventListener("keydown", handleKeyDownCapture, true);
+      return () => {
+        window.cancelAnimationFrame(rafId);
+        window.removeEventListener("keydown", handleKeyDownCapture, true);
+      };
+    }, [activeModal == null ? void 0 : activeModal.modalId]);
+    if (!activeModal) return null;
+    const CustomTemplate = getModalTemplate(activeModal.modalType);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: "fixed inset-0 z-modal bg-overlay flex items-center justify-center p-[1rem] select-none font-ui bg-cover bg-center bg-no-repeat overflow-hidden",
+        style,
+        onMouseDown: () => {
+          var _a2;
+          if (!document.hasFocus()) {
+            (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+          }
+        },
+        children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            ref: modalRef,
+            tabIndex: -1,
+            role: "dialog",
+            "aria-modal": "true",
+            "aria-label": activeModal.title,
+            className: modalContainerVariants({ size: activeModal.size || "md" }),
+            onClick: (e) => e.stopPropagation(),
+            children: CustomTemplate ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              CustomTemplate,
+              {
+                modal: activeModal,
+                values: controlValues,
+                onSubmit: submitModal
+              }
+            ) : /* @__PURE__ */ jsxRuntimeExports.jsx(GenericModalContent, { modal: activeModal })
+          }
+        )
+      }
+    );
+  };
+  const StatCards = () => {
+    const relationships = useMarasStore((s) => s.relationships);
+    const getCount = (status) => {
+      return relationships.filter(
+        (r2) => r2.status === status && (r2.actorA === PLAYER_FORM_ID || r2.actorB === PLAYER_FORM_ID)
+      ).length;
+    };
+    const stats = [
+      { label: "Married", count: getCount(RelationshipStatus.Married), icon: Crown, color: "text-accent-bright" },
+      { label: "Dating", count: getCount(RelationshipStatus.Dating), icon: Heart, color: "text-status-success" },
+      { label: "Lovers", count: getCount(RelationshipStatus.Lover), icon: Flame, color: "text-accent" },
+      { label: "Engaged", count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: "text-status-warning" },
+      { label: "Divorced", count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: "text-status-danger" }
+    ];
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-[0.75rem]", children: stats.map((stat, i) => {
+      const Icon2 = stat.icon;
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          className: "bg-panel-raised border border-border-subtle hover:border-border-strong rounded-md p-[0.75rem] flex flex-col justify-between transition-colors",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-foreground-muted mb-[0.25rem]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium uppercase tracking-wider", children: stat.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { className: `w-[1.125em] h-[1.125em] ${stat.color}` })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `text-2xl font-bold font-mono ${stat.color}`, children: stat.count })
+          ]
+        },
+        i
+      );
+    }) });
+  };
+  var __defProp$3 = Object.defineProperty;
+  var __name$3 = (target, value) => __defProp$3(target, "name", { value, configurable: true });
+  var PROGRESS_NAME = "Progress";
+  var DEFAULT_MAX = 100;
+  var [createProgressContext, createProgressScope] = /* @__PURE__ */ createContextScope(PROGRESS_NAME);
+  var [ProgressProvider, useProgressContext] = createProgressContext(PROGRESS_NAME);
+  var Progress$1 = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$3(function Progress2(props, forwardedRef) {
+      const {
+        __scopeProgress,
+        value: valueProp = null,
+        max: maxProp,
+        getValueLabel = defaultGetValueLabel,
+        ...progressProps
+      } = props;
+      if ((maxProp || maxProp === 0) && !isValidMaxNumber(maxProp)) {
+        console.error(getInvalidMaxError(`${maxProp}`, "Progress"));
+      }
+      const max2 = isValidMaxNumber(maxProp) ? maxProp : DEFAULT_MAX;
+      if (valueProp !== null && !isValidValueNumber(valueProp, max2)) {
+        console.error(getInvalidValueError(`${valueProp}`, "Progress"));
+      }
+      const value = isValidValueNumber(valueProp, max2) ? valueProp : null;
+      const valueLabel = isNumber(value) ? getValueLabel(value, max2) : void 0;
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(ProgressProvider, { scope: __scopeProgress, value, max: max2, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Primitive.div,
+        {
+          "aria-valuemax": max2,
+          "aria-valuemin": 0,
+          "aria-valuenow": isNumber(value) ? value : void 0,
+          "aria-valuetext": valueLabel,
+          role: "progressbar",
+          "data-state": getProgressState(value, max2),
+          "data-value": value ?? void 0,
+          "data-max": max2,
+          ...progressProps,
+          ref: forwardedRef
+        }
+      ) });
+    }, "Progress")
+  );
+  var INDICATOR_NAME = "ProgressIndicator";
+  var ProgressIndicator = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$3(function ProgressIndicator2(props, forwardedRef) {
+      const { __scopeProgress, ...indicatorProps } = props;
+      const context = useProgressContext(INDICATOR_NAME, __scopeProgress);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Primitive.div,
+        {
+          "data-state": getProgressState(context.value, context.max),
+          "data-value": context.value ?? void 0,
+          "data-max": context.max,
+          ...indicatorProps,
+          ref: forwardedRef
+        }
+      );
+    }, "ProgressIndicator")
+  );
+  function defaultGetValueLabel(value, max2) {
+    return `${Math.round(value / max2 * 100)}%`;
+  }
+  __name$3(defaultGetValueLabel, "defaultGetValueLabel");
+  function getProgressState(value, maxValue) {
+    return value == null ? "indeterminate" : value === maxValue ? "complete" : "loading";
+  }
+  __name$3(getProgressState, "getProgressState");
+  function isNumber(value) {
+    return typeof value === "number";
+  }
+  __name$3(isNumber, "isNumber");
+  function isValidMaxNumber(max2) {
+    return isNumber(max2) && !isNaN(max2) && max2 > 0;
+  }
+  __name$3(isValidMaxNumber, "isValidMaxNumber");
+  function isValidValueNumber(value, max2) {
+    return isNumber(value) && !isNaN(value) && value <= max2 && value >= 0;
+  }
+  __name$3(isValidValueNumber, "isValidValueNumber");
+  function getInvalidMaxError(propValue, componentName) {
+    return `Invalid prop \`max\` of value \`${propValue}\` supplied to \`${componentName}\`. Only numbers greater than 0 are valid max values. Defaulting to \`${DEFAULT_MAX}\`.`;
+  }
+  __name$3(getInvalidMaxError, "getInvalidMaxError");
+  function getInvalidValueError(propValue, componentName) {
+    return `Invalid prop \`value\` of value \`${propValue}\` supplied to \`${componentName}\`. The \`value\` prop must be:
+  - a positive number
+  - less than the value passed to \`max\` (or ${DEFAULT_MAX} if no \`max\` prop is set)
+  - \`null\` or \`undefined\` if the progress is indeterminate.
+
+Defaulting to \`null\`.`;
+  }
+  __name$3(getInvalidValueError, "getInvalidValueError");
+  var Root$1 = Progress$1;
+  var Indicator = ProgressIndicator;
+  const Progress = reactExports.forwardRef(({ className, value, indicatorClassName, ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    Root$1,
+    {
+      ref,
+      className: cn(
+        "relative h-2 w-full overflow-hidden rounded-full bg-panel-inset border border-border-subtle",
+        className
+      ),
+      ...props,
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Indicator,
+        {
+          className: cn("h-full w-full flex-1 bg-accent transition-all", indicatorClassName),
+          style: { transform: `translateX(-${100 - (value || 0)}%)` }
+        }
+      )
+    }
+  ));
+  Progress.displayName = Root$1.displayName;
+  const AffectionBar = ({
+    value,
+    size: size2 = "md",
+    showLabel = true,
+    className = ""
+  }) => {
+    const clampedValue = Math.round(Math.max(0, Math.min(100, value)));
+    let indicatorColor = "bg-accent";
+    if (clampedValue >= 70) {
+      indicatorColor = "bg-status-success";
+    } else if (clampedValue >= 40) {
+      indicatorColor = "bg-accent";
+    } else {
+      indicatorColor = "bg-status-warning";
+    }
+    const heightClass = size2 === "sm" ? "h-[0.375rem]" : size2 === "lg" ? "h-[0.75rem]" : "h-[0.5rem]";
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.5rem] w-full ${className}`, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Progress,
+        {
+          value: clampedValue,
+          className: `flex-1 ${heightClass}`,
+          indicatorClassName: indicatorColor
+        }
+      ),
+      showLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-mono font-semibold text-foreground-secondary min-w-[2.25rem] text-right", children: [
+        clampedValue,
+        "%"
+      ] })
+    ] });
+  };
+  function parseTraitEnum(val, enumObj, defaultValue) {
+    if (val === void 0 || val === null) return defaultValue;
+    if (typeof val === "number") return val in enumObj ? val : defaultValue;
+    if (!isNaN(Number(val))) {
+      const num = Number(val);
+      return num in enumObj ? num : defaultValue;
+    }
+    const lower = String(val).toLowerCase();
+    const keys = Object.keys(enumObj).filter((k2) => isNaN(Number(k2)));
+    const match = keys.find((k2) => k2.toLowerCase() === lower || lower.includes(k2.toLowerCase()));
+    return match !== void 0 ? enumObj[match] : defaultValue;
+  }
+  const parseSocialClass = (val) => parseTraitEnum(val, SocialClass, SocialClass.Middle);
+  const parseSkillType = (val) => parseTraitEnum(val, SkillType, SkillType.Warrior);
+  const parseTemperament = (val) => parseTraitEnum(val, Temperament, Temperament.Proud);
+  const getSocialClassLabel = (sc2) => SocialClass[parseSocialClass(sc2)] || "Middle";
+  const getSkillTypeLabel = (st) => SkillType[parseSkillType(st)] || "Warrior";
+  const getTemperamentLabel = (t2) => Temperament[parseTemperament(t2)] || "Proud";
+  const CUSTOM_ICON_NAMES = {
+    nobles: "noble",
+    rulers: "ruler",
+    working: "middle"
+  };
+  function getTraitIconUrl(category, val, variant = "default") {
+    const dir = variant === "square" ? "./assets/icons/squars" : "./assets/icons";
+    let rawName = "";
+    if (category === "socialClass") {
+      rawName = SocialClass[parseSocialClass(val)];
+    } else if (category === "skillType") {
+      rawName = SkillType[parseSkillType(val)];
+    } else {
+      rawName = Temperament[parseTemperament(val)];
+    }
+    const key = (rawName || "").toLowerCase();
+    const filename = CUSTOM_ICON_NAMES[key] || key;
+    return `${dir}/${filename}.png`;
+  }
+  const getSocialClassIconUrl = (sc2, variant) => getTraitIconUrl("socialClass", sc2, variant);
+  const getSkillTypeIconUrl = (st, variant) => getTraitIconUrl("skillType", st, variant);
+  const getTemperamentIconUrl = (t2, variant) => getTraitIconUrl("temperament", t2, variant);
+  function resolveSize(size2) {
+    if (!size2) return "1em";
+    switch (size2) {
+      case "xs":
+        return "0.875em";
+      case "sm":
+        return "1em";
+      case "md":
+        return "1.25em";
+      case "lg":
+        return "1.5em";
+      case "xl":
+        return "2em";
+      default:
+        return size2;
+    }
+  }
+  const TraitIconBase = React$2.forwardRef(
+    ({
+      iconUrl,
+      label,
+      category,
+      size: size2 = "md",
+      showLabel = false,
+      showTooltip = true,
+      className,
+      style,
+      alt,
+      ...props
+    }, ref) => {
+      const dim = resolveSize(size2);
+      const imgNode = /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "img",
+        {
+          ref,
+          src: iconUrl,
+          alt: alt || label,
+          style: { width: dim, height: dim, ...style },
+          className: cn("object-contain inline-block flex-shrink-0 align-middle", className),
+          ...props
+        }
+      );
+      const contentNode = showLabel ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.375em] text-xs font-medium text-foreground-primary", children: [
+        imgNode,
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
+      ] }) : imgNode;
+      if (showTooltip) {
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `${category}: ${label}`, children: contentNode });
+      }
+      return contentNode;
+    }
+  );
+  TraitIconBase.displayName = "TraitIconBase";
+  function TraitBadgeBase({
+    category,
+    label,
+    icon,
+    size: size2 = "md",
+    showIconOnly = false,
+    className
+  }) {
+    const sizeClasses = size2 === "sm" ? showIconOnly ? "p-[0.125rem]" : "text-[0.6875rem] px-[0.375rem] py-[0.125rem] gap-[0.25rem]" : size2 === "md" ? showIconOnly ? "p-[0.25rem]" : "text-xs px-[0.5rem] py-[0.25rem] gap-[0.375rem]" : showIconOnly ? "p-[0.5rem]" : "text-sm px-[0.75rem] py-[0.375rem] gap-[0.5rem]";
+    const badgeNode = /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "span",
+      {
+        className: cn(
+          "inline-flex items-center rounded-md font-medium bg-panel-inset border border-border-subtle text-foreground-secondary hover:border-border-strong transition-colors cursor-pointer",
+          sizeClasses,
+          className
+        ),
+        children: [
+          icon,
+          !showIconOnly && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
+        ]
+      }
+    );
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `${category}: ${label}`, children: badgeNode });
+  }
+  const SocialClassIcon = React$2.forwardRef(
+    (props, ref) => {
+      const sc2 = parseSocialClass(props.value);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        TraitIconBase,
+        {
+          ref,
+          category: "Social Class",
+          label: getSocialClassLabel(sc2),
+          iconUrl: getSocialClassIconUrl(sc2, props.variant),
+          ...props
+        }
+      );
+    }
+  );
+  SocialClassIcon.displayName = "SocialClassIcon";
+  const SkillTypeIcon = React$2.forwardRef(
+    (props, ref) => {
+      const st = parseSkillType(props.value);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        TraitIconBase,
+        {
+          ref,
+          category: "Skill Class",
+          label: getSkillTypeLabel(st),
+          iconUrl: getSkillTypeIconUrl(st, props.variant),
+          ...props
+        }
+      );
+    }
+  );
+  SkillTypeIcon.displayName = "SkillTypeIcon";
+  const TemperamentIcon = React$2.forwardRef(
+    (props, ref) => {
+      const tp = parseTemperament(props.value);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        TraitIconBase,
+        {
+          ref,
+          category: "Temperament",
+          label: getTemperamentLabel(tp),
+          iconUrl: getTemperamentIconUrl(tp, props.variant),
+          ...props
+        }
+      );
+    }
+  );
+  TemperamentIcon.displayName = "TemperamentIcon";
+  const SocialClassBadge = (props) => {
+    const sc2 = parseSocialClass(props.value);
+    const label = getSocialClassLabel(sc2);
+    const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      TraitBadgeBase,
+      {
+        category: "Social Class",
+        label,
+        icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SocialClassIcon,
+          {
+            value: sc2,
+            size: iconSize,
+            variant: props.variant,
+            className: props.iconClassName,
+            showTooltip: false
+          }
+        ),
+        ...props
+      }
+    );
+  };
+  const SkillTypeBadge = (props) => {
+    const st = parseSkillType(props.value);
+    const label = getSkillTypeLabel(st);
+    const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      TraitBadgeBase,
+      {
+        category: "Skill Class",
+        label,
+        icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SkillTypeIcon,
+          {
+            value: st,
+            size: iconSize,
+            variant: props.variant,
+            className: props.iconClassName,
+            showTooltip: false
+          }
+        ),
+        ...props
+      }
+    );
+  };
+  const TemperamentBadge = (props) => {
+    const tp = parseTemperament(props.value);
+    const label = getTemperamentLabel(tp);
+    const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      TraitBadgeBase,
+      {
+        category: "Temperament",
+        label,
+        icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          TemperamentIcon,
+          {
+            value: tp,
+            size: iconSize,
+            variant: props.variant,
+            className: props.iconClassName,
+            showTooltip: false
+          }
+        ),
+        ...props
+      }
+    );
+  };
+  const NpcTraitBadges = ({
+    npc,
+    socialClass,
+    skillType,
+    temperament,
+    size: size2 = "sm",
+    variant = "default",
+    showIconOnly = false,
+    className
+  }) => {
+    const sc2 = (npc == null ? void 0 : npc.socialClass) !== void 0 ? npc.socialClass : socialClass;
+    const st = (npc == null ? void 0 : npc.skillType) !== void 0 ? npc.skillType : skillType;
+    const tp = (npc == null ? void 0 : npc.temperament) !== void 0 ? npc.temperament : temperament;
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: cn("inline-flex items-center gap-[0.25rem] flex-wrap", className), children: [
+      sc2 !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(SocialClassBadge, { value: sc2, size: size2, variant, showIconOnly }),
+      st !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(SkillTypeBadge, { value: st, size: size2, variant, showIconOnly }),
+      tp !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(TemperamentBadge, { value: tp, size: size2, variant, showIconOnly })
+    ] });
+  };
+  const HierarchyDisplay = () => {
+    const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks);
+    const npcProfiles = useMarasStore((s) => s.npcProfiles);
+    const affectionData = useMarasStore((s) => s.affectionData);
+    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
+    const rankBadges = [
+      { rank: "1st Spouse", icon: Crown, color: "text-amber-400 border-amber-500/30" },
+      { rank: "2nd Spouse", icon: Medal, color: "text-slate-300 border-slate-400/30" },
+      { rank: "3rd Spouse", icon: Award, color: "text-amber-600 border-amber-700/30" }
+    ];
+    const handleCardClick = (formId) => {
+      if (formId) {
+        openNpcDetail(formId);
+      }
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.75rem]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-base font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Crown, { className: "w-[1.125em] h-[1.125em] text-accent" }),
+          " Spouse Hierarchy (Top 3 Ranks)"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: "Managed via Marriage & Spouse Assets" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-[0.75rem]", children: rankBadges.map((badge, idx) => {
+        var _a2;
+        const formId = hierarchyRanks[idx];
+        const npc = formId ? npcProfiles.get(formId) : null;
+        const affection = formId ? ((_a2 = affectionData.get(formId)) == null ? void 0 : _a2.permanent) ?? 0 : 0;
+        const Icon2 = badge.icon;
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            onClick: () => formId && handleCardClick(formId),
+            className: `bg-panel-raised border rounded-md p-[0.875rem] flex flex-col justify-between transition-all ${formId ? "border-border-strong hover:border-border-accent cursor-pointer hover:shadow-raised" : "border-border-divider border-dashed opacity-60"}`,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-[0.5rem]", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `text-xs font-semibold px-[0.5rem] py-[0.125rem] rounded-full border bg-panel flex items-center gap-[0.25rem] ${badge.color}`, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { className: "w-[1em] h-[1em]" }),
+                  " ",
+                  badge.rank
+                ] }),
+                formId && /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: RelationshipStatus.Married })
+              ] }),
+              npc ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem]", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-base font-semibold text-foreground-primary", children: npc.name }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-foreground-secondary mb-[0.25rem] flex items-center gap-[0.25rem] flex-wrap", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.race }),
+                    npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.currentHome || "No Home Set" })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc, size: "md" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" })
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "py-[1rem] text-center text-xs text-foreground-muted italic", children: "Unassigned Rank Slot" })
+            ]
+          },
+          idx
+        );
+      }) })
+    ] });
+  };
+  var __defProp$2 = Object.defineProperty;
+  var __name$2 = (target, value) => __defProp$2(target, "name", { value, configurable: true });
+  function useStateMachine(initialState, machine) {
+    return reactExports.useReducer((state, event) => {
+      const nextState = machine[state][event];
+      return nextState ?? state;
+    }, initialState);
+  }
+  __name$2(useStateMachine, "useStateMachine");
+  var SCROLL_AREA_NAME = "ScrollArea";
+  var [createScrollAreaContext, createScrollAreaScope] = /* @__PURE__ */ createContextScope(SCROLL_AREA_NAME);
+  var [ScrollAreaProvider, useScrollAreaContext] = createScrollAreaContext(SCROLL_AREA_NAME);
+  var ScrollArea$1 = /* @__PURE__ */ reactExports.forwardRef(
+    /* @__PURE__ */ __name$2(function ScrollArea2(props, forwardedRef) {
+      const {
+        __scopeScrollArea,
+        type = "hover",
+        dir,
+        scrollHideDelay = 600,
+        ...scrollAreaProps
+      } = props;
+      const [scrollArea, setScrollArea] = reactExports.useState(null);
+      const [viewport, setViewport] = reactExports.useState(null);
+      const [content, setContent] = reactExports.useState(null);
+      const [scrollbarX, setScrollbarX] = reactExports.useState(null);
+      const [scrollbarY, setScrollbarY] = reactExports.useState(null);
+      const [cornerWidth, setCornerWidth] = reactExports.useState(0);
+      const [cornerHeight, setCornerHeight] = reactExports.useState(0);
+      const [scrollbarXEnabled, setScrollbarXEnabled] = reactExports.useState(false);
+      const [scrollbarYEnabled, setScrollbarYEnabled] = reactExports.useState(false);
+      const composedRefs = useComposedRefs(forwardedRef, setScrollArea);
+      const direction = useDirection(dir);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ScrollAreaProvider,
+        {
+          scope: __scopeScrollArea,
+          type,
+          dir: direction,
+          scrollHideDelay,
+          scrollArea,
+          viewport,
+          onViewportChange: setViewport,
+          content,
+          onContentChange: setContent,
+          scrollbarX,
+          onScrollbarXChange: setScrollbarX,
+          scrollbarXEnabled,
+          onScrollbarXEnabledChange: setScrollbarXEnabled,
+          scrollbarY,
+          onScrollbarYChange: setScrollbarY,
+          scrollbarYEnabled,
+          onScrollbarYEnabledChange: setScrollbarYEnabled,
+          onCornerWidthChange: setCornerWidth,
+          onCornerHeightChange: setCornerHeight,
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Primitive.div,
+            {
+              dir: direction,
+              ...scrollAreaProps,
+              ref: composedRefs,
+              style: {
+                position: "relative",
+                // Pass corner sizes as CSS vars to reduce re-renders of context consumers
+                "--radix-scroll-area-corner-width": cornerWidth + "px",
+                "--radix-scroll-area-corner-height": cornerHeight + "px",
+                ...props.style
+              }
+            }
+          )
+        }
+      );
+    }, "ScrollArea")
+  );
+  var VIEWPORT_NAME = "ScrollAreaViewport";
+  var ScrollAreaViewport = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$2(function ScrollAreaViewport2(props, forwardedRef) {
+      const { __scopeScrollArea, children, nonce, ...viewportProps } = props;
+      const context = useScrollAreaContext(VIEWPORT_NAME, __scopeScrollArea);
+      const ref = reactExports.useRef(null);
+      const composedRefs = useComposedRefs(forwardedRef, ref, context.onViewportChange);
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaViewportStyle, { nonce }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Primitive.div,
+          {
+            "data-radix-scroll-area-viewport": "",
+            ...viewportProps,
+            ref: composedRefs,
+            style: {
+              /**
+               * We don't support `visible` because the intention is to have at least one scrollbar
+               * if this component is used and `visible` will behave like `auto` in that case
+               * https://developer.mozilla.org/en-US/docs/Web/CSS/overflow#description
+               *
+               * We don't handle `auto` because the intention is for the native implementation
+               * to be hidden if using this component. We just want to ensure the node is scrollable
+               * so could have used either `scroll` or `auto` here. We picked `scroll` to prevent
+               * the browser from having to work out whether to render native scrollbars or not,
+               * we tell it to with the intention of hiding them in CSS.
+               */
+              overflowX: context.scrollbarXEnabled ? "scroll" : "hidden",
+              overflowY: context.scrollbarYEnabled ? "scroll" : "hidden",
+              ...props.style
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: context.onContentChange, style: { minWidth: "100%", display: "table" }, children })
+          }
+        )
+      ] });
+    }, "ScrollAreaViewport")
+  );
+  var ScrollAreaViewportStyle = /* @__PURE__ */ reactExports.memo(
+    /* @__PURE__ */ __name$2(function ScrollAreaViewportStyle2({ nonce }) {
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "style",
+        {
+          dangerouslySetInnerHTML: {
+            __html: `[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}`
+          },
+          nonce
+        }
+      );
+    }, "ScrollAreaViewportStyle"),
+    (prevProps, nextProps) => prevProps.nonce === nextProps.nonce
+  );
+  var SCROLLBAR_NAME = "ScrollAreaScrollbar";
+  var ScrollAreaScrollbar = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$2(function ScrollAreaScrollbar2(props, forwardedRef) {
+      const { forceMount, ...scrollbarProps } = props;
+      const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+      const { onScrollbarXEnabledChange, onScrollbarYEnabledChange } = context;
+      const isHorizontal = props.orientation === "horizontal";
+      reactExports.useEffect(() => {
+        isHorizontal ? onScrollbarXEnabledChange(true) : onScrollbarYEnabledChange(true);
+        return () => {
+          isHorizontal ? onScrollbarXEnabledChange(false) : onScrollbarYEnabledChange(false);
+        };
+      }, [isHorizontal, onScrollbarXEnabledChange, onScrollbarYEnabledChange]);
+      return context.type === "hover" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarHover, { ...scrollbarProps, ref: forwardedRef, forceMount }) : context.type === "scroll" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarScroll, { ...scrollbarProps, ref: forwardedRef, forceMount }) : context.type === "auto" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarAuto, { ...scrollbarProps, ref: forwardedRef, forceMount }) : context.type === "always" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaScrollbarVisible, { ...scrollbarProps, ref: forwardedRef, "data-state": "visible" }) : null;
+    }, "ScrollAreaScrollbar")
+  );
+  var ScrollAreaScrollbarHover = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarHover2(props, forwardedRef) {
+    const { forceMount, ...scrollbarProps } = props;
+    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+    const [visible, setVisible] = reactExports.useState(false);
+    reactExports.useEffect(() => {
+      const scrollArea = context.scrollArea;
+      let hideTimer = 0;
+      if (scrollArea) {
+        const handlePointerEnter = /* @__PURE__ */ __name$2(() => {
+          window.clearTimeout(hideTimer);
+          setVisible(true);
+        }, "handlePointerEnter");
+        const handlePointerLeave = /* @__PURE__ */ __name$2(() => {
+          hideTimer = window.setTimeout(() => setVisible(false), context.scrollHideDelay);
+        }, "handlePointerLeave");
+        scrollArea.addEventListener("pointerenter", handlePointerEnter);
+        scrollArea.addEventListener("pointerleave", handlePointerLeave);
+        return () => {
+          window.clearTimeout(hideTimer);
+          scrollArea.removeEventListener("pointerenter", handlePointerEnter);
+          scrollArea.removeEventListener("pointerleave", handlePointerLeave);
+        };
+      }
+    }, [context.scrollArea, context.scrollHideDelay]);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || visible, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ScrollAreaScrollbarAuto,
+      {
+        "data-state": visible ? "visible" : "hidden",
+        ...scrollbarProps,
+        ref: forwardedRef
+      }
+    ) });
+  }, "ScrollAreaScrollbarHover"));
+  var ScrollAreaScrollbarScroll = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarScroll2(props, forwardedRef) {
+    const { forceMount, ...scrollbarProps } = props;
+    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+    const isHorizontal = props.orientation === "horizontal";
+    const debounceScrollEnd = useDebounceCallback(() => send("SCROLL_END"), 100);
+    const [state, send] = useStateMachine("hidden", {
+      hidden: {
+        SCROLL: "scrolling"
+      },
+      scrolling: {
+        SCROLL_END: "idle",
+        POINTER_ENTER: "interacting"
+      },
+      interacting: {
+        SCROLL: "interacting",
+        POINTER_LEAVE: "idle"
+      },
+      idle: {
+        HIDE: "hidden",
+        SCROLL: "scrolling",
+        POINTER_ENTER: "interacting"
+      }
+    });
+    reactExports.useEffect(() => {
+      if (state === "idle") {
+        const hideTimer = window.setTimeout(() => send("HIDE"), context.scrollHideDelay);
+        return () => window.clearTimeout(hideTimer);
+      }
+    }, [state, context.scrollHideDelay, send]);
+    reactExports.useEffect(() => {
+      const viewport = context.viewport;
+      const scrollDirection = isHorizontal ? "scrollLeft" : "scrollTop";
+      if (viewport) {
+        let prevScrollPos = viewport[scrollDirection];
+        const handleScroll2 = /* @__PURE__ */ __name$2(() => {
+          const scrollPos = viewport[scrollDirection];
+          const hasScrollInDirectionChanged = prevScrollPos !== scrollPos;
+          if (hasScrollInDirectionChanged) {
+            send("SCROLL");
+            debounceScrollEnd();
+          }
+          prevScrollPos = scrollPos;
+        }, "handleScroll");
+        viewport.addEventListener("scroll", handleScroll2);
+        return () => viewport.removeEventListener("scroll", handleScroll2);
+      }
+    }, [context.viewport, isHorizontal, send, debounceScrollEnd]);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || state !== "hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ScrollAreaScrollbarVisible,
+      {
+        "data-state": state === "hidden" ? "hidden" : "visible",
+        ...scrollbarProps,
+        ref: forwardedRef,
+        onPointerEnter: composeEventHandlers(props.onPointerEnter, () => send("POINTER_ENTER")),
+        onPointerLeave: composeEventHandlers(props.onPointerLeave, () => send("POINTER_LEAVE"))
+      }
+    ) });
+  }, "ScrollAreaScrollbarScroll"));
+  var ScrollAreaScrollbarAuto = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarAuto2(props, forwardedRef) {
+    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+    const { forceMount, ...scrollbarProps } = props;
+    const [visible, setVisible] = reactExports.useState(false);
+    const isHorizontal = props.orientation === "horizontal";
+    const handleResize = useDebounceCallback(() => {
+      if (context.viewport) {
+        const isOverflowX = context.viewport.offsetWidth < context.viewport.scrollWidth;
+        const isOverflowY = context.viewport.offsetHeight < context.viewport.scrollHeight;
+        setVisible(isHorizontal ? isOverflowX : isOverflowY);
+      }
+    }, 10);
+    useResizeObserver(context.viewport, handleResize);
+    useResizeObserver(context.content, handleResize);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || visible, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ScrollAreaScrollbarVisible,
+      {
+        "data-state": visible ? "visible" : "hidden",
+        ...scrollbarProps,
+        ref: forwardedRef
+      }
+    ) });
+  }, "ScrollAreaScrollbarAuto"));
+  var ScrollAreaScrollbarVisible = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarVisible2(props, forwardedRef) {
+    const { orientation = "vertical", ...scrollbarProps } = props;
+    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+    const thumbRef = reactExports.useRef(null);
+    const pointerOffsetRef = reactExports.useRef(0);
+    const [sizes, setSizes] = reactExports.useState({
+      content: 0,
+      viewport: 0,
+      scrollbar: { size: 0, paddingStart: 0, paddingEnd: 0 }
+    });
+    const thumbRatio = getThumbRatio(sizes.viewport, sizes.content);
+    const commonProps = {
+      ...scrollbarProps,
+      sizes,
+      onSizesChange: setSizes,
+      hasThumb: Boolean(thumbRatio > 0 && thumbRatio < 1),
+      onThumbChange: /* @__PURE__ */ __name$2((thumb) => thumbRef.current = thumb, "onThumbChange"),
+      onThumbPointerUp: /* @__PURE__ */ __name$2(() => pointerOffsetRef.current = 0, "onThumbPointerUp"),
+      onThumbPointerDown: /* @__PURE__ */ __name$2((pointerPos) => pointerOffsetRef.current = pointerPos, "onThumbPointerDown")
+    };
+    function getScrollPosition(pointerPos, dir) {
+      return getScrollPositionFromPointer(pointerPos, pointerOffsetRef.current, sizes, dir);
+    }
+    __name$2(getScrollPosition, "getScrollPosition");
+    if (orientation === "horizontal") {
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ScrollAreaScrollbarX,
+        {
+          ...commonProps,
+          ref: forwardedRef,
+          onThumbPositionChange: () => {
+            if (context.viewport && thumbRef.current) {
+              const scrollPos = context.viewport.scrollLeft;
+              const offset2 = getThumbOffsetFromScroll(scrollPos, sizes, context.dir);
+              thumbRef.current.style.transform = `translate3d(${offset2}px, 0, 0)`;
+            }
+          },
+          onWheelScroll: (scrollPos) => {
+            if (context.viewport) context.viewport.scrollLeft = scrollPos;
+          },
+          onDragScroll: (pointerPos) => {
+            if (context.viewport) {
+              context.viewport.scrollLeft = getScrollPosition(pointerPos, context.dir);
+            }
+          }
+        }
+      );
+    }
+    if (orientation === "vertical") {
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ScrollAreaScrollbarY,
+        {
+          ...commonProps,
+          ref: forwardedRef,
+          onThumbPositionChange: () => {
+            if (context.viewport && thumbRef.current) {
+              const scrollPos = context.viewport.scrollTop;
+              const offset2 = getThumbOffsetFromScroll(scrollPos, sizes);
+              thumbRef.current.style.transform = `translate3d(0, ${offset2}px, 0)`;
+            }
+          },
+          onWheelScroll: (scrollPos) => {
+            if (context.viewport) context.viewport.scrollTop = scrollPos;
+          },
+          onDragScroll: (pointerPos) => {
+            if (context.viewport) context.viewport.scrollTop = getScrollPosition(pointerPos);
+          }
+        }
+      );
+    }
+    return null;
+  }, "ScrollAreaScrollbarVisible"));
+  var ScrollAreaScrollbarX = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarX2(props, forwardedRef) {
+    const { sizes, onSizesChange, ...scrollbarProps } = props;
+    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+    const [computedStyle, setComputedStyle] = reactExports.useState();
+    const ref = reactExports.useRef(null);
+    const composeRefs2 = useComposedRefs(forwardedRef, ref, context.onScrollbarXChange);
+    reactExports.useEffect(() => {
+      if (ref.current) setComputedStyle(getComputedStyle(ref.current));
+    }, [ref]);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ScrollAreaScrollbarImpl,
+      {
+        "data-orientation": "horizontal",
+        ...scrollbarProps,
+        ref: composeRefs2,
+        sizes,
+        style: {
+          bottom: 0,
+          left: context.dir === "rtl" ? "var(--radix-scroll-area-corner-width)" : 0,
+          right: context.dir === "ltr" ? "var(--radix-scroll-area-corner-width)" : 0,
+          "--radix-scroll-area-thumb-width": getThumbSize(sizes) + "px",
+          ...props.style
+        },
+        onThumbPointerDown: (pointerPos) => props.onThumbPointerDown(pointerPos.x),
+        onDragScroll: (pointerPos) => props.onDragScroll(pointerPos.x),
+        onWheelScroll: (event, maxScrollPos) => {
+          if (context.viewport) {
+            const scrollPos = context.viewport.scrollLeft + event.deltaX;
+            props.onWheelScroll(scrollPos);
+            if (isScrollingWithinScrollbarBounds(scrollPos, maxScrollPos)) {
+              event.preventDefault();
+            }
+          }
+        },
+        onResize: () => {
+          if (ref.current && context.viewport && computedStyle) {
+            onSizesChange({
+              content: context.viewport.scrollWidth,
+              viewport: context.viewport.offsetWidth,
+              scrollbar: {
+                size: ref.current.clientWidth,
+                paddingStart: toInt(computedStyle.paddingLeft),
+                paddingEnd: toInt(computedStyle.paddingRight)
+              }
+            });
+          }
+        }
+      }
+    );
+  }, "ScrollAreaScrollbarX"));
+  var ScrollAreaScrollbarY = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarY2(props, forwardedRef) {
+    const { sizes, onSizesChange, ...scrollbarProps } = props;
+    const context = useScrollAreaContext(SCROLLBAR_NAME, props.__scopeScrollArea);
+    const [computedStyle, setComputedStyle] = reactExports.useState();
+    const ref = reactExports.useRef(null);
+    const composeRefs2 = useComposedRefs(forwardedRef, ref, context.onScrollbarYChange);
+    reactExports.useEffect(() => {
+      if (ref.current) setComputedStyle(getComputedStyle(ref.current));
+    }, [ref]);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ScrollAreaScrollbarImpl,
+      {
+        "data-orientation": "vertical",
+        ...scrollbarProps,
+        ref: composeRefs2,
+        sizes,
+        style: {
+          top: 0,
+          right: context.dir === "ltr" ? 0 : void 0,
+          left: context.dir === "rtl" ? 0 : void 0,
+          bottom: "var(--radix-scroll-area-corner-height)",
+          "--radix-scroll-area-thumb-height": getThumbSize(sizes) + "px",
+          ...props.style
+        },
+        onThumbPointerDown: (pointerPos) => props.onThumbPointerDown(pointerPos.y),
+        onDragScroll: (pointerPos) => props.onDragScroll(pointerPos.y),
+        onWheelScroll: (event, maxScrollPos) => {
+          if (context.viewport) {
+            const scrollPos = context.viewport.scrollTop + event.deltaY;
+            props.onWheelScroll(scrollPos);
+            if (isScrollingWithinScrollbarBounds(scrollPos, maxScrollPos)) {
+              event.preventDefault();
+            }
+          }
+        },
+        onResize: () => {
+          if (ref.current && context.viewport && computedStyle) {
+            onSizesChange({
+              content: context.viewport.scrollHeight,
+              viewport: context.viewport.offsetHeight,
+              scrollbar: {
+                size: ref.current.clientHeight,
+                paddingStart: toInt(computedStyle.paddingTop),
+                paddingEnd: toInt(computedStyle.paddingBottom)
+              }
+            });
+          }
+        }
+      }
+    );
+  }, "ScrollAreaScrollbarY"));
+  var [ScrollbarProvider, useScrollbarContext] = createScrollAreaContext(SCROLLBAR_NAME);
+  var ScrollAreaScrollbarImpl = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaScrollbarImpl2(props, forwardedRef) {
+    const {
+      __scopeScrollArea,
+      sizes,
+      hasThumb,
+      onThumbChange,
+      onThumbPointerUp,
+      onThumbPointerDown,
+      onThumbPositionChange,
+      onDragScroll,
+      onWheelScroll,
+      onResize,
+      ...scrollbarProps
+    } = props;
+    const context = useScrollAreaContext(SCROLLBAR_NAME, __scopeScrollArea);
+    const [scrollbar, setScrollbar] = reactExports.useState(null);
+    const composeRefs2 = useComposedRefs(forwardedRef, setScrollbar);
+    const rectRef = reactExports.useRef(null);
+    const prevWebkitUserSelectRef = reactExports.useRef("");
+    const viewport = context.viewport;
+    const maxScrollPos = sizes.content - sizes.viewport;
+    const handleWheelScroll = useCallbackRef$1(onWheelScroll);
+    const handleThumbPositionChange = useCallbackRef$1(onThumbPositionChange);
+    const handleResize = useDebounceCallback(onResize, 10);
+    function handleDragScroll(event) {
+      if (rectRef.current) {
+        const x2 = event.clientX - rectRef.current.left;
+        const y2 = event.clientY - rectRef.current.top;
+        onDragScroll({ x: x2, y: y2 });
+      }
+    }
+    __name$2(handleDragScroll, "handleDragScroll");
+    reactExports.useEffect(() => {
+      const handleWheel = /* @__PURE__ */ __name$2((event) => {
+        const element = event.target;
+        const isScrollbarWheel = scrollbar == null ? void 0 : scrollbar.contains(element);
+        if (isScrollbarWheel) handleWheelScroll(event, maxScrollPos);
+      }, "handleWheel");
+      document.addEventListener("wheel", handleWheel, { passive: false });
+      return () => document.removeEventListener("wheel", handleWheel, { passive: false });
+    }, [viewport, scrollbar, maxScrollPos, handleWheelScroll]);
+    reactExports.useEffect(handleThumbPositionChange, [sizes, handleThumbPositionChange]);
+    useResizeObserver(scrollbar, handleResize);
+    useResizeObserver(context.content, handleResize);
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ScrollbarProvider,
+      {
+        scope: __scopeScrollArea,
+        scrollbar,
+        hasThumb,
+        onThumbChange: useCallbackRef$1(onThumbChange),
+        onThumbPointerUp: useCallbackRef$1(onThumbPointerUp),
+        onThumbPositionChange: handleThumbPositionChange,
+        onThumbPointerDown: useCallbackRef$1(onThumbPointerDown),
+        children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Primitive.div,
+          {
+            ...scrollbarProps,
+            ref: composeRefs2,
+            style: { position: "absolute", ...scrollbarProps.style },
+            onPointerDown: composeEventHandlers(props.onPointerDown, (event) => {
+              const mainPointer = 0;
+              if (event.button === mainPointer) {
+                const element = event.target;
+                element.setPointerCapture(event.pointerId);
+                rectRef.current = scrollbar.getBoundingClientRect();
+                prevWebkitUserSelectRef.current = document.body.style.webkitUserSelect;
+                document.body.style.webkitUserSelect = "none";
+                if (context.viewport) context.viewport.style.scrollBehavior = "auto";
+                handleDragScroll(event);
+              }
+            }),
+            onPointerMove: composeEventHandlers(props.onPointerMove, handleDragScroll),
+            onPointerUp: composeEventHandlers(props.onPointerUp, (event) => {
+              const element = event.target;
+              if (element.hasPointerCapture(event.pointerId)) {
+                element.releasePointerCapture(event.pointerId);
+              }
+              document.body.style.webkitUserSelect = prevWebkitUserSelectRef.current;
+              if (context.viewport) context.viewport.style.scrollBehavior = "";
+              rectRef.current = null;
+            })
+          }
+        )
+      }
+    );
+  }, "ScrollAreaScrollbarImpl"));
+  var THUMB_NAME$2 = "ScrollAreaThumb";
+  var ScrollAreaThumb = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$2(function ScrollAreaThumb2(props, forwardedRef) {
+      const { forceMount, ...thumbProps } = props;
+      const scrollbarContext = useScrollbarContext(THUMB_NAME$2, props.__scopeScrollArea);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(Presence, { present: forceMount || scrollbarContext.hasThumb, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaThumbImpl, { ref: forwardedRef, ...thumbProps }) });
+    }, "ScrollAreaThumb")
+  );
+  var ScrollAreaThumbImpl = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$2(function ScrollAreaThumbImpl2(props, forwardedRef) {
+      const { __scopeScrollArea, style, ...thumbProps } = props;
+      const scrollAreaContext = useScrollAreaContext(THUMB_NAME$2, __scopeScrollArea);
+      const scrollbarContext = useScrollbarContext(THUMB_NAME$2, __scopeScrollArea);
+      const { onThumbPositionChange } = scrollbarContext;
+      const composedRef = useComposedRefs(forwardedRef, scrollbarContext.onThumbChange);
+      const removeUnlinkedScrollListenerRef = reactExports.useRef(void 0);
+      const debounceScrollEnd = useDebounceCallback(() => {
+        if (removeUnlinkedScrollListenerRef.current) {
+          removeUnlinkedScrollListenerRef.current();
+          removeUnlinkedScrollListenerRef.current = void 0;
+        }
+      }, 100);
+      reactExports.useEffect(() => {
+        const viewport = scrollAreaContext.viewport;
+        if (viewport) {
+          const handleScroll2 = /* @__PURE__ */ __name$2(() => {
+            debounceScrollEnd();
+            if (!removeUnlinkedScrollListenerRef.current) {
+              const listener = addUnlinkedScrollListener(viewport, onThumbPositionChange);
+              removeUnlinkedScrollListenerRef.current = listener;
+              onThumbPositionChange();
+            }
+          }, "handleScroll");
+          onThumbPositionChange();
+          viewport.addEventListener("scroll", handleScroll2);
+          return () => viewport.removeEventListener("scroll", handleScroll2);
+        }
+      }, [scrollAreaContext.viewport, debounceScrollEnd, onThumbPositionChange]);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Primitive.div,
+        {
+          "data-state": scrollbarContext.hasThumb ? "visible" : "hidden",
+          ...thumbProps,
+          ref: composedRef,
+          style: {
+            width: "var(--radix-scroll-area-thumb-width)",
+            height: "var(--radix-scroll-area-thumb-height)",
+            ...style
+          },
+          onPointerDownCapture: composeEventHandlers(props.onPointerDownCapture, (event) => {
+            const thumb = event.target;
+            const thumbRect = thumb.getBoundingClientRect();
+            const x2 = event.clientX - thumbRect.left;
+            const y2 = event.clientY - thumbRect.top;
+            scrollbarContext.onThumbPointerDown({ x: x2, y: y2 });
+          }),
+          onPointerUp: composeEventHandlers(props.onPointerUp, scrollbarContext.onThumbPointerUp)
+        }
+      );
+    }, "ScrollAreaThumbImpl")
+  );
+  var CORNER_NAME = "ScrollAreaCorner";
+  var ScrollAreaCorner = /* @__PURE__ */ reactExports.forwardRef(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name$2(function ScrollAreaCorner2(props, forwardedRef) {
+      const context = useScrollAreaContext(CORNER_NAME, props.__scopeScrollArea);
+      const hasBothScrollbarsVisible = Boolean(context.scrollbarX && context.scrollbarY);
+      const hasCorner = context.type !== "scroll" && hasBothScrollbarsVisible;
+      return hasCorner ? /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaCornerImpl, { ...props, ref: forwardedRef }) : null;
+    }, "ScrollAreaCorner")
+  );
+  var ScrollAreaCornerImpl = /* @__PURE__ */ reactExports.forwardRef(/* @__PURE__ */ __name$2(function ScrollAreaCornerImpl2(props, forwardedRef) {
+    const { __scopeScrollArea, ...cornerProps } = props;
+    const context = useScrollAreaContext(CORNER_NAME, __scopeScrollArea);
+    const [width, setWidth] = reactExports.useState(0);
+    const [height, setHeight] = reactExports.useState(0);
+    const hasSize = Boolean(width && height);
+    const { onCornerWidthChange, onCornerHeightChange } = context;
+    useResizeObserver(context.scrollbarX, () => {
+      var _a2;
+      const height2 = ((_a2 = context.scrollbarX) == null ? void 0 : _a2.offsetHeight) || 0;
+      context.onCornerHeightChange(height2);
+      setHeight(height2);
+    });
+    useResizeObserver(context.scrollbarY, () => {
+      var _a2;
+      const width2 = ((_a2 = context.scrollbarY) == null ? void 0 : _a2.offsetWidth) || 0;
+      context.onCornerWidthChange(width2);
+      setWidth(width2);
+    });
+    reactExports.useEffect(() => {
+      return () => {
+        onCornerWidthChange(0);
+        onCornerHeightChange(0);
+      };
+    }, [onCornerWidthChange, onCornerHeightChange]);
+    return hasSize ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Primitive.div,
+      {
+        ...cornerProps,
+        ref: forwardedRef,
+        style: {
+          width,
+          height,
+          position: "absolute",
+          right: context.dir === "ltr" ? 0 : void 0,
+          left: context.dir === "rtl" ? 0 : void 0,
+          bottom: 0,
+          ...props.style
+        }
+      }
+    ) : null;
+  }, "ScrollAreaCornerImpl"));
+  function toInt(value) {
+    return value ? parseInt(value, 10) : 0;
+  }
+  __name$2(toInt, "toInt");
+  function getThumbRatio(viewportSize, contentSize) {
+    const ratio = viewportSize / contentSize;
+    return isNaN(ratio) ? 0 : ratio;
+  }
+  __name$2(getThumbRatio, "getThumbRatio");
+  function getThumbSize(sizes) {
+    const ratio = getThumbRatio(sizes.viewport, sizes.content);
+    const scrollbarPadding = sizes.scrollbar.paddingStart + sizes.scrollbar.paddingEnd;
+    const thumbSize = (sizes.scrollbar.size - scrollbarPadding) * ratio;
+    return Math.max(thumbSize, 18);
+  }
+  __name$2(getThumbSize, "getThumbSize");
+  function getScrollPositionFromPointer(pointerPos, pointerOffset, sizes, dir = "ltr") {
+    const thumbSizePx = getThumbSize(sizes);
+    const thumbCenter = thumbSizePx / 2;
+    const offset2 = pointerOffset || thumbCenter;
+    const thumbOffsetFromEnd = thumbSizePx - offset2;
+    const minPointerPos = sizes.scrollbar.paddingStart + offset2;
+    const maxPointerPos = sizes.scrollbar.size - sizes.scrollbar.paddingEnd - thumbOffsetFromEnd;
+    const maxScrollPos = sizes.content - sizes.viewport;
+    const scrollRange = dir === "ltr" ? [0, maxScrollPos] : [maxScrollPos * -1, 0];
+    const interpolate = linearScale$1([minPointerPos, maxPointerPos], scrollRange);
+    return interpolate(pointerPos);
+  }
+  __name$2(getScrollPositionFromPointer, "getScrollPositionFromPointer");
+  function getThumbOffsetFromScroll(scrollPos, sizes, dir = "ltr") {
+    const thumbSizePx = getThumbSize(sizes);
+    const scrollbarPadding = sizes.scrollbar.paddingStart + sizes.scrollbar.paddingEnd;
+    const scrollbar = sizes.scrollbar.size - scrollbarPadding;
+    const maxScrollPos = sizes.content - sizes.viewport;
+    const maxThumbPos = scrollbar - thumbSizePx;
+    const scrollClampRange = dir === "ltr" ? [0, maxScrollPos] : [maxScrollPos * -1, 0];
+    const scrollWithoutMomentum = clamp(scrollPos, scrollClampRange);
+    const interpolate = linearScale$1([0, maxScrollPos], [0, maxThumbPos]);
+    return interpolate(scrollWithoutMomentum);
+  }
+  __name$2(getThumbOffsetFromScroll, "getThumbOffsetFromScroll");
+  function linearScale$1(input, output) {
+    return (value) => {
+      if (input[0] === input[1] || output[0] === output[1]) return output[0];
+      const ratio = (output[1] - output[0]) / (input[1] - input[0]);
+      return output[0] + ratio * (value - input[0]);
+    };
+  }
+  __name$2(linearScale$1, "linearScale");
+  function isScrollingWithinScrollbarBounds(scrollPos, maxScrollPos) {
+    return scrollPos > 0 && scrollPos < maxScrollPos;
+  }
+  __name$2(isScrollingWithinScrollbarBounds, "isScrollingWithinScrollbarBounds");
+  var addUnlinkedScrollListener = /* @__PURE__ */ __name$2((node, handler = () => {
+  }) => {
+    let prevPosition = { left: node.scrollLeft, top: node.scrollTop };
+    let rAF = 0;
+    (/* @__PURE__ */ __name$2(function loop() {
+      const position = { left: node.scrollLeft, top: node.scrollTop };
+      const isHorizontalScroll = prevPosition.left !== position.left;
+      const isVerticalScroll = prevPosition.top !== position.top;
+      if (isHorizontalScroll || isVerticalScroll) handler();
+      prevPosition = position;
+      rAF = window.requestAnimationFrame(loop);
+    }, "loop"))();
+    return () => window.cancelAnimationFrame(rAF);
+  }, "addUnlinkedScrollListener");
+  function useDebounceCallback(callback, delay) {
+    const handleCallback = useCallbackRef$1(callback);
+    const debounceTimerRef = reactExports.useRef(0);
+    reactExports.useEffect(() => () => window.clearTimeout(debounceTimerRef.current), []);
+    return reactExports.useCallback(() => {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = window.setTimeout(handleCallback, delay);
+    }, [handleCallback, delay]);
+  }
+  __name$2(useDebounceCallback, "useDebounceCallback");
+  function useResizeObserver(element, onResize) {
+    const handleResize = useCallbackRef$1(onResize);
+    useLayoutEffect2(() => {
+      let rAF = 0;
+      if (element) {
+        const resizeObserver = new ResizeObserver(() => {
+          cancelAnimationFrame(rAF);
+          rAF = window.requestAnimationFrame(handleResize);
+        });
+        resizeObserver.observe(element);
+        return () => {
+          window.cancelAnimationFrame(rAF);
+          resizeObserver.unobserve(element);
+        };
+      }
+    }, [element, handleResize]);
+  }
+  __name$2(useResizeObserver, "useResizeObserver");
+  var Root = ScrollArea$1;
+  var Viewport = ScrollAreaViewport;
+  var Corner = ScrollAreaCorner;
+  const ScrollArea = reactExports.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    Root,
+    {
+      ref,
+      className: cn("relative overflow-hidden", className),
+      ...props,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Viewport, { className: "h-full w-full rounded-[inherit]", children }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollBar, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Corner, {})
+      ]
+    }
+  ));
+  ScrollArea.displayName = Root.displayName;
+  const ScrollBar = reactExports.forwardRef(({ className, orientation = "vertical", ...props }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ScrollAreaScrollbar,
+    {
+      ref,
+      orientation,
+      className: cn(
+        "flex touch-none select-none transition-colors",
+        orientation === "vertical" && "h-full w-2.5 border-l border-l-transparent p-[1px]",
+        orientation === "horizontal" && "h-2.5 flex-col border-t border-t-transparent p-[1px]",
+        className
+      ),
+      ...props,
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollAreaThumb, { className: "relative flex-1 rounded-full bg-border-strong hover:bg-accent" })
+    }
+  ));
+  ScrollBar.displayName = ScrollAreaScrollbar.displayName;
+  const AffectionOverview = () => {
+    const relationships = useMarasStore((s) => s.relationships);
+    const npcProfiles = useMarasStore((s) => s.npcProfiles);
+    const affectionData = useMarasStore((s) => s.affectionData);
+    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
+    const playerRelationships = relationships.filter(
+      (r2) => (r2.actorA === PLAYER_FORM_ID || r2.actorB === PLAYER_FORM_ID) && (r2.status === RelationshipStatus.Married || r2.status === RelationshipStatus.Engaged || r2.status === RelationshipStatus.Dating || r2.status === RelationshipStatus.Lover)
+    );
+    const partners = playerRelationships.map((r2) => {
+      var _a2;
+      const partnerId = r2.actorA === PLAYER_FORM_ID ? r2.actorB : r2.actorA;
+      const npc = npcProfiles.get(partnerId);
+      const aff = ((_a2 = affectionData.get(partnerId)) == null ? void 0 : _a2.permanent) ?? 0;
+      return { partnerId, npc, status: r2.status, affection: aff };
+    }).filter((p2) => p2.npc !== void 0).sort((a, b) => b.affection - a.affection);
+    const handleRowClick = (id2) => {
+      openNpcDetail(id2);
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex flex-col gap-[0.75rem] h-full", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[1.125em] h-[1.125em] text-accent" }),
+          " Affection Health"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
+          partners.length,
+          " Partners Tracked"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: partners.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: "No active partners" }) : partners.map(({ partnerId, npc, status, affection }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          onClick: () => handleRowClick(partnerId),
+          className: "flex items-center gap-[0.75rem] p-[0.5rem] bg-panel-raised border border-border-subtle hover:border-border-accent rounded-md transition-colors cursor-pointer",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-[9rem] flex-shrink-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold text-foreground-primary truncate", children: npc == null ? void 0 : npc.name }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] truncate", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc == null ? void 0 : npc.race }),
+                (npc == null ? void 0 : npc.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[4.5rem]", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                ] })
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status }) })
+          ]
+        },
+        partnerId
+      )) }) })
+    ] });
+  };
+  function getLatestStatusRecord(pair) {
+    if (!pair || !pair.statusHistory || pair.statusHistory.length === 0) return void 0;
+    return pair.statusHistory[pair.statusHistory.length - 1];
+  }
+  function formatGameDay(day, currentGameDay) {
+    if (day === void 0 || day === null) return "";
+    if (day < 0) return "Historical";
+    if (currentGameDay != null && currentGameDay >= 0) {
+      const diff = Math.floor(currentGameDay - day);
+      if (diff <= 0) return "Today";
+      if (diff === 1) return "1 day ago";
+      if (diff < 7) return `${diff} days ago`;
+      if (diff < 30) {
+        const weeks = Math.floor(diff / 7);
+        return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+      }
+      if (diff < 365) {
+        const months = Math.floor(diff / 30);
+        return months === 1 ? "1 month ago" : `${months} months ago`;
+      }
+      const years = Math.floor(diff / 365);
+      return years === 1 ? "1 year ago" : `${years} years ago`;
+    }
+    return `Day ${Math.floor(day)}`;
+  }
+  function formatRelationshipDate(date, prefix = "Married", currentGameDay) {
+    if (date === void 0 || date === null) return "";
+    if (date < 0) return `${prefix} (Historical)`;
+    const formatted = formatGameDay(date, currentGameDay);
+    if (formatted === "Today") return `${prefix} Today`;
+    return `${prefix} ${formatted}`;
+  }
+  const ActivityFeed = ({ limit = 5 }) => {
+    const relationships = useMarasStore((s) => s.relationships);
+    const npcProfiles = useMarasStore((s) => s.npcProfiles);
+    const currentGameDay = useMarasStore((s) => s.currentGameDay);
+    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
+    const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
+    const events = [];
+    relationships.forEach((r2) => {
+      r2.statusHistory.forEach((h, histIdx) => {
+        events.push({
+          actorA: r2.actorA,
+          actorB: r2.actorB,
+          fromStatus: h.fromStatus,
+          toStatus: h.toStatus,
+          timestamp: h.timestamp,
+          orderIndex: histIdx
+        });
+      });
+    });
+    events.sort((a, b) => {
+      if (Math.abs(b.timestamp - a.timestamp) > 1e-4) {
+        return b.timestamp - a.timestamp;
+      }
+      return b.orderIndex - a.orderIndex;
+    });
+    const getName = (id2) => {
+      var _a2, _b;
+      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
+      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || "Unknown NPC";
+    };
+    const renderActorName = (actorId) => {
+      const name = getName(actorId);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          role: "button",
+          tabIndex: 0,
+          onClick: (e) => {
+            e.stopPropagation();
+            openNpcDetail(actorId);
+          },
+          onKeyDown: (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openNpcDetail(actorId);
+            }
+          },
+          className: "font-semibold text-foreground-primary hover:text-accent-bright hover:underline cursor-pointer transition-colors",
+          children: name
+        }
+      );
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex flex-col gap-[0.75rem] h-full", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[1.125em] h-[1.125em] text-accent" }),
+          " Recent Activity Feed"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
+            events.length,
+            " Events"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setActiveSubSection("activity"),
+              className: "text-xs text-accent hover:text-accent-bright hover:underline flex items-center gap-[0.25rem] transition-colors cursor-pointer font-medium",
+              children: [
+                "View Full Feed ",
+                /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRight, { className: "w-[0.875em] h-[0.875em]" })
+              ]
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: events.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: "No relationship history recorded" }) : events.slice(0, limit).map((ev, idx) => {
+        const toLabel = getStatusLabel(ev.toStatus);
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex items-center gap-[0.625rem] p-[0.5rem] bg-panel-raised border-l-2 border-l-accent border border-border-subtle rounded-r-md text-xs",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: ev.toStatus, size: "1.25em" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1", children: [
+                renderActorName(ev.actorA),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary", children: " & " }),
+                renderActorName(ev.actorB),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: " → " }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent font-medium", children: toLabel })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted flex-shrink-0", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em]" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(ev.timestamp, currentGameDay) })
+              ] })
+            ]
+          },
+          idx
+        );
+      }) }) })
+    ] });
+  };
+  const FullActivityFeed = () => {
+    const relationships = useMarasStore((s) => s.relationships);
+    const npcProfiles = useMarasStore((s) => s.npcProfiles);
+    const currentGameDay = useMarasStore((s) => s.currentGameDay);
+    const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
+    const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
+    const [searchTerm, setSearchTerm] = reactExports.useState("");
+    const [selectedCategory, setSelectedCategory] = reactExports.useState("all");
+    const allEvents = reactExports.useMemo(() => {
+      const eventsList = [];
+      relationships.forEach((r2, pairIdx) => {
+        r2.statusHistory.forEach((h, histIdx) => {
+          eventsList.push({
+            id: `${pairIdx}-${histIdx}-${h.timestamp}`,
+            actorA: r2.actorA,
+            actorB: r2.actorB,
+            fromStatus: h.fromStatus,
+            toStatus: h.toStatus,
+            timestamp: h.timestamp,
+            orderIndex: histIdx
+          });
+        });
+      });
+      eventsList.sort((a, b) => {
+        if (Math.abs(b.timestamp - a.timestamp) > 1e-4) {
+          return b.timestamp - a.timestamp;
+        }
+        return b.orderIndex - a.orderIndex;
+      });
+      return eventsList;
+    }, [relationships]);
+    const getName = (id2) => {
+      var _a2, _b;
+      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
+      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || `NPC ${id2}`;
+    };
+    const filteredEvents = reactExports.useMemo(() => {
+      return allEvents.filter((ev) => {
+        const nameA = getName(ev.actorA).toLowerCase();
+        const nameB = getName(ev.actorB).toLowerCase();
+        const searchMatch = !searchTerm.trim() || nameA.includes(searchTerm.toLowerCase()) || nameB.includes(searchTerm.toLowerCase()) || getStatusLabel(ev.toStatus).toLowerCase().includes(searchTerm.toLowerCase());
+        if (!searchMatch) return false;
+        if (selectedCategory === "union") {
+          return ev.toStatus === RelationshipStatus.Married || ev.toStatus === RelationshipStatus.Engaged;
+        }
+        if (selectedCategory === "romance") {
+          return ev.toStatus === RelationshipStatus.Dating || ev.toStatus === RelationshipStatus.Lover;
+        }
+        if (selectedCategory === "ended") {
+          return ev.toStatus === RelationshipStatus.Divorced || ev.toStatus === RelationshipStatus.Jilted || ev.toStatus === RelationshipStatus.ExDating || ev.toStatus === RelationshipStatus.ExLover;
+        }
+        return true;
+      });
+    }, [allEvents, searchTerm, selectedCategory, npcProfiles]);
+    const unionCount = reactExports.useMemo(
+      () => allEvents.filter(
+        (e) => e.toStatus === RelationshipStatus.Married || e.toStatus === RelationshipStatus.Engaged
+      ).length,
+      [allEvents]
+    );
+    const romanceCount = reactExports.useMemo(
+      () => allEvents.filter(
+        (e) => e.toStatus === RelationshipStatus.Dating || e.toStatus === RelationshipStatus.Lover
+      ).length,
+      [allEvents]
+    );
+    const endedCount = reactExports.useMemo(
+      () => allEvents.filter(
+        (e) => e.toStatus === RelationshipStatus.Divorced || e.toStatus === RelationshipStatus.Jilted || e.toStatus === RelationshipStatus.ExDating || e.toStatus === RelationshipStatus.ExLover
+      ).length,
+      [allEvents]
+    );
+    const renderActorName = (actorId) => {
+      const name = getName(actorId);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          role: "button",
+          tabIndex: 0,
+          onClick: (e) => {
+            e.stopPropagation();
+            openNpcDetail(actorId);
+          },
+          onKeyDown: (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openNpcDetail(actorId);
+            }
+          },
+          className: "font-semibold text-foreground-primary hover:text-accent-bright hover:underline cursor-pointer transition-colors",
+          children: name
+        }
+      );
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[1rem] h-full w-full", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-[0.75rem] bg-panel border border-border-subtle rounded-lg p-[1rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => setActiveSubSection("dashboard"),
+              className: "p-[0.5rem] rounded-md bg-panel-raised border border-border-subtle text-foreground-muted hover:text-accent-bright hover:bg-accent-soft transition-colors cursor-pointer",
+              title: "Back to Dashboard",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowLeft, { className: "w-[1.125em] h-[1.125em]" })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-lg font-bold text-foreground-primary flex items-center gap-[0.5rem]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[1.25em] h-[1.25em] text-accent" }),
+              "Full Activity Feed & Relationship History"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted", children: "Chronological ledger of relationship milestone transitions across Skyrim" })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-semibold px-[0.625rem] py-[0.25rem] bg-accent-soft text-accent-bright rounded-full border border-accent/20", children: [
+          allEvents.length,
+          " Total Events"
+        ] }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[0.75rem] flex flex-col md:flex-row items-center justify-between gap-[0.75rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-wrap w-full md:w-auto", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted flex items-center gap-[0.25rem] mr-[0.25rem]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Filter, { className: "w-[0.875em] h-[0.875em]" }),
+            " Filter:"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setSelectedCategory("all"),
+              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer ${selectedCategory === "all" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
+              children: [
+                "All (",
+                allEvents.length,
+                ")"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setSelectedCategory("union"),
+              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "union" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.Engaged }),
+                " Marriages & Engagements (",
+                unionCount,
+                ")"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setSelectedCategory("romance"),
+              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "romance" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.Lover }),
+                " Dating & Lovers (",
+                romanceCount,
+                ")"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => setSelectedCategory("ended"),
+              className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "ended" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.ExLover }),
+                " Divorced & Ended (",
+                endedCount,
+                ")"
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative w-full md:w-[12rem]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[1em] h-[1em] absolute left-[0.625rem] top-[50%] translate-y-[-50%] text-foreground-muted pointer-events-none" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "text",
+              value: searchTerm,
+              onChange: (e) => setSearchTerm(e.target.value),
+              placeholder: "Search by actor or status...",
+              className: "w-full bg-panel-inset border border-border-subtle rounded-md pl-[2rem] pr-[2rem] py-[0.375rem] text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
+            }
+          ),
+          searchTerm && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => setSearchTerm(""),
+              className: "absolute right-[0.5rem] top-[50%] translate-y-[-50%] text-foreground-muted hover:text-foreground-primary",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[0.875em] h-[0.875em]" })
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex-1 flex flex-col overflow-hidden min-h-[22rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-full pr-[0.75rem]", children: filteredEvents.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center py-[4rem] gap-[0.75rem] text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[2.5rem] h-[2.5rem] text-foreground-muted opacity-40" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-foreground-muted font-medium", children: searchTerm || selectedCategory !== "all" ? "No relationship activity matching your current filter" : "No relationship activity history recorded yet" }),
+        (searchTerm || selectedCategory !== "all") && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: () => {
+              setSearchTerm("");
+              setSelectedCategory("all");
+            },
+            className: "text-xs text-accent hover:underline flex items-center gap-[0.25rem]",
+            children: "Reset filters"
+          }
+        )
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.625rem]", children: filteredEvents.map((ev) => {
+        const fromLabel = getStatusLabel(ev.fromStatus);
+        getStatusLabel(ev.toStatus);
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex flex-col sm:flex-row sm:items-center justify-between gap-[0.75rem] p-[0.75rem] bg-panel-raised border-l-4 border-l-accent border border-border-subtle rounded-r-md text-xs hover:border-accent/40 transition-colors",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start sm:items-center gap-[0.75rem]", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "p-[0.375rem] bg-panel-inset rounded-md border border-border-subtle flex-shrink-0 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: ev.toStatus, size: "1.5em" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.25rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-wrap text-sm", children: [
+                    renderActorName(ev.actorA),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary font-semibold", children: "&" }),
+                    renderActorName(ev.actorB)
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-foreground-muted text-xs", children: [
+                    ev.timestamp < 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem] text-foreground-secondary", children: "Pre-existing" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem]", children: fromLabel }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "→" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: ev.toStatus })
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] text-foreground-muted text-[0.75rem] self-end sm:self-center", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em] text-accent" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(ev.timestamp, currentGameDay) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-inset px-[0.5rem] py-[0.125rem] rounded border border-border-subtle", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Calendar, { className: "w-[0.75em] h-[0.75em]" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: ev.timestamp < 0 ? "Historical" : `Day ${Math.floor(ev.timestamp)}` })
+                ] })
+              ] })
+            ]
+          },
+          ev.id
+        );
+      }) }) }) })
+    ] });
   };
   const NpcAllPairsList = () => {
     const relationships = useMarasStore((s) => s.relationships);
@@ -23751,6 +24638,7 @@ Defaulting to \`null\`.`;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
+    const removeRelationship = useMarasStore((s) => s.removeRelationship);
     if (!selectedId) {
       return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 bg-panel border border-border-subtle rounded-lg flex items-center justify-center p-[2rem] text-center text-foreground-muted", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(GitFork, { className: "w-[2em] h-[2em] text-accent" }),
@@ -23892,7 +24780,24 @@ Defaulting to \`null\`.`;
                     ] })
                   ] }),
                   hasAffectionStatus && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[8rem] flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" }) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: r2.status }) })
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-shrink-0 flex items-center gap-[0.5rem]", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: r2.status }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          confirmRemoveRelationship(
+                            (selectedNpc == null ? void 0 : selectedNpc.name) || `NPC ${selectedId}`,
+                            otherName,
+                            () => removeRelationship(selectedId, otherId)
+                          );
+                        },
+                        className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
+                      }
+                    ) })
+                  ] })
                 ]
               },
               idx
@@ -24060,6 +24965,7 @@ Defaulting to \`null\`.`;
     const setActiveTab = useMarasStore((s) => s.setActiveTab);
     const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
+    const removeChild = useMarasStore((s) => s.removeChild);
     const children = Array.from(childrenStore.values()).filter(
       (c) => c.guardianAId === PLAYER_FORM_ID || c.guardianBId === PLAYER_FORM_ID || c.bioMotherId === PLAYER_FORM_ID || c.bioFatherId === PLAYER_FORM_ID
     ).map((c) => {
@@ -24213,7 +25119,24 @@ Defaulting to \`null\`.`;
                   ] })
                 ] })
               ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem] flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "View Child Details", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-[0.25rem] text-foreground-muted hover:text-accent cursor-pointer", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "w-[1.25em] h-[1.25em]" }) }) }) })
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-shrink-0", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Child Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      confirmRemoveChild(
+                        child.childId,
+                        displayName,
+                        () => removeChild(child.childId)
+                      );
+                    },
+                    className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
+                  }
+                ) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "View Child Details", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-[0.25rem] text-foreground-muted hover:text-accent cursor-pointer", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "w-[1.25em] h-[1.25em]" }) }) })
+              ] })
             ]
           },
           child.childId
@@ -28004,6 +28927,20 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
+                label: "Review Matchmaking Results in Modal",
+                description: "When enabled, presents an interactive checklist modal to review, adjust, or reject proposed NPC pairings before they are applied in-game.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.confirmResults ?? false,
+                    onChange: (val) => updateMatchmakingSettings({ confirmResults: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
                 label: "Evaluation Interval",
                 description: `Number of in-game days between automated matchmaking evaluations (${matchmakingSettings.intervalDays} days).`,
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -29516,6 +30453,7 @@ Defaulting to \`null\`.`;
     };
   }
   const NpcDetailPartnerPanel = () => {
+    var _a2;
     const currentNpcId = useMarasStore((s) => s.npcDetailId);
     const partnerId = useMarasStore((s) => s.npcDetailPartnerId);
     const setPartnerId = useMarasStore((s) => s.setNpcDetailPartnerId);
@@ -29538,6 +30476,7 @@ Defaulting to \`null\`.`;
     const isOpen = Boolean(partnerId);
     const isPlayerPartner = partnerId === PLAYER_FORM_ID;
     const availableStatusOptions = useAvailableStatuses(currentNpcId, partnerId);
+    const currentNpcName = currentNpcId ? currentNpcId === PLAYER_FORM_ID ? getPlayerProfileFallback(npcProfiles).name : ((_a2 = npcProfiles.get(currentNpcId)) == null ? void 0 : _a2.name) || `NPC ${currentNpcId}` : "NPC";
     const partnerProfile = partnerId ? isPlayerPartner ? getPlayerProfileFallback(npcProfiles) : npcProfiles.get(partnerId) : null;
     const foundRel = partnerId && currentNpcId ? relationships.find(
       (r2) => areSameFormId(r2.actorA, currentNpcId) && areSameFormId(r2.actorB, partnerId) || areSameFormId(r2.actorA, partnerId) && areSameFormId(r2.actorB, currentNpcId)
@@ -29662,7 +30601,11 @@ Defaulting to \`null\`.`;
               ) || isUnofficialAffair) && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
-                  onClick: () => removeRelationship(currentNpcId, partnerId),
+                  onClick: () => confirmRemoveRelationship(
+                    currentNpcName,
+                    partnerProfile.name,
+                    () => removeRelationship(currentNpcId, partnerId)
+                  ),
                   className: "w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer",
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
@@ -29714,8 +30657,8 @@ Defaulting to \`null\`.`;
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.375rem] border-t border-border-divider space-y-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-destructive font-semibold block text-[0.6875rem]", children: "Cheating / Affair Records:" }),
                   records.map((cr, idx) => {
-                    var _a2, _b, _c, _d;
-                    const cheaterName = cr.cheaterId === PLAYER_FORM_ID ? ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(cr.cheaterId)) == null ? void 0 : _b.name) || `NPC ${cr.cheaterId}`;
+                    var _a3, _b, _c, _d;
+                    const cheaterName = cr.cheaterId === PLAYER_FORM_ID ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(cr.cheaterId)) == null ? void 0 : _b.name) || `NPC ${cr.cheaterId}`;
                     const affairPartner = npcProfiles.get(cr.affairPartnerId);
                     const affairPartnerName = cr.affairPartnerId === PLAYER_FORM_ID ? ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.name) || "Prisoner (Player)" : (affairPartner == null ? void 0 : affairPartner.name) || `NPC ${cr.affairPartnerId}`;
                     const victimProfile = npcProfiles.get(cr.victimId);
@@ -29791,14 +30734,18 @@ Defaulting to \`null\`.`;
                               children: badgeLabel
                             }
                           ),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove child", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Child Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "button",
                             {
                               onClick: (e) => {
                                 e.stopPropagation();
-                                removeChild(child.childId);
+                                confirmRemoveChild(
+                                  child.childId,
+                                  childName,
+                                  () => removeChild(child.childId)
+                                );
                               },
-                              className: "p-[0.25rem] text-foreground-muted hover:text-destructive hover:bg-destructive/10 rounded transition-colors",
+                              className: "p-[0.25rem] text-foreground-muted hover:text-destructive hover:bg-destructive/10 rounded transition-colors cursor-pointer",
                               children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.875em] h-[0.875em]" })
                             }
                           ) })
@@ -29815,9 +30762,9 @@ Defaulting to \`null\`.`;
               ...partnerCategorized.openRelationship,
               ...partnerCategorized.cheating
             ].filter((r2) => r2.actorA !== currentNpcId && r2.actorB !== currentNpcId).map((r2, i) => {
-              var _a2, _b;
+              var _a3, _b;
               const otherId = r2.actorA === partnerId ? r2.actorB : r2.actorA;
-              const otherName = otherId === PLAYER_FORM_ID ? ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(otherId)) == null ? void 0 : _b.name) || `NPC ${otherId}`;
+              const otherName = otherId === PLAYER_FORM_ID ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(otherId)) == null ? void 0 : _b.name) || `NPC ${otherId}`;
               return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
@@ -30514,6 +31461,7 @@ Defaulting to \`null\`.`;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const children = useMarasStore((s) => s.children);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
+    const removeChild = useMarasStore((s) => s.removeChild);
     const allChildren = Array.from(children.values()).filter(
       (c) => areSameFormId(c.guardianAId, npcId) || areSameFormId(c.guardianBId, npcId) || areSameFormId(c.bioMotherId, npcId) || areSameFormId(c.bioFatherId, npcId)
     );
@@ -30551,13 +31499,30 @@ Defaulting to \`null\`.`;
                     ] })
                   ] })
                 ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: `px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold flex-shrink-0 ml-[0.5rem] ${badgeStyle}`,
-                    children: badgeLabel
-                  }
-                )
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-shrink-0 ml-[0.5rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: `px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold ${badgeStyle}`,
+                      children: badgeLabel
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Child Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        confirmRemoveChild(
+                          child.childId,
+                          childName,
+                          () => removeChild(child.childId)
+                        );
+                      },
+                      className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.875em] h-[0.875em]" })
+                    }
+                  ) })
+                ] })
               ]
             },
             idx
@@ -30574,10 +31539,12 @@ Defaulting to \`null\`.`;
     currentNpcId,
     onSelectPartner
   }) => {
+    var _a2, _b;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const removeRelationship = useMarasStore((s) => s.removeRelationship);
+    const currentNpcName = currentNpcId === PLAYER_FORM_ID ? ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(currentNpcId)) == null ? void 0 : _b.name) || `NPC ${currentNpcId}`;
     const validRelationships = relationships.filter((r2) => {
       const partnerId = r2.actorA === currentNpcId ? r2.actorB : r2.actorA;
       return Boolean(partnerId && partnerId !== "" && partnerId !== "00000000" && partnerId !== currentNpcId);
@@ -30594,12 +31561,12 @@ Defaulting to \`null\`.`;
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 gap-[0.375rem]", children: validRelationships.map((r2, idx) => {
-        var _a2, _b, _c, _d;
+        var _a3, _b2, _c, _d;
         const partnerId = r2.actorA === currentNpcId ? r2.actorB : r2.actorA;
         const isPlayer = partnerId === PLAYER_FORM_ID;
         const partnerProfile = isPlayer ? npcProfiles.get(PLAYER_FORM_ID) : npcProfiles.get(partnerId);
-        const partnerName = isPlayer ? ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)" : (partnerProfile == null ? void 0 : partnerProfile.name) || `NPC ${partnerId}`;
-        const partnerRace = isPlayer ? ((_b = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b.race) || "Nord" : (partnerProfile == null ? void 0 : partnerProfile.race) || "Nord";
+        const partnerName = isPlayer ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)" : (partnerProfile == null ? void 0 : partnerProfile.name) || `NPC ${partnerId}`;
+        const partnerRace = isPlayer ? ((_b2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b2.race) || "Nord" : (partnerProfile == null ? void 0 : partnerProfile.race) || "Nord";
         const partnerPlugin = isPlayer ? ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.pluginName) || "Skyrim.esm" : partnerProfile == null ? void 0 : partnerProfile.pluginName;
         const isPlayerInvolved = currentNpcId === PLAYER_FORM_ID || partnerId === PLAYER_FORM_ID;
         const targetNpcId = currentNpcId === PLAYER_FORM_ID ? partnerId : currentNpcId;
@@ -30664,7 +31631,11 @@ Defaulting to \`null\`.`;
                   {
                     onClick: (e) => {
                       e.stopPropagation();
-                      removeRelationship(currentNpcId, partnerId);
+                      confirmRemoveRelationship(
+                        currentNpcName,
+                        partnerName,
+                        () => removeRelationship(currentNpcId, partnerId)
+                      );
                     },
                     className: "p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer",
                     children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
@@ -30905,6 +31876,7 @@ Defaulting to \`null\`.`;
     const playerHomes = useMarasStore((s) => s.playerHomes);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit);
+    const removeChild = useMarasStore((s) => s.removeChild);
     const npc = npcProfiles.get(npcId);
     const childRecord = children.get(npcId);
     const stage = (childRecord == null ? void 0 : childRecord.stage) || (npc == null ? void 0 : npc.stage) || "child";
@@ -31086,7 +32058,18 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || "Unset (Original Location)" })
           ] })
-        ] }) })
+        ] }) }),
+        childRecord && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.5rem] border-t border-border-divider", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Permanently remove this child record from M.A.R.A.S household and family tracking", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            onClick: () => confirmRemoveChild(npcId, displayName, () => removeChild(npcId)),
+            className: "w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Child Record" })
+            ]
+          }
+        ) }) })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         ChildRelocationModal,
@@ -31711,7 +32694,7 @@ Defaulting to \`null\`.`;
     const activeTab = useMarasStore((s) => s.activeTab);
     const npcDetailId = useMarasStore((s) => s.npcDetailId);
     const setStatusMsg = useMarasStore((s) => s.setStatusMsg);
-    const setIsOpen = useMarasStore((s) => s.setIsOpen);
+    const hasActiveModal = useModalStore((s) => s.activeModal !== null);
     const inGame = isInGame();
     const style = {};
     reactExports.useEffect(() => {
@@ -31729,13 +32712,12 @@ Defaulting to \`null\`.`;
           setStatusMsg(String(statusJson));
         }
       };
-      setIsOpen(true);
       (_a2 = window.log) == null ? void 0 : _a2.call(window, "MARAS Prisma UI View mounted successfully");
       {
-        sendMarasAction("fetchOverview");
+        sendMarasAction("uiReady");
       }
-    }, [setStatusMsg, setIsOpen, inGame]);
-    if (!isOpen) return null;
+    }, [setStatusMsg, inGame]);
+    if (!isOpen && !hasActiveModal) return null;
     const renderContent = () => {
       if (npcDetailId) {
         return /* @__PURE__ */ jsxRuntimeExports.jsx(NpcDetailShell, {});
@@ -31754,7 +32736,10 @@ Defaulting to \`null\`.`;
           return /* @__PURE__ */ jsxRuntimeExports.jsx(OverviewPage, {});
       }
     };
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(DashboardLayout, { style, children: renderContent() });
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(DashboardLayout, { style, children: renderContent() }),
+      hasActiveModal && /* @__PURE__ */ jsxRuntimeExports.jsx(PrismaModalHost, { style: !isOpen ? style : void 0 })
+    ] });
   };
   class ErrorBoundary extends reactExports.Component {
     constructor() {

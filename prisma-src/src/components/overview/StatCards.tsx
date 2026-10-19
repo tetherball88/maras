@@ -2,8 +2,7 @@ import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
-import { Heart, Crown, Users, HeartOff, UserCheck, Flame } from 'lucide-react'
-
+import { Heart, Crown, HeartOff, UserCheck, Flame } from 'lucide-react'
 export const StatCards: React.FC = () => {
   const relationships = useMarasStore((s) => s.relationships)
 
@@ -20,11 +19,10 @@ export const StatCards: React.FC = () => {
     { label: 'Lovers', count: getCount(RelationshipStatus.Lover), icon: Flame, color: 'text-accent' },
     { label: 'Engaged', count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: 'text-status-warning' },
     { label: 'Divorced', count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: 'text-status-danger' },
-    { label: 'Candidates', count: getCount(RelationshipStatus.Candidate), icon: Users, color: 'text-foreground-secondary' },
   ]
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-[0.75rem]">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-[0.75rem]">
       {stats.map((stat, i) => {
         const Icon = stat.icon
         return (

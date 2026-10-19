@@ -658,6 +658,7 @@ export const mockSettings: MarasSettings = {
   globalBanPet: false,
   skyrimnetActionRadius: 3000,
   matchmakingExcludePlayerActivePartners: false,
+  matchmakingConfirmResults: false,
   paternityBaseChance: 2,
   paternityDailyGrowth: 2.0,
   paternityMaxChance: 60,

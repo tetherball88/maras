@@ -79,9 +79,13 @@ When **SkyrimNet** is active, candidate matches from scheduled scans (both LLM-p
 flowchart LR
     Cand["Mechanically Valid Candidates"] --> EvalCheck{"matchmakingEvaluationStep?"}
     EvalCheck -- "Enabled" --> Tier2["Batch Stage 1: LLM Narrative Verification\n(maras_matchmaking_verify)"]
-    EvalCheck -- "Disabled" --> MemCheck
-    Tier2 -- "suitable == true" --> MemCheck{"matchmakingGenerateMemories?"}
+    EvalCheck -- "Disabled" --> ReviewCheck
+    Tier2 -- "suitable == true" --> ReviewCheck{"matchmakingConfirmResults?"}
     Tier2 -- "suitable == false" --> Reject["Rejected (Not Applied)"]
+    ReviewCheck -- "Enabled" --> ReviewModal["Prisma UI Checklist Review Modal\n(ShowMatchmakingReviewModal)"]
+    ReviewCheck -- "Disabled" --> MemCheck{"matchmakingGenerateMemories?"}
+    ReviewModal -- "Approved Pairs" --> MemCheck
+    ReviewModal -- "Discard All" --> Reject
     MemCheck -- "Enabled" --> MemBatch["Batch Stage 2: Dual Memory Generation\n(maras_matchmaking_memories)"]
     MemCheck -- "Disabled" --> ApplyDirect["ApplyMatch Directly"]
     MemBatch --> ApplyAndIngest["ApplyMatch + IngestMemories into SkyrimNet"]
@@ -89,14 +93,22 @@ flowchart LR
 
 ### Stage 1: Batched Narrative Verification (`maras_matchmaking_verify`)
 - Evaluates each proposed pair individually with full character profiles, their existing relationship trees, and the UUIDs/names of any committed primary partners they might be cheating on.
-- The LLM returns a JSON verdict (`suitable` / `allow` boolean + `reason`). Only pairs approved by the narrative evaluator advance to Stage 2.
+- The LLM returns a JSON verdict (`suitable` / `allow` boolean + `reason`). Only pairs approved by the narrative evaluator advance to the review/memory pipeline.
+
+### Optional Player Review Modal (`matchmakingConfirmResults` / `ShowMatchmakingReviewModal`)
+- When `matchmakingConfirmResults` (**"Review Matchmaking Results in Modal"**) is enabled, `MatchmakingService` intercepts all candidate pairs (from scheduled LLM scans, global auto-apply scans, and Dice-Roll matchmaking) right *before* memory generation (`StartMemoryBatch`) and displays a consolidated Prisma UI checklist modal (`ModalTone::Ai`):
+  - Each row shows `{actorAName} & {actorBName}`, their current status $\rightarrow$ proposed target status, an action badge (`New`, `Advance`, `Breakup`, `Cheating`, `Open`, `Close`), and the LLM verification reasoning or compatibility description.
+  - Rows for `new`, `advance`, and `breakup` include an inline per-row status dropdown (`selectOptions`), allowing the player to override the target status on the fly before applying (with mechanically invalid options automatically disabled and explained via tooltip).
+  - Clicking **Apply Selected** forwards only the checked pairs (with any status overrides) to `ExecuteMemoryBatchOrApply`, avoiding wasted LLM memory generation calls for rejected pairs. Clicking **Discard All** skips the entire batch.
 
 ### Stage 2: Dual-Perspective Memory Generation (`maras_matchmaking_memories`)
 - Requests first-person episodic memories for **both Actor A and Actor B** describing how the relationship change happened (including location, emotion, importance score, and tags).
 - **Atomic Application Guarantee**: Relationship status changes (`ApplyMatch`) are **only** committed to `NPCRelationshipManager` after the memory batch finishes for that pair, ensuring NPCs never change relationship state without corresponding SkyrimNet memories when memory generation is active.
 
 ### Interactive In-Game Retry / Cancel Modal on LLM Failure
-- If any LLM request in a scheduled scan, verification batch, or memory batch fails or returns unrepairable JSON, `MatchmakingService` queues an in-game `RE::MessageBoxMenu` listing the exact failed NPC pairs and failure reasons:
-  - **Retry**: Re-dispatches only the failed tasks in the batch without re-running already-succeeded pairs.
-  - **Cancel**: Cleanly aborts the failed pairs (leaving their in-game relationship status untouched) while still applying and ingesting memories for the pairs in the batch that succeeded.
+- If any LLM request in a scheduled scan, manual per-NPC scan, global scan, single-pair memory request, verification batch, or memory batch fails or returns unrepairable JSON, `MatchmakingService` queues a Prisma UI modal via [`PrismaModalManager`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/include/ui/PrismaModalManager.h) listing the exact failed NPC pairs or scan target and failure reasons in an info box:
+  - **Retry**: Re-dispatches the failed request (or only the failed tasks in a batch without re-running already-succeeded pairs).
+  - **Cancel**: Cleanly aborts the failed request or failed batch pairs (leaving their in-game relationship status untouched and clearing any UI loading spinner) while still applying and ingesting memories for any pairs in a batch that succeeded.
+
+
 

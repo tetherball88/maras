@@ -1,21 +1,27 @@
-# PrismaUIManager & PrismaUIDataBridge — Web Dashboard Lifecycle & Bidirectional Data Bridge
+# PrismaUIManager, PrismaModalManager & PrismaUIDataBridge — Web Dashboard, Modal System & Bidirectional Data Bridge
 
-[PrismaUIManager.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/ui/PrismaUIManager.cpp) and [PrismaUIDataBridge.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/ui/PrismaUIDataBridge.cpp) connect the native C++ M.A.R.A.S engine to the embedded React/TypeScript web dashboard (`MARAS/index.html` rendered via `PrismaUI.dll`).
+[PrismaUIManager.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/ui/PrismaUIManager.cpp), [PrismaModalManager.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/ui/PrismaModalManager.cpp), and [PrismaUIDataBridge.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/ui/PrismaUIDataBridge.cpp) connect the native C++ M.A.R.A.S engine to the embedded React/TypeScript web dashboard and standalone modal system (`MARAS/index.html` rendered via `PrismaUI.dll`).
 
 ---
 
-## 1. View Lifecycle, Focus & Hotkey Management (`PrismaUIManager`)
+## 1. View Lifecycle, Focus & Modal Coordination (`PrismaUIManager` & `PrismaModalManager`)
 
 ### Dynamic API Attachment & Graceful Fallback
-At startup, `PrismaUIManager` requests the `PrismaUI` V1 plugin interface dynamically. If `PrismaUI.dll` is not installed, M.A.R.A.S continues running all gameplay, Papyrus, and SkyrimNet systems normally without the web dashboard.
+At startup, `PrismaUIManager` requests the `PrismaUI` V1 plugin interface dynamically. If `PrismaUI.dll` is not installed, M.A.R.A.S continues running gameplay, Papyrus, and SkyrimNet systems normally without the web view, and `PrismaModalManager` safely aborts queued modal requests with their configured fallback button index.
 
-### Keyboard Hotkey Listener
-The manager registers as an `RE::BSInputDeviceManager` input event sink and listens for the user's configured dashboard toggle key (`toggleUIKey`, defaulting to `Alt+B`) combined with exact modifier state verification (`Ctrl`, `Shift`, `Alt` via Win32 `GetAsyncKeyState`). When matched, it queues a game-thread task to toggle the dashboard open or closed.
+### Keyboard Hotkey Listener & Modal Focus Lock
+The manager registers as an `RE::BSInputDeviceManager` input event sink and listens for the user's configured dashboard toggle key (`toggleUIKey`, defaulting to `Alt+B`) combined with exact modifier state verification (`Ctrl`, `Shift`, `Alt` via Win32 `GetAsyncKeyState`). When a blocking modal is active (`PrismaModalManager::HasActiveModal()`), the hotkey listener blocks dashboard toggling and re-asserts modal focus if needed.
 
-### Lazy View Creation & Game Pause Control
-- **On-Demand View Creation**: The `MARAS/index.html` browser view is created lazily the first time the player opens the dashboard (`Show()`), registering four JavaScript-to-C++ bridge listeners (`closeMARAS`, `log`, `refocusView`, and `marasAction`).
-- **DOM Ready Handshake**: When the web view finishes loading (`OnDomReady`), the manager focuses the view, pushes the plugin version status (`window.receiveMARASStatus`), triggers `window.openMARAS()`, and dispatches a complete initial state snapshot via `PrismaUIDataBridge::SendOverviewData()`.
-- **Safe Pause Counter Management**: Tracks whether M.A.R.A.S itself incremented `RE::UI::GetSingleton()->numPausesGame` (`m_pausedGame`) so hiding or destroying the view always decrements the engine's pause counter cleanly without desynchronizing other menus.
+### Independent Dashboard & Modal Roots (`SyncViewVisibilityAndFocus`)
+- **Single Shared Web View, Independent React Roots**: Both `<DashboardLayout>` (`useMarasStore.isOpen`) and `<PrismaModalHost />` (`useModalStore.activeModal`) share a single `MARAS/index.html` `PrismaView` instance to minimize VRAM overhead while mounting and unmounting independently.
+- **Lazy View Creation & Readiness Handshake**: The `MARAS/index.html` browser view is created lazily on first dashboard open or first modal request (`EnsureViewCreated()`). When the DOM and React tree finish mounting (`OnDomReady` / `"uiReady"` action), `OnUIReady()` synchronizes whichever root (`openMARAS` + overview data and/or `showMARASModal`) is currently active.
+- **Locked Modal Focus & Game Pause**:
+  - When a modal is active, `SyncViewVisibilityAndFocus()` focuses the view with `prismaUI->Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/true)` so the game is paused and the user cannot unfocus or dismiss the popup via `Escape` or PrismaUI's focus key until a modal control button is selected.
+  - When the modal queue empties, if the dashboard is closed, the view unfocuses and hides (unpausing the game); if the dashboard is open, focus transitions back to standard non-paused dashboard mode (`Focus(view, false, false)`).
+
+### Generic FIFO Modal Queue (`PrismaModalManager`)
+- **Declarative Schema & Custom Template Hybrid**: C++ callers construct a `ModalRequest` (with `title`, `subtitle`, `message`, `tone`, `size`, interactive `controls` such as `checkbox`, `select`, `text`, `infobox`, or multi-row `checklist` items with per-row checkboxes and inline select dropdowns, and `buttons`) and pass a `ModalCallback` to `PrismaModalManager::ShowModal`.
+- **Sequential Queueing**: Multiple concurrent modal requests are queued in FIFO order and presented one at a time. When the user clicks a button in `<PrismaModalHost />`, React dispatches `"modalResponse"` (`{ modalId, buttonId, buttonIndex, values }`), and `PrismaModalManager::HandleModalResponse` resolves the active entry on the SKSE main game thread and provides typed accessors (`GetBool`, `GetString`, `GetCheckedItemIds`, `GetUncheckedItemIds`, `IsItemChecked`, `GetItemSelectValue`) on `ModalResponse`.
 
 ---
 
@@ -25,7 +31,7 @@ Rather than forcing the React frontend to make dozens of granular queries, `Pris
 
 ### Overview Snapshot (`SendOverviewData`)
 Before assembling the overview payload, the bridge triggers `SyncAllMarriedCouplesChildCustody()` so any recent marriages or divorces reflect up-to-date child guardianship. It then packages:
-1. **Player Relationship Counts**: Totals for married, engaged, lover, dating, divorced, jilted, and candidate NPCs.
+1. **Player Relationship Counts**: Totals for married, engaged, lover, dating, divorced, and jilted NPCs.
 2. **Spouse Hierarchy Top 3**: Profiles and permanent affection scores for the player's `Lead`, `Second`, and `Third` ranked spouses.
 3. **Complete NPC Profile Directory**:
    - Includes the Player (`0x14`), all registered M.A.R.A.S NPCs, all loaded child actors in Skyrim (discovered directly from loaded forms without polluting the marriage candidate registry), all biological/adoptive parents in the children registry, and any third-party paramours referenced in cheating records.

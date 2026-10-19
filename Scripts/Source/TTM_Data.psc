@@ -471,11 +471,3 @@ EndFunction
 Faction Function GetCheatingNpcCaughtFaction() global
     return Game.GetFormFromFile(0x5c4, "TT_MARAS.esp") as Faction
 EndFunction
-
-Message Function GetDivorceSettlementMsg() global
-    return Game.GetFormFromFile(0x164, "TT_MARAS.esp") as Message
-EndFunction
-
-Message Function GetSkipWeddingMsg() global
-    return Game.GetFormFromFile(0x165, "TT_MARAS.esp") as Message
-EndFunction

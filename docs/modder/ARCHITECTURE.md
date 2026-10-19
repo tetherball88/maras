@@ -19,7 +19,7 @@ flowchart TD
         Core["Core Registries & Hooks\nFormCache | NPCIndex | DeceasedRegistry\nFactionService | PackageOverrideService\nPollingService | Serialization ('MARS' v4)"]
         RelEngine["Relationship & Household Engine\nNPCRelationshipManager | AffectionService\nSpouseHierarchyManager | SpouseBuffService\nPlayerHouseService | HomeCellService\nSpouseAssetsService | PlayerChildrenService"]
         AIEngine["AI & Background Coordinators\nSkyrimNetIntegration | MatchmakingService\nBanterCoordinatorService | IntimateThreadService\nQuestEventManager | MarriageDifficulty | NameService"]
-        UIBridge["Native UI & Web Bridge\nPrismaUIManager | PrismaUIDataBridge\nConfirmationModal"]
+        UIBridge["Native UI & Web Bridge\nPrismaUIManager | PrismaUIDataBridge\nPrismaModalManager | ConfirmationModal"]
         PublicAPI["C DLL Export API\nMARAS_PublicAPI.h (MARAS_GetAPI v1)"]
     end
 
@@ -30,9 +30,9 @@ flowchart TD
         ScenesDial["Quests, Scenes & Dialogues\nTTM_Actions | TTM_NpcsScenes | TTM_DialogueManager*\nTTM_QuestDivorce | TTM_QuestTrackKilledSpouses"]
     end
 
-    subgraph Prisma["Layer 3: Prisma UI Dashboard (prisma-src/ -> PrismaUI/views/MARAS/)"]
-        Zustand["Zustand State Store\n(useMarasStore.ts & prismaBridge.ts)"]
-        Pages["React Dashboard Pages\nOverview | My Household | Matchmaking\nNPC Detail | Settings"]
+    subgraph Prisma["Layer 3: Prisma UI Dashboard & Modals (prisma-src/ -> PrismaUI/views/MARAS/)"]
+        Zustand["Zustand State Stores\n(useMarasStore.ts, useModalStore.ts & prismaBridge.ts)"]
+        Pages["React Dashboard & Modal Host\nOverview | My Household | Matchmaking\nNPC Detail | Settings | PrismaModalHost"]
     end
 
     subgraph SkyrimNet["Layer 4: SkyrimNet External Bundle (tetherball88.maras)"]
@@ -94,6 +94,7 @@ flowchart TD
   - [DeceasedRegistry.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/DeceasedRegistry.md) — Historical snapshots of deceased partners and children, bereavement tracking, and widowhood state.
   - [PollingService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PollingService.md) — Throttled real-time follower detection, child order expiration ticks, and midnight day-rollover orchestration.
   - [PrismaUIDataBridge.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PrismaUIDataBridge.md) — Prisma UI view lifecycle, hotkey handling, outbound JSON state snapshots, and main-thread action dispatching.
+  - [PrismaModalManager.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PrismaModalManager.md) — Standalone/blocking Prisma UI modal queue, locked focus and game pause coordination, and declarative interactive controls.
 
 ---
 

@@ -48,7 +48,7 @@ Function MakeNpcEngaged(Actor npc) global
     bool alwaysSkipWeddings = MARAS.GetSettingBool("skipWedding")
     int answerSkipWedding = -1
     if(TTM_Data.GetPlayerHadWedding() && !alwaysSkipWeddings && StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 0)
-        answerSkipWedding = TTM_Data.GetSkipWeddingMsg().Show()
+        answerSkipWedding = MARAS.ShowSkipWeddingModal(npc)
     endif
     if(answerSkipWedding == 2)
         StorageUtil.SetIntValue(none, "TTM_DontShowSkipWeddingMessage", 1)
@@ -232,8 +232,10 @@ Function AddDivorceFee(Quest divorceQuest) global
 
     Actor spouse = StorageUtil.GetFormValue(none, "TTM_DivorceLetter_Spouse") as Actor
     Actor player = TTM_Data.GetPlayer()
-    Faction crimeFaction = spouse.GetCrimeFaction()
-
+    Faction crimeFaction = none
+    if(spouse != none)
+        crimeFaction = spouse.GetCrimeFaction()
+    endif
 
     if(crimeFaction == none)
         crimeFaction = TTM_Data.GetDefaultCrimeFaction()
@@ -245,14 +247,20 @@ Function AddDivorceFee(Quest divorceQuest) global
     int questsCompleted = PapyrusUtil.ClampInt(Game.QueryStat("Quests Completed") * 100, 0, 1000)
     int dungeonsCleared = PapyrusUtil.ClampInt(Game.QueryStat("Dungeons Cleared") * 100, 0, 1000)
 
-    int fee = 100 + playerWealth + housesOwned + horsesOwned + questsCompleted + dungeonsCleared
+    int assetsShare = housesOwned + horsesOwned + questsCompleted + dungeonsCleared
+    int fee = 100 + playerWealth + assetsShare
+    bool canPayDirectly = player.GetGoldAmount() >= fee
 
-    crimeFaction.SetCrimeGold(fee)
     StorageUtil.SetFloatValue(none, "TTM_LastTimePayedDivorceFee", now)
     StorageUtil.SetFormValue(none, "TTM_DivorceLetter_Spouse", none)
     divorceQuest.Stop()
 
-    TTM_Data.GetDivorceSettlementMsg().Show(fee)
+    int choice = MARAS.ShowDivorceSettlementModal(spouse, fee, playerWealth, assetsShare, canPayDirectly)
+    if(choice == 0 && canPayDirectly)
+        player.RemoveItem(TTM_Data.GetGoldMisc(), fee)
+    else
+        crimeFaction.SetCrimeGold(fee)
+    endif
 EndFunction
 
 ;/ ==============================

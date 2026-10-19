@@ -1,80 +1,21 @@
 #include "ui/ConfirmationModal.h"
 
+#include "core/NPCRelationshipManager.h"
 #include "core/SkyrimNetIntegration.h"
 #include "services/ActorService.h"
+#include "ui/PrismaModalManager.h"
+#include "ui/PrismaUIManager.h"
 #include "utils/Settings.h"
 
 namespace MARAS {
 
-class ConfirmationModal::ModalCallback : public RE::IMessageBoxCallback {
-public:
-    ModalCallback(RE::BSScript::Internal::VirtualMachine* vm,
-                  RE::VMStackID stackID,
-                  ConfirmationModal* owner,
-                  std::vector<std::string> keys,
-                  int normalSec,
-                  int declineSec,
-                  ModalAction action,
-                  std::string actionTypeStr,
-                  RE::FormID originatorID,
-                  RE::FormID targetID,
-                  std::string mainActorList,
-                  std::string secondaryActorList,
-                  std::string activity,
-                  bool skyrimNetAvailable)
-        : _vm(vm),
-          _stackID(stackID),
-          _owner(owner),
-          _keys(std::move(keys)),
-          _normalSec(normalSec),
-          _declineSec(declineSec),
-          _action(action),
-          _actionTypeStr(std::move(actionTypeStr)),
-          _originatorID(originatorID),
-          _targetID(targetID),
-          _mainActorList(std::move(mainActorList)),
-          _secondaryActorList(std::move(secondaryActorList)),
-          _activity(std::move(activity)),
-          _skyrimNetAvailable(skyrimNetAvailable) {}
+namespace {
 
-    void Run(std::uint8_t a_msg) override {
-        int result = static_cast<int>(a_msg);
-        MARAS_LOG_INFO("ConfirmationModal::ModalCallback::Run - result={}", result);
-
-        if (result == 0) {
-            _owner->SetCooldownAll(_keys, _normalSec);
-        } else if (result == 1) {
-            _owner->SetCooldownAll(_keys, _declineSec);
-        } else if (result == 2 && _skyrimNetAvailable) {
-            _owner->SetCooldownAll(_keys, _declineSec);
-            FireTriggerTextInput();
-            FireDeclineEvent();
-        }
-
-        _vm->ReturnLatentResult(_stackID, result);
-    }
-
-private:
-    RE::BSScript::Internal::VirtualMachine* _vm;
-    RE::VMStackID _stackID;
-    ConfirmationModal* _owner;
-    std::vector<std::string> _keys;
-    int _normalSec;
-    int _declineSec;
-    ModalAction _action;
-    std::string _actionTypeStr;
-    RE::FormID _originatorID;
-    RE::FormID _targetID;
-    std::string _mainActorList;
-    std::string _secondaryActorList;
-    std::string _activity;
-    bool _skyrimNetAvailable;
-
-    static std::string BuildDeclineMsg(ModalAction action,
-                                       const std::string& actionTypeRaw,
-                                       const std::string& mainActorList,
-                                       const std::string& secondaryActorList,
-                                       const std::string& activity) {
+    std::string BuildDeclineMsg(ConfirmationModal::ModalAction action,
+                                const std::string& actionTypeRaw,
+                                const std::string& mainActorList,
+                                const std::string& secondaryActorList,
+                                const std::string& activity) {
         auto* playerActor = RE::PlayerCharacter::GetSingleton();
         std::string playerName =
             (playerActor && playerActor->GetDisplayFullName() && playerActor->GetDisplayFullName()[0] != '\0')
@@ -82,34 +23,37 @@ private:
                 : "the player";
 
         switch (action) {
-            case ModalAction::Dating:
+            case ConfirmationModal::ModalAction::Dating:
                 return mainActorList + " attempted to start dating with " + secondaryActorList + ", " + playerName +
                        " did not go through with it.";
-            case ModalAction::Engaged:
+            case ConfirmationModal::ModalAction::Engaged:
                 return mainActorList + " attempted an engagement with " + secondaryActorList + ", " + playerName +
                        " did not go through with it.";
-            case ModalAction::Lover:
+            case ConfirmationModal::ModalAction::Lover:
                 return mainActorList + " attempted to become lovers with " + secondaryActorList + ", " + playerName +
                        " did not go through with it.";
-            case ModalAction::Married:
+            case ConfirmationModal::ModalAction::Married:
                 return mainActorList + " attempted to marry " + secondaryActorList + ", " + playerName +
                        " did not go through with it.";
-            case ModalAction::ExDating:
+            case ConfirmationModal::ModalAction::ExDating:
                 return mainActorList + " attempted to break up dating with " + secondaryActorList + ", " + playerName +
                        " did not go through with it.";
-            case ModalAction::Jilted:
+            case ConfirmationModal::ModalAction::Jilted:
                 return mainActorList + " attempted to break off the engagement with " + secondaryActorList + ", " +
                        playerName + " did not go through with it.";
-            case ModalAction::ExLover:
+            case ConfirmationModal::ModalAction::ExLover:
                 return mainActorList + " attempted to end the lover relationship with " + secondaryActorList + ", " +
                        playerName + " did not go through with it.";
-            case ModalAction::Divorced:
+            case ConfirmationModal::ModalAction::Divorced:
                 return mainActorList + " attempted to divorce " + secondaryActorList + ", " + playerName +
                        " did not go through with it.";
-            case ModalAction::OpenRelationship:
+            case ConfirmationModal::ModalAction::LowAffectionDivorce:
+                return mainActorList + " attempted to divorce " + secondaryActorList +
+                       " due to low affection, " + playerName + " did not go through with it.";
+            case ConfirmationModal::ModalAction::OpenRelationship:
                 return mainActorList + " attempted to open the relationship with " + secondaryActorList + ", " +
                        playerName + " did not go through with it.";
-            case ModalAction::CloseRelationship:
+            case ConfirmationModal::ModalAction::CloseRelationship:
                 return mainActorList + " attempted to close the relationship with " + secondaryActorList + ", " +
                        playerName + " did not go through with it.";
             default:
@@ -123,14 +67,14 @@ private:
                secondaryActorList + ", " + playerName + " did not go through with it.";
     }
 
-    static std::string BuildDeclineJson(ModalAction action,
-                                        const std::string& actionTypeRaw,
-                                        const std::string& mainActorList,
-                                        const std::string& secondaryActorList,
-                                        const std::string& activity,
-                                        RE::FormID originatorID,
-                                        RE::FormID targetID,
-                                        bool skipTrigger = true) {
+    std::string BuildDeclineJson(ConfirmationModal::ModalAction action,
+                                 const std::string& actionTypeRaw,
+                                 const std::string& mainActorList,
+                                 const std::string& secondaryActorList,
+                                 const std::string& activity,
+                                 RE::FormID originatorID,
+                                 RE::FormID targetID,
+                                 bool skipTrigger = true) {
         std::string msg = BuildDeclineMsg(action, actionTypeRaw, mainActorList, secondaryActorList, activity);
         auto* playerActor = RE::PlayerCharacter::GetSingleton();
         std::string playerName =
@@ -138,7 +82,7 @@ private:
                 ? playerActor->GetDisplayFullName()
                 : "the player";
 
-        std::string actionName(ModalActionToString(action));
+        std::string actionName(ConfirmationModal::ModalActionToString(action));
         if (actionName.empty()) actionName = actionTypeRaw;
 
         nlohmann::json j;
@@ -154,10 +98,16 @@ private:
         return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
     }
 
-    void FireDeclineEvent() const {
+    void FireDeclineEvent(ConfirmationModal::ModalAction action,
+                          const std::string& actionTypeStr,
+                          const std::string& mainActorList,
+                          const std::string& secondaryActorList,
+                          const std::string& activity,
+                          RE::FormID originatorID,
+                          RE::FormID targetID) {
         auto* player = RE::PlayerCharacter::GetSingleton();
-        std::string payload = BuildDeclineJson(_action, _actionTypeStr, _mainActorList, _secondaryActorList, _activity,
-                                               _originatorID, _targetID, true);
+        std::string payload = BuildDeclineJson(action, actionTypeStr, mainActorList, secondaryActorList, activity,
+                                               originatorID, targetID, true);
 
         MARAS_LOG_INFO("ConfirmationModal::FireDeclineEvent - firing maras_decline: {}", payload);
 
@@ -172,17 +122,68 @@ private:
         }
     }
 
-    static void FireTriggerTextInput() {
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([]() {
-                auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-                if (!vm) return;
-                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
-                vm->DispatchStaticCall("SkyrimNetApi", "TriggerTextInput", RE::MakeFunctionArguments(), nullCallback);
-            });
+    void FireTriggerTextInput() {
+        PrismaUIManager::GetSingleton().RunAfterFocusReleased([]() {
+            MARAS_LOG_INFO("ConfirmationModal::FireTriggerTextInput - FocusMenu released, dispatching SkyrimNetApi.TriggerTextInput");
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm) return;
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
+            vm->DispatchStaticCall("SkyrimNetApi", "TriggerTextInput", RE::MakeFunctionArguments(), nullCallback);
+        });
+    }
+
+    std::string BuildModalTitle(ConfirmationModal::ModalAction action, const std::string& actionTypeRaw) {
+        switch (action) {
+            case ConfirmationModal::ModalAction::Dating:
+                return "Dating Proposal";
+            case ConfirmationModal::ModalAction::Engaged:
+                return "Engagement Proposal";
+            case ConfirmationModal::ModalAction::Lover:
+                return "Lover Proposal";
+            case ConfirmationModal::ModalAction::Married:
+                return "Marriage Proposal";
+            case ConfirmationModal::ModalAction::ExDating:
+                return "Breakup Request";
+            case ConfirmationModal::ModalAction::Jilted:
+                return "Break Off Engagement";
+            case ConfirmationModal::ModalAction::ExLover:
+                return "End Lover Relationship";
+            case ConfirmationModal::ModalAction::Divorced:
+                return "Divorce Request";
+            case ConfirmationModal::ModalAction::LowAffectionDivorce:
+                return "Estranged Divorce Ultimatum";
+            case ConfirmationModal::ModalAction::OpenRelationship:
+                return "Open Relationship Request";
+            case ConfirmationModal::ModalAction::CloseRelationship:
+                return "Close Relationship Request";
+            case ConfirmationModal::ModalAction::Custom:
+            default:
+                return !actionTypeRaw.empty() ? ("Confirm: " + actionTypeRaw) : "Relationship Confirmation";
         }
     }
-};
+
+    ModalTone GetModalTone(ConfirmationModal::ModalAction action) {
+        switch (action) {
+            case ConfirmationModal::ModalAction::ExDating:
+            case ConfirmationModal::ModalAction::Jilted:
+            case ConfirmationModal::ModalAction::ExLover:
+            case ConfirmationModal::ModalAction::Divorced:
+            case ConfirmationModal::ModalAction::LowAffectionDivorce:
+                return ModalTone::Danger;
+            case ConfirmationModal::ModalAction::OpenRelationship:
+            case ConfirmationModal::ModalAction::CloseRelationship:
+                return ModalTone::Warning;
+            case ConfirmationModal::ModalAction::Dating:
+            case ConfirmationModal::ModalAction::Engaged:
+            case ConfirmationModal::ModalAction::Lover:
+            case ConfirmationModal::ModalAction::Married:
+            case ConfirmationModal::ModalAction::Custom:
+            default:
+                return ModalTone::Default;
+        }
+    }
+
+}  // namespace
 
 ConfirmationModal& ConfirmationModal::GetSingleton() {
     static ConfirmationModal instance;
@@ -201,6 +202,7 @@ ConfirmationModal::ModalAction ConfirmationModal::StringToModalAction(std::strin
     if (lower == "jilted") return ModalAction::Jilted;
     if (lower == "exlover") return ModalAction::ExLover;
     if (lower == "divorced") return ModalAction::Divorced;
+    if (lower == "low_affection_divorce") return ModalAction::LowAffectionDivorce;
     if (lower == "open_relationship") return ModalAction::OpenRelationship;
     if (lower == "close_relationship") return ModalAction::CloseRelationship;
     return ModalAction::Custom;
@@ -216,6 +218,7 @@ std::string_view ConfirmationModal::ModalActionToString(ModalAction action) {
         case ModalAction::Jilted: return "jilted";
         case ModalAction::ExLover: return "exlover";
         case ModalAction::Divorced: return "divorced";
+        case ModalAction::LowAffectionDivorce: return "low_affection_divorce";
         case ModalAction::OpenRelationship: return "open_relationship";
         case ModalAction::CloseRelationship: return "close_relationship";
         default: return "";
@@ -387,49 +390,81 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
 
     std::string message = BuildMessage(action, actionTypeStr, mainActorList, secondaryActorList, activity, details);
 
-    MARAS_LOG_INFO("ConfirmationModal::Show - queuing modal message: '{}'", message);
-
-    if (auto* taskIF = SKSE::GetTaskInterface()) {
-        taskIF->AddTask([this, vm, stackID, message, keys, normalSec, declineSec,
-                         action, actionTypeStr, originatorID, targetID, mainActorList, secondaryActorList, activity]() {
-            MARAS_LOG_INFO("ConfirmationModal - game thread: creating MessageBoxData");
-            auto* factory = RE::MessageDataFactoryManager::GetSingleton();
-            auto* ifStr   = RE::InterfaceStrings::GetSingleton();
-            auto* creator = (factory && ifStr) ? factory->GetCreator<RE::MessageBoxData>(ifStr->messageBoxData) : nullptr;
-            if (!creator) {
-                MARAS_LOG_ERROR("ConfirmationModal - null creator");
-                vm->ReturnLatentResult(stackID, 1);
-                return;
-            }
-            auto* msgData = creator->Create();
-            if (!msgData) {
-                MARAS_LOG_ERROR("ConfirmationModal - null msgData");
-                vm->ReturnLatentResult(stackID, 1);
-                return;
-            }
-
-            msgData->bodyText = message.c_str();
-            msgData->buttonText.push_back(RE::BSString("Accept"));
-            msgData->buttonText.push_back(RE::BSString("Cancel"));
-
-            // Conditionally add "Decline (Explain)" button ONLY if SkyrimNet is loaded
-            bool skyrimNetAvailable = MARAS::IsSkyrimNetAvailable();
-            if (skyrimNetAvailable) {
-                msgData->buttonText.push_back(RE::BSString("Decline (Explain)"));
-            }
-
-            msgData->cancelButtonIndex = 1;
-            msgData->callback = RE::make_smart<ModalCallback>(
-                vm, stackID, this, keys, normalSec, declineSec,
-                action, actionTypeStr, originatorID, targetID, mainActorList, secondaryActorList, activity, skyrimNetAvailable);
-
-            MARAS_LOG_INFO("ConfirmationModal - queuing UI message (SkyrimNet available: {})", skyrimNetAvailable);
-            RE::MessageBoxMenu::QueueMessage(msgData);
-        });
-    } else {
+    if (!SKSE::GetTaskInterface()) {
         MARAS_LOG_ERROR("ConfirmationModal::Show - SKSE task interface unavailable");
         return RE::BSScript::LatentStatus::kFailed;
     }
+
+    bool skyrimNetAvailable = MARAS::IsSkyrimNetAvailable();
+
+    ModalRequest req;
+    req.title = BuildModalTitle(action, actionTypeStr);
+    req.subtitle = mainActorList + " & " + secondaryActorList;
+    req.message = message;
+    req.tone = GetModalTone(action);
+    req.size = ModalSize::Md;
+    req.defaultCancelButtonIndex = 1;
+
+    req.buttons.push_back(ModalButton::Make("accept", "Accept", ModalButtonVariant::Primary));
+    req.buttons.push_back(ModalButton::Make("cancel", "Cancel", ModalButtonVariant::Secondary));
+
+    // Conditionally add "Decline (Explain)" button ONLY if SkyrimNet is loaded
+    if (skyrimNetAvailable) {
+        req.buttons.push_back(ModalButton::Make("decline_explain", "Decline (Explain)", ModalButtonVariant::Outline));
+    }
+
+    MARAS_LOG_INFO("ConfirmationModal::Show - queuing Prisma UI modal: title='{}' message='{}' (SkyrimNet available: {})",
+                   req.title, message, skyrimNetAvailable);
+
+    const bool trackPairState = (action != ModalAction::Custom && originatorID != 0 && targetID != 0);
+    const RelationshipStatus initialStatus = trackPairState
+        ? NPCRelationshipManager::GetSingleton().GetRelationshipStatus(originatorID, targetID)
+        : RelationshipStatus::Unknown;
+    const bool initialIsOpen = trackPairState
+        ? NPCRelationshipManager::GetSingleton().GetPairIsOpen(originatorID, targetID)
+        : false;
+
+    PrismaModalManager::GetSingleton().ShowModal(
+        std::move(req),
+        [this, vm, stackID, keys = std::move(keys), normalSec, declineSec,
+         action, actionTypeStr = std::move(actionTypeStr), originatorID, targetID,
+         trackPairState, initialStatus, initialIsOpen,
+         mainActorList = std::move(mainActorList), secondaryActorList = std::move(secondaryActorList),
+         activity = std::move(activity), skyrimNetAvailable](const ModalResponse& resp) {
+            int result = (resp.buttonIndex >= 0) ? resp.buttonIndex : 1;
+            if (resp.aborted) {
+                result = 1;
+            }
+            MARAS_LOG_INFO("ConfirmationModal callback - modalId='{}' buttonId='{}' result={} aborted={}",
+                           resp.modalId, resp.buttonId, result, resp.aborted);
+
+            if (trackPairState) {
+                auto& relMgr = NPCRelationshipManager::GetSingleton();
+                const RelationshipStatus currentStatus = relMgr.GetRelationshipStatus(originatorID, targetID);
+                const bool currentIsOpen = relMgr.GetPairIsOpen(originatorID, targetID);
+                const bool stateChanged = (currentStatus != initialStatus) ||
+                    ((action == ModalAction::OpenRelationship || action == ModalAction::CloseRelationship) &&
+                     currentIsOpen != initialIsOpen);
+                if (stateChanged) {
+                    MARAS_LOG_INFO("ConfirmationModal callback - pair {:08X}/{:08X} state already changed while modal '{}' was open; ignoring modal selection",
+                                   originatorID, targetID, resp.modalId);
+                    vm->ReturnLatentResult(stackID, 1);
+                    return;
+                }
+            }
+
+            if (result == 0) {
+                this->SetCooldownAll(keys, normalSec);
+            } else if (result == 1) {
+                this->SetCooldownAll(keys, declineSec);
+            } else if (result == 2 && skyrimNetAvailable) {
+                this->SetCooldownAll(keys, declineSec);
+                FireTriggerTextInput();
+                FireDeclineEvent(action, actionTypeStr, mainActorList, secondaryActorList, activity, originatorID, targetID);
+            }
+
+            vm->ReturnLatentResult(stackID, result);
+        });
 
     return RE::BSScript::LatentStatus::kStarted;
 }
@@ -496,6 +531,7 @@ bool ConfirmationModal::IsActionTypeEnabled(ModalAction action) {
         case ModalAction::Jilted: return s.confirmBreakup_Engagement;
         case ModalAction::ExLover: return s.confirmBreakup_Lover;
         case ModalAction::Divorced: return s.confirmDivorce;
+        case ModalAction::LowAffectionDivorce: return s.confirmDivorceDuringLowAffectionQuest;
         case ModalAction::OpenRelationship: return s.confirmOpenRelationship;
         case ModalAction::CloseRelationship: return s.confirmCloseRelationship;
         default: return true;
@@ -514,6 +550,9 @@ std::string ConfirmationModal::BuildMessage(ModalAction action,
         case ModalAction::Divorced:
             return mainActorList + " wants to end the relationship with " + secondaryActorList +
                    ".\nDo you want to proceed with the divorce?";
+        case ModalAction::LowAffectionDivorce:
+            return mainActorList + " wants to divorce " + secondaryActorList +
+                   " due to estranged affection.\nDo you want to proceed with the divorce?";
         case ModalAction::Dating:
             return mainActorList + " wants to start dating " + secondaryActorList + ".\nDo you allow this?";
         case ModalAction::Engaged:

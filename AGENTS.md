@@ -52,6 +52,10 @@ For detailed system architecture, consult:
   2. `PrismaUIDataBridge.cpp` (`SendOverviewData` / `SendMatchmakingSettings` **and** `ProcessUpdateSetting` / `ProcessUpdateMatchmakingSettings`).
   3. `PapyrusInterface.cpp` (`GetSetting*` and `SetSetting*`, if exposed to Papyrus).
 
+### Standalone Prisma UI Modals (`PrismaModalManager` & `PrismaModalHost`)
+- All confirmation popups, retry/cancel prompts, and interactive modal dialogs **MUST** use the Prisma UI modal infrastructure (`PrismaModalManager` in C++ $\leftrightarrow$ `useModalStore` / `<PrismaModalHost />` in React) rather than native Skyrim `RE::MessageBoxMenu`.
+- Modals mount independently of the main dashboard (`<DashboardLayout>`), pause the game on show, keep PrismaUI's `FocusMenu` enabled (`Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/false)`) so mouse cursor movement and keyboard navigation (`WASD`, Arrow keys, `Tab`, `Enter`/`Space`/`E`) work seamlessly, and cannot be dismissed except by selecting one of the modal's control buttons. See [docs/modder/services/PrismaModalManager.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PrismaModalManager.md).
+
 ---
 
 ## 2. SkyrimNet Cross-Layer Gating Policy

@@ -13,7 +13,9 @@
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "ui/ConfirmationModal.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
+#include "ui/PrismaUIManager.h"
 #include "utils/Common.h"
 #include "utils/Settings.h"
 
@@ -196,6 +198,8 @@ namespace MARAS::Serialization {
         IntimateThreadService::GetSingleton().ClearAll();
         ChildrenFleeService::GetSingleton().Reset();
         ConfirmationModal::GetSingleton().Revert();
+        PrismaModalManager::GetSingleton().Revert();
+        PrismaUIManager::GetSingleton().ResetNewGameDeferral();
         PrismaUIDataBridge::GetSingleton().Revert();
 
         MARAS_LOG_INFO("Reverted MARAS co-save runtime state");

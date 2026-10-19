@@ -3,20 +3,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border cursor-pointer",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-base font-medium transition-colors focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-accent-bright focus-visible:ring-2 focus-visible:ring-accent-bright focus:shadow-glow disabled:pointer-events-none disabled:opacity-50 border cursor-pointer",
   {
     variants: {
       variant: {
         default:
-          "bg-accent text-foreground-onAccent hover:bg-accent-bright border-accent-bright active:bg-accent-deep shadow-raised",
+          "bg-accent text-foreground-onAccent hover:bg-accent-bright focus:bg-accent-bright border-accent-bright active:bg-accent-deep shadow-raised",
         secondary:
-          "bg-panel-raised text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-strong hover:text-accent-bright",
+          "bg-panel-raised text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-strong hover:text-accent-bright focus:bg-accent-faint focus:border-border-accent focus:text-accent-bright",
         outline:
-          "bg-transparent text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-accent hover:text-accent-bright",
+          "bg-transparent text-foreground-primary border-border-subtle hover:bg-accent-faint hover:border-border-accent hover:text-accent-bright focus:bg-accent-faint focus:border-border-accent focus:text-accent-bright",
         ghost:
-          "bg-transparent text-foreground-secondary hover:bg-accent-faint hover:text-foreground-primary border-transparent",
+          "bg-transparent text-foreground-secondary hover:bg-accent-faint hover:text-foreground-primary focus:bg-accent-faint focus:text-foreground-primary border-transparent",
         danger:
-          "bg-status-danger-soft text-status-danger border-status-danger hover:bg-status-danger hover:text-foreground-primary",
+          "bg-status-danger-soft text-status-danger border-status-danger hover:bg-status-danger hover:text-foreground-primary focus:bg-status-danger focus:text-foreground-primary",
       },
       size: {
         default: "h-[2.5rem] px-[1rem] py-[0.5rem]",

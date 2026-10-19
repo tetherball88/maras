@@ -11,6 +11,7 @@
 #include "core/MatchmakingService.h"
 #include "core/DeceasedRegistry.h"
 #include "services/ActorService.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIManager.h"
 #include "utils/FormUtils.h"
 #include "utils/EnumUtils.h"
@@ -134,7 +135,11 @@ namespace MARAS {
 
         taskIF->AddTask([this, action = std::move(action), payload = std::move(payload)]() {
             try {
-                if (action == "fetchOverview") {
+                if (action == "uiReady") {
+                    PrismaUIManager::GetSingleton().OnUIReady();
+                } else if (action == "modalResponse") {
+                    PrismaModalManager::GetSingleton().HandleModalResponse(payload);
+                } else if (action == "fetchOverview") {
                     SendOverviewData();
                 } else if (action == "fetchHouseholdBuffs") {
                     SendHouseholdBuffs();
@@ -403,6 +408,7 @@ namespace MARAS {
         j["actionsDeclineCooldown"] = settings.actionsDeclineCooldown;
         j["skyrimnetActionRadius"] = RoundFloat(settings.skyrimnetActionRadius);
         j["matchmakingExcludePlayerActivePartners"] = settings.matchmakingExcludePlayerActivePartners;
+        j["matchmakingConfirmResults"] = settings.matchmakingConfirmResults;
         j["alwaysSuccess"] = settings.alwaysSuccessMarriage;
         j["logLevel"] = settings.logLevel;
         j["logDestination"] = settings.logDestination;
@@ -488,7 +494,6 @@ namespace MARAS {
         data["statCounts"]["engaged"] = relMgr.GetAllEngaged(kPlayerFormID).size();
         data["statCounts"]["divorced"] = relMgr.GetAllDivorced(kPlayerFormID).size();
         data["statCounts"]["jilted"] = relMgr.GetAllJilted(kPlayerFormID).size();
-        data["statCounts"]["candidate"] = relMgr.GetAllCandidates(kPlayerFormID).size();
 
         // Hierarchy top 3
         std::vector<std::string> rankFormIDs;
@@ -844,6 +849,7 @@ namespace MARAS {
         j["useLLM"] = s.matchmakingUseLLM;
         j["evaluationStep"] = s.matchmakingEvaluationStep;
         j["generateMemories"] = s.matchmakingGenerateMemories;
+        j["confirmResults"] = s.matchmakingConfirmResults;
         j["diceRollChanceNewDating"] = s.diceRollChanceNewDating;
         j["diceRollChanceNewEngaged"] = s.diceRollChanceNewEngaged;
         j["diceRollChanceNewLoverAllowed"] = s.diceRollChanceNewLoverAllowed;
@@ -906,6 +912,7 @@ namespace MARAS {
         if (payload.contains("useLLM")) s.matchmakingUseLLM = GetJsonBool(payload, "useLLM", s.matchmakingUseLLM);
         if (payload.contains("evaluationStep")) s.matchmakingEvaluationStep = GetJsonBool(payload, "evaluationStep", s.matchmakingEvaluationStep);
         if (payload.contains("generateMemories")) s.matchmakingGenerateMemories = GetJsonBool(payload, "generateMemories", s.matchmakingGenerateMemories);
+        if (payload.contains("confirmResults")) s.matchmakingConfirmResults = GetJsonBool(payload, "confirmResults", s.matchmakingConfirmResults);
         if (payload.contains("diceRollChanceNewDating")) s.diceRollChanceNewDating = GetJsonInt(payload, "diceRollChanceNewDating", s.diceRollChanceNewDating);
         if (payload.contains("diceRollChanceNewEngaged")) s.diceRollChanceNewEngaged = GetJsonInt(payload, "diceRollChanceNewEngaged", s.diceRollChanceNewEngaged);
         if (payload.contains("diceRollChanceNewLoverAllowed")) s.diceRollChanceNewLoverAllowed = GetJsonInt(payload, "diceRollChanceNewLoverAllowed", s.diceRollChanceNewLoverAllowed);

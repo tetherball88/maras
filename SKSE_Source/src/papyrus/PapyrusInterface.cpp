@@ -4,11 +4,16 @@
 #include "core/ChildrenFleeService.h"
 #include "core/IntimateThreadService.h"
 #include "core/LoggingService.h"
+#include "core/PlayerHouseService.h"
 #include "services/ActorService.h"
 #include "ui/ConfirmationModal.h"
+#include "ui/PrismaModalManager.h"
+#include "ui/PrismaUIDataBridge.h"
 #include "ui/PrismaUIManager.h"
 #include "utils/Common.h"
+#include "utils/EnumUtils.h"
 #include "utils/JsonService.h"
+#include "utils/Settings.h"
 
 namespace MARAS::PapyrusInterface {
 
@@ -156,6 +161,628 @@ namespace MARAS::PapyrusInterface {
             vm, stackID,
             actionType.c_str(), mainActors, secondaryActors,
             paramsJson.c_str());
+    }
+
+    RE::BSScript::LatentStatus ShowSkipWeddingModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                    RE::VMStackID stackID,
+                                                    RE::StaticFunctionTag*,
+                                                    RE::Actor* fiance) {
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("PapyrusInterface: ShowSkipWeddingModal - SKSE task interface unavailable");
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        std::string fianceName = fiance ? ActorSvc::GetName(fiance->GetFormID()) : "your fiance";
+        if (fianceName.empty()) {
+            fianceName = "your fiance";
+        }
+
+        ModalRequest req;
+        req.title = "Wedding Ceremony";
+        req.subtitle = fianceName;
+        req.message = "Would you like to skip the formal Temple of Mara wedding ceremony with " + fianceName +
+                      " and marry immediately, or hold a traditional ceremony?";
+        req.tone = ModalTone::Default;
+        req.size = ModalSize::Sm;
+        req.defaultCancelButtonIndex = 1;
+
+        req.controls.push_back(ModalControl::MakeCheckbox(
+            "dont_ask_again",
+            "Remember my choice for future engagements",
+            false));
+
+        req.buttons.push_back(ModalButton::Make("skip_wedding", "Marry Immediately (Skip Ceremony)", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("hold_wedding", "Hold Wedding Ceremony", ModalButtonVariant::Secondary));
+
+        MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal queuing modal for '{}'", fianceName);
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [vm, stackID](const ModalResponse& resp) {
+                if (resp.aborted) {
+                    vm->ReturnLatentResult(stackID, 1);
+                    return;
+                }
+
+                const bool dontAskAgain = resp.GetBool("dont_ask_again", false);
+                if (resp.buttonIndex == 0 || resp.buttonId == "skip_wedding") {
+                    if (dontAskAgain) {
+                        Settings::GetSingleton().SetBoolByKey("skipWedding", true);
+                        PrismaUIDataBridge::GetSingleton().SendSettingsData();
+                        MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal - persisted skipWedding=true");
+                    }
+                    vm->ReturnLatentResult(stackID, 0);
+                } else {
+                    int32_t result = dontAskAgain ? 2 : 1;
+                    vm->ReturnLatentResult(stackID, result);
+                }
+            });
+
+        return RE::BSScript::LatentStatus::kStarted;
+    }
+
+    RE::BSScript::LatentStatus ShowDivorceSettlementModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                          RE::VMStackID stackID,
+                                                          RE::StaticFunctionTag*,
+                                                          RE::Actor* exSpouse,
+                                                          int32_t totalFee,
+                                                          int32_t goldShare,
+                                                          int32_t assetsShare,
+                                                          bool canPayDirectly) {
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("PapyrusInterface: ShowDivorceSettlementModal - SKSE task interface unavailable");
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        std::string spouseName = exSpouse ? ActorSvc::GetName(exSpouse->GetFormID()) : "";
+
+        ModalRequest req;
+        req.title = "Divorce Settlement Notice";
+        req.subtitle = !spouseName.empty() ? spouseName : "Hold Court";
+        req.message = !spouseName.empty()
+            ? ("A hold court has issued a divorce settlement ruling following your divorce from " + spouseName + ".")
+            : "A hold court has issued a divorce settlement ruling.";
+        req.tone = ModalTone::Danger;
+        req.size = ModalSize::Md;
+        req.defaultCancelButtonIndex = canPayDirectly ? 1 : 0;
+
+        std::string breakdownText = fmt::format(
+            "Court Filing Fee: 100 Gold\n"
+            "Liquid Wealth Share: {} Gold\n"
+            "Property & Renown Assessment: {} Gold\n"
+            "Total Settlement Due: {} Gold",
+            goldShare, assetsShare, totalFee);
+
+        req.controls.push_back(ModalControl::MakeInfoBox(
+            "fee_breakdown",
+            "Settlement Breakdown",
+            breakdownText,
+            ModalTone::Warning));
+
+        if (canPayDirectly) {
+            req.buttons.push_back(ModalButton::Make(
+                "pay_now",
+                fmt::format("Pay Settlement Now ({} Gold)", totalFee),
+                ModalButtonVariant::Primary));
+            req.buttons.push_back(ModalButton::Make(
+                "refuse_bounty",
+                "Refuse / Add to Hold Bounty",
+                ModalButtonVariant::Danger));
+        } else {
+            req.buttons.push_back(ModalButton::Make(
+                "accept_bounty",
+                fmt::format("Accept Hold Bounty ({} Gold)", totalFee),
+                ModalButtonVariant::Danger));
+        }
+
+        MARAS_LOG_INFO("PapyrusInterface: ShowDivorceSettlementModal queuing modal for '{}' (fee={}, canPayDirectly={})",
+                       req.subtitle, totalFee, canPayDirectly);
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [vm, stackID, canPayDirectly](const ModalResponse& resp) {
+                if (resp.aborted) {
+                    vm->ReturnLatentResult(stackID, 1);
+                    return;
+                }
+
+                if (canPayDirectly && (resp.buttonIndex == 0 || resp.buttonId == "pay_now")) {
+                    vm->ReturnLatentResult(stackID, 0);
+                } else {
+                    vm->ReturnLatentResult(stackID, 1);
+                }
+            });
+
+        return RE::BSScript::LatentStatus::kStarted;
+    }
+
+    RE::BSScript::LatentStatus ShowChooseHomeModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                   RE::VMStackID stackID,
+                                                   RE::StaticFunctionTag*,
+                                                   RE::Actor* targetActor,
+                                                   bool isChild) {
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("PapyrusInterface: ShowChooseHomeModal - SKSE task interface unavailable");
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        auto& houseSvc = PlayerHouseService::GetSingleton();
+        auto houses = houseSvc.GetAllPlayerHouses();
+        if (houses.empty()) {
+            MARAS_LOG_WARN("PapyrusInterface: ShowChooseHomeModal called with no registered player houses");
+            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
+                vm->ReturnLatentResult<RE::BGSLocation*>(stackID, nullptr);
+            });
+            return RE::BSScript::LatentStatus::kStarted;
+        }
+
+        const RE::FormID targetFormID = targetActor ? targetActor->GetFormID() : 0;
+        std::string targetName = targetActor ? ActorSvc::GetName(targetFormID) : "";
+        if (targetName.empty()) {
+            targetName = isChild ? "Child" : "Spouse";
+        }
+
+        const RE::FormID currentHouseID = (targetFormID != 0) ? houseSvc.GetTenantHouseFormID(targetFormID) : 0;
+        std::vector<ModalSelectOption> houseOptions;
+        houseOptions.reserve(houses.size());
+        std::string defaultHouseVal;
+
+        for (RE::FormID houseID : houses) {
+            std::string houseName = PlayerHouseService::GetHouseName(houseID);
+            if (houseName.empty()) {
+                houseName = fmt::format("Home ({:08X})", houseID);
+            }
+            const auto tenants = houseSvc.GetPlayerHouseTenants(houseID);
+            std::string label = fmt::format("{} ({} resident{})",
+                                            houseName,
+                                            tenants.size(),
+                                            tenants.size() == 1 ? "" : "s");
+            std::string valStr = std::to_string(houseID);
+            houseOptions.push_back({valStr, std::move(label)});
+            if (defaultHouseVal.empty() || houseID == currentHouseID) {
+                defaultHouseVal = valStr;
+            }
+        }
+
+        ModalRequest req;
+        req.title = isChild ? "Choose Child Residence" : "Choose Spouse Residence";
+        req.subtitle = targetName;
+        req.message = isChild
+            ? ("Select which player home " + targetName + " should live in.")
+            : ("Select which player home " + targetName + " should live in and how they should spend their daily schedule.");
+        req.tone = ModalTone::Default;
+        req.size = ModalSize::Md;
+        req.defaultCancelButtonIndex = 1;
+
+        req.controls.push_back(ModalControl::MakeSelect(
+            "house_id",
+            "Residence",
+            std::move(houseOptions),
+            defaultHouseVal));
+
+        if (!isChild) {
+            const bool currentStayAtHome = (targetFormID != 0) ? houseSvc.GetTenantStayAtHome(targetFormID) : true;
+            std::vector<ModalSelectOption> schedOptions = {
+                {"stay", "Stay at Home (Sandbox in Residence)"},
+                {"original", "Keep Original AI Schedule"}};
+            req.controls.push_back(ModalControl::MakeSelect(
+                "schedule_mode",
+                "Spouse Schedule",
+                std::move(schedOptions),
+                currentStayAtHome ? "stay" : "original"));
+        }
+
+        req.buttons.push_back(ModalButton::Make("confirm", "Move to Residence", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("cancel", "Cancel", ModalButtonVariant::Secondary));
+
+        MARAS_LOG_INFO("PapyrusInterface: ShowChooseHomeModal queuing modal for '{}' (isChild={}, houses={})",
+                       targetName, isChild, houses.size());
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [vm, stackID, targetFormID, isChild](const ModalResponse& resp) {
+                if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
+                    vm->ReturnLatentResult<RE::BGSLocation*>(stackID, nullptr);
+                    return;
+                }
+
+                const std::string houseIdStr = resp.GetString("house_id", "");
+                RE::FormID selectedHouseID = 0;
+                if (!houseIdStr.empty()) {
+                    try {
+                        selectedHouseID = static_cast<RE::FormID>(std::stoul(houseIdStr));
+                    } catch (...) {
+                        selectedHouseID = 0;
+                    }
+                }
+
+                auto* chosenLoc = selectedHouseID != 0
+                    ? RE::TESForm::LookupByID<RE::BGSLocation>(selectedHouseID)
+                    : nullptr;
+
+                if (chosenLoc && !isChild && targetFormID != 0) {
+                    const bool stayAtHome = (resp.GetString("schedule_mode", "stay") != "original");
+                    std::lock_guard lock(GetPapyrusMutex());
+                    auto& svc = PlayerHouseService::GetSingleton();
+                    svc.RelocateFamilyUnit(targetFormID, selectedHouseID, true);
+                    svc.SetTenantStayAtHome(targetFormID, stayAtHome);
+                }
+
+                vm->ReturnLatentResult<RE::BGSLocation*>(stackID, chosenLoc);
+            });
+
+        return RE::BSScript::LatentStatus::kStarted;
+    }
+
+    RE::BSScript::LatentStatus ShowChooseAdoptionSpouseModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                             RE::VMStackID stackID,
+                                                             RE::StaticFunctionTag*,
+                                                             RE::Actor* child) {
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("PapyrusInterface: ShowChooseAdoptionSpouseModal - SKSE task interface unavailable");
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto& houseSvc = PlayerHouseService::GetSingleton();
+        auto spouses = relMgr.GetAllMarried();
+        if (spouses.empty()) {
+            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
+                vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
+            });
+            return RE::BSScript::LatentStatus::kStarted;
+        }
+
+        std::vector<ModalSelectOption> spouseOptions;
+        spouseOptions.reserve(spouses.size() + 1);
+        std::string defaultSpouseVal;
+
+        for (RE::FormID spouseID : spouses) {
+            auto* spouseActor = RE::TESForm::LookupByID<RE::Actor>(spouseID);
+            if (!spouseActor) {
+                continue;
+            }
+            std::string spouseName = ActorSvc::GetName(spouseID);
+            if (spouseName.empty()) {
+                spouseName = fmt::format("Spouse ({:08X})", spouseID);
+            }
+
+            RE::FormID houseID = houseSvc.GetTenantHouseFormID(spouseID);
+            std::string label;
+            if (houseID != 0) {
+                std::string houseName = PlayerHouseService::GetHouseName(houseID);
+                label = fmt::format("{} — {}", spouseName, !houseName.empty() ? houseName : "Player Home");
+            } else {
+                label = fmt::format("{} (Not Assigned to a Player Home)", spouseName);
+            }
+
+            std::string valStr = std::to_string(spouseID);
+            spouseOptions.push_back({valStr, std::move(label)});
+            if (defaultSpouseVal.empty()) {
+                defaultSpouseVal = valStr;
+            }
+        }
+
+        if (defaultSpouseVal.empty()) {
+            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
+                vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
+            });
+            return RE::BSScript::LatentStatus::kStarted;
+        }
+
+        spouseOptions.push_back({"0", "None (Adopt as Single Parent)"});
+
+        std::string childName = child ? ActorSvc::GetName(child->GetFormID()) : "";
+
+        ModalRequest req;
+        req.title = "Adopt Child — Select Co-Parent";
+        req.subtitle = !childName.empty() ? childName : "Child Adoption";
+        req.message = !childName.empty()
+            ? ("Choose which of your spouses will co-parent " + childName + " with you, or adopt as a single parent.")
+            : "Choose which of your spouses will co-parent this child with you, or adopt as a single parent.";
+        req.tone = ModalTone::Default;
+        req.size = ModalSize::Md;
+        req.defaultCancelButtonIndex = 1;
+
+        req.controls.push_back(ModalControl::MakeSelect(
+            "spouse_id",
+            "Co-Parent Spouse",
+            std::move(spouseOptions),
+            defaultSpouseVal));
+
+        req.buttons.push_back(ModalButton::Make("confirm", "Confirm Co-Parent", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("single_parent", "Adopt as Single Parent", ModalButtonVariant::Secondary));
+
+        MARAS_LOG_INFO("PapyrusInterface: ShowChooseAdoptionSpouseModal queuing modal (child='{}', spouses={})",
+                       req.subtitle, spouses.size());
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [vm, stackID](const ModalResponse& resp) {
+                if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
+                    vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
+                    return;
+                }
+
+                const std::string spouseIdStr = resp.GetString("spouse_id", "0");
+                RE::FormID selectedSpouseID = 0;
+                if (!spouseIdStr.empty() && spouseIdStr != "0") {
+                    try {
+                        selectedSpouseID = static_cast<RE::FormID>(std::stoul(spouseIdStr));
+                    } catch (...) {
+                        selectedSpouseID = 0;
+                    }
+                }
+
+                auto* chosenSpouse = selectedSpouseID != 0
+                    ? RE::TESForm::LookupByID<RE::Actor>(selectedSpouseID)
+                    : nullptr;
+                vm->ReturnLatentResult<RE::Actor*>(stackID, chosenSpouse);
+            });
+
+        return RE::BSScript::LatentStatus::kStarted;
+    }
+
+    RE::BSScript::LatentStatus ShowDebugStatusModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                    RE::VMStackID stackID,
+                                                    RE::StaticFunctionTag*,
+                                                    RE::Actor* target) {
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("PapyrusInterface: ShowDebugStatusModal - SKSE task interface unavailable");
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        if (!target) {
+            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
+                vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(""));
+            });
+            return RE::BSScript::LatentStatus::kStarted;
+        }
+
+        const RE::FormID targetID = target->GetFormID();
+        std::string targetName = ActorSvc::GetName(targetID);
+        if (targetName.empty()) {
+            targetName = fmt::format("NPC ({:08X})", targetID);
+        }
+
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        std::string currentStatus = "candidate";
+        if (relMgr.IsRegistered(targetID)) {
+            currentStatus = std::string(Utils::RelationshipStatusToString(relMgr.GetRelationshipStatus(kPlayerFormID, targetID)));
+            for (char& ch : currentStatus) {
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+        }
+
+        std::vector<ModalSelectOption> statusOptions = {
+            {"candidate", "Candidate"},
+            {"dating", "Dating"},
+            {"lover", "Lover"},
+            {"engaged", "Engaged"},
+            {"married", "Married"},
+            {"exdating", "Ex-Dating"},
+            {"exlover", "Ex-Lover"},
+            {"jilted", "Jilted"},
+            {"divorced", "Divorced"},
+            {"unregister", "Unregister from MARAS"}};
+
+        ModalRequest req;
+        req.title = "Debug Relationship Status";
+        req.subtitle = targetName;
+        req.message = fmt::format("Current MARAS status with Player: '{}'. Select a new status to apply:", currentStatus);
+        req.tone = ModalTone::Default;
+        req.size = ModalSize::Sm;
+        req.defaultCancelButtonIndex = 1;
+
+        req.controls.push_back(ModalControl::MakeSelect(
+            "target_status",
+            "Target Relationship Status",
+            std::move(statusOptions),
+            currentStatus));
+
+        req.buttons.push_back(ModalButton::Make("apply", "Apply Status", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("cancel", "Cancel", ModalButtonVariant::Secondary));
+
+        MARAS_LOG_INFO("PapyrusInterface: ShowDebugStatusModal queuing modal for '{}' (current='{}')",
+                       targetName, currentStatus);
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [vm, stackID](const ModalResponse& resp) {
+                if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "apply")) {
+                    vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(""));
+                    return;
+                }
+
+                const std::string chosen = resp.GetString("target_status", "");
+                vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(chosen));
+            });
+
+        return RE::BSScript::LatentStatus::kStarted;
+    }
+
+    RE::BSScript::LatentStatus ShowChildMigrationAuditModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                            RE::VMStackID stackID,
+                                                            RE::StaticFunctionTag*) {
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("PapyrusInterface: ShowChildMigrationAuditModal - SKSE task interface unavailable");
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        std::vector<RE::FormID> migratedChildIDs;
+        std::vector<ModalChecklistItem> items;
+
+        for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
+            const bool isTempRef = ((cID >> 24) == 0xFF);
+            const bool involvesPlayer = (cEntry.guardianAID == kPlayerFormID ||
+                                         cEntry.guardianBID == kPlayerFormID ||
+                                         cEntry.bioMotherID == kPlayerFormID ||
+                                         cEntry.bioFatherID == kPlayerFormID);
+            if (!cEntry.isBiologicalChild && !isTempRef && !involvesPlayer) {
+                continue;
+            }
+
+            migratedChildIDs.push_back(cID);
+
+            ModalChecklistItem item;
+            item.id = fmt::format("child_{:08X}", cID);
+            item.label = !cEntry.name.empty() ? cEntry.name : ActorSvc::GetName(cID);
+            if (item.label.empty()) {
+                item.label = fmt::format("Child ({:08X})", cID);
+            }
+
+            switch (cEntry.stage) {
+                case ChildStage::Unborn:
+                    item.badgeText = "Pregnancy";
+                    item.badgeTone = "warning";
+                    break;
+                case ChildStage::Infant:
+                    item.badgeText = "Infant";
+                    item.badgeTone = "accent";
+                    break;
+                case ChildStage::Child:
+                    item.badgeText = cEntry.isAdopted ? "Adopted" : "Child";
+                    item.badgeTone = cEntry.isAdopted ? "accent" : "success";
+                    break;
+                case ChildStage::Training:
+                    item.badgeText = "Training";
+                    item.badgeTone = "accent";
+                    break;
+                case ChildStage::Adult:
+                    item.badgeText = "Adult Child";
+                    item.badgeTone = "neutral";
+                    break;
+            }
+
+            auto resolveActorName = [](RE::FormID id) -> std::string {
+                if (id == 0 || id == kUnknownFatherFormID) {
+                    return "";
+                }
+                if (id == kPlayerFormID) {
+                    std::string pName = ActorSvc::GetPlayerName(false);
+                    return !pName.empty() ? pName : "Player";
+                }
+                return ActorSvc::GetName(id);
+            };
+
+            if (cEntry.isAdopted) {
+                std::string gAName = resolveActorName(cEntry.guardianAID);
+                std::string gBName = resolveActorName(cEntry.guardianBID);
+                if (!gAName.empty() && !gBName.empty()) {
+                    item.subtitle = fmt::format("Adoptive Guardians: {} & {}", gAName, gBName);
+                } else if (!gAName.empty()) {
+                    item.subtitle = fmt::format("Adoptive Guardian: {}", gAName);
+                } else if (!gBName.empty()) {
+                    item.subtitle = fmt::format("Adoptive Guardian: {}", gBName);
+                } else {
+                    item.subtitle = "Adopted into Household";
+                }
+            } else {
+                // Respect perspective-bound secret masking for the Player
+                bool canPlayerKnowSecret = true;
+                if (cEntry.paternitySecret.HasActiveSecret() && !cEntry.paternitySecret.discovered) {
+                    if (cEntry.bioMotherID == kPlayerFormID) {
+                        canPlayerKnowSecret = true;
+                    } else if (cEntry.bioFatherID == kPlayerFormID) {
+                        canPlayerKnowSecret = !cEntry.paternitySecret.isSecretForBioFather;
+                    } else if (cEntry.guardianAID == kPlayerFormID || cEntry.guardianBID == kPlayerFormID) {
+                        canPlayerKnowSecret = !cEntry.paternitySecret.isSecretForPartner;
+                    } else {
+                        canPlayerKnowSecret = false;
+                    }
+                }
+
+                std::string motherName = resolveActorName(cEntry.bioMotherID);
+                RE::FormID displayedFatherID = cEntry.bioFatherID;
+                if (!canPlayerKnowSecret) {
+                    if (cEntry.guardianAID != 0 && cEntry.guardianAID != cEntry.bioMotherID) {
+                        displayedFatherID = cEntry.guardianAID;
+                    } else if (cEntry.guardianBID != 0 && cEntry.guardianBID != cEntry.bioMotherID) {
+                        displayedFatherID = cEntry.guardianBID;
+                    } else {
+                        displayedFatherID = 0;
+                    }
+                }
+                std::string fatherName = resolveActorName(displayedFatherID);
+                if (fatherName.empty() && canPlayerKnowSecret && !cEntry.paternitySecret.bioFatherName.empty()) {
+                    fatherName = cEntry.paternitySecret.bioFatherName;
+                }
+
+                if (!motherName.empty() && !fatherName.empty()) {
+                    item.subtitle = fmt::format("Parents: {} & {}", motherName, fatherName);
+                } else if (!motherName.empty()) {
+                    item.subtitle = fmt::format("Mother: {}", motherName);
+                } else if (!fatherName.empty()) {
+                    item.subtitle = fmt::format("Father: {}", fatherName);
+                } else {
+                    item.subtitle = "Migrated Fertility Record";
+                }
+            }
+
+            item.checked = true;
+            items.push_back(std::move(item));
+        }
+
+        if (items.empty()) {
+            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
+                vm->ReturnLatentResult<int32_t>(stackID, 0);
+            });
+            return RE::BSScript::LatentStatus::kStarted;
+        }
+
+        ModalRequest req;
+        req.title = "Detected Pregnancies & Children";
+        req.subtitle = "First-Time Fertility & Adoption Migration";
+        req.message = "M.A.R.A.S migrated the following existing pregnancies, biological children, and adopted children into its household registry. "
+                      "Uncheck any stale or unwanted records you wish to discard:";
+        req.tone = ModalTone::Default;
+        req.size = ModalSize::Lg;
+        req.defaultCancelButtonIndex = 0;
+
+        req.controls.push_back(ModalControl::MakeChecklist(
+            "migrated_children",
+            "Migrated Pregnancies & Children",
+            std::move(items),
+            true,
+            "Unchecked entries will be removed from the M.A.R.A.S child and household registry."));
+
+        req.buttons.push_back(ModalButton::Make("keep_selected", "Keep Selected", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("discard_all", "Discard All", ModalButtonVariant::Secondary));
+
+        MARAS_LOG_INFO("PapyrusInterface: ShowChildMigrationAuditModal queuing modal with {} migrated entries",
+                       migratedChildIDs.size());
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [vm, stackID, childIDs = std::move(migratedChildIDs)](const ModalResponse& resp) {
+                const bool discardAll = (!resp.aborted && (resp.buttonIndex == 1 || resp.buttonId == "discard_all"));
+                auto& mgr = NPCRelationshipManager::GetSingleton();
+                int32_t keptCount = 0;
+                int32_t removedCount = 0;
+
+                for (RE::FormID cID : childIDs) {
+                    const std::string itemId = fmt::format("child_{:08X}", cID);
+                    const bool keep = !discardAll && (resp.aborted || resp.IsItemChecked("migrated_children", itemId, true));
+                    if (keep) {
+                        ++keptCount;
+                    } else {
+                        if (mgr.RemoveChild(cID)) {
+                            ++removedCount;
+                        }
+                    }
+                }
+
+                if (removedCount > 0) {
+                    PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                }
+
+                MARAS_LOG_INFO("PapyrusInterface: ShowChildMigrationAuditModal completed — kept={}, removed={}",
+                               keptCount, removedCount);
+                vm->ReturnLatentResult<int32_t>(stackID, keptCount);
+            });
+
+        return RE::BSScript::LatentStatus::kStarted;
     }
 
     int32_t CheckAndSetActionCooldown(RE::StaticFunctionTag*,
@@ -412,6 +1039,12 @@ namespace MARAS::PapyrusInterface {
 
         // Confirmation modal functions
         RegisterLatentFixed<int32_t>(vm, "ShowConfirmationModal", "MARAS", ShowConfirmationModal);
+        RegisterLatentFixed<int32_t>(vm, "ShowSkipWeddingModal", "MARAS", ShowSkipWeddingModal);
+        RegisterLatentFixed<int32_t>(vm, "ShowDivorceSettlementModal", "MARAS", ShowDivorceSettlementModal);
+        RegisterLatentFixed<RE::BGSLocation*>(vm, "ShowChooseHomeModal", "MARAS", ShowChooseHomeModal);
+        RegisterLatentFixed<RE::Actor*>(vm, "ShowChooseAdoptionSpouseModal", "MARAS", ShowChooseAdoptionSpouseModal);
+        RegisterLatentFixed<RE::BSFixedString>(vm, "ShowDebugStatusModal", "MARAS", ShowDebugStatusModal);
+        RegisterLatentFixed<int32_t>(vm, "ShowChildMigrationAuditModal", "MARAS", ShowChildMigrationAuditModal);
         vm->RegisterFunction("CheckAndSetActionCooldown", "MARAS", CheckAndSetActionCooldown);
 
         // Settings & Migration functions

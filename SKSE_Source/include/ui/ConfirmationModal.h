@@ -30,6 +30,7 @@ public:
         Jilted,
         ExLover,
         Divorced,
+        LowAffectionDivorce,
         OpenRelationship,
         CloseRelationship,
         Custom
@@ -63,8 +64,6 @@ private:
 
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> _cooldowns;
     std::shared_mutex _cooldownMutex;
-
-    class ModalCallback;
 
     static bool IsPlayer(RE::Actor* actor);
     static std::string BuildCooldownKey(const char* actionType, RE::FormID formID);

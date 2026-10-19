@@ -40,6 +40,7 @@ namespace MARAS {
         MatchmakingResult result;
         bool completed = false;
         bool failed = false;
+        bool isInvalidJson = false;
         std::string failureReason;
     };
 
@@ -100,13 +101,21 @@ namespace MARAS {
         void FinishVerificationBatch(std::shared_ptr<VerificationBatch> batch);
 
         void StartMemoryBatch(std::vector<MatchmakingResult> verifiedMatches, bool isScheduledScan = true);
+        void ExecuteMemoryBatchOrApply(std::vector<MatchmakingResult> approvedMatches, bool isScheduledScan = true);
         void RetryMemoryTasks(std::shared_ptr<MemoryBatch> batch, const std::vector<size_t>& indicesToRetry);
         void FinishMemoryBatch(std::shared_ptr<MemoryBatch> batch);
+
+        void ShowMatchmakingReviewModal(std::vector<MatchmakingResult> candidates,
+                                        bool isScheduledScan,
+                                        std::function<void(std::vector<MatchmakingResult>)> onApproved);
 
         void ShowInGameFailedLLMModal(const std::string& title,
                                       const std::vector<std::string>& failedDescriptions,
                                       std::function<void()> onRetry,
-                                      std::function<void()> onCancel);
+                                      std::function<void()> onCancel,
+                                      bool hasRequestFailure = true,
+                                      bool hasInvalidJson = false,
+                                      std::string_view llmVariant = "gamemaster_evaluation");
 
         // Context builders
         nlohmann::json BuildScheduledContext(float currentGameDay);

@@ -1,7 +1,9 @@
 import React from 'react'
 import { useMarasStore } from '../../../store/useMarasStore'
+import { confirmRemoveChild } from '../../../store/useModalStore'
 import { SectionCard } from '../../shared/SectionCard'
-import { Baby } from 'lucide-react'
+import { AppTooltip } from '../../shared/AppTooltip'
+import { Baby, Trash2 } from 'lucide-react'
 import { formatGameDay } from '../../../utils/dateUtils'
 import { getChildRelationshipStatus } from '../../../utils/childUtils'
 import { areSameFormId } from '../../../utils/statusAvailability'
@@ -19,6 +21,7 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const children = useMarasStore((s) => s.children)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
+  const removeChild = useMarasStore((s) => s.removeChild)
 
   const allChildren = Array.from(children.values()).filter(
     (c) =>
@@ -72,11 +75,26 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
                   </div>
                 </div>
 
-                <span
-                  className={`px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold flex-shrink-0 ml-[0.5rem] ${badgeStyle}`}
-                >
-                  {badgeLabel}
-                </span>
+                <div className="flex items-center gap-[0.375rem] flex-shrink-0 ml-[0.5rem]">
+                  <span
+                    className={`px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold ${badgeStyle}`}
+                  >
+                    {badgeLabel}
+                  </span>
+                  <AppTooltip content="Remove Child Record">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        confirmRemoveChild(child.childId, childName, () =>
+                          removeChild(child.childId),
+                        )
+                      }}
+                      className="p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-[0.875em] h-[0.875em]" />
+                    </button>
+                  </AppTooltip>
+                </div>
               </div>
             )
           })}
@@ -85,3 +103,4 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
     </SectionCard>
   )
 }
+

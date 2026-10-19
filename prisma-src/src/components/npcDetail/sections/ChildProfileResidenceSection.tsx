@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { useMarasStore } from '../../../store/useMarasStore'
+import { confirmRemoveChild } from '../../../store/useModalStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { SelectInput } from '../../shared/SelectInput'
+import { AppTooltip } from '../../shared/AppTooltip'
 import { ChildRelocationModal } from '../ChildRelocationModal'
 import { PLAYER_FORM_ID } from '../../../data/mockData'
-import { Baby, Home, GraduationCap, Swords, AlertTriangle } from 'lucide-react'
+import { Baby, Home, GraduationCap, Swords, AlertTriangle, Trash2 } from 'lucide-react'
 import { formatGameDay } from '../../../utils/dateUtils'
 import { areSameFormId } from '../../../utils/statusAvailability'
 import { resolveIsFemale, getChildGenderNouns } from '../../../utils/childUtils'
@@ -32,6 +34,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   const playerHomes = useMarasStore((s) => s.playerHomes)
   const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile)
   const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit)
+  const removeChild = useMarasStore((s) => s.removeChild)
 
   const npc = npcProfiles.get(npcId)
 
@@ -296,6 +299,22 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               </div>
             )}
           </div>
+
+          {childRecord && (
+            <div className="pt-[0.5rem] border-t border-border-divider">
+              <AppTooltip content="Permanently remove this child record from M.A.R.A.S household and family tracking">
+                <button
+                  onClick={() =>
+                    confirmRemoveChild(npcId, displayName, () => removeChild(npcId))
+                  }
+                  className="w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-[0.95em] h-[0.95em]" />
+                  <span>Remove Child Record</span>
+                </button>
+              </AppTooltip>
+            </div>
+          )}
         </div>
       </SectionCard>
 
@@ -312,3 +331,4 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
     </>
   )
 }
+

@@ -11,6 +11,7 @@
 #include "core/PlayerHouseService.h"
 #include "core/Serialization.h"
 #include "core/SkyrimNetIntegration.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
@@ -282,6 +283,11 @@ namespace MARAS {
         RelationshipPairKey key(npcFormID, targetFormID);
         auto existingIt = relationshipPairs.find(key);
         RelationshipStatus oldStatus = (existingIt != relationshipPairs.end()) ? existingIt->second.status : RelationshipStatus::Candidate;
+        if (existingIt != relationshipPairs.end() && oldStatus == status) {
+            MARAS_LOG_INFO("ChangeStatusCommon skipped for {:08X} / {:08X}: already {}",
+                           npcFormID, targetFormID, Utils::RelationshipStatusToString(status));
+            return false;
+        }
         if (oldStatus != status) {
             std::string blockReason;
             if (!CanFormRelationship(npcFormID, targetFormID, status, &blockReason)) {
@@ -2558,17 +2564,38 @@ namespace MARAS {
         };
         std::vector<ScannedChildEntry> scannedChildren;
 
+        struct PlayerRelationshipAuditEntry {
+            RE::FormID npcBaseID{ 0 };
+            RE::FormID npcRefID{ 0 };
+            bool isRef{ false };
+            std::string npcName;
+            std::string pluginName;
+            RelationshipStatus vanillaStatus{ RelationshipStatus::Unknown };
+            RelationshipStatus targetMarasStatus{ RelationshipStatus::Unknown };
+            bool defaultChecked{ false };
+        };
+        std::vector<PlayerRelationshipAuditEntry> playerAuditEntries;
+
         auto isPlayerForm = [](RE::FormID id) -> bool {
             return id == kPlayerBaseID || id == kPlayerRefID;
         };
 
-        // Pre-collect set of all vanilla relationship pair keys
+        auto statusPriority = [](RelationshipStatus s) -> int {
+            switch (s) {
+                case RelationshipStatus::Married: return 3;
+                case RelationshipStatus::Dating:  return 2;
+                case RelationshipStatus::Lover:   return 1;
+                default:                          return 0;
+            }
+        };
+
+        // Pre-collect set of all vanilla NPC-NPC relationship pair keys
         std::unordered_set<RelationshipPairKey, RelationshipPairKeyHash> vanillaPairKeys;
         for (auto* rel : relArray) {
             if (!rel || !rel->npc1 || !rel->npc2) continue;
             RE::FormID b1 = rel->npc1->GetFormID();
             RE::FormID b2 = rel->npc2->GetFormID();
-            if (isNewGame && (isPlayerForm(b1) || isPlayerForm(b2))) {
+            if (isPlayerForm(b1) || isPlayerForm(b2)) {
                 continue;
             }
             RE::FormID id1 = npcIndex.GetRefID(b1);
@@ -2606,6 +2633,9 @@ namespace MARAS {
             return false;
         };
 
+        auto* marriedFaction = FormCache::GetSingleton().GetMarriedFaction();
+        auto* courtingFaction = FormCache::GetSingleton().GetCourtingFaction();
+
         size_t scannedCount = 0;
         size_t importedCount = 0;
 
@@ -2620,11 +2650,7 @@ namespace MARAS {
             RE::FormID baseID1 = npc1Base->GetFormID();
             RE::FormID baseID2 = npc2Base->GetFormID();
 
-            if (isNewGame && (isPlayerForm(baseID1) || isPlayerForm(baseID2))) {
-                MARAS_LOG_INFO("ScanExistingRelationships: Ignoring player-NPC relationship ({:08X} <-> {:08X}) on new game",
-                               baseID1, baseID2);
-                continue;
-            }
+            const bool isPlayerPair = isPlayerForm(baseID1) || isPlayerForm(baseID2);
 
             auto entry1 = npcIndex.FindByFormID(baseID1);
             auto entry2 = npcIndex.FindByFormID(baseID2);
@@ -2634,6 +2660,9 @@ namespace MARAS {
             bool isChild2 = entry2 ? entry2->isChild : (npc2Base->GetRace() && npc2Base->GetRace()->data.flags.any(RE::RACE_DATA::Flag::kChild));
 
             if (isChild1 || isChild2) {
+                if (isNewGame && isPlayerPair) {
+                    continue;
+                }
                 // Strictly require an adult-child pair (isChild1 != isChild2) AND a Parent/Child association type (kParentChildAssocFormID)
                 if (isChild1 != isChild2 && rel->assocType && rel->assocType->GetFormID() == kParentChildAssocFormID) {
                     RE::FormID cBaseID = (isChild1 ? npc1Base : npc2Base)->GetFormID();
@@ -2672,6 +2701,81 @@ namespace MARAS {
 
             // Only process Courting, Spouse, or Lover relationships
             if (vanillaStatus == RelationshipStatus::Unknown) {
+                continue;
+            }
+
+            // Strictly audit Player-NPC romantic relationships via the First-Time Relationship Audit Modal
+            if (isPlayerPair) {
+                auto* npcBase = isPlayerForm(baseID1) ? npc2Base : npc1Base;
+                RE::FormID npcBaseID = npcBase->GetFormID();
+                if (isPlayerForm(npcBaseID)) {
+                    continue;
+                }
+
+                const auto& npcEntry = isPlayerForm(baseID1) ? entry2 : entry1;
+                RE::FormID npcRefID = npcEntry ? npcEntry->refFormID : npcIndex.GetRefID(npcBaseID);
+                bool isNpcRef = (npcRefID != 0 && npcRefID != npcBaseID);
+
+                if (isNpcRef) {
+                    auto existingStatus = GetRelationshipStatus(kPlayerRefID, npcRefID);
+                    if (existingStatus != RelationshipStatus::Candidate &&
+                        existingStatus != RelationshipStatus::Unknown) {
+                        continue;
+                    }
+                }
+
+                std::string npcName;
+                if (isNpcRef) {
+                    npcName = ActorSvc::GetName(npcRefID);
+                }
+                if (npcName.empty() && npcBase->GetName() && npcBase->GetName()[0] != '\0') {
+                    npcName = npcBase->GetName();
+                }
+                if (npcName.empty()) {
+                    npcName = fmt::format("NPC ({:08X})", npcBaseID);
+                }
+
+                const auto* srcFile = rel->GetFile(0);
+                if (!srcFile) {
+                    srcFile = npcBase->GetFile(0);
+                }
+                std::string pluginName = (srcFile && !srcFile->GetFilename().empty())
+                    ? std::string(srcFile->GetFilename())
+                    : "Savegame / Runtime";
+
+                bool defaultChecked = false;
+                if (!isNewGame) {
+                    bool hasActiveVanillaFaction = false;
+                    if (isNpcRef) {
+                        if (auto* npcActor = RE::TESForm::LookupByID<RE::Actor>(npcRefID)) {
+                            hasActiveVanillaFaction =
+                                (marriedFaction && npcActor->IsInFaction(marriedFaction)) ||
+                                (courtingFaction && npcActor->IsInFaction(courtingFaction));
+                        }
+                    }
+                    bool isRuntimeDynamicRel = ((rel->GetFormID() >> 24) == 0xFF);
+                    defaultChecked = hasActiveVanillaFaction || isRuntimeDynamicRel;
+                }
+
+                auto existingIt = std::find_if(
+                    playerAuditEntries.begin(), playerAuditEntries.end(),
+                    [npcBaseID](const PlayerRelationshipAuditEntry& e) { return e.npcBaseID == npcBaseID; });
+
+                if (existingIt == playerAuditEntries.end()) {
+                    playerAuditEntries.push_back(PlayerRelationshipAuditEntry{
+                        npcBaseID,
+                        isNpcRef ? npcRefID : 0,
+                        isNpcRef,
+                        std::move(npcName),
+                        std::move(pluginName),
+                        vanillaStatus,
+                        vanillaStatus,
+                        defaultChecked});
+                } else if (statusPriority(vanillaStatus) > statusPriority(existingIt->vanillaStatus)) {
+                    existingIt->vanillaStatus = vanillaStatus;
+                    existingIt->targetMarasStatus = vanillaStatus;
+                    existingIt->defaultChecked = existingIt->defaultChecked || defaultChecked;
+                }
                 continue;
             }
 
@@ -2845,10 +2949,144 @@ namespace MARAS {
 
         SyncAllMarriedCouplesChildCustody();
 
+        // 3. If Player-NPC romantic BGSRelationship records were detected, show the First-Time Relationship Audit Modal
+        if (!playerAuditEntries.empty()) {
+            std::vector<ModalChecklistItem> items;
+            items.reserve(playerAuditEntries.size());
+
+            const std::vector<ModalSelectOption> statusSelectOptions = {
+                {"dating", "Dating"},
+                {"lover", "Lover"},
+                {"engaged", "Engaged"},
+                {"married", "Married"}};
+
+            for (size_t i = 0; i < playerAuditEntries.size(); ++i) {
+                const auto& entry = playerAuditEntries[i];
+                ModalChecklistItem item;
+                item.id = fmt::format("rel_{}", i);
+                item.label = entry.npcName;
+                item.subtitle = fmt::format("Source: {}", entry.pluginName);
+
+                if (entry.vanillaStatus == RelationshipStatus::Married) {
+                    item.badgeText = "Spouse";
+                    item.badgeTone = "success";
+                } else if (entry.vanillaStatus == RelationshipStatus::Dating) {
+                    item.badgeText = "Courting";
+                    item.badgeTone = "accent";
+                } else {
+                    item.badgeText = "Lover";
+                    item.badgeTone = "warning";
+                }
+
+                item.checked = entry.defaultChecked;
+                item.selectKey = "status";
+                item.selectLabel = "Import As";
+                item.selectValue = std::string(Utils::RelationshipStatusToString(entry.targetMarasStatus));
+                item.selectOptions = statusSelectOptions;
+
+                items.push_back(std::move(item));
+            }
+
+            ModalRequest req;
+            req.title = "Detected Player Relationships";
+            req.subtitle = "First-Time M.A.R.A.S Relationship Scan";
+            req.message = "M.A.R.A.S detected existing or plugin-defined romantic relationships between your character and the following NPCs. "
+                          "Select which relationships are genuinely active in this playthrough and choose their MARAS status:";
+            req.tone = ModalTone::Default;
+            req.size = ModalSize::Lg;
+            req.defaultCancelButtonIndex = 1;
+
+            req.controls.push_back(ModalControl::MakeChecklist(
+                "detected_player_rels",
+                "Player-NPC Romantic Relationships",
+                std::move(items),
+                true,
+                "Unchecked entries (such as pre-configured follower mod Lover records) will be ignored."));
+
+            req.buttons.push_back(ModalButton::Make("import_selected", "Import Selected", ModalButtonVariant::Primary));
+            req.buttons.push_back(ModalButton::Make("skip_all", "Skip All", ModalButtonVariant::Secondary));
+
+            MARAS_LOG_INFO("ScanExistingRelationships: Queuing Player-NPC Relationship Audit Modal with {} detected entries (isNewGame={})",
+                           playerAuditEntries.size(), isNewGame);
+
+            PrismaModalManager::GetSingleton().ShowModal(
+                std::move(req),
+                [this, entries = std::move(playerAuditEntries)](const ModalResponse& resp) {
+                    if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "import_selected")) {
+                        MARAS_LOG_INFO("ScanExistingRelationships (Audit Modal): Player skipped importing all {} detected player-NPC relationships",
+                                       entries.size());
+                        return;
+                    }
+
+                    auto& idx = NPCIndex::GetSingleton();
+                    size_t auditImported = 0;
+                    size_t auditDeferred = 0;
+
+                    for (size_t i = 0; i < entries.size(); ++i) {
+                        const std::string itemId = fmt::format("rel_{}", i);
+                        if (!resp.IsItemChecked("detected_player_rels", itemId, false)) {
+                            continue;
+                        }
+
+                        const auto& entry = entries[i];
+                        const std::string defaultStatusStr = std::string(Utils::RelationshipStatusToString(entry.targetMarasStatus));
+                        const std::string chosenStr = resp.GetItemSelectValue("detected_player_rels", itemId, defaultStatusStr);
+                        RelationshipStatus chosenStatus = Utils::StringToRelationshipStatus(chosenStr);
+                        if (chosenStatus == RelationshipStatus::Unknown || chosenStatus == RelationshipStatus::Candidate) {
+                            chosenStatus = entry.targetMarasStatus;
+                        }
+
+                        RE::FormID npcRefID = entry.isRef ? entry.npcRefID : idx.GetRefID(entry.npcBaseID);
+                        const bool hasValidRef = (npcRefID != 0 && npcRefID != entry.npcBaseID);
+
+                        if (hasValidRef) {
+                            EnsureRegistered(kPlayerRefID);
+                            EnsureRegistered(npcRefID);
+                            SetOriginalRelationshipStatus(kPlayerRefID, npcRefID, entry.vanillaStatus);
+
+                            auto currentStatus = GetRelationshipStatus(kPlayerRefID, npcRefID);
+                            if (currentStatus == RelationshipStatus::Candidate || currentStatus == RelationshipStatus::Unknown) {
+                                ApplyImportedVanillaStatus(kPlayerRefID, npcRefID, entry.vanillaStatus, chosenStatus);
+
+                                auto& pairData = GetOrCreatePairData(kPlayerRefID, npcRefID);
+                                RE::FormID defaultInit = DetermineDefaultInitiator(kPlayerRefID, npcRefID);
+                                for (auto& hist : pairData.statusHistory) {
+                                    hist.timestamp = -1.0f;
+                                    hist.fromStatus = RelationshipStatus::Unknown;
+                                    hist.initiatorFormID = defaultInit;
+                                }
+
+                                MARAS_LOG_INFO("ScanExistingRelationships (Audit Modal): Imported player relationship {} (original {}) with {} ({:08X})",
+                                               Utils::RelationshipStatusToString(chosenStatus),
+                                               Utils::RelationshipStatusToString(entry.vanillaStatus),
+                                               entry.npcName, npcRefID);
+                                auditImported++;
+                            }
+                        } else {
+                            AddPendingRelationship(
+                                entry.npcBaseID,
+                                PendingRelationshipData(kPlayerBaseID, kPlayerRefID, chosenStatus, entry.vanillaStatus));
+                            MARAS_LOG_INFO("ScanExistingRelationships (Audit Modal): Deferred player relationship {} (original {}) for unspawned NPC '{}' (Base {:08X})",
+                                           Utils::RelationshipStatusToString(chosenStatus),
+                                           Utils::RelationshipStatusToString(entry.vanillaStatus),
+                                           entry.npcName, entry.npcBaseID);
+                            auditDeferred++;
+                        }
+                    }
+
+                    if (auditImported > 0) {
+                        SyncAllMarriedCouplesChildCustody();
+                        RecalculateAndUpdateGlobals();
+                    }
+                    MARAS_LOG_INFO("ScanExistingRelationships (Audit Modal): Completed — imported {} active, deferred {} unspawned player-NPC relationships",
+                                   auditImported, auditDeferred);
+                });
+        }
+
         auto endTime = std::chrono::steady_clock::now();
         auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-        MARAS_LOG_INFO("ScanExistingRelationships: Complete in {} ms — Scanned {} vanilla relationships, imported {} adult pairs, {} child records, deferred {} pending pairs and {} pending children",
-                       elapsedMs, scannedCount, importedCount, childImportedCount, pendingRelationshipsByBaseID.size(), pendingChildrenByBaseID.size());
+        MARAS_LOG_INFO("ScanExistingRelationships: Complete in {} ms — Scanned {} vanilla relationships, imported {} adult pairs, {} child records, queued {} player audit entries, deferred {} pending pairs and {} pending children",
+                       elapsedMs, scannedCount, importedCount, childImportedCount, playerAuditEntries.size(), pendingRelationshipsByBaseID.size(), pendingChildrenByBaseID.size());
     }
 
     float NPCRelationshipManager::GetEngagementTimestamp(RE::FormID actorA, RE::FormID actorB) const {

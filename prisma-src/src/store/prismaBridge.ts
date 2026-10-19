@@ -1,4 +1,5 @@
 import { useMarasStore, flushAllPendingDebouncedActions } from './useMarasStore'
+import { useModalStore } from './useModalStore'
 import {
   NPCProfile,
   RelationshipPair,
@@ -8,6 +9,7 @@ import {
   SkillType,
   Temperament,
   AffairStatus,
+  PrismaModalPayload,
 } from '../types'
 
 declare global {
@@ -25,6 +27,9 @@ declare global {
     onChildPromoted?: (oldIdOrData: { oldId: string; newId: string } | string, newId?: string) => void
     openMARAS?: () => void
     showMARAS?: () => void
+    closeMARASView?: () => void
+    showMARASModal?: (modalData: PrismaModalPayload | string) => void
+    clearMARASModal?: () => void
     refocusView?: (unused?: string) => void
     receiveNPCSearchResults?: (data: { query: string; side: string; results: any[] } | string) => void
     receiveAllSkyrimNPCs?: (data: { npcs: any[] } | string) => void
@@ -73,7 +78,6 @@ export function initializePrismaBridge() {
     if (!data || typeof data !== 'object') return
     console.log('[PrismaBridge] receiveMARASOverview payload:', data)
     const store = useMarasStore.getState()
-    store.setIsOpen(true)
 
     // Reconcile real child names from children array into npcProfiles if npcProfiles has placeholder names
     if (data.children && data.npcProfiles) {
@@ -113,7 +117,7 @@ export function initializePrismaBridge() {
     useMarasStore.getState().setHouseholdBuffs(data)
   }
 
-  // 1b. Direct View Show/Open callbacks from SKSE / Prisma UI
+  // 1b. Direct View Show/Open/Close callbacks from SKSE / Prisma UI
   window.openMARAS = () => {
     console.log('[PrismaBridge] openMARAS called')
     useMarasStore.getState().setIsOpen(true)
@@ -123,6 +127,26 @@ export function initializePrismaBridge() {
     console.log('[PrismaBridge] showMARAS called')
     useMarasStore.getState().setIsOpen(true)
     window.refocusView?.()
+  }
+  window.closeMARASView = () => {
+    console.log('[PrismaBridge] closeMARASView called')
+    useMarasStore.getState().setIsOpen(false)
+  }
+
+  // 1c. Standalone/Blocking Prisma UI Modal callbacks from C++
+  window.showMARASModal = (rawModal: PrismaModalPayload | string) => {
+    const modal = parsePayload<PrismaModalPayload>(rawModal)
+    if (!modal || typeof modal !== 'object' || !modal.modalId) {
+      console.error('[PrismaBridge] Invalid showMARASModal payload:', rawModal)
+      return
+    }
+    console.log('[PrismaBridge] showMARASModal:', modal)
+    useModalStore.getState().showModal(modal)
+    window.refocusView?.()
+  }
+  window.clearMARASModal = () => {
+    console.log('[PrismaBridge] clearMARASModal called')
+    useModalStore.getState().clearModal()
   }
 
   // Auto-acquire OS/game input focus when clicking or interacting with inputs

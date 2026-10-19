@@ -199,7 +199,7 @@ Function AdoptChild(Actor child, Actor spouseToAdopWith = none, Location houseTo
                     spouseToAdopWith = spouses[0]
                 endif
             elseif (spousesCount > 1)
-                spouseToAdopWith = TTM_Utils.ChooseSpouseToAdoptWithMsg()
+                spouseToAdopWith = TTM_Utils.ChooseSpouseToAdoptWithMsg(child)
             endif
             ; 0 spouses: adopt as single parent (spouseToAdopWith stays none)
         endif
@@ -1219,6 +1219,9 @@ Function MigrateAllChildren()
             hmkValidator.Stop()
         endif
     endif
+
+    int keptCount = MARAS.ShowChildMigrationAuditModal()
+    TTM_Debug.info("TTM_ServiceChildrenLogic: Child migration audit completed (kept=" + keptCount + ").")
 
     ReenableAdoptableChildren()
     TTM_Debug.info("TTM_ServiceChildrenLogic: MigrateAllChildren completed successfully.")

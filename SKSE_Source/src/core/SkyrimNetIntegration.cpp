@@ -5,6 +5,7 @@
 #include "core/HomeCellService.h"
 #include "core/FormCache.h"
 #include "services/ActorService.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/Settings.h"
 #include "utils/JsonService.h"
@@ -2041,57 +2042,100 @@ void RegisterSkyrimNetDecorators()
 
 using PublicSendCustomPromptToLLM_t = bool (*)(const char* promptName, const char* variant, const char* contextJson, std::function<void(const char* response, int success)> callback);
 
-struct LLMRetryCallback : RE::IMessageBoxCallback {
-    std::function<void()> retry;
-    std::function<void()> ignore;
-    LLMRetryCallback(std::function<void()> r, std::function<void()> i)
-        : retry(std::move(r)), ignore(std::move(i)) {}
-    void Run(std::uint8_t a_msg) override {
-        if (static_cast<int>(a_msg) == 0) retry();
-        else                               ignore();
+namespace {
+    std::string GetModelSlotDisplayName(std::string_view llmVariant) {
+        if (llmVariant == "memory") {
+            return "Memory";
+        }
+        return "GameMaster";
     }
-};
+}
+
+std::string GetLLMFailureGuidanceTitle(LLMFailureType failureType) {
+    switch (failureType) {
+        case LLMFailureType::InvalidJson:
+            return "What Does This Mean? (Broken JSON Response)";
+        case LLMFailureType::RequestFailed:
+        default:
+            return "What Does This Mean? (HTTP / Connection Failure)";
+    }
+}
+
+std::string GetLLMFailureGuidance(LLMFailureType failureType, std::string_view llmVariant) {
+    const std::string slotName = GetModelSlotDisplayName(llmVariant);
+    if (failureType == LLMFailureType::InvalidJson) {
+        return fmt::format(
+            "Your AI model replied, but its response was formatted incorrectly (broken JSON) and could not be read.\n\n"
+            "• Why this happens: M.A.R.A.S requires the AI to reply in a strict structured data format. Even good models occasionally make a formatting mistake, and clicking Retry usually fixes it.\n"
+            "• Seeing this error too often? If this happens frequently, the AI model assigned to your '{}' slot in SkyrimNet is incapable of returning valid JSON reliably most of the time. Consider switching that slot in SkyrimNet to a more capable model.",
+            slotName);
+    }
+
+    return fmt::format(
+        "SkyrimNet could not get a response from your AI provider for the '{}' model slot (HTTP / network error or empty reply).\n\n"
+        "• Cloud AI (OpenRouter, OpenAI, etc.): The service may have timed out, hit a rate limit, run out of API credits, or your API key / model name in SkyrimNet may be invalid.\n"
+        "• Local AI (Ollama, KoboldCPP, LM Studio): Your local AI server may be offline, still loading a model, or overloaded.\n"
+        "• What to do: Click Retry to send the request again. If it keeps failing, check your internet connection or SkyrimNet provider settings.",
+        slotName);
+}
+
+std::string GetLLMBatchFailureGuidance(bool hasRequestFailure, bool hasInvalidJson, std::string_view llmVariant) {
+    if (hasRequestFailure && hasInvalidJson) {
+        const std::string slotName = GetModelSlotDisplayName(llmVariant);
+        return fmt::format(
+            "Some AI requests failed to connect, while others returned unreadable data:\n\n"
+            "• HTTP / Connection Failed: SkyrimNet could not reach your AI provider or received an empty reply (timeout, rate limit, out of API credits, invalid API key, or local AI server offline).\n"
+            "• Broken JSON Response: The AI model in your SkyrimNet '{}' slot replied with broken formatting. If you see broken JSON errors too often, your '{}' model is incapable of returning valid JSON reliably and should be changed to a stronger model.",
+            slotName, slotName);
+    }
+    if (hasInvalidJson) {
+        return GetLLMFailureGuidance(LLMFailureType::InvalidJson, llmVariant);
+    }
+    return GetLLMFailureGuidance(LLMFailureType::RequestFailed, llmVariant);
+}
 
 void ShowLLMRetryModal(const std::string& evaluationType,
                        const std::string& description,
+                       LLMFailureType failureType,
                        std::function<void()> onRetry,
-                       std::function<void()> onIgnore)
+                       std::function<void()> onIgnore,
+                       std::string_view llmVariant)
 {
-    auto* taskIF = SKSE::GetTaskInterface();
-    if (!taskIF) {
+    if (!SKSE::GetTaskInterface()) {
         MARAS_LOG_ERROR("ShowLLMRetryModal: no task interface, falling back to ignore");
-        onIgnore();
+        if (onIgnore) onIgnore();
         return;
     }
-    taskIF->AddTask([evaluationType,
-                     description,
-                     onRetry  = std::move(onRetry),
-                     onIgnore = std::move(onIgnore)]() mutable {
-        auto* factory = RE::MessageDataFactoryManager::GetSingleton();
-        auto* ifStr   = RE::InterfaceStrings::GetSingleton();
-        auto* creator = factory
-            ? factory->GetCreator<RE::MessageBoxData>(ifStr->messageBoxData)
-            : nullptr;
-        if (!creator) {
-            MARAS_LOG_ERROR("ShowLLMRetryModal: null creator, ignoring");
-            onIgnore(); return;
-        }
-        auto* msgData = creator->Create();
-        if (!msgData) {
-            MARAS_LOG_ERROR("ShowLLMRetryModal: null msgData, ignoring");
-            onIgnore(); return;
-        }
-        std::string body =
-            "MARAS: LLM request failed (" + evaluationType + ").\n" + description +
-            "\n\nChoose Retry to try again, or Ignore to skip this evaluation.";
-        msgData->bodyText       = body.c_str();
-        msgData->buttonText.push_back(RE::BSString("Retry"));
-        msgData->buttonText.push_back(RE::BSString("Ignore"));
-        msgData->cancelButtonIndex = 1;
-        msgData->callback =
-            RE::make_smart<LLMRetryCallback>(std::move(onRetry), std::move(onIgnore));
-        RE::MessageBoxMenu::QueueMessage(msgData);
-    });
+
+    ModalRequest req;
+    req.title = "LLM Evaluation Failed";
+    req.subtitle = evaluationType;
+    req.message = "Choose Retry to send the request again, or Ignore to skip this evaluation.";
+    req.tone = ModalTone::Warning;
+    req.size = ModalSize::Md;
+    req.defaultCancelButtonIndex = 1;
+
+    if (!description.empty()) {
+        req.controls.push_back(ModalControl::MakeInfoBox("error_details", "Failure Details", description, ModalTone::Warning));
+    }
+    req.controls.push_back(ModalControl::MakeInfoBox(
+        "error_guidance",
+        GetLLMFailureGuidanceTitle(failureType),
+        GetLLMFailureGuidance(failureType, llmVariant),
+        ModalTone::Default));
+
+    req.buttons.push_back(ModalButton::Make("retry", "Retry Request", ModalButtonVariant::Primary));
+    req.buttons.push_back(ModalButton::Make("ignore", "Ignore", ModalButtonVariant::Secondary));
+
+    PrismaModalManager::GetSingleton().ShowModal(
+        std::move(req),
+        [onRetry = std::move(onRetry), onIgnore = std::move(onIgnore)](const ModalResponse& resp) mutable {
+            if (!resp.aborted && (resp.buttonIndex == 0 || resp.buttonId == "retry")) {
+                if (onRetry) onRetry();
+            } else {
+                if (onIgnore) onIgnore();
+            }
+        });
 }
 
 bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partnerFormID, const std::string& targetStatus, const std::string& evalId) {
@@ -2118,11 +2162,13 @@ bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partner
     }
 
     std::string currentStatusStr(Utils::RelationshipStatusToString(NPCRelationshipManager::GetSingleton().GetRelationshipStatus(actorFormID, partnerFormID)));
+    std::string actorName = ActorSvc::GetName(actorFormID);
+    std::string partnerName = ActorSvc::GetName(partnerFormID);
 
     nlohmann::json ctx;
-    ctx["actorName"] = ActorSvc::GetName(actorFormID);
+    ctx["actorName"] = actorName;
     ctx["actorFormId"] = fmt::format("0x{:08X}", actorFormID);
-    ctx["partnerName"] = ActorSvc::GetName(partnerFormID);
+    ctx["partnerName"] = partnerName;
     ctx["partnerFormId"] = fmt::format("0x{:08X}", partnerFormID);
     ctx["currentStatus"] = currentStatusStr;
     ctx["targetStatus"] = targetStatus;
@@ -2136,30 +2182,45 @@ bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partner
 
     auto callbackHolder = std::make_shared<std::function<void(const char*, int)>>();
 
-    *callbackHolder = [callbackHolder, actorFormID, partnerFormID, targetStatus, evalId, contextJson, promptName, llmVariant, fnSendLLM](const char* response, int success) {
+    *callbackHolder = [callbackHolder, actorFormID, partnerFormID, actorName, partnerName, currentStatusStr, targetStatus, evalId, contextJson, promptName, llmVariant, fnSendLLM](const char* response, int success) {
         try {
             MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange callback: success={}", success);
 
-            auto retryAction = [callbackHolder, promptName, llmVariant, contextJson, fnSendLLM]() {
-                MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange: retrying LLM request.");
-                if (*callbackHolder) {
-                    if (!fnSendLLM(promptName.c_str(), llmVariant.c_str(), contextJson.c_str(), *callbackHolder)) {
-                        *callbackHolder = nullptr;
-                    }
-                }
-            };
-
-            auto ignoreAction = [callbackHolder, actorFormID, partnerFormID, targetStatus]() {
-                MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange: player chose to ignore failed evaluation.");
+            auto queueRetryModal = [&](const std::string& errorDetail, LLMFailureType failureType) {
+                std::function<void(const char*, int)> savedCb = std::move(*callbackHolder);
                 *callbackHolder = nullptr;
+
+                auto retryAction = [callbackHolder, savedCb = std::move(savedCb), promptName, llmVariant, contextJson, fnSendLLM]() mutable {
+                    MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange: retrying LLM request.");
+                    *callbackHolder = std::move(savedCb);
+                    if (*callbackHolder) {
+                        if (!fnSendLLM(promptName.c_str(), llmVariant.c_str(), contextJson.c_str(), *callbackHolder)) {
+                            *callbackHolder = nullptr;
+                        }
+                    }
+                };
+
+                auto ignoreAction = [callbackHolder]() {
+                    MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange: player chose to ignore failed evaluation.");
+                    *callbackHolder = nullptr;
+                };
+
+                std::string fullDescription = fmt::format(
+                    "{} & {} ({} -> {})\n{}",
+                    actorName, partnerName, currentStatusStr, targetStatus, errorDetail);
+
+                ShowLLMRetryModal(
+                    "Relationship Status Change",
+                    fullDescription,
+                    failureType,
+                    std::move(retryAction),
+                    std::move(ignoreAction),
+                    llmVariant);
             };
 
             if (!success || !response || response[0] == '\0') {
                 MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: LLM returned failure or empty response.");
-                ShowLLMRetryModal(
-                    "Relationship Status Change",
-                    "The LLM evaluation request failed (HTTP or connection error).",
-                    retryAction, ignoreAction);
+                queueRetryModal("HTTP / connection request failed or returned an empty response.", LLMFailureType::RequestFailed);
                 return;
             }
 
@@ -2167,10 +2228,7 @@ bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partner
 
             if (resp.is_discarded() || !resp.is_object()) {
                 MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: LLM response was not valid JSON (even after sanitization and repair). Raw: {}", response);
-                ShowLLMRetryModal(
-                    "Relationship Status Change",
-                    "Failed to parse LLM evaluation response.",
-                    retryAction, ignoreAction);
+                queueRetryModal("AI model returned broken or unreadable JSON.", LLMFailureType::InvalidJson);
                 return;
             }
 
@@ -2349,33 +2407,65 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
         ctx["hasVisualDiscrepancy"] = hasVisualDiscrepancy;
         ctx["visualDiscrepancyDescription"] = visualDesc;
 
+        std::string childName = ctx["childName"].get<std::string>();
+        std::string motherName = ctx["motherName"].get<std::string>();
         std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         std::string promptName = "maras_evaluations/maras_paternity_evaluation";
 
-        auto callback = [childID, motherID, presumedFatherID, bioFatherID](const char* response, int success) {
+        auto callbackHolder = std::make_shared<std::function<void(const char*, int)>>();
+
+        *callbackHolder = [callbackHolder, childID, motherID, presumedFatherID, bioFatherID, childName, motherName, promptName, contextJson](const char* response, int success) {
             try {
+                auto queueRetryModal = [&](const std::string& errorDetail, LLMFailureType failureType) {
+                    std::function<void(const char*, int)> savedCb = std::move(*callbackHolder);
+                    *callbackHolder = nullptr;
+
+                    auto retryAction = [callbackHolder, savedCb = std::move(savedCb), promptName, contextJson, childID]() mutable {
+                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: retrying LLM request for child {:08X}.", childID);
+                        *callbackHolder = std::move(savedCb);
+                        if (*callbackHolder) {
+                            if (!SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, *callbackHolder)) {
+                                *callbackHolder = nullptr;
+                                PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                                PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+                            }
+                        }
+                    };
+
+                    auto ignoreAction = [callbackHolder, childID]() {
+                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: player chose to ignore failed evaluation for child {:08X}.", childID);
+                        *callbackHolder = nullptr;
+                        PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                        PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+                    };
+
+                    std::string fullDescription = fmt::format(
+                        "Child: {} (Mother: {})\n{}",
+                        childName, motherName, errorDetail);
+
+                    ShowLLMRetryModal(
+                        "Paternity Secret Evaluation",
+                        fullDescription,
+                        failureType,
+                        std::move(retryAction),
+                        std::move(ignoreAction),
+                        "gamemaster_evaluation");
+                };
+
                 if (!success || !response || response[0] == '\0') {
                     MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: LLM request failed or returned empty response.");
-                    if (auto* taskIF = SKSE::GetTaskInterface()) {
-                        taskIF->AddTask([childID]() {
-                            PrismaUIDataBridge::GetSingleton().SendOverviewData();
-                            PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
-                        });
-                    }
+                    queueRetryModal("HTTP / connection request failed or returned an empty response.", LLMFailureType::RequestFailed);
                     return;
                 }
 
                 nlohmann::json resp = JsonService::ParseLLMJson(response);
                 if (resp.is_discarded() || !resp.is_object()) {
                     MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: Failed to parse LLM response: {}", response);
-                    if (auto* taskIF = SKSE::GetTaskInterface()) {
-                        taskIF->AddTask([childID]() {
-                            PrismaUIDataBridge::GetSingleton().SendOverviewData();
-                            PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
-                        });
-                    }
+                    queueRetryModal("AI model returned broken or unreadable JSON.", LLMFailureType::InvalidJson);
                     return;
                 }
+
+                *callbackHolder = nullptr;
 
                 auto getStr = [&](const char* key, const char* defaultVal) -> std::string {
                     return (resp.contains(key) && resp[key].is_string()) ? resp[key].get<std::string>() : defaultVal;
@@ -2445,12 +2535,19 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
                 }
             } catch (const std::exception& e) {
                 MARAS_LOG_ERROR("[SkyrimNet] Exception in EvaluatePaternitySecret callback: {}", e.what());
+                *callbackHolder = nullptr;
             } catch (...) {
                 MARAS_LOG_ERROR("[SkyrimNet] Unknown exception in EvaluatePaternitySecret callback");
+                *callbackHolder = nullptr;
             }
         };
 
-        return SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, std::move(callback));
+        bool queued = SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, *callbackHolder);
+        if (!queued) {
+            *callbackHolder = nullptr;
+            return false;
+        }
+        return true;
     }
 
     uint64_t GetActorUUID(RE::FormID formID) {

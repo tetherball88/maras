@@ -254,7 +254,7 @@ export function flushAllPendingDebouncedActions() {
 }
 
 export const useMarasStore = create<MarasState>((set, get) => ({
-  isOpen: true,
+  isOpen: !isGameBuild,
   isInGame: isGameBuild,
   statusMsg: isGameBuild ? 'M.A.R.A.S Core Active' : 'Prisma UI Dev Mode',
   activeTab: 'overview',
@@ -314,6 +314,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     useLLM: true,
     generateMemories: true,
     evaluationStep: true,
+    confirmResults: mockSettings.matchmakingConfirmResults ?? false,
     diceRollChanceNewDating: 22,
     diceRollChanceNewEngaged: 17,
     diceRollChanceNewLoverAllowed: 17,
@@ -1022,10 +1023,19 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
       if (data.settings) {
         updates.settings = { ...state.settings, ...data.settings }
-        if (data.settings.matchmakingExcludePlayerActivePartners !== undefined) {
+        if (
+          data.settings.matchmakingExcludePlayerActivePartners !== undefined ||
+          data.settings.matchmakingConfirmResults !== undefined
+        ) {
+          const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings
           updates.matchmakingSettings = {
-            ...(updates.matchmakingSettings ?? state.matchmakingSettings),
-            excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners,
+            ...baseMatchSettings,
+            ...(data.settings.matchmakingExcludePlayerActivePartners !== undefined
+              ? { excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners }
+              : {}),
+            ...(data.settings.matchmakingConfirmResults !== undefined
+              ? { confirmResults: data.settings.matchmakingConfirmResults }
+              : {}),
           }
         }
       }

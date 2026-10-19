@@ -3,6 +3,7 @@
 #include "core/NPCIndex.h"
 #include "core/SkyrimNetIntegration.h"
 #include "services/ActorService.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -139,12 +140,15 @@ namespace MARAS {
                 return;
             }
 
+            std::string motherName = ActorSvc::GetName(motherID);
+            std::string bioFatherName = ActorSvc::GetName(cand.bioFatherID);
+
             nlohmann::json ctx;
-            ctx["motherName"] = ActorSvc::GetName(motherID);
+            ctx["motherName"] = motherName;
             ctx["motherRace"] = ActorSvc::GetRaceName(motherID);
             ctx["motherUUID"] = GetActorUUID(motherID);
 
-            ctx["bioFatherName"] = ActorSvc::GetName(cand.bioFatherID);
+            ctx["bioFatherName"] = bioFatherName;
             ctx["bioFatherRace"] = ActorSvc::GetRaceName(cand.bioFatherID);
             ctx["bioFatherUUID"] = GetActorUUID(cand.bioFatherID);
 
@@ -166,37 +170,101 @@ namespace MARAS {
             std::string contextJson = ctx.dump();
 
             SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson,
-                [this, motherID, cand, processNext, index](const char* response, int success) {
+                [this, motherID, motherName, bioFatherName, cand, processNext, index](const char* response, int success) {
+                    bool validJson = false;
                     bool steppedIn = false;
+                    std::string failureDetail;
+                    LLMFailureType failureType = LLMFailureType::RequestFailed;
+
                     if (success && response && response[0] != '\0') {
                         nlohmann::json resp = JsonService::ParseLLMJson(response);
-                        if (!resp.is_discarded()) {
+                        if (!resp.is_discarded() && resp.is_object()) {
+                            validJson = true;
                             steppedIn = resp.value("bio_father_steps_in", false);
                             std::string reason = resp.value("reason", "");
                             spdlog::info("[SkyrimNet] Step-in LLM evaluation for bio father {:08X} with mother {:08X}: steppedIn={}, reason='{}'",
                                          cand.bioFatherID, motherID, steppedIn, reason);
+                        } else {
+                            failureType = LLMFailureType::InvalidJson;
+                            failureDetail = "AI model returned broken or unreadable JSON.";
+                            spdlog::warn("[SkyrimNet] Step-in LLM evaluation returned malformed JSON for {:08X} & {:08X}: {}",
+                                         cand.bioFatherID, motherID, response);
                         }
                     } else {
-                        // Fallback dice roll on LLM failure
-                        float roll = Utils::RandomFloat(0.0f, 100.0f);
-                        float chance = static_cast<float>(Settings::GetSingleton().paternityBioStepUpChance);
-                        steppedIn = (roll < chance);
-                        spdlog::warn("[SkyrimNet] Step-in LLM call failed, fallback roll: {:.1f}% < {:.1f}% -> {}",
-                                     roll, chance, steppedIn);
+                        failureType = LLMFailureType::RequestFailed;
+                        failureDetail = "HTTP / connection request failed or returned an empty response.";
+                        spdlog::warn("[SkyrimNet] Step-in LLM call failed for {:08X} & {:08X}", cand.bioFatherID, motherID);
                     }
 
-                    SKSE::GetTaskInterface()->AddTask([this, motherID, cand, steppedIn, processNext, index]() {
-                        if (!*processNext) {
-                            return;
-                        }
-                        if (steppedIn) {
-                            ApplyBioFatherStepIn(motherID, cand.bioFatherID);
-                            // First agreed! Cancel remainder of queue and break circular reference
-                            *processNext = nullptr;
-                        } else {
+                    if (validJson) {
+                        SKSE::GetTaskInterface()->AddTask([this, motherID, cand, steppedIn, processNext, index]() {
+                            if (!*processNext) {
+                                return;
+                            }
+                            if (steppedIn) {
+                                ApplyBioFatherStepIn(motherID, cand.bioFatherID);
+                                *processNext = nullptr;
+                            } else {
+                                (*processNext)(index + 1);
+                            }
+                        });
+                        return;
+                    }
+
+                    ModalRequest req;
+                    req.title = "Bio-Father Step-In Evaluation Failed";
+                    req.subtitle = "SkyrimNet LLM Request Failed";
+                    req.message = "The SkyrimNet LLM evaluation for whether the biological father steps in to marry the mother failed. Choose how to proceed:";
+                    req.tone = ModalTone::Warning;
+                    req.size = ModalSize::Md;
+                    req.defaultCancelButtonIndex = 2;
+
+                    std::string childDesc = cand.isPregnancy ? "Unborn Child" : (cand.childName.empty() ? "Child" : cand.childName);
+                    req.controls.push_back(ModalControl::MakeInfoBox(
+                        "error_details",
+                        "Failure Details",
+                        std::format("{} & {} ({})\n{}", bioFatherName, motherName, childDesc, failureDetail),
+                        ModalTone::Warning));
+                    req.controls.push_back(ModalControl::MakeInfoBox(
+                        "error_guidance",
+                        GetLLMFailureGuidanceTitle(failureType),
+                        GetLLMFailureGuidance(failureType, "gamemaster_evaluation"),
+                        ModalTone::Default));
+
+                    req.buttons.push_back(ModalButton::Make("retry", "Retry LLM Request", ModalButtonVariant::Primary));
+                    req.buttons.push_back(ModalButton::Make("dice_roll", "Use Dice Roll Fallback", ModalButtonVariant::Secondary));
+                    req.buttons.push_back(ModalButton::Make("skip", "Skip Candidate", ModalButtonVariant::Ghost));
+
+                    PrismaModalManager::GetSingleton().ShowModal(
+                        std::move(req),
+                        [this, motherID, cand, processNext, index](const ModalResponse& modalResp) {
+                            if (!*processNext) {
+                                return;
+                            }
+                            if (!modalResp.aborted && (modalResp.buttonIndex == 0 || modalResp.buttonId == "retry")) {
+                                spdlog::info("[SkyrimNet] Player chose to retry bio-father step-in LLM evaluation for {:08X} & {:08X}",
+                                             cand.bioFatherID, motherID);
+                                (*processNext)(index);
+                                return;
+                            }
+                            if (!modalResp.aborted && (modalResp.buttonIndex == 1 || modalResp.buttonId == "dice_roll")) {
+                                float roll = Utils::RandomFloat(0.0f, 100.0f);
+                                float chance = static_cast<float>(Settings::GetSingleton().paternityBioStepUpChance);
+                                bool fallbackStepIn = (roll < chance);
+                                spdlog::info("[SkyrimNet] Player chose dice-roll fallback for bio-father step-in ({:08X} & {:08X}): {:.1f}% < {:.1f}% -> {}",
+                                             cand.bioFatherID, motherID, roll, chance, fallbackStepIn);
+                                if (fallbackStepIn) {
+                                    ApplyBioFatherStepIn(motherID, cand.bioFatherID);
+                                    *processNext = nullptr;
+                                } else {
+                                    (*processNext)(index + 1);
+                                }
+                                return;
+                            }
+                            spdlog::info("[SkyrimNet] Player skipped bio-father step-in evaluation for {:08X} & {:08X}",
+                                         cand.bioFatherID, motherID);
                             (*processNext)(index + 1);
-                        }
-                    });
+                        });
                 });
         };
 

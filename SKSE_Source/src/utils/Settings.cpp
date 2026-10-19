@@ -150,6 +150,7 @@ namespace MARAS {
             visit("enableScenes_LocTypeLumberMill", &Settings::enableScenes_LocTypeLumberMill, false);
             visit("scenesCooldownHours", &Settings::scenesCooldownHours, false);
             visit("disablePolygamyQuest", &Settings::disablePolygamyQuest, false);
+            visit("matchmakingConfirmResults", &Settings::matchmakingConfirmResults, false);
         }
     }
 
@@ -587,6 +588,7 @@ namespace MARAS {
                 {"matchmakingusellm", &Settings::matchmakingUseLLM},
                 {"matchmakingevaluationstep", &Settings::matchmakingEvaluationStep},
                 {"matchmakinggeneratememories", &Settings::matchmakingGenerateMemories},
+                {"matchmakingconfirmresults", &Settings::matchmakingConfirmResults},
                 {"paternityforcedicerolls", &Settings::paternityForceDiceRolls},
                 {"enablescenes", &Settings::enableScenes},
                 {"enablescenes_lover", &Settings::enableScenes_Lover},

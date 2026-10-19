@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { confirmRemoveRelationship, confirmRemoveChild } from '../../store/useModalStore'
 import {
   RelationshipPair,
   RelationshipStatus,
@@ -50,6 +51,12 @@ export const NpcDetailPartnerPanel: React.FC = () => {
   const isOpen = Boolean(partnerId)
   const isPlayerPartner = partnerId === PLAYER_FORM_ID
   const availableStatusOptions = useAvailableStatuses(currentNpcId, partnerId)
+
+  const currentNpcName = currentNpcId
+    ? currentNpcId === PLAYER_FORM_ID
+      ? getPlayerProfileFallback(npcProfiles).name
+      : npcProfiles.get(currentNpcId)?.name || `NPC ${currentNpcId}`
+    : 'NPC'
 
   const partnerProfile = partnerId
     ? isPlayerPartner
@@ -256,7 +263,13 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                       isUnofficialAffair) && (
                       <AppTooltip content="Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate">
                         <button
-                          onClick={() => removeRelationship(currentNpcId, partnerId)}
+                          onClick={() =>
+                            confirmRemoveRelationship(
+                              currentNpcName,
+                              partnerProfile.name,
+                              () => removeRelationship(currentNpcId, partnerId),
+                            )
+                          }
                           className="w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-[0.95em] h-[0.95em]" />
@@ -422,13 +435,15 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                                 >
                                   {badgeLabel}
                                 </span>
-                                <AppTooltip content="Remove child">
+                                <AppTooltip content="Remove Child Record">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      removeChild(child.childId)
+                                      confirmRemoveChild(child.childId, childName, () =>
+                                        removeChild(child.childId),
+                                      )
                                     }}
-                                    className="p-[0.25rem] text-foreground-muted hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                                    className="p-[0.25rem] text-foreground-muted hover:text-destructive hover:bg-destructive/10 rounded transition-colors cursor-pointer"
                                   >
                                     <Trash2 className="w-[0.875em] h-[0.875em]" />
                                   </button>

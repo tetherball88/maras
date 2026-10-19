@@ -1,7 +1,9 @@
 import React, { CSSProperties, useEffect } from 'react'
 import { useMarasStore } from '@/store/useMarasStore'
+import { useModalStore } from '@/store/useModalStore'
 import { sendMarasAction } from '@/store/prismaBridge'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { PrismaModalHost } from '@/components/modals/PrismaModalHost'
 import { OverviewPage } from '@/components/pages/OverviewPage'
 import { MyHouseholdPage } from '@/components/pages/MyHouseholdPage'
 import { MatchmakingPage } from '@/components/pages/MatchmakingPage'
@@ -22,16 +24,16 @@ export const App: React.FC = () => {
   const activeTab = useMarasStore((s) => s.activeTab)
   const npcDetailId = useMarasStore((s) => s.npcDetailId)
   const setStatusMsg = useMarasStore((s) => s.setStatusMsg)
-  const setIsOpen = useMarasStore((s) => s.setIsOpen)
+  const hasActiveModal = useModalStore((s) => s.activeModal !== null)
 
   const inGame = isInGame()
   const style: CSSProperties = !inGame
     ? {
-      backgroundImage: 'url("./assets/background.jpg")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-    }
+        backgroundImage: 'url("./assets/background.jpg")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }
     : {}
 
   useEffect(() => {
@@ -49,17 +51,15 @@ export const App: React.FC = () => {
       }
     }
 
-    // Make sure UI state is open when mounted inside PrismaUI
-    setIsOpen(true)
     window.log?.('MARAS Prisma UI View mounted successfully')
 
-    // Automatically request live overview data on mount to avoid missing DOM ready events
+    // Notify C++ that the React UI tree has mounted so it can push either the Dashboard or active Modal
     if (inGame) {
-      sendMarasAction('fetchOverview')
+      sendMarasAction('uiReady')
     }
-  }, [setStatusMsg, setIsOpen, inGame])
+  }, [setStatusMsg, inGame])
 
-  if (!isOpen) return null
+  if (!isOpen && !hasActiveModal) return null
 
   const renderContent = () => {
     if (npcDetailId) {
@@ -81,6 +81,12 @@ export const App: React.FC = () => {
     }
   }
 
-  return <DashboardLayout style={style}>{renderContent()}</DashboardLayout>
+  return (
+    <>
+      {isOpen && <DashboardLayout style={style}>{renderContent()}</DashboardLayout>}
+      {hasActiveModal && <PrismaModalHost style={!isOpen ? style : undefined} />}
+    </>
+  )
 }
+
 

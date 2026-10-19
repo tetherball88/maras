@@ -2,6 +2,7 @@
 #include "core/SkyrimNetIntegration.h"
 #include "core/LoggingService.h"
 #include "services/ActorService.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/Settings.h"
 #include "utils/ActorUtils.h"
@@ -104,18 +105,29 @@ namespace MARAS {
         }
     }
 
-    template <typename TaskType>
-    static std::pair<std::vector<size_t>, std::vector<std::string>> CollectBatchFailures(const std::vector<TaskType>& tasks) {
+    struct BatchFailureSummary {
         std::vector<size_t> indices;
         std::vector<std::string> descriptions;
+        bool hasRequestFailure = false;
+        bool hasInvalidJson = false;
+    };
+
+    template <typename TaskType>
+    static BatchFailureSummary CollectBatchFailures(const std::vector<TaskType>& tasks) {
+        BatchFailureSummary summary;
         for (size_t i = 0; i < tasks.size(); ++i) {
             if (tasks[i].failed) {
-                indices.push_back(i);
-                descriptions.push_back(std::format("• {} & {}: {}",
+                summary.indices.push_back(i);
+                summary.descriptions.push_back(std::format("• {} & {}: {}",
                     tasks[i].result.actorAName, tasks[i].result.actorBName, tasks[i].failureReason));
+                if (tasks[i].isInvalidJson) {
+                    summary.hasInvalidJson = true;
+                } else {
+                    summary.hasRequestFailure = true;
+                }
             }
         }
-        return {indices, descriptions};
+        return summary;
     }
 
     static std::vector<size_t> MakeBatchIndices(size_t count) {
@@ -153,6 +165,7 @@ namespace MARAS {
     template <typename BatchType, typename RetryFn, typename CancelFn, typename FinishFn>
     static void HandleBatchCompletion(std::shared_ptr<BatchType> batch,
                                       const std::string& modalTitle,
+                                      std::string_view llmVariant,
                                       MatchmakingService* service,
                                       RetryFn retryFn,
                                       CancelFn cancelFn,
@@ -162,12 +175,13 @@ namespace MARAS {
             batch->pendingCount--;
         }
         if (batch->pendingCount == 0) {
-            auto [failedIndices, failedDescriptions] = CollectBatchFailures(batch->tasks);
-            if (!failedIndices.empty() && batch->isScheduledScan) {
-                MARAS_LOG_WARN("[Matchmaking] Batch finished with {} failed task(s). Showing in-game dialog.", failedIndices.size());
+            auto summary = CollectBatchFailures(batch->tasks);
+            if (!summary.indices.empty()) {
+                MARAS_LOG_WARN("[Matchmaking] Batch finished with {} failed task(s). Showing in-game dialog.", summary.indices.size());
+                auto failedIndices = summary.indices;
                 service->ShowInGameFailedLLMModal(
                     modalTitle,
-                    failedDescriptions,
+                    summary.descriptions,
                     [batch, failedIndices, retryFn]() {
                         batch->pendingCount = failedIndices.size();
                         retryFn(batch, failedIndices);
@@ -176,7 +190,10 @@ namespace MARAS {
                         MARAS_LOG_INFO("[Matchmaking] User cancelled failed task(s). Relationship changes will NOT be applied for failed pairs.");
                         cancelFn(batch, failedIndices);
                         finishFn(batch);
-                    }
+                    },
+                    summary.hasRequestFailure,
+                    summary.hasInvalidJson,
+                    llmVariant
                 );
             } else {
                 finishFn(batch);
@@ -641,14 +658,17 @@ namespace MARAS {
                         MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking response returned malformed/unrepairable JSON");
                         ShowInGameFailedLLMModal(
                             "MARAS: Matchmaking Scan Failed",
-                            { "The scheduled matchmaking scan returned malformed or unreadable data." },
+                            { "The scheduled matchmaking scan returned malformed or unreadable JSON data." },
                             [this, currentGameDay]() {
                                 lastMatchmakingDay_ = -1.0f;
                                 TryScheduledMatchmaking(currentGameDay);
                             },
                             []() {
                                 MARAS_LOG_INFO("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking retry cancelled by player.");
-                            }
+                            },
+                            false,
+                            true,
+                            "gamemaster_evaluation"
                         );
                         return;
                     }
@@ -1102,28 +1122,16 @@ namespace MARAS {
             return;
         }
 
-        if (IsSkyrimNetAvailable() && (settings.matchmakingEvaluationStep || settings.matchmakingGenerateMemories)) {
-            if (settings.matchmakingEvaluationStep) {
-                MARAS_LOG_INFO("[Matchmaking:DiceRoll] SkyrimNet is LOADED -> Dispatching {} match(es) to LLM verification & dual-memory generation pipeline",
-                               matches.size());
-                MARAS_LOG_INFO("================================================================================");
-                StartVerificationBatch(std::move(matches), true);
-            } else {
-                MARAS_LOG_INFO("[Matchmaking:DiceRoll] SkyrimNet is LOADED (evaluation step disabled) -> Dispatching {} match(es) directly to memory generation pipeline",
-                               matches.size());
-                MARAS_LOG_INFO("================================================================================");
-                StartMemoryBatch(std::move(matches), true);
-            }
-        } else {
-            MARAS_LOG_INFO("[Matchmaking:DiceRoll] Directly applying {} match(es) in background (SkyrimNet unavailable or evaluation & memory steps disabled):",
+        if (IsSkyrimNetAvailable() && settings.matchmakingEvaluationStep) {
+            MARAS_LOG_INFO("[Matchmaking:DiceRoll] SkyrimNet is LOADED -> Dispatching {} match(es) to LLM verification & dual-memory generation pipeline",
                            matches.size());
-            for (size_t i = 0; i < matches.size(); ++i) {
-                auto& match = matches[i];
-                bool applied = ApplyMatch(match);
-                MARAS_LOG_INFO("[Matchmaking:DiceRoll]   Match #{}: {} <-> {} | Action: '{}' -> '{}' | Status: {}",
-                               i + 1, match.actorAName, match.actorBName, match.action, match.targetStatus, applied ? "APPLIED" : "FAILED");
-            }
             MARAS_LOG_INFO("================================================================================");
+            StartVerificationBatch(std::move(matches), true);
+        } else {
+            MARAS_LOG_INFO("[Matchmaking:DiceRoll] Proceeding with {} match(es) to review/memory/apply pipeline (evaluationStep: {}, generateMemories: {})",
+                           matches.size(), settings.matchmakingEvaluationStep, settings.matchmakingGenerateMemories);
+            MARAS_LOG_INFO("================================================================================");
+            StartMemoryBatch(std::move(matches), true);
         }
     }
 
@@ -1148,17 +1156,44 @@ namespace MARAS {
         std::string contextJson = SafeJsonDump(ctx);
         std::string promptName = "maras_evaluations/maras_matchmaking_manual";
 
-        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [targetNpcFormID](const char* response, int success) {
+        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, targetNpcFormID](const char* response, int success) {
             if (!success || !response || response[0] == '\0') {
                 MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking request failed or returned empty response (success: {})", success);
-                SKSE::GetTaskInterface()->AddTask([]() {
-                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
-                });
+                std::string targetName = ActorSvc::GetName(targetNpcFormID);
+                ShowInGameFailedLLMModal(
+                    "MARAS: Manual Matchmaking Failed",
+                    { std::format("• Target NPC: {} — The matchmaking request failed or returned an empty response.", targetName) },
+                    [this, targetNpcFormID]() {
+                        RunManualMatchmaking(targetNpcFormID);
+                    },
+                    []() {
+                        PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
+                    }
+                );
                 return;
             }
-            SKSE::GetTaskInterface()->AddTask([respStr = std::string(response), targetNpcFormID]() {
+            SKSE::GetTaskInterface()->AddTask([this, respStr = std::string(response), targetNpcFormID]() {
                 try {
-                    MatchmakingService::GetSingleton().ProcessManualResults(respStr, targetNpcFormID);
+                    nlohmann::json resp = JsonService::ParseLLMJson(respStr);
+                    if (resp.is_discarded()) {
+                        MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking returned malformed/unrepairable JSON");
+                        std::string targetName = ActorSvc::GetName(targetNpcFormID);
+                        ShowInGameFailedLLMModal(
+                            "MARAS: Manual Matchmaking Failed",
+                            { std::format("• Target NPC: {} — The matchmaking scan returned malformed or unreadable JSON data.", targetName) },
+                            [this, targetNpcFormID]() {
+                                RunManualMatchmaking(targetNpcFormID);
+                            },
+                            []() {
+                                PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
+                            },
+                            false,
+                            true,
+                            "gamemaster_evaluation"
+                        );
+                        return;
+                    }
+                    ProcessManualResults(respStr, targetNpcFormID);
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("[Matchmaking:RunManualMatchmaking] Exception processing manual results: {}", e.what());
                     PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
@@ -1183,20 +1218,49 @@ namespace MARAS {
         std::string contextJson = SafeJsonDump(ctx);
         std::string promptName = "maras_evaluations/maras_matchmaking_scheduled";
 
-        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [autoApply](const char* response, int success) {
+        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, autoApply](const char* response, int success) {
             if (!success || !response || response[0] == '\0') {
                 MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking request failed or returned empty response (success: {})", success);
-                SKSE::GetTaskInterface()->AddTask([]() {
-                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
-                });
+                ShowInGameFailedLLMModal(
+                    "MARAS: Global Matchmaking Scan Failed",
+                    { "The global matchmaking scan request failed or returned an empty response." },
+                    [this, autoApply]() {
+                        RunGlobalMatchmaking(autoApply);
+                    },
+                    [autoApply]() {
+                        if (!autoApply) {
+                            PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
+                        }
+                    }
+                );
                 return;
             }
-            SKSE::GetTaskInterface()->AddTask([respStr = std::string(response), autoApply]() {
+            SKSE::GetTaskInterface()->AddTask([this, respStr = std::string(response), autoApply]() {
                 try {
+                    nlohmann::json resp = JsonService::ParseLLMJson(respStr);
+                    if (resp.is_discarded()) {
+                        MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking returned malformed/unrepairable JSON");
+                        ShowInGameFailedLLMModal(
+                            "MARAS: Global Matchmaking Scan Failed",
+                            { "The global matchmaking scan returned malformed or unreadable JSON data." },
+                            [this, autoApply]() {
+                                RunGlobalMatchmaking(autoApply);
+                            },
+                            [autoApply]() {
+                                if (!autoApply) {
+                                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
+                                }
+                            },
+                            false,
+                            true,
+                            "gamemaster_evaluation"
+                        );
+                        return;
+                    }
                     if (autoApply) {
-                        MatchmakingService::GetSingleton().ProcessScheduledResults(respStr, false);
+                        ProcessScheduledResults(respStr, false);
                     } else {
-                        MatchmakingService::GetSingleton().ProcessGlobalManualResults(respStr);
+                        ProcessGlobalManualResults(respStr);
                     }
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("[Matchmaking:RunGlobalMatchmaking] Exception processing global results: {}", e.what());
@@ -1398,11 +1462,41 @@ namespace MARAS {
 
     void MatchmakingService::RunMemoryGeneration(RE::FormID actorA, RE::FormID actorB, const std::string& targetStatus, const std::string& action) {
         RequestMemoriesAsync(actorA, actorB, targetStatus, action,
-            [actorA, actorB](const std::string& respStr) {
-                MatchmakingService::GetSingleton().ProcessGeneratedMemories(respStr, actorA, actorB);
+            [this, actorA, actorB, targetStatus, action](const std::string& respStr) {
+                auto entries = ParseGeneratedMemories(respStr, actorA, actorB);
+                if (entries.empty()) {
+                    MARAS_LOG_WARN("[Matchmaking:RunMemoryGeneration] Failed to parse generated memories for {:08X} & {:08X}", actorA, actorB);
+                    ShowInGameFailedLLMModal(
+                        "MARAS: Memory Generation Failed",
+                        { std::format("• {} & {}: Failed to parse memories array from LLM response (malformed or invalid JSON).", ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)) },
+                        [this, actorA, actorB, targetStatus, action]() {
+                            RunMemoryGeneration(actorA, actorB, targetStatus, action);
+                        },
+                        [actorB]() {
+                            PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
+                        },
+                        false,
+                        true,
+                        "memory"
+                    );
+                    return;
+                }
+                ProcessGeneratedMemories(respStr, actorA, actorB);
             },
-            [actorB]() {
-                PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
+            [this, actorA, actorB, targetStatus, action]() {
+                ShowInGameFailedLLMModal(
+                    "MARAS: Memory Generation Failed",
+                    { std::format("• {} & {}: LLM memory generation request failed or returned an empty response.", ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)) },
+                    [this, actorA, actorB, targetStatus, action]() {
+                        RunMemoryGeneration(actorA, actorB, targetStatus, action);
+                    },
+                    [actorB]() {
+                        PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
+                    },
+                    true,
+                    false,
+                    "memory"
+                );
             });
     }
 
@@ -1498,74 +1592,306 @@ namespace MARAS {
         PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, outputArray);
     }
 
-    struct MatchmakingRetryCallback : RE::IMessageBoxCallback {
-        std::function<void()> retry;
-        std::function<void()> cancel;
-        MatchmakingRetryCallback(std::function<void()> r, std::function<void()> c)
-            : retry(std::move(r)), cancel(std::move(c)) {}
-        void Run(std::uint8_t a_msg) override {
-            if (static_cast<int>(a_msg) == 0) {
-                if (retry) retry();
-            } else {
-                if (cancel) cancel();
-            }
-        }
-    };
-
     void MatchmakingService::ShowInGameFailedLLMModal(
         const std::string& title,
         const std::vector<std::string>& failedDescriptions,
         std::function<void()> onRetry,
-        std::function<void()> onCancel)
+        std::function<void()> onCancel,
+        bool hasRequestFailure,
+        bool hasInvalidJson,
+        std::string_view llmVariant)
     {
         if (failedDescriptions.empty()) {
             return;
         }
 
-        std::ostringstream ss;
-        if (!title.empty()) {
-            ss << title << "\n\n";
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("[Matchmaking:ShowInGameFailedLLMModal] No task interface, falling back to cancel");
+            if (onCancel) onCancel();
+            return;
         }
+
+        std::ostringstream ss;
         for (size_t i = 0; i < failedDescriptions.size(); ++i) {
             ss << failedDescriptions[i];
             if (i + 1 < failedDescriptions.size()) {
                 ss << "\n";
             }
         }
-        ss << "\n\nChoose Retry to re-run failed requests, or Cancel to abort them.";
 
-        std::string message = ss.str();
+        ModalRequest req;
+        req.title = !title.empty() ? title : "Matchmaking LLM Request Failed";
+        req.subtitle = "SkyrimNet Matchmaking Pipeline";
+        req.message = "Choose Retry to re-run failed requests, or Cancel to abort them.";
+        req.tone = ModalTone::Warning;
+        req.size = ModalSize::Md;
+        req.defaultCancelButtonIndex = 1;
 
-        auto* taskIF = SKSE::GetTaskInterface();
-        if (!taskIF) {
-            MARAS_LOG_ERROR("[Matchmaking:ShowInGameFailedLLMModal] No task interface, falling back to cancel");
-            if (onCancel) onCancel();
+        req.controls.push_back(ModalControl::MakeInfoBox(
+            "failed_tasks",
+            failedDescriptions.size() > 1 ? "Failed Requests" : "Failure Details",
+            ss.str(),
+            ModalTone::Warning));
+
+        std::string guidanceTitle = (!hasRequestFailure && hasInvalidJson)
+            ? GetLLMFailureGuidanceTitle(LLMFailureType::InvalidJson)
+            : (hasRequestFailure && !hasInvalidJson)
+                ? GetLLMFailureGuidanceTitle(LLMFailureType::RequestFailed)
+                : "What Does This Mean?";
+
+        req.controls.push_back(ModalControl::MakeInfoBox(
+            "error_guidance",
+            guidanceTitle,
+            GetLLMBatchFailureGuidance(hasRequestFailure, hasInvalidJson, llmVariant),
+            ModalTone::Default));
+
+        req.buttons.push_back(ModalButton::Make("retry", "Retry Failed", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("cancel", "Cancel", ModalButtonVariant::Secondary));
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [onRetry = std::move(onRetry), onCancel = std::move(onCancel)](const ModalResponse& resp) mutable {
+                if (!resp.aborted && (resp.buttonIndex == 0 || resp.buttonId == "retry")) {
+                    if (onRetry) onRetry();
+                } else {
+                    if (onCancel) onCancel();
+                }
+            });
+    }
+
+    namespace {
+        std::string FormatStatusDisplayLabel(RelationshipStatus status) {
+            switch (status) {
+                case RelationshipStatus::Dating:
+                    return "Dating";
+                case RelationshipStatus::Lover:
+                    return "Lover";
+                case RelationshipStatus::Engaged:
+                    return "Engaged";
+                case RelationshipStatus::Married:
+                    return "Married";
+                case RelationshipStatus::ExDating:
+                    return "Ex-Dating";
+                case RelationshipStatus::ExLover:
+                    return "Ex-Lover";
+                case RelationshipStatus::Jilted:
+                    return "Jilted";
+                case RelationshipStatus::Divorced:
+                    return "Divorced";
+                case RelationshipStatus::Candidate:
+                case RelationshipStatus::Unknown:
+                default:
+                    return "Single / Unrelated";
+            }
+        }
+
+        std::string FormatTargetStatusDisplayLabel(std::string_view targetStatus) {
+            std::string lower = StringUtils::ToLowerStd(targetStatus);
+            if (lower == "dating") return "Dating";
+            if (lower == "lover") return "Lover";
+            if (lower == "engaged") return "Engaged";
+            if (lower == "married") return "Married";
+            if (lower == "exdating") return "Ex-Dating";
+            if (lower == "exlover") return "Ex-Lover";
+            if (lower == "jilted") return "Jilted";
+            if (lower == "divorced") return "Divorced";
+            if (lower == "open") return "Open Relationship";
+            if (lower == "closed") return "Exclusive / Closed";
+            return std::string(targetStatus);
+        }
+    }  // namespace
+
+    void MatchmakingService::ShowMatchmakingReviewModal(
+        std::vector<MatchmakingResult> candidates,
+        bool isScheduledScan,
+        std::function<void(std::vector<MatchmakingResult>)> onApproved)
+    {
+        if (candidates.empty()) {
+            if (onApproved) onApproved({});
             return;
         }
 
-        taskIF->AddTask([message, onRetry = std::move(onRetry), onCancel = std::move(onCancel)]() mutable {
-            auto* factory = RE::MessageDataFactoryManager::GetSingleton();
-            auto* ifStr   = RE::InterfaceStrings::GetSingleton();
-            auto* creator = factory ? factory->GetCreator<RE::MessageBoxData>(ifStr->messageBoxData) : nullptr;
-            if (!creator) {
-                MARAS_LOG_ERROR("[Matchmaking:ShowInGameFailedLLMModal] Null creator, cancelling");
-                if (onCancel) onCancel();
-                return;
-            }
-            auto* msgData = creator->Create();
-            if (!msgData) {
-                MARAS_LOG_ERROR("[Matchmaking:ShowInGameFailedLLMModal] Null msgData, cancelling");
-                if (onCancel) onCancel();
-                return;
+        if (!SKSE::GetTaskInterface()) {
+            MARAS_LOG_ERROR("[Matchmaking:ShowMatchmakingReviewModal] No task interface, applying candidates without modal");
+            if (onApproved) onApproved(std::move(candidates));
+            return;
+        }
+
+        auto& mgr = NPCRelationshipManager::GetSingleton();
+        const auto& settings = Settings::GetSingleton();
+
+        std::vector<ModalChecklistItem> items;
+        items.reserve(candidates.size());
+
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            const auto& cand = candidates[i];
+            ModalChecklistItem item;
+            item.id = std::format("match_{}", i);
+
+            std::string nameA = !cand.actorAName.empty() ? cand.actorAName : ActorSvc::GetName(cand.actorAFormID);
+            std::string nameB = !cand.actorBName.empty() ? cand.actorBName : ActorSvc::GetName(cand.actorBFormID);
+            item.label = std::format("{} & {}", nameA, nameB);
+
+            RelationshipStatus currentSt = mgr.GetRelationshipStatus(cand.actorAFormID, cand.actorBFormID);
+            const auto* pairData = mgr.GetNPCData(cand.actorAFormID, cand.actorBFormID);
+            std::string currentLabel = FormatStatusDisplayLabel(currentSt);
+            if (IsActiveRelationship(currentSt) && pairData) {
+                currentLabel += pairData->isOpen ? " (Open)" : " (Exclusive)";
             }
 
-            msgData->bodyText = message.c_str();
-            msgData->buttonText.push_back(RE::BSString("Retry"));
-            msgData->buttonText.push_back(RE::BSString("Cancel"));
-            msgData->cancelButtonIndex = 1;
-            msgData->callback = RE::make_smart<MatchmakingRetryCallback>(std::move(onRetry), std::move(onCancel));
-            RE::MessageBoxMenu::QueueMessage(msgData);
-        });
+            item.subtitle = std::format("{} -> {}", currentLabel, FormatTargetStatusDisplayLabel(cand.targetStatus));
+            item.checked = true;
+
+            if (cand.action == "new" || cand.action == "advance") {
+                if (cand.isCheating) {
+                    item.badgeText = "Cheating";
+                    item.badgeTone = "warning";
+                } else if (cand.action == "advance") {
+                    item.badgeText = "Advance";
+                    item.badgeTone = "success";
+                } else {
+                    item.badgeText = "New";
+                    item.badgeTone = "accent";
+                }
+
+                item.selectKey = "targetStatus";
+                item.selectLabel = "Status";
+                item.selectValue = StringUtils::ToLowerStd(cand.targetStatus);
+                if (item.selectValue.empty()) {
+                    item.selectValue = "dating";
+                }
+
+                struct StatusOptionSpec {
+                    const char* value;
+                    const char* label;
+                    RelationshipStatus statusEnum;
+                };
+                static constexpr StatusOptionSpec kPositiveOptions[] = {
+                    {"dating", "Dating", RelationshipStatus::Dating},
+                    {"lover", "Lover", RelationshipStatus::Lover},
+                    {"engaged", "Engaged", RelationshipStatus::Engaged},
+                    {"married", "Married", RelationshipStatus::Married}
+                };
+
+                for (const auto& spec : kPositiveOptions) {
+                    ModalSelectOption opt;
+                    opt.value = spec.value;
+                    opt.label = spec.label;
+
+                    std::string reason;
+                    bool canForm = mgr.CanFormRelationship(cand.actorAFormID, cand.actorBFormID, spec.statusEnum, &reason);
+                    if (canForm && spec.statusEnum == RelationshipStatus::Lover && !settings.matchmakingAllowCheating) {
+                        if (IsPairCheating(cand.actorAFormID, cand.actorBFormID, "lover")) {
+                            canForm = false;
+                            reason = "Cheating is disabled in matchmaking settings";
+                        }
+                    }
+
+                    if (!canForm && item.selectValue != spec.value) {
+                        opt.disabled = true;
+                        opt.tooltip = reason;
+                    }
+                    item.selectOptions.push_back(std::move(opt));
+                }
+            } else if (cand.action == "breakup") {
+                item.badgeText = "Breakup";
+                item.badgeTone = "danger";
+
+                item.selectKey = "targetStatus";
+                item.selectLabel = "Status";
+                item.selectValue = StringUtils::ToLowerStd(cand.targetStatus);
+                if (item.selectValue.empty()) {
+                    item.selectValue = "exdating";
+                }
+
+                item.selectOptions = {
+                    {"exdating", "Ex-Dating", false, ""},
+                    {"exlover", "Ex-Lover", false, ""},
+                    {"jilted", "Jilted", false, ""},
+                    {"divorced", "Divorced", false, ""}
+                };
+            } else if (cand.action == "open") {
+                item.badgeText = "Open";
+                item.badgeTone = "accent";
+            } else if (cand.action == "close") {
+                item.badgeText = "Close";
+                item.badgeTone = "default";
+            }
+
+            if (!cand.memory.empty()) {
+                item.description = cand.memory;
+            } else {
+                item.description = std::format("Proposed '{}' transition to {}.",
+                                               cand.action,
+                                               FormatTargetStatusDisplayLabel(cand.targetStatus));
+            }
+
+            items.push_back(std::move(item));
+        }
+
+        ModalRequest req;
+        req.title = "Matchmaking Suggestions";
+        req.subtitle = std::format("{} Proposed NPC Relationship {} ({})",
+                                   candidates.size(),
+                                   candidates.size() == 1 ? "Change" : "Changes",
+                                   isScheduledScan ? "Scheduled Scan" : "World Scan");
+        req.message = "Review the proposed NPC relationship changes below. Uncheck any pairs you wish to skip, or adjust their target status before applying.";
+        req.tone = ModalTone::Ai;
+        req.size = candidates.size() > 4 ? ModalSize::Xl : ModalSize::Lg;
+        req.defaultCancelButtonIndex = 1;
+
+        req.controls.push_back(ModalControl::MakeChecklist(
+            "matches",
+            "Proposed Pairings",
+            std::move(items),
+            true));
+
+        ModalButton applyBtn = ModalButton::Make("apply", "Apply Selected", ModalButtonVariant::Primary);
+        applyBtn.requireChecklistId = "matches";
+        applyBtn.minCheckedCount = 1;
+        req.buttons.push_back(std::move(applyBtn));
+        req.buttons.push_back(ModalButton::Make("discard", "Discard All", ModalButtonVariant::Secondary));
+
+        PrismaModalManager::GetSingleton().ShowModal(
+            std::move(req),
+            [candidates = std::move(candidates), onApproved = std::move(onApproved)](const ModalResponse& resp) mutable {
+                if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "apply")) {
+                    MARAS_LOG_INFO("[Matchmaking:ShowMatchmakingReviewModal] User discarded all {} matchmaking suggestion(s).",
+                                   candidates.size());
+                    if (onApproved) onApproved({});
+                    return;
+                }
+
+                std::vector<MatchmakingResult> approved;
+                approved.reserve(candidates.size());
+
+                for (size_t i = 0; i < candidates.size(); ++i) {
+                    std::string itemId = std::format("match_{}", i);
+                    if (!resp.IsItemChecked("matches", itemId, false)) {
+                        MARAS_LOG_INFO("[Matchmaking:ShowMatchmakingReviewModal] User unchecked match: {} <-> {}",
+                                       candidates[i].actorAName, candidates[i].actorBName);
+                        continue;
+                    }
+
+                    MatchmakingResult match = std::move(candidates[i]);
+                    if (match.action == "new" || match.action == "advance" || match.action == "breakup") {
+                        std::string chosenStatus = StringUtils::ToLowerStd(
+                            resp.GetItemSelectValue("matches", itemId, match.targetStatus));
+                        if (!chosenStatus.empty() && chosenStatus != match.targetStatus) {
+                            MARAS_LOG_INFO("[Matchmaking:ShowMatchmakingReviewModal] User overrode target status for {} <-> {}: '{}' -> '{}'",
+                                           match.actorAName, match.actorBName, match.targetStatus, chosenStatus);
+                            match.targetStatus = chosenStatus;
+                            match.isCheating = IsPairCheating(match.actorAFormID, match.actorBFormID, match.targetStatus);
+                        }
+                    }
+
+                    approved.push_back(std::move(match));
+                }
+
+                MARAS_LOG_INFO("[Matchmaking:ShowMatchmakingReviewModal] User approved {} of {} matchmaking suggestion(s).",
+                               approved.size(), candidates.size());
+                if (onApproved) onApproved(std::move(approved));
+            });
     }
 
     void MatchmakingService::StartVerificationBatch(std::vector<MatchmakingResult> candidates, bool isScheduledScan) {
@@ -1574,10 +1900,8 @@ namespace MARAS {
         }
 
         if (!IsSkyrimNetAvailable()) {
-            MARAS_LOG_WARN("[Matchmaking:StartVerificationBatch] SkyrimNet is not available, applying candidates directly without verification");
-            for (auto& cand : candidates) {
-                ApplyMatch(cand);
-            }
+            MARAS_LOG_WARN("[Matchmaking:StartVerificationBatch] SkyrimNet is not available, forwarding candidates directly without verification");
+            StartMemoryBatch(std::move(candidates), isScheduledScan);
             return;
         }
 
@@ -1610,6 +1934,7 @@ namespace MARAS {
             auto& task = batch->tasks[idx];
             task.completed = false;
             task.failed = false;
+            task.isInvalidJson = false;
             task.failureReason.clear();
             task.suitable = false;
             task.verificationReason.clear();
@@ -1632,6 +1957,7 @@ namespace MARAS {
                         if (!success || respStr.empty()) {
                             t.completed = true;
                             t.failed = true;
+                            t.isInvalidJson = false;
                             t.failureReason = "LLM request failed or returned empty response";
                             MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Verification request failed for {} <-> {}",
                                            t.result.actorAName, t.result.actorBName);
@@ -1640,12 +1966,14 @@ namespace MARAS {
                             if (resp.is_discarded()) {
                                 t.completed = true;
                                 t.failed = true;
+                                t.isInvalidJson = true;
                                 t.failureReason = "Malformed / unrepairable JSON response";
                                 MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Failed to parse verification JSON for {} <-> {}. Raw: {}",
                                                t.result.actorAName, t.result.actorBName, respStr);
                             } else {
                                 t.completed = true;
                                 t.failed = false;
+                                t.isInvalidJson = false;
                                 t.suitable = GetJsonBool(resp, "suitable", GetJsonBool(resp, "allow", false));
                                 t.verificationReason = GetJsonString(resp, "reason", "No reason provided");
                                 MARAS_LOG_INFO("[Matchmaking:RetryVerificationTasks] Verification for {} <-> {}: suitable={}, reason='{}'",
@@ -1653,7 +1981,7 @@ namespace MARAS {
                             }
                         }
 
-                        HandleBatchCompletion(batch, "MARAS: Verification Request Failed", this,
+                        HandleBatchCompletion(batch, "MARAS: Verification Request Failed", "gamemaster_evaluation", this,
                             [this](auto b, const auto& idxs) { RetryVerificationTasks(b, idxs); },
                             [](auto b, const auto& idxs) {
                                 for (size_t fi : idxs) b->tasks[fi].suitable = false;
@@ -1677,7 +2005,11 @@ namespace MARAS {
                 MARAS_LOG_INFO("[Matchmaking:FinishVerificationBatch] Match VERIFIED by LLM for {} (0x{:08X}) <-> {} (0x{:08X}) | Action: {} -> {} | Reason: {}",
                                task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID,
                                task.result.action, task.result.targetStatus, task.verificationReason);
-                verifiedMatches.push_back(task.result);
+                MatchmakingResult verified = task.result;
+                if (verified.memory.empty() && !task.verificationReason.empty() && task.verificationReason != "No reason provided") {
+                    verified.memory = task.verificationReason;
+                }
+                verifiedMatches.push_back(std::move(verified));
             } else {
                 MARAS_LOG_INFO("[Matchmaking:FinishVerificationBatch] Match REJECTED or CANCELLED for {} (0x{:08X}) <-> {} (0x{:08X}) | Action: {} -> {} | Suitable: {}, Failed: {}",
                                task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID,
@@ -1690,7 +2022,7 @@ namespace MARAS {
             return;
         }
 
-        MARAS_LOG_INFO("[Matchmaking:FinishVerificationBatch] Advancing {} verified match(es) to memory generation batch", verifiedMatches.size());
+        MARAS_LOG_INFO("[Matchmaking:FinishVerificationBatch] Advancing {} verified match(es) to review/memory pipeline", verifiedMatches.size());
         StartMemoryBatch(std::move(verifiedMatches), batch->isScheduledScan);
     }
 
@@ -1700,10 +2032,32 @@ namespace MARAS {
         }
 
         const auto& settings = Settings::GetSingleton();
+        if (settings.matchmakingConfirmResults) {
+            MARAS_LOG_INFO("[Matchmaking:StartMemoryBatch] matchmakingConfirmResults is enabled. Presenting review modal for {} match(es) (isScheduled: {})",
+                           verifiedMatches.size(), isScheduledScan);
+            ShowMatchmakingReviewModal(
+                std::move(verifiedMatches),
+                isScheduledScan,
+                [this, isScheduledScan](std::vector<MatchmakingResult> approvedMatches) {
+                    ExecuteMemoryBatchOrApply(std::move(approvedMatches), isScheduledScan);
+                });
+            return;
+        }
+
+        ExecuteMemoryBatchOrApply(std::move(verifiedMatches), isScheduledScan);
+    }
+
+    void MatchmakingService::ExecuteMemoryBatchOrApply(std::vector<MatchmakingResult> approvedMatches, bool isScheduledScan) {
+        if (approvedMatches.empty()) {
+            return;
+        }
+
+        const auto& settings = Settings::GetSingleton();
         if (!settings.matchmakingGenerateMemories || !IsSkyrimNetAvailable()) {
-            MARAS_LOG_INFO("[Matchmaking:StartMemoryBatch] {} Applying verified matches directly without memory ingestion.",
-                           !IsSkyrimNetAvailable() ? "SkyrimNet is not available." : "Memory generation is disabled.");
-            for (auto& match : verifiedMatches) {
+            MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] {} Applying {} match(es) directly without memory ingestion.",
+                           !IsSkyrimNetAvailable() ? "SkyrimNet is not available." : "Memory generation is disabled.",
+                           approvedMatches.size());
+            for (auto& match : approvedMatches) {
                 ApplyMatch(match);
             }
             return;
@@ -1711,8 +2065,8 @@ namespace MARAS {
 
         auto batch = std::make_shared<MemoryBatch>();
         batch->isScheduledScan = isScheduledScan;
-        batch->tasks.reserve(verifiedMatches.size());
-        for (auto& match : verifiedMatches) {
+        batch->tasks.reserve(approvedMatches.size());
+        for (auto& match : approvedMatches) {
             MemoryTask task;
             task.result = std::move(match);
             batch->tasks.push_back(std::move(task));
@@ -1721,7 +2075,7 @@ namespace MARAS {
         batch->pendingCount = batch->tasks.size();
         auto allIndices = MakeBatchIndices(batch->tasks.size());
 
-        MARAS_LOG_INFO("[Matchmaking:StartMemoryBatch] Starting memory generation batch for {} verified match(es) (isScheduled: {})",
+        MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] Starting memory generation batch for {} approved match(es) (isScheduled: {})",
                        batch->tasks.size(), isScheduledScan);
 
         RetryMemoryTasks(batch, allIndices);
@@ -1738,6 +2092,7 @@ namespace MARAS {
             auto& task = batch->tasks[idx];
             task.completed = false;
             task.failed = false;
+            task.isInvalidJson = false;
             task.failureReason.clear();
             task.generatedMemories.clear();
 
@@ -1758,6 +2113,7 @@ namespace MARAS {
                         if (!success || respStr.empty()) {
                             t.completed = true;
                             t.failed = true;
+                            t.isInvalidJson = false;
                             t.failureReason = "LLM request failed or returned empty response";
                             MARAS_LOG_WARN("[Matchmaking:RetryMemoryTasks] Memory generation failed for {} <-> {}",
                                            t.result.actorAName, t.result.actorBName);
@@ -1766,19 +2122,21 @@ namespace MARAS {
                             if (memories.empty()) {
                                 t.completed = true;
                                 t.failed = true;
-                                t.failureReason = "Failed to parse memories array from LLM response";
+                                t.isInvalidJson = true;
+                                t.failureReason = "Failed to parse memories array from LLM response (malformed or invalid JSON)";
                                 MARAS_LOG_WARN("[Matchmaking:RetryMemoryTasks] Failed to parse memories for {} <-> {}. Raw: {}",
                                                t.result.actorAName, t.result.actorBName, respStr);
                             } else {
                                 t.completed = true;
                                 t.failed = false;
+                                t.isInvalidJson = false;
                                 t.generatedMemories = std::move(memories);
                                 MARAS_LOG_INFO("[Matchmaking:RetryMemoryTasks] Parsed {} memories for {} <-> {}",
                                                t.generatedMemories.size(), t.result.actorAName, t.result.actorBName);
                             }
                         }
 
-                        HandleBatchCompletion(batch, "MARAS: Memory Generation Failed", this,
+                        HandleBatchCompletion(batch, "MARAS: Memory Generation Failed", "memory", this,
                             [this](auto b, const auto& idxs) { RetryMemoryTasks(b, idxs); },
                             [](auto, const auto&) {},
                             [this](auto b) { FinishMemoryBatch(b); }
@@ -2025,7 +2383,16 @@ namespace MARAS {
         }
         else if (result.action == "breakup") {
             auto currentStatus = mgr.GetRelationshipStatus(result.actorAFormID, result.actorBFormID);
-            auto [targetStr, targetEnum] = GetBreakupTarget(currentStatus);
+            auto [defaultStr, defaultEnum] = GetBreakupTarget(currentStatus);
+            RelationshipStatus targetEnum = Utils::StringToRelationshipStatus(result.targetStatus);
+            std::string targetStr = StringUtils::ToLowerStd(result.targetStatus);
+            if (targetEnum != RelationshipStatus::Divorced &&
+                targetEnum != RelationshipStatus::Jilted &&
+                targetEnum != RelationshipStatus::ExDating &&
+                targetEnum != RelationshipStatus::ExLover) {
+                targetEnum = defaultEnum;
+                targetStr = defaultStr;
+            }
             switch (targetEnum) {
                 case RelationshipStatus::Divorced:
                     success = mgr.PromoteToDivorced(result.actorAFormID, result.actorBFormID);

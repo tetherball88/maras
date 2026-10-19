@@ -64,6 +64,13 @@ export default {
         raised: 'var(--shadow-raised)',
         glow: 'var(--shadow-glow)',
       },
+      zIndex: {
+        overlay: 'var(--z-overlay)',
+        window: 'var(--z-window)',
+        modal: 'var(--z-modal)',
+        dropdown: 'var(--z-dropdown)',
+        tooltip: 'var(--z-tooltip)',
+      },
     },
   },
   plugins: [],

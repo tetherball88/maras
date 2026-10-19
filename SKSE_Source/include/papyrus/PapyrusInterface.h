@@ -329,6 +329,34 @@ namespace MARAS::PapyrusInterface {
                                                      std::vector<RE::Actor*> mainActors,
                                                      std::vector<RE::Actor*> secondaryActors,
                                                      RE::BSFixedString paramsJson);
+    RE::BSScript::LatentStatus ShowSkipWeddingModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                    RE::VMStackID stackID,
+                                                    RE::StaticFunctionTag*,
+                                                    RE::Actor* fiance);
+    RE::BSScript::LatentStatus ShowDivorceSettlementModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                          RE::VMStackID stackID,
+                                                          RE::StaticFunctionTag*,
+                                                          RE::Actor* exSpouse,
+                                                          int32_t totalFee,
+                                                          int32_t goldShare,
+                                                          int32_t assetsShare,
+                                                          bool canPayDirectly);
+    RE::BSScript::LatentStatus ShowChooseHomeModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                   RE::VMStackID stackID,
+                                                   RE::StaticFunctionTag*,
+                                                   RE::Actor* targetActor,
+                                                   bool isChild);
+    RE::BSScript::LatentStatus ShowChooseAdoptionSpouseModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                             RE::VMStackID stackID,
+                                                             RE::StaticFunctionTag*,
+                                                             RE::Actor* child);
+    RE::BSScript::LatentStatus ShowDebugStatusModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                    RE::VMStackID stackID,
+                                                    RE::StaticFunctionTag*,
+                                                    RE::Actor* target);
+    RE::BSScript::LatentStatus ShowChildMigrationAuditModal(RE::BSScript::Internal::VirtualMachine* vm,
+                                                            RE::VMStackID stackID,
+                                                            RE::StaticFunctionTag*);
     int32_t CheckAndSetActionCooldown(RE::StaticFunctionTag*,
                                       RE::BSFixedString actionType,
                                       std::vector<RE::Actor*> actors);

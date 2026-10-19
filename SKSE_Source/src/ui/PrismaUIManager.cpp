@@ -1,9 +1,51 @@
 #include "ui/PrismaUIManager.h"
+#include "core/NPCRelationshipManager.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/Settings.h"
 #include <Windows.h>
 
 namespace MARAS {
+
+    void PrismaUIManager::OnNewGameStarted(bool deferInitialScan) {
+        m_deferModalsUntilRaceMenuClosed = true;
+        m_pendingNewGameRelationshipScan = deferInitialScan;
+        MARAS_LOG_INFO("PrismaUIManager::OnNewGameStarted: deferring modals and initial relationship scan (deferInitialScan={}) until RaceSex Menu closes",
+                       deferInitialScan);
+    }
+
+    void PrismaUIManager::ResetNewGameDeferral() {
+        m_deferModalsUntilRaceMenuClosed = false;
+        m_pendingNewGameRelationshipScan = false;
+    }
+
+    bool PrismaUIManager::IsBlockingNativeMenuOpen() const {
+        auto* ui = RE::UI::GetSingleton();
+        if (!ui) {
+            return false;
+        }
+        return ui->IsMenuOpen(RE::RaceSexMenu::MENU_NAME) ||
+               ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME) ||
+               ui->IsMenuOpen(RE::MainMenu::MENU_NAME);
+    }
+
+    bool PrismaUIManager::IsModalDisplayBlocked() const {
+        return m_deferModalsUntilRaceMenuClosed || IsBlockingNativeMenuOpen();
+    }
+
+    void PrismaUIManager::TryRunPendingNewGameScan() {
+        if (!m_pendingNewGameRelationshipScan || IsModalDisplayBlocked()) {
+            return;
+        }
+
+        m_pendingNewGameRelationshipScan = false;
+        if (!Settings::GetSingleton().initialRelationshipScanDone) {
+            MARAS_LOG_INFO("PrismaUIManager::TryRunPendingNewGameScan: character creation finished — running deferred new-game relationship scan");
+            NPCRelationshipManager::GetSingleton().ScanExistingRelationships(/*isNewGame=*/true);
+            Settings::GetSingleton().initialRelationshipScanDone = true;
+            NPCRelationshipManager::GetSingleton().LogStatistics();
+        }
+    }
 
     void PrismaUIManager::StartListeningInput() {
         if (auto* dm = RE::BSInputDeviceManager::GetSingleton()) {
@@ -12,14 +54,120 @@ namespace MARAS {
             isListeningInput = true;
             MARAS_LOG_INFO("PrismaUIManager: started listening for input events");
         }
+        if (auto* ui = RE::UI::GetSingleton()) {
+            ui->RemoveEventSink<RE::MenuOpenCloseEvent>(this);
+            ui->AddEventSink<RE::MenuOpenCloseEvent>(this);
+        }
     }
 
     void PrismaUIManager::StopListeningInput() {
         if (auto* dm = RE::BSInputDeviceManager::GetSingleton()) {
             dm->RemoveEventSink(this);
         }
+        if (auto* ui = RE::UI::GetSingleton()) {
+            ui->RemoveEventSink<RE::MenuOpenCloseEvent>(this);
+        }
         isListeningInput = false;
         MARAS_LOG_INFO("PrismaUIManager: stopped listening for input events");
+    }
+
+    RE::BSEventNotifyControl PrismaUIManager::ProcessEvent(
+        const RE::MenuOpenCloseEvent* a_event,
+        RE::BSTEventSource<RE::MenuOpenCloseEvent>* /*a_source*/)
+    {
+        if (!a_event) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        if (!a_event->opening && a_event->menuName == "PrismaUI_FocusMenu") {
+            SKSE::GetTaskInterface()->AddTask([]() {
+                PrismaUIManager::GetSingleton().TryFlushPostUnfocusCallbacks();
+            });
+        }
+
+        const bool isBlockingMenu = (a_event->menuName == RE::RaceSexMenu::MENU_NAME ||
+                                     a_event->menuName == RE::LoadingMenu::MENU_NAME ||
+                                     a_event->menuName == RE::MainMenu::MENU_NAME);
+
+        if (!a_event->opening && a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
+            if (m_deferModalsUntilRaceMenuClosed) {
+                MARAS_LOG_INFO("PrismaUIManager: RaceSex Menu closed — lifting new-game modal deferral");
+                m_deferModalsUntilRaceMenuClosed = false;
+            }
+        }
+
+        if (isBlockingMenu) {
+            if (auto* taskIF = SKSE::GetTaskInterface()) {
+                taskIF->AddTask([]() {
+                    auto& mgr = PrismaUIManager::GetSingleton();
+                    mgr.TryRunPendingNewGameScan();
+                    if (!mgr.IsModalDisplayBlocked() && PrismaModalManager::GetSingleton().HasActiveModal()) {
+                        PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
+                    }
+                    mgr.SyncViewVisibilityAndFocus();
+                });
+            }
+        }
+
+        return RE::BSEventNotifyControl::kContinue;
+    }
+
+    void PrismaUIManager::RunAfterFocusReleased(std::function<void()> callback) {
+        if (!callback) {
+            return;
+        }
+
+        SyncViewVisibilityAndFocus();
+
+        auto* ui = RE::UI::GetSingleton();
+        const bool focusMenuOpen = ui && ui->IsMenuOpen("PrismaUI_FocusMenu");
+        const bool viewFocused = IsViewValid() && prismaUI->HasFocus(view);
+
+        if (!focusMenuOpen && !viewFocused) {
+            if (auto* taskIF = SKSE::GetTaskInterface()) {
+                taskIF->AddTask([cb = std::move(callback)]() {
+                    try {
+                        cb();
+                    } catch (const std::exception& e) {
+                        MARAS_LOG_ERROR("PrismaUIManager::RunAfterFocusReleased immediate callback exception: {}", e.what());
+                    }
+                });
+            }
+            return;
+        }
+
+        MARAS_LOG_INFO("PrismaUIManager::RunAfterFocusReleased: deferring callback until PrismaUI_FocusMenu closes");
+        m_postUnfocusCallbacks.push_back(std::move(callback));
+    }
+
+    void PrismaUIManager::TryFlushPostUnfocusCallbacks() {
+        if (m_postUnfocusCallbacks.empty()) {
+            return;
+        }
+
+        auto* ui = RE::UI::GetSingleton();
+        if (ui && ui->IsMenuOpen("PrismaUI_FocusMenu")) {
+            return;
+        }
+
+        std::vector<std::function<void()>> callbacks;
+        callbacks.swap(m_postUnfocusCallbacks);
+
+        MARAS_LOG_INFO("PrismaUIManager::TryFlushPostUnfocusCallbacks: FocusMenu and Cursor Menu closed, scheduling {} callback(s)",
+                       callbacks.size());
+
+        if (auto* taskIF = SKSE::GetTaskInterface()) {
+            taskIF->AddTask([callbacks = std::move(callbacks)]() {
+                for (const auto& cb : callbacks) {
+                    if (!cb) continue;
+                    try {
+                        cb();
+                    } catch (const std::exception& e) {
+                        MARAS_LOG_ERROR("PrismaUIManager::TryFlushPostUnfocusCallbacks exception: {}", e.what());
+                    }
+                }
+            });
+        }
     }
 
     RE::BSEventNotifyControl PrismaUIManager::ProcessEvent(
@@ -27,6 +175,21 @@ namespace MARAS {
         RE::BSTEventSource<RE::InputEvent*>* /*a_source*/)
     {
         if (!a_event || !*a_event) return RE::BSEventNotifyControl::kContinue;
+
+        // While a Prisma modal is active, block the dashboard toggle hotkey and restore focus if lost on button press
+        if (PrismaModalManager::GetSingleton().HasActiveModal()) {
+            if (!IsModalDisplayBlocked() && IsViewValid() && m_domReady && !prismaUI->HasFocus(view)) {
+                for (auto* event = *a_event; event; event = event->next) {
+                    if (auto* button = event->AsButtonEvent(); button && button->IsDown()) {
+                        SKSE::GetTaskInterface()->AddTask([]() {
+                            PrismaUIManager::GetSingleton().SyncViewVisibilityAndFocus();
+                        });
+                        break;
+                    }
+                }
+            }
+            return RE::BSEventNotifyControl::kContinue;
+        }
 
         const auto& settings = Settings::GetSingleton();
         const uint32_t hotkeyCode = settings.toggleUIKey;
@@ -72,6 +235,7 @@ namespace MARAS {
         auto api = PRISMA_UI_API::RequestPluginAPI(PRISMA_UI_API::InterfaceVersion::V1);
         if (!api) {
             MARAS_LOG_INFO("PrismaUI not available — M.A.R.A.S will run without Prisma UI");
+            StartListeningInput();
             return;
         }
 
@@ -82,26 +246,113 @@ namespace MARAS {
         StartListeningInput();
     }
 
-    void PrismaUIManager::OnDomReady(PrismaView view) {
-        MARAS_LOG_INFO("PrismaUIManager: DOM ready callback received for view {}", view);
-        SKSE::GetTaskInterface()->AddTask([view]() {
-            auto& mgr = PrismaUIManager::GetSingleton();
-            if (mgr.view != view || !mgr.IsViewValid()) return;
+    bool PrismaUIManager::EnsureViewCreated() {
+        if (!prismaUI) {
+            MARAS_LOG_WARN("PrismaUIManager::EnsureViewCreated called but PrismaUI API is not available");
+            return false;
+        }
 
-            if (!mgr.prismaUI->HasFocus(mgr.view)) {
-                MARAS_LOG_INFO("PrismaUIManager: OnDomReady Focusing view {}", mgr.view);
-                mgr.prismaUI->Focus(mgr.view);
+        if (view && prismaUI->IsValid(view)) {
+            return true;
+        }
+
+        MARAS_LOG_INFO("PrismaUIManager: Creating view 'MARAS/index.html'...");
+        m_domReady = false;
+        m_modalFocusLocked = false;
+
+        auto newView = prismaUI->CreateView("MARAS/index.html", OnDomReady);
+        if (!newView) {
+            MARAS_LOG_ERROR("Failed to create PrismaUI view for M.A.R.A.S");
+            return false;
+        }
+
+        view = newView;
+        prismaUI->RegisterJSListener(view, "closeMARAS", OnCloseMARAS);
+        prismaUI->RegisterJSListener(view, "log", OnLog);
+        prismaUI->RegisterJSListener(view, "refocusView", OnRefocusView);
+        prismaUI->RegisterJSListener(view, "marasAction", OnMarasAction);
+
+        MARAS_LOG_INFO("PrismaUI view created successfully for M.A.R.A.S: handle {}", newView);
+        return true;
+    }
+
+    void PrismaUIManager::SyncViewVisibilityAndFocus() {
+        if (!IsViewValid()) {
+            return;
+        }
+
+        const bool blocked = IsModalDisplayBlocked();
+        const bool hasModal = !blocked && PrismaModalManager::GetSingleton().HasActiveModal();
+        const bool shouldBeVisible = !blocked && (m_dashboardOpen || hasModal);
+
+        if (!shouldBeVisible) {
+            if (prismaUI->HasFocus(view)) {
+                prismaUI->Unfocus(view);
             }
+            if (!prismaUI->IsHidden(view)) {
+                prismaUI->Hide(view);
+            }
+            m_modalFocusLocked = false;
+            return;
+        }
 
-            nlohmann::json statusData;
-            statusData["status"] = "M.A.R.A.S Core Initialized";
-            statusData["version"] = PROJECT_VERSION;
+        // Wait until Ultralight has finished creating the view on the UI thread (OnDomReady -> OnUIReady)
+        if (!m_domReady) {
+            return;
+        }
 
-            std::string statusJson = statusData.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-            mgr.InteropCall("receiveMARASStatus", statusJson.c_str());
-            mgr.InteropCall("openMARAS", "");
+        if (prismaUI->IsHidden(view)) {
+            prismaUI->Show(view);
+        }
 
+        if (hasModal != m_modalFocusLocked && prismaUI->HasFocus(view)) {
+            prismaUI->Unfocus(view);
+        }
+
+        // FocusMenu (disableFocusMenu=false) MUST remain enabled so PrismaUI's Scaleform cursor/input menu
+        // owns the mouse cursor and routes mouse + keyboard events to the web view.
+        if (!prismaUI->HasFocus(view)) {
+            const bool focused = prismaUI->Focus(view, /*pauseGame=*/hasModal, /*disableFocusMenu=*/false);
+            m_modalFocusLocked = hasModal && focused;
+            MARAS_LOG_INFO("PrismaUIManager: Focused view {} (pauseGame={}, disableFocusMenu=false, success={})",
+                           view, hasModal, focused);
+        }
+    }
+
+    void PrismaUIManager::OnUIReady() {
+        if (!IsViewValid()) return;
+
+        m_domReady = true;
+        SyncViewVisibilityAndFocus();
+
+        nlohmann::json statusData;
+        statusData["status"] = "M.A.R.A.S Core Initialized";
+        statusData["version"] = PROJECT_VERSION;
+        std::string statusJson = statusData.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        InteropCall("receiveMARASStatus", statusJson.c_str());
+
+        if (m_dashboardOpen) {
+            InteropCall("openMARAS", "");
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
+        } else {
+            InteropCall("closeMARASView", "");
+        }
+
+        if (PrismaModalManager::GetSingleton().HasActiveModal()) {
+            PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/true);
+        }
+    }
+
+    void PrismaUIManager::OnDomReady(PrismaView readyView) {
+        MARAS_LOG_INFO("PrismaUIManager: DOM ready callback received for view {}", readyView);
+        SKSE::GetTaskInterface()->AddTask([readyView]() {
+            try {
+                auto& mgr = PrismaUIManager::GetSingleton();
+                if (mgr.view != readyView || !mgr.IsViewValid()) return;
+                mgr.OnUIReady();
+            } catch (const std::exception& e) {
+                MARAS_LOG_ERROR("PrismaUIManager::OnDomReady exception: {}", e.what());
+            }
         });
     }
 
@@ -111,55 +362,61 @@ namespace MARAS {
             return;
         }
 
-        MARAS_LOG_INFO("PrismaUIManager::Show() requested");
+        if (IsBlockingNativeMenuOpen()) {
+            MARAS_LOG_INFO("PrismaUIManager::Show() ignored while blocking native menu is open");
+            return;
+        }
 
-        if (view && prismaUI->IsValid(view)) {
-            MARAS_LOG_INFO("PrismaUIManager: Showing existing valid view {}", view);
-            prismaUI->Show(view);
-            if (!prismaUI->HasFocus(view)) {
-                prismaUI->Focus(view);
-            }
+        if (m_deferModalsUntilRaceMenuClosed) {
+            m_deferModalsUntilRaceMenuClosed = false;
+            TryRunPendingNewGameScan();
+        }
+
+        MARAS_LOG_INFO("PrismaUIManager::Show() requested");
+        m_dashboardOpen = true;
+
+        const bool wasValid = IsViewValid();
+        if (!EnsureViewCreated()) {
+            m_dashboardOpen = false;
+            return;
+        }
+
+        SyncViewVisibilityAndFocus();
+
+        if (wasValid && m_domReady) {
             InteropCall("openMARAS", "");
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
-            return;
         }
-
-        MARAS_LOG_INFO("PrismaUIManager: Creating view 'MARAS/index.html'...");
-        auto newView = prismaUI->CreateView("MARAS/index.html", OnDomReady);
-        if (!newView) {
-            MARAS_LOG_ERROR("Failed to create PrismaUI view for M.A.R.A.S");
-            return;
-        }
-
-        view = newView;
-        prismaUI->RegisterJSListener(view, "closeMARAS", OnCloseMARAS);
-        prismaUI->RegisterJSListener(view, "log", OnLog);
-        prismaUI->RegisterJSListener(view, "refocusView", OnRefocusView);
-        prismaUI->RegisterJSListener(view, "marasAction", OnMarasAction);
-        
-        prismaUI->Show(view);
-        prismaUI->Focus(view);
-        
-        MARAS_LOG_INFO("PrismaUI view created successfully for M.A.R.A.S: handle {}", newView);
     }
 
     void PrismaUIManager::Hide() {
         if (!prismaUI || !view) {
+            m_dashboardOpen = false;
             return;
         }
 
         MARAS_LOG_INFO("PrismaUIManager::Hide() called for view {}", view);
+        m_dashboardOpen = false;
 
         if (prismaUI->IsValid(view)) {
-            prismaUI->Hide(view);
-            prismaUI->Unfocus(view);
-            MARAS_LOG_INFO("PrismaUIManager: Hidden and unfocused view {}", view);
+            if (m_domReady) {
+                InteropCall("closeMARASView", "");
+            }
+            SyncViewVisibilityAndFocus();
+            MARAS_LOG_INFO("PrismaUIManager: Dashboard closed for view {} (modalActive={})",
+                           view, PrismaModalManager::GetSingleton().HasActiveModal());
         }
     }
 
     void PrismaUIManager::Toggle() {
         if (!prismaUI) {
             MARAS_LOG_WARN("PrismaUIManager::Toggle() called but PrismaUI is not available");
+            return;
+        }
+
+        if (PrismaModalManager::GetSingleton().HasActiveModal()) {
+            MARAS_LOG_INFO("PrismaUIManager::Toggle() ignored while a modal is active");
+            SyncViewVisibilityAndFocus();
             return;
         }
 
@@ -174,6 +431,13 @@ namespace MARAS {
     }
 
     void PrismaUIManager::Destroy() {
+        m_dashboardOpen = false;
+        m_domReady = false;
+        m_modalFocusLocked = false;
+        m_deferModalsUntilRaceMenuClosed = false;
+        m_pendingNewGameRelationshipScan = false;
+        m_postUnfocusCallbacks.clear();
+
         if (prismaUI && view) {
             MARAS_LOG_INFO("PrismaUIManager::Destroy() called for view {}", view);
             if (prismaUI->IsValid(view)) {
@@ -204,7 +468,7 @@ namespace MARAS {
         SKSE::GetTaskInterface()->AddTask([]() {
             auto& mgr = PrismaUIManager::GetSingleton();
             if (mgr.IsViewValid()) {
-                mgr.prismaUI->Focus(mgr.view);
+                mgr.SyncViewVisibilityAndFocus();
             }
         });
     }

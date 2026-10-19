@@ -5,6 +5,7 @@ import { StatusBadge } from '../shared/StatusBadge'
 import { AffectionBar } from '../shared/AffectionBar'
 import { AppTooltip } from '../shared/AppTooltip'
 import { useMarasStore } from '../../store/useMarasStore'
+import { confirmRemoveRelationship } from '../../store/useModalStore'
 import { Heart, User, Crown, AlertTriangle, Shield, Clock, Flame, Trash2 } from 'lucide-react'
 
 interface NpcPartnerGroupProps {
@@ -28,6 +29,11 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
   const affectionData = useMarasStore((s) => s.affectionData)
   const cheatingRecords = useMarasStore((s) => s.cheatingRecords)
   const removeRelationship = useMarasStore((s) => s.removeRelationship)
+
+  const currentNpcName =
+    currentNpcId === PLAYER_FORM_ID
+      ? npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
+      : npcProfiles.get(currentNpcId)?.name || `NPC ${currentNpcId}`
 
   const validRelationships = relationships.filter((r) => {
     const partnerId = r.actorA === currentNpcId ? r.actorB : r.actorA
@@ -140,7 +146,9 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      removeRelationship(currentNpcId, partnerId)
+                      confirmRemoveRelationship(currentNpcName, partnerName, () =>
+                        removeRelationship(currentNpcId, partnerId),
+                      )
                     }}
                     className="p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer"
                   >
@@ -155,3 +163,4 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
     </div>
   )
 }
+

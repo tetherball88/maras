@@ -1,12 +1,14 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { confirmRemoveRelationship } from '../../store/useModalStore'
 import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { StatusBadge, getStatusLabel, StatusIcon } from '../shared/StatusBadge'
 import { formatRelationshipDate, getLatestStatusRecord } from '../../utils/dateUtils'
 import { AffectionBar } from '../shared/AffectionBar'
+import { AppTooltip } from '../shared/AppTooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { GitFork, Heart, Calendar, Shield, Baby } from 'lucide-react'
+import { GitFork, Heart, Calendar, Shield, Baby, Trash2 } from 'lucide-react'
 import { resolveIsFemale, getChildGenderNouns } from '../../utils/childUtils'
 import { areSameFormId } from '../../utils/statusAvailability'
 
@@ -18,6 +20,7 @@ export const NpcRelationshipDetails: React.FC = () => {
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const affectionData = useMarasStore((s) => s.affectionData)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
+  const removeRelationship = useMarasStore((s) => s.removeRelationship)
 
   if (!selectedId) {
     return (
@@ -195,8 +198,23 @@ export const NpcRelationshipDetails: React.FC = () => {
                             </div>
                           )}
 
-                          <div className="flex-shrink-0">
+                          <div className="flex-shrink-0 flex items-center gap-[0.5rem]">
                             <StatusBadge status={r.status} />
+                            <AppTooltip content="Remove Relationship Record">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  confirmRemoveRelationship(
+                                    selectedNpc?.name || `NPC ${selectedId}`,
+                                    otherName,
+                                    () => removeRelationship(selectedId, otherId),
+                                  )
+                                }}
+                                className="p-[0.25rem] rounded text-foreground-muted hover:text-status-danger hover:bg-rose-950/40 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-[0.95em] h-[0.95em]" />
+                              </button>
+                            </AppTooltip>
                           </div>
                         </div>
                       )
@@ -211,3 +229,4 @@ export const NpcRelationshipDetails: React.FC = () => {
     </div>
   )
 }
+

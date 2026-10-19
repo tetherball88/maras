@@ -30,6 +30,7 @@
 #include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
+#include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIManager.h"
 #include "utils/ActorUtils.h"
 #include "utils/Settings.h"
@@ -54,6 +55,17 @@ namespace {
         RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent*,
                                               RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override {
             MARAS::PollingService::GetSingleton().Update();
+            if (MARAS::PrismaModalManager::GetSingleton().HasActiveModal()) {
+                if (auto* taskIF = SKSE::GetTaskInterface()) {
+                    taskIF->AddTask([]() {
+                        auto& uiMgr = MARAS::PrismaUIManager::GetSingleton();
+                        if (!uiMgr.IsModalDisplayBlocked()) {
+                            MARAS::PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
+                        }
+                        uiMgr.SyncViewVisibilityAndFocus();
+                    });
+                }
+            }
             return RE::BSEventNotifyControl::kContinue;
         }
 
@@ -197,6 +209,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
                         MARAS::NPCIndex::GetSingleton().ClearLoadedActors();
+                        MARAS::PrismaModalManager::GetSingleton().Revert();
                         MARAS::PrismaUIManager::GetSingleton().Destroy();
                         MARAS::IntimateThreadService::GetSingleton().ClearAll();
                         MARAS::ChildrenFleeService::GetSingleton().Reset();
@@ -224,10 +237,16 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS::FactionService::GetSingleton().SanitizePlayerMarriedFaction();
                         MARAS::NPCRelationshipManager::GetSingleton().UpdateCanFormNonCheatingMainFaction(MARAS::kPlayerFormID);
 
-                        // Check and trigger initial relationship scan on first load of this save
-                        if (!MARAS::Settings::GetSingleton().initialRelationshipScanDone) {
-                            MARAS::NPCRelationshipManager::GetSingleton().ScanExistingRelationships(isNewGame);
-                            MARAS::Settings::GetSingleton().initialRelationshipScanDone = true;
+                        // On a new game, defer modals and the initial relationship scan until character creation (RaceSex Menu) closes
+                        if (isNewGame) {
+                            MARAS::PrismaUIManager::GetSingleton().OnNewGameStarted(
+                                !MARAS::Settings::GetSingleton().initialRelationshipScanDone);
+                        } else {
+                            MARAS::PrismaUIManager::GetSingleton().ResetNewGameDeferral();
+                            if (!MARAS::Settings::GetSingleton().initialRelationshipScanDone) {
+                                MARAS::NPCRelationshipManager::GetSingleton().ScanExistingRelationships(/*isNewGame=*/false);
+                                MARAS::Settings::GetSingleton().initialRelationshipScanDone = true;
+                            }
                         }
 
                         // Log statistics after save data has been loaded

@@ -291,6 +291,16 @@ export const MatchmakingSettings: React.FC = () => {
         )}
 
         <SettingRow
+          label="Review Matchmaking Results in Modal"
+          description="When enabled, presents an interactive checklist modal to review, adjust, or reject proposed NPC pairings before they are applied in-game."
+        >
+          <ToggleSwitch
+            checked={matchmakingSettings.confirmResults ?? false}
+            onChange={(val) => updateMatchmakingSettings({ confirmResults: val })}
+          />
+        </SettingRow>
+
+        <SettingRow
           label="Evaluation Interval"
           description={`Number of in-game days between automated matchmaking evaluations (${matchmakingSettings.intervalDays} days).`}
         >

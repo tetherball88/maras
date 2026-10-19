@@ -238,6 +238,7 @@ export interface MarasSettings {
   matchmakingAllowCheating?: boolean
   matchmakingOrientation?: number
   matchmakingExcludePlayerActivePartners?: boolean
+  matchmakingConfirmResults?: boolean
   paternityBaseChance?: number
   paternityDailyGrowth?: number
   paternityMaxChance?: number
@@ -274,6 +275,7 @@ export interface MatchmakingSettings {
   useLLM?: boolean
   generateMemories?: boolean
   evaluationStep?: boolean
+  confirmResults?: boolean
   diceRollChanceNewDating?: number
   diceRollChanceNewEngaged?: number
   diceRollChanceNewLoverAllowed?: number
@@ -355,4 +357,6 @@ export interface HouseholdBuffsData {
   activePermanentCount: number
   activeFollowerCount: number
 }
+
+export * from './types/modal'
 
