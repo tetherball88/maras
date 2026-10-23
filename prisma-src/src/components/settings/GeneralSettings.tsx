@@ -10,6 +10,8 @@ export const GeneralSettings: React.FC = () => {
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
   const uiScale = settings.uiScale ?? 1.0
+  const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings)
+  const lonelinessDays = settings.lonelinessThresholdDays ?? 2
 
   return (
     <div className="space-y-[1rem]">
@@ -71,6 +73,24 @@ export const GeneralSettings: React.FC = () => {
             step={0.1}
             unit="x"
             onChange={(val) => updateSetting('affectionDecayMult', val)}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="Loneliness Threshold (Days)"
+          description={`Master time unit (L = ${lonelinessDays}d): days without meaningful interaction before daily affection decay begins, and base unit scaling all Player Partner Agency intervals (scan every ${Math.max(1, Math.round(lonelinessDays * 1.5))}d, talking-to-physical affair escalation after ${Math.round(lonelinessDays * 2)}d).`}
+        >
+          <SliderInput
+            value={lonelinessDays}
+            min={1}
+            max={14}
+            step={1}
+            unit="d"
+            onChange={(val) => {
+              const days = Math.round(val)
+              updateSetting('lonelinessThresholdDays', days)
+              updateMatchmakingSettings({ lonelinessThresholdDays: days })
+            }}
           />
         </SettingRow>
 

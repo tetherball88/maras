@@ -1,0 +1,8 @@
+FormKey: 000DAD:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestCloseScold
+Name:
+  TargetLanguage: English
+  Value: No. We agreed to an open relationship, and I'm not giving up my freedom now.
+Branch: 000D9D:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

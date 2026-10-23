@@ -52,6 +52,7 @@ namespace MARAS {
         int32_t defaultLogLevel = 1; // Default log level loaded from INI
         int32_t logLevel = 1; // Default to debug (overridden by INI / cosave)
         float affectionDecayMultiplier = 1.0f;
+        int32_t lonelinessThresholdDays = 2;
         float skyrimnetActionRadius = 3000.0f;
         bool disablePolygamyQuest = false;
         bool migratedFromStorageUtil = false;
@@ -101,6 +102,64 @@ namespace MARAS {
         bool matchmakingEvaluationStep = true;
         bool matchmakingGenerateMemories = true;
         bool matchmakingConfirmResults = false;
+
+        // Player-Partner Infidelity settings (cosave persisted)
+        bool playerPartnerCheatingAgencyEnabled = true;
+        bool playerPartnerOpenRelAgencyEnabled = true;
+
+        float playerPartnerCheatingChanceMultiplier = 1.0f;
+        int32_t playerPartnerCheatingMaxRollCap = 65;
+        int32_t playerPartnerCheatingMaxSecretLovers = 1;
+        bool playerPartnerCheatingAllowWhenHappy = false;
+        bool playerPartnerCheatingEnableNeglect = true;
+        bool playerPartnerCheatingEnableRevenge = true;
+        bool playerPartnerCheatingEnableHierarchy = true;
+        bool playerPartnerCheatingEnableChildrenAnchor = true;
+        bool playerPartnerCheatingUseLLM = true;
+        bool playerPartnerCheatingConfirmResults = false;
+        float playerPartnerAgencyOpenLoverChanceMultiplier = 1.0f;
+        float playerPartnerAgencyBreakupChanceMultiplier = 1.0f;
+        bool playerPartnerAgencyEnableForceGreets = true;
+        bool playerPartnerAgencyEnableHomeArrivalEvents = true;
+
+        // =========================================================================
+        // Configurable Loneliness & Partner Agency Day-Threshold Multipliers (cosave persisted)
+        // All day thresholds in AffectionService and Tier 2 Partner Agency derive
+        // from `lonelinessThresholdDays` (L, default = 2 days) multiplied by these settings.
+        // =========================================================================
+        float multLonelinessDecayStart      = 1.0f; // 1.0x L (default 2d) - AffectionService daily loneliness decay onset
+        float multPartnerAgencyScanInterval = 1.5f; // 1.5x L (default 3d) - Tier 2 Partner Agency evaluation interval
+        float multRecentAttentionWindow     = 1.0f; // 1.0x L (default 2d) - Recent player visit mitigation & guilt bonus
+        float multVeryRecentVisitWindow     = 0.5f; // 0.5x L (default 1d) - Very recent player visit bonus for open partners
+        float multNeglectGrowthStart        = 1.0f; // 1.0x L (default 2d) - Neglect growth onset (Troubled/Estranged & Open)
+        float multContentNeglectStart       = 2.0f; // 2.0x L (default 4d) - Neglect growth onset for Content (50-74) partners
+        float multProlongedAbsencePenalty   = 2.0f; // 2.0x L (default 4d) - Prolonged player absence penalty for affair breakups
+        float multAffairTalkingEscalation   = 2.0f; // 2.0x L (default 4d) - Deterministic Talking -> Physical affair escalation
+        float multMinSideFlingAgeForBreakup = 1.5f; // 1.5x L (default 3d) - Minimum age of an affair/open lover before breakup roll
+        float multPartnerIntentTTL          = 2.0f; // 2.0x L (default 4d) - PendingPartnerIntent expiration window
+        float multHomeArrivalCooldown       = 1.0f; // 1.0x L (default 2d) - Per-location cooldown between home-arrival events
+        float multAffairFatigueStart        = 5.0f; // 5.0x L (default 10d) - Affair fatigue / open fling novelty fade onset
+        float multRomanticAttendedBreakup   = 1.5f; // 1.5x L (default 3d) - Romantic partner recently attended breakup window
+        float multSuggestOpenNeglectMin     = 2.0f; // 2.0x L (default 4d) - Neglect onset for SuggestOpen bonus
+
+        float GetBaseLonelinessDays() const noexcept {
+            return static_cast<float>(std::clamp(lonelinessThresholdDays, 1, 14));
+        }
+        float GetLonelinessDecayStartDays() const noexcept         { return GetBaseLonelinessDays() * multLonelinessDecayStart; }
+        float GetPartnerAgencyScanIntervalDays() const noexcept    { return GetBaseLonelinessDays() * multPartnerAgencyScanInterval; }
+        float GetAffairTalkingEscalationDays() const noexcept      { return GetBaseLonelinessDays() * multAffairTalkingEscalation; }
+        float GetPartnerIntentTTLDays() const noexcept             { return GetBaseLonelinessDays() * multPartnerIntentTTL; }
+        float GetHomeArrivalCooldownDays() const noexcept          { return GetBaseLonelinessDays() * multHomeArrivalCooldown; }
+        float GetRecentEffortMaxDays() const noexcept              { return GetBaseLonelinessDays() * multRecentAttentionWindow; }
+        float GetOpenRecentVisitMitigationMaxDays() const noexcept { return GetBaseLonelinessDays() * multVeryRecentVisitWindow; }
+        float GetNeglectTroubledStartDays() const noexcept         { return GetBaseLonelinessDays() * multNeglectGrowthStart; }
+        float GetNeglectContentStartDays() const noexcept          { return GetBaseLonelinessDays() * multContentNeglectStart; }
+        float GetProlongedAbsencePenaltyDays() const noexcept      { return GetBaseLonelinessDays() * multProlongedAbsencePenalty; }
+        float GetMinSideLoverAgeForBreakupDays() const noexcept    { return GetBaseLonelinessDays() * multMinSideFlingAgeForBreakup; }
+        float GetAffairFatigueStartDays() const noexcept           { return GetBaseLonelinessDays() * multAffairFatigueStart; }
+        float GetOpenFlingNoveltyDays() const noexcept             { return GetBaseLonelinessDays() * multAffairFatigueStart; }
+        float GetRomanticAttendedBreakupMaxDays() const noexcept   { return GetBaseLonelinessDays() * multRomanticAttendedBreakup; }
+        float GetSuggestOpenNeglectMinDays() const noexcept        { return GetBaseLonelinessDays() * multSuggestOpenNeglectMin; }
 
         // Dice Roll chance weights (sum enforced = 100 in UI, stored as raw int32_t)
         int32_t diceRollChanceNewDating = 22;        // ~20% normalized

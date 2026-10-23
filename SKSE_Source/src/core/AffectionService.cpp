@@ -31,7 +31,7 @@ namespace MARAS {
         constexpr float kMultiplierEstranged = 0.0f;
 
         // Loneliness decay configuration
-        constexpr float kDaysBeforeDecayStarts = 2.0f;
+        // kDaysBeforeDecayStarts replaced by Settings::GetLonelinessDecayStartDays()
         constexpr float kFollowingAffectionBonus = 6.0f;
         constexpr float kDefaultDecayPerDay = 3.0f;
         constexpr float kNeverRecordedDaysSince = 999.0f;
@@ -353,7 +353,7 @@ namespace MARAS {
             float daysSince = GetDaysSinceLastAffection(npcFormID);
 
             // Only apply decay if no affection received for more than the threshold
-            if (daysSince <= kDaysBeforeDecayStarts) {
+            if (daysSince <= Settings::GetSingleton().GetLonelinessDecayStartDays()) {
                 continue;
             }
 

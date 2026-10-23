@@ -1,0 +1,33 @@
+FormKey: 000D8B:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000D8A:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000D87:TT_MARAS.esp
+- 000D8C:TT_MARAS.esp
+- 000D8F:TT_MARAS.esp
+Responses:
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: You've said that before. Every time, and then you're gone again.
+  ScriptNotes: ''
+  Edits: ''
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I can't live on promises. I need something real.
+  ScriptNotes: ''
+  Edits: ''

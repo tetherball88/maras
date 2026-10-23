@@ -6,6 +6,7 @@ Name:
 EquipmentType: 013F44:Skyrim.esm
 Description:
   TargetLanguage: English
+  Value: ''
 Type: Ability
 Effects:
 - BaseEffect: 000029:TT_MARAS.esp

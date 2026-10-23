@@ -1,0 +1,38 @@
+FormKey: 000DAF:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000DAE:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000DA2:TT_MARAS.esp
+- 000DB0:TT_MARAS.esp
+- 000DB3:TT_MARAS.esp
+Responses:
+- Emotion: Anger
+  EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: We agreed to it once. Now I'm telling you it's hurting us.
+  ScriptNotes: ''
+  Edits: ''
+- Emotion: Puzzled
+  EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Why do your other lovers matter more to you than I do?
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 000006:TT_MARAS.esp

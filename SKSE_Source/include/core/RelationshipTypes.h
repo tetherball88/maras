@@ -85,6 +85,21 @@ namespace MARAS {
         _Count
     };
 
+    enum class AffairStage : uint8_t {
+        Talking = 0,     // Stage 1: Emotional / Flirting / Secret Courting
+        Physical = 1,    // Stage 2: Full Physical / Sexual Affair
+        _Count
+    };
+
+    enum class PartnerIntentType : uint8_t {
+        None = 0,
+        SuggestOpen = 1,      // Partner wants to ask the player to open the relationship
+        SuggestClose = 2,     // Partner wants to ask the player to close the open relationship
+        ConfessTalking = 3,   // Partner feels guilty and wants to confess a Talking-stage affair
+        ConfessPhysical = 4,  // Partner feels guilty and wants to confess a Physical-stage affair
+        _Count
+    };
+
     // Compile-time validation: ensure enums fit in uint8_t for serialization
     static_assert(static_cast<uint8_t>(SocialClass::_Count) <= 255,
                   "SocialClass enum exceeds uint8_t range");
@@ -102,6 +117,10 @@ namespace MARAS {
                   "AffairDiscovery enum exceeds uint8_t range");
     static_assert(static_cast<uint8_t>(AffairResolution::_Count) <= 255,
                   "AffairResolution enum exceeds uint8_t range");
+    static_assert(static_cast<uint8_t>(AffairStage::_Count) <= 255,
+                  "AffairStage enum exceeds uint8_t range");
+    static_assert(static_cast<uint8_t>(PartnerIntentType::_Count) <= 255,
+                  "PartnerIntentType enum exceeds uint8_t range");
 
 }  // namespace MARAS
 

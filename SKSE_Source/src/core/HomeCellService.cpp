@@ -227,6 +227,12 @@ namespace MARAS {
         return (it != actorsWithHome_.end()) ? it->second.homeCell : 0;
     }
 
+    RE::FormID HomeCellService::GetNpcHome(RE::FormID actorFormID) const {
+        if (actorFormID == 0) return 0;
+        auto it = actorsWithHome_.find(actorFormID);
+        return (it != actorsWithHome_.end()) ? it->second.homeCell : 0;
+    }
+
     RE::FormID HomeCellService::GetNpcOriginalHouseCenterMarker(RE::Actor* npc) const {
         if (!npc) return 0;
 

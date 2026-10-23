@@ -5,13 +5,11 @@ Flags:
 PreviousDialog: 0005B2:TT_MARAS.esp
 FavorLevel: None
 LinkTo:
-- 000357:TT_MARAS.esp
-- 000355:TT_MARAS.esp
-- 000373:TT_MARAS.esp
-- 00036A:TT_MARAS.esp
+- 000DCE:TT_MARAS.esp
 - 0005B6:TT_MARAS.esp
 Responses:
-- EmotionValue: 50
+- Emotion: Surprise
+  EmotionValue: 60
   ResponseNumber: 1
   Unknown2: 0x000000
   Flags:
@@ -19,7 +17,7 @@ Responses:
   Unknown3: 0x000000
   Text:
     TargetLanguage: English
-    Value: Well. Now you know. I'm not going to pretend or apologize, so say whatever you came to say.
+    Value: Wait—what are you doing here?! You weren't supposed to be back yet!
   ScriptNotes: ''
   Edits: ''
 Conditions:

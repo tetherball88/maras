@@ -562,6 +562,10 @@ namespace MARAS {
 
         float cTime = (conceptionTime > 0.0f) ? conceptionTime : (RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f);
 
+        if (motherID != 0) EnsureRegistered(motherID);
+        if (presumedFatherID != 0) EnsureRegistered(presumedFatherID);
+        if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID) EnsureRegistered(bioFatherID);
+
         RE::FormID gA = motherID;
         RE::FormID gB = (presumedFatherID != 0 && IsMarried(motherID, presumedFatherID)) ? presumedFatherID : 0;
         RE::FormID bioM = motherID;
@@ -1348,6 +1352,10 @@ namespace MARAS {
         if (cTime <= 0.0f) {
             cTime = bTime;
         }
+
+        if (motherID != 0) EnsureRegistered(motherID);
+        if (presumedFatherID != 0) EnsureRegistered(presumedFatherID);
+        if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID) EnsureRegistered(bioFatherID);
 
         RE::FormID gA = motherID;
         RE::FormID gB = (presumedFatherID != 0 && IsMarried(motherID, presumedFatherID)) ? presumedFatherID : 0;

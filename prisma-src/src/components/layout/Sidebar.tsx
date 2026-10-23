@@ -65,6 +65,7 @@ export const subNavConfig: Record<string, SubItem[]> = {
     { id: 'general', label: 'General', icon: Sliders },
     { id: 'confirmations', label: 'Confirmations', icon: CheckSquare },
     { id: 'matchmaking', label: 'Matchmaking', icon: HeartHandshake },
+    { id: 'partnerAgency', label: 'Partner Agency', icon: Heart },
     { id: 'scenes', label: 'NPC Scenes', icon: Clapperboard },
     { id: 'children', label: 'Children & Pets', icon: Baby },
     { id: 'fertility', label: 'Fertility', icon: Dna },

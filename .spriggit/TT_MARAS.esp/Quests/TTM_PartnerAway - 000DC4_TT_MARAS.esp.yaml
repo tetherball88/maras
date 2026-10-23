@@ -1,0 +1,104 @@
+FormKey: 000DC4:TT_MARAS.esp
+EditorID: TTM_PartnerAway
+VirtualMachineAdapter:
+  Scripts:
+  - Name: TTM_QuestPartnerAway
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Lover
+      Object: 000DC4:TT_MARAS.esp
+      Alias: 1
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_Partner
+      Object: 000DC4:TT_MARAS.esp
+      Alias: 0
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_TavernLocation
+      Object: 000DC4:TT_MARAS.esp
+      Alias: 3
+    - MutagenObjectType: ScriptObjectProperty
+      Name: Alias_TavernMarker
+      Object: 000DC4:TT_MARAS.esp
+      Alias: 2
+  FileName: ''
+Name:
+  TargetLanguage: English
+  Value: A Note Left Behind
+Flags:
+- AllowRepeatedStages
+Priority: 75
+Stages:
+- Flags:
+  - StartUpStage
+  LogEntries:
+  - Flags: []
+- Index: 10
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: <Alias=Partner> left a note at home letting me know <Alias.Pronoun=Partner> stepped out to <Alias=TavernLocation> to spend some time with <Alias=Lover>. I can join them there if I wish.
+- Index: 20
+  LogEntries:
+  - Flags: []
+    Entry:
+      TargetLanguage: English
+      Value: I found a half-burned letter near the hearth addressed to <Alias=Partner>. Something feels off - the note mentions meeting in secret at <Alias=TavernLocation>. Maybe I should go there and see for myself.
+- Index: 100
+  Flags:
+  - ShutDownStage
+  LogEntries:
+  - Flags: []
+Objectives:
+- Index: 10
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Join <Alias=Partner> at <Alias=TavernLocation>
+  Targets:
+  - {}
+- Index: 20
+  Flags: []
+  DisplayText:
+    TargetLanguage: English
+    Value: Check on <Alias=Partner> at <Alias=TavernLocation>
+  Targets:
+  - {}
+NextAliasID: 4
+Aliases:
+- Name: Partner
+  Flags:
+  - Optional
+  - AllowReuseInQuest
+  - StoresText
+  - AllowReserved
+  - UsesStoredText
+  PackageData:
+  - 000DC5:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 1
+  Name: Lover
+  Flags:
+  - Optional
+  - AllowReuseInQuest
+  - StoresText
+  - AllowReserved
+  - UsesStoredText
+  VoiceTypes: Null
+- ID: 2
+  Name: TavernMarker
+  Flags:
+  - Optional
+  - AllowReuseInQuest
+  - AllowReserved
+  VoiceTypes: Null
+- ID: 3
+  Type: Location
+  Name: TavernLocation
+  Flags:
+  - Optional
+  - AllowReuseInQuest
+  - StoresText
+  - AllowReserved
+  - UsesStoredText
+  - AllowCleared

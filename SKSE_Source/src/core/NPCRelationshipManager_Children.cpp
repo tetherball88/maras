@@ -419,6 +419,11 @@ namespace MARAS {
             entry.guardianAID = ResolveSingleCustodian(childID, entry, entry.guardianAID, entry.guardianBID);
             entry.guardianBID = 0;
         }
+        if (entry.guardianAID != 0) EnsureRegistered(entry.guardianAID);
+        if (entry.guardianBID != 0) EnsureRegistered(entry.guardianBID);
+        if (entry.bioMotherID != 0) EnsureRegistered(entry.bioMotherID);
+        if (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) EnsureRegistered(entry.bioFatherID);
+        if (entry.presumedFatherID != 0) EnsureRegistered(entry.presumedFatherID);
         childrenByID[childID] = entry;
 
         MARAS_LOG_INFO("[Children] Registered child actor {:08X} ('{}', stage: {}, adopted: {}, bioM: {:08X}, bioF: {:08X}) to guardians {:08X} / {:08X}",

@@ -1,0 +1,8 @@
+FormKey: 000DA4:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestCloseRefuse
+Name:
+  TargetLanguage: English
+  Value: I'm not ready to close things between us yet. Let's leave it open a while longer.
+Branch: 000D9D:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

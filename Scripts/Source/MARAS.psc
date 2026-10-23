@@ -152,6 +152,21 @@ bool Function SetCheatingAffairStatus(Actor cheater, Actor victim, Actor affairP
 ;/ Get the affair status for a cheating record /;
 int Function GetCheatingAffairStatus(Actor cheater, Actor victim, Actor affairPartner) global native
 
+;/ Get the affair stage for a cheating record (0 = Talking, 1 = Physical) /;
+int Function GetAffairStage(Actor cheater, Actor victim, Actor affairPartner = None) global native
+
+;/ Set the affair stage for a cheating record (0 = Talking, 1 = Physical) /;
+bool Function SetAffairStage(Actor cheater, Actor victim, Actor affairPartner, int stage) global native
+
+;/ Get a player partner's pending conversation intent ("none", "suggest_open", "suggest_close", "confess_talking", "confess_physical") /;
+string Function GetPartnerPendingIntent(Actor partner) global native
+
+;/ Clear a player partner's pending conversation intent /;
+Function ClearPartnerIntent(Actor partner) global native
+
+;/ Evaluate partner agency home-arrival scenarios (pending force-greet intents and side-lover scenarios) when arriving at a location /;
+bool Function EvaluatePartnerHomeArrival(Location akNewLoc = None) global native
+
 ;/ Check if cheater has cheated on victim /;
 bool Function HasCheatedOn(Actor cheater, Actor victim) global native
 
@@ -919,6 +934,9 @@ string Function GetJsonString(string json, string path, string defaultVal = "") 
 
 ;/ Extract Actor reference from a JSON payload by path /;
 Actor Function GetJsonActor(string json, string path) global native
+
+;/ Extract any Form reference (Location, ObjectReference, etc.) from a JSON payload by path /;
+Form Function GetJsonForm(string json, string path) global native
 
 ;/ Extract int property from a JSON payload by path /;
 int Function GetJsonInt(string json, string path, int defaultVal = 0) global native

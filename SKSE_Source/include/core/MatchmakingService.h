@@ -31,6 +31,8 @@ namespace MARAS {
         std::string memory;             // Optional in-world narrative
         std::vector<GeneratedMemoryEntry> dualMemories; // Optional dual POV memories
         bool isCheating = false;        // True if suggested relationship involves infidelity / closed partner
+        AffairStage affairStage = AffairStage::Physical; // Stage for new cheating affair (Talking for Tier 2 scheduled affairs)
+        PartnerIntentType postBreakupIntent = PartnerIntentType::None; // Optional confession intent queued if breakup is applied
         bool applied = false;
         bool skipped = false;
         std::string skipReason;
@@ -79,6 +81,8 @@ namespace MARAS {
 
         // Scheduled matchmaking hook from PollingService
         void TryScheduledMatchmaking(float currentGameDay);
+        void TryScheduledPlayerPartnerInfidelity(float currentGameDay);
+        bool EvaluatePartnerHomeArrival(RE::BGSLocation* newLocation = nullptr);
         void RunLLMScheduledMatchmaking(float currentGameDay);
         void RunDiceRollMatchmaking(float currentGameDay);
 
@@ -146,6 +150,8 @@ namespace MARAS {
 
         float GetLastMatchmakingDay() const { return lastMatchmakingDay_; }
         void SetLastMatchmakingDay(float day) { lastMatchmakingDay_ = day; }
+        float GetLastPlayerPartnerCheatingDay() const { return lastPlayerPartnerCheatingDay_; }
+        void SetLastPlayerPartnerCheatingDay(float day) { lastPlayerPartnerCheatingDay_ = day; }
         float GetCurrentGameDay() const;
 
     private:
@@ -175,7 +181,9 @@ namespace MARAS {
             float currentGameDay);
 
         float lastMatchmakingDay_ = -1.0f;
+        float lastPlayerPartnerCheatingDay_ = -1.0f;
         std::unordered_map<RE::FormID, float> npcLastMatchmakingChangeDay_;
+        std::unordered_map<RE::FormID, float> lastHomeArrivalEventDayByLoc_;
     };
 
 }  // namespace MARAS

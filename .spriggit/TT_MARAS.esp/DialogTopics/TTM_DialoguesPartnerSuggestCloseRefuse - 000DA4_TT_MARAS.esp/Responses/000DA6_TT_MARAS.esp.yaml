@@ -1,0 +1,38 @@
+FormKey: 000DA6:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000DA5:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000DA2:TT_MARAS.esp
+- 000DA7:TT_MARAS.esp
+- 000DAA:TT_MARAS.esp
+Responses:
+- Emotion: Anger
+  EmotionValue: 40
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: A while longer? How much longer do you need with other people?
+  ScriptNotes: ''
+  Edits: ''
+- Emotion: Sad
+  EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I'm done with this arrangement, and I was hoping you were ready to put it behind us too.
+  ScriptNotes: ''
+  Edits: ''
+Conditions:
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetGlobalValueConditionData
+    Global: 000006:TT_MARAS.esp

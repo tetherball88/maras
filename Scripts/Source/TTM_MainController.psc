@@ -72,6 +72,7 @@ Function Maintenance()
     RegisterForModEvent("maras_open_relationship_changed", "OnMarasOpenRelationshipChanged")
     RegisterForModEvent("maras_affair_exposed", "OnMarasAffairExposed")
     RegisterForModEvent("maras_affair_resolved", "OnMarasAffairResolved")
+    RegisterForModEvent("maras_partner_home_arrival_event", "OnMarasPartnerHomeArrivalEvent")
     RegisterForModEvent("maras_stop_polygamy_quest", "OnStopPolygamyQuest")
 
     int fertilityEngine = TTM_ServiceFertility.GetActiveEngine()
@@ -175,10 +176,10 @@ Event OnMarasCheatingCaught(string eventName, string jsonPayload, float threadID
         return ; player will decide how to react
     endif
 
-    if(cheater != player)
-        npcScenes.StartCheatingScene(cheater, affairPartner, victim)
-    else
+    if(cheater == player)
         npcScenes.PartnerNoticedCheatingPlayer(victim)
+    elseif(cheater != player && victim != player && affairPartner != player)
+        npcScenes.StartCheatingScene(cheater, affairPartner, victim)
     endif
 EndEvent
 
@@ -273,6 +274,56 @@ Event OnMarasAffairResolved(string eventName, string jsonPayload, float numArg, 
         TTM_ServiceAffection.ApplyAffairResolvedAffection(cheater, victim, resolution)
         if (TTM_Data.GetHasSkyrimNet())
             TTM_ServiceSkyrimNet.RegisterAffairResolved(cheater, victim, affairPartner, resolution)
+        endif
+    endif
+EndEvent
+
+Event OnMarasPartnerHomeArrivalEvent(string eventName, string jsonPayload, float isPriorityIntent, Form sender)
+    Actor partner = sender as Actor
+    if (!partner)
+        partner = MARAS.GetJsonActor(jsonPayload, "partnerFormId")
+    endif
+    Actor lover = MARAS.GetJsonActor(jsonPayload, "loverFormId")
+    string scenario = MARAS.GetJsonString(jsonPayload, "scenario")
+    TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: scenario=" + scenario + ", isPriorityIntent=" + isPriorityIntent + ", partner=" + TTM_Utils.GetActorName(partner) + " (" + partner + "), lover=" + TTM_Utils.GetActorName(lover) + " (" + lover + "), payload=" + jsonPayload)
+    if (!partner)
+        return
+    endif
+
+    TTM_NpcsScenes npcScenes = TTM_Data.GetMarasNpcsScenesQuest() as TTM_NpcsScenes
+    if (!npcScenes)
+        TTM_Debug.warn("OnMarasPartnerHomeArrivalEvent: Aborting — TTM_NpcsScenes quest is None!")
+        return
+    endif
+
+    if (scenario == "intent_suggest_open")
+        TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: Routing '" + scenario + "' -> npcScenes.PartnerSuggestOpen(" + TTM_Utils.GetActorName(partner) + ")")
+        npcScenes.PartnerSuggestOpen(partner)
+    elseif (scenario == "intent_suggest_close")
+        TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: Routing '" + scenario + "' -> npcScenes.PartnerSuggestClose(" + TTM_Utils.GetActorName(partner) + ")")
+        npcScenes.PartnerSuggestClose(partner)
+    elseif (scenario == "intent_confess_talking")
+        TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: Routing '" + scenario + "' -> npcScenes.PartnerConfessTalking(" + TTM_Utils.GetActorName(partner) + ")")
+        npcScenes.PartnerConfessTalking(partner)
+    elseif (scenario == "intent_confess_physical")
+        TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: Routing '" + scenario + "' -> npcScenes.PartnerConfessPhysical(" + TTM_Utils.GetActorName(partner) + ")")
+        npcScenes.PartnerConfessPhysical(partner)
+    elseif (scenario == "cheating_talking_in_house" || scenario == "cheating_physical_in_house" || scenario == "open_in_house")
+        if (lover)
+            TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: Routing in-house '" + scenario + "' -> npcScenes.SetupSceneOnLocationChange(" + TTM_Utils.GetActorName(partner) + ", " + TTM_Utils.GetActorName(lover) + ")")
+            npcScenes.SetupSceneOnLocationChange(partner, lover, scenario)
+        else
+            TTM_Debug.warn("OnMarasPartnerHomeArrivalEvent: Cannot start in-house '" + scenario + "' for " + TTM_Utils.GetActorName(partner) + " — resolved lover Actor is None!")
+        endif
+    elseif (scenario == "open_date_away" || scenario == "cheating_talking_letter" || scenario == "cheating_physical_letter")
+        Location targetLoc = MARAS.GetJsonForm(jsonPayload, "targetLocationFormId") as Location
+        ObjectReference targetMarker = MARAS.GetJsonForm(jsonPayload, "targetMarkerFormId") as ObjectReference
+        TTM_QuestPartnerAway partnerAwayQst = TTM_Data.GetMarasPartnerAwayQuest() as TTM_QuestPartnerAway
+        if (partnerAwayQst && lover && targetLoc && targetMarker)
+            TTM_Debug.info("OnMarasPartnerHomeArrivalEvent: Routing away '" + scenario + "' -> partnerAwayQst.StartRendezvous(" + TTM_Utils.GetActorName(partner) + ", " + TTM_Utils.GetActorName(lover) + ", loc=" + targetLoc + ", marker=" + targetMarker + ")")
+            partnerAwayQst.StartRendezvous(partner, lover, scenario, targetLoc, targetMarker)
+        else
+            TTM_Debug.warn("OnMarasPartnerHomeArrivalEvent: Cannot start away '" + scenario + "' — partnerAwayQst=" + partnerAwayQst + ", lover=" + lover + ", targetLoc=" + targetLoc + ", targetMarker=" + targetMarker)
         endif
     endif
 EndEvent

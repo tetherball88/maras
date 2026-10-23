@@ -23,6 +23,12 @@ Unknown3: 0x000000
 PackageTemplate: 0C7039:Skyrim.esm
 DataInputVersion: 8
 Data:
+- Key: 0
+  Value:
+    MutagenObjectType: PackageDataBool
+- Key: 1
+  Value:
+    MutagenObjectType: PackageDataFloat
 - Key: 3
   Value:
     MutagenObjectType: PackageDataLocation
@@ -31,20 +37,14 @@ Data:
         MutagenObjectType: LocationTarget
         Link: 017791:Skyrim.esm
       Radius: 150
-- Key: 6
-  Value:
-    MutagenObjectType: PackageDataObjectList
-    Data: 0
-- Key: 1
-  Value:
-    MutagenObjectType: PackageDataFloat
-- Key: 0
-  Value:
-    MutagenObjectType: PackageDataBool
 - Key: 4
   Value:
     MutagenObjectType: PackageDataFloat
     Data: 150
+- Key: 6
+  Value:
+    MutagenObjectType: PackageDataObjectList
+    Data: 0
 - Key: 14
   Value:
     MutagenObjectType: PackageDataBool

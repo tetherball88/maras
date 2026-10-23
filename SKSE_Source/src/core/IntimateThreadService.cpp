@@ -169,13 +169,30 @@ namespace MARAS {
                         continue;
                     }
 
-                    // 2. Open relationship
+                    // 2. Co-spouse intimacy exemption: if two or more co-spouses of the Player are intimate
+                    // with each other (and no non-co-spouse third party is in the thread), it is not cheating on the Player.
+                    if (partnerID == kPlayerFormID && relMgr.IsPlayerActiveMainPartner(actorID)) {
+                        bool hasNonCoSpouseOther = false;
+                        for (RE::FormID otherID : actorIDs) {
+                            if (otherID == 0 || otherID == actorID || otherID == kPlayerFormID) continue;
+                            if (!relMgr.IsPlayerActiveMainPartner(otherID)) {
+                                hasNonCoSpouseOther = true;
+                                break;
+                            }
+                        }
+                        if (!hasNonCoSpouseOther) {
+                            MARAS_LOG_DEBUG("EvaluateParticipants: Co-spouse intimacy exemption applied for {:08X} ({}) — all other thread participants are Player co-spouses", actorID, ActorSvc::GetName(actorID));
+                            continue;
+                        }
+                    }
+
+                    // 3. Open relationship
                     if (pairData.isOpen) {
                         openPartners.push_back(partnerID);
                         continue;
                     }
 
-                    // 3. Player polygamy exemption
+                    // 4. Player polygamy exemption
                     if (actorID == kPlayerFormID && enablePolygamy) {
                         continue;
                     }
@@ -342,6 +359,12 @@ namespace MARAS {
                         if (std::find(threadCopy.actorIDs.begin(), threadCopy.actorIDs.end(), victimID) != threadCopy.actorIDs.end()) {
                             continue;
                         }
+                        // Co-spouse intimacy exemption: two co-spouses of the Player being intimate is never cheating on the Player
+                        if (victimID == kPlayerFormID &&
+                            relMgr.IsPlayerActiveMainPartner(cheaterID) &&
+                            relMgr.IsPlayerActiveMainPartner(partnerID)) {
+                            continue;
+                        }
 
                         const auto* pairData = relMgr.GetNPCData(cheaterID, victimID);
                         if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || pairData->isOpen) {
@@ -395,6 +418,12 @@ namespace MARAS {
                     for (RE::FormID witnessID : ow.cachedPartnerIDs) {
                         if (witnessID == 0 || witnessID == sexPartnerID || witnessID == partnerID) continue;
                         if (std::find(threadCopy.actorIDs.begin(), threadCopy.actorIDs.end(), witnessID) != threadCopy.actorIDs.end()) {
+                            continue;
+                        }
+                        // Co-spouse intimacy exemption
+                        if (witnessID == kPlayerFormID &&
+                            relMgr.IsPlayerActiveMainPartner(partnerID) &&
+                            relMgr.IsPlayerActiveMainPartner(sexPartnerID)) {
                             continue;
                         }
 
@@ -580,6 +609,11 @@ namespace MARAS {
                         if (affairPartnerID == 0 || affairPartnerID == victimID || affairPartnerID == pc.cheaterID) {
                             continue;
                         }
+                        if (victimID == kPlayerFormID &&
+                            relMgr.IsPlayerActiveMainPartner(pc.cheaterID) &&
+                            relMgr.IsPlayerActiveMainPartner(affairPartnerID)) {
+                            continue;
+                        }
 
                         CaughtEventKey caughtKey{ pc.cheaterID, victimID, affairPartnerID };
 
@@ -667,6 +701,11 @@ namespace MARAS {
                     // Open partner is present and has LOS or close proximity
                     for (RE::FormID sexPartnerID : activeSexPartners) {
                         if (sexPartnerID == 0 || sexPartnerID == witnessID || sexPartnerID == ow.actorID) {
+                            continue;
+                        }
+                        if (witnessID == kPlayerFormID &&
+                            relMgr.IsPlayerActiveMainPartner(ow.actorID) &&
+                            relMgr.IsPlayerActiveMainPartner(sexPartnerID)) {
                             continue;
                         }
 

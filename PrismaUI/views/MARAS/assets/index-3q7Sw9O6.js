@@ -7251,6 +7251,11 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     AffairStatus2[AffairStatus2["EndedConfronted"] = 4] = "EndedConfronted";
     return AffairStatus2;
   })(AffairStatus || {});
+  var AffairStage = /* @__PURE__ */ ((AffairStage2) => {
+    AffairStage2[AffairStage2["Talking"] = 0] = "Talking";
+    AffairStage2[AffairStage2["Physical"] = 1] = "Physical";
+    return AffairStage2;
+  })(AffairStage || {});
   var MatchmakingOrientation = /* @__PURE__ */ ((MatchmakingOrientation2) => {
     MatchmakingOrientation2[MatchmakingOrientation2["Any"] = 0] = "Any";
     MatchmakingOrientation2[MatchmakingOrientation2["Heterosexual"] = 1] = "Heterosexual";
@@ -7840,6 +7845,37 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     skyrimnetActionRadius: 3e3,
     matchmakingExcludePlayerActivePartners: false,
     matchmakingConfirmResults: false,
+    playerPartnerCheatingAgencyEnabled: true,
+    playerPartnerOpenRelAgencyEnabled: true,
+    playerPartnerCheatingChanceMultiplier: 1,
+    playerPartnerCheatingMaxRollCap: 65,
+    playerPartnerCheatingMaxSecretLovers: 1,
+    playerPartnerCheatingAllowWhenHappy: false,
+    playerPartnerCheatingEnableNeglect: true,
+    playerPartnerCheatingEnableRevenge: true,
+    playerPartnerCheatingEnableHierarchy: true,
+    playerPartnerCheatingEnableChildrenAnchor: true,
+    playerPartnerCheatingUseLLM: true,
+    playerPartnerCheatingConfirmResults: false,
+    lonelinessThresholdDays: 2,
+    playerPartnerAgencyOpenLoverChanceMultiplier: 1,
+    playerPartnerAgencyBreakupChanceMultiplier: 1,
+    playerPartnerAgencyEnableForceGreets: true,
+    playerPartnerAgencyEnableHomeArrivalEvents: true,
+    multLonelinessDecayStart: 1,
+    multPartnerAgencyScanInterval: 1.5,
+    multRecentAttentionWindow: 1,
+    multVeryRecentVisitWindow: 0.5,
+    multNeglectGrowthStart: 1,
+    multContentNeglectStart: 2,
+    multProlongedAbsencePenalty: 2,
+    multAffairTalkingEscalation: 2,
+    multMinSideFlingAgeForBreakup: 1.5,
+    multPartnerIntentTTL: 2,
+    multHomeArrivalCooldown: 1,
+    multAffairFatigueStart: 5,
+    multRomanticAttendedBreakup: 1.5,
+    multSuggestOpenNeglectMin: 2,
     paternityBaseChance: 2,
     paternityDailyGrowth: 2,
     paternityMaxChance: 60,
@@ -10725,7 +10761,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           currentCritter: item.currentCritter !== void 0 ? item.currentCritter : existing == null ? void 0 : existing.currentCritter,
           currentPet: item.currentPet !== void 0 ? item.currentPet : existing == null ? void 0 : existing.currentPet,
           pluginName: item.pluginName || (existing == null ? void 0 : existing.pluginName),
-          gender: item.gender ?? (existing == null ? void 0 : existing.gender) ?? "male"
+          gender: item.gender ?? (existing == null ? void 0 : existing.gender) ?? "male",
+          pendingIntent: item.pendingIntent ?? (existing == null ? void 0 : existing.pendingIntent)
         };
       });
       store.setLiveGameData({ npcProfiles: profiles });
@@ -10769,7 +10806,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             petBanned: detail.petBanned,
             currentCritter: detail.currentCritter,
             currentPet: detail.currentPet,
-            gender: detail.gender ?? (existing == null ? void 0 : existing.gender) ?? "male"
+            gender: detail.gender ?? (existing == null ? void 0 : existing.gender) ?? "male",
+            pendingIntent: detail.pendingIntent ?? (existing == null ? void 0 : existing.pendingIntent)
           },
           true
           // skipBridge = true (incoming from C++)
@@ -15259,14 +15297,14 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         cheatingRecords: [...rawCheatingRecords]
       };
     }
-    const visibleCheating = rawCheatingRecords.filter((cr) => !cr.isSecret);
+    const visibleCheating = rawCheatingRecords.filter((cr) => !cr.isSecret || cr.affairStatus === AffairStatus.Allowed);
     const isSecretAffairPair = (actorA, actorB) => {
       let hasSecret = false;
       let hasPublic = false;
       for (const cr of rawCheatingRecords) {
         const matchesPair = areSameFormId(cr.cheaterId, actorA) && areSameFormId(cr.affairPartnerId, actorB) || areSameFormId(cr.cheaterId, actorB) && areSameFormId(cr.affairPartnerId, actorA);
         if (matchesPair) {
-          if (cr.isSecret) hasSecret = true;
+          if (cr.isSecret && cr.affairStatus !== AffairStatus.Allowed) hasSecret = true;
           else hasPublic = true;
         }
       }
@@ -15276,7 +15314,26 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     for (const r2 of rawRelationships) {
       const isAffairStatus = r2.status === RelationshipStatus.Lover || r2.status === RelationshipStatus.Dating || r2.status === RelationshipStatus.ExLover || r2.status === RelationshipStatus.ExDating || r2.status === RelationshipStatus.Candidate;
       if (isAffairStatus && isSecretAffairPair(r2.actorA, r2.actorB)) {
-        if (areSameFormId(r2.actorA, PLAYER_FORM_ID) || areSameFormId(r2.actorB, PLAYER_FORM_ID)) {
+        let priorStatus = null;
+        if (r2.statusHistory && r2.statusHistory.length > 0) {
+          for (let i = r2.statusHistory.length - 1; i >= 0; i--) {
+            const histStatus = r2.statusHistory[i].toStatus;
+            if (histStatus === RelationshipStatus.Divorced || histStatus === RelationshipStatus.Jilted) {
+              priorStatus = histStatus;
+              break;
+            }
+          }
+        }
+        if (priorStatus !== null) {
+          visibleRelationships.push({
+            ...r2,
+            status: priorStatus,
+            isOpen: false,
+            statusHistory: r2.statusHistory.filter(
+              (h) => h.toStatus !== RelationshipStatus.Lover && h.toStatus !== RelationshipStatus.Dating
+            )
+          });
+        } else if (areSameFormId(r2.actorA, PLAYER_FORM_ID) || areSameFormId(r2.actorB, PLAYER_FORM_ID)) {
           visibleRelationships.push({
             ...r2,
             status: RelationshipStatus.Candidate,
@@ -15414,7 +15471,38 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       diceRollChanceNewLoverCheating: 6,
       diceRollChanceAdvance: 22,
       diceRollChanceBreakup: 11,
-      diceRollChanceOpenClose: 5
+      diceRollChanceOpenClose: 5,
+      playerPartnerCheatingAgencyEnabled: mockSettings.playerPartnerCheatingAgencyEnabled ?? true,
+      playerPartnerOpenRelAgencyEnabled: mockSettings.playerPartnerOpenRelAgencyEnabled ?? true,
+      playerPartnerCheatingChanceMultiplier: mockSettings.playerPartnerCheatingChanceMultiplier ?? 1,
+      playerPartnerCheatingMaxRollCap: mockSettings.playerPartnerCheatingMaxRollCap ?? 65,
+      playerPartnerCheatingMaxSecretLovers: mockSettings.playerPartnerCheatingMaxSecretLovers ?? 1,
+      playerPartnerCheatingAllowWhenHappy: mockSettings.playerPartnerCheatingAllowWhenHappy ?? false,
+      playerPartnerCheatingEnableNeglect: mockSettings.playerPartnerCheatingEnableNeglect ?? true,
+      playerPartnerCheatingEnableRevenge: mockSettings.playerPartnerCheatingEnableRevenge ?? true,
+      playerPartnerCheatingEnableHierarchy: mockSettings.playerPartnerCheatingEnableHierarchy ?? true,
+      playerPartnerCheatingEnableChildrenAnchor: mockSettings.playerPartnerCheatingEnableChildrenAnchor ?? true,
+      playerPartnerCheatingUseLLM: mockSettings.playerPartnerCheatingUseLLM ?? true,
+      playerPartnerCheatingConfirmResults: mockSettings.playerPartnerCheatingConfirmResults ?? false,
+      lonelinessThresholdDays: mockSettings.lonelinessThresholdDays ?? 2,
+      playerPartnerAgencyOpenLoverChanceMultiplier: mockSettings.playerPartnerAgencyOpenLoverChanceMultiplier ?? 1,
+      playerPartnerAgencyBreakupChanceMultiplier: mockSettings.playerPartnerAgencyBreakupChanceMultiplier ?? 1,
+      playerPartnerAgencyEnableForceGreets: mockSettings.playerPartnerAgencyEnableForceGreets ?? true,
+      playerPartnerAgencyEnableHomeArrivalEvents: mockSettings.playerPartnerAgencyEnableHomeArrivalEvents ?? true,
+      multLonelinessDecayStart: mockSettings.multLonelinessDecayStart ?? 1,
+      multPartnerAgencyScanInterval: mockSettings.multPartnerAgencyScanInterval ?? 1.5,
+      multRecentAttentionWindow: mockSettings.multRecentAttentionWindow ?? 1,
+      multVeryRecentVisitWindow: mockSettings.multVeryRecentVisitWindow ?? 0.5,
+      multNeglectGrowthStart: mockSettings.multNeglectGrowthStart ?? 1,
+      multContentNeglectStart: mockSettings.multContentNeglectStart ?? 2,
+      multProlongedAbsencePenalty: mockSettings.multProlongedAbsencePenalty ?? 2,
+      multAffairTalkingEscalation: mockSettings.multAffairTalkingEscalation ?? 2,
+      multMinSideFlingAgeForBreakup: mockSettings.multMinSideFlingAgeForBreakup ?? 1.5,
+      multPartnerIntentTTL: mockSettings.multPartnerIntentTTL ?? 2,
+      multHomeArrivalCooldown: mockSettings.multHomeArrivalCooldown ?? 1,
+      multAffairFatigueStart: mockSettings.multAffairFatigueStart ?? 5,
+      multRomanticAttendedBreakup: mockSettings.multRomanticAttendedBreakup ?? 1.5,
+      multSuggestOpenNeglectMin: mockSettings.multSuggestOpenNeglectMin ?? 2
     },
     householdBuffs: null,
     isLoadingBuffs: false,
@@ -15962,7 +16050,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             temperament: (existing == null ? void 0 : existing.temperament) ?? item.temperament ?? Temperament.Proud,
             currentHome: (existing == null ? void 0 : existing.currentHome) ?? item.currentHome,
             originalHome: (existing == null ? void 0 : existing.originalHome) ?? item.originalHome,
-            isChild: (existing == null ? void 0 : existing.isChild) ?? item.isChild
+            isChild: (existing == null ? void 0 : existing.isChild) ?? item.isChild,
+            pendingIntent: (existing == null ? void 0 : existing.pendingIntent) ?? item.pendingIntent
           };
           newNpcProfiles.set(item.formId, profile);
           return profile;
@@ -16063,12 +16152,43 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         if (data.settings) {
           nextSettings = { ...state.settings, ...data.settings };
           updates.settings = nextSettings;
-          if (data.settings.matchmakingExcludePlayerActivePartners !== void 0 || data.settings.matchmakingConfirmResults !== void 0) {
+          if (data.settings.matchmakingExcludePlayerActivePartners !== void 0 || data.settings.matchmakingConfirmResults !== void 0 || data.settings.playerPartnerCheatingAgencyEnabled !== void 0 || data.settings.playerPartnerOpenRelAgencyEnabled !== void 0) {
             const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings;
             updates.matchmakingSettings = {
               ...baseMatchSettings,
               ...data.settings.matchmakingExcludePlayerActivePartners !== void 0 ? { excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners } : {},
-              ...data.settings.matchmakingConfirmResults !== void 0 ? { confirmResults: data.settings.matchmakingConfirmResults } : {}
+              ...data.settings.matchmakingConfirmResults !== void 0 ? { confirmResults: data.settings.matchmakingConfirmResults } : {},
+              ...data.settings.playerPartnerCheatingAgencyEnabled !== void 0 ? { playerPartnerCheatingAgencyEnabled: data.settings.playerPartnerCheatingAgencyEnabled } : {},
+              ...data.settings.playerPartnerOpenRelAgencyEnabled !== void 0 ? { playerPartnerOpenRelAgencyEnabled: data.settings.playerPartnerOpenRelAgencyEnabled } : {},
+              ...data.settings.playerPartnerCheatingChanceMultiplier !== void 0 ? { playerPartnerCheatingChanceMultiplier: data.settings.playerPartnerCheatingChanceMultiplier } : {},
+              ...data.settings.playerPartnerCheatingMaxRollCap !== void 0 ? { playerPartnerCheatingMaxRollCap: data.settings.playerPartnerCheatingMaxRollCap } : {},
+              ...data.settings.playerPartnerCheatingMaxSecretLovers !== void 0 ? { playerPartnerCheatingMaxSecretLovers: data.settings.playerPartnerCheatingMaxSecretLovers } : {},
+              ...data.settings.playerPartnerCheatingAllowWhenHappy !== void 0 ? { playerPartnerCheatingAllowWhenHappy: data.settings.playerPartnerCheatingAllowWhenHappy } : {},
+              ...data.settings.playerPartnerCheatingEnableNeglect !== void 0 ? { playerPartnerCheatingEnableNeglect: data.settings.playerPartnerCheatingEnableNeglect } : {},
+              ...data.settings.playerPartnerCheatingEnableRevenge !== void 0 ? { playerPartnerCheatingEnableRevenge: data.settings.playerPartnerCheatingEnableRevenge } : {},
+              ...data.settings.playerPartnerCheatingEnableHierarchy !== void 0 ? { playerPartnerCheatingEnableHierarchy: data.settings.playerPartnerCheatingEnableHierarchy } : {},
+              ...data.settings.playerPartnerCheatingEnableChildrenAnchor !== void 0 ? { playerPartnerCheatingEnableChildrenAnchor: data.settings.playerPartnerCheatingEnableChildrenAnchor } : {},
+              ...data.settings.playerPartnerCheatingUseLLM !== void 0 ? { playerPartnerCheatingUseLLM: data.settings.playerPartnerCheatingUseLLM } : {},
+              ...data.settings.playerPartnerCheatingConfirmResults !== void 0 ? { playerPartnerCheatingConfirmResults: data.settings.playerPartnerCheatingConfirmResults } : {},
+              ...data.settings.lonelinessThresholdDays !== void 0 ? { lonelinessThresholdDays: data.settings.lonelinessThresholdDays } : {},
+              ...data.settings.playerPartnerAgencyOpenLoverChanceMultiplier !== void 0 ? { playerPartnerAgencyOpenLoverChanceMultiplier: data.settings.playerPartnerAgencyOpenLoverChanceMultiplier } : {},
+              ...data.settings.playerPartnerAgencyBreakupChanceMultiplier !== void 0 ? { playerPartnerAgencyBreakupChanceMultiplier: data.settings.playerPartnerAgencyBreakupChanceMultiplier } : {},
+              ...data.settings.playerPartnerAgencyEnableForceGreets !== void 0 ? { playerPartnerAgencyEnableForceGreets: data.settings.playerPartnerAgencyEnableForceGreets } : {},
+              ...data.settings.playerPartnerAgencyEnableHomeArrivalEvents !== void 0 ? { playerPartnerAgencyEnableHomeArrivalEvents: data.settings.playerPartnerAgencyEnableHomeArrivalEvents } : {},
+              ...data.settings.multLonelinessDecayStart !== void 0 ? { multLonelinessDecayStart: data.settings.multLonelinessDecayStart } : {},
+              ...data.settings.multPartnerAgencyScanInterval !== void 0 ? { multPartnerAgencyScanInterval: data.settings.multPartnerAgencyScanInterval } : {},
+              ...data.settings.multRecentAttentionWindow !== void 0 ? { multRecentAttentionWindow: data.settings.multRecentAttentionWindow } : {},
+              ...data.settings.multVeryRecentVisitWindow !== void 0 ? { multVeryRecentVisitWindow: data.settings.multVeryRecentVisitWindow } : {},
+              ...data.settings.multNeglectGrowthStart !== void 0 ? { multNeglectGrowthStart: data.settings.multNeglectGrowthStart } : {},
+              ...data.settings.multContentNeglectStart !== void 0 ? { multContentNeglectStart: data.settings.multContentNeglectStart } : {},
+              ...data.settings.multProlongedAbsencePenalty !== void 0 ? { multProlongedAbsencePenalty: data.settings.multProlongedAbsencePenalty } : {},
+              ...data.settings.multAffairTalkingEscalation !== void 0 ? { multAffairTalkingEscalation: data.settings.multAffairTalkingEscalation } : {},
+              ...data.settings.multMinSideFlingAgeForBreakup !== void 0 ? { multMinSideFlingAgeForBreakup: data.settings.multMinSideFlingAgeForBreakup } : {},
+              ...data.settings.multPartnerIntentTTL !== void 0 ? { multPartnerIntentTTL: data.settings.multPartnerIntentTTL } : {},
+              ...data.settings.multHomeArrivalCooldown !== void 0 ? { multHomeArrivalCooldown: data.settings.multHomeArrivalCooldown } : {},
+              ...data.settings.multAffairFatigueStart !== void 0 ? { multAffairFatigueStart: data.settings.multAffairFatigueStart } : {},
+              ...data.settings.multRomanticAttendedBreakup !== void 0 ? { multRomanticAttendedBreakup: data.settings.multRomanticAttendedBreakup } : {},
+              ...data.settings.multSuggestOpenNeglectMin !== void 0 ? { multSuggestOpenNeglectMin: data.settings.multSuggestOpenNeglectMin } : {}
             };
           }
         }
@@ -17882,6 +18002,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       { id: "general", label: "General", icon: SlidersVertical },
       { id: "confirmations", label: "Confirmations", icon: SquareCheckBig },
       { id: "matchmaking", label: "Matchmaking", icon: HeartHandshake },
+      { id: "partnerAgency", label: "Partner Agency", icon: Heart },
       { id: "scenes", label: "NPC Scenes", icon: Clapperboard },
       { id: "children", label: "Children & Pets", icon: Baby },
       { id: "fertility", label: "Fertility", icon: Dna },
@@ -29004,6 +29125,8 @@ Defaulting to \`null\`.`;
     const settings = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
     const uiScale = settings.uiScale ?? 1;
+    const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings);
+    const lonelinessDays = settings.lonelinessThresholdDays ?? 2;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Interface & Accessibility", icon: Monitor, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -29082,6 +29205,28 @@ Defaulting to \`null\`.`;
                 step: 0.1,
                 unit: "x",
                 onChange: (val) => updateSetting("affectionDecayMult", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Loneliness Threshold (Days)",
+            description: `Master time unit (L = ${lonelinessDays}d): days without meaningful interaction before daily affection decay begins, and base unit scaling all Player Partner Agency intervals (scan every ${Math.max(1, Math.round(lonelinessDays * 1.5))}d, talking-to-physical affair escalation after ${Math.round(lonelinessDays * 2)}d).`,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SliderInput,
+              {
+                value: lonelinessDays,
+                min: 1,
+                max: 14,
+                step: 1,
+                unit: "d",
+                onChange: (val) => {
+                  const days = Math.round(val);
+                  updateSetting("lonelinessThresholdDays", days);
+                  updateMatchmakingSettings({ lonelinessThresholdDays: days });
+                }
               }
             )
           }
@@ -30002,6 +30147,582 @@ Defaulting to \`null\`.`;
               )
             }
           )
+        }
+      )
+    ] });
+  };
+  const PartnerAgencySettings = () => {
+    const matchmakingSettings = useMarasStore((s) => s.matchmakingSettings);
+    const settings = useMarasStore((s) => s.settings);
+    const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings);
+    const updateSetting = useMarasStore((s) => s.updateSetting);
+    const hasSkyrimNet = Boolean(settings.hasSkyrimNet) && !Boolean(settings.simulateNoSkyrimNet);
+    const lonelinessDays = matchmakingSettings.lonelinessThresholdDays ?? settings.lonelinessThresholdDays ?? 2;
+    const fmtDays = (mult) => {
+      const days = lonelinessDays * mult;
+      return Number.isInteger(days) ? `${days}d` : `${days.toFixed(1)}d`;
+    };
+    const multScanInterval = matchmakingSettings.multPartnerAgencyScanInterval ?? 1.5;
+    const multLonelinessDecay = matchmakingSettings.multLonelinessDecayStart ?? 1;
+    const multRecentAttention = matchmakingSettings.multRecentAttentionWindow ?? 1;
+    const multVeryRecentVisit = matchmakingSettings.multVeryRecentVisitWindow ?? 0.5;
+    const multNeglectGrowth = matchmakingSettings.multNeglectGrowthStart ?? 1;
+    const multContentNeglect = matchmakingSettings.multContentNeglectStart ?? 2;
+    const multProlongedAbsence = matchmakingSettings.multProlongedAbsencePenalty ?? 2;
+    const multTalkingEscalation = matchmakingSettings.multAffairTalkingEscalation ?? 2;
+    const multMinSideFlingAge = matchmakingSettings.multMinSideFlingAgeForBreakup ?? 1.5;
+    const multIntentTTL = matchmakingSettings.multPartnerIntentTTL ?? 2;
+    const multHomeCooldown = matchmakingSettings.multHomeArrivalCooldown ?? 1;
+    const multAffairFatigue = matchmakingSettings.multAffairFatigueStart ?? 5;
+    const multRomanticAttended = matchmakingSettings.multRomanticAttendedBreakup ?? 1.5;
+    const multSuggestOpenNeglect = matchmakingSettings.multSuggestOpenNeglectMin ?? 2;
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[1rem]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        SectionCard,
+        {
+          title: "Player Partner Agency & Infidelity Engine",
+          icon: Heart,
+          subtitle: "Dedicated Tier 2 agency (2-stage affairs, open-relationship lovers, breakups, force-greet intents & home-arrival events) for all active player main partners",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Partner Cheating Agency",
+                description: "Independently evaluate the player's closed-relationship partners (Dating, Engaged, Married) for secret infidelity (2-stage Talking/Physical affairs, affair breakups, confessions, and home-arrival cheating scenarios), regardless of whether generic NPC matchmaking is enabled.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingAgencyEnabled ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingAgencyEnabled: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Partner Open-Relationship Agency",
+                description: "Independently evaluate the player's partners for open-relationship agency (seeking consensual side lovers, open-lover breakups, proposing to open or close the relationship, and home-arrival open-relationship scenarios), regardless of whether generic NPC matchmaking is enabled.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerOpenRelAgencyEnabled ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerOpenRelAgencyEnabled: val })
+                  }
+                )
+              }
+            ),
+            hasSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Use SkyrimNet AI Evaluation (Stage 2)",
+                description: "When a partner passes a Stage 1 probability check, ask SkyrimNet AI to evaluate whether they act on it and pick the most fitting local candidate. When disabled, weighted dice rolls select from the shortlisted candidates.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingUseLLM ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingUseLLM: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Review Partner Agency Results in Modal",
+                description: "Present an interactive confirmation modal before applying any new side-lover relationship or breakup initiated by a player partner.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingConfirmResults ?? false,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingConfirmResults: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Partner Force-Greet Intents",
+                description: `Allow player partners to queue relationship conversations (suggesting an open or closed relationship, or confessing guilt after ending an affair; expires after ${fmtDays(multIntentTTL)} [${multIntentTTL}x L] if ignored).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerAgencyEnableForceGreets ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerAgencyEnableForceGreets: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Home-Arrival Events & Letters",
+                description: "Evaluate active side-lover scenarios and handwritten note modals (open-lover inn dates, suspicious talking-stage letters, or in-house encounters) when arriving at a partner's home.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerAgencyEnableHomeArrivalEvents ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerAgencyEnableHomeArrivalEvents: val })
+                  }
+                )
+              }
+            )
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        SectionCard,
+        {
+          title: "Temptation, Desire & Breakup Rules",
+          icon: SlidersVertical,
+          subtitle: "Configure probability multipliers, roll caps, and loyalty anchors for player partners",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Global Temptation Multiplier",
+                description: `Scales calculated Stage 1 cheating temptation probabilities across all closed player partners (${(matchmakingSettings.playerPartnerCheatingChanceMultiplier ?? 1).toFixed(1)}x).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: matchmakingSettings.playerPartnerCheatingChanceMultiplier ?? 1,
+                    min: 0.1,
+                    max: 3,
+                    step: 0.1,
+                    unit: "x",
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingChanceMultiplier: Number(val.toFixed(1)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Open Lover Desire Multiplier",
+                description: `Scales Stage 1 desire for open-relationship player partners to pursue consensual side lovers (${(matchmakingSettings.playerPartnerAgencyOpenLoverChanceMultiplier ?? 1).toFixed(1)}x).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: matchmakingSettings.playerPartnerAgencyOpenLoverChanceMultiplier ?? 1,
+                    min: 0.1,
+                    max: 3,
+                    step: 0.1,
+                    unit: "x",
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerAgencyOpenLoverChanceMultiplier: Number(val.toFixed(1)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Side-Lover Breakup Multiplier",
+                description: `Scales probability of player partners ending existing secret affairs or open-relationship side flings after ${fmtDays(multMinSideFlingAge)} (${(matchmakingSettings.playerPartnerAgencyBreakupChanceMultiplier ?? 1).toFixed(1)}x).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: matchmakingSettings.playerPartnerAgencyBreakupChanceMultiplier ?? 1,
+                    min: 0.1,
+                    max: 3,
+                    step: 0.1,
+                    unit: "x",
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerAgencyBreakupChanceMultiplier: Number(val.toFixed(1)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Max Temptation Roll Cap",
+                description: `Maximum Stage 1 temptation probability per check (${matchmakingSettings.playerPartnerCheatingMaxRollCap ?? 65}%).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: matchmakingSettings.playerPartnerCheatingMaxRollCap ?? 65,
+                    min: 5,
+                    max: 100,
+                    step: 5,
+                    unit: "%",
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingMaxRollCap: Math.round(val) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Max Secret Lovers Per Partner",
+                description: `Maximum concurrent ongoing secret affair lovers a single player partner can have (${matchmakingSettings.playerPartnerCheatingMaxSecretLovers ?? 1}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: matchmakingSettings.playerPartnerCheatingMaxSecretLovers ?? 1,
+                    min: 1,
+                    max: 3,
+                    step: 1,
+                    unit: "",
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingMaxSecretLovers: Math.round(val) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Allow Infidelity When Happy (75–100 Affection)",
+                description: "When disabled, partners in the Happy affection tier are completely immune unless Revenge (player caught cheating) is triggered.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingAllowWhenHappy ?? false,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingAllowWhenHappy: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Neglect Penalty",
+                description: `Increase temptation when the player goes several days without meaningful affection interaction (starts after ${fmtDays(multNeglectGrowth)} [${multNeglectGrowth}x L] for Troubled/Estranged partners, or after ${fmtDays(multContentNeglect)} [${multContentNeglect}x L] for Content partners).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingEnableNeglect ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingEnableNeglect: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Revenge Penalty (Player Infidelity)",
+                description: "Significantly increase temptation (+20%, amplified by Jealous/Proud temperaments) when the partner has an ongoing exposed affair against them by the player.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingEnableRevenge ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingEnableRevenge: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Polygamy Hierarchy Factor",
+                description: "Apply a minor temptation increase for lower-ranked spouses in polygamous households (Rank 1: 0%, Rank 2: +3%, Rank 3: +5%, Rank 4+: +7%).",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingEnableHierarchy ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingEnableHierarchy: val })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Enable Shared Children Loyalty Anchor",
+                description: "Reduce temptation (-12% if sharing children with the player, and hard-immune while pregnant) to reflect family commitment.",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToggleSwitch,
+                  {
+                    checked: matchmakingSettings.playerPartnerCheatingEnableChildrenAnchor ?? true,
+                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingEnableChildrenAnchor: val })
+                  }
+                )
+              }
+            )
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        SectionCard,
+        {
+          title: "Day-Threshold Multipliers (Relative to Loneliness Threshold L)",
+          icon: Clock,
+          subtitle: `All Partner Agency and Affection time windows scale from Base Loneliness Threshold (L = ${lonelinessDays}d)`,
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Base Loneliness Threshold (L)",
+                description: `Master time unit (L = ${lonelinessDays} days) from which all Partner Agency and Affection day thresholds below are calculated.`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: lonelinessDays,
+                    min: 1,
+                    max: 14,
+                    step: 1,
+                    unit: "d",
+                    onChange: (val) => {
+                      const days = Math.round(val);
+                      updateSetting("lonelinessThresholdDays", days);
+                      updateMatchmakingSettings({ lonelinessThresholdDays: days });
+                    }
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Partner Agency Scan Interval",
+                description: `How often scheduled Partner Agency evaluations run (${multScanInterval}x L = ${fmtDays(multScanInterval)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multScanInterval,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multPartnerAgencyScanInterval: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Loneliness Decay & Open-Lover Loneliness Onset",
+                description: `Days without player interaction before daily affection loneliness decay and open-partner loneliness desire begin (${multLonelinessDecay}x L = ${fmtDays(multLonelinessDecay)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multLonelinessDecay,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multLonelinessDecayStart: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Recent Attention & Guilt Window",
+                description: `Window after spending time with the player where partners receive breakup boosts with side lovers, guilt confession eligibility, and neglect mitigation (${multRecentAttention}x L = ${fmtDays(multRecentAttention)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multRecentAttention,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multRecentAttentionWindow: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Very Recent Visit Window (Open Partners)",
+                description: `Window after a player visit where open-relationship partners have reduced desire to seek a new side lover (${multVeryRecentVisit}x L = ${fmtDays(multVeryRecentVisit)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multVeryRecentVisit,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multVeryRecentVisitWindow: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Neglect Growth Onset (Troubled / Estranged)",
+                description: `Days without player interaction before neglect temptation starts growing for Troubled/Estranged (<50 affection) partners (${multNeglectGrowth}x L = ${fmtDays(multNeglectGrowth)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multNeglectGrowth,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multNeglectGrowthStart: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Neglect Growth Onset (Content Partners)",
+                description: `Days without player interaction before Content (50–74 affection) partners lose immunity and begin accumulating neglect temptation (${multContentNeglect}x L = ${fmtDays(multContentNeglect)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multContentNeglect,
+                    min: 0.5,
+                    max: 6,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multContentNeglectStart: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Prolonged Absence Penalty Onset (Affair Breakups)",
+                description: `Days of player absence after which a cheating partner becomes less likely (-10%) to break off an ongoing secret affair (${multProlongedAbsence}x L = ${fmtDays(multProlongedAbsence)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multProlongedAbsence,
+                    min: 0.5,
+                    max: 6,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multProlongedAbsencePenalty: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Affair Talking -> Physical Escalation",
+                description: `Duration of an unresolved Talking affair before it deterministically escalates to a Physical affair (${multTalkingEscalation}x L = ${fmtDays(multTalkingEscalation)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multTalkingEscalation,
+                    min: 0.5,
+                    max: 6,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multAffairTalkingEscalation: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Min Side-Lover Age Before Breakup",
+                description: `Minimum duration a secret affair or open-relationship side fling must last before breakup rolls are evaluated (${multMinSideFlingAge}x L = ${fmtDays(multMinSideFlingAge)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multMinSideFlingAge,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multMinSideFlingAgeForBreakup: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Pending Force-Greet Intent TTL",
+                description: `How long a queued partner conversation intent (SuggestOpen, SuggestClose, ConfessTalking, ConfessPhysical) waits for the player before expiring (${multIntentTTL}x L = ${fmtDays(multIntentTTL)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multIntentTTL,
+                    min: 0.5,
+                    max: 6,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multPartnerIntentTTL: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Home-Arrival Event Location Cooldown",
+                description: `Minimum cooldown per home location between triggered side-lover arrival scenarios (${multHomeCooldown}x L = ${fmtDays(multHomeCooldown)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multHomeCooldown,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multHomeArrivalCooldown: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Affair Fatigue & Open Fling Novelty Fade Onset",
+                description: `Duration of a secret affair or open fling before novelty fades and breakup likelihood increases with age (${multAffairFatigue}x L = ${fmtDays(multAffairFatigue)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multAffairFatigue,
+                    min: 1,
+                    max: 15,
+                    step: 0.5,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multAffairFatigueStart: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Romantic Partner Attended Breakup Window",
+                description: `Window after player interaction where a Romantic partner gets a 1.25x boost to breaking off a secret affair out of devotion (${multRomanticAttended}x L = ${fmtDays(multRomanticAttended)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multRomanticAttended,
+                    min: 0.25,
+                    max: 5,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multRomanticAttendedBreakup: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SettingRow,
+              {
+                label: "Suggest Open Relationship Neglect Onset",
+                description: `Days without player interaction before neglect begins adding bonus probability to proposing an open relationship (${multSuggestOpenNeglect}x L = ${fmtDays(multSuggestOpenNeglect)}).`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  SliderInput,
+                  {
+                    value: multSuggestOpenNeglect,
+                    min: 0.5,
+                    max: 6,
+                    step: 0.25,
+                    unit: "x L",
+                    onChange: (val) => updateMatchmakingSettings({ multSuggestOpenNeglectMin: Number(val.toFixed(2)) })
+                  }
+                )
+              }
+            )
+          ]
         }
       )
     ] });
@@ -31084,6 +31805,8 @@ Defaulting to \`null\`.`;
           return /* @__PURE__ */ jsxRuntimeExports.jsx(ConfirmationSettings, {});
         case "matchmaking":
           return /* @__PURE__ */ jsxRuntimeExports.jsx(MatchmakingSettings, {});
+        case "partnerAgency":
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(PartnerAgencySettings, {});
         case "scenes":
           return /* @__PURE__ */ jsxRuntimeExports.jsx(ScenesSettings, {});
         case "children":
@@ -31405,6 +32128,8 @@ Defaulting to \`null\`.`;
                     const typeLabel = cr.affairType === AffairType.Lover ? "Lover" : cr.affairType === AffairType.Dating ? "Dating" : "Casual";
                     const statusLabel = cr.affairStatus === AffairStatus.Ongoing ? "Ongoing" : cr.affairStatus === AffairStatus.EndedBreakup ? "Ended (Breakup)" : cr.affairStatus === AffairStatus.EndedVictimSplit ? "Ended (Divorce/Split)" : cr.affairStatus === AffairStatus.Allowed ? "Allowed (Open)" : cr.affairStatus === AffairStatus.EndedConfronted ? "Ended (Confronted)" : "Ongoing";
                     const isOngoing = cr.affairStatus === void 0 || cr.affairStatus === AffairStatus.Ongoing;
+                    const isTalkingStage = cr.affairStage === AffairStage.Talking;
+                    const stageLabel = isTalkingStage ? "Talking Stage" : "Physical Affair";
                     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-destructive/10 text-destructive text-[0.6875rem] p-[0.375rem] rounded border border-destructive/20 flex justify-between items-center gap-[0.5rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.125rem]", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
@@ -31423,6 +32148,7 @@ Defaulting to \`null\`.`;
                         ] }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[0.5625rem] font-medium", children: typeLabel }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-medium border ${isTalkingStage ? "bg-sky-500/20 text-sky-300 border-sky-500/30" : "bg-pink-500/20 text-pink-300 border-pink-500/30"}`, children: stageLabel }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-medium border ${isOngoing ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-zinc-500/20 text-zinc-300 border-zinc-500/30"}`, children: statusLabel })
                         ] })
                       ] }),
@@ -32314,6 +33040,7 @@ Defaulting to \`null\`.`;
           (cr) => cr.cheaterId === currentNpcId && cr.affairPartnerId === partnerId && (cr.affairStatus === void 0 || cr.affairStatus === AffairStatus.Ongoing)
         );
         const affairIncidents = affairRecords.reduce((sum, cr) => sum + (cr.count || 1), 0);
+        const isTalkingAffair = affairRecords.some((cr) => cr.affairStage === AffairStage.Talking);
         const isUnofficialAffair = affairRecords.length > 0 && (r2.status === RelationshipStatus.Candidate || r2.status === RelationshipStatus.Unknown);
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
@@ -32348,11 +33075,7 @@ Defaulting to \`null\`.`;
                 ] }),
                 affairRecords.length > 0 && !isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "Affair (",
-                    affairIncidents,
-                    ")"
-                  ] })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isTalkingAffair ? "Affair (Talking)" : `Affair (${affairIncidents})` })
                 ] }),
                 isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { className: "w-[0.875em] h-[0.875em]" }),

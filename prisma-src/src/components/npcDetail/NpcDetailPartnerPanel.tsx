@@ -9,6 +9,7 @@ import {
   Temperament,
   AffairType,
   AffairStatus,
+  AffairStage,
 } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { StatusBadge, getStatusLabel } from '../shared/StatusBadge'
@@ -352,6 +353,8 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                                     cr.affairStatus === AffairStatus.Allowed ? 'Allowed (Open)' :
                                       cr.affairStatus === AffairStatus.EndedConfronted ? 'Ended (Confronted)' : 'Ongoing'
                             const isOngoing = cr.affairStatus === undefined || cr.affairStatus === AffairStatus.Ongoing
+                            const isTalkingStage = cr.affairStage === AffairStage.Talking
+                            const stageLabel = isTalkingStage ? 'Talking Stage' : 'Physical Affair'
 
                             return (
                               <div key={idx} className="bg-destructive/10 text-destructive text-[0.6875rem] p-[0.375rem] rounded border border-destructive/20 flex justify-between items-center gap-[0.5rem]">
@@ -367,6 +370,12 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                                   <div className="flex items-center gap-[0.25rem]">
                                     <span className="px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[0.5625rem] font-medium">
                                       {typeLabel}
+                                    </span>
+                                    <span className={`px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-medium border ${isTalkingStage
+                                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                      : 'bg-pink-500/20 text-pink-300 border-pink-500/30'
+                                      }`}>
+                                      {stageLabel}
                                     </span>
                                     <span className={`px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-medium border ${isOngoing
                                       ? 'bg-red-500/20 text-red-300 border-red-500/30'

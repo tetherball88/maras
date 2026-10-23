@@ -219,7 +219,6 @@ Actions:
   EndPhase: 7
   Packages:
   - 000225:TT_MARAS.esp
-Unused2: {}
 Quest: 000216:TT_MARAS.esp
 LastActionIndex: 11
 VNAM: 0x03000000030000000300000003000000

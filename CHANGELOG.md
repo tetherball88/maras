@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.3.0.alpha - 2026-10-27
+
+### Added
+- **Player Partner Agency & Infidelity Engine**: Added a dedicated background agency system for your active partners (**Dating**, **Engaged**, and **Married**), operating independently from generic NPC world matchmaking:
+  - **Two-Stage Secret Affairs (`Talking Stage` -> `Physical Affair`)**: Closed-relationship partners who give in to temptation now start in a **Talking Stage** (secret letters, lingering conversations, flirtatious closeness) before escalating to a **Physical Affair** if left unresolved. Affair stages are tracked and badged in the Dashboard.
+  - **Dynamic Temptation & Loyalty Drivers**: Partner temptation is calculated from affection tier (**Happy**, **Content**, **Troubled**, **Estranged**), days of player neglect, **Revenge** (if they caught you cheating), **Spouse Hierarchy** rank in polygamous households, **Shared Children** (which anchor loyalty, plus full immunity during pregnancy), and personality temperament.
+  - **Realistic Local Paramours**: Tempted or open-relationship partners choose from people in their actual daily life and history—old flames, housemates under the same roof, guildmates, town neighbors, or people in the same hold—with anti-repeat rules so they don't keep getting back together with past failed flings or lovers you already confronted.
+  - **Open-Relationship Side Lovers & Autonomous Breakups**: Partners in an **Open Relationship** can independently pursue consensual side lovers, and both cheating and open partners can break off their side relationships on their own when guilt sets in, when you reconnect and spend time with them, or when the novelty wears off.
+- **Partner Force-Greet Conversations**: Your partners can now approach you when you return home to:
+  - **Propose Opening the Relationship** (with options to agree, promise to spend more time together, scold, persuade, or intimidate).
+  - **Ask to Close an Open Relationship** and become exclusive again.
+  - **Confess Guilt** after breaking off a secret Talking or Physical affair on their own.
+  - Ignoring a partner's pending conversation for too long carries consequences (an ignored request to open the relationship can push them into a secret Talking affair, an ignored request to close lowers affection, and an unconfessed Talking affair escalates to Physical).
+- **Home-Arrival Encounters, Handwritten Notes & Tavern Rendezvous**: Returning to a partner's home can now trigger live arrival events—walking in on a Talking-Stage conversation, catching a Physical affair in the act, walking in on an open-relationship partner with their lover, or discovering a **handwritten note** left behind (a note from an open partner having dinner at a local inn, or a suspicious unsigned letter from a secret lover) that starts a quest leading you to the nearby tavern.
+- **New "Partner Agency" Settings Tab & Loneliness Threshold Slider**:
+  - Added a dedicated **Partner Agency** sub-page in **Settings** with toggles and sliders for closed-relationship cheating agency, open-relationship agency, SkyrimNet AI evaluation, result review modals, force-greets, home-arrival events, temptation/breakup multipliers, loyalty anchors, and day-threshold multipliers.
+  - Added a master **Loneliness Threshold (Days)** slider (`1`–`14` days, default `2`) in **Settings -> General** and **Partner Agency** that controls both how many days you can be away before daily affection decay begins and the base time unit for all Partner Agency timers.
+- **SkyrimNet Partner Agency Integration**: Added AI evaluation for partner affairs, open-relationship lovers, side breakups, guilt confessions, and open/close relationship proposals, along with dual first-person memory generation and expanded character prompt context (affection tier, days since last player interaction, affair stage, and pending conversation intents).
+
+### Changed
+- **Co-Spouse Intimacy in Polygamous Households**: When two or more of your active partners become intimate or form a `Lover` bond with each other, it is now treated as a consensual co-spouse bond rather than cheating on you.
+- **Unconditional Partner Separation from World Matchmaking**: Your active partners (**Dating**, **Engaged**, **Married**) are now always excluded from generic NPC-to-NPC world matchmaking and ambient location banter so their relationships are governed exclusively by the Partner Agency system.
+- **OStim Bed Detection Radius**: Increased the bed search radius for OStim intimate scenes so scenes reliably find beds in larger player homes and taverns.
+
+### Fixed
+- **Secrets Mode Masking**:
+  - Consensual open-relationship side lovers (`Allowed`) are no longer hidden when **Secrets** mode is enabled.
+  - NPC pairs who were **Divorced** or **Jilted** before starting a secret affair now display their prior Divorced/Jilted status while secrets are hidden instead of disappearing from the relationship list.
+- **Walk-In Cheating Discovery**: Confronting a cheating partner or persuading/joining them when walking in on an affair now properly marks the secret affair as discovered.
+- **Parent & Guardian Auto-Registration**: Biological parents, presumed fathers, and guardians assigned to a child or pregnancy are now automatically registered as tracked NPCs so their profiles always appear in the Dashboard.
+
 ## 2.2.0.alpha - 2026-10-26
 
 ### Added

@@ -1,0 +1,21 @@
+FormKey: 000DCD:TT_MARAS.esp
+Flags:
+  Flags:
+  - Goodbye
+  - Random
+  - RandomEnd
+PreviousDialog: 000DCC:TT_MARAS.esp
+FavorLevel: None
+Responses:
+- EmotionValue: 50
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: "...Fine. We'll talk when you've cooled off."
+  ScriptNotes: ''
+  Edits: ''
+

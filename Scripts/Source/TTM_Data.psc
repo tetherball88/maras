@@ -337,6 +337,10 @@ Quest Function GetMarasNpcsScenesQuest() global
     return Game.GetFormFromFile(0x378, "TT_MARAS.esp") as Quest
 EndFunction
 
+Quest Function GetMarasPartnerAwayQuest() global
+    return Game.GetFormFromFile(0xDC4, "TT_MARAS.esp") as Quest
+EndFunction
+
 Quest Function GetTurnSpouseToVampireQuest() global
     return Game.GetFormFromFile(0x58ca, "Dawnguard.esm") as Quest
 EndFunction

@@ -79,6 +79,11 @@ namespace MARAS::PapyrusInterface {
     bool SetCheatingDiscovered(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* affairPartner, RE::BSFixedString statusOrResolution);
     bool SetCheatingAffairStatus(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner, std::int32_t affairStatus);
     std::int32_t GetCheatingAffairStatus(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner);
+    std::int32_t GetAffairStage(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner);
+    bool SetAffairStage(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner, std::int32_t stage);
+    std::string GetPartnerPendingIntent(RE::StaticFunctionTag*, RE::Actor* partner);
+    void ClearPartnerIntent(RE::StaticFunctionTag*, RE::Actor* partner);
+    bool EvaluatePartnerHomeArrival(RE::StaticFunctionTag*, RE::BGSLocation* akNewLoc);
     bool HasCheatedOn(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim);
     bool IsNPCCheating(RE::StaticFunctionTag*, RE::Actor* npc);
     bool IsRelationshipCheating(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB);
@@ -312,6 +317,7 @@ namespace MARAS::PapyrusInterface {
 
     std::string GetJsonString(RE::StaticFunctionTag*, std::string json, std::string path, std::string defaultVal);
     RE::Actor* GetJsonActor(RE::StaticFunctionTag*, std::string json, std::string path);
+    RE::TESForm* GetJsonForm(RE::StaticFunctionTag*, std::string json, std::string path);
     int32_t GetJsonInt(RE::StaticFunctionTag*, std::string json, std::string path, int32_t defaultVal);
     float GetJsonFloat(RE::StaticFunctionTag*, std::string json, std::string path, float defaultVal);
     bool GetJsonBool(RE::StaticFunctionTag*, std::string json, std::string path, bool defaultVal);

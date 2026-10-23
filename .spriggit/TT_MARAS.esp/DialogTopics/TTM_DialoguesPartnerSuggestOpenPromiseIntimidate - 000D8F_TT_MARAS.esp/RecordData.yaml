@@ -1,0 +1,8 @@
+FormKey: 000D8F:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestOpenPromiseIntimidate
+Name:
+  TargetLanguage: English
+  Value: "[Intimidate] I'm not asking. You will wait for me."
+Branch: 000D82:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

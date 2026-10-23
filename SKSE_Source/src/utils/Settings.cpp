@@ -14,7 +14,7 @@ namespace MARAS {
 
     namespace {
         constexpr uint8_t kSettingsVersionMarker = 0xFF;
-        constexpr uint32_t kSettingsSubVersion = 1;
+        constexpr uint32_t kSettingsSubVersion = 2;
 
         const std::unordered_map<std::string, uint32_t> kKeyNameToDxCode = {
             {"F1", 0x3B}, {"F2", 0x3C}, {"F3", 0x3D}, {"F4", 0x3E},
@@ -155,6 +155,37 @@ namespace MARAS {
             visit("uiFullScreen", &Settings::uiFullScreen, false);
             visit("uiScale", &Settings::uiScale, false);
             visit("autoPauseOnOpen", &Settings::autoPauseOnOpen, false);
+            visit("playerPartnerCheatingAgencyEnabled", &Settings::playerPartnerCheatingAgencyEnabled, false);
+            visit("playerPartnerCheatingChanceMultiplier", &Settings::playerPartnerCheatingChanceMultiplier, false);
+            visit("playerPartnerCheatingMaxRollCap", &Settings::playerPartnerCheatingMaxRollCap, false);
+            visit("playerPartnerCheatingMaxSecretLovers", &Settings::playerPartnerCheatingMaxSecretLovers, false);
+            visit("playerPartnerCheatingAllowWhenHappy", &Settings::playerPartnerCheatingAllowWhenHappy, false);
+            visit("playerPartnerCheatingEnableNeglect", &Settings::playerPartnerCheatingEnableNeglect, false);
+            visit("playerPartnerCheatingEnableRevenge", &Settings::playerPartnerCheatingEnableRevenge, false);
+            visit("playerPartnerCheatingEnableHierarchy", &Settings::playerPartnerCheatingEnableHierarchy, false);
+            visit("playerPartnerCheatingEnableChildrenAnchor", &Settings::playerPartnerCheatingEnableChildrenAnchor, false);
+            visit("playerPartnerCheatingUseLLM", &Settings::playerPartnerCheatingUseLLM, false);
+            visit("playerPartnerCheatingConfirmResults", &Settings::playerPartnerCheatingConfirmResults, false);
+            visit("lonelinessThresholdDays", &Settings::lonelinessThresholdDays, false);
+            visit("playerPartnerAgencyOpenLoverChanceMultiplier", &Settings::playerPartnerAgencyOpenLoverChanceMultiplier, false);
+            visit("playerPartnerAgencyBreakupChanceMultiplier", &Settings::playerPartnerAgencyBreakupChanceMultiplier, false);
+            visit("playerPartnerAgencyEnableForceGreets", &Settings::playerPartnerAgencyEnableForceGreets, false);
+            visit("playerPartnerAgencyEnableHomeArrivalEvents", &Settings::playerPartnerAgencyEnableHomeArrivalEvents, false);
+            visit("playerPartnerOpenRelAgencyEnabled", &Settings::playerPartnerOpenRelAgencyEnabled, false);
+            visit("multLonelinessDecayStart", &Settings::multLonelinessDecayStart, false);
+            visit("multPartnerAgencyScanInterval", &Settings::multPartnerAgencyScanInterval, false);
+            visit("multRecentAttentionWindow", &Settings::multRecentAttentionWindow, false);
+            visit("multVeryRecentVisitWindow", &Settings::multVeryRecentVisitWindow, false);
+            visit("multNeglectGrowthStart", &Settings::multNeglectGrowthStart, false);
+            visit("multContentNeglectStart", &Settings::multContentNeglectStart, false);
+            visit("multProlongedAbsencePenalty", &Settings::multProlongedAbsencePenalty, false);
+            visit("multAffairTalkingEscalation", &Settings::multAffairTalkingEscalation, false);
+            visit("multMinSideFlingAgeForBreakup", &Settings::multMinSideFlingAgeForBreakup, false);
+            visit("multPartnerIntentTTL", &Settings::multPartnerIntentTTL, false);
+            visit("multHomeArrivalCooldown", &Settings::multHomeArrivalCooldown, false);
+            visit("multAffairFatigueStart", &Settings::multAffairFatigueStart, false);
+            visit("multRomanticAttendedBreakup", &Settings::multRomanticAttendedBreakup, false);
+            visit("multSuggestOpenNeglectMin", &Settings::multSuggestOpenNeglectMin, false);
         }
     }
 
@@ -381,8 +412,8 @@ namespace MARAS {
             }
 
             bool hasVersionHeader = (firstByte == kSettingsVersionMarker);
+            uint32_t subVersion = 0;
             if (hasVersionHeader) {
-                uint32_t subVersion = 0;
                 if (!serialization->ReadRecordData(subVersion) || subVersion < 1 || subVersion > kSettingsSubVersion) {
                     MARAS_LOG_ERROR("Settings::LoadGameSettings - invalid or unsupported settings sub-version {}", subVersion);
                     RevertGameSettingsUnlocked();
@@ -396,6 +427,13 @@ namespace MARAS {
 
             ForEachPersistedSetting([&](std::string_view key, auto memberPtr, bool required) {
                 if (requiredReadFailed || streamEnded) return;
+                if (subVersion < 2 && key == "playerPartnerCheatingChanceMultiplier") {
+                    int32_t legacyIntervalDays = 0;
+                    if (!serialization->ReadRecordData(legacyIntervalDays)) {
+                        streamEnded = true;
+                        return;
+                    }
+                }
                 auto& field = this->*memberPtr;
                 using FieldType = std::decay_t<decltype(field)>;
 
@@ -624,7 +662,18 @@ namespace MARAS {
                 {"enablescenes_loctypesettlement", &Settings::enableScenes_LocTypeSettlement},
                 {"enablescenes_loctypeorcstronghold", &Settings::enableScenes_LocTypeOrcStronghold},
                 {"enablescenes_loctypecity", &Settings::enableScenes_LocTypeCity},
-                {"enablescenes_loctypelumbermill", &Settings::enableScenes_LocTypeLumberMill}
+                {"enablescenes_loctypelumbermill", &Settings::enableScenes_LocTypeLumberMill},
+                {"playerpartnercheatingagencyenabled", &Settings::playerPartnerCheatingAgencyEnabled},
+                {"playerpartneropenrelagencyenabled", &Settings::playerPartnerOpenRelAgencyEnabled},
+                {"playerpartnercheatingallowwhenhappy", &Settings::playerPartnerCheatingAllowWhenHappy},
+                {"playerpartnercheatingenableneglect", &Settings::playerPartnerCheatingEnableNeglect},
+                {"playerpartnercheatingenablerevenge", &Settings::playerPartnerCheatingEnableRevenge},
+                {"playerpartnercheatingenablehierarchy", &Settings::playerPartnerCheatingEnableHierarchy},
+                {"playerpartnercheatingenablechildrenanchor", &Settings::playerPartnerCheatingEnableChildrenAnchor},
+                {"playerpartnercheatingusellm", &Settings::playerPartnerCheatingUseLLM},
+                {"playerpartnercheatingconfirmresults", &Settings::playerPartnerCheatingConfirmResults},
+                {"playerpartneragencyenableforcegreets", &Settings::playerPartnerAgencyEnableForceGreets},
+                {"playerpartneragencyenablehomearrivalevents", &Settings::playerPartnerAgencyEnableHomeArrivalEvents}
             };
             return kMap;
         }
@@ -651,7 +700,10 @@ namespace MARAS {
                 {"paternityphenotypebirthchance", &Settings::paternityPhenotypeBirthChance},
                 {"paternitynonskyrimnetrevealchance", &Settings::paternityNonSkyrimNetRevealChance},
                 {"paternitybreakupchance", &Settings::paternityBreakupChance},
-                {"paternitybiostepupchance", &Settings::paternityBioStepUpChance}
+                {"paternitybiostepupchance", &Settings::paternityBioStepUpChance},
+                {"playerpartnercheatingmaxrollcap", &Settings::playerPartnerCheatingMaxRollCap},
+                {"playerpartnercheatingmaxsecretlovers", &Settings::playerPartnerCheatingMaxSecretLovers},
+                {"lonelinessthresholddays", &Settings::lonelinessThresholdDays}
             };
             return kMap;
         }
@@ -665,7 +717,24 @@ namespace MARAS {
                 {"scenescooldownhours", &Settings::scenesCooldownHours},
                 {"paternitydailygrowth", &Settings::paternityDailyGrowth},
                 {"paternityphenotypedailygrowth", &Settings::paternityPhenotypeDailyGrowth},
-                {"uiscale", &Settings::uiScale}
+                {"uiscale", &Settings::uiScale},
+                {"playerpartnercheatingchancemultiplier", &Settings::playerPartnerCheatingChanceMultiplier},
+                {"playerpartneragencyopenloverchancemultiplier", &Settings::playerPartnerAgencyOpenLoverChanceMultiplier},
+                {"playerpartneragencybreakupchancemultiplier", &Settings::playerPartnerAgencyBreakupChanceMultiplier},
+                {"multlonelinessdecaystart", &Settings::multLonelinessDecayStart},
+                {"multpartneragencyscaninterval", &Settings::multPartnerAgencyScanInterval},
+                {"multrecentattentionwindow", &Settings::multRecentAttentionWindow},
+                {"multveryrecentvisitwindow", &Settings::multVeryRecentVisitWindow},
+                {"multneglectgrowthstart", &Settings::multNeglectGrowthStart},
+                {"multcontentneglectstart", &Settings::multContentNeglectStart},
+                {"multprolongedabsencepenalty", &Settings::multProlongedAbsencePenalty},
+                {"multaffairtalkingescalation", &Settings::multAffairTalkingEscalation},
+                {"multminsideflingageforbreakup", &Settings::multMinSideFlingAgeForBreakup},
+                {"multpartnerintentttl", &Settings::multPartnerIntentTTL},
+                {"multhomearrivalcooldown", &Settings::multHomeArrivalCooldown},
+                {"multaffairfatiguestart", &Settings::multAffairFatigueStart},
+                {"multromanticattendedbreakup", &Settings::multRomanticAttendedBreakup},
+                {"multsuggestopenneglectmin", &Settings::multSuggestOpenNeglectMin}
             };
             return kMap;
         }
@@ -853,6 +922,5 @@ namespace MARAS {
     }
 
 }
-
 
 

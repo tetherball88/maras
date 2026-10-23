@@ -39,6 +39,9 @@
         {% for partnerName in openRelationships %}
             {{npcName}} and {{partnerName}} are in an open relationship.
         {% endfor %}
+        {% if false %}
+
+        {% endif %}
     {% endif %}
 
     {% if length(profile.player_co_partners) > 0 %}

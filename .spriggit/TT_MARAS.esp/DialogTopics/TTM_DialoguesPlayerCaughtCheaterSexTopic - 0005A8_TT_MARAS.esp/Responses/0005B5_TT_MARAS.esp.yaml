@@ -6,10 +6,7 @@ Flags:
 PreviousDialog: 0005B4:TT_MARAS.esp
 FavorLevel: None
 LinkTo:
-- 000357:TT_MARAS.esp
-- 000355:TT_MARAS.esp
-- 000373:TT_MARAS.esp
-- 00036A:TT_MARAS.esp
+- 000DCE:TT_MARAS.esp
 - 0005B6:TT_MARAS.esp
 Responses:
 - Emotion: Fear

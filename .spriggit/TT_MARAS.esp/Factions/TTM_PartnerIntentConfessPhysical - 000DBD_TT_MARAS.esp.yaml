@@ -1,0 +1,6 @@
+FormKey: 000DBD:TT_MARAS.esp
+EditorID: TTM_PartnerIntentConfessPhysical
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

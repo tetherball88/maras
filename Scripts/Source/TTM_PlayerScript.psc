@@ -53,11 +53,31 @@ Function CheckCell()
 EndFunction
 
 Event OnLocationChange(Location akOldLoc, Location akNewLoc)
+    string oldLocName = "None"
+    if (akOldLoc)
+        oldLocName = akOldLoc.GetName()
+    endif
+    string newLocName = "None"
+    if (akNewLoc)
+        newLocName = akNewLoc.GetName()
+    endif
+    TTM_Debug.debug("TTM_PlayerScript: OnLocationChange: '" + oldLocName + "' (" + akOldLoc + ") -> '" + newLocName + "' (" + akNewLoc + ")")
     CheckCell()
     TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
     childrenLogicQst.PlayerLocationChanged(akNewLoc, akOldLoc)
+    TTM_QuestPartnerAway partnerAwayQst = TTM_Data.GetMarasPartnerAwayQuest() as TTM_QuestPartnerAway
+    bool handledRendezvous = false
+    if (partnerAwayQst)
+        handledRendezvous = partnerAwayQst.CheckPlayerArrival(akNewLoc)
+    endif
     TTM_NpcsScenes npcScenes = TTM_Data.GetMarasNpcsScenesQuest() as TTM_NpcsScenes
-    if(MARAS.IsLocationAllowedForScenes(akNewLoc))
+    bool handledHomeArrival = false
+    if (!handledRendezvous)
+        handledHomeArrival = MARAS.EvaluatePartnerHomeArrival(akNewLoc)
+    endif
+    TTM_Debug.debug("TTM_PlayerScript: OnLocationChange results for '" + newLocName + "': handledRendezvous=" + handledRendezvous + ", handledHomeArrival=" + handledHomeArrival)
+    if (!handledRendezvous && !handledHomeArrival && MARAS.IsLocationAllowedForScenes(akNewLoc))
+        TTM_Debug.debug("TTM_PlayerScript: OnLocationChange proceeding to regular SetupSceneOnLocationChange for '" + newLocName + "'")
         npcScenes.SetupSceneOnLocationChange()
     endif
 

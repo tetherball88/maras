@@ -227,6 +227,7 @@ export function initializePrismaBridge() {
         currentPet: item.currentPet !== undefined ? item.currentPet : existing?.currentPet,
         pluginName: item.pluginName || existing?.pluginName,
         gender: item.gender ?? existing?.gender ?? 'male',
+        pendingIntent: item.pendingIntent ?? existing?.pendingIntent,
       }
     })
 
@@ -275,6 +276,7 @@ export function initializePrismaBridge() {
           currentCritter: detail.currentCritter,
           currentPet: detail.currentPet,
           gender: detail.gender ?? existing?.gender ?? 'male',
+          pendingIntent: detail.pendingIntent ?? existing?.pendingIntent,
         },
         true // skipBridge = true (incoming from C++)
       )

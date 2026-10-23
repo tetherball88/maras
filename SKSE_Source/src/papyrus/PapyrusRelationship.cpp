@@ -4,6 +4,7 @@
 #include "core/BonusesService.h"
 #include "core/DeceasedRegistry.h"
 #include "core/MarriageDifficulty.h"
+#include "core/MatchmakingService.h"
 #include "core/NPCIndex.h"
 #include "core/PollingService.h"
 #include "core/SkyrimNetIntegration.h"
@@ -787,6 +788,53 @@ namespace MARAS::PapyrusInterface {
         std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(NPCRelationshipManager::GetSingleton().GetCheatingAffairStatus(
             cheater->GetFormID(), victim->GetFormID(), affairPartner->GetFormID()));
+    }
+
+    std::int32_t GetAffairStage(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner) {
+        if (!cheater || !victim) {
+            return static_cast<std::int32_t>(AffairStage::Physical);
+        }
+        RE::FormID partnerID = affairPartner ? affairPartner->GetFormID() : 0;
+        std::lock_guard lock(GetPapyrusMutex());
+        return static_cast<std::int32_t>(NPCRelationshipManager::GetSingleton().GetCheatingAffairStage(
+            cheater->GetFormID(), victim->GetFormID(), partnerID));
+    }
+
+    bool SetAffairStage(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner, std::int32_t stage) {
+        if (!cheater || !victim) {
+            MARAS_LOG_WARN("SetAffairStage: null cheater or victim provided");
+            return false;
+        }
+        if (stage < 0 || stage >= static_cast<std::int32_t>(AffairStage::_Count)) {
+            MARAS_LOG_WARN("SetAffairStage: invalid stage {}", stage);
+            return false;
+        }
+        RE::FormID partnerID = affairPartner ? affairPartner->GetFormID() : 0;
+        std::lock_guard lock(GetPapyrusMutex());
+        return NPCRelationshipManager::GetSingleton().SetCheatingAffairStage(
+            cheater->GetFormID(), victim->GetFormID(), partnerID, static_cast<AffairStage>(stage));
+    }
+
+    std::string GetPartnerPendingIntent(RE::StaticFunctionTag*, RE::Actor* partner) {
+        if (!partner) { MARAS_LOG_WARN("Papyrus GetPartnerPendingIntent called with null partner"); return "none"; }
+        std::lock_guard lock(GetPapyrusMutex());
+        auto intent = NPCRelationshipManager::GetSingleton().GetPartnerPendingIntent(partner->GetFormID());
+        std::string res(Utils::PartnerIntentTypeToString(intent.type));
+        MARAS_LOG_DEBUG("Papyrus GetPartnerPendingIntent({:08X} '{}') -> '{}'", partner->GetFormID(), partner->GetDisplayFullName(), res);
+        return res;
+    }
+
+    void ClearPartnerIntent(RE::StaticFunctionTag*, RE::Actor* partner) {
+        if (!partner) { MARAS_LOG_WARN("Papyrus ClearPartnerIntent called with null partner"); return; }
+        MARAS_LOG_INFO("Papyrus ClearPartnerIntent called for {:08X} ('{}')", partner->GetFormID(), partner->GetDisplayFullName());
+        std::lock_guard lock(GetPapyrusMutex());
+        NPCRelationshipManager::GetSingleton().ClearPartnerIntent(partner->GetFormID());
+    }
+
+    bool EvaluatePartnerHomeArrival(RE::StaticFunctionTag*, RE::BGSLocation* akNewLoc) {
+        std::lock_guard lock(GetPapyrusMutex());
+        MARAS_LOG_DEBUG("Papyrus EvaluatePartnerHomeArrival invoked (akNewLoc={:08X} '{}')", akNewLoc ? akNewLoc->GetFormID() : 0, akNewLoc ? akNewLoc->GetName() : "None");
+        return MatchmakingService::GetSingleton().EvaluatePartnerHomeArrival(akNewLoc);
     }
 
     bool HasCheatedOn(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim) {

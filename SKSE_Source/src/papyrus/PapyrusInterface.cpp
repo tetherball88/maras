@@ -124,6 +124,10 @@ namespace MARAS::PapyrusInterface {
         return MARAS::JsonService::GetActor(json.c_str(), path.c_str());
     }
 
+    RE::TESForm* GetJsonForm(RE::StaticFunctionTag*, std::string json, std::string path) {
+        return MARAS::JsonService::GetForm(json.c_str(), path.c_str());
+    }
+
     int32_t GetJsonInt(RE::StaticFunctionTag*, std::string json, std::string path, int32_t defaultVal) {
         return MARAS::JsonService::GetInt(json.c_str(), path.c_str(), defaultVal);
     }
@@ -757,7 +761,18 @@ namespace MARAS::PapyrusInterface {
                 int32_t keptCount = 0;
                 int32_t removedCount = 0;
 
+                std::unordered_set<RE::FormID> discardedParents;
                 for (RE::FormID cID : childIDs) {
+                    if (auto entryOpt = mgr.GetChildEntry(cID)) {
+                        const std::string itemIdCheck = fmt::format("child_{:08X}", cID);
+                        const bool keepCheck = !discardAll && (resp.aborted || resp.IsItemChecked("migrated_children", itemIdCheck, true));
+                        if (!keepCheck) {
+                            if (entryOpt->guardianAID != 0 && entryOpt->guardianAID != kPlayerFormID) discardedParents.insert(entryOpt->guardianAID);
+                            if (entryOpt->guardianBID != 0 && entryOpt->guardianBID != kPlayerFormID) discardedParents.insert(entryOpt->guardianBID);
+                            if (entryOpt->bioMotherID != 0 && entryOpt->bioMotherID != kPlayerFormID) discardedParents.insert(entryOpt->bioMotherID);
+                            if (entryOpt->bioFatherID != 0 && entryOpt->bioFatherID != kPlayerFormID && entryOpt->bioFatherID != kUnknownFatherFormID) discardedParents.insert(entryOpt->bioFatherID);
+                        }
+                    }
                     const std::string itemId = fmt::format("child_{:08X}", cID);
                     const bool keep = !discardAll && (resp.aborted || resp.IsItemChecked("migrated_children", itemId, true));
                     if (keep) {
@@ -769,6 +784,14 @@ namespace MARAS::PapyrusInterface {
                     }
                 }
 
+                for (RE::FormID parentID : discardedParents) {
+                    if (mgr.GetAllPartners(parentID).empty() && mgr.GetChildrenOfActor(parentID).empty()) {
+                        mgr.UnregisterNPC(parentID);
+                    }
+                }
+                if (keptCount > 0) {
+                    PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                }
                 if (removedCount > 0) {
                     PrismaUIDataBridge::GetSingleton().SendOverviewData();
                 }
@@ -983,6 +1006,11 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("BreakAllLoverConnections", "MARAS", BreakAllLoverConnections);
         vm->RegisterFunction("SetCheatingAffairStatus", "MARAS", SetCheatingAffairStatus);
         vm->RegisterFunction("GetCheatingAffairStatus", "MARAS", GetCheatingAffairStatus);
+        vm->RegisterFunction("GetAffairStage", "MARAS", GetAffairStage);
+        vm->RegisterFunction("SetAffairStage", "MARAS", SetAffairStage);
+        vm->RegisterFunction("GetPartnerPendingIntent", "MARAS", GetPartnerPendingIntent);
+        vm->RegisterFunction("ClearPartnerIntent", "MARAS", ClearPartnerIntent);
+        vm->RegisterFunction("EvaluatePartnerHomeArrival", "MARAS", EvaluatePartnerHomeArrival);
         vm->RegisterFunction("HasCheatedOn", "MARAS", HasCheatedOn);
         vm->RegisterFunction("IsNPCCheating", "MARAS", IsNPCCheating);
         vm->RegisterFunction("IsRelationshipCheating", "MARAS", IsRelationshipCheating);
@@ -999,6 +1027,7 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("CanFormRelationship", "MARAS", CanFormRelationship);
         vm->RegisterFunction("GetJsonString", "MARAS", GetJsonString);
         vm->RegisterFunction("GetJsonActor", "MARAS", GetJsonActor);
+        vm->RegisterFunction("GetJsonForm", "MARAS", GetJsonForm);
         vm->RegisterFunction("GetJsonInt", "MARAS", GetJsonInt);
         vm->RegisterFunction("GetJsonFloat", "MARAS", GetJsonFloat);
         vm->RegisterFunction("GetJsonBool", "MARAS", GetJsonBool);

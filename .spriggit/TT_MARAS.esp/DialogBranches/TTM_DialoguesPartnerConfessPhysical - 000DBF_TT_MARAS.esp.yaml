@@ -1,0 +1,7 @@
+FormKey: 000DBF:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerConfessPhysical
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 000DC0:TT_MARAS.esp

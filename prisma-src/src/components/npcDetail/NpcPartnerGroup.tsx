@@ -1,5 +1,5 @@
 import React from 'react'
-import { RelationshipPair, RelationshipStatus, AffairStatus } from '../../types'
+import { RelationshipPair, RelationshipStatus, AffairStatus, AffairStage } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { StatusBadge } from '../shared/StatusBadge'
 import { AffectionBar } from '../shared/AffectionBar'
@@ -76,6 +76,7 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
               (cr.affairStatus === undefined || cr.affairStatus === AffairStatus.Ongoing)
           )
           const affairIncidents = affairRecords.reduce((sum, cr) => sum + (cr.count || 1), 0)
+          const isTalkingAffair = affairRecords.some((cr) => cr.affairStage === AffairStage.Talking)
           const isUnofficialAffair = affairRecords.length > 0 && (r.status === RelationshipStatus.Candidate || r.status === RelationshipStatus.Unknown)
 
           return (
@@ -127,7 +128,7 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
                 {affairRecords.length > 0 && !isUnofficialAffair && (
                   <span className="text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold flex items-center gap-[0.25rem]">
                     <Flame className="w-[0.875em] h-[0.875em]" />
-                    <span>Affair ({affairIncidents})</span>
+                    <span>{isTalkingAffair ? 'Affair (Talking)' : `Affair (${affairIncidents})`}</span>
                   </span>
                 )}
                 {isUnofficialAffair && (

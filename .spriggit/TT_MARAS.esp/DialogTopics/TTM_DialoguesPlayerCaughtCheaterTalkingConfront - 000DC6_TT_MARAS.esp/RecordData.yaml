@@ -1,0 +1,9 @@
+FormKey: 000DC6:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterTalkingConfront
+Name:
+  TargetLanguage: English
+  Value: Save the act. Tell me what's really going on between you two.
+Branch: 0005A6:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST
+

@@ -1,0 +1,8 @@
+FormKey: 000D95:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestOpenScoldPersuade
+Name:
+  TargetLanguage: English
+  Value: "[Persuade] I'm sorry. I spoke in anger. Please, let's not do this."
+Branch: 000D82:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

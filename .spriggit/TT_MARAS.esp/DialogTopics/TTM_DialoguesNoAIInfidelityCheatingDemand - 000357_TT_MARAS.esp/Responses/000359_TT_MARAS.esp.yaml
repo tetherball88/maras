@@ -23,7 +23,6 @@ LinkTo:
 - 00036A:TT_MARAS.esp
 - 000368:TT_MARAS.esp
 - 000369:TT_MARAS.esp
-- 0005B6:TT_MARAS.esp
 Responses:
 - EmotionValue: 50
   ResponseNumber: 1

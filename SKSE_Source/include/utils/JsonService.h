@@ -133,6 +133,21 @@ inline RE::Actor* GetActor(const char* json, const char* path) {
     }
 }
 
+inline RE::TESForm* GetForm(const char* json, const char* path) {
+    try {
+        const auto* j = detail::GetParsedJson(json);
+        if (!j) return nullptr;
+        const auto* val = Traverse(*j, path);
+        if (!val) return nullptr;
+
+        RE::FormID formID = detail::ExtractFormID(*val);
+        if (!HasPhysicalActor(formID)) return nullptr;
+        return RE::TESForm::LookupByID(formID);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 inline int32_t GetInt(const char* json, const char* path, int32_t def = 0) {
     try {
         const auto* j = detail::GetParsedJson(json);

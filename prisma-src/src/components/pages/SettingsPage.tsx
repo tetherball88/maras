@@ -3,6 +3,7 @@ import { useMarasStore } from '../../store/useMarasStore'
 import { GeneralSettings } from '../settings/GeneralSettings'
 import { ConfirmationSettings } from '../settings/ConfirmationSettings'
 import { MatchmakingSettings } from '../settings/MatchmakingSettings'
+import { PartnerAgencySettings } from '../settings/PartnerAgencySettings'
 import { ScenesSettings } from '../settings/ScenesSettings'
 import { ChildrenSettings } from '../settings/ChildrenSettings'
 import { FertilitySettings } from '../settings/FertilitySettings'
@@ -23,6 +24,8 @@ export const SettingsPage: React.FC = () => {
         return <ConfirmationSettings />
       case 'matchmaking':
         return <MatchmakingSettings />
+      case 'partnerAgency':
+        return <PartnerAgencySettings />
       case 'scenes':
         return <ScenesSettings />
       case 'children':

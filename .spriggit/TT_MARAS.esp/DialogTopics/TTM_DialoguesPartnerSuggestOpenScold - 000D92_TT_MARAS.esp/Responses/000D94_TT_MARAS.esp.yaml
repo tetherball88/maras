@@ -1,0 +1,33 @@
+FormKey: 000D94:TT_MARAS.esp
+Flags: {}
+PreviousDialog: 000D93:TT_MARAS.esp
+FavorLevel: None
+LinkTo:
+- 000D87:TT_MARAS.esp
+- 000D95:TT_MARAS.esp
+- 000D98:TT_MARAS.esp
+Responses:
+- Emotion: Anger
+  EmotionValue: 60
+  ResponseNumber: 1
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: Don't shout at me like I'm some milk-drinker who doesn't know my own mind.
+  ScriptNotes: ''
+  Edits: ''
+- Emotion: Anger
+  EmotionValue: 50
+  ResponseNumber: 2
+  Unknown2: 0x000000
+  Flags:
+  - UseEmotionAnimation
+  Unknown3: 0x000000
+  Text:
+    TargetLanguage: English
+    Value: I'm not asking for permission to be lonely. I'm telling you I already am.
+  ScriptNotes: ''
+  Edits: ''

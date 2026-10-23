@@ -29,6 +29,7 @@ namespace MARAS {
 
         // Queries
         RE::FormID GetNpcHome(RE::Actor* npc) const;
+        RE::FormID GetNpcHome(RE::FormID actorFormID) const;
         std::vector<RE::FormID> GetNpcBeds(RE::Actor* npc) const;
         std::vector<RE::FormID> GetCellDoors(RE::FormID cellFormID) const;
         RE::FormID GetNpcOriginalHouseCenterMarker(RE::Actor* npc) const;

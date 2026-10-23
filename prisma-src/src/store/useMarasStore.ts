@@ -368,6 +368,37 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     diceRollChanceAdvance: 22,
     diceRollChanceBreakup: 11,
     diceRollChanceOpenClose: 5,
+    playerPartnerCheatingAgencyEnabled: mockSettings.playerPartnerCheatingAgencyEnabled ?? true,
+    playerPartnerOpenRelAgencyEnabled: mockSettings.playerPartnerOpenRelAgencyEnabled ?? true,
+    playerPartnerCheatingChanceMultiplier: mockSettings.playerPartnerCheatingChanceMultiplier ?? 1.0,
+    playerPartnerCheatingMaxRollCap: mockSettings.playerPartnerCheatingMaxRollCap ?? 65,
+    playerPartnerCheatingMaxSecretLovers: mockSettings.playerPartnerCheatingMaxSecretLovers ?? 1,
+    playerPartnerCheatingAllowWhenHappy: mockSettings.playerPartnerCheatingAllowWhenHappy ?? false,
+    playerPartnerCheatingEnableNeglect: mockSettings.playerPartnerCheatingEnableNeglect ?? true,
+    playerPartnerCheatingEnableRevenge: mockSettings.playerPartnerCheatingEnableRevenge ?? true,
+    playerPartnerCheatingEnableHierarchy: mockSettings.playerPartnerCheatingEnableHierarchy ?? true,
+    playerPartnerCheatingEnableChildrenAnchor: mockSettings.playerPartnerCheatingEnableChildrenAnchor ?? true,
+    playerPartnerCheatingUseLLM: mockSettings.playerPartnerCheatingUseLLM ?? true,
+    playerPartnerCheatingConfirmResults: mockSettings.playerPartnerCheatingConfirmResults ?? false,
+    lonelinessThresholdDays: mockSettings.lonelinessThresholdDays ?? 2,
+    playerPartnerAgencyOpenLoverChanceMultiplier: mockSettings.playerPartnerAgencyOpenLoverChanceMultiplier ?? 1.0,
+    playerPartnerAgencyBreakupChanceMultiplier: mockSettings.playerPartnerAgencyBreakupChanceMultiplier ?? 1.0,
+    playerPartnerAgencyEnableForceGreets: mockSettings.playerPartnerAgencyEnableForceGreets ?? true,
+    playerPartnerAgencyEnableHomeArrivalEvents: mockSettings.playerPartnerAgencyEnableHomeArrivalEvents ?? true,
+    multLonelinessDecayStart: mockSettings.multLonelinessDecayStart ?? 1.0,
+    multPartnerAgencyScanInterval: mockSettings.multPartnerAgencyScanInterval ?? 1.5,
+    multRecentAttentionWindow: mockSettings.multRecentAttentionWindow ?? 1.0,
+    multVeryRecentVisitWindow: mockSettings.multVeryRecentVisitWindow ?? 0.5,
+    multNeglectGrowthStart: mockSettings.multNeglectGrowthStart ?? 1.0,
+    multContentNeglectStart: mockSettings.multContentNeglectStart ?? 2.0,
+    multProlongedAbsencePenalty: mockSettings.multProlongedAbsencePenalty ?? 2.0,
+    multAffairTalkingEscalation: mockSettings.multAffairTalkingEscalation ?? 2.0,
+    multMinSideFlingAgeForBreakup: mockSettings.multMinSideFlingAgeForBreakup ?? 1.5,
+    multPartnerIntentTTL: mockSettings.multPartnerIntentTTL ?? 2.0,
+    multHomeArrivalCooldown: mockSettings.multHomeArrivalCooldown ?? 1.0,
+    multAffairFatigueStart: mockSettings.multAffairFatigueStart ?? 5.0,
+    multRomanticAttendedBreakup: mockSettings.multRomanticAttendedBreakup ?? 1.5,
+    multSuggestOpenNeglectMin: mockSettings.multSuggestOpenNeglectMin ?? 2.0,
   },
 
   householdBuffs: isGameBuild ? null : mockHouseholdBuffs,
@@ -999,6 +1030,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           currentHome: existing?.currentHome ?? item.currentHome,
           originalHome: existing?.originalHome ?? item.originalHome,
           isChild: existing?.isChild ?? item.isChild,
+          pendingIntent: existing?.pendingIntent ?? item.pendingIntent,
         }
 
         newNpcProfiles.set(item.formId, profile)
@@ -1120,7 +1152,9 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         updates.settings = nextSettings
         if (
           data.settings.matchmakingExcludePlayerActivePartners !== undefined ||
-          data.settings.matchmakingConfirmResults !== undefined
+          data.settings.matchmakingConfirmResults !== undefined ||
+          data.settings.playerPartnerCheatingAgencyEnabled !== undefined ||
+          data.settings.playerPartnerOpenRelAgencyEnabled !== undefined
         ) {
           const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings
           updates.matchmakingSettings = {
@@ -1131,6 +1165,43 @@ export const useMarasStore = create<MarasState>((set, get) => ({
             ...(data.settings.matchmakingConfirmResults !== undefined
               ? { confirmResults: data.settings.matchmakingConfirmResults }
               : {}),
+            ...(data.settings.playerPartnerCheatingAgencyEnabled !== undefined
+              ? { playerPartnerCheatingAgencyEnabled: data.settings.playerPartnerCheatingAgencyEnabled }
+              : {}),
+            ...(data.settings.playerPartnerOpenRelAgencyEnabled !== undefined
+              ? { playerPartnerOpenRelAgencyEnabled: data.settings.playerPartnerOpenRelAgencyEnabled }
+              : {}),
+            ...(data.settings.playerPartnerCheatingChanceMultiplier !== undefined ? { playerPartnerCheatingChanceMultiplier: data.settings.playerPartnerCheatingChanceMultiplier } : {}),
+            ...(data.settings.playerPartnerCheatingMaxRollCap !== undefined ? { playerPartnerCheatingMaxRollCap: data.settings.playerPartnerCheatingMaxRollCap } : {}),
+            ...(data.settings.playerPartnerCheatingMaxSecretLovers !== undefined ? { playerPartnerCheatingMaxSecretLovers: data.settings.playerPartnerCheatingMaxSecretLovers } : {}),
+            ...(data.settings.playerPartnerCheatingAllowWhenHappy !== undefined ? { playerPartnerCheatingAllowWhenHappy: data.settings.playerPartnerCheatingAllowWhenHappy } : {}),
+            ...(data.settings.playerPartnerCheatingEnableNeglect !== undefined ? { playerPartnerCheatingEnableNeglect: data.settings.playerPartnerCheatingEnableNeglect } : {}),
+            ...(data.settings.playerPartnerCheatingEnableRevenge !== undefined ? { playerPartnerCheatingEnableRevenge: data.settings.playerPartnerCheatingEnableRevenge } : {}),
+            ...(data.settings.playerPartnerCheatingEnableHierarchy !== undefined ? { playerPartnerCheatingEnableHierarchy: data.settings.playerPartnerCheatingEnableHierarchy } : {}),
+            ...(data.settings.playerPartnerCheatingEnableChildrenAnchor !== undefined ? { playerPartnerCheatingEnableChildrenAnchor: data.settings.playerPartnerCheatingEnableChildrenAnchor } : {}),
+            ...(data.settings.playerPartnerCheatingUseLLM !== undefined ? { playerPartnerCheatingUseLLM: data.settings.playerPartnerCheatingUseLLM } : {}),
+            ...(data.settings.playerPartnerCheatingConfirmResults !== undefined
+              ? { playerPartnerCheatingConfirmResults: data.settings.playerPartnerCheatingConfirmResults }
+              : {}),
+            ...(data.settings.lonelinessThresholdDays !== undefined ? { lonelinessThresholdDays: data.settings.lonelinessThresholdDays } : {}),
+            ...(data.settings.playerPartnerAgencyOpenLoverChanceMultiplier !== undefined ? { playerPartnerAgencyOpenLoverChanceMultiplier: data.settings.playerPartnerAgencyOpenLoverChanceMultiplier } : {}),
+            ...(data.settings.playerPartnerAgencyBreakupChanceMultiplier !== undefined ? { playerPartnerAgencyBreakupChanceMultiplier: data.settings.playerPartnerAgencyBreakupChanceMultiplier } : {}),
+            ...(data.settings.playerPartnerAgencyEnableForceGreets !== undefined ? { playerPartnerAgencyEnableForceGreets: data.settings.playerPartnerAgencyEnableForceGreets } : {}),
+            ...(data.settings.playerPartnerAgencyEnableHomeArrivalEvents !== undefined ? { playerPartnerAgencyEnableHomeArrivalEvents: data.settings.playerPartnerAgencyEnableHomeArrivalEvents } : {}),
+            ...(data.settings.multLonelinessDecayStart !== undefined ? { multLonelinessDecayStart: data.settings.multLonelinessDecayStart } : {}),
+            ...(data.settings.multPartnerAgencyScanInterval !== undefined ? { multPartnerAgencyScanInterval: data.settings.multPartnerAgencyScanInterval } : {}),
+            ...(data.settings.multRecentAttentionWindow !== undefined ? { multRecentAttentionWindow: data.settings.multRecentAttentionWindow } : {}),
+            ...(data.settings.multVeryRecentVisitWindow !== undefined ? { multVeryRecentVisitWindow: data.settings.multVeryRecentVisitWindow } : {}),
+            ...(data.settings.multNeglectGrowthStart !== undefined ? { multNeglectGrowthStart: data.settings.multNeglectGrowthStart } : {}),
+            ...(data.settings.multContentNeglectStart !== undefined ? { multContentNeglectStart: data.settings.multContentNeglectStart } : {}),
+            ...(data.settings.multProlongedAbsencePenalty !== undefined ? { multProlongedAbsencePenalty: data.settings.multProlongedAbsencePenalty } : {}),
+            ...(data.settings.multAffairTalkingEscalation !== undefined ? { multAffairTalkingEscalation: data.settings.multAffairTalkingEscalation } : {}),
+            ...(data.settings.multMinSideFlingAgeForBreakup !== undefined ? { multMinSideFlingAgeForBreakup: data.settings.multMinSideFlingAgeForBreakup } : {}),
+            ...(data.settings.multPartnerIntentTTL !== undefined ? { multPartnerIntentTTL: data.settings.multPartnerIntentTTL } : {}),
+            ...(data.settings.multHomeArrivalCooldown !== undefined ? { multHomeArrivalCooldown: data.settings.multHomeArrivalCooldown } : {}),
+            ...(data.settings.multAffairFatigueStart !== undefined ? { multAffairFatigueStart: data.settings.multAffairFatigueStart } : {}),
+            ...(data.settings.multRomanticAttendedBreakup !== undefined ? { multRomanticAttendedBreakup: data.settings.multRomanticAttendedBreakup } : {}),
+            ...(data.settings.multSuggestOpenNeglectMin !== undefined ? { multSuggestOpenNeglectMin: data.settings.multSuggestOpenNeglectMin } : {}),
           }
         }
       }

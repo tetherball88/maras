@@ -1,0 +1,6 @@
+FormKey: 000D80:TT_MARAS.esp
+EditorID: TTM_PartnerIntentSuggestOpen
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

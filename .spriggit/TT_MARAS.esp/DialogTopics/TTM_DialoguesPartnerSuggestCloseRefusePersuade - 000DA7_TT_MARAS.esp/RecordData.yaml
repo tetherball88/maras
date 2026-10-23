@@ -1,0 +1,8 @@
+FormKey: 000DA7:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestCloseRefusePersuade
+Name:
+  TargetLanguage: English
+  Value: "[Persuade] Asking for more time doesn't mean I love you any less. Please, don't force this yet."
+Branch: 000D9D:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

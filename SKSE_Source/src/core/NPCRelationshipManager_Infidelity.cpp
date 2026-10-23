@@ -53,6 +53,11 @@ namespace MARAS {
         }
         UpdateCanFormNonCheatingMainFaction(actorA);
         UpdateCanFormNonCheatingMainFaction(actorB);
+        if (actorA == kPlayerFormID && actorB != 0) {
+            ClearPartnerIntent(actorB);
+        } else if (actorB == kPlayerFormID && actorA != 0) {
+            ClearPartnerIntent(actorA);
+        }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, static_cast<uint8_t>(pairStatus));
 
         if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
@@ -77,7 +82,8 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::RecordCheating(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, bool isSecret,
-                                                AffairType affairType, AffairStatus affairStatus) {
+                                                AffairType affairType, AffairStatus affairStatus,
+                                                AffairStage affairStage) {
         if (!EnsureRegistered(cheaterID) || !EnsureRegistered(victimID) || !EnsureRegistered(affairPartnerID)) {
             return false;
         }
@@ -87,8 +93,15 @@ namespace MARAS {
             return false;
         }
 
+        if (victimID == kPlayerFormID && IsPlayerActiveMainPartner(cheaterID) && IsPlayerActiveMainPartner(affairPartnerID)) {
+            MARAS_LOG_INFO("RecordCheating ignored for co-spouses {:08X} and {:08X}: co-spouse intimacy is not cheating on player",
+                           cheaterID, affairPartnerID);
+            return false;
+        }
+
         auto calendar = RE::Calendar::GetSingleton();
         int32_t currentDay = calendar ? static_cast<int32_t>(calendar->GetDaysPassed()) : 0;
+        float currentFloatDay = calendar ? calendar->GetDaysPassed() : 0.0f;
 
         auto& pairData = GetOrCreatePairData(cheaterID, victimID);
 
@@ -108,17 +121,34 @@ namespace MARAS {
                 if (affairType != AffairType::Casual) {
                     record.affairType = affairType;
                 }
+                if (record.affairStatus == AffairStatus::Ongoing) {
+                    if (affairStage == AffairStage::Physical && record.affairStage == AffairStage::Talking) {
+                        record.affairStage = AffairStage::Physical;
+                        record.stageStartDay = currentFloatDay;
+                        auto itIntent = pendingPartnerIntents_.find(cheaterID);
+                        if (itIntent != pendingPartnerIntents_.end() &&
+                            itIntent->second.type == PartnerIntentType::ConfessTalking &&
+                            (itIntent->second.relatedLoverID == 0 || itIntent->second.relatedLoverID == affairPartnerID)) {
+                            MARAS_LOG_INFO("RecordCheating: Auto-upgrading PendingPartnerIntent from ConfessTalking to ConfessPhysical for cheater {:08X} with lover {:08X}",
+                                           cheaterID, affairPartnerID);
+                            SetPartnerPendingIntent(cheaterID, PartnerIntentType::ConfessPhysical, affairPartnerID);
+                        }
+                    } else if (record.count == 1) {
+                        record.affairStage = affairStage;
+                        record.stageStartDay = currentFloatDay;
+                    }
+                }
                 found = true;
                 break;
             }
         }
         if (!found) {
-            pairData.cheatingRecords.emplace_back(cheaterID, victimID, affairPartnerID, 1, currentDay, isSecret, affairType, affairStatus);
+            pairData.cheatingRecords.emplace_back(cheaterID, victimID, affairPartnerID, 1, currentDay, isSecret, affairType, affairStatus, affairStage, currentFloatDay);
         }
 
-        MARAS_LOG_INFO("Recorded cheating event: {:08X} cheated on {:08X} with {:08X} (isSecret: {}, type: {}, status: {})",
+        MARAS_LOG_INFO("Recorded cheating event: {:08X} cheated on {:08X} with {:08X} (isSecret: {}, type: {}, status: {}, stage: {})",
                        cheaterID, victimID, affairPartnerID, isSecret,
-                       Utils::AffairTypeToString(affairType), Utils::AffairStatusToString(affairStatus));
+                       Utils::AffairTypeToString(affairType), Utils::AffairStatusToString(affairStatus), Utils::AffairStageToString(affairStage));
         if (victimID == kPlayerFormID) {
             UpdateSpouseCheatingFaction(cheaterID);
         }
@@ -158,10 +188,17 @@ namespace MARAS {
         }
 
         if (!closedMainPartners.empty()) {
+            const bool isActorPlayerPartner = IsPlayerActiveMainPartner(actorID);
             auto activeRelationships = GetActiveRelationships(actorID);
             for (const auto& [partnerID, status] : activeRelationships) {
                 if (partnerID == 0 || partnerID == actorID) continue;
                 if (std::find(closedMainPartners.begin(), closedMainPartners.end(), partnerID) == closedMainPartners.end()) {
+                    // Co-spouse exemption: a secondary bond with another active main partner of the Player
+                    // is not cheating on the Player
+                    if (isActorPlayerPartner && IsPlayerActiveMainPartner(partnerID) &&
+                        closedMainPartners.size() == 1 && closedMainPartners.front() == kPlayerFormID) {
+                        continue;
+                    }
                     return true;
                 }
             }
@@ -186,11 +223,15 @@ namespace MARAS {
             return false;
         }
 
+        const bool bothCoSpouses = IsPlayerActiveMainPartner(actorA) && IsPlayerActiveMainPartner(actorB);
+
         // 1. Check if actorA is in any closed main-tier relationship (Married, Engaged, Dating) with someone else
         for (const auto& [mKey, mData] : relationshipPairs) {
             if (mKey.Contains(actorA) && !mKey.Contains(actorB) && IsMainTier(mData.status) && !mData.isOpen) {
                 if (actorA == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
                     // player polygamy allows multiple partners
+                } else if (bothCoSpouses && mKey.GetOther(actorA) == kPlayerFormID) {
+                    // co-spouses of the Player are not cheating on the Player with each other
                 } else {
                     return true;
                 }
@@ -202,6 +243,8 @@ namespace MARAS {
             if (mKey.Contains(actorB) && !mKey.Contains(actorA) && IsMainTier(mData.status) && !mData.isOpen) {
                 if (actorB == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
                     // player polygamy allows multiple partners
+                } else if (bothCoSpouses && mKey.GetOther(actorB) == kPlayerFormID) {
+                    // co-spouses of the Player are not cheating on the Player with each other
                 } else {
                     return true;
                 }
@@ -320,6 +363,107 @@ namespace MARAS {
         return AffairStatus::Ongoing;
     }
 
+    bool NPCRelationshipManager::SetCheatingAffairStage(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, AffairStage stage) {
+        RelationshipPairKey key(cheaterID, victimID);
+        auto it = relationshipPairs.find(key);
+        if (it == relationshipPairs.end()) return false;
+
+        auto* calendar = RE::Calendar::GetSingleton();
+        float currentFloatDay = calendar ? calendar->GetDaysPassed() : 0.0f;
+        bool updated = false;
+
+        for (auto& rec : it->second.cheatingRecords) {
+            if (rec.cheaterID == cheaterID && rec.victimID == victimID &&
+                (affairPartnerID == 0 || rec.affairPartnerID == affairPartnerID)) {
+                if (rec.affairStage != stage) {
+                    rec.affairStage = stage;
+                    rec.stageStartDay = currentFloatDay;
+                    if (stage == AffairStage::Physical) {
+                        auto itIntent = pendingPartnerIntents_.find(cheaterID);
+                        if (itIntent != pendingPartnerIntents_.end() &&
+                            itIntent->second.type == PartnerIntentType::ConfessTalking &&
+                            (itIntent->second.relatedLoverID == 0 || itIntent->second.relatedLoverID == rec.affairPartnerID)) {
+                            SetPartnerPendingIntent(cheaterID, PartnerIntentType::ConfessPhysical, rec.affairPartnerID);
+                        }
+                    }
+                }
+                updated = true;
+                MARAS_LOG_INFO("Set cheating affair stage for cheater {:08X} on victim {:08X} with {:08X} to {}",
+                               cheaterID, victimID, rec.affairPartnerID, Utils::AffairStageToString(stage));
+                if (affairPartnerID != 0) break;
+            }
+        }
+        if (!updated) {
+            MARAS_LOG_WARN("SetCheatingAffairStage: No matching cheating record found for cheater {:08X} on victim {:08X} with affairPartner {:08X}",
+                           cheaterID, victimID, affairPartnerID);
+        }
+        return updated;
+    }
+
+    AffairStage NPCRelationshipManager::GetCheatingAffairStage(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID) const {
+        RelationshipPairKey key(cheaterID, victimID);
+        auto it = relationshipPairs.find(key);
+        if (it == relationshipPairs.end()) return AffairStage::Physical;
+
+        for (const auto& rec : it->second.cheatingRecords) {
+            if (rec.cheaterID == cheaterID && rec.victimID == victimID &&
+                (affairPartnerID == 0 || rec.affairPartnerID == affairPartnerID)) {
+                if (affairPartnerID != 0 || rec.affairStatus == AffairStatus::Ongoing) {
+                    return rec.affairStage;
+                }
+            }
+        }
+        return AffairStage::Physical;
+    }
+
+    void NPCRelationshipManager::SetPartnerPendingIntent(RE::FormID partnerID, PartnerIntentType type, RE::FormID relatedLoverID) {
+        if (partnerID == 0 || partnerID == kPlayerFormID) return;
+        if (type == PartnerIntentType::None) {
+            ClearPartnerIntent(partnerID);
+            return;
+        }
+        auto* calendar = RE::Calendar::GetSingleton();
+        float currentDay = calendar ? calendar->GetDaysPassed() : 0.0f;
+        pendingPartnerIntents_[partnerID] = PendingPartnerIntent(type, currentDay, relatedLoverID);
+
+        std::string intentStr(Utils::PartnerIntentTypeToString(type));
+        MARAS_LOG_INFO("SetPartnerPendingIntent: Partner {:08X} ({}) -> {} (lover {:08X}, day {:.2f})",
+                       partnerID, ActorSvc::GetName(partnerID), intentStr, relatedLoverID, currentDay);
+
+        if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+            RE::Actor* partnerActor = NPCIndex::GetSingleton().GetActorFromFormId(partnerID);
+            RE::TESForm* senderForm = partnerActor ? static_cast<RE::TESForm*>(partnerActor) : nullptr;
+            SKSE::ModCallbackEvent modEvent("maras_partner_intent_changed", intentStr, static_cast<float>(static_cast<uint8_t>(type)), senderForm);
+            eventSource->SendEvent(&modEvent);
+        }
+    }
+
+    PendingPartnerIntent NPCRelationshipManager::GetPartnerPendingIntent(RE::FormID partnerID) const {
+        auto it = pendingPartnerIntents_.find(partnerID);
+        return (it != pendingPartnerIntents_.end()) ? it->second : PendingPartnerIntent{};
+    }
+
+    void NPCRelationshipManager::ClearPartnerIntent(RE::FormID partnerID) {
+        if (partnerID == 0) return;
+        auto it = pendingPartnerIntents_.find(partnerID);
+        if (it == pendingPartnerIntents_.end()) {
+            MARAS_LOG_DEBUG("ClearPartnerIntent: Partner {:08X} ({}) had no pending intent to clear",
+                            partnerID, ActorSvc::GetName(partnerID));
+            return;
+        }
+
+        pendingPartnerIntents_.erase(it);
+        MARAS_LOG_INFO("ClearPartnerIntent: Cleared pending intent for partner {:08X} ({})",
+                       partnerID, ActorSvc::GetName(partnerID));
+
+        if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+            RE::Actor* partnerActor = NPCIndex::GetSingleton().GetActorFromFormId(partnerID);
+            RE::TESForm* senderForm = partnerActor ? static_cast<RE::TESForm*>(partnerActor) : nullptr;
+            SKSE::ModCallbackEvent modEvent("maras_partner_intent_changed", "none", 0.0f, senderForm);
+            eventSource->SendEvent(&modEvent);
+        }
+    }
+
     void NPCRelationshipManager::MarkCheatingAllowedForPair(RE::FormID actorA, RE::FormID actorB) {
         RelationshipPairKey key(actorA, actorB);
         auto it = relationshipPairs.find(key);
@@ -364,6 +508,9 @@ namespace MARAS {
             auto partnerIDs = GetAllPartners(cheaterID);
             for (auto pID : partnerIDs) {
                 if (pID == affairPartnerID || pID == 0) continue;
+                if (pID == kPlayerFormID && IsPlayerActiveMainPartner(cheaterID) && IsPlayerActiveMainPartner(affairPartnerID)) {
+                    continue;
+                }
                 const auto* rData = GetNPCData(cheaterID, pID);
                 if (rData && IsMainTier(rData->status) && !rData->isOpen) {
                     RecordCheating(cheaterID, pID, affairPartnerID, /*isSecret=*/true, aType, AffairStatus::Ongoing);
@@ -390,6 +537,12 @@ namespace MARAS {
                         (rec.cheaterID == actor2 && rec.affairPartnerID == actor1)) {
                         if (rec.affairStatus == AffairStatus::Ongoing) {
                             rec.affairStatus = AffairStatus::EndedBreakup;
+                            auto itIntent = pendingPartnerIntents_.find(rec.cheaterID);
+                            if (itIntent != pendingPartnerIntents_.end() &&
+                                (itIntent->second.type == PartnerIntentType::ConfessTalking ||
+                                 itIntent->second.type == PartnerIntentType::ConfessPhysical)) {
+                                ClearPartnerIntent(rec.cheaterID);
+                            }
                             MARAS_LOG_INFO("Affair marked EndedBreakup: cheater {:08X} / victim {:08X} with {:08X}",
                                            rec.cheaterID, rec.victimID, rec.affairPartnerID);
                         }
@@ -406,6 +559,7 @@ namespace MARAS {
                 for (auto& rec : it->second.cheatingRecords) {
                     if (rec.affairStatus == AffairStatus::Ongoing) {
                         rec.affairStatus = AffairStatus::EndedVictimSplit;
+                        ClearPartnerIntent(rec.cheaterID);
                         MARAS_LOG_INFO("Affair marked EndedVictimSplit: cheater {:08X} / victim {:08X} with {:08X}",
                                        rec.cheaterID, rec.victimID, rec.affairPartnerID);
                     }
@@ -622,6 +776,7 @@ namespace MARAS {
 
                             case AffairResolution::Breakup:
                                 rec.affairStatus = AffairStatus::EndedVictimSplit;
+                        ClearPartnerIntent(rec.cheaterID);
                                 if (rec.victimID != 0) {
                                     victimsToSplit.insert(rec.victimID);
                                 }
@@ -678,6 +833,12 @@ namespace MARAS {
         }
 
         if (updated) {
+            auto itIntent = pendingPartnerIntents_.find(cheaterID);
+            if (itIntent != pendingPartnerIntents_.end() &&
+                (itIntent->second.type == PartnerIntentType::ConfessTalking ||
+                 itIntent->second.type == PartnerIntentType::ConfessPhysical)) {
+                ClearPartnerIntent(cheaterID);
+            }
             UpdateSpouseCheatingFaction(cheaterID);
             for (auto vID : victimsToUpdate) {
                 UpdateSpouseCheatingFaction(vID);
@@ -718,6 +879,10 @@ namespace MARAS {
             }
         }
 
+        if (!updated) {
+            MARAS_LOG_DEBUG("SetCheatingDiscovered: No matching ongoing cheating record updated for cheater {:08X} with affairPartner {:08X} (statusOrResolution={})", 
+                            cheaterID, affairPartnerID, statusOrResolution);
+        }
         return updated;
     }
 

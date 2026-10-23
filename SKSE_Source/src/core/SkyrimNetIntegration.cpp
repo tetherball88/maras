@@ -531,7 +531,8 @@ namespace {
                 }
 
                 const RE::FormID openPrimaryID = findOpenPrimary(partnerID);
-                if (actorFormID == kPlayerFormID && playerPolygamyEnabled) {
+                if ((actorFormID == kPlayerFormID && playerPolygamyEnabled) ||
+                    (mgr.IsPlayerActiveMainPartner(actorFormID) && mgr.IsPlayerActiveMainPartner(partnerID))) {
                     relationship["permission"] = "player_polygamy";
                 } else if (openPrimaryID != 0) {
                     relationship["permission"] = "open_primary";
@@ -549,6 +550,20 @@ namespace {
         }
 
         const auto* playerRelationship = mgr.GetNPCData(actorFormID, kPlayerFormID);
+        if (actorFormID != kPlayerFormID && playerRelationship && isCurrentStatus(playerRelationship->status)) {
+            j["player_relationship_status"] = statusToKey(playerRelationship->status);
+            const auto& affSvc = AffectionService::GetSingleton();
+            const int affScore = affSvc.GetPermanentAffection(actorFormID);
+            const float daysSince = affSvc.GetDaysSinceLastAffection(actorFormID);
+            std::string affTier = "estranged";
+            if (affScore >= 75) affTier = "happy";
+            else if (affScore >= 50) affTier = "content";
+            else if (affScore >= 25) affTier = "troubled";
+            j["player_affection_score"] = affScore;
+            j["player_affection_tier"] = affTier;
+            j["days_since_player_interaction"] = static_cast<int>(std::floor(daysSince));
+            j["pending_intent"] = std::string(Utils::PartnerIntentTypeToString(mgr.GetPartnerPendingIntent(actorFormID).type));
+        }
         if (playerRelationship && isCurrentStatus(playerRelationship->status) && playerPolygamyEnabled) {
             j["player_relationship_status"] = statusToKey(playerRelationship->status);
             struct PlayerPartner {
@@ -1056,6 +1071,7 @@ namespace {
             infidelity["victim"] = MakeNpcRef(record.victimID);
             infidelity["status"] = affairStatusToKey(record.affairStatus);
             infidelity["type"] = StringUtils::ToLowerStd(Utils::AffairTypeToString(record.affairType));
+            infidelity["affair_stage"] = StringUtils::ToLowerStd(std::string(Utils::AffairStageToString(record.affairStage)));
             infidelity["incident_count"] = record.count;
             infidelity["last_timestamp"] = record.lastTimestamp;
             infidelity["is_secret"] = record.isSecret;

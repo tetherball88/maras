@@ -7,6 +7,7 @@ MenuDisplayObject: 06F747:Skyrim.esm
 EquipmentType: 013F44:Skyrim.esm
 Description:
   TargetLanguage: English
+  Value: ''
 CastType: FireAndForget
 TargetType: TargetActor
 Range: 24

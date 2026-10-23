@@ -45,6 +45,22 @@ VirtualMachineAdapter:
       Name: OpenRelationshipScene
       Object: 000D3A:TT_MARAS.esp
     - MutagenObjectType: ScriptObjectProperty
+      Name: PlayersPartnerConfessPhysical
+      Object: 000378:TT_MARAS.esp
+      Alias: 9
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayersPartnerConfessTalking
+      Object: 000378:TT_MARAS.esp
+      Alias: 8
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayersPartnerSuggestClose
+      Object: 000378:TT_MARAS.esp
+      Alias: 7
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayersPartnerSuggestOpen
+      Object: 000378:TT_MARAS.esp
+      Alias: 6
+    - MutagenObjectType: ScriptObjectProperty
       Name: PlayersPartnerWalkInCheating
       Object: 000378:TT_MARAS.esp
       Alias: 4
@@ -64,7 +80,7 @@ Flags:
 - 0x10
 - RunOnce
 Priority: 100
-NextAliasID: 6
+NextAliasID: 10
 Aliases:
 - Name: Npc1
   Flags:
@@ -110,4 +126,40 @@ Aliases:
   - 0005A4:TT_MARAS.esp
   PackageData:
   - 00056D:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 6
+  Name: PlayersPartnerSuggestOpen
+  Flags:
+  - Optional
+  Factions:
+  - 000D80:TT_MARAS.esp
+  PackageData:
+  - 000D81:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 7
+  Name: PlayersPartnerSuggestClose
+  Flags:
+  - Optional
+  Factions:
+  - 000D9B:TT_MARAS.esp
+  PackageData:
+  - 000D9C:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 8
+  Name: PlayersPartnerConfessTalking
+  Flags:
+  - Optional
+  Factions:
+  - 000DB6:TT_MARAS.esp
+  PackageData:
+  - 000DB7:TT_MARAS.esp
+  VoiceTypes: Null
+- ID: 9
+  Name: PlayersPartnerConfessPhysical
+  Flags:
+  - Optional
+  Factions:
+  - 000DBD:TT_MARAS.esp
+  PackageData:
+  - 000DBE:TT_MARAS.esp
   VoiceTypes: Null

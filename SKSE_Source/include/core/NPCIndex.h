@@ -28,6 +28,9 @@ namespace MARAS {
         std::string raceName;            // Display race name
         std::string currentCell;         // Current cell name if loaded
         std::string pluginName;          // Mod/plugin where NPC was originally declared
+        RE::FormID  placementCellID = 0; // Static placement cell FormID (recorded during BuildIndex)
+        RE::FormID  editorLocationID = 0;// Static editor BGSLocation FormID (from ref or placement cell)
+        RE::FormID  crimeFactionID = 0;  // TESNPC::crimeFaction FormID (hold/town civic affiliation)
     };
 
     /**

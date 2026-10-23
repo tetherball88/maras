@@ -454,6 +454,9 @@ namespace MARAS {
             entry.pluginName = (originFile && originFile->fileName) ? originFile->fileName : "";
 
             m_entriesByRef[baseID] = entry;
+            entry.crimeFactionID = npc->crimeFaction ? npc->crimeFaction->GetFormID() : 0;
+
+            m_entriesByRef[baseID] = entry;
             m_baseToRefMap[baseID] = baseID;
             if (shouldDumpReport) {
                 uniqueBaseNPCs.push_back({
@@ -508,6 +511,10 @@ namespace MARAS {
 
                     if (shouldUpgrade) {
                         it->second.refFormID = refID;
+                        it->second.placementCellID = cell->GetFormID();
+                        RE::BGSLocation* loc = ref->GetEditorLocation();
+                        if (!loc) loc = cell->GetLocation();
+                        if (loc) it->second.editorLocationID = loc->GetFormID();
                         m_baseToRefMap[baseID] = refID;
                         persistentResolvedCount++;
                         if (shouldDumpReport) {
@@ -542,6 +549,11 @@ namespace MARAS {
                     entry.nameLower = nameLower;
                     entry.isChild = isChild;
                     entry.isUnique = false;
+                    entry.placementCellID = cell->GetFormID();
+                    RE::BGSLocation* loc = ref->GetEditorLocation();
+                    if (!loc) loc = cell->GetLocation();
+                    entry.editorLocationID = loc ? loc->GetFormID() : 0;
+                    entry.crimeFactionID = base->crimeFaction ? base->crimeFaction->GetFormID() : 0;
                     entry.sex = static_cast<uint8_t>(base->GetSex());
                     entry.raceName = raceName;
 
@@ -667,6 +679,17 @@ namespace MARAS {
             if (auto* cell = actor->GetParentCell()) {
                 const char* cname = cell->GetName();
                 it->second.currentCell = (cname && cname[0]) ? cname : "";
+                if (it->second.placementCellID == 0) {
+                    it->second.placementCellID = cell->GetFormID();
+                }
+                if (it->second.editorLocationID == 0) {
+                    RE::BGSLocation* loc = actor->GetEditorLocation();
+                    if (!loc) loc = cell->GetLocation();
+                    if (loc) it->second.editorLocationID = loc->GetFormID();
+                }
+                if (it->second.crimeFactionID == 0 && base->crimeFaction) {
+                    it->second.crimeFactionID = base->crimeFaction->GetFormID();
+                }
             }
         } else {
             NPCEntry entry;
@@ -688,6 +711,18 @@ namespace MARAS {
             if (auto* cell = actor->GetParentCell()) {
                 const char* cname = cell->GetName();
                 entry.currentCell = (cname && cname[0]) ? cname : "";
+                entry.placementCellID = cell->GetFormID();
+                RE::BGSLocation* loc = actor->GetEditorLocation();
+                if (!loc) loc = cell->GetLocation();
+                entry.editorLocationID = loc ? loc->GetFormID() : 0;
+            }
+            if (entry.editorLocationID == 0) {
+                if (auto* loc = actor->GetEditorLocation()) {
+                    entry.editorLocationID = loc->GetFormID();
+                }
+            }
+            if (base->crimeFaction) {
+                entry.crimeFactionID = base->crimeFaction->GetFormID();
             }
 
             m_entriesByRef[refID] = entry;
@@ -1268,6 +1303,9 @@ namespace MARAS {
             item["isUnique"] = entry.isUnique;
             item["pluginName"] = entry.pluginName;
             item["currentCell"] = entry.currentCell;
+            item["placementCellId"] = std::format("0x{:08X}", entry.placementCellID);
+            item["editorLocationId"] = std::format("0x{:08X}", entry.editorLocationID);
+            item["crimeFactionId"] = std::format("0x{:08X}", entry.crimeFactionID);
             item["isLoaded"] = m_loadedActors.contains(entry.refFormID);
             entriesJson.push_back(item);
         }

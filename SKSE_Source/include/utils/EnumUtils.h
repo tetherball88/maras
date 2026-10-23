@@ -150,6 +150,32 @@ namespace MARAS::Utils {
         }
     }
 
+    constexpr std::string_view AffairStageToString(AffairStage stage) {
+        switch (stage) {
+            case AffairStage::Talking:
+                return "talking";
+            case AffairStage::Physical:
+            default:
+                return "physical";
+        }
+    }
+
+    constexpr std::string_view PartnerIntentTypeToString(PartnerIntentType type) {
+        switch (type) {
+            case PartnerIntentType::SuggestOpen:
+                return "suggest_open";
+            case PartnerIntentType::SuggestClose:
+                return "suggest_close";
+            case PartnerIntentType::ConfessTalking:
+                return "confess_talking";
+            case PartnerIntentType::ConfessPhysical:
+                return "confess_physical";
+            case PartnerIntentType::None:
+            default:
+                return "none";
+        }
+    }
+
     // String to enum conversions (case-insensitive, zero heap allocations)
 
     SocialClass StringToSocialClass(std::string_view str);
@@ -160,5 +186,7 @@ namespace MARAS::Utils {
     AffairStatus StringToAffairStatus(std::string_view str);
     AffairDiscovery StringToAffairDiscovery(std::string_view str);
     AffairResolution StringToAffairResolution(std::string_view str);
+    AffairStage StringToAffairStage(std::string_view str);
+    PartnerIntentType StringToPartnerIntentType(std::string_view str);
 
 }  // namespace MARAS::Utils

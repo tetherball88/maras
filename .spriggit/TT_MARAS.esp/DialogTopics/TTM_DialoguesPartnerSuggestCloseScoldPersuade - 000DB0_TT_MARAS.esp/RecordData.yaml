@@ -1,0 +1,8 @@
+FormKey: 000DB0:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestCloseScoldPersuade
+Name:
+  TargetLanguage: English
+  Value: "[Persuade] That was harsh, I'm sorry. You come first - I just think things work as they are."
+Branch: 000D9D:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

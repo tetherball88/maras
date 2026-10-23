@@ -547,7 +547,7 @@ export const MatchmakingSettings: React.FC = () => {
         </SettingRow>
       </SectionCard>
 
-      {/* Section 4: Manual Matchmaking Actions */}
+      {/* Section 5: Manual Matchmaking Actions */}
       <SectionCard
         title="Manual Matchmaking Actions"
         icon={Globe}

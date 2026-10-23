@@ -32,7 +32,7 @@ A partner's permanent affection score places them into one of four emotional sta
 
 ### 2.3 Loneliness Decay & Adventuring Together
 Every day, the service checks how many days have passed since each player partner last received any affection interaction:
-- **2-Day Grace Period**: If you interacted with a partner within the last **2 in-game days**, they suffer zero loneliness decay.
+- **Configurable Loneliness Threshold (`lonelinessThresholdDays`, default `2` days)**: If you interacted with a partner within the last `lonelinessThresholdDays` ($L$, configurable from `1` to `14` days in Settings; accessed via `Settings::GetLonelinessDecayStartDays()`), they suffer zero loneliness decay. This same master time unit $L$ also scales all Tier 2 Player-Partner Agency time windows in `Settings.h`.
 - **Adventuring Bonus (`+6` Affection/Day)**: If a partner is currently traveling with you as an active **Follower**, they never suffer loneliness decay—instead, they *gain* `+6` daily affection from spending time by your side!
 - **Personalized Neglect Decay**: If a partner is left behind for more than 2 days, their daily affection loss is tailored to six factors:
   1. **Personality (Temperament)**:

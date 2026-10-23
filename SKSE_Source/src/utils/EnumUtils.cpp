@@ -116,4 +116,34 @@ namespace MARAS::Utils {
         return AffairResolution::None;
     }
 
+    AffairStage StringToAffairStage(std::string_view str) {
+        if (StringUtils::CaseInsensitiveEquals(str, "talking") ||
+            StringUtils::CaseInsensitiveEquals(str, "emotional") ||
+            StringUtils::CaseInsensitiveEquals(str, "flirting")) {
+            return AffairStage::Talking;
+        }
+        return AffairStage::Physical;
+    }
+
+    PartnerIntentType StringToPartnerIntentType(std::string_view str) {
+        if (StringUtils::CaseInsensitiveEquals(str, "suggest_open") ||
+            StringUtils::CaseInsensitiveEquals(str, "suggestopen")) {
+            return PartnerIntentType::SuggestOpen;
+        }
+        if (StringUtils::CaseInsensitiveEquals(str, "suggest_close") ||
+            StringUtils::CaseInsensitiveEquals(str, "suggestclose")) {
+            return PartnerIntentType::SuggestClose;
+        }
+        if (StringUtils::CaseInsensitiveEquals(str, "confess_talking") ||
+            StringUtils::CaseInsensitiveEquals(str, "confesstalking")) {
+            return PartnerIntentType::ConfessTalking;
+        }
+        if (StringUtils::CaseInsensitiveEquals(str, "confess_physical") ||
+            StringUtils::CaseInsensitiveEquals(str, "confessphysical") ||
+            StringUtils::CaseInsensitiveEquals(str, "confess_sex")) {
+            return PartnerIntentType::ConfessPhysical;
+        }
+        return PartnerIntentType::None;
+    }
+
 }  // namespace MARAS::Utils

@@ -53,6 +53,11 @@ export enum AffairStatus {
   EndedConfronted = 4,
 }
 
+export enum AffairStage {
+  Talking = 0,
+  Physical = 1,
+}
+
 export interface CheatingRecord {
   cheaterId: string
   victimId: string
@@ -62,6 +67,7 @@ export interface CheatingRecord {
   isSecret: boolean
   affairType?: AffairType
   affairStatus?: AffairStatus
+  affairStage?: AffairStage
 }
 
 export type ChildStage = 'unborn' | 'infant' | 'child' | 'training' | 'adult'
@@ -148,6 +154,7 @@ export interface NPCProfile {
   currentPet?: ChildCompanionInfo | null
   pluginName?: string
   blockedFromAdoptionReason?: string
+  pendingIntent?: string
 }
 
 export interface RelationshipPair {
@@ -241,6 +248,38 @@ export interface MarasSettings {
   matchmakingOrientation?: number
   matchmakingExcludePlayerActivePartners?: boolean
   matchmakingConfirmResults?: boolean
+  playerPartnerCheatingAgencyEnabled?: boolean
+  playerPartnerOpenRelAgencyEnabled?: boolean
+
+  playerPartnerCheatingChanceMultiplier?: number
+  playerPartnerCheatingMaxRollCap?: number
+  playerPartnerCheatingMaxSecretLovers?: number
+  playerPartnerCheatingAllowWhenHappy?: boolean
+  playerPartnerCheatingEnableNeglect?: boolean
+  playerPartnerCheatingEnableRevenge?: boolean
+  playerPartnerCheatingEnableHierarchy?: boolean
+  playerPartnerCheatingEnableChildrenAnchor?: boolean
+  playerPartnerCheatingUseLLM?: boolean
+  playerPartnerCheatingConfirmResults?: boolean
+  lonelinessThresholdDays?: number
+  playerPartnerAgencyOpenLoverChanceMultiplier?: number
+  playerPartnerAgencyBreakupChanceMultiplier?: number
+  playerPartnerAgencyEnableForceGreets?: boolean
+  playerPartnerAgencyEnableHomeArrivalEvents?: boolean
+  multLonelinessDecayStart?: number
+  multPartnerAgencyScanInterval?: number
+  multRecentAttentionWindow?: number
+  multVeryRecentVisitWindow?: number
+  multNeglectGrowthStart?: number
+  multContentNeglectStart?: number
+  multProlongedAbsencePenalty?: number
+  multAffairTalkingEscalation?: number
+  multMinSideFlingAgeForBreakup?: number
+  multPartnerIntentTTL?: number
+  multHomeArrivalCooldown?: number
+  multAffairFatigueStart?: number
+  multRomanticAttendedBreakup?: number
+  multSuggestOpenNeglectMin?: number
   paternityBaseChance?: number
   paternityDailyGrowth?: number
   paternityMaxChance?: number
@@ -289,6 +328,38 @@ export interface MatchmakingSettings {
   diceRollChanceAdvance?: number
   diceRollChanceBreakup?: number
   diceRollChanceOpenClose?: number
+  playerPartnerCheatingAgencyEnabled?: boolean
+  playerPartnerOpenRelAgencyEnabled?: boolean
+
+  playerPartnerCheatingChanceMultiplier?: number
+  playerPartnerCheatingMaxRollCap?: number
+  playerPartnerCheatingMaxSecretLovers?: number
+  playerPartnerCheatingAllowWhenHappy?: boolean
+  playerPartnerCheatingEnableNeglect?: boolean
+  playerPartnerCheatingEnableRevenge?: boolean
+  playerPartnerCheatingEnableHierarchy?: boolean
+  playerPartnerCheatingEnableChildrenAnchor?: boolean
+  playerPartnerCheatingUseLLM?: boolean
+  playerPartnerCheatingConfirmResults?: boolean
+  lonelinessThresholdDays?: number
+  playerPartnerAgencyOpenLoverChanceMultiplier?: number
+  playerPartnerAgencyBreakupChanceMultiplier?: number
+  playerPartnerAgencyEnableForceGreets?: boolean
+  playerPartnerAgencyEnableHomeArrivalEvents?: boolean
+  multLonelinessDecayStart?: number
+  multPartnerAgencyScanInterval?: number
+  multRecentAttentionWindow?: number
+  multVeryRecentVisitWindow?: number
+  multNeglectGrowthStart?: number
+  multContentNeglectStart?: number
+  multProlongedAbsencePenalty?: number
+  multAffairTalkingEscalation?: number
+  multMinSideFlingAgeForBreakup?: number
+  multPartnerIntentTTL?: number
+  multHomeArrivalCooldown?: number
+  multAffairFatigueStart?: number
+  multRomanticAttendedBreakup?: number
+  multSuggestOpenNeglectMin?: number
 }
 
 export interface NpcMemoryEntry {

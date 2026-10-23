@@ -1,0 +1,7 @@
+FormKey: 000D9D:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestClose
+Quest: 000067:TT_MARAS.esp
+Category: Player
+Flags:
+- Blocking
+StartingTopic: 000D9E:TT_MARAS.esp

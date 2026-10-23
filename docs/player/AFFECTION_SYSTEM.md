@@ -66,7 +66,7 @@ Your partner's **Social Class** determines how hard they are to impress with shi
 Once you're in a committed relationship, your partners actually expect to see you occasionally. Shocking, right?
 
 ### The 2-Day Grace Period
-If you've interacted with a partner within the last **2 in-game days**, they lose **zero** affection. Go clear that dungeon!
+If you've interacted with a partner within the last **2 in-game days** (configurable from `1` to `14` days via the **Loneliness Threshold (Days)** slider in **Dashboard $\rightarrow$ Settings $\rightarrow$ General**), they lose **zero** affection. Go clear that dungeon! *(Bonus: this Loneliness Threshold also scales all Player-Partner Agency timers—such as how often partners evaluate side relationships and how fast a Talking-Stage affair escalates!)*
 
 ### What Happens After 2 Days of Radio Silence?
 If you vanish for 3+ days without visiting, daily **Loneliness Decay** kicks in based on several factors:

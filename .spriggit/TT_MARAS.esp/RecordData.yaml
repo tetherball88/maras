@@ -5,7 +5,6 @@ ModKey: TT_MARAS.esp
 GameRelease: SkyrimSE
 ModHeader:
   Flags:
-  - Localized
   - Small
   Author: DEFAULT
   MasterReferences:

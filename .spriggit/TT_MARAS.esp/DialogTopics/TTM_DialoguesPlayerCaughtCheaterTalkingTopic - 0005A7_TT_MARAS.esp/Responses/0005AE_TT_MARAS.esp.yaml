@@ -5,12 +5,11 @@ Flags:
 PreviousDialog: 0005AD:TT_MARAS.esp
 FavorLevel: None
 LinkTo:
-- 000357:TT_MARAS.esp
-- 000355:TT_MARAS.esp
-- 000373:TT_MARAS.esp
-- 00036A:TT_MARAS.esp
+- 000DC6:TT_MARAS.esp
+- 000DCB:TT_MARAS.esp
 Responses:
-- EmotionValue: 50
+- Emotion: Surprise
+  EmotionValue: 50
   ResponseNumber: 1
   Unknown2: 0x000000
   Flags:
@@ -18,7 +17,7 @@ Responses:
   Unknown3: 0x000000
   Text:
     TargetLanguage: English
-    Value: Yes, I enjoy talking to them. Maybe more than I should. So what are you going to do about it?
+    Value: Wait—you're back already? Don't look at me like that, we were only passing the time.
   ScriptNotes: ''
   Edits: ''
 Conditions:

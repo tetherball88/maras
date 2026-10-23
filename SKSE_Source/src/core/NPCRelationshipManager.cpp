@@ -2446,6 +2446,9 @@ namespace MARAS {
 
         allRegistered.insert(npcFormID);
         MARAS_LOG_INFO("EnsureRegistered: inserted {:08X} into allRegistered", npcFormID);
+        if (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Unknown) {
+            UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
+        }
 
         try {
             npcProfiles[npcFormID] = NPCProfileData(npcFormID, socialClass, skillType, temperament);

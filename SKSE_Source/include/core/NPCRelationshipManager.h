@@ -61,12 +61,26 @@ namespace MARAS {
         bool isSecret{ false };           // Whether the cheating is secret or publicly known
         AffairType affairType{ AffairType::Casual };       // Type of affair (casual, dating, lover)
         AffairStatus affairStatus{ AffairStatus::Ongoing }; // Status of affair (ongoing, ended reasons, allowed)
+        AffairStage affairStage{ AffairStage::Physical };   // Stage of affair (Talking vs Physical; defaults to Physical for legacy saves & direct sex)
+        float stageStartDay{ 0.0f };                        // Game day when current affairStage began
 
         CheatingRecord() = default;
         CheatingRecord(RE::FormID cheater, RE::FormID victim, RE::FormID affairPartner, uint32_t c = 1, int32_t ts = 0, bool secret = false,
-                       AffairType aType = AffairType::Casual, AffairStatus aStatus = AffairStatus::Ongoing)
+                       AffairType aType = AffairType::Casual, AffairStatus aStatus = AffairStatus::Ongoing,
+                       AffairStage aStage = AffairStage::Physical, float stStart = -1.0f)
             : cheaterID(cheater), victimID(victim), affairPartnerID(affairPartner), count(c), lastTimestamp(ts), isSecret(secret),
-              affairType(aType), affairStatus(aStatus) {}
+              affairType(aType), affairStatus(aStatus), affairStage(aStage),
+              stageStartDay(stStart >= 0.0f ? stStart : static_cast<float>(ts)) {}
+    };
+
+    struct PendingPartnerIntent {
+        PartnerIntentType type{ PartnerIntentType::None };
+        float createdGameDay{ -1.0f };
+        RE::FormID relatedLoverID{ 0 };
+
+        PendingPartnerIntent() = default;
+        PendingPartnerIntent(PartnerIntentType t, float day, RE::FormID lover = 0)
+            : type(t), createdGameDay(day), relatedLoverID(lover) {}
     };
 
     // Categorization of races into distinct phenotype tiers for paternity discovery
@@ -277,6 +291,9 @@ namespace MARAS {
         // Override data storage
         Utils::OverrideMap npcOverrides;
 
+        // Pending partner intents for Tier 2 Player-Partner Agency (keyed by partner FormID)
+        std::unordered_map<RE::FormID, PendingPartnerIntent> pendingPartnerIntents_;
+
         // Adjacency index & pair access helpers
         void IndexPair(const RelationshipPairKey& key);
         void UnindexPair(const RelationshipPairKey& key);
@@ -459,7 +476,8 @@ namespace MARAS {
 
         // Cheating tracking accessors & mutators
         bool RecordCheating(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, bool isSecret = false,
-                            AffairType affairType = AffairType::Casual, AffairStatus affairStatus = AffairStatus::Ongoing);
+                            AffairType affairType = AffairType::Casual, AffairStatus affairStatus = AffairStatus::Ongoing,
+                            AffairStage affairStage = AffairStage::Physical);
         bool HasCheatedOn(RE::FormID cheaterID, RE::FormID victimID) const;
         bool IsNPCCheating(RE::FormID actorID) const;
         bool IsRelationshipCheating(RE::FormID actorA, RE::FormID actorB) const;
@@ -470,6 +488,12 @@ namespace MARAS {
         std::vector<CheatingRecord> GetCheatingRecordsForActor(RE::FormID actorID) const;
         bool SetCheatingAffairStatus(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, AffairStatus status);
         AffairStatus GetCheatingAffairStatus(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID) const;
+        bool SetCheatingAffairStage(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, AffairStage stage);
+        AffairStage GetCheatingAffairStage(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID) const;
+        void SetPartnerPendingIntent(RE::FormID partnerID, PartnerIntentType type, RE::FormID relatedLoverID = 0);
+        PendingPartnerIntent GetPartnerPendingIntent(RE::FormID partnerID) const;
+        void ClearPartnerIntent(RE::FormID partnerID);
+        const std::unordered_map<RE::FormID, PendingPartnerIntent>& GetAllPendingPartnerIntents() const { return pendingPartnerIntents_; }
         void MarkCheatingAllowedForPair(RE::FormID actorA, RE::FormID actorB);
         void MarkPlayerCheatingAllowedOnPolygamy();
         void EvaluateCheatingOnStatusChange(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus newStatus);

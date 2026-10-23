@@ -1,0 +1,9 @@
+FormKey: 000DCE:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterSexConfront
+Name:
+  TargetLanguage: English
+  Value: What is there to explain?! I just caught you two in the act!
+Branch: 0005AA:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST
+

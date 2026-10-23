@@ -251,6 +251,7 @@ namespace MARAS {
         profile["socialClass"] = static_cast<uint8_t>(relMgr.GetSocialClass(formID));
         profile["skillType"] = static_cast<uint8_t>(relMgr.GetSkillType(formID));
         profile["temperament"] = static_cast<uint8_t>(relMgr.GetTemperament(formID));
+        profile["pendingIntent"] = std::string(Utils::PartnerIntentTypeToString(relMgr.GetPartnerPendingIntent(formID).type));
 
         std::string pkgName = "None";
         bool isChild = relMgr.IsChildNPC(formID);
@@ -421,6 +422,7 @@ namespace MARAS {
         nlohmann::json j;
         j["skipWedding"] = settings.skipWedding;
         j["affectionDecayMult"] = RoundFloat(settings.affectionDecayMultiplier);
+        j["lonelinessThresholdDays"] = settings.lonelinessThresholdDays;
         j["enablePolygamy"] = settings.GetEnablePolygamy();
         j["disablePolygamyQuest"] = settings.GetDisablePolygamyQuest();
         j["hasSkyrimNet"] = IsSkyrimNetAvailable();
@@ -446,6 +448,36 @@ namespace MARAS {
         j["skyrimnetActionRadius"] = RoundFloat(settings.skyrimnetActionRadius);
         j["matchmakingExcludePlayerActivePartners"] = settings.matchmakingExcludePlayerActivePartners;
         j["matchmakingConfirmResults"] = settings.matchmakingConfirmResults;
+        j["playerPartnerCheatingAgencyEnabled"] = settings.playerPartnerCheatingAgencyEnabled;
+        j["playerPartnerOpenRelAgencyEnabled"] = settings.playerPartnerOpenRelAgencyEnabled;
+        j["playerPartnerCheatingChanceMultiplier"] = RoundFloat(settings.playerPartnerCheatingChanceMultiplier);
+        j["playerPartnerCheatingMaxRollCap"] = settings.playerPartnerCheatingMaxRollCap;
+        j["playerPartnerCheatingMaxSecretLovers"] = settings.playerPartnerCheatingMaxSecretLovers;
+        j["playerPartnerCheatingAllowWhenHappy"] = settings.playerPartnerCheatingAllowWhenHappy;
+        j["playerPartnerCheatingEnableNeglect"] = settings.playerPartnerCheatingEnableNeglect;
+        j["playerPartnerCheatingEnableRevenge"] = settings.playerPartnerCheatingEnableRevenge;
+        j["playerPartnerCheatingEnableHierarchy"] = settings.playerPartnerCheatingEnableHierarchy;
+        j["playerPartnerCheatingEnableChildrenAnchor"] = settings.playerPartnerCheatingEnableChildrenAnchor;
+        j["playerPartnerCheatingUseLLM"] = settings.playerPartnerCheatingUseLLM;
+        j["playerPartnerCheatingConfirmResults"] = settings.playerPartnerCheatingConfirmResults;
+        j["playerPartnerAgencyOpenLoverChanceMultiplier"] = RoundFloat(settings.playerPartnerAgencyOpenLoverChanceMultiplier);
+        j["playerPartnerAgencyBreakupChanceMultiplier"] = RoundFloat(settings.playerPartnerAgencyBreakupChanceMultiplier);
+        j["playerPartnerAgencyEnableForceGreets"] = settings.playerPartnerAgencyEnableForceGreets;
+        j["playerPartnerAgencyEnableHomeArrivalEvents"] = settings.playerPartnerAgencyEnableHomeArrivalEvents;
+        j["multLonelinessDecayStart"] = RoundFloat(settings.multLonelinessDecayStart);
+        j["multPartnerAgencyScanInterval"] = RoundFloat(settings.multPartnerAgencyScanInterval);
+        j["multRecentAttentionWindow"] = RoundFloat(settings.multRecentAttentionWindow);
+        j["multVeryRecentVisitWindow"] = RoundFloat(settings.multVeryRecentVisitWindow);
+        j["multNeglectGrowthStart"] = RoundFloat(settings.multNeglectGrowthStart);
+        j["multContentNeglectStart"] = RoundFloat(settings.multContentNeglectStart);
+        j["multProlongedAbsencePenalty"] = RoundFloat(settings.multProlongedAbsencePenalty);
+        j["multAffairTalkingEscalation"] = RoundFloat(settings.multAffairTalkingEscalation);
+        j["multMinSideFlingAgeForBreakup"] = RoundFloat(settings.multMinSideFlingAgeForBreakup);
+        j["multPartnerIntentTTL"] = RoundFloat(settings.multPartnerIntentTTL);
+        j["multHomeArrivalCooldown"] = RoundFloat(settings.multHomeArrivalCooldown);
+        j["multAffairFatigueStart"] = RoundFloat(settings.multAffairFatigueStart);
+        j["multRomanticAttendedBreakup"] = RoundFloat(settings.multRomanticAttendedBreakup);
+        j["multSuggestOpenNeglectMin"] = RoundFloat(settings.multSuggestOpenNeglectMin);
         j["alwaysSuccess"] = settings.alwaysSuccessMarriage;
         j["logLevel"] = settings.logLevel;
         j["logDestination"] = settings.logDestination;
@@ -603,7 +635,7 @@ namespace MARAS {
             if (cEntry.bioMotherID != 0 && cEntry.bioMotherID != kPlayerFormID && addedProfiles.insert(cEntry.bioMotherID).second) {
                 profilesArray.push_back(BuildNPCProfileJson(cEntry.bioMotherID));
             }
-            if (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kPlayerFormID && addedProfiles.insert(cEntry.bioFatherID).second) {
+            if (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kPlayerFormID && cEntry.bioFatherID != kUnknownFatherFormID && addedProfiles.insert(cEntry.bioFatherID).second) {
                 profilesArray.push_back(BuildNPCProfileJson(cEntry.bioFatherID));
             }
             if (cEntry.presumedFatherID != 0 && cEntry.presumedFatherID != kPlayerFormID && addedProfiles.insert(cEntry.presumedFatherID).second) {
@@ -723,6 +755,7 @@ namespace MARAS {
                 cObj["isSecret"] = c.isSecret;
                 cObj["affairType"] = static_cast<uint8_t>(c.affairType);
                 cObj["affairStatus"] = static_cast<uint8_t>(c.affairStatus);
+                cObj["affairStage"] = static_cast<uint8_t>(c.affairStage);
                 cheatingArray.push_back(cObj);
             }
         }
@@ -783,16 +816,67 @@ namespace MARAS {
                 list.push_back(BuildNPCProfileJson(formID));
             }
         }
-
         if (cachedChildRefIDs.empty()) {
             for (const auto& entry : NPCIndex::GetSingleton().GetAllEntries(NPCFilter::ChildOnly)) {
                 if (entry.refFormID != 0) {
                     cachedChildRefIDs.insert(entry.refFormID);
                 }
             }
-            for (const auto& [cID, _] : relMgr.GetAllChildren()) {
-                if (cID != 0) {
-                    cachedChildRefIDs.insert(cID);
+        }
+        for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
+            if (cEntry.guardianAID != 0 && cEntry.guardianAID != kPlayerFormID && added.insert(cEntry.guardianAID).second) {
+                list.push_back(BuildNPCProfileJson(cEntry.guardianAID));
+            }
+            if (cEntry.guardianBID != 0 && cEntry.guardianBID != kPlayerFormID && added.insert(cEntry.guardianBID).second) {
+                list.push_back(BuildNPCProfileJson(cEntry.guardianBID));
+            }
+            if (cEntry.bioMotherID != 0 && cEntry.bioMotherID != kPlayerFormID && added.insert(cEntry.bioMotherID).second) {
+                list.push_back(BuildNPCProfileJson(cEntry.bioMotherID));
+            }
+            if (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kPlayerFormID && cEntry.bioFatherID != kUnknownFatherFormID && added.insert(cEntry.bioFatherID).second) {
+                list.push_back(BuildNPCProfileJson(cEntry.bioFatherID));
+            }
+            if (cEntry.presumedFatherID != 0 && cEntry.presumedFatherID != kPlayerFormID && added.insert(cEntry.presumedFatherID).second) {
+                list.push_back(BuildNPCProfileJson(cEntry.presumedFatherID));
+            }
+            if (cID != 0) {
+                cachedChildRefIDs.insert(cID);
+                if (added.insert(cID).second) {
+                    nlohmann::json childObj = BuildNPCProfileJson(cID);
+                    bool isChild = (cEntry.stage != ChildStage::Adult);
+                    childObj["isChild"] = isChild;
+                    std::string currentName = GetJsonString(childObj, "name");
+                    if ((currentName.empty() || currentName.rfind("NPC_", 0) == 0) && !cEntry.name.empty()) {
+                        childObj["name"] = cEntry.name;
+                    }
+                    std::string currentRace = GetJsonString(childObj, "race");
+                    if (currentRace.empty() || currentRace == "Nord") {
+                        RE::FormID motherID = relMgr.GetBioMother(cID);
+                        RE::FormID parentFormID = motherID != 0 ? motherID :
+                            (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kUnknownFatherFormID ? cEntry.bioFatherID :
+                            (cEntry.guardianAID != 0 ? cEntry.guardianAID : cEntry.guardianBID));
+                        if (parentFormID != 0) {
+                            childObj["race"] = ActorSvc::GetRaceName(parentFormID);
+                        }
+                    }
+                    if (isChild) {
+                        uint8_t childGender = relMgr.GetChildGender(cID);
+                        childObj["gender"] = (cEntry.stage == ChildStage::Unborn || childGender == 2) ? "unknown" : ((childGender == 1) ? "female" : "male");
+                    }
+                    list.push_back(childObj);
+                }
+            }
+        }
+        for (const auto& [pairKey, pairData] : relMgr.GetAllRelationshipPairs()) {
+            for (const auto& c : pairData.cheatingRecords) {
+                if (c.cheaterID != 0 && c.cheaterID != kPlayerFormID && added.insert(c.cheaterID).second) {
+                    list.push_back(BuildNPCProfileJson(c.cheaterID));
+                }
+                if (c.victimID != 0 && c.victimID != kPlayerFormID && added.insert(c.victimID).second) {
+                    list.push_back(BuildNPCProfileJson(c.victimID));
+                }
+                if (c.affairPartnerID != 0 && c.affairPartnerID != kPlayerFormID && added.insert(c.affairPartnerID).second) {
+                    list.push_back(BuildNPCProfileJson(c.affairPartnerID));
                 }
             }
         }
@@ -903,6 +987,37 @@ namespace MARAS {
         j["diceRollChanceAdvance"] = s.diceRollChanceAdvance;
         j["diceRollChanceBreakup"] = s.diceRollChanceBreakup;
         j["diceRollChanceOpenClose"] = s.diceRollChanceOpenClose;
+        j["playerPartnerCheatingAgencyEnabled"] = s.playerPartnerCheatingAgencyEnabled;
+        j["playerPartnerOpenRelAgencyEnabled"] = s.playerPartnerOpenRelAgencyEnabled;
+        j["playerPartnerCheatingChanceMultiplier"] = RoundFloat(s.playerPartnerCheatingChanceMultiplier);
+        j["playerPartnerCheatingMaxRollCap"] = s.playerPartnerCheatingMaxRollCap;
+        j["playerPartnerCheatingMaxSecretLovers"] = s.playerPartnerCheatingMaxSecretLovers;
+        j["playerPartnerCheatingAllowWhenHappy"] = s.playerPartnerCheatingAllowWhenHappy;
+        j["playerPartnerCheatingEnableNeglect"] = s.playerPartnerCheatingEnableNeglect;
+        j["playerPartnerCheatingEnableRevenge"] = s.playerPartnerCheatingEnableRevenge;
+        j["playerPartnerCheatingEnableHierarchy"] = s.playerPartnerCheatingEnableHierarchy;
+        j["playerPartnerCheatingEnableChildrenAnchor"] = s.playerPartnerCheatingEnableChildrenAnchor;
+        j["playerPartnerCheatingUseLLM"] = s.playerPartnerCheatingUseLLM;
+        j["playerPartnerCheatingConfirmResults"] = s.playerPartnerCheatingConfirmResults;
+        j["lonelinessThresholdDays"] = s.lonelinessThresholdDays;
+        j["playerPartnerAgencyOpenLoverChanceMultiplier"] = RoundFloat(s.playerPartnerAgencyOpenLoverChanceMultiplier);
+        j["playerPartnerAgencyBreakupChanceMultiplier"] = RoundFloat(s.playerPartnerAgencyBreakupChanceMultiplier);
+        j["playerPartnerAgencyEnableForceGreets"] = s.playerPartnerAgencyEnableForceGreets;
+        j["playerPartnerAgencyEnableHomeArrivalEvents"] = s.playerPartnerAgencyEnableHomeArrivalEvents;
+        j["multLonelinessDecayStart"] = RoundFloat(s.multLonelinessDecayStart);
+        j["multPartnerAgencyScanInterval"] = RoundFloat(s.multPartnerAgencyScanInterval);
+        j["multRecentAttentionWindow"] = RoundFloat(s.multRecentAttentionWindow);
+        j["multVeryRecentVisitWindow"] = RoundFloat(s.multVeryRecentVisitWindow);
+        j["multNeglectGrowthStart"] = RoundFloat(s.multNeglectGrowthStart);
+        j["multContentNeglectStart"] = RoundFloat(s.multContentNeglectStart);
+        j["multProlongedAbsencePenalty"] = RoundFloat(s.multProlongedAbsencePenalty);
+        j["multAffairTalkingEscalation"] = RoundFloat(s.multAffairTalkingEscalation);
+        j["multMinSideFlingAgeForBreakup"] = RoundFloat(s.multMinSideFlingAgeForBreakup);
+        j["multPartnerIntentTTL"] = RoundFloat(s.multPartnerIntentTTL);
+        j["multHomeArrivalCooldown"] = RoundFloat(s.multHomeArrivalCooldown);
+        j["multAffairFatigueStart"] = RoundFloat(s.multAffairFatigueStart);
+        j["multRomanticAttendedBreakup"] = RoundFloat(s.multRomanticAttendedBreakup);
+        j["multSuggestOpenNeglectMin"] = RoundFloat(s.multSuggestOpenNeglectMin);
         std::string jsonStr = j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("receiveMatchmakingSettings", jsonStr.c_str());
     }
@@ -966,6 +1081,37 @@ namespace MARAS {
         if (payload.contains("diceRollChanceAdvance")) s.diceRollChanceAdvance = GetJsonInt(payload, "diceRollChanceAdvance", s.diceRollChanceAdvance);
         if (payload.contains("diceRollChanceBreakup")) s.diceRollChanceBreakup = GetJsonInt(payload, "diceRollChanceBreakup", s.diceRollChanceBreakup);
         if (payload.contains("diceRollChanceOpenClose")) s.diceRollChanceOpenClose = GetJsonInt(payload, "diceRollChanceOpenClose", s.diceRollChanceOpenClose);
+        if (payload.contains("playerPartnerCheatingAgencyEnabled")) s.playerPartnerCheatingAgencyEnabled = GetJsonBool(payload, "playerPartnerCheatingAgencyEnabled", s.playerPartnerCheatingAgencyEnabled);
+        if (payload.contains("playerPartnerOpenRelAgencyEnabled")) s.playerPartnerOpenRelAgencyEnabled = GetJsonBool(payload, "playerPartnerOpenRelAgencyEnabled", s.playerPartnerOpenRelAgencyEnabled);
+        if (payload.contains("playerPartnerCheatingChanceMultiplier")) s.playerPartnerCheatingChanceMultiplier = std::clamp(GetJsonFloat(payload, "playerPartnerCheatingChanceMultiplier", s.playerPartnerCheatingChanceMultiplier), 0.1f, 3.0f);
+        if (payload.contains("playerPartnerCheatingMaxRollCap")) s.playerPartnerCheatingMaxRollCap = std::clamp(GetJsonInt(payload, "playerPartnerCheatingMaxRollCap", s.playerPartnerCheatingMaxRollCap), 5, 100);
+        if (payload.contains("playerPartnerCheatingMaxSecretLovers")) s.playerPartnerCheatingMaxSecretLovers = std::clamp(GetJsonInt(payload, "playerPartnerCheatingMaxSecretLovers", s.playerPartnerCheatingMaxSecretLovers), 1, 5);
+        if (payload.contains("playerPartnerCheatingAllowWhenHappy")) s.playerPartnerCheatingAllowWhenHappy = GetJsonBool(payload, "playerPartnerCheatingAllowWhenHappy", s.playerPartnerCheatingAllowWhenHappy);
+        if (payload.contains("playerPartnerCheatingEnableNeglect")) s.playerPartnerCheatingEnableNeglect = GetJsonBool(payload, "playerPartnerCheatingEnableNeglect", s.playerPartnerCheatingEnableNeglect);
+        if (payload.contains("playerPartnerCheatingEnableRevenge")) s.playerPartnerCheatingEnableRevenge = GetJsonBool(payload, "playerPartnerCheatingEnableRevenge", s.playerPartnerCheatingEnableRevenge);
+        if (payload.contains("playerPartnerCheatingEnableHierarchy")) s.playerPartnerCheatingEnableHierarchy = GetJsonBool(payload, "playerPartnerCheatingEnableHierarchy", s.playerPartnerCheatingEnableHierarchy);
+        if (payload.contains("playerPartnerCheatingEnableChildrenAnchor")) s.playerPartnerCheatingEnableChildrenAnchor = GetJsonBool(payload, "playerPartnerCheatingEnableChildrenAnchor", s.playerPartnerCheatingEnableChildrenAnchor);
+        if (payload.contains("playerPartnerCheatingUseLLM")) s.playerPartnerCheatingUseLLM = GetJsonBool(payload, "playerPartnerCheatingUseLLM", s.playerPartnerCheatingUseLLM);
+        if (payload.contains("playerPartnerCheatingConfirmResults")) s.playerPartnerCheatingConfirmResults = GetJsonBool(payload, "playerPartnerCheatingConfirmResults", s.playerPartnerCheatingConfirmResults);
+        if (payload.contains("lonelinessThresholdDays")) s.lonelinessThresholdDays = std::clamp(GetJsonInt(payload, "lonelinessThresholdDays", s.lonelinessThresholdDays), 1, 14);
+        if (payload.contains("playerPartnerAgencyOpenLoverChanceMultiplier")) s.playerPartnerAgencyOpenLoverChanceMultiplier = std::clamp(GetJsonFloat(payload, "playerPartnerAgencyOpenLoverChanceMultiplier", s.playerPartnerAgencyOpenLoverChanceMultiplier), 0.1f, 3.0f);
+        if (payload.contains("playerPartnerAgencyBreakupChanceMultiplier")) s.playerPartnerAgencyBreakupChanceMultiplier = std::clamp(GetJsonFloat(payload, "playerPartnerAgencyBreakupChanceMultiplier", s.playerPartnerAgencyBreakupChanceMultiplier), 0.1f, 3.0f);
+        if (payload.contains("playerPartnerAgencyEnableForceGreets")) s.playerPartnerAgencyEnableForceGreets = GetJsonBool(payload, "playerPartnerAgencyEnableForceGreets", s.playerPartnerAgencyEnableForceGreets);
+        if (payload.contains("playerPartnerAgencyEnableHomeArrivalEvents")) s.playerPartnerAgencyEnableHomeArrivalEvents = GetJsonBool(payload, "playerPartnerAgencyEnableHomeArrivalEvents", s.playerPartnerAgencyEnableHomeArrivalEvents);
+        if (payload.contains("multLonelinessDecayStart")) s.multLonelinessDecayStart = std::clamp(GetJsonFloat(payload, "multLonelinessDecayStart", s.multLonelinessDecayStart), 0.1f, 10.0f);
+        if (payload.contains("multPartnerAgencyScanInterval")) s.multPartnerAgencyScanInterval = std::clamp(GetJsonFloat(payload, "multPartnerAgencyScanInterval", s.multPartnerAgencyScanInterval), 0.25f, 10.0f);
+        if (payload.contains("multRecentAttentionWindow")) s.multRecentAttentionWindow = std::clamp(GetJsonFloat(payload, "multRecentAttentionWindow", s.multRecentAttentionWindow), 0.1f, 10.0f);
+        if (payload.contains("multVeryRecentVisitWindow")) s.multVeryRecentVisitWindow = std::clamp(GetJsonFloat(payload, "multVeryRecentVisitWindow", s.multVeryRecentVisitWindow), 0.1f, 10.0f);
+        if (payload.contains("multNeglectGrowthStart")) s.multNeglectGrowthStart = std::clamp(GetJsonFloat(payload, "multNeglectGrowthStart", s.multNeglectGrowthStart), 0.1f, 10.0f);
+        if (payload.contains("multContentNeglectStart")) s.multContentNeglectStart = std::clamp(GetJsonFloat(payload, "multContentNeglectStart", s.multContentNeglectStart), 0.1f, 10.0f);
+        if (payload.contains("multProlongedAbsencePenalty")) s.multProlongedAbsencePenalty = std::clamp(GetJsonFloat(payload, "multProlongedAbsencePenalty", s.multProlongedAbsencePenalty), 0.1f, 10.0f);
+        if (payload.contains("multAffairTalkingEscalation")) s.multAffairTalkingEscalation = std::clamp(GetJsonFloat(payload, "multAffairTalkingEscalation", s.multAffairTalkingEscalation), 0.25f, 10.0f);
+        if (payload.contains("multMinSideFlingAgeForBreakup")) s.multMinSideFlingAgeForBreakup = std::clamp(GetJsonFloat(payload, "multMinSideFlingAgeForBreakup", s.multMinSideFlingAgeForBreakup), 0.1f, 10.0f);
+        if (payload.contains("multPartnerIntentTTL")) s.multPartnerIntentTTL = std::clamp(GetJsonFloat(payload, "multPartnerIntentTTL", s.multPartnerIntentTTL), 0.25f, 10.0f);
+        if (payload.contains("multHomeArrivalCooldown")) s.multHomeArrivalCooldown = std::clamp(GetJsonFloat(payload, "multHomeArrivalCooldown", s.multHomeArrivalCooldown), 0.1f, 10.0f);
+        if (payload.contains("multAffairFatigueStart")) s.multAffairFatigueStart = std::clamp(GetJsonFloat(payload, "multAffairFatigueStart", s.multAffairFatigueStart), 0.5f, 20.0f);
+        if (payload.contains("multRomanticAttendedBreakup")) s.multRomanticAttendedBreakup = std::clamp(GetJsonFloat(payload, "multRomanticAttendedBreakup", s.multRomanticAttendedBreakup), 0.1f, 10.0f);
+        if (payload.contains("multSuggestOpenNeglectMin")) s.multSuggestOpenNeglectMin = std::clamp(GetJsonFloat(payload, "multSuggestOpenNeglectMin", s.multSuggestOpenNeglectMin), 0.1f, 10.0f);
         SendMatchmakingSettings();
     }
 
@@ -1312,7 +1458,11 @@ namespace MARAS {
                     key == "skyrimnetActionRadius" || key == "actionRadius" ||
                     key == "scenesCooldownHours" ||
                     key == "paternityDailyGrowth" || key == "paternityPhenotypeDailyGrowth" ||
-                    key == "uiScale") {
+                    key == "uiScale" ||
+                    key == "playerPartnerCheatingChanceMultiplier" ||
+                    key == "playerPartnerAgencyOpenLoverChanceMultiplier" ||
+                    key == "playerPartnerAgencyBreakupChanceMultiplier" ||
+                    key.starts_with("mult")) {
                     updated = s.SetFloatByKey(key, itVal->get<float>());
                 } else {
                     updated = s.SetIntByKey(key, itVal->get<int32_t>());

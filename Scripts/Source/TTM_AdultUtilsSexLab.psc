@@ -53,11 +53,11 @@ int Function SetupQuickScene(Actor npc1, Actor npc2, bool stall, bool furnitureO
     SexLabFramework sexLab = SexLabUtil.GetAPI()
     ObjectReference slBed = sexLab.FindBed(npc1, 1500.0)
     if(!furnitureOptional && slBed == none)
-        TTM_Debug.debug("TTM_AdultUtils:SetupQuickScene:No bed found for " + npc1)
+        TTM_Debug.debug("TTM_AdultUtilsSexLab:SetupQuickScene:No bed found for " + npc1)
         return -1
     endif
     Actor[] slActors = SexLabUtil.MakeActorArray(npc1, npc2)
-    TTM_Debug.debug("TTM_AdultUtils:SetupQuickScene:SexLab:" + slBed + ":" + slActors + ": stall:"+stall)
+    TTM_Debug.debug("TTM_AdultUtilsSexLab:SetupQuickScene:SexLab:" + slBed + ":" + slActors + ": stall:"+stall)
     SexLabThread slThread = sexLab.StartScene(slActors, "", akCenter = slBed)
     if(!slThread)
         return -1

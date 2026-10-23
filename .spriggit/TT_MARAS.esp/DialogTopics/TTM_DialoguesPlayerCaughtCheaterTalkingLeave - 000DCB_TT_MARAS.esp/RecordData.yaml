@@ -1,0 +1,9 @@
+FormKey: 000DCB:TT_MARAS.esp
+EditorID: TTM_DialoguesPlayerCaughtCheaterTalkingLeave
+Name:
+  TargetLanguage: English
+  Value: Enjoy your little 'chat.' We'll talk about this later.
+Branch: 0005A6:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST
+

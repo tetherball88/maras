@@ -6,10 +6,8 @@ Flags:
 PreviousDialog: 0005AE:TT_MARAS.esp
 FavorLevel: None
 LinkTo:
-- 000357:TT_MARAS.esp
-- 000355:TT_MARAS.esp
-- 000373:TT_MARAS.esp
-- 00036A:TT_MARAS.esp
+- 000DC6:TT_MARAS.esp
+- 000DCB:TT_MARAS.esp
 Responses:
 - Emotion: Disgust
   EmotionValue: 20

@@ -20,6 +20,7 @@ namespace MARAS {
         pendingRelationshipsByBaseID.clear();
         pendingChildrenByBaseID.clear();
         childrenByID.clear();
+        pendingPartnerIntents_.clear();
         nextSyntheticChildID_ = 0xFF700001;
 
         MARAS_LOG_INFO("Cleared all NPC relationship data");
@@ -228,6 +229,51 @@ namespace MARAS {
             // Version 5+ presumed father
             if (!serialization->WriteRecordData(entry.presumedFatherID)) {
                 MARAS_LOG_ERROR("Failed to write presumedFatherID for child {:08X}", cID);
+                return false;
+            }
+        }
+
+        // Save Tier 2 Partner Agency Extension Block ('AGN1' = 0x41474E31)
+        constexpr std::uint32_t kAgencyExtMagic = 0x41474E31;
+        if (!serialization->WriteRecordData(kAgencyExtMagic)) {
+            MARAS_LOG_ERROR("Failed to write agency extension magic");
+            return false;
+        }
+
+        std::uint32_t stageRecCount = 0;
+        for (const auto& [key, data] : relationshipPairs) {
+            stageRecCount += static_cast<std::uint32_t>(data.cheatingRecords.size());
+        }
+        if (!serialization->WriteRecordData(stageRecCount)) {
+            MARAS_LOG_ERROR("Failed to write cheating stage record count");
+            return false;
+        }
+        for (const auto& [key, data] : relationshipPairs) {
+            for (const auto& record : data.cheatingRecords) {
+                if (!serialization->WriteRecordData(key.actorA) ||
+                    !serialization->WriteRecordData(key.actorB) ||
+                    !serialization->WriteRecordData(record.cheaterID) ||
+                    !serialization->WriteRecordData(record.victimID) ||
+                    !serialization->WriteRecordData(record.affairPartnerID) ||
+                    !serialization->WriteRecordData(static_cast<std::uint8_t>(record.affairStage)) ||
+                    !serialization->WriteRecordData(record.stageStartDay)) {
+                    MARAS_LOG_ERROR("Failed to write cheating stage extension for pair {:08X} - {:08X}", key.actorA, key.actorB);
+                    return false;
+                }
+            }
+        }
+
+        std::uint32_t intentCount = static_cast<std::uint32_t>(pendingPartnerIntents_.size());
+        if (!serialization->WriteRecordData(intentCount)) {
+            MARAS_LOG_ERROR("Failed to write pending partner intent count");
+            return false;
+        }
+        for (const auto& [partnerID, intent] : pendingPartnerIntents_) {
+            if (!serialization->WriteRecordData(partnerID) ||
+                !serialization->WriteRecordData(static_cast<std::uint8_t>(intent.type)) ||
+                !serialization->WriteRecordData(intent.createdGameDay) ||
+                !serialization->WriteRecordData(intent.relatedLoverID)) {
+                MARAS_LOG_ERROR("Failed to write pending partner intent for {:08X}", partnerID);
                 return false;
             }
         }
@@ -722,10 +768,94 @@ namespace MARAS {
                     }
                 }
             }
+
+            // Consume legacy dev pregnancy count if trailing bytes exist in record
+            if (hasRemainingBytes(sizeof(std::uint32_t))) {
+                std::uint32_t pregCount = 0;
+                readValue(pregCount);
+                constexpr std::uint32_t kAgencyExtMagic = 0x41474E31;
+                std::uint32_t extMagic = pregCount;
+                if (extMagic != kAgencyExtMagic && hasRemainingBytes(sizeof(std::uint32_t))) {
+                    readValue(extMagic);
+                }
+                if (extMagic == kAgencyExtMagic) {
+                    std::uint32_t stageRecCount = 0;
+                    if (readValue(stageRecCount)) {
+                        for (std::uint32_t sIdx = 0; sIdx < stageRecCount; ++sIdx) {
+                            RE::FormID oldA = 0, newA = 0, oldB = 0, newB = 0;
+                            RE::FormID oldCheater = 0, newCheater = 0;
+                            RE::FormID oldVictim = 0, newVictim = 0;
+                            RE::FormID oldAffair = 0, newAffair = 0;
+                            std::uint8_t rawStage = static_cast<std::uint8_t>(AffairStage::Physical);
+                            float stStartDay = 0.0f;
+
+                            if (!readValue(oldA) || !readValue(oldB) ||
+                                !readValue(oldCheater) || !readValue(oldVictim) || !readValue(oldAffair) ||
+                                !readValue(rawStage) || !readValue(stStartDay)) {
+                                break;
+                            }
+
+                            bool validA = (oldA == kPlayerFormID) ? (newA = kPlayerFormID, true) : serialization->ResolveFormID(oldA, newA);
+                            bool validB = (oldB == kPlayerFormID) ? (newB = kPlayerFormID, true) : serialization->ResolveFormID(oldB, newB);
+                            bool resCheater = (oldCheater == kPlayerFormID) ? (newCheater = kPlayerFormID, true) : serialization->ResolveFormID(oldCheater, newCheater);
+                            bool resVictim = (oldVictim == kPlayerFormID) ? (newVictim = kPlayerFormID, true) : serialization->ResolveFormID(oldVictim, newVictim);
+                            bool resAffair = (oldAffair == kPlayerFormID) ? (newAffair = kPlayerFormID, true) : serialization->ResolveFormID(oldAffair, newAffair);
+
+                            if (validA && validB && resCheater && resVictim && resAffair) {
+                                RelationshipPairKey pKey(newA, newB);
+                                auto itPair = relationshipPairs.find(pKey);
+                                if (itPair != relationshipPairs.end()) {
+                                    for (auto& rec : itPair->second.cheatingRecords) {
+                                        if (rec.cheaterID == newCheater && rec.victimID == newVictim && rec.affairPartnerID == newAffair) {
+                                            if (rawStage < static_cast<std::uint8_t>(AffairStage::_Count)) {
+                                                rec.affairStage = static_cast<AffairStage>(rawStage);
+                                            }
+                                            rec.stageStartDay = stStartDay;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    std::uint32_t intentCount = 0;
+                    if (readValue(intentCount)) {
+                        for (std::uint32_t iIdx = 0; iIdx < intentCount; ++iIdx) {
+                            RE::FormID oldPartner = 0, newPartner = 0;
+                            std::uint8_t rawIntent = 0;
+                            float createdDay = -1.0f;
+                            RE::FormID oldLover = 0, newLover = 0;
+
+                            if (!readValue(oldPartner) || !readValue(rawIntent) ||
+                                !readValue(createdDay) || !readValue(oldLover)) {
+                                break;
+                            }
+
+                            bool validPartner = (oldPartner == kPlayerFormID) ? (newPartner = kPlayerFormID, true) : serialization->ResolveFormID(oldPartner, newPartner);
+                            if (oldLover != 0) {
+                                (oldLover == kPlayerFormID) ? (newLover = kPlayerFormID, true) : serialization->ResolveFormID(oldLover, newLover);
+                            }
+                            if (validPartner && newPartner != 0 &&
+                                rawIntent > 0 && rawIntent < static_cast<std::uint8_t>(PartnerIntentType::_Count)) {
+                                pendingPartnerIntents_[newPartner] = PendingPartnerIntent(
+                                    static_cast<PartnerIntentType>(rawIntent), createdDay, newLover);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         MARAS_LOG_INFO("Successfully loaded {} profiles, {} relationship pairs, {} pending entries, {} pending children, and {} registered children",
                        npcProfiles.size(), relationshipPairs.size(), pendingRelationshipsByBaseID.size(), pendingChildrenByBaseID.size(), childrenByID.size());
+        for (const auto& [cID, entry] : childrenByID) {
+            if (entry.guardianAID != 0) EnsureRegistered(entry.guardianAID);
+            if (entry.guardianBID != 0) EnsureRegistered(entry.guardianBID);
+            if (entry.bioMotherID != 0) EnsureRegistered(entry.bioMotherID);
+            if (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) EnsureRegistered(entry.bioFatherID);
+            if (entry.presumedFatherID != 0) EnsureRegistered(entry.presumedFatherID);
+        }
         RecalculateAndUpdateGlobals();
         UpdateAllCanFormNonCheatingMainFactions();
         SyncAllMarriedCouplesChildCustody();
@@ -975,6 +1105,11 @@ namespace MARAS {
                     {"id", static_cast<uint8_t>(c.affairStatus)},
                     {"name", Utils::AffairStatusToString(c.affairStatus)}
                 };
+                cObj["affairStage"] = {
+                    {"id", static_cast<uint8_t>(c.affairStage)},
+                    {"name", Utils::AffairStageToString(c.affairStage)}
+                };
+                cObj["stageStartDay"] = c.stageStartDay;
                 cheatArray.push_back(cObj);
             }
             pairObj["cheatingRecords"] = cheatArray;
@@ -1134,6 +1269,26 @@ namespace MARAS {
         }
         root["pregnancyState"] = pregArray;
 
+        nlohmann::json intentsArray = nlohmann::json::array();
+        for (const auto& [partnerID, intent] : pendingPartnerIntents_) {
+            if (intent.type == PartnerIntentType::None) continue;
+            nlohmann::json iObj;
+            iObj["partner"] = {
+                {"formId", std::format("{:08X}", partnerID)},
+                {"name", ActorSvc::GetName(partnerID)}
+            };
+            iObj["intent"] = {
+                {"id", static_cast<uint8_t>(intent.type)},
+                {"name", Utils::PartnerIntentTypeToString(intent.type)}
+            };
+            iObj["createdGameDay"] = intent.createdGameDay;
+            iObj["relatedLover"] = {
+                {"formId", intent.relatedLoverID != 0 ? std::format("{:08X}", intent.relatedLoverID) : ""},
+                {"name", intent.relatedLoverID != 0 ? ActorSvc::GetName(intent.relatedLoverID) : ""}
+            };
+            intentsArray.push_back(iObj);
+        }
+        root["pendingPartnerIntents"] = intentsArray;
         root["nextSyntheticChildId"] = std::format("{:08X}", nextSyntheticChildID_);
 
         return root;

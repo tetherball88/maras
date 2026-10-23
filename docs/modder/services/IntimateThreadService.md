@@ -14,7 +14,9 @@ Before any sexual stage even begins, the service evaluates every participant aga
 
 1. **Group Scene Exemption**:
    - If an actor's committed partner is **also a participant in the same animation thread** (e.g., a threesome or group scene), that partner is not considered betrayed.
-2. **Open Relationship Watcher Classification**:
+2. **Co-Spouse Intimacy Exemption**:
+   - When two or more active main partners of the Player (`IsPlayerActiveMainPartner`) participate in intimacy with each other, it **never** counts as cheating on the Player (and does not trigger cheating or open-relationship walk-in events for the Player).
+3. **Open Relationship Watcher Classification**:
    - If the relationship pair has `isOpen == true`, the absent partner is not a victim of cheating. Instead, they are cached as an **Open Relationship Watcher** so the system can still fire a consensual open-relationship witness reaction if they walk in.
 3. **Player Polygamy Exemption**:
    - If the participant is the Player (`0x14`) and `enablePolygamy` is enabled in M.A.R.A.S settings, the player's absent partners do not classify the player as a cheater.

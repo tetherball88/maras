@@ -76,6 +76,12 @@ namespace MARAS {
             return false;
         }
 
+        // Exclude active main partners of the player (governed by Tier 2 Partner Agency mechanics)
+        if (NPCRelationshipManager::GetSingleton().IsPlayerActiveMainPartner(formID)) {
+            MARAS_LOG_TRACE("BanterCoordinator: Actor {:08X} ('{}') is an active main partner of the player", formID, actor->GetName());
+            return false;
+        }
+
         // Exclude ghosts
         if (actor->IsGhost()) {
             MARAS_LOG_TRACE("BanterCoordinator: Actor {:08X} ('{}') is ghost", formID, actor->GetName());
@@ -204,6 +210,10 @@ namespace MARAS {
                 auto idA = actorA->GetFormID();
                 auto idB = actorB->GetFormID();
 
+                if (relManager.IsPlayerActiveMainPartner(idA) || relManager.IsPlayerActiveMainPartner(idB)) {
+                    continue;
+                }
+
                 auto status = relManager.GetRelationshipStatus(idA, idB);
                 if (IsBanterQualifyingStatus(status)) {
                     if (!IsOnCooldown(idA, idB, currentDay)) {
@@ -229,10 +239,13 @@ namespace MARAS {
 
         for (auto* localActor : localActors) {
             auto localID = localActor->GetFormID();
+            if (relManager.IsPlayerActiveMainPartner(localID)) continue;
+
             auto activeRels = relManager.GetActiveRelationships(localID);
 
             for (const auto& [partnerID, status] : activeRels) {
                 if (partnerID == 0 || partnerID == kPlayerFormID || IsSyntheticChildID(partnerID)) continue;
+                if (relManager.IsPlayerActiveMainPartner(partnerID)) continue;
                 if (!IsBanterQualifyingStatus(status)) continue;
 
                 // If partner was already locally present, it was handled in Tier 1

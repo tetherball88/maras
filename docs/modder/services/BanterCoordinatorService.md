@@ -32,6 +32,7 @@ Every candidate actor must pass strict eligibility checks:
 - **Living & Valid**: Must not be dead, disabled, deleted, a ghost (`IsGhost`), or recorded in [DeceasedRegistry](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/DeceasedRegistry.cpp) (checked by both placed Reference FormID and Base NPC FormID).
 - **Adults Only**: Excludes child actors (`IsChild`) and `0xFF` synthetic unborn/infant records.
 - **No Active Player Followers**: Excludes NPCs currently following the player as an active teammate/follower (`IsPlayerFollower`) so companion combat/travel routines are not interrupted.
+- **No Active Player Main Partners**: Excludes NPCs who are currently in an active main relationship (`Dating`, `Engaged`, `Married`) with the player (`IsPlayerActiveMainPartner`) so generic location-arrival banter never hijacks or competes with Tier 2 Player-Partner Agency & Home-Arrival mechanics.
 - **Idle & Out of Combat**: Excludes actors currently in combat (`IsInCombat`) or already participating in another Creation Engine quest scene (`GetCurrentScene() != nullptr`).
 - **3D Loaded & Within Radius**: For locally present actors, their 3D model must be loaded and within `scanRadius` units of the player.
 
@@ -48,8 +49,8 @@ Once eligible nearby actors are collected, `BanterCoordinatorService` searches f
 
 ### Tier 2: Solitary Local NPC with Absent Partner (Fallback)
 - If **no** co-located couples are present in Tier 1, the service falls back to **Tier 2**.
-- For each local actor within `scanRadius`, it inspects all of their active `Dating`, `Lover`, `Engaged`, and `Married` partners who are **not** within the local scan radius (excluding the player).
-- Looks up the absent partner's actor reference in the world and validates that the absent partner is alive, not a follower, not in combat, and not in another scene (skipping the 3D-loaded and distance checks).
+- For each local actor within `scanRadius`, it inspects all of their active `Dating`, `Lover`, `Engaged`, and `Married` partners who are **not** within the local scan radius (excluding the player and active player main partners).
+- Looks up the absent partner's actor reference in the world and validates that the absent partner is alive, not a follower, not an active player main partner, not in combat, and not in another scene (skipping the 3D-loaded and distance checks).
 - Selects a `(Local Actor, Absent Partner)` pair using the same prioritized selection (never-played first, then least-recently-played) and returns them so the quest scene can trigger solitary/monologue or third-party gossip dialogue referencing the absent partner.
 
 ---
@@ -65,4 +66,3 @@ To prevent banter spam in crowded inns or towns, `BanterCoordinatorService` enfo
    - Lasts **`2x` the global scene cooldown** (`2.0 * scenesCooldownHours`, e.g., `48.0` in-game hours by default) and is stamped when the couple's scene actually plays (`RecordScenePlayed`), preventing the same couple from repeating immediately as soon as the `1x` global cooldown expires.
    - Among off-cooldown candidates in a tier, couples who have **never played** a scene are prioritized first, followed by the **least-recently-played** couple(s).
 - Both the global timestamp, per-couple timestamps, and configured cooldown hours are persisted in the `'BNTR'` (version 2) SKSE co-save record.
-

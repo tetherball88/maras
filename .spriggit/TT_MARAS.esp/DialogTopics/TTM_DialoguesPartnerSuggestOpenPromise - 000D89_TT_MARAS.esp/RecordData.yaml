@@ -1,0 +1,8 @@
+FormKey: 000D89:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestOpenPromise
+Name:
+  TargetLanguage: English
+  Value: I don't want that. I'll be here more, I promise.
+Branch: 000D82:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST

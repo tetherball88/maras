@@ -11,24 +11,24 @@ int Function AddParticipant(Actor participant, Actor newActor) global
 EndFunction
 
 bool Function HasBedsNearby(Actor npc1) global
-    return OFurniture.FindFurnitureOfType("bed", npc1, 1500, 1500) != none
+    return OFurniture.FindFurnitureOfType("bed", npc1, 3000, 3000) != none
 EndFunction
 
 int Function SetupQuickScene(Actor npc1, Actor npc2, bool stall, bool furnitureOptional = false) global
-    ObjectReference bed = OFurniture.FindFurnitureOfType("bed", npc1, 1500, 1500)
+    ObjectReference bed = OFurniture.FindFurnitureOfType("bed", npc1, 3000, 3000)
     if(!furnitureOptional && bed == none)
-        TTM_Debug.debug("TTM_AdultUtils:SetupQuickScene:No bed found for " + npc1)
+        TTM_Debug.debug("TTM_AdultUtilsOStim:SetupQuickScene:No bed found for " + npc1)
         return -1
     endif
     Actor[] actors = OActorUtil.Sort(OActorUtil.ToArray(npc1, npc2), OActorUtil.EmptyArray())
     string sceneID = OLibrary.GetRandomSceneSuperloadCSV(actors, AnyActionType = "intercourse")
-    TTM_Debug.debug("TTM_AdultUtils:SetupQuickScene:" + sceneID + ":" + bed + ":" + actors + ": stall:"+stall)
+    TTM_Debug.debug("TTM_AdultUtilsOStim:SetupQuickScene:" + sceneID + ":" + bed + ":" + actors + ": stall:"+stall)
     int ThreadID = OThread.QuickStart(actors, sceneID, bed)
     if(stall)
         StorageUtil.SetIntValue(none, "TTM_IntimateScene_Thread"+ThreadID+"_OriginalAutoMode", OThread.IsInAutoMode(ThreadID) as int)
         OThread.StopAutoMode(ThreadID)
         Utility.wait(0.5)
-        TTM_Debug.debug("TTM_AdultUtils:IsInAutoMode:" + OThread.IsInAutoMode(ThreadID))
+        TTM_Debug.debug("TTM_AdultUtilsOStim:IsInAutoMode:" + OThread.IsInAutoMode(ThreadID))
         OThread.StallClimax(ThreadID)
     endif
     return ThreadID
@@ -40,7 +40,7 @@ EndFunction
 
 Function EndThreadActor(Actor participant) global
     int ThreadID = OActor.GetSceneID(participant)
-    TTM_Debug.debug("TTM_AdultUtils:EndThreadActor:" + participant + ":" + ThreadID)
+    TTM_Debug.debug("TTM_AdultUtilsOStim:EndThreadActor:" + participant + ":" + ThreadID)
     if(ThreadID == -1)
         return
     endif

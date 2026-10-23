@@ -19,37 +19,78 @@ ReferenceAlias Property npc2PartnerAlias Auto
 
 ReferenceAlias Property PlayersPartnerWalkInCheating Auto
 ReferenceAlias Property PlayersPartnerWalkInOpenRelationship Auto
+ReferenceAlias Property PlayersPartnerSuggestOpen Auto
+ReferenceAlias Property PlayersPartnerSuggestClose Auto
+ReferenceAlias Property PlayersPartnerConfessTalking Auto
+ReferenceAlias Property PlayersPartnerConfessPhysical Auto
 
 int Property sexThread = -1 Auto
 
-Function SetupSceneOnLocationChange()
+Function SetupSceneOnLocationChange(Actor forcedNpc1 = none, Actor forcedNpc2 = none, string forcedScenario = "")
     Actor player = TTM_Data.GetPlayer()
-    if(!MARAS.IsLocationAllowedForScenes(player.GetCurrentLocation()))
-        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: Location not allowed for scenes by settings")
-        return
+    bool isForced = (forcedNpc1 != none && forcedNpc2 != none && forcedScenario != "")
+    Actor npc1 = none
+    Actor npc2 = none
+
+    if(isForced)
+        npc1 = forcedNpc1
+        npc2 = forcedNpc2
+    else
+        if(!MARAS.IsLocationAllowedForScenes(player.GetCurrentLocation()))
+            TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: Location not allowed for scenes by settings")
+            return
+        endif
+        Actor[] couple = MARAS.FindBanterCoupleCandidates()
+        if(couple.Length < 2)
+            TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: Not enough participants: " + couple.Length)
+            return
+        endif
+        npc1 = couple[0]
+        npc2 = couple[1]
     endif
-    Actor[] couple = MARAS.FindBanterCoupleCandidates()
-    if(couple.length < 2)
-        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: Not enough participants: " + couple.Length)
-        return
-    endif
-    Actor npc1 = couple[0]
-    Actor npc2 = couple[1]
+
     Actor npc1MainPartner = none
     Actor npc2MainPartner = none
     bool shouldSetupSexScene = false
+    bool shouldExposeCheating = false
     sexThread = -1
 
-    if(couple.Length < 2)
-        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: Not enough participants: " + couple.Length)
-        return
-    endif
     bool isCheating = MARAS.IsRelationshipCheating(npc1, npc2)
     bool isOpen = MARAS.IsNPCInOpenRelationship(npc1) || MARAS.IsNPCInOpenRelationship(npc2)
     sceneIdx = Utility.RandomInt(0, 4)
     Scene selectedScene = None
-    TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: isCheating: " + isCheating + ", isOpen: "+isOpen+", initial sceneIdx: " + sceneIdx)
-    if(isCheating)
+    TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: isForced: " + isForced + ", forcedScenario: " + forcedScenario + ", isCheating: " + isCheating + ", isOpen: " + isOpen + ", initial sceneIdx: " + sceneIdx)
+
+    if(isForced)
+        npc1MainPartner = player
+        if(forcedScenario == "cheating_talking_in_house" || forcedScenario == "cheating_talking_letter")
+            shouldExposeCheating = true
+            selectedScene = CheatingScene
+            sceneIdx = GetCheatingSceneIdx(npc1, npc2, 0)
+            if(MARAS.IsNPCCheating(npc2))
+                npc2MainPartner = MARAS.GetPrimaryPartner(npc2)
+            endif
+        elseif(forcedScenario == "cheating_physical_in_house" || forcedScenario == "cheating_physical_letter")
+            shouldExposeCheating = true
+            shouldSetupSexScene = true
+            if(MARAS.IsNPCCheating(npc2))
+                npc2MainPartner = MARAS.GetPrimaryPartner(npc2)
+            endif
+        elseif(forcedScenario == "open_in_house" || forcedScenario == "open_date_away")
+            selectedScene = OpenRelationshipScene
+            bool isNpc2Open = MARAS.IsNPCInOpenRelationship(npc2)
+            if(isNpc2Open)
+                if(Utility.RandomInt(0, 1) == 0)
+                    sceneIdx = 4 ; 5th open relationship scene is for when both npcs are in open relationships
+                endif
+                npc2MainPartner = MARAS.GetPrimaryPartner(npc2)
+            else
+                if(sceneIdx == 4)
+                    sceneIdx = Utility.RandomInt(0, 3)
+                endif
+            endif
+        endif
+    elseif(isCheating)
         int typeOfCheatingScene = GetCheatingSceneWithFallbacks(npc1, npc2)
         if(typeOfCheatingScene == -1)
             return
@@ -88,12 +129,15 @@ Function SetupSceneOnLocationChange()
         if(typeOfCheatingScene == 2)
             shouldSetupSexScene = true
         endif
+        if(npc1MainPartner == player || typeOfCheatingScene >= 1)
+            shouldExposeCheating = true
+        endif
 
         if(npc1MainPartner && npc1MainPartner.GetCurrentScene() != none)
             TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: can't start scene npc1MainPartner is in a scene: " + npc1MainPartner.GetCurrentScene())
             return
         endif
-        if(npc1MainPartner && typeOfCheatingScene >= 1)
+        if(npc1MainPartner && npc1MainPartner != player && typeOfCheatingScene >= 1)
             ; move npc1's partner since they active aprticipant of a scene
             MoveNpc(npc1MainPartner, player)
         endif
@@ -145,15 +189,15 @@ Function SetupSceneOnLocationChange()
     endif
     TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: final sceneIdx: " + sceneIdx)
 
-    if(!selectedScene)
-        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: selectedScene is None")
+    if(!selectedScene && !shouldSetupSexScene)
+        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: selectedScene is None and shouldSetupSexScene is False")
         return
     endif
 
     bool npc1InSameCell = npc1.GetParentCell() == player.GetParentCell()
     bool npc2InSameCell = npc2.GetParentCell() == player.GetParentCell()
 
-    if(!npc1InSameCell && !npc2InSameCell)
+    if(!npc1InSameCell && !npc2InSameCell && !isForced)
         TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: npc1InSameCell is False and npc2InSameCell is False")
         return
     endif
@@ -167,14 +211,43 @@ Function SetupSceneOnLocationChange()
         return
     endif
 
-    if(!npc1InSameCell)
+    if(!npc1InSameCell && !npc2InSameCell)
+        MoveNpc(npc1, player)
+        MoveNpc(npc2, npc1)
+    elseif(!npc1InSameCell)
         MoveNpc(npc1, npc2)
-    endif
-    if(!npc2InSameCell)
+    elseif(!npc2InSameCell)
         MoveNpc(npc2, npc1)
     endif
 
-    MuteParticipants(npc1, npc2, npc1MainPartner, shouldSetupSexScene)
+    if(shouldExposeCheating || (isCheating && npc1MainPartner && npc1MainPartner.GetParentCell() == player.GetParentCell()))
+        MARAS.SetCheatingDiscovered(npc1, npc2, "exposed")
+    endif
+    if((isForced || isCheating) && npc2MainPartner && npc2MainPartner.GetParentCell() == player.GetParentCell())
+        MARAS.SetCheatingDiscovered(npc2, npc1, "exposed")
+    endif
+
+    if(isForced && (forcedScenario == "cheating_physical_in_house" || forcedScenario == "cheating_physical_letter"))
+        sexThread = TTM_AdultUtils.SetupQuickScene(npc1, npc2, false)
+        if(sexThread != -1)
+            MARAS.RecordScenePlayed(npc1, npc2)
+            return
+        endif
+        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: forced " + forcedScenario + " SetupQuickScene failed, falling back to CheatingScene")
+        selectedScene = CheatingScene
+        sceneIdx = GetCheatingSceneIdx(npc1, npc2, 0)
+        shouldSetupSexScene = false
+    elseif(isForced && forcedScenario == "open_date_away")
+        sexThread = TTM_AdultUtils.SetupQuickScene(npc1, npc2, false)
+        if(sexThread != -1)
+            MARAS.RecordScenePlayed(npc1, npc2)
+            return
+        endif
+        TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: forced open_date_away SetupQuickScene failed, falling back to OpenRelationshipScene")
+    endif
+
+    bool shouldMutePartner = shouldSetupSexScene && npc1MainPartner != none && npc1MainPartner != player
+    MuteParticipants(npc1, npc2, npc1MainPartner, shouldMutePartner)
 
     if(shouldSetupSexScene)
         sexThread = TTM_AdultUtils.SetupQuickScene(npc1, npc2, true)
@@ -231,8 +304,9 @@ Function MoveNpc(Actor npc, Actor target)
     StorageUtil.SetFormValue(npc, "TTM_NpcOriginalLocation", originalPlaceMarker)
     StorageUtil.FormListAdd(none, "TTM_MovedNpcs", npc)
     TTM_Debug.debug("TTM_NpcsScenes: MoveNpc: npc: " + npc + ", target: " + target + ", originalPlaceMarker: " + originalPlaceMarker)
-    npc.MoveTo(target, afZOffset = 35)
+    npc.MoveTo(target)
     PO3_SKSEFunctions.MoveToNearestNavmeshLocation(npc)
+    npc.EvaluatePackage()
 EndFunction
 
 Function RestoreNpc(Actor npc)
@@ -342,6 +416,7 @@ int Function GetCheatingSceneWithFallbacks(Actor npc1, Actor npc2, bool allowCau
             return -1
         endif
     endif
+    return typeOfCheatingScene
 EndFunction
 
 int Function GetCheatingSceneIdx(Actor npc1, Actor npc2, int typeOfCheatingScene)
@@ -427,4 +502,89 @@ Function FreePartnerNoticeOpenRelPlayer(Actor npc)
     TTM_Debug.debug("TTM_NpcsScenes: FreePartnerNoticeOpenRelPlayer: Clearing PlayersPartnerWalkInOpenRelationship alias")
     PlayersPartnerWalkInOpenRelationship.Clear()
     npc.EvaluatePackage()
+EndFunction
+
+
+Function PartnerSuggestOpen(Actor npc)
+    if(!npc)
+        return
+    endif
+    if(npc.GetCurrentScene() != none)
+        TTM_Debug.debug("TTM_NpcsScenes: PartnerSuggestOpen: npc is in a scene: " + npc.GetCurrentScene())
+        return
+    endif
+    TTM_Debug.debug("TTM_NpcsScenes: PartnerSuggestOpen: npc: " + npc + ": alias: " + PlayersPartnerSuggestOpen)
+    PlayersPartnerSuggestOpen.ForceRefTo(npc)
+    npc.EvaluatePackage()
+EndFunction
+
+Function FreePartnerSuggestOpen(Actor npc)
+    TTM_Debug.debug("TTM_NpcsScenes: FreePartnerSuggestOpen: Clearing PlayersPartnerSuggestOpen alias")
+    PlayersPartnerSuggestOpen.Clear()
+    if(npc)
+        npc.EvaluatePackage()
+    endif
+EndFunction
+
+Function PartnerSuggestClose(Actor npc)
+    if(!npc)
+        return
+    endif
+    if(npc.GetCurrentScene() != none)
+        TTM_Debug.debug("TTM_NpcsScenes: PartnerSuggestClose: npc is in a scene: " + npc.GetCurrentScene())
+        return
+    endif
+    TTM_Debug.debug("TTM_NpcsScenes: PartnerSuggestClose: npc: " + npc + ": alias: " + PlayersPartnerSuggestClose)
+    PlayersPartnerSuggestClose.ForceRefTo(npc)
+    npc.EvaluatePackage()
+EndFunction
+
+Function FreePartnerSuggestClose(Actor npc)
+    TTM_Debug.debug("TTM_NpcsScenes: FreePartnerSuggestClose: Clearing PlayersPartnerSuggestClose alias")
+    PlayersPartnerSuggestClose.Clear()
+    if(npc)
+        npc.EvaluatePackage()
+    endif
+EndFunction
+
+Function PartnerConfessTalking(Actor npc)
+    if(!npc)
+        return
+    endif
+    if(npc.GetCurrentScene() != none)
+        TTM_Debug.debug("TTM_NpcsScenes: PartnerConfessTalking: npc is in a scene: " + npc.GetCurrentScene())
+        return
+    endif
+    TTM_Debug.debug("TTM_NpcsScenes: PartnerConfessTalking: npc: " + npc + ": alias: " + PlayersPartnerConfessTalking)
+    PlayersPartnerConfessTalking.ForceRefTo(npc)
+    npc.EvaluatePackage()
+EndFunction
+
+Function FreePartnerConfessTalking(Actor npc)
+    TTM_Debug.debug("TTM_NpcsScenes: FreePartnerConfessTalking: Clearing PlayersPartnerConfessTalking alias")
+    PlayersPartnerConfessTalking.Clear()
+    if(npc)
+        npc.EvaluatePackage()
+    endif
+EndFunction
+
+Function PartnerConfessPhysical(Actor npc)
+    if(!npc)
+        return
+    endif
+    if(npc.GetCurrentScene() != none)
+        TTM_Debug.debug("TTM_NpcsScenes: PartnerConfessPhysical: npc is in a scene: " + npc.GetCurrentScene())
+        return
+    endif
+    TTM_Debug.debug("TTM_NpcsScenes: PartnerConfessPhysical: npc: " + npc + ": alias: " + PlayersPartnerConfessPhysical)
+    PlayersPartnerConfessPhysical.ForceRefTo(npc)
+    npc.EvaluatePackage()
+EndFunction
+
+Function FreePartnerConfessPhysical(Actor npc)
+    TTM_Debug.debug("TTM_NpcsScenes: FreePartnerConfessPhysical: Clearing PlayersPartnerConfessPhysical alias")
+    PlayersPartnerConfessPhysical.Clear()
+    if(npc)
+        npc.EvaluatePackage()
+    endif
 EndFunction

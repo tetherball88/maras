@@ -143,6 +143,7 @@ namespace MARAS {
 
             // Trigger scheduled matchmaking check
             MatchmakingService::GetSingleton().TryScheduledMatchmaking(currentDay);
+            MatchmakingService::GetSingleton().TryScheduledPlayerPartnerInfidelity(currentDay);
 
             // Daily paternity discovery roll for active secret paternity intrigue
             NPCRelationshipManager::GetSingleton().CheckPaternitySecretsDailyTick(currentDay);

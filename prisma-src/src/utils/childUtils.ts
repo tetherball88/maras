@@ -1,4 +1,4 @@
-import { ChildRecord, CheatingRecord, RelationshipPair, RelationshipStatus } from '../types'
+import { AffairStatus, ChildRecord, CheatingRecord, RelationshipPair, RelationshipStatus } from '../types'
 import { areSameFormId } from './statusAvailability'
 import { PLAYER_FORM_ID } from '../data/mockData'
 
@@ -371,7 +371,7 @@ export function maskCheatingAndRelationships(
     }
   }
 
-  const visibleCheating = rawCheatingRecords.filter((cr) => !cr.isSecret)
+  const visibleCheating = rawCheatingRecords.filter((cr) => !cr.isSecret || cr.affairStatus === AffairStatus.Allowed)
 
   const isSecretAffairPair = (actorA: string, actorB: string): boolean => {
     let hasSecret = false
@@ -381,7 +381,7 @@ export function maskCheatingAndRelationships(
         (areSameFormId(cr.cheaterId, actorA) && areSameFormId(cr.affairPartnerId, actorB)) ||
         (areSameFormId(cr.cheaterId, actorB) && areSameFormId(cr.affairPartnerId, actorA))
       if (matchesPair) {
-        if (cr.isSecret) hasSecret = true
+        if (cr.isSecret && cr.affairStatus !== AffairStatus.Allowed) hasSecret = true
         else hasPublic = true
       }
     }
@@ -398,7 +398,27 @@ export function maskCheatingAndRelationships(
       r.status === RelationshipStatus.Candidate
 
     if (isAffairStatus && isSecretAffairPair(r.actorA, r.actorB)) {
-      if (areSameFormId(r.actorA, PLAYER_FORM_ID) || areSameFormId(r.actorB, PLAYER_FORM_ID)) {
+      let priorStatus: RelationshipStatus | null = null
+      if (r.statusHistory && r.statusHistory.length > 0) {
+        for (let i = r.statusHistory.length - 1; i >= 0; i--) {
+          const histStatus = r.statusHistory[i].toStatus
+          if (histStatus === RelationshipStatus.Divorced || histStatus === RelationshipStatus.Jilted) {
+            priorStatus = histStatus
+            break
+          }
+        }
+      }
+
+      if (priorStatus !== null) {
+        visibleRelationships.push({
+          ...r,
+          status: priorStatus,
+          isOpen: false,
+          statusHistory: r.statusHistory.filter(
+            (h) => h.toStatus !== RelationshipStatus.Lover && h.toStatus !== RelationshipStatus.Dating,
+          ),
+        })
+      } else if (areSameFormId(r.actorA, PLAYER_FORM_ID) || areSameFormId(r.actorB, PLAYER_FORM_ID)) {
         visibleRelationships.push({
           ...r,
           status: RelationshipStatus.Candidate,
@@ -406,7 +426,7 @@ export function maskCheatingAndRelationships(
           statusHistory: [],
         })
       }
-      // For NPC-NPC secret affairs, omit the pair completely while secret
+      // For NPC-NPC secret affairs with no prior Divorced/Jilted history, omit the pair while secret
       continue
     }
     visibleRelationships.push(r)

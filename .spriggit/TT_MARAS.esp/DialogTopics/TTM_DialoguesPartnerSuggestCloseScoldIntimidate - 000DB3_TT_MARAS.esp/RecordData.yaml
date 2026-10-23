@@ -1,0 +1,8 @@
+FormKey: 000DB3:TT_MARAS.esp
+EditorID: TTM_DialoguesPartnerSuggestCloseScoldIntimidate
+Name:
+  TargetLanguage: English
+  Value: "[Intimidate] Keep pressing this, and you'll regret it."
+Branch: 000D9D:TT_MARAS.esp
+Quest: 000067:TT_MARAS.esp
+SubtypeName: CUST
