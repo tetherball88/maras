@@ -7785,6 +7785,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     minRelRankForDial: -4,
     hasSkyrimNet: true,
     simulateNoSkyrimNet: false,
+    revealSecretsInUI: false,
+    uiFullScreen: false,
+    uiScale: 1,
+    autoPauseOnOpen: false,
     enableConfirmationModal: true,
     enableScenes: true,
     scenesCooldownHours: 24,
@@ -10617,7 +10621,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         affectionData: data.affectionData,
         hierarchyRanks: data.hierarchyRanks,
         playerHomes: data.playerHomes,
-        settings: data.settings
+        settings: data.settings,
+        isGamePaused: data.isGamePaused
       });
       if (data.children) {
         useMarasStore.setState({ evaluatingChildId: null });
@@ -10644,6 +10649,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       console.log("[PrismaBridge] closeMARASView called");
       useMarasStore.getState().setIsOpen(false);
     };
+    window.onGamePausedChanged = (raw) => {
+      const data = parsePayload(raw);
+      console.log("[PrismaBridge] onGamePausedChanged:", data);
+      if (data && typeof data.paused === "boolean") {
+        useMarasStore.getState().setGamePaused(data.paused, true);
+      }
+    };
     window.showMARASModal = (rawModal) => {
       var _a2;
       const modal = parsePayload(rawModal);
@@ -10656,8 +10668,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
     };
     window.clearMARASModal = () => {
+      var _a2;
       console.log("[PrismaBridge] clearMARASModal called");
       useModalStore.getState().clearModal();
+      if (useMarasStore.getState().isOpen) {
+        (_a2 = window.refocusView) == null ? void 0 : _a2.call(window);
+        setTimeout(() => {
+          var _a3;
+          if (useMarasStore.getState().isOpen) {
+            (_a3 = window.refocusView) == null ? void 0 : _a3.call(window);
+          }
+        }, 50);
+      }
     };
     document.addEventListener("mousedown", () => {
       var _a2;
@@ -10767,7 +10789,14 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const data = parsePayload(raw);
       if (!data || !data.actorA || !data.actorB) return;
       console.log(`[PrismaBridge] onStatusChanged: ${data.actorA} <-> ${data.actorB} = ${data.status} (isOpen: ${data.isOpen})`);
-      useMarasStore.getState().handleRealtimeStatusChanged(data.actorA, data.actorB, data.status, data.isOpen);
+      useMarasStore.getState().handleRealtimeStatusChanged(
+        data.actorA,
+        data.actorB,
+        data.status,
+        data.isOpen,
+        data.actorAProfile,
+        data.actorBProfile
+      );
     };
     window.onHierarchyChanged = (raw) => {
       const data = raw !== void 0 ? parsePayload(raw) : void 0;
@@ -14984,10 +15013,313 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       });
     }, [actorA, actorB, relationships, npcProfiles, enablePolygamy]);
   }
+  function resolveIsFemale(child, npc) {
+    const g = (child == null ? void 0 : child.gender) ?? (npc == null ? void 0 : npc.gender);
+    if (g === "female") return true;
+    if (g === "male") return false;
+    return void 0;
+  }
+  function getChildGenderNouns(isFemale) {
+    const sonOrDaughter = isFemale !== void 0 ? isFemale ? "Daughter" : "Son" : "Child";
+    const childNoun = isFemale !== void 0 ? isFemale ? "Daughter" : "Son" : "Child";
+    const stepNoun = isFemale !== void 0 ? isFemale ? "Stepdaughter" : "Stepson" : "Stepchild";
+    const boyOrGirl = isFemale !== void 0 ? isFemale ? "Girl" : "Boy" : "Child";
+    const genderSymbol = isFemale !== void 0 ? isFemale ? "♀" : "♂" : "";
+    return { sonOrDaughter, childNoun, stepNoun, boyOrGirl, genderSymbol };
+  }
+  function isActorChild(child, actorId) {
+    if (!actorId) return false;
+    if (areSameFormId(child.guardianAId, actorId) || areSameFormId(child.guardianBId, actorId) || areSameFormId(child.bioMotherId, actorId) || areSameFormId(child.bioFatherId, actorId)) {
+      return true;
+    }
+    const isSecretPartner = Boolean(child.isSecretForPartner ?? child.isSecret);
+    if (isSecretPartner && child.presumedFatherId && areSameFormId(child.presumedFatherId, actorId)) {
+      return true;
+    }
+    return false;
+  }
+  function getChildRelationshipStatus(child, actorIdOrA, actorBId) {
+    const isAdopted = child.isAdopted !== false;
+    const isFemale = resolveIsFemale(child);
+    const { sonOrDaughter, childNoun, stepNoun } = getChildGenderNouns(isFemale);
+    if (isAdopted) {
+      return {
+        statusLabel: `Adopted ${childNoun}`,
+        badgeLabel: `Adopted ${sonOrDaughter}`,
+        badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+      };
+    }
+    const bioMother = child.bioMotherId;
+    const bioFather = child.bioFatherId;
+    const presumedFather = child.presumedFatherId;
+    if (actorIdOrA && actorBId) {
+      const isBioA = areSameFormId(bioMother, actorIdOrA) || areSameFormId(bioFather, actorIdOrA);
+      const isBioB = areSameFormId(bioMother, actorBId) || areSameFormId(bioFather, actorBId);
+      const isPresumedA = Boolean(presumedFather && areSameFormId(presumedFather, actorIdOrA));
+      const isPresumedB = Boolean(presumedFather && areSameFormId(presumedFather, actorBId));
+      if (isBioA && isBioB) {
+        return {
+          statusLabel: `Shared Biological ${sonOrDaughter}`,
+          badgeLabel: sonOrDaughter,
+          badgeStyle: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+        };
+      }
+      if (isBioA && isPresumedB || isBioB && isPresumedA) {
+        const isSecretPartner2 = child.isSecretForPartner ?? child.isSecret;
+        if (isSecretPartner2) {
+          return {
+            statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
+            badgeLabel: `Presumed ${sonOrDaughter}`,
+            badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+          };
+        }
+        return {
+          statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+          badgeLabel: stepNoun,
+          badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+        };
+      }
+      if (isBioA || isBioB) {
+        const isSecretPartner2 = child.isSecretForPartner ?? child.isSecret;
+        if (isSecretPartner2) {
+          return {
+            statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
+            badgeLabel: `Presumed ${sonOrDaughter}`,
+            badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+          };
+        }
+        return {
+          statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+          badgeLabel: stepNoun,
+          badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+        };
+      }
+      return {
+        statusLabel: `Adopted ${childNoun}`,
+        badgeLabel: `Adopted ${sonOrDaughter}`,
+        badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+      };
+    }
+    const isBioMotherMatch = actorIdOrA ? areSameFormId(bioMother, actorIdOrA) : false;
+    const isBioFatherMatch = actorIdOrA ? areSameFormId(bioFather, actorIdOrA) : false;
+    const isPresumedFatherMatch = actorIdOrA && presumedFather ? areSameFormId(presumedFather, actorIdOrA) : false;
+    const isGuardianMatch = actorIdOrA ? areSameFormId(child.guardianAId, actorIdOrA) || areSameFormId(child.guardianBId, actorIdOrA) : false;
+    if (isBioMotherMatch || isBioFatherMatch) {
+      if (isBioFatherMatch && child.isSecretForBioFather) {
+        return {
+          statusLabel: `Biological ${sonOrDaughter} (Secret from Father)`,
+          badgeLabel: `${sonOrDaughter} (Secret)`,
+          badgeStyle: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+        };
+      }
+      return {
+        statusLabel: `Biological ${sonOrDaughter}`,
+        badgeLabel: sonOrDaughter,
+        badgeStyle: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+      };
+    }
+    const isSecretPartner = child.isSecretForPartner ?? child.isSecret;
+    if (isPresumedFatherMatch) {
+      if (isSecretPartner) {
+        return {
+          statusLabel: isGuardianMatch ? `Presumed ${sonOrDaughter} (Guardian • Secret)` : `Presumed ${sonOrDaughter} (Secret from Partner)`,
+          badgeLabel: `Presumed ${sonOrDaughter}`,
+          badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+        };
+      }
+      if (isGuardianMatch) {
+        return {
+          statusLabel: stepNoun,
+          badgeLabel: stepNoun,
+          badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+        };
+      }
+      return {
+        statusLabel: `Former Presumed ${sonOrDaughter}`,
+        badgeLabel: `Former Presumed`,
+        badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+      };
+    }
+    if (isSecretPartner) {
+      return {
+        statusLabel: `Presumed ${sonOrDaughter} (Secret from Partner)`,
+        badgeLabel: `Presumed ${sonOrDaughter}`,
+        badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+      };
+    }
+    return {
+      statusLabel: stepNoun,
+      badgeLabel: stepNoun,
+      badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+    };
+  }
+  function getParentRole(parentFormId, child, parentGender) {
+    const isFemale = parentGender === "female";
+    const isMale = parentGender === "male";
+    if (child.isAdopted !== false) {
+      return {
+        roleLabel: isMale ? "Adoptive Father" : isFemale ? "Adoptive Mother" : "Current Guardian",
+        badgeStyle: "text-amber-300"
+      };
+    }
+    const isBioMother = areSameFormId(parentFormId, child.bioMotherId);
+    const isBioFather = areSameFormId(parentFormId, child.bioFatherId);
+    const isPresumedFather = Boolean(child.presumedFatherId && areSameFormId(parentFormId, child.presumedFatherId));
+    if (isBioMother) {
+      return {
+        roleLabel: "Biological Mother",
+        isSecret: false,
+        badgeStyle: "text-emerald-300"
+      };
+    }
+    if (isBioFather) {
+      const isSecretBio = child.isSecretForBioFather ?? false;
+      return {
+        roleLabel: "Biological Father",
+        isSecret: isSecretBio,
+        isSecretForBioFather: isSecretBio,
+        badgeStyle: "text-emerald-300"
+      };
+    }
+    const isSecretPartner = child.isSecretForPartner ?? child.isSecret;
+    if (isPresumedFather) {
+      if (isSecretPartner) {
+        return {
+          roleLabel: "Presumed Father (Guardian)",
+          isSecret: true,
+          isSecretForPartner: true,
+          badgeStyle: "text-purple-300"
+        };
+      }
+      return {
+        roleLabel: "Step-father",
+        badgeStyle: "text-sky-300"
+      };
+    }
+    if (isSecretPartner) {
+      return {
+        roleLabel: isMale ? "Presumed Father (Guardian)" : isFemale ? "Step-mother (secret)" : "Step-parent (secret)",
+        isSecret: true,
+        isSecretForPartner: true,
+        badgeStyle: "text-purple-300"
+      };
+    }
+    return {
+      roleLabel: isMale ? "Step-father" : isFemale ? "Step-mother" : "Step-parent",
+      badgeStyle: "text-sky-300"
+    };
+  }
+  function maskChildRecord(child, revealSecrets, npcProfiles) {
+    var _a2;
+    const isSecretPartner = Boolean(child.isSecretForPartner ?? child.isSecret);
+    const isSecretBio = Boolean(child.isSecretForBioFather);
+    if (!isSecretPartner && !isSecretBio) {
+      return child;
+    }
+    const cleanId = (id2) => id2 && id2 !== "00000000" && id2 !== "00700000" ? id2 : void 0;
+    if (isSecretPartner) {
+      const presumedId = cleanId(child.presumedFatherId);
+      const presumedName = child.presumedFatherName || (presumedId ? (_a2 = npcProfiles == null ? void 0 : npcProfiles.get(presumedId)) == null ? void 0 : _a2.name : void 0);
+      return {
+        ...child,
+        ...child.isAdopted === false ? {
+          bioFatherId: presumedId,
+          bioFatherName: presumedName
+        } : {},
+        presumedFatherId: void 0,
+        presumedFatherName: void 0,
+        isSecret: false,
+        isSecretForPartner: false,
+        isSecretForBioFather: false,
+        hasPhenotypeMismatch: false
+      };
+    }
+    return {
+      ...child,
+      bioFatherId: void 0,
+      bioFatherName: void 0,
+      isSecret: false,
+      isSecretForPartner: false,
+      isSecretForBioFather: false,
+      hasPhenotypeMismatch: false
+    };
+  }
+  function maskChildrenMap(rawChildren, revealSecrets, npcProfiles) {
+    if (revealSecrets) return new Map(rawChildren);
+    const masked = /* @__PURE__ */ new Map();
+    for (const [id2, child] of rawChildren.entries()) {
+      masked.set(id2, maskChildRecord(child, false, npcProfiles));
+    }
+    return masked;
+  }
+  function maskCheatingAndRelationships(rawRelationships, rawCheatingRecords, revealSecrets) {
+    if (revealSecrets) {
+      return {
+        relationships: [...rawRelationships],
+        cheatingRecords: [...rawCheatingRecords]
+      };
+    }
+    const visibleCheating = rawCheatingRecords.filter((cr) => !cr.isSecret);
+    const isSecretAffairPair = (actorA, actorB) => {
+      let hasSecret = false;
+      let hasPublic = false;
+      for (const cr of rawCheatingRecords) {
+        const matchesPair = areSameFormId(cr.cheaterId, actorA) && areSameFormId(cr.affairPartnerId, actorB) || areSameFormId(cr.cheaterId, actorB) && areSameFormId(cr.affairPartnerId, actorA);
+        if (matchesPair) {
+          if (cr.isSecret) hasSecret = true;
+          else hasPublic = true;
+        }
+      }
+      return hasSecret && !hasPublic;
+    };
+    const visibleRelationships = [];
+    for (const r2 of rawRelationships) {
+      const isAffairStatus = r2.status === RelationshipStatus.Lover || r2.status === RelationshipStatus.Dating || r2.status === RelationshipStatus.ExLover || r2.status === RelationshipStatus.ExDating || r2.status === RelationshipStatus.Candidate;
+      if (isAffairStatus && isSecretAffairPair(r2.actorA, r2.actorB)) {
+        if (areSameFormId(r2.actorA, PLAYER_FORM_ID) || areSameFormId(r2.actorB, PLAYER_FORM_ID)) {
+          visibleRelationships.push({
+            ...r2,
+            status: RelationshipStatus.Candidate,
+            isOpen: false,
+            statusHistory: []
+          });
+        }
+        continue;
+      }
+      visibleRelationships.push(r2);
+    }
+    return {
+      relationships: visibleRelationships,
+      cheatingRecords: visibleCheating
+    };
+  }
   const isGameBuild = isInGame();
   const initialNpcMap = /* @__PURE__ */ new Map();
   const initialAffectionMap = /* @__PURE__ */ new Map();
   const initialChildMap = /* @__PURE__ */ new Map();
+  function computeVisibleSecretsState(rawRelationships, rawChildren, rawCheatingRecords, revealSecrets, npcProfiles) {
+    const { relationships, cheatingRecords } = maskCheatingAndRelationships(
+      rawRelationships,
+      rawCheatingRecords,
+      revealSecrets
+    );
+    const children = maskChildrenMap(rawChildren, revealSecrets, npcProfiles);
+    return {
+      rawRelationships,
+      rawChildren,
+      rawCheatingRecords,
+      relationships,
+      children,
+      cheatingRecords
+    };
+  }
+  const initialVisibleSecretsState = computeVisibleSecretsState(
+    [],
+    initialChildMap,
+    [],
+    Boolean(mockSettings.revealSecretsInUI),
+    initialNpcMap
+  );
   const setAffectionDebounceTimers = /* @__PURE__ */ new Map();
   const pendingAffectionUpdates = /* @__PURE__ */ new Map();
   let matchmakingSettingsDebounceTimer = null;
@@ -15024,6 +15356,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   const useMarasStore = create((set, get) => ({
     isOpen: !isGameBuild,
     isInGame: isGameBuild,
+    isGamePaused: !isGameBuild,
     statusMsg: "M.A.R.A.S Core Active",
     activeTab: "overview",
     activeSubSection: "dashboard",
@@ -15056,9 +15389,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     isLoadingAllNpcs: false,
     currentGameDay: 0,
     npcProfiles: initialNpcMap,
-    relationships: [],
-    children: initialChildMap,
-    cheatingRecords: [],
+    ...initialVisibleSecretsState,
     affectionData: initialAffectionMap,
     hierarchyRanks: ["", "", ""],
     playerHomes: [],
@@ -15413,7 +15744,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       if (typeof window !== "undefined" && !window.marasAction) {
         setTimeout(() => {
           set((state) => {
-            const newChildren = new Map(state.children);
+            const newChildren = new Map(state.rawChildren);
             const child = newChildren.get(childId);
             const newProfiles = new Map(state.npcProfiles);
             const profile = newProfiles.get(childId);
@@ -15432,7 +15763,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
               });
             }
             return {
-              children: newChildren,
+              ...computeVisibleSecretsState(
+                state.rawRelationships,
+                newChildren,
+                state.rawCheatingRecords,
+                Boolean(state.settings.revealSecretsInUI),
+                newProfiles
+              ),
               npcProfiles: newProfiles,
               statusMsg: `Child (${childId}) successfully spawned into the world!`
             };
@@ -15442,7 +15779,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     handleChildPromoted: (oldId, newId) => {
       set((state) => {
-        const newChildren = new Map(state.children);
+        const newChildren = new Map(state.rawChildren);
         const oldChild = newChildren.get(oldId);
         if (oldChild) {
           newChildren.delete(oldId);
@@ -15465,7 +15802,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           });
         }
         return {
-          children: newChildren,
+          ...computeVisibleSecretsState(
+            state.rawRelationships,
+            newChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            newProfiles
+          ),
           npcProfiles: newProfiles,
           npcDetailId: state.npcDetailId === oldId ? newId : state.npcDetailId,
           selectedNpcId: state.selectedNpcId === oldId ? newId : state.selectedNpcId,
@@ -15484,7 +15827,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       if (typeof window !== "undefined" && !window.marasAction) {
         setTimeout(() => {
           set((state) => {
-            const newChildren = new Map(state.children);
+            const newChildren = new Map(state.rawChildren);
             const target = newChildren.get(childId);
             if (target) {
               newChildren.set(childId, {
@@ -15495,7 +15838,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
               });
             }
             return {
-              children: newChildren,
+              ...computeVisibleSecretsState(
+                state.rawRelationships,
+                newChildren,
+                state.rawCheatingRecords,
+                Boolean(state.settings.revealSecretsInUI),
+                state.npcProfiles
+              ),
               evaluatingChildId: null,
               statusMsg: `Secret evaluated for child (${childId}).`
             };
@@ -15511,7 +15860,23 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     setStatusMsg: (statusMsg) => set({ statusMsg }),
     setIsOpen: (isOpen) => {
-      set({ isOpen });
+      set((state) => ({
+        isOpen,
+        ...!isOpen ? { isGamePaused: false } : !state.isOpen && !state.isInGame ? { isGamePaused: Boolean(state.settings.autoPauseOnOpen) } : {}
+      }));
+    },
+    setGamePaused: (paused, skipBridge = false) => {
+      set({
+        isGamePaused: paused,
+        statusMsg: paused ? "Game paused." : "Game unpaused."
+      });
+      if (!skipBridge) {
+        sendMarasAction("setGamePaused", { paused });
+      }
+    },
+    toggleGamePaused: () => {
+      const nextPaused = !get().isGamePaused;
+      get().setGamePaused(nextPaused);
     },
     setPlayerHomes: (playerHomes) => set({ playerHomes }),
     setAllSkyrimNpcs: (allSkyrimNpcs) => set({ allSkyrimNpcs, isLoadingAllNpcs: false }),
@@ -15648,10 +16013,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     setDetailPanelOpen: (detailPanelOpen) => set({ detailPanelOpen }),
     setLiveGameData: (data) => {
       set((state) => {
+        var _a2;
         const updates = {};
         if (data.currentGameDay != null) {
           updates.currentGameDay = data.currentGameDay;
         }
+        let nextProfiles = state.npcProfiles;
         if (data.npcProfiles && Array.isArray(data.npcProfiles)) {
           const newMap = new Map(state.npcProfiles);
           data.npcProfiles.forEach((npc) => {
@@ -15659,20 +16026,24 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             newMap.set(npc.formId, existing ? { ...existing, ...npc } : npc);
           });
           updates.npcProfiles = newMap;
+          nextProfiles = newMap;
         }
+        let nextRawRelationships = state.rawRelationships;
         if (data.relationships && Array.isArray(data.relationships)) {
-          updates.relationships = data.relationships;
+          nextRawRelationships = data.relationships;
         }
+        let nextRawChildren = state.rawChildren;
         if (data.children && Array.isArray(data.children)) {
-          const newMap = new Map(state.children);
+          const newMap = new Map(state.rawChildren);
           data.children.forEach((c) => {
             const existing = newMap.get(c.childId);
             newMap.set(c.childId, existing ? { ...existing, ...c } : c);
           });
-          updates.children = newMap;
+          nextRawChildren = newMap;
         }
+        let nextRawCheating = state.rawCheatingRecords;
         if (data.cheatingRecords && Array.isArray(data.cheatingRecords)) {
-          updates.cheatingRecords = data.cheatingRecords;
+          nextRawCheating = data.cheatingRecords;
         }
         if (data.affectionData && Array.isArray(data.affectionData)) {
           const newMap = new Map(state.affectionData);
@@ -15685,8 +16056,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         if (data.playerHomes && Array.isArray(data.playerHomes)) {
           updates.playerHomes = data.playerHomes;
         }
+        if (typeof data.isGamePaused === "boolean") {
+          updates.isGamePaused = data.isGamePaused;
+        }
+        let nextSettings = state.settings;
         if (data.settings) {
-          updates.settings = { ...state.settings, ...data.settings };
+          nextSettings = { ...state.settings, ...data.settings };
+          updates.settings = nextSettings;
           if (data.settings.matchmakingExcludePlayerActivePartners !== void 0 || data.settings.matchmakingConfirmResults !== void 0) {
             const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings;
             updates.matchmakingSettings = {
@@ -15695,6 +16071,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
               ...data.settings.matchmakingConfirmResults !== void 0 ? { confirmResults: data.settings.matchmakingConfirmResults } : {}
             };
           }
+        }
+        if (data.relationships || data.children || data.cheatingRecords || data.npcProfiles || ((_a2 = data.settings) == null ? void 0 : _a2.revealSecretsInUI) !== void 0) {
+          Object.assign(
+            updates,
+            computeVisibleSecretsState(
+              nextRawRelationships,
+              nextRawChildren,
+              nextRawCheating,
+              Boolean(nextSettings.revealSecretsInUI),
+              nextProfiles
+            )
+          );
         }
         return updates;
       });
@@ -15819,13 +16207,19 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     setPairIsOpen: (actorA, actorB, isOpen, fromMatchmaking) => {
       sendMarasAction("setPairIsOpen", { actorA, actorB, isOpen, fromMatchmaking });
       set((state) => {
-        const newRels = state.relationships.map((r2) => {
+        const newRels = state.rawRelationships.map((r2) => {
           if (r2.actorA === actorA && r2.actorB === actorB || r2.actorA === actorB && r2.actorB === actorA) {
             return { ...r2, isOpen };
           }
           return r2;
         });
-        return { relationships: newRels };
+        return computeVisibleSecretsState(
+          newRels,
+          state.rawChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          state.npcProfiles
+        );
       });
     },
     setHierarchyRank: (formId, rankIndex) => {
@@ -15843,10 +16237,36 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     assignRelationshipStatus: (actorA, actorB, status, dualMemories, fromMatchmaking) => {
       sendMarasAction("assignRelationship", { actorA, actorB, status, dualMemories, fromMatchmaking });
       set((state) => {
-        const pairIndex = state.relationships.findIndex(
+        let nextProfiles = state.npcProfiles;
+        const ensureActorProfile = (formId) => {
+          if (!formId || nextProfiles.has(formId)) return;
+          const compact = state.allSkyrimNpcs.find((n2) => areSameFormId(n2.formId, formId));
+          const suggestion = state.aiSuggestions.find(
+            (s) => areSameFormId(s.formId, formId) || s.actorAFormId && areSameFormId(s.actorAFormId, formId)
+          );
+          const fallbackName = (compact == null ? void 0 : compact.name) || (suggestion && areSameFormId(suggestion.formId, formId) ? suggestion.name : suggestion == null ? void 0 : suggestion.actorAName);
+          if (!fallbackName && !compact) return;
+          if (nextProfiles === state.npcProfiles) {
+            nextProfiles = new Map(state.npcProfiles);
+          }
+          nextProfiles.set(formId, {
+            formId,
+            name: fallbackName || `NPC ${formId}`,
+            race: (compact == null ? void 0 : compact.race) || "Nord",
+            gender: (compact == null ? void 0 : compact.gender) || "male",
+            pluginName: compact == null ? void 0 : compact.pluginName,
+            isChild: compact == null ? void 0 : compact.isChild,
+            socialClass: SocialClass.Middle,
+            skillType: SkillType.Warrior,
+            temperament: Temperament.Proud
+          });
+        };
+        ensureActorProfile(actorA);
+        ensureActorProfile(actorB);
+        const pairIndex = state.rawRelationships.findIndex(
           (r2) => areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA)
         );
-        const newRelationships = [...state.relationships];
+        const newRelationships = [...state.rawRelationships];
         if (pairIndex !== -1) {
           const oldPair = newRelationships[pairIndex];
           newRelationships[pairIndex] = {
@@ -15878,22 +16298,72 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             ]
           });
         }
-        return { relationships: newRelationships };
+        return {
+          ...nextProfiles !== state.npcProfiles ? { npcProfiles: nextProfiles } : {},
+          ...computeVisibleSecretsState(
+            newRelationships,
+            state.rawChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            nextProfiles
+          )
+        };
       });
     },
-    handleRealtimeStatusChanged: (actorA, actorB, status, isOpen) => {
+    handleRealtimeStatusChanged: (actorA, actorB, status, isOpen, actorAProfile, actorBProfile) => {
       set((state) => {
+        let nextProfiles = state.npcProfiles;
+        const upsertRealtimeProfile = (formId, incoming) => {
+          if (!formId) return;
+          if (incoming && incoming.formId) {
+            if (nextProfiles === state.npcProfiles) {
+              nextProfiles = new Map(state.npcProfiles);
+            }
+            const existing = nextProfiles.get(incoming.formId);
+            nextProfiles.set(incoming.formId, existing ? { ...existing, ...incoming } : incoming);
+            return;
+          }
+          if (!nextProfiles.has(formId)) {
+            const compact = state.allSkyrimNpcs.find((n2) => areSameFormId(n2.formId, formId));
+            if (compact) {
+              if (nextProfiles === state.npcProfiles) {
+                nextProfiles = new Map(state.npcProfiles);
+              }
+              nextProfiles.set(formId, {
+                formId,
+                name: compact.name,
+                race: compact.race || "Nord",
+                gender: compact.gender || "male",
+                pluginName: compact.pluginName,
+                isChild: compact.isChild,
+                socialClass: SocialClass.Middle,
+                skillType: SkillType.Warrior,
+                temperament: Temperament.Proud
+              });
+            }
+          }
+        };
+        upsertRealtimeProfile(actorA, actorAProfile);
+        upsertRealtimeProfile(actorB, actorBProfile);
         if (status === RelationshipStatus.Candidate || status === RelationshipStatus.Unknown) {
+          const filtered = state.rawRelationships.filter(
+            (r2) => !(areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA))
+          );
           return {
-            relationships: state.relationships.filter(
-              (r2) => !(areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA))
+            ...nextProfiles !== state.npcProfiles ? { npcProfiles: nextProfiles } : {},
+            ...computeVisibleSecretsState(
+              filtered,
+              state.rawChildren,
+              state.rawCheatingRecords,
+              Boolean(state.settings.revealSecretsInUI),
+              nextProfiles
             )
           };
         }
-        const pairIndex = state.relationships.findIndex(
+        const pairIndex = state.rawRelationships.findIndex(
           (r2) => areSameFormId(r2.actorA, actorA) && areSameFormId(r2.actorB, actorB) || areSameFormId(r2.actorA, actorB) && areSameFormId(r2.actorB, actorA)
         );
-        const newRelationships = [...state.relationships];
+        const newRelationships = [...state.rawRelationships];
         if (pairIndex !== -1) {
           const oldPair = newRelationships[pairIndex];
           newRelationships[pairIndex] = {
@@ -15926,7 +16396,16 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             ]
           });
         }
-        return { relationships: newRelationships };
+        return {
+          ...nextProfiles !== state.npcProfiles ? { npcProfiles: nextProfiles } : {},
+          ...computeVisibleSecretsState(
+            newRelationships,
+            state.rawChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            nextProfiles
+          )
+        };
       });
     },
     removeRelationship: (actorA, actorB, fromMatchmaking) => {
@@ -15936,10 +16415,17 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         const shouldClosePartnerDrawer = state.npcDetailId !== null && state.npcDetailPartnerId !== null && isMatchingPair(state.npcDetailId, state.npcDetailPartnerId);
         const playerPartnerId = areSameFormId(actorA, PLAYER_FORM_ID) ? actorB : areSameFormId(actorB, PLAYER_FORM_ID) ? actorA : null;
         const nextRanks = playerPartnerId ? state.hierarchyRanks.map((id2) => areSameFormId(id2, playerPartnerId) ? "" : id2) : state.hierarchyRanks;
+        const nextRawRelationships = state.rawRelationships.filter((r2) => !isMatchingPair(r2.actorA, r2.actorB));
+        const nextRawCheating = state.rawCheatingRecords.filter(
+          (c) => !isMatchingPair(c.cheaterId, c.affairPartnerId) && !isMatchingPair(c.cheaterId, c.victimId)
+        );
         return {
-          relationships: state.relationships.filter((r2) => !isMatchingPair(r2.actorA, r2.actorB)),
-          cheatingRecords: state.cheatingRecords.filter(
-            (c) => !isMatchingPair(c.cheaterId, c.affairPartnerId) && !isMatchingPair(c.cheaterId, c.victimId)
+          ...computeVisibleSecretsState(
+            nextRawRelationships,
+            state.rawChildren,
+            nextRawCheating,
+            Boolean(state.settings.revealSecretsInUI),
+            state.npcProfiles
           ),
           hierarchyRanks: nextRanks,
           ...shouldClosePartnerDrawer ? { npcDetailPartnerId: null } : {},
@@ -15952,7 +16438,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         sendMarasAction("addChild", child);
       }
       set((state) => {
-        const newChildren = new Map(state.children);
+        const newChildren = new Map(state.rawChildren);
         const childNpc = state.npcProfiles.get(child.childId);
         const guardianANpc = state.npcProfiles.get(child.guardianAId);
         const guardianBNpc = child.guardianBId ? state.npcProfiles.get(child.guardianBId) : void 0;
@@ -15990,7 +16476,16 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             }
           }
         }
-        return { children: newChildren, npcProfiles: newProfiles };
+        return {
+          ...computeVisibleSecretsState(
+            state.rawRelationships,
+            newChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            newProfiles
+          ),
+          npcProfiles: newProfiles
+        };
       });
     },
     removeChild: (childId, skipBridge = false) => {
@@ -15998,12 +16493,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         sendMarasAction("removeChild", { childId });
       }
       set((state) => {
-        const newChildren = new Map(state.children);
+        const newChildren = new Map(state.rawChildren);
         newChildren.delete(childId);
         const newProfiles = new Map(state.npcProfiles);
         newProfiles.delete(childId);
         return {
-          children: newChildren,
+          ...computeVisibleSecretsState(
+            state.rawRelationships,
+            newChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            newProfiles
+          ),
           npcProfiles: newProfiles,
           npcDetailId: state.npcDetailId === childId ? null : state.npcDetailId,
           selectedNpcId: state.selectedNpcId === childId ? null : state.selectedNpcId
@@ -16011,29 +16512,60 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       });
     },
     updateChild: (childId, updates, skipBridge = false) => {
+      const stateSnapshot = get();
+      const rawExisting = stateSnapshot.rawChildren.get(childId);
+      let effectiveUpdates = { ...updates };
+      if (!skipBridge && !stateSnapshot.settings.revealSecretsInUI && updates.bioFatherId !== void 0 && Boolean((rawExisting == null ? void 0 : rawExisting.isSecretForPartner) ?? (rawExisting == null ? void 0 : rawExisting.isSecret))) {
+        effectiveUpdates = {
+          ...effectiveUpdates,
+          presumedFatherId: void 0,
+          presumedFatherName: void 0,
+          isSecret: false,
+          isSecretForPartner: false,
+          isSecretForBioFather: false
+        };
+        sendMarasAction("setPaternitySecretEdges", {
+          childId,
+          isSecretForBioFather: false,
+          isSecretForPartner: false
+        });
+      }
       if (!skipBridge) {
-        sendMarasAction("updateChild", { childId, ...updates });
+        sendMarasAction("updateChild", {
+          childId,
+          ...effectiveUpdates,
+          ...effectiveUpdates.presumedFatherId === void 0 && "presumedFatherId" in effectiveUpdates ? { presumedFatherId: "" } : {}
+        });
       }
       set((state) => {
-        const newChildren = new Map(state.children);
+        const newChildren = new Map(state.rawChildren);
         const existing = newChildren.get(childId);
         if (existing) {
-          newChildren.set(childId, { ...existing, ...updates });
+          newChildren.set(childId, { ...existing, ...effectiveUpdates });
         } else {
-          newChildren.set(childId, updates);
+          newChildren.set(childId, effectiveUpdates);
         }
         const newProfiles = new Map(state.npcProfiles);
         const existingProf = newProfiles.get(childId);
         if (existingProf) {
           newProfiles.set(childId, {
             ...existingProf,
-            ...updates.name ? { name: updates.name } : {},
-            ...updates.stage ? { stage: updates.stage } : {},
-            ...updates.hasRefID !== void 0 ? { hasRefID: updates.hasRefID } : {},
-            ...updates.isEphemeral !== void 0 ? { isEphemeral: updates.isEphemeral } : {}
+            ...effectiveUpdates.name ? { name: effectiveUpdates.name } : {},
+            ...effectiveUpdates.stage ? { stage: effectiveUpdates.stage } : {},
+            ...effectiveUpdates.hasRefID !== void 0 ? { hasRefID: effectiveUpdates.hasRefID } : {},
+            ...effectiveUpdates.isEphemeral !== void 0 ? { isEphemeral: effectiveUpdates.isEphemeral } : {}
           });
         }
-        return { children: newChildren, npcProfiles: newProfiles };
+        return {
+          ...computeVisibleSecretsState(
+            state.rawRelationships,
+            newChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            newProfiles
+          ),
+          npcProfiles: newProfiles
+        };
       });
     },
     relocateFamilyUnit: ({ childId, home, coParentId, siblingIds }) => {
@@ -16065,7 +16597,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       sendMarasAction("setPaternitySecretEdges", { childId, isSecretForBioFather, isSecretForPartner });
       set((state) => {
         const isSecret = isSecretForBioFather || isSecretForPartner;
-        const newChildren = new Map(state.children);
+        const newChildren = new Map(state.rawChildren);
         const existing = newChildren.get(childId);
         if (existing) {
           newChildren.set(childId, {
@@ -16075,16 +16607,59 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             isSecretForPartner
           });
         }
-        return { children: newChildren };
+        return computeVisibleSecretsState(
+          state.rawRelationships,
+          newChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          state.npcProfiles
+        );
       });
     },
     updateSetting: (key, value) => {
+      let normalizedValue = value;
+      if (key === "uiScale" && typeof value === "number") {
+        normalizedValue = Math.round(Math.min(1.5, Math.max(0.75, value)) * 100) / 100;
+      }
       set((state) => {
-        const newSettings = { ...state.settings, [key]: value };
+        const newSettings = { ...state.settings, [key]: normalizedValue };
         if (key === "simulateNoSkyrimNet") {
-          if (value) {
+          if (normalizedValue) {
             newSettings.hasSkyrimNet = false;
           }
+        }
+        if (key === "autoPauseOnOpen") {
+          const paused = Boolean(normalizedValue);
+          return {
+            settings: newSettings,
+            isGamePaused: paused,
+            statusMsg: paused ? "Auto-pause on open enabled (Game Paused)." : "Auto-pause on open disabled (Game Unpaused)."
+          };
+        }
+        if (key === "uiFullScreen") {
+          return {
+            settings: newSettings,
+            statusMsg: normalizedValue ? "Switched to Full Screen mode." : "Switched to Windowed mode."
+          };
+        }
+        if (key === "uiScale") {
+          return {
+            settings: newSettings,
+            statusMsg: `UI Scale set to ${Math.round(Number(normalizedValue) * 100)}%.`
+          };
+        }
+        if (key === "revealSecretsInUI") {
+          return {
+            settings: newSettings,
+            ...computeVisibleSecretsState(
+              state.rawRelationships,
+              state.rawChildren,
+              state.rawCheatingRecords,
+              Boolean(newSettings.revealSecretsInUI),
+              state.npcProfiles
+            ),
+            statusMsg: normalizedValue ? "All hidden secrets revealed in dashboard." : "Undiscovered secrets hidden (Intrigue Mode)."
+          };
         }
         return { settings: newSettings };
       });
@@ -16094,17 +16669,17 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         clearTimeout(existingTimer);
         updateSettingDebounceTimers.delete(keyStr);
       }
-      if (typeof value === "number") {
-        pendingSettingUpdates.set(keyStr, value);
+      if (typeof normalizedValue === "number") {
+        pendingSettingUpdates.set(keyStr, normalizedValue);
         const timer = setTimeout(() => {
           updateSettingDebounceTimers.delete(keyStr);
           pendingSettingUpdates.delete(keyStr);
-          sendMarasAction("updateSetting", { key, value });
+          sendMarasAction("updateSetting", { key, value: normalizedValue });
         }, 300);
         updateSettingDebounceTimers.set(keyStr, timer);
       } else {
         pendingSettingUpdates.delete(keyStr);
-        sendMarasAction("updateSetting", { key, value });
+        sendMarasAction("updateSetting", { key, value: normalizedValue });
       }
     },
     dumpData: () => {
@@ -16137,6 +16712,26 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         (_a2 = window.log) == null ? void 0 : _a2.call(window, "closeMARAS called (standalone mode)");
       }
       set({ isOpen: false });
+    },
+    refreshData: () => {
+      flushAllPendingDebouncedActions();
+      const { isInGame: isInGame2, npcDetailId, npcDetailPartnerId } = get();
+      if (isInGame2) {
+        sendMarasAction("fetchOverview");
+        sendMarasAction("fetchNPCList");
+        sendMarasAction("fetchAllSkyrimNpcs");
+        sendMarasAction("fetchMatchmakingData");
+        sendMarasAction("fetchHouseholdBuffs");
+        if (npcDetailId) {
+          sendMarasAction("fetchNPCDetail", { formId: npcDetailId });
+        }
+        if (npcDetailPartnerId) {
+          sendMarasAction("fetchNPCDetail", { formId: npcDetailPartnerId });
+        }
+        set({ statusMsg: "Dashboard data refreshed from SKSE." });
+      } else {
+        set({ statusMsg: "Dashboard data refreshed (Standalone Mode)." });
+      }
     },
     logTestSignal: () => {
       var _a2;
@@ -16813,6 +17408,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
    * This source code is licensed under the ISC license.
    * See the LICENSE file in the root directory of this source tree.
    */
+  const Maximize2 = createLucideIcon("Maximize2", [
+    ["polyline", { points: "15 3 21 3 21 9", key: "mznyad" }],
+    ["polyline", { points: "9 21 3 21 3 15", key: "1avn1i" }],
+    ["line", { x1: "21", x2: "14", y1: "3", y2: "10", key: "ota7mn" }],
+    ["line", { x1: "3", x2: "10", y1: "21", y2: "14", key: "1atl0r" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
   const Medal = createLucideIcon("Medal", [
     [
       "path",
@@ -16826,6 +17433,36 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     ["path", { d: "M8 7h8", key: "i86dvs" }],
     ["circle", { cx: "12", cy: "17", r: "5", key: "qbz8iq" }],
     ["path", { d: "M12 18v-2h-.5", key: "fawc4q" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Minimize2 = createLucideIcon("Minimize2", [
+    ["polyline", { points: "4 14 10 14 10 20", key: "11kfnr" }],
+    ["polyline", { points: "20 10 14 10 14 4", key: "rlmsce" }],
+    ["line", { x1: "14", x2: "21", y1: "10", y2: "3", key: "o5lafz" }],
+    ["line", { x1: "3", x2: "10", y1: "21", y2: "14", key: "1atl0r" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Minus = createLucideIcon("Minus", [["path", { d: "M5 12h14", key: "1ays0h" }]]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Monitor = createLucideIcon("Monitor", [
+    ["rect", { width: "20", height: "14", x: "2", y: "3", rx: "2", key: "48i651" }],
+    ["line", { x1: "8", x2: "16", y1: "21", y2: "21", key: "1svkeh" }],
+    ["line", { x1: "12", x2: "12", y1: "17", y2: "21", key: "vw1qmm" }]
   ]);
   /**
    * @license lucide-react v0.460.0 - ISC
@@ -16870,6 +17507,26 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" }],
     ["path", { d: "M9 3v18", key: "fh3hqa" }],
     ["path", { d: "m14 9 3 3-3 3", key: "8010ee" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Pause = createLucideIcon("Pause", [
+    ["rect", { x: "14", y: "4", width: "4", height: "16", rx: "1", key: "zuxfzm" }],
+    ["rect", { x: "6", y: "4", width: "4", height: "16", rx: "1", key: "1okwgv" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Plus = createLucideIcon("Plus", [
+    ["path", { d: "M5 12h14", key: "1ays0h" }],
+    ["path", { d: "M12 5v14", key: "s699le" }]
   ]);
   /**
    * @license lucide-react v0.460.0 - ISC
@@ -17299,6 +17956,254 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }
     );
   };
+  const DashboardLayout = ({ children, style }) => {
+    var _a2;
+    const closeUi = useMarasStore((s) => s.closeUi);
+    const refreshData = useMarasStore((s) => s.refreshData);
+    const fleeChildrenFromCell = useMarasStore((s) => s.fleeChildrenFromCell);
+    const hasChildren = useMarasStore((s) => s.children.size > 0);
+    const statusMsg = useMarasStore((s) => s.statusMsg);
+    const isInGame2 = useMarasStore((s) => s.isInGame);
+    const isGamePaused = useMarasStore((s) => s.isGamePaused);
+    const toggleGamePaused = useMarasStore((s) => s.toggleGamePaused);
+    const logTestSignal = useMarasStore((s) => s.logTestSignal);
+    const activeTab = useMarasStore((s) => s.activeTab);
+    const activeSubSection = useMarasStore((s) => s.activeSubSection);
+    const revealSecretsInUI = useMarasStore((s) => Boolean(s.settings.revealSecretsInUI));
+    const uiFullScreen = useMarasStore((s) => Boolean(s.settings.uiFullScreen));
+    const uiScale = useMarasStore((s) => s.settings.uiScale ?? 1);
+    const updateSetting = useMarasStore((s) => s.updateSetting);
+    const [isSpinningRefresh, setIsSpinningRefresh] = reactExports.useState(false);
+    const handleRefresh = () => {
+      setIsSpinningRefresh(true);
+      refreshData();
+      setTimeout(() => setIsSpinningRefresh(false), 500);
+    };
+    const handleScaleStep = (delta) => {
+      const next = Math.round(Math.min(1.5, Math.max(0.75, uiScale + delta)) * 100) / 100;
+      updateSetting("uiScale", next);
+    };
+    const currentTabObj = mainNavTabs.find((t2) => t2.id === activeTab);
+    const currentSubObj = (_a2 = subNavConfig[activeTab]) == null ? void 0 : _a2.find((s) => s.id === activeSubSection);
+    const ActiveTabIcon = (currentTabObj == null ? void 0 : currentTabObj.icon) || Sparkles;
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: `ui-container h-full w-full flex items-center justify-center ${uiFullScreen ? "p-0" : "p-[1rem]"} bg-overlay select-none font-ui bg-cover bg-center bg-no-repeat overflow-hidden`,
+        style,
+        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: `prism-panel w-full h-full ${uiFullScreen ? "max-w-none max-h-none rounded-none border-0" : "max-w-[68rem] max-h-[44rem] rounded-lg border border-border-strong"} bg-window shadow-window flex flex-col overflow-hidden relative`,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "header flex items-center justify-between px-[1.25rem] py-[0.75rem] border-b border-border-divider bg-panel", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[1rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("h1", { className: "text-xl font-bold tracking-wide text-accent-bright flex items-center gap-[0.375rem] leading-tight", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em] text-accent" }),
+                      " M.A.R.A.S"
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-secondary leading-tight", children: "Marriage & Relationship Alignment System" })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      AppTooltip,
+                      {
+                        side: "bottom",
+                        content: revealSecretsInUI ? "All Secrets Revealed — Showing all hidden affairs and paternity secrets. Click to hide undiscovered secrets (Intrigue Mode)." : "Secrets Hidden (Intrigue Mode) — Undiscovered affairs and paternity secrets are masked as if no secrets exist. Click to reveal all secrets.",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "button",
+                          {
+                            type: "button",
+                            onClick: () => updateSetting("revealSecretsInUI", !revealSecretsInUI),
+                            className: `h-[2rem] px-[0.625rem] rounded-md border transition-all cursor-pointer flex items-center justify-center gap-[0.3125rem] text-xs font-semibold shadow-raised ${revealSecretsInUI ? "text-accent-bright bg-accent/25 border-border-accent shadow-glow hover:bg-accent/35" : "text-foreground-primary bg-panel-raised border-border-strong hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft"}`,
+                            children: [
+                              revealSecretsInUI ? /* @__PURE__ */ jsxRuntimeExports.jsx(Eye, { className: "w-[1rem] h-[1rem] text-accent-bright shrink-0" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(EyeOff, { className: "w-[1rem] h-[1rem] text-accent shrink-0" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Secrets" })
+                            ]
+                          }
+                        )
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      AppTooltip,
+                      {
+                        side: "bottom",
+                        content: "Reload Data — Refresh all relationships, NPC profiles, children, household buffs, and settings from SKSE.",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "button",
+                          {
+                            type: "button",
+                            onClick: handleRefresh,
+                            className: "h-[2rem] px-[0.625rem] rounded-md border transition-all cursor-pointer flex items-center justify-center gap-[0.3125rem] text-xs font-semibold text-foreground-primary bg-panel-raised border-border-strong shadow-raised hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft",
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                RefreshCw,
+                                {
+                                  className: `w-[1rem] h-[1rem] text-accent shrink-0 transition-transform duration-500 ${isSpinningRefresh ? "rotate-180 text-accent-bright" : ""}`
+                                }
+                              ),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Reload" })
+                            ]
+                          }
+                        )
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      AppTooltip,
+                      {
+                        side: "bottom",
+                        content: hasChildren ? "Make all children in your current cell run away until you leave the cell (they flee through the nearest door; children still stuck next to you after ~12 seconds are moved out of the way). Useful before an intimate scene." : "No children to send away.",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "button",
+                          {
+                            type: "button",
+                            onClick: fleeChildrenFromCell,
+                            disabled: !hasChildren,
+                            className: "h-[2rem] px-[0.625rem] rounded-md border transition-all cursor-pointer flex items-center justify-center gap-[0.3125rem] text-xs font-semibold text-foreground-primary bg-panel-raised border-border-strong shadow-raised hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:text-foreground-primary disabled:hover:border-border-strong disabled:hover:bg-panel-raised",
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1rem] h-[1rem] text-accent shrink-0" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Send Kids" })
+                            ]
+                          }
+                        ) })
+                      }
+                    )
+                  ] })
+                ] }),
+                currentTabObj && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-[2rem] flex items-center gap-[0.5rem] bg-panel-inset px-[0.75rem] rounded-md border border-border-subtle text-xs font-medium", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(ActiveTabIcon, { className: "w-[1em] h-[1em] text-accent" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-semibold", children: currentTabObj.label }),
+                  currentSubObj && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "/" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary", children: currentSubObj.label })
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-[2rem] flex items-center bg-panel-raised border border-border-strong rounded-md p-[0.125rem] shadow-raised", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { side: "bottom", content: "Decrease UI & Font Scale (-5%)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: () => handleScaleStep(-0.05),
+                        disabled: uiScale <= 0.75,
+                        className: "h-full px-[0.4375rem] rounded-sm text-xs text-foreground-primary hover:text-accent-bright hover:bg-accent-soft disabled:opacity-40 disabled:pointer-events-none cursor-pointer transition-colors flex items-center",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { className: "w-[0.95rem] h-[0.95rem] text-accent" })
+                      }
+                    ) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      AppTooltip,
+                      {
+                        side: "bottom",
+                        content: "Accessibility UI & Font Scale — Click to reset to 100%",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "button",
+                          {
+                            type: "button",
+                            onClick: () => updateSetting("uiScale", 1),
+                            className: `h-full px-[0.4375rem] rounded-sm text-xs font-semibold cursor-pointer transition-colors flex items-center ${Math.round(uiScale * 100) !== 100 ? "text-accent-bright bg-accent/20" : "text-foreground-primary hover:text-accent-bright"}`,
+                            children: [
+                              Math.round(uiScale * 100),
+                              "%"
+                            ]
+                          }
+                        )
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { side: "bottom", content: "Increase UI & Font Scale (+5%)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: () => handleScaleStep(0.05),
+                        disabled: uiScale >= 1.5,
+                        className: "h-full px-[0.4375rem] rounded-sm text-xs text-foreground-primary hover:text-accent-bright hover:bg-accent-soft disabled:opacity-40 disabled:pointer-events-none cursor-pointer transition-colors flex items-center",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { className: "w-[0.95rem] h-[0.95rem] text-accent" })
+                      }
+                    ) })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    AppTooltip,
+                    {
+                      side: "bottom",
+                      content: isGamePaused ? "Game Paused — Skyrim world time and AI are paused while you browse. Click to unpause the game." : "Pause Game — Click to pause Skyrim while the dashboard is open.",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          type: "button",
+                          onClick: toggleGamePaused,
+                          className: `h-[2rem] px-[0.625rem] rounded-md border transition-all cursor-pointer flex items-center justify-center gap-[0.3125rem] text-xs font-semibold shadow-raised ${isGamePaused ? "text-accent-bright bg-accent/25 border-border-accent shadow-glow hover:bg-accent/35" : "text-foreground-primary bg-panel-raised border-border-strong hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft"}`,
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              Pause,
+                              {
+                                className: `w-[1rem] h-[1rem] shrink-0 ${isGamePaused ? "text-accent-bright" : "text-accent"}`
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGamePaused ? "Paused" : "Pause" })
+                          ]
+                        }
+                      )
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    AppTooltip,
+                    {
+                      side: "bottom",
+                      content: uiFullScreen ? "Windowed Mode — Restore centered dashboard window" : "Full Screen Mode — Expand dashboard to fill the screen",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          onClick: () => updateSetting("uiFullScreen", !uiFullScreen),
+                          className: `w-[2rem] h-[2rem] rounded-md border transition-all cursor-pointer flex items-center justify-center shadow-raised ${uiFullScreen ? "text-accent-bright bg-accent/25 border-border-accent shadow-glow hover:bg-accent/35" : "text-foreground-primary bg-panel-raised border-border-strong hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft"}`,
+                          children: uiFullScreen ? /* @__PURE__ */ jsxRuntimeExports.jsx(Minimize2, { className: "w-[1.05rem] h-[1.05rem] text-accent-bright" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Maximize2, { className: "w-[1.05rem] h-[1.05rem] text-accent" })
+                        }
+                      )
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Close UI (Esc)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: closeUi,
+                      className: "w-[2rem] h-[2rem] rounded-md border border-border-strong bg-panel-raised text-foreground-primary shadow-raised hover:text-status-danger hover:border-status-danger hover:bg-status-danger-soft transition-all cursor-pointer flex items-center justify-center",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[1.15rem] h-[1.15rem]" })
+                    }
+                  ) })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex overflow-hidden", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Sidebar, {}),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1 bg-window relative h-full min-h-0 overflow-hidden p-[1.25rem]", children })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "px-[1.25rem] py-[0.5rem] bg-panel border-t border-border-divider flex items-center justify-between text-xs text-foreground-muted", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-[0.5rem] h-[0.5rem] rounded-full inline-block ${isInGame2 ? "bg-status-success" : "bg-accent"}` }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: statusMsg }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-border-divider", children: "|" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: isInGame2 ? "text-status-success font-semibold" : "text-accent-bright", children: isInGame2 ? "Live SKSE Mode" : "Standalone Mock Mode" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "button",
+                    {
+                      onClick: logTestSignal,
+                      className: "flex items-center gap-[0.25rem] hover:text-accent cursor-pointer transition-colors",
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Terminal, { className: "w-[1em] h-[1em]" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Log Test Signal" })
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "v1.0.0" })
+                ] })
+              ] })
+            ]
+          }
+        )
+      }
+    );
+  };
   const falsyToString = (value) => typeof value === "boolean" ? `${value}` : value === 0 ? "0" : value;
   const cx = clsx;
   const cva = (base, config) => (props) => {
@@ -17339,6 +18244,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     }, []);
     return cx(base, getVariantClassNames, getCompoundVariantClassNames, props === null || props === void 0 ? void 0 : props.class, props === null || props === void 0 ? void 0 : props.className);
   };
+  const modalTemplateRegistry = /* @__PURE__ */ new Map();
+  function getModalTemplate(modalType) {
+    if (!modalType || modalType === "generic") {
+      return void 0;
+    }
+    return modalTemplateRegistry.get(modalType);
+  }
   const buttonVariants = cva(
     "inline-flex items-center justify-center whitespace-nowrap rounded-md text-base font-medium transition-colors focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-accent-bright focus-visible:ring-2 focus-visible:ring-accent-bright focus:shadow-glow disabled:pointer-events-none disabled:opacity-50 border cursor-pointer",
     {
@@ -17376,109 +18288,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     }
   );
   Button.displayName = "Button";
-  const DashboardLayout = ({ children, style }) => {
-    var _a2;
-    const closeUi = useMarasStore((s) => s.closeUi);
-    const fleeChildrenFromCell = useMarasStore((s) => s.fleeChildrenFromCell);
-    const hasChildren = useMarasStore((s) => s.children.size > 0);
-    const statusMsg = useMarasStore((s) => s.statusMsg);
-    const isInGame2 = useMarasStore((s) => s.isInGame);
-    const logTestSignal = useMarasStore((s) => s.logTestSignal);
-    const activeTab = useMarasStore((s) => s.activeTab);
-    const activeSubSection = useMarasStore((s) => s.activeSubSection);
-    const currentTabObj = mainNavTabs.find((t2) => t2.id === activeTab);
-    const currentSubObj = (_a2 = subNavConfig[activeTab]) == null ? void 0 : _a2.find((s) => s.id === activeSubSection);
-    const ActiveTabIcon = (currentTabObj == null ? void 0 : currentTabObj.icon) || Sparkles;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        className: "ui-container h-full w-full flex items-center justify-center p-[1rem] bg-overlay select-none font-ui bg-cover bg-center bg-no-repeat overflow-hidden",
-        style,
-        children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "prism-panel w-full max-w-[68rem] h-full max-h-[44rem] rounded-lg border border-border-strong bg-window shadow-window flex flex-col overflow-hidden relative", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "header flex items-center justify-between px-[1.25rem] py-[0.75rem] border-b border-border-divider bg-panel", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[1rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("h1", { className: "text-xl font-bold tracking-wide text-accent-bright flex items-center gap-[0.375rem]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-                " M.A.R.A.S"
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-secondary", children: "Marriage & Relationship Alignment System" })
-            ] }) }),
-            currentTabObj && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] bg-panel-inset px-[0.75rem] py-[0.375rem] rounded-md border border-border-subtle text-xs font-medium", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(ActiveTabIcon, { className: "w-[1em] h-[1em] text-accent" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-semibold", children: currentTabObj.label }),
-              currentSubObj && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "/" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary", children: currentSubObj.label })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                AppTooltip,
-                {
-                  side: "bottom",
-                  content: hasChildren ? "Make all children in your current cell run away until you leave the cell (they flee through the nearest door; children still stuck next to you after ~12 seconds are moved out of the way). Useful before an intimate scene." : "No children to send away.",
-                  children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    Button,
-                    {
-                      variant: "ghost",
-                      size: "icon",
-                      onClick: fleeChildrenFromCell,
-                      disabled: !hasChildren,
-                      className: "text-foreground-muted hover:text-accent-bright hover:bg-accent-soft rounded-full",
-                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1.25em] h-[1.25em]" })
-                    }
-                  ) })
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Close UI (Esc)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                Button,
-                {
-                  variant: "ghost",
-                  size: "icon",
-                  onClick: closeUi,
-                  className: "text-foreground-muted hover:text-accent-bright hover:bg-accent-soft rounded-full",
-                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[1.25em] h-[1.25em]" })
-                }
-              ) })
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex overflow-hidden", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Sidebar, {}),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "flex-1 bg-window relative h-full min-h-0 overflow-hidden p-[1.25rem]", children })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "px-[1.25rem] py-[0.5rem] bg-panel border-t border-border-divider flex items-center justify-between text-xs text-foreground-muted", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-[0.5rem] h-[0.5rem] rounded-full inline-block ${isInGame2 ? "bg-status-success" : "bg-accent"}` }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: statusMsg }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-border-divider", children: "|" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: isInGame2 ? "text-status-success font-semibold" : "text-accent-bright", children: isInGame2 ? "Live SKSE Mode" : "Standalone Mock Mode" })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "button",
-                {
-                  onClick: logTestSignal,
-                  className: "flex items-center gap-[0.25rem] hover:text-accent cursor-pointer transition-colors",
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(Terminal, { className: "w-[1em] h-[1em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Log Test Signal" })
-                  ]
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "v1.0.0" })
-            ] })
-          ] })
-        ] })
-      }
-    );
-  };
-  const modalTemplateRegistry = /* @__PURE__ */ new Map();
-  function getModalTemplate(modalType) {
-    if (!modalType || modalType === "generic") {
-      return void 0;
-    }
-    return modalTemplateRegistry.get(modalType);
-  }
   const checkboxVariants = cva(
     "inline-flex items-center justify-center shrink-0 rounded-sm border transition-colors focus:outline-none focus:ring-2 focus:ring-accent-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-bright disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
     {
@@ -24500,135 +25309,6 @@ Defaulting to \`null\`.`;
       )
     ] });
   };
-  function resolveIsFemale(child, npc) {
-    const g = (child == null ? void 0 : child.gender) ?? (npc == null ? void 0 : npc.gender);
-    if (g === "female") return true;
-    if (g === "male") return false;
-    return void 0;
-  }
-  function getChildGenderNouns(isFemale) {
-    const sonOrDaughter = isFemale !== void 0 ? isFemale ? "Daughter" : "Son" : "Child";
-    const childNoun = isFemale !== void 0 ? isFemale ? "Daughter" : "Son" : "Child";
-    const stepNoun = isFemale !== void 0 ? isFemale ? "Stepdaughter" : "Stepson" : "Stepchild";
-    const boyOrGirl = isFemale !== void 0 ? isFemale ? "Girl" : "Boy" : "Child";
-    const genderSymbol = isFemale !== void 0 ? isFemale ? "♀" : "♂" : "";
-    return { sonOrDaughter, childNoun, stepNoun, boyOrGirl, genderSymbol };
-  }
-  function getChildRelationshipStatus(child, actorIdOrA, actorBId) {
-    const isAdopted = child.isAdopted !== false;
-    const isFemale = resolveIsFemale(child);
-    const { sonOrDaughter, childNoun, stepNoun } = getChildGenderNouns(isFemale);
-    if (isAdopted) {
-      return {
-        statusLabel: `Adopted ${childNoun}`,
-        badgeLabel: `Adopted ${sonOrDaughter}`,
-        badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-      };
-    }
-    const bioMother = child.bioMotherId;
-    const bioFather = child.bioFatherId;
-    if (actorIdOrA && actorBId) {
-      const isBioA = areSameFormId(bioMother, actorIdOrA) || areSameFormId(bioFather, actorIdOrA);
-      const isBioB = areSameFormId(bioMother, actorBId) || areSameFormId(bioFather, actorBId);
-      if (isBioA && isBioB) {
-        return {
-          statusLabel: `Shared Biological ${sonOrDaughter}`,
-          badgeLabel: sonOrDaughter,
-          badgeStyle: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-        };
-      }
-      if (isBioA || isBioB) {
-        const isSecretPartner2 = child.isSecretForPartner ?? child.isSecret;
-        if (isSecretPartner2) {
-          return {
-            statusLabel: `${stepNoun} / ${sonOrDaughter} (Secret)`,
-            badgeLabel: `${stepNoun} (Secret)`,
-            badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-          };
-        }
-        return {
-          statusLabel: `${stepNoun} / ${sonOrDaughter}`,
-          badgeLabel: stepNoun,
-          badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-        };
-      }
-      return {
-        statusLabel: `Adopted ${childNoun}`,
-        badgeLabel: `Adopted ${sonOrDaughter}`,
-        badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-      };
-    }
-    const isBioMotherMatch = actorIdOrA ? areSameFormId(bioMother, actorIdOrA) : false;
-    const isBioFatherMatch = actorIdOrA ? areSameFormId(bioFather, actorIdOrA) : false;
-    if (isBioMotherMatch || isBioFatherMatch) {
-      if (isBioFatherMatch && child.isSecretForBioFather) {
-        return {
-          statusLabel: `Biological ${sonOrDaughter} (Secret from Father)`,
-          badgeLabel: `${sonOrDaughter} (Secret)`,
-          badgeStyle: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-        };
-      }
-      return {
-        statusLabel: `Biological ${sonOrDaughter}`,
-        badgeLabel: sonOrDaughter,
-        badgeStyle: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-      };
-    }
-    const isSecretPartner = child.isSecretForPartner ?? child.isSecret;
-    if (isSecretPartner) {
-      return {
-        statusLabel: `${stepNoun} (Secret from Partner)`,
-        badgeLabel: `${stepNoun} (Secret)`,
-        badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-      };
-    }
-    return {
-      statusLabel: stepNoun,
-      badgeLabel: stepNoun,
-      badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-    };
-  }
-  function getParentRole(parentFormId, child, parentGender) {
-    const isFemale = parentGender === "female";
-    const isMale = parentGender === "male";
-    if (child.isAdopted !== false) {
-      return {
-        roleLabel: isMale ? "Adoptive Father" : isFemale ? "Adoptive Mother" : "Current Guardian",
-        badgeStyle: "text-amber-300"
-      };
-    }
-    const isBioMother = areSameFormId(parentFormId, child.bioMotherId);
-    const isBioFather = areSameFormId(parentFormId, child.bioFatherId);
-    if (isBioMother) {
-      return {
-        roleLabel: "Biological Mother",
-        isSecret: false,
-        badgeStyle: "text-emerald-300"
-      };
-    }
-    if (isBioFather) {
-      const isSecretBio = child.isSecretForBioFather ?? false;
-      return {
-        roleLabel: "Biological Father",
-        isSecret: isSecretBio,
-        isSecretForBioFather: isSecretBio,
-        badgeStyle: "text-emerald-300"
-      };
-    }
-    const isSecretPartner = child.isSecretForPartner ?? child.isSecret;
-    if (isSecretPartner) {
-      return {
-        roleLabel: isMale ? "Step-father (secret)" : isFemale ? "Step-mother (secret)" : "Step-parent (secret)",
-        isSecret: true,
-        isSecretForPartner: true,
-        badgeStyle: "text-purple-300"
-      };
-    }
-    return {
-      roleLabel: isMale ? "Step-father" : isFemale ? "Step-mother" : "Step-parent",
-      badgeStyle: "text-sky-300"
-    };
-  }
   const NpcRelationshipDetails = () => {
     var _a2, _b, _c;
     const selectedId = useMarasStore((s) => s.selectedNpcRelationsId);
@@ -24966,15 +25646,19 @@ Defaulting to \`null\`.`;
     const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
     const removeChild = useMarasStore((s) => s.removeChild);
-    const children = Array.from(childrenStore.values()).filter(
-      (c) => c.guardianAId === PLAYER_FORM_ID || c.guardianBId === PLAYER_FORM_ID || c.bioMotherId === PLAYER_FORM_ID || c.bioFatherId === PLAYER_FORM_ID
-    ).map((c) => {
-      const partnerId = c.guardianAId === PLAYER_FORM_ID ? c.guardianBId : c.guardianAId;
+    const children = Array.from(childrenStore.values()).filter((c) => isActorChild(c, PLAYER_FORM_ID)).map((c) => {
+      const cleanId = (id2) => id2 && id2 !== "00000000" && id2 !== "00700000" ? id2 : void 0;
+      const gA = cleanId(c.guardianAId);
+      const gB = cleanId(c.guardianBId);
+      const isPlayerCustodian = gA === PLAYER_FORM_ID || gB === PLAYER_FORM_ID || !gA && !gB;
+      const partnerId = isPlayerCustodian ? gA === PLAYER_FORM_ID ? gB : gA : gA || gB || (cleanId(c.bioMotherId) === PLAYER_FORM_ID ? cleanId(c.bioFatherId) : cleanId(c.bioMotherId));
       const partnerNpc = partnerId ? npcProfiles.get(partnerId) : void 0;
-      const partnerName = (partnerNpc == null ? void 0 : partnerNpc.name) || (partnerId ? "Player" : "");
+      const partnerName = (partnerNpc == null ? void 0 : partnerNpc.name) || (partnerId === gA ? c.guardianAName : partnerId === gB ? c.guardianBName : "") || "";
       return {
         ...c,
         isAdopted: c.isAdopted ?? true,
+        isPlayerCustodian,
+        partnerId,
         parentPartnerName: partnerName
       };
     });
@@ -25031,7 +25715,8 @@ Defaulting to \`null\`.`;
         const isPlaceholderName = !(npc == null ? void 0 : npc.name) || npc.name.startsWith("NPC_");
         const displayName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (npc == null ? void 0 : npc.name) || child.name || `Child ${child.childId}`;
         const race = (npc == null ? void 0 : npc.race) || "Nord";
-        const home = (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || "Breezehome";
+        const partnerNpc = child.partnerId ? npcProfiles.get(child.partnerId) : void 0;
+        const home = (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || (partnerNpc == null ? void 0 : partnerNpc.currentHome) || (partnerNpc == null ? void 0 : partnerNpc.originalHome) || (child.isPlayerCustodian ? "Breezehome" : "With Custodial Parent");
         const stage = child.stage || (npc == null ? void 0 : npc.stage) || "child";
         const hasRefID = child.hasRefID ?? (npc == null ? void 0 : npc.hasRefID) ?? !child.childId.startsWith("FF7");
         child.isEphemeral ?? (npc == null ? void 0 : npc.isEphemeral) ?? (!hasRefID || stage === "unborn" || stage === "infant" || stage === "training");
@@ -25106,7 +25791,7 @@ Defaulting to \`null\`.`;
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: home })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: child.parentPartnerName ? `Parents: Player & ${child.parentPartnerName}` : "Guardian: Player (Sole Guardian)" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: child.isPlayerCustodian ? child.parentPartnerName ? `Parents: Player & ${child.parentPartnerName}` : "Guardian: Player (Sole Guardian)" : `Custody: ${child.parentPartnerName || "Other Parent"}` }),
                   stage === "unborn" ? child.conceptionTimestamp != null && child.conceptionTimestamp > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
@@ -28318,113 +29003,164 @@ Defaulting to \`null\`.`;
   const GeneralSettings = () => {
     const settings = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[1rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "General Mod Settings", icon: SlidersVertical, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Skip Wedding Ceremony",
-          description: "Immediately complete marriages without scheduling a ceremony at the Temple of Mara.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: settings.skipWedding,
-              onChange: (val) => updateSetting("skipWedding", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Affection Decay Multiplier",
-          description: `Scale daily affection decay rate when not interacting (${Number(settings.affectionDecayMult.toFixed(2))}x).`,
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            SliderInput,
-            {
-              value: settings.affectionDecayMult,
-              min: 0,
-              max: 2,
-              step: 0.1,
-              unit: "x",
-              onChange: (val) => updateSetting("affectionDecayMult", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Enable Polygamy",
-          description: "Allow marrying multiple spouses and establishing rank hierarchies.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: settings.enablePolygamy,
-              onChange: (val) => updateSetting("enablePolygamy", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Disable Polygamy Quest",
-          description: "Prevent 'The Flame Divides Not' quest from starting. If currently running, stops and resets the quest.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: !!settings.disablePolygamyQuest,
-              onChange: (val) => updateSetting("disablePolygamyQuest", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Toggle Dashboard Hotkey Modifiers",
-          description: "Require Ctrl / Shift / Alt keys in combination with your configured toggle key.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] text-xs text-foreground-primary", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "input",
-                {
-                  type: "checkbox",
-                  checked: settings.toggleUIModCtrl,
-                  onChange: (e) => updateSetting("toggleUIModCtrl", e.target.checked),
-                  className: "accent-accent"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Ctrl" })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "input",
-                {
-                  type: "checkbox",
-                  checked: settings.toggleUIModShift,
-                  onChange: (e) => updateSetting("toggleUIModShift", e.target.checked),
-                  className: "accent-accent"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Shift" })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "input",
-                {
-                  type: "checkbox",
-                  checked: settings.toggleUIModAlt,
-                  onChange: (e) => updateSetting("toggleUIModAlt", e.target.checked),
-                  className: "accent-accent"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Alt" })
+    const uiScale = settings.uiScale ?? 1;
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Interface & Accessibility", icon: Monitor, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Auto-Pause Game on Dashboard Open",
+            description: "Automatically pause Skyrim whenever the M.A.R.A.S dashboard is opened. You can also pause or unpause at any time using the Pause button in the top-right header bar.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: Boolean(settings.autoPauseOnOpen),
+                onChange: (val) => updateSetting("autoPauseOnOpen", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Full Screen Mode",
+            description: "Open the M.A.R.A.S dashboard in full-screen mode instead of a centered window.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: Boolean(settings.uiFullScreen),
+                onChange: (val) => updateSetting("uiFullScreen", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "UI & Font Scale (Accessibility)",
+            description: `Scale all fonts, icons, cards, and UI elements proportionally across the dashboard and modals (${Math.round(uiScale * 100)}%).`,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SliderInput,
+              {
+                value: uiScale,
+                min: 0.75,
+                max: 1.5,
+                step: 0.05,
+                unit: "x",
+                onChange: (val) => updateSetting("uiScale", val)
+              }
+            )
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "General Mod Settings", icon: SlidersVertical, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Skip Wedding Ceremony",
+            description: "Immediately complete marriages without scheduling a ceremony at the Temple of Mara.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: settings.skipWedding,
+                onChange: (val) => updateSetting("skipWedding", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Affection Decay Multiplier",
+            description: `Scale daily affection decay rate when not interacting (${Number(settings.affectionDecayMult.toFixed(2))}x).`,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SliderInput,
+              {
+                value: settings.affectionDecayMult,
+                min: 0,
+                max: 2,
+                step: 0.1,
+                unit: "x",
+                onChange: (val) => updateSetting("affectionDecayMult", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Enable Polygamy",
+            description: "Allow marrying multiple spouses and establishing rank hierarchies.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: settings.enablePolygamy,
+                onChange: (val) => updateSetting("enablePolygamy", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Disable Polygamy Quest",
+            description: "Prevent 'The Flame Divides Not' quest from starting. If currently running, stops and resets the quest.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: !!settings.disablePolygamyQuest,
+                onChange: (val) => updateSetting("disablePolygamyQuest", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Toggle Dashboard Hotkey Modifiers",
+            description: "Require Ctrl / Shift / Alt keys in combination with your configured toggle key.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] text-xs text-foreground-primary", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "input",
+                  {
+                    type: "checkbox",
+                    checked: settings.toggleUIModCtrl,
+                    onChange: (e) => updateSetting("toggleUIModCtrl", e.target.checked),
+                    className: "accent-accent"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Ctrl" })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "input",
+                  {
+                    type: "checkbox",
+                    checked: settings.toggleUIModShift,
+                    onChange: (e) => updateSetting("toggleUIModShift", e.target.checked),
+                    className: "accent-accent"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Shift" })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "input",
+                  {
+                    type: "checkbox",
+                    checked: settings.toggleUIModAlt,
+                    onChange: (e) => updateSetting("toggleUIModAlt", e.target.checked),
+                    className: "accent-accent"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Alt" })
+              ] })
             ] })
-          ] })
-        }
-      )
-    ] }) });
+          }
+        )
+      ] })
+    ] });
   };
   const ConfirmationSettings = () => {
     const settings = useMarasStore((s) => s.settings);
@@ -30339,6 +31075,7 @@ Defaulting to \`null\`.`;
   };
   const SettingsPage = () => {
     const activeSubSection = useMarasStore((s) => s.activeSubSection);
+    const uiFullScreen = useMarasStore((s) => Boolean(s.settings.uiFullScreen));
     const renderSubSection = () => {
       switch (activeSubSection) {
         case "general":
@@ -30363,7 +31100,7 @@ Defaulting to \`null\`.`;
           return /* @__PURE__ */ jsxRuntimeExports.jsx(GeneralSettings, {});
       }
     };
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-full w-full", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-w-[44rem] mx-auto p-[0.5rem] pr-[1rem] pb-[2rem]", children: renderSubSection() }) });
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-full w-full", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `${uiFullScreen ? "max-w-[60rem]" : "max-w-[44rem]"} mx-auto p-[0.5rem] pr-[1rem] pb-[2rem]`, children: renderSubSection() }) });
   };
   function categorizePartners(selectedNpcId, relationships, cheatingRecords = [], enablePolygamy = false) {
     const isPlayer = selectedNpcId === PLAYER_FORM_ID;
@@ -30493,7 +31230,9 @@ Defaulting to \`null\`.`;
       return Array.from(children.values()).filter((c) => {
         const isGuardianPair = areSameFormId(c.guardianAId, currentNpcId) && areSameFormId(c.guardianBId, partnerId) || areSameFormId(c.guardianAId, partnerId) && areSameFormId(c.guardianBId, currentNpcId);
         const isBioPair = areSameFormId(c.bioMotherId, currentNpcId) && areSameFormId(c.bioFatherId, partnerId) || areSameFormId(c.bioMotherId, partnerId) && areSameFormId(c.bioFatherId, currentNpcId);
-        return isGuardianPair || isBioPair;
+        const isSecretPartner = Boolean(c.isSecretForPartner ?? c.isSecret);
+        const isPresumedPair = isSecretPartner && Boolean(c.presumedFatherId) && (areSameFormId(c.bioMotherId, currentNpcId) && areSameFormId(c.presumedFatherId, partnerId) || areSameFormId(c.bioMotherId, partnerId) && areSameFormId(c.presumedFatherId, currentNpcId));
+        return isGuardianPair || isBioPair || isPresumedPair;
       });
     }, [children, currentNpcId, partnerId]);
     const targetNpcId = isPlayerPartner ? currentNpcId !== PLAYER_FORM_ID ? currentNpcId : null : partnerId;
@@ -31462,9 +32201,7 @@ Defaulting to \`null\`.`;
     const children = useMarasStore((s) => s.children);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
     const removeChild = useMarasStore((s) => s.removeChild);
-    const allChildren = Array.from(children.values()).filter(
-      (c) => areSameFormId(c.guardianAId, npcId) || areSameFormId(c.guardianBId, npcId) || areSameFormId(c.bioMotherId, npcId) || areSameFormId(c.bioFatherId, npcId)
-    );
+    const allChildren = Array.from(children.values()).filter((c) => isActorChild(c, npcId));
     if (allChildren.length === 0) return null;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       SectionCard,
@@ -31868,7 +32605,7 @@ Defaulting to \`null\`.`;
     isPlayerChild,
     className = ""
   }) => {
-    var _a2, _b;
+    var _a2, _b, _c, _d;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const children = useMarasStore((s) => s.children);
@@ -31876,7 +32613,6 @@ Defaulting to \`null\`.`;
     const playerHomes = useMarasStore((s) => s.playerHomes);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit);
-    const removeChild = useMarasStore((s) => s.removeChild);
     const npc = npcProfiles.get(npcId);
     const childRecord = children.get(npcId);
     const stage = (childRecord == null ? void 0 : childRecord.stage) || (npc == null ? void 0 : npc.stage) || "child";
@@ -32033,6 +32769,17 @@ Defaulting to \`null\`.`;
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "This child is registered in the family record. Once adopted or spawned as an active Hearthfire kid, an in-game residence can be designated." })
           ] })
+        ] }) : isPlayerChildResolved && hasSpouseCoParent ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Assigned Residence" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-medium text-accent-bright flex items-center gap-[0.25rem]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (spouseProfile == null ? void 0 : spouseProfile.currentHome) || "Unassigned" })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.625rem] text-foreground-muted mt-[0.25rem]", children: [
+            "Residence is controlled by co-parent (",
+            spouseName,
+            ")'s assigned home."
+          ] })
         ] }) : isPlayerChildResolved ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-foreground-muted block mb-[0.125rem] font-medium flex items-center gap-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
@@ -32046,30 +32793,14 @@ Defaulting to \`null\`.`;
               onChange: handleSelectHome,
               className: "w-full text-xs"
             }
-          ),
-          hasSpouseCoParent && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.625rem] text-foreground-muted mt-[0.25rem]", children: [
-            "Changing residence will also relocate co-parent (",
-            spouseName,
-            ") and any siblings."
-          ] })
+          )
         ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Assigned Home" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-medium text-accent-bright flex items-center gap-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || "Unset (Original Location)" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || ((childRecord == null ? void 0 : childRecord.guardianAId) && childRecord.guardianAId !== "00000000" ? ((_c = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _c.currentHome) || ((_d = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _d.originalHome) : void 0) || "Following Custodial Parent" })
           ] })
-        ] }) }),
-        childRecord && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.5rem] border-t border-border-divider", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Permanently remove this child record from M.A.R.A.S household and family tracking", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            onClick: () => confirmRemoveChild(npcId, displayName, () => removeChild(npcId)),
-            className: "w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Child Record" })
-            ]
-          }
-        ) }) })
+        ] }) })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         ChildRelocationModal,
@@ -32085,6 +32816,31 @@ Defaulting to \`null\`.`;
       )
     ] });
   };
+  const SLOT_META = {
+    guardianA: {
+      title: "Guardian A",
+      filterLabel: "All Adult NPCs"
+    },
+    guardianB: {
+      title: "Guardian B",
+      filterLabel: "All Adult NPCs"
+    },
+    bioMother: {
+      title: "Biological Mother",
+      filterLabel: "Females Only",
+      genderFilter: "female"
+    },
+    bioFather: {
+      title: "Biological Father",
+      filterLabel: "Males Only",
+      genderFilter: "male"
+    },
+    presumedFather: {
+      title: "Presumed Father",
+      filterLabel: "Males Only",
+      genderFilter: "male"
+    }
+  };
   const ChildGuardiansSection = ({
     npcId,
     className = ""
@@ -32092,8 +32848,31 @@ Defaulting to \`null\`.`;
     var _a2;
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
+    const allSkyrimNpcs = useMarasStore((s) => s.allSkyrimNpcs);
+    const isLoadingAllNpcs = useMarasStore((s) => s.isLoadingAllNpcs);
+    const fetchAllSkyrimNpcs = useMarasStore((s) => s.fetchAllSkyrimNpcs);
     const children = useMarasStore((s) => s.children);
+    const updateChild = useMarasStore((s) => s.updateChild);
     const setPaternitySecretEdges = useMarasStore((s) => s.setPaternitySecretEdges);
+    const revealSecretsInUI = useMarasStore((s) => Boolean(s.settings.revealSecretsInUI));
+    const [activeSlot, setActiveSlot] = reactExports.useState(null);
+    const [searchQuery, setSearchQuery] = reactExports.useState("");
+    reactExports.useEffect(() => {
+      setActiveSlot(null);
+      setSearchQuery("");
+    }, [npcId]);
+    const handleToggleSlotPicker = (slot) => {
+      if (activeSlot === slot) {
+        setActiveSlot(null);
+        setSearchQuery("");
+        return;
+      }
+      if (allSkyrimNpcs.length === 0 && !isLoadingAllNpcs) {
+        fetchAllSkyrimNpcs();
+      }
+      setActiveSlot(slot);
+      setSearchQuery("");
+    };
     const childRecord = children.get(npcId);
     const isSecretForPartner = Boolean((childRecord == null ? void 0 : childRecord.isSecretForPartner) ?? (childRecord == null ? void 0 : childRecord.isSecret));
     const isSecretForBio = Boolean(childRecord == null ? void 0 : childRecord.isSecretForBioFather);
@@ -32108,111 +32887,432 @@ Defaulting to \`null\`.`;
     };
     const playerName = ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
     const playerProfile = npcProfiles.get(PLAYER_FORM_ID);
-    const parentAId = (childRecord == null ? void 0 : childRecord.guardianAId) || (childRecord == null ? void 0 : childRecord.bioMotherId);
-    const parentBId = (childRecord == null ? void 0 : childRecord.guardianBId) || (childRecord == null ? void 0 : childRecord.bioFatherId);
-    const parentAProfile = parentAId ? parentAId === PLAYER_FORM_ID ? { formId: PLAYER_FORM_ID, name: playerName, gender: playerProfile == null ? void 0 : playerProfile.gender } : npcProfiles.get(parentAId) : null;
-    const parentBProfile = parentBId ? parentBId === PLAYER_FORM_ID ? { formId: PLAYER_FORM_ID, name: playerName, gender: playerProfile == null ? void 0 : playerProfile.gender } : npcProfiles.get(parentBId) : null;
+    const cleanId = (id2) => id2 && id2 !== "00000000" && id2 !== "00700000" ? id2 : void 0;
+    const gAId = cleanId(childRecord == null ? void 0 : childRecord.guardianAId);
+    const gBId = cleanId(childRecord == null ? void 0 : childRecord.guardianBId);
+    const bioMotherId = cleanId(childRecord == null ? void 0 : childRecord.bioMotherId);
+    const bioFatherId = cleanId(childRecord == null ? void 0 : childRecord.bioFatherId);
+    const presumedFatherId = cleanId(childRecord == null ? void 0 : childRecord.presumedFatherId);
+    const resolveDisplayProfile = (id2, fallbackName) => {
+      if (id2) {
+        if (areSameFormId(id2, PLAYER_FORM_ID)) {
+          return {
+            formId: PLAYER_FORM_ID,
+            name: playerName,
+            gender: playerProfile == null ? void 0 : playerProfile.gender
+          };
+        }
+        const prof = npcProfiles.get(id2);
+        if (prof) return prof;
+        const compact = allSkyrimNpcs.find((n2) => areSameFormId(n2.formId, id2));
+        if (compact) {
+          return {
+            formId: compact.formId,
+            name: compact.name,
+            gender: compact.gender
+          };
+        }
+        return {
+          formId: id2,
+          name: fallbackName || `NPC ${id2}`,
+          gender: void 0
+        };
+      }
+      if (fallbackName) {
+        return {
+          formId: "",
+          name: fallbackName,
+          gender: void 0
+        };
+      }
+      return null;
+    };
+    const parentAProfile = resolveDisplayProfile(gAId, childRecord == null ? void 0 : childRecord.guardianAName);
+    const parentBProfile = resolveDisplayProfile(gBId, childRecord == null ? void 0 : childRecord.guardianBName);
+    const bioMotherProfile = resolveDisplayProfile(bioMotherId, childRecord == null ? void 0 : childRecord.bioMotherName);
+    const bioFatherProfile = resolveDisplayProfile(bioFatherId, childRecord == null ? void 0 : childRecord.bioFatherName);
+    const presumedFatherProfile = resolveDisplayProfile(presumedFatherId, childRecord == null ? void 0 : childRecord.presumedFatherName);
+    const showPresumedFatherSlot = revealSecretsInUI || Boolean(presumedFatherProfile);
+    reactExports.useEffect(() => {
+      if (!showPresumedFatherSlot && activeSlot === "presumedFather") {
+        setActiveSlot(null);
+        setSearchQuery("");
+      }
+    }, [showPresumedFatherSlot, activeSlot]);
+    const getCurrentSlotFormId = (slot) => {
+      switch (slot) {
+        case "guardianA":
+          return gAId;
+        case "guardianB":
+          return gBId;
+        case "bioMother":
+          return bioMotherId;
+        case "bioFather":
+          return bioFatherId;
+        case "presumedFather":
+          return presumedFatherId;
+      }
+    };
+    const filteredCandidates = reactExports.useMemo(() => {
+      if (!activeSlot) return [];
+      const meta = SLOT_META[activeSlot];
+      const seen = /* @__PURE__ */ new Set();
+      const list = [];
+      const pushCandidate = (c, isChildFlag) => {
+        if (!c.formId || c.formId === "00000000" || areSameFormId(c.formId, npcId)) return;
+        if (isChildFlag || children.has(c.formId)) return;
+        const key = c.formId.toUpperCase();
+        if (seen.has(key)) return;
+        if (meta.genderFilter && c.gender !== meta.genderFilter) return;
+        seen.add(key);
+        list.push(c);
+      };
+      pushCandidate({
+        formId: PLAYER_FORM_ID,
+        name: playerName,
+        race: (playerProfile == null ? void 0 : playerProfile.race) || "Nord",
+        gender: (playerProfile == null ? void 0 : playerProfile.gender) || "male",
+        pluginName: "Skyrim.esm"
+      });
+      for (const prof of npcProfiles.values()) {
+        pushCandidate(
+          {
+            formId: prof.formId,
+            name: prof.name,
+            race: prof.race,
+            gender: prof.gender,
+            pluginName: prof.pluginName
+          },
+          prof.isChild
+        );
+      }
+      for (const compact of allSkyrimNpcs) {
+        pushCandidate(
+          {
+            formId: compact.formId,
+            name: compact.name,
+            race: compact.race,
+            gender: compact.gender,
+            pluginName: compact.pluginName
+          },
+          compact.isChild
+        );
+      }
+      const q2 = searchQuery.trim().toLowerCase();
+      const matched = q2 ? list.filter(
+        (n2) => n2.name.toLowerCase().includes(q2) || n2.formId.toLowerCase().includes(q2) || n2.race && n2.race.toLowerCase().includes(q2) || n2.pluginName && n2.pluginName.toLowerCase().includes(q2)
+      ) : list;
+      return matched.slice(0, 60);
+    }, [activeSlot, npcProfiles, allSkyrimNpcs, children, npcId, playerName, playerProfile, searchQuery]);
+    const handleSelectCandidate = (slot, candidate) => {
+      if (!childRecord) return;
+      const nextId = candidate ? candidate.formId : "";
+      const nextName = candidate ? candidate.name : "";
+      const updates = {};
+      if (slot === "guardianA") {
+        updates.guardianAId = nextId;
+        updates.guardianAName = nextName;
+      } else if (slot === "guardianB") {
+        updates.guardianBId = nextId;
+        updates.guardianBName = nextName;
+      } else if (slot === "bioMother") {
+        updates.bioMotherId = nextId;
+        updates.bioMotherName = nextName;
+        if (nextId) {
+          updates.isAdopted = false;
+          updates.isBiologicalChild = true;
+        }
+      } else if (slot === "bioFather") {
+        updates.bioFatherId = nextId;
+        updates.bioFatherName = nextName;
+        if (nextId) {
+          updates.isAdopted = false;
+          updates.isBiologicalChild = true;
+        }
+      } else if (slot === "presumedFather") {
+        updates.presumedFatherId = nextId;
+        updates.presumedFatherName = nextName;
+        if (nextId && (!childRecord.bioFatherId || !areSameFormId(nextId, childRecord.bioFatherId))) {
+          updates.isSecret = true;
+          updates.isSecretForPartner = true;
+        } else if (!nextId) {
+          updates.isSecret = false;
+          updates.isSecretForPartner = false;
+        }
+      }
+      updateChild(childRecord.childId, updates);
+      setActiveSlot(null);
+      setSearchQuery("");
+    };
     return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Parents & Guardians", icon: Users, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
-      parentAProfile || parentBProfile ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-[0.75rem]", children: [
-        parentAProfile && (() => {
-          const isPlayerParent = areSameFormId(parentAProfile.formId, PLAYER_FORM_ID);
-          const { roleLabel, isSecret, isSecretForPartner: isSecretPartner, badgeStyle } = getParentRole(
-            parentAProfile.formId,
-            childRecord || {},
-            parentAProfile.gender
-          );
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: "Custodial Guardians (Click to Swap)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-[0.75rem]", children: [
+          { slot: "guardianA", profile: parentAProfile, fallbackLabel: "Guardian A" },
+          { slot: "guardianB", profile: parentBProfile, fallbackLabel: "Guardian B" }
+        ].map(({ slot, profile, fallbackLabel }) => {
+          const isSelectedSlot = activeSlot === slot;
+          const isPlayerParent = Boolean((profile == null ? void 0 : profile.formId) && areSameFormId(profile.formId, PLAYER_FORM_ID));
+          const roleInfo = (profile == null ? void 0 : profile.formId) ? getParentRole(profile.formId, childRecord || {}, profile.gender) : { roleLabel: fallbackLabel, isSecret: false, isSecretForPartner: false, badgeStyle: "text-foreground-muted" };
           return /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
-              onClick: () => !isPlayerParent && openNpcDetail(parentAProfile.formId),
-              className: `p-[0.75rem] bg-panel-inset border border-border-subtle rounded flex items-center justify-between transition-colors ${isPlayerParent ? "" : "hover:bg-interactive-hover cursor-pointer"}`,
+              onClick: () => handleToggleSlotPicker(slot),
+              className: `p-[0.75rem] bg-panel-inset border rounded flex items-center justify-between transition-colors cursor-pointer ${isSelectedSlot ? "border-accent bg-interactive-hover" : "border-border-subtle hover:bg-interactive-hover hover:border-border-accent"}`,
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] mb-[0.125rem]", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[0.6875rem] ${badgeStyle || "text-foreground-muted"} block font-medium`, children: roleLabel }),
-                    isSecret && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] mb-[0.125rem] flex-wrap", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[0.6875rem] ${roleInfo.badgeStyle || "text-foreground-muted"} block font-medium`, children: roleInfo.roleLabel }),
+                    roleInfo.isSecret && /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "span",
                       {
                         className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
-                        title: isSecretPartner ? "Partner believes the child is theirs" : "Secret from parent",
-                        children: isSecretPartner ? "Secret from Partner" : "Secret"
+                        title: roleInfo.isSecretForPartner ? "Partner believes the child is theirs" : "Secret from parent",
+                        children: roleInfo.isSecretForPartner ? "Secret from Partner" : "Secret"
                       }
                     )
                   ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-bold text-accent-bright text-xs", children: parentAProfile.name })
+                  profile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-bold text-accent-bright text-xs truncate block", children: profile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "italic text-foreground-muted text-xs block", children: "Unassigned — Click to assign" })
                 ] }),
-                !isPlayerParent && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted", children: "View Profile →" })
-              ]
-            }
-          );
-        })(),
-        parentBProfile && (() => {
-          const isPlayerParent = areSameFormId(parentBProfile.formId, PLAYER_FORM_ID);
-          const { roleLabel, isSecret, isSecretForPartner: isSecretPartner, badgeStyle } = getParentRole(
-            parentBProfile.formId,
-            childRecord || {},
-            parentBProfile.gender
-          );
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              onClick: () => !isPlayerParent && openNpcDetail(parentBProfile.formId),
-              className: `p-[0.75rem] bg-panel-inset border border-border-subtle rounded flex items-center justify-between transition-colors ${isPlayerParent ? "" : "hover:bg-interactive-hover cursor-pointer"}`,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] mb-[0.125rem]", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[0.6875rem] ${badgeStyle || "text-foreground-muted"} block font-medium`, children: roleLabel }),
-                    isSecret && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
-                      {
-                        className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
-                        title: isSecretPartner ? "Partner believes the child is theirs" : "Secret from parent",
-                        children: isSecretPartner ? "Secret from Partner" : "Secret"
-                      }
-                    )
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-shrink-0 ml-[0.5rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] text-foreground-muted flex items-center gap-[0.25rem]", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[0.75em] h-[0.75em]" }),
+                    "Swap"
                   ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-bold text-accent-bright text-xs", children: parentBProfile.name })
-                ] }),
-                !isPlayerParent && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted", children: "View Profile →" })
+                  (profile == null ? void 0 : profile.formId) && !isPlayerParent && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        openNpcDetail(profile.formId);
+                      },
+                      className: "px-[0.375rem] py-[0.125rem] rounded bg-panel-raised hover:bg-accent/20 text-[0.625rem] text-accent border border-border-subtle flex items-center gap-[0.25rem] transition-colors cursor-pointer",
+                      title: "Open NPC Profile",
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Profile" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
+                      ]
+                    }
+                  )
+                ] })
               ]
-            }
+            },
+            slot
           );
-        })()
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem]", children: "No registered parents found for this child." }),
-      ((childRecord == null ? void 0 : childRecord.isAdopted) !== false && ((childRecord == null ? void 0 : childRecord.bioMotherId) || (childRecord == null ? void 0 : childRecord.bioFatherId)) || (childRecord == null ? void 0 : childRecord.isAdopted) === false && (Boolean(childRecord.bioMotherId && !areSameFormId(childRecord.bioMotherId, parentAId) && !areSameFormId(childRecord.bioMotherId, parentBId)) || Boolean(childRecord.bioFatherId && !areSameFormId(childRecord.bioFatherId, parentAId) && !areSameFormId(childRecord.bioFatherId, parentBId)))) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.5rem] border-t border-border-divider", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: "Biological Parents" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-[0.5rem]", children: [
-          (childRecord == null ? void 0 : childRecord.bioMotherName) && (() => {
-            const isPlayerBioMom = Boolean(childRecord.bioMotherId && areSameFormId(childRecord.bioMotherId, PLAYER_FORM_ID));
+        }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.5rem] border-t border-border-divider", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: showPresumedFatherSlot ? "Biological & Presumed Parents (Click to Swap)" : "Biological Parents (Click to Swap)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `grid grid-cols-1 ${showPresumedFatherSlot ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-[0.5rem]`, children: [
+          (() => {
+            const isSelectedSlot = activeSlot === "bioMother";
+            const isPlayerBioMom = Boolean((bioMotherProfile == null ? void 0 : bioMotherProfile.formId) && areSameFormId(bioMotherProfile.formId, PLAYER_FORM_ID));
             return /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
-                onClick: () => childRecord.bioMotherId && !isPlayerBioMom && openNpcDetail(childRecord.bioMotherId),
-                className: `p-[0.5rem] bg-panel-raised border border-border-subtle rounded flex items-center justify-between transition-colors ${isPlayerBioMom ? "" : "hover:border-border-accent cursor-pointer"}`,
+                onClick: () => handleToggleSlotPicker("bioMother"),
+                className: `p-[0.5rem] bg-panel-raised border rounded flex flex-col justify-between gap-[0.25rem] transition-colors cursor-pointer ${isSelectedSlot ? "border-accent bg-interactive-hover" : "border-border-subtle hover:border-border-accent"}`,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium", children: childRecord.bioMotherName }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: "Biological Mother" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem]", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: "Biological Mother" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[0.75em] h-[0.75em] text-foreground-muted" }),
+                      (bioMotherProfile == null ? void 0 : bioMotherProfile.formId) && !isPlayerBioMom && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            openNpcDetail(bioMotherProfile.formId);
+                          },
+                          className: "p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer",
+                          title: "Open Biological Mother Profile",
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
+                        }
+                      )
+                    ] })
+                  ] }),
+                  bioMotherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: bioMotherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: "Unassigned (♀)" })
                 ]
               }
             );
           })(),
-          (childRecord == null ? void 0 : childRecord.bioFatherName) && (() => {
-            const isPlayerBioDad = Boolean(childRecord.bioFatherId && areSameFormId(childRecord.bioFatherId, PLAYER_FORM_ID));
+          (() => {
+            const isSelectedSlot = activeSlot === "bioFather";
+            const isPlayerBioDad = Boolean((bioFatherProfile == null ? void 0 : bioFatherProfile.formId) && areSameFormId(bioFatherProfile.formId, PLAYER_FORM_ID));
             return /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
-                onClick: () => childRecord.bioFatherId && !isPlayerBioDad && openNpcDetail(childRecord.bioFatherId),
-                className: `p-[0.5rem] bg-panel-raised border border-border-subtle rounded flex items-center justify-between transition-colors ${isPlayerBioDad ? "" : "hover:border-border-accent cursor-pointer"}`,
+                onClick: () => handleToggleSlotPicker("bioFather"),
+                className: `p-[0.5rem] bg-panel-raised border rounded flex flex-col justify-between gap-[0.25rem] transition-colors cursor-pointer ${isSelectedSlot ? "border-accent bg-interactive-hover" : "border-border-subtle hover:border-border-accent"}`,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium", children: childRecord.bioFatherName }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: "Biological Father" }),
-                    childRecord.isSecretForBioFather && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold uppercase tracking-wider", title: "Biological father is unaware that he fathered this child", children: "Secret From Him" })
-                  ] })
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem] flex-wrap", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: "Biological Father" }),
+                      (childRecord == null ? void 0 : childRecord.isSecretForBioFather) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold uppercase tracking-wider",
+                          title: "Biological father is unaware that he fathered this child",
+                          children: "Secret From Him"
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[0.75em] h-[0.75em] text-foreground-muted" }),
+                      (bioFatherProfile == null ? void 0 : bioFatherProfile.formId) && !isPlayerBioDad && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            openNpcDetail(bioFatherProfile.formId);
+                          },
+                          className: "p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer",
+                          title: "Open Biological Father Profile",
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
+                        }
+                      )
+                    ] })
+                  ] }),
+                  bioFatherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: bioFatherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: "Unassigned (♂)" })
+                ]
+              }
+            );
+          })(),
+          showPresumedFatherSlot && (() => {
+            const isSelectedSlot = activeSlot === "presumedFather";
+            const isPlayerPresumedDad = Boolean((presumedFatherProfile == null ? void 0 : presumedFatherProfile.formId) && areSameFormId(presumedFatherProfile.formId, PLAYER_FORM_ID));
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                onClick: () => handleToggleSlotPicker("presumedFather"),
+                className: `p-[0.5rem] bg-panel-raised border rounded flex flex-col justify-between gap-[0.25rem] transition-colors cursor-pointer ${isSelectedSlot ? "border-accent bg-interactive-hover" : "border-border-subtle hover:border-border-accent"}`,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem] flex-wrap", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-purple-300 font-medium", children: "Presumed Father" }),
+                      presumedFatherProfile && (isSecretForPartner ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
+                          title: "Partner believes the child is his biological child",
+                          children: "Secret From Partner"
+                        }
+                      ) : (childRecord == null ? void 0 : childRecord.discoveredByPartner) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold uppercase tracking-wider",
+                          title: "Partner has discovered the true paternity",
+                          children: "Truth Known"
+                        }
+                      ) : null)
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[0.75em] h-[0.75em] text-foreground-muted" }),
+                      (presumedFatherProfile == null ? void 0 : presumedFatherProfile.formId) && !isPlayerPresumedDad && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            openNpcDetail(presumedFatherProfile.formId);
+                          },
+                          className: "p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer",
+                          title: "Open Presumed Father Profile",
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
+                        }
+                      )
+                    ] })
+                  ] }),
+                  presumedFatherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: presumedFatherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: "None / Unassigned (♂)" })
                 ]
               }
             );
           })()
+        ] })
+      ] }),
+      activeSlot && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-panel-inset border border-accent/40 rounded space-y-[0.5rem]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-bold text-accent-bright", children: [
+              "Swap ",
+              SLOT_META[activeSlot].title
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-accent/15 text-accent border border-accent/30 font-medium", children: SLOT_META[activeSlot].filterLabel })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              onClick: () => {
+                setActiveSlot(null);
+                setSearchQuery("");
+              },
+              className: "p-[0.25rem] rounded text-foreground-muted hover:text-foreground-primary hover:bg-panel-raised transition-colors cursor-pointer",
+              title: "Close picker",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[0.875em] h-[0.875em]" })
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[0.875em] h-[0.875em] text-foreground-muted absolute left-[0.5rem] top-1/2 -translate-y-1/2 pointer-events-none" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "text",
+              value: searchQuery,
+              onChange: (e) => setSearchQuery(e.target.value),
+              placeholder: `Search ${SLOT_META[activeSlot].filterLabel.toLowerCase()} by name, race, plugin, or FormID...`,
+              autoFocus: true,
+              className: "w-full pl-[1.75rem] pr-[0.5rem] py-[0.375rem] bg-panel-raised border border-border-subtle rounded text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-h-[12rem] overflow-y-auto space-y-[0.25rem] pr-[0.25rem]", children: [
+          getCurrentSlotFormId(activeSlot) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              type: "button",
+              onClick: () => handleSelectCandidate(activeSlot, null),
+              className: "w-full px-[0.5rem] py-[0.375rem] rounded bg-rose-950/30 hover:bg-rose-950/50 border border-rose-500/30 text-rose-300 text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                  "Clear / Unassign ",
+                  SLOT_META[activeSlot].title
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] uppercase", children: "None" })
+              ]
+            }
+          ),
+          isLoadingAllNpcs && filteredCandidates.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem] text-center", children: "Loading NPCs..." }) : filteredCandidates.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem] text-center", children: "No matching NPCs found." }) : filteredCandidates.map((cand) => {
+            const currentId = getCurrentSlotFormId(activeSlot);
+            const isCurrent = Boolean(currentId && areSameFormId(currentId, cand.formId));
+            const isPlayer = areSameFormId(cand.formId, PLAYER_FORM_ID);
+            const genderSym = cand.gender === "female" ? "♀" : cand.gender === "male" ? "♂" : "";
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                type: "button",
+                onClick: () => handleSelectCandidate(activeSlot, cand),
+                className: `w-full px-[0.5rem] py-[0.375rem] rounded border text-left flex items-center justify-between transition-colors cursor-pointer ${isCurrent ? "bg-accent/20 border-accent text-accent-bright" : "bg-panel-raised hover:bg-interactive-hover border-border-subtle text-foreground-primary"}`,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] min-w-0", children: [
+                    genderSym && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted flex-shrink-0", children: genderSym }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium truncate", children: cand.name }),
+                    isPlayer && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase flex-shrink-0", children: "Player" }),
+                    isCurrent && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-accent/30 text-accent-bright font-semibold uppercase flex-shrink-0", children: "Current" })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-[0.625rem] text-foreground-muted flex-shrink-0 ml-[0.5rem]", children: [
+                    cand.race && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: cand.race }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: cand.formId })
+                  ] })
+                ]
+              },
+              cand.formId
+            );
+          })
         ] })
       ] }),
       hasActiveSecret && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.625rem] border-t border-border-divider space-y-[0.5rem]", children: [
@@ -32349,9 +33449,7 @@ Defaulting to \`null\`.`;
     const children = useMarasStore((s) => s.children);
     const settings = useMarasStore((s) => s.settings);
     const categorized = categorizePartners(PLAYER_FORM_ID, relationships, cheatingRecords, settings.enablePolygamy);
-    const hasChildren = Array.from(children.values()).some(
-      (c) => c.guardianAId === PLAYER_FORM_ID || c.guardianBId === PLAYER_FORM_ID || c.bioMotherId === PLAYER_FORM_ID || c.bioFatherId === PLAYER_FORM_ID
-    );
+    const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, PLAYER_FORM_ID));
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
     );
@@ -32374,9 +33472,7 @@ Defaulting to \`null\`.`;
     const settings = useMarasStore((s) => s.settings);
     const npc = npcProfiles.get(npcId);
     const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy) : null;
-    const hasChildren = Array.from(children.values()).some(
-      (c) => c.guardianAId === npcId || c.guardianBId === npcId || c.bioMotherId === npcId || c.bioFatherId === npcId
-    );
+    const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, npcId));
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
     );
@@ -32406,9 +33502,7 @@ Defaulting to \`null\`.`;
     const isMarried = (relWithPlayer == null ? void 0 : relWithPlayer.status) === RelationshipStatus.Married;
     const npc = npcProfiles.get(npcId);
     const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy) : null;
-    const hasChildren = Array.from(children.values()).some(
-      (c) => c.guardianAId === npcId || c.guardianBId === npcId || c.bioMotherId === npcId || c.bioFatherId === npcId
-    );
+    const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, npcId));
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
     );
@@ -32489,6 +33583,7 @@ Defaulting to \`null\`.`;
     const teleportPlayerToNpc = useMarasStore((s) => s.teleportPlayerToNpc);
     const teleportNpcToPlayer = useMarasStore((s) => s.teleportNpcToPlayer);
     const spawnChild = useMarasStore((s) => s.spawnChild);
+    const removeChild = useMarasStore((s) => s.removeChild);
     const setMatchmakingModalOpen = useMarasStore((s) => s.setMatchmakingModalOpen);
     const evaluateChildSecret = useMarasStore((s) => s.evaluateChildSecret);
     const evaluatingChildId = useMarasStore((s) => s.evaluatingChildId);
@@ -32509,7 +33604,7 @@ Defaulting to \`null\`.`;
     const isChild = !!((npc == null ? void 0 : npc.isChild) || childRecord);
     const stage = (childRecord == null ? void 0 : childRecord.stage) || (npc == null ? void 0 : npc.stage) || (isChild ? "child" : void 0);
     const hasRefID = (childRecord == null ? void 0 : childRecord.hasRefID) ?? (npc == null ? void 0 : npc.hasRefID) ?? !npcId.startsWith("FF7");
-    const isPlayerChild = isChild && !!(childRecord && (areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) || areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID) || areSameFormId(childRecord.bioMotherId, PLAYER_FORM_ID) || areSameFormId(childRecord.bioFatherId, PLAYER_FORM_ID)));
+    const isPlayerChild = isChild && !!(childRecord && (areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) || areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID) || (!childRecord.guardianAId || childRecord.guardianAId === "00000000") && (!childRecord.guardianBId || childRecord.guardianBId === "00000000") && (areSameFormId(childRecord.bioMotherId, PLAYER_FORM_ID) || areSameFormId(childRecord.bioFatherId, PLAYER_FORM_ID))));
     const hasSecret = Boolean(
       childRecord && (childRecord.isSecret || childRecord.isSecretForPartner || childRecord.isSecretForBioFather)
     );
@@ -32669,6 +33764,20 @@ Defaulting to \`null\`.`;
               )
             }
           ),
+          childRecord && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Permanently remove this child record from M.A.R.A.S household and family tracking", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => confirmRemoveChild(npcId, displayName, () => {
+                removeChild(npcId);
+                closeNpcDetail();
+              }),
+              className: "text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 px-[0.625rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Child Record" })
+              ]
+            }
+          ) }),
           !isChild && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Open Matchmaking Modal", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
@@ -32694,7 +33803,12 @@ Defaulting to \`null\`.`;
     const activeTab = useMarasStore((s) => s.activeTab);
     const npcDetailId = useMarasStore((s) => s.npcDetailId);
     const setStatusMsg = useMarasStore((s) => s.setStatusMsg);
+    const uiScale = useMarasStore((s) => s.settings.uiScale ?? 1);
     const hasActiveModal = useModalStore((s) => s.activeModal !== null);
+    reactExports.useEffect(() => {
+      const clampedScale = Math.min(1.5, Math.max(0.75, Number.isFinite(uiScale) ? uiScale : 1));
+      document.documentElement.style.setProperty("--ui-scale", String(clampedScale));
+    }, [uiScale]);
     const inGame = isInGame();
     const style = {};
     reactExports.useEffect(() => {

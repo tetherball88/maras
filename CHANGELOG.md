@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.2.0.alpha - 2026-10-26
+
+### Added
+- **Secrets / Intrigue Mode**: Added a **Secrets** toggle in the dashboard header and General Settings (hidden by default). When secrets are hidden, undiscovered affairs and paternity secrets are masked across the UI so you aren't spoiled on secrets your character hasn't uncovered yet (for example, showing the presumed father as the biological father until the truth comes out).
+- **UI Scale & Full Screen Controls**: Added quick **UI & Font Scale** (`75%`–`150%`) and **Full Screen Mode** buttons in the dashboard header (and General Settings) to resize text and UI elements or expand the dashboard to fill the screen.
+- **Pause Game While Browsing**: Added a **Pause** button in the dashboard header and an **Auto-Pause on Open** setting to pause the game world and AI while using the dashboard.
+- **Interactive Parents & Guardians Editor**: You can now click any parent or guardian slot (**Guardian A**, **Guardian B**, **Biological Mother**, **Biological Father**, or **Presumed Father**) on a child's detail page to search and assign, swap, or clear parents from any adult NPC in Skyrim.
+- **Dedicated Presumed Father Tracking**: Added a separate **Presumed Father** slot for children with paternity secrets, allowing unmarried partners (dating or engaged) to be tracked as the presumed father without automatically making them a household guardian.
+- **Header Quick Actions**: Added a **Reload** button to the dashboard header, updated the child-flee button with a clear **Send Kids** label, and added a **Remove Child Record** button directly on a child's detail page.
+
+### Changed
+- **Unmarried Birth Custody**: Children born to unmarried parents no longer automatically assign both parents as shared guardians. Custody is now awarded to a single parent at birth based on your Child Custody settings, while married couples continue to share custody.
+- **Child Custody on Marriage & Breakups**:
+  - Marrying an NPC who has a child (or marrying the other biological parent of a child in your household) now properly brings the child into your shared household and resolves any paternity secret between the biological parents.
+  - Breaking up a dating relationship or calling off an engagement now evaluates child custody and resolves pregnancy/paternity secrets involving the former partner, matching divorce behavior.
+- **Unhoused Child Behavior**: Children in the player's household who have not yet been assigned to a home now follow and stay near their parent instead of wandering off, and newly spawned NPC children now appear beside their mother or guardian instead of at the player's location.
+- **Beeing Female NG Parity**: Updated Beeing Female NG birth and child-spawning support to match Fertility Mode Reloaded's custody and co-spouse rules.
+- **SkyrimNet Prompts**:
+  - Added a note to character bio prompts instructing the AI that M.A.R.A.S relationship, family, pregnancy, and infidelity sections take priority over older or conflicting relationship descriptions in the character bio.
+  - Improved pregnancy and paternity secret prompts so a pregnant mother hiding an affair baby no longer assumes her partner already knows about the pregnancy or already believes the baby is his.
+
+### Fixed
+- Fixed the player's name appearing with a `"(Player)"` suffix in UI views, notifications, and prompts instead of just the character's name.
+- Fixed the dashboard not refreshing automatically after background or AI matchmaking updates finish applying.
+- Fixed child adoption home selection opening a legacy message box instead of the new Prisma UI home selector modal.
+- Fixed existing saves where an unmarried NPC's biological child with the player had their custody overwritten by the player, automatically restoring custody to the appropriate parent on load.
+
 ## 2.1.1.alpha - 2026-10-24
 - Fixed Fertility Mode Reloaded (FMR 1.0.7+) newborn children remaining stuck at the `Infant` ("Newborn") stage in Prisma UI when growing up into a young child and being registered as an unrelated adopted orphan when spawned (`TTM_MainController` now subscribes to `FMR_ChildGrewUpWithMother` so `akMother` is received and matched to the mother's synthetic child record).
 - Removed leftover hardcoded `sceneIdx = 4` override in `TTM_NpcsScenes` (`SetupSceneOnLocationChange`) so NPC-NPC ambient banter scenes play all randomized dialogue variants instead of repeating index 4.

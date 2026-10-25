@@ -10,7 +10,6 @@ namespace MARAS::ActorSvc {
 
     // Attributes & Metadata
     std::string GetName(RE::FormID id);
-    std::string GetPlayerName(bool includeRole = true);
     std::string GetRaceName(RE::FormID id);
     std::string GetRaceEditorID(RE::FormID id);
     RE::TESRace* GetRace(RE::FormID id);

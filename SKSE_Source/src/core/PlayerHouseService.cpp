@@ -527,7 +527,7 @@ namespace MARAS {
         // 1. Relocate the specific Spouse (if present and requested, or if the Spouse was the primary target)
         if (targetSpouseID != 0 && !matches(targetSpouseID, kPlayerFormID) && (moveParents || !isChild)) {
             if (relocatedSet.insert(targetSpouseID).second) {
-                bool stayAtHome = GetTenantStayAtHome(targetSpouseID);
+                bool stayAtHome = (GetTenantHouseFormID(targetSpouseID) != 0) ? GetTenantStayAtHome(targetSpouseID) : !isChild;
                 (void)RegisterTenantInPlayerHouse(targetSpouseID, playerHouseFormID, stayAtHome);
                 relocatedMembers.push_back(targetSpouseID);
                 MARAS_LOG_INFO("PlayerHouseService::RelocateFamilyUnit: Relocated player spouse {:08X} to house {:08X} (stayAtHome: {})",

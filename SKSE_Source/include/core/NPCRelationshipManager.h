@@ -124,6 +124,7 @@ namespace MARAS {
         bool isAdopted{ true };
         RE::FormID bioMotherID{ 0 };   // Always female — NPC who carried/gave birth (0 for adopted)
         RE::FormID bioFatherID{ 0 };   // Always male — biological sire (0 for adopted)
+        RE::FormID presumedFatherID{ 0 }; // Mother's main partner assumed to be father under paternity secret (0 if none/same as bioFather)
         bool isBiologicalChild{ false };       // true = FMR-born, false = adopted/vanilla
         float conceptionTimestamp{ 0.0f };     // game days (from FMR)
         float birthTimestamp{ 0.0f };          // game days (from FMR)
@@ -136,9 +137,9 @@ namespace MARAS {
         ChildRegistryEntry(RE::FormID cID, RE::FormID gA, RE::FormID gB, const std::string& n, int32_t ts = 0, bool adopted = true,
                            RE::FormID bioM = 0, RE::FormID bioF = 0, bool bioChild = false, float concTs = 0.0f, float birthTs = 0.0f,
                            PaternitySecret pSec = {}, ChildStage st = ChildStage::Child, const std::string& trainLoc = "",
-                           uint8_t gen = 2)
+                           uint8_t gen = 2, RE::FormID presumedF = 0)
             : childID(cID), guardianAID(gA), guardianBID(gB), name(n), timestamp(ts), isAdopted(adopted),
-              bioMotherID(bioM), bioFatherID(bioF), isBiologicalChild(bioChild),
+              bioMotherID(bioM), bioFatherID(bioF), presumedFatherID(presumedF), isBiologicalChild(bioChild),
               conceptionTimestamp(concTs), birthTimestamp(birthTs), paternitySecret(pSec),
               stage(st), trainingLocation(trainLoc), gender(gen) {}
     };
@@ -295,7 +296,9 @@ namespace MARAS {
         void AddPendingChild(RE::FormID childBaseID, const PendingChildData& data);
         void TryResolvePendingChildren(RE::FormID baseID, RE::FormID refID);
 
-        // Helper methods for child custody evaluation on marriage and divorce
+        // Helper methods for child custody evaluation on birth, marriage, and divorce/breakup
+        RE::FormID ResolveSingleCustodian(RE::FormID childID, const ChildRegistryEntry& entry, RE::FormID parentA, RE::FormID parentB) const;
+        void ApplyBirthCustodyRules(RE::FormID childID, ChildRegistryEntry& entry, RE::FormID motherID, RE::FormID presumedFatherID, RE::FormID bioFatherID);
         void EvaluateChildCustodyOnMarriage(RE::FormID actorA, RE::FormID actorB = kPlayerFormID);
         void EvaluateChildCustodyOnDivorce(RE::FormID actorA, RE::FormID actorB = kPlayerFormID);
 
@@ -516,9 +519,11 @@ namespace MARAS {
         // Biological and Partner lineage accessors
         RE::FormID GetBioMother(RE::FormID childID) const;
         RE::FormID GetBioFather(RE::FormID childID) const;
+        RE::FormID GetPresumedFather(RE::FormID childID) const;
         RE::FormID GetMotherPartner(RE::FormID childID) const;
         bool SetBioMother(RE::FormID childID, RE::FormID motherID);
         bool SetBioFather(RE::FormID childID, RE::FormID fatherID);
+        bool SetPresumedFather(RE::FormID childID, RE::FormID fatherID);
 
         // Fertility and Pregnancy Tracking (Fertility Mode Reloaded integration)
         void SetNPCPregnant(RE::FormID motherID, bool pregnant, RE::FormID bioFatherID = 0, RE::FormID presumedFatherID = 0, float conceptionTime = 0.0f);

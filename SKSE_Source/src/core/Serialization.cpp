@@ -97,24 +97,17 @@ namespace MARAS::Serialization {
         std::uint32_t length = 0;
 
         while (serialization->GetNextRecordInfo(type, version, length)) {
-            const std::uint32_t rawVersion = version;
-
-            // Remap in-development unreleased versions (5..20) down to collapsed version 4 for general validation
-            if (version > kDataVersion && version <= 20) {
-                version = kDataVersion;
-            }
-
             if (version < 1 || version > kDataVersion) {
                 MARAS_LOG_ERROR("Unsupported co-save record version {} for record type 0x{:08X} (expected 1-{})",
-                                rawVersion, type, kDataVersion);
+                                version, type, kDataVersion);
                 continue;
             }
 
             if (type == kNPCRelationshipData) {
-                if (!manager.Load(serialization, rawVersion, length)) {
+                if (!manager.Load(serialization, version, length)) {
                     MARAS_LOG_ERROR("Failed to load NPC relationship data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded NPC relationship data (version {})", rawVersion);
+                    MARAS_LOG_INFO("Successfully loaded NPC relationship data (version {})", version);
                 }
             } else if (type == kSpouseHierarchyData) {
                 if (!SpouseHierarchyManager::GetSingleton().Load(serialization)) {

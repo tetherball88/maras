@@ -46,29 +46,65 @@ Function RegisterBeeingFemaleChild(Actor childActor, Actor bioMother, Actor bioF
         return
     endif
     Actor player = TTM_Data.GetPlayer()
-    bool isPlayerChild = (player == bioMother || player == bioFather)
-    if (!isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
+    TakeOverChild(childActor)
+    Actor guardianA = none
+    Actor guardianB = none
+    if (syntheticID != 0)
+        guardianA = MARAS.GetGuardianA(syntheticID)
+        guardianB = MARAS.GetGuardianB(syntheticID)
+    else
+        Actor presumedFather = none
+        if (bioMother != none)
+            presumedFather = MARAS.GetPrimaryPartner(bioMother)
+        endif
+        float dob = StorageUtil.GetFloatValue(childActor, "FW.Child.Birthday", 0.0)
+        string cName = StorageUtil.GetStringValue(childActor, "FW.Child.Name", "")
+        if (cName == "")
+            cName = childActor.GetDisplayName()
+        endif
+        syntheticID = MARAS.RegisterFertilityChild(0, bioMother, presumedFather, bioFather, dob, dob, cName)
+        if (syntheticID != 0)
+            guardianA = MARAS.GetGuardianA(syntheticID)
+            guardianB = MARAS.GetGuardianB(syntheticID)
+        endif
+    endif
+    bool isPlayerChild = false
+    if (guardianA != none || guardianB != none)
+        if (guardianA == player || guardianB == player)
+            isPlayerChild = true
+        elseif ((guardianA != none && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != none && MARAS.IsNPCStatus(guardianB, "married")))
+            isPlayerChild = true
+        endif
+    elseif (player == bioMother || player == bioFather)
+        isPlayerChild = true
+    endif
+    if (guardianA == none && guardianB == none && !isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
         isPlayerChild = true
     endif
 
     if (isPlayerChild)
         TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
-        childrenLogicQst.AdoptChild(childActor, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = stage, isMigrating = isMigrating)
-    else
-        Actor npcFather = none
-        if (syntheticID != 0)
-            npcFather = MARAS.GetMotherPartner(syntheticID)
+        Actor coSpouse = none
+        if (guardianA != none && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
+            coSpouse = guardianA
+        elseif (guardianB != none && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
+            coSpouse = guardianB
         endif
-        if (npcFather == none)
-            npcFather = bioFather
+        childrenLogicQst.AdoptChild(childActor, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = stage, isMigrating = isMigrating)
+    else
+        Actor gA = guardianA
+        Actor gB = guardianB
+        if (gA == none && gB == none)
+            gA = bioMother
         endif
         Location houseLoc = none
-        if (bioMother != none)
-            houseLoc = MARAS.GetTenantHouse(bioMother)
+        if (gA != none)
+            houseLoc = MARAS.GetTenantHouse(gA)
         endif
-        MARAS.RegisterChildActor(childActor, bioMother, npcFather, houseLoc, bioMother, bioFather, syntheticID, stage)
+        MARAS.RegisterChildActor(childActor, gA, gB, houseLoc, bioMother, bioFather, syntheticID, stage, sendEvent = !isMigrating)
+        childActor.EvaluatePackage()
+        childActor.MoveToPackageLocation()
     endif
-    TakeOverChild(childActor)
 EndFunction
 
 ;/

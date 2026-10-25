@@ -4,6 +4,7 @@
 #include "core/NPCIndex.h"
 #include "core/Serialization.h"
 #include "services/ActorService.h"
+#include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 
@@ -218,9 +219,15 @@ namespace MARAS {
                 return false;
             }
 
-            // Version 19+ child gender
+            // Child gender
             if (!serialization->WriteRecordData(entry.gender)) {
                 MARAS_LOG_ERROR("Failed to write gender for child {:08X}", cID);
+                return false;
+            }
+
+            // Version 5+ presumed father
+            if (!serialization->WriteRecordData(entry.presumedFatherID)) {
+                MARAS_LOG_ERROR("Failed to write presumedFatherID for child {:08X}", cID);
                 return false;
             }
         }
@@ -373,13 +380,8 @@ namespace MARAS {
                 }
             }
         } else {
-            // Version 4+ Unified Format (note: version 4 is also the collapsed final schema version;
-            // versions 5..20 were intermediate in-development versions)
-            const bool hasChildRegistry = (version == 4 || version >= 11);
-            const bool hasFertilityFields = (version == 4 || version >= 15);
-            const bool hasLifecycleFields = (version == 4 || version >= 16);
-            const bool hasDualSecrecyFields = (version == 4 || version >= 17);
-            const bool hasChildGender = (version == 4 || version >= 19);
+            // Version 4+ Unified Format
+            const bool hasPresumedFather = (version >= 5);
             constexpr std::uint32_t kMaxChildStringLen = 512;
 
             std::uint32_t profileCount = 0;
@@ -581,7 +583,7 @@ namespace MARAS {
             }
 
             std::uint32_t childRegCount = 0;
-            if (hasChildRegistry && readValue(childRegCount)) {
+            if (readValue(childRegCount)) {
                 for (std::uint32_t cIdx = 0; cIdx < childRegCount; ++cIdx) {
                     RE::FormID oldChild = 0, newChild = 0;
                     RE::FormID oldPA = 0, newPA = 0;
@@ -619,37 +621,32 @@ namespace MARAS {
                     bool isSec = false, disc = false, byPartner = false, mismatch = false;
                     float lastCheck = 0.0f;
 
-                    if (hasFertilityFields) {
-                        if (!readValue(isBioChild) ||
-                            !readValue(concTs) ||
-                            !readValue(birthTs) ||
-                            !readValue(isSec) ||
-                            !readValue(disc) ||
-                            !readValue(byPartner) ||
-                            !readValue(mismatch) ||
-                            !readValue(lastCheck)) break;
-                    }
+                    if (!readValue(isBioChild) ||
+                        !readValue(concTs) ||
+                        !readValue(birthTs) ||
+                        !readValue(isSec) ||
+                        !readValue(disc) ||
+                        !readValue(byPartner) ||
+                        !readValue(mismatch) ||
+                        !readValue(lastCheck)) break;
 
                     PaternitySecret pSec(isSec, disc, byPartner, mismatch, lastCheck);
 
-                    ChildStage stage = ChildStage::Child;
-                    std::string trainingLoc;
-                    if (hasLifecycleFields) {
-                        uint8_t uStage = 0;
-                        if (!readValue(uStage)) break;
-                        stage = static_cast<ChildStage>(uStage);
+                    uint8_t uStage = 0;
+                    if (!readValue(uStage)) break;
+                    ChildStage stage = static_cast<ChildStage>(uStage);
 
-                        uint32_t locLen = 0;
-                        if (!readValue(locLen) || locLen > kMaxChildStringLen || !hasRemainingBytes(locLen)) {
-                            MARAS_LOG_ERROR("Invalid or out-of-bounds child training location length {} during load", locLen);
+                    uint32_t locLen = 0;
+                    if (!readValue(locLen) || locLen > kMaxChildStringLen || !hasRemainingBytes(locLen)) {
+                        MARAS_LOG_ERROR("Invalid or out-of-bounds child training location length {} during load", locLen);
+                        break;
+                    }
+                    std::string trainingLoc;
+                    if (locLen > 0) {
+                        trainingLoc.resize(locLen);
+                        if (!readBuffer(trainingLoc.data(), locLen)) {
+                            MARAS_LOG_ERROR("Failed to read child training location of length {}", locLen);
                             break;
-                        }
-                        if (locLen > 0) {
-                            trainingLoc.resize(locLen);
-                            if (!readBuffer(trainingLoc.data(), locLen)) {
-                                MARAS_LOG_ERROR("Failed to read child training location of length {}", locLen);
-                                break;
-                            }
                         }
                     }
 
@@ -658,23 +655,20 @@ namespace MARAS {
                         stage = ChildStage::Infant;
                     }
 
-                    if (hasDualSecrecyFields) {
-                        bool secBio = false, secPartner = false, byBio = false;
-                        if (!readValue(secBio) ||
-                            !readValue(secPartner) ||
-                            !readValue(byBio)) break;
-                        pSec.isSecretForBioFather = secBio;
-                        pSec.isSecretForPartner = secPartner;
-                        pSec.discoveredByBioFather = byBio;
-                    } else {
-                        pSec.isSecretForPartner = pSec.isSecret;
-                        pSec.isSecretForBioFather = false;
-                        pSec.discoveredByBioFather = false;
-                    }
+                    bool secBio = false, secPartner = false, byBio = false;
+                    if (!readValue(secBio) ||
+                        !readValue(secPartner) ||
+                        !readValue(byBio)) break;
+                    pSec.isSecretForBioFather = secBio;
+                    pSec.isSecretForPartner = secPartner;
+                    pSec.discoveredByBioFather = byBio;
 
                     uint8_t childGender = 0;
-                    if (hasChildGender && hasRemainingBytes(sizeof(childGender))) {
-                        if (!readValue(childGender)) break;
+                    if (!readValue(childGender)) break;
+
+                    RE::FormID oldPresumedFather = 0, newPresumedFather = 0;
+                    if (hasPresumedFather) {
+                        if (!readValue(oldPresumedFather)) break;
                     }
 
                     bool validChild = false;
@@ -695,6 +689,7 @@ namespace MARAS {
                         if (oldPB != 0) (oldPB == kPlayerFormID) ? newPB = kPlayerFormID : serialization->ResolveFormID(oldPB, newPB);
                         if (oldBioA != 0) (oldBioA == kPlayerFormID) ? newBioA = kPlayerFormID : serialization->ResolveFormID(oldBioA, newBioA);
                         if (oldBioB != 0) (oldBioB == kPlayerFormID) ? newBioB = kPlayerFormID : ((oldBioB == kUnknownFatherFormID) ? (newBioB = kUnknownFatherFormID, true) : serialization->ResolveFormID(oldBioB, newBioB));
+                        if (oldPresumedFather != 0) (oldPresumedFather == kPlayerFormID) ? newPresumedFather = kPlayerFormID : serialization->ResolveFormID(oldPresumedFather, newPresumedFather);
 
                         RE::FormID guardianA = newPA;
                         RE::FormID guardianB = newPB;
@@ -702,15 +697,30 @@ namespace MARAS {
                         RE::FormID bioFather = newBioB;
 
                         childrenByID.emplace(newChild, ChildRegistryEntry(newChild, guardianA, guardianB, childName, ts, isAdopted, bioMother, bioFather,
-                                                                          isBioChild, concTs, birthTs, pSec, stage, trainingLoc, childGender));
+                                                                          isBioChild, concTs, birthTs, pSec, stage, trainingLoc, childGender, newPresumedFather));
                     }
                 }
             }
 
-            // Consume legacy dev pregnancy count if trailing bytes exist in record
-            if (hasRemainingBytes(sizeof(std::uint32_t))) {
-                std::uint32_t pregCount = 0;
-                readValue(pregCount);
+            // Migrate v4 saves that did not yet store presumedFatherID explicitly
+            if (!hasPresumedFather) {
+                for (auto& [cID, entry] : childrenByID) {
+                    if (entry.presumedFatherID == 0 && (entry.paternitySecret.isSecret || entry.paternitySecret.discovered)) {
+                        RE::FormID candidatePF = 0;
+                        if (entry.bioMotherID != 0) {
+                            if (MatchesActor(entry.guardianAID, entry.bioMotherID) && entry.guardianBID != 0) {
+                                candidatePF = entry.guardianBID;
+                            } else if (MatchesActor(entry.guardianBID, entry.bioMotherID) && entry.guardianAID != 0) {
+                                candidatePF = entry.guardianAID;
+                            } else {
+                                candidatePF = GetPrimaryPartner(entry.bioMotherID);
+                            }
+                        }
+                        if (candidatePF != 0 && !MatchesActor(candidatePF, entry.bioFatherID) && !MatchesActor(candidatePF, entry.bioMotherID)) {
+                            entry.presumedFatherID = candidatePF;
+                        }
+                    }
+                }
             }
         }
 
@@ -1027,6 +1037,10 @@ namespace MARAS {
             cObj["bioFather"] = {
                 {"formId", std::format("{:08X}", entry.bioFatherID)},
                 {"name", entry.bioFatherID == 0 ? "" : (entry.bioFatherID == kUnknownFatherFormID ? "Unknown" : ActorSvc::GetName(entry.bioFatherID))}
+            };
+            cObj["presumedFather"] = {
+                {"formId", std::format("{:08X}", entry.presumedFatherID)},
+                {"name", entry.presumedFatherID == 0 ? "" : ActorSvc::GetName(entry.presumedFatherID)}
             };
             cObj["isBiologicalChild"] = entry.isBiologicalChild;
             cObj["conceptionTimestamp"] = entry.conceptionTimestamp;

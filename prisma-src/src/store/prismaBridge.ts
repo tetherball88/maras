@@ -20,7 +20,18 @@ declare global {
     receiveNPCList?: (list: any[] | string) => void
     receiveNPCDetail?: (detail: any) => void
     onAffectionChanged?: (data: { formId: string; value: number } | string) => void
-    onStatusChanged?: (data: { actorA: string; actorB: string; status: number; isOpen?: boolean } | string) => void
+    onStatusChanged?: (
+      data:
+        | {
+            actorA: string
+            actorB: string
+            status: number
+            isOpen?: boolean
+            actorAProfile?: NPCProfile
+            actorBProfile?: NPCProfile
+          }
+        | string
+    ) => void
     onHierarchyChanged?: (data?: { ranks?: [string, string, string] } | [string, string, string] | string) => void
     onChildUpdated?: (child: any) => void
     onChildRemoved?: (data: { childId: string } | string) => void
@@ -28,6 +39,7 @@ declare global {
     openMARAS?: () => void
     showMARAS?: () => void
     closeMARASView?: () => void
+    onGamePausedChanged?: (data: { paused: boolean } | string) => void
     showMARASModal?: (modalData: PrismaModalPayload | string) => void
     clearMARASModal?: () => void
     refocusView?: (unused?: string) => void
@@ -104,6 +116,7 @@ export function initializePrismaBridge() {
       hierarchyRanks: data.hierarchyRanks,
       playerHomes: data.playerHomes,
       settings: data.settings,
+      isGamePaused: data.isGamePaused,
     })
     if (data.children) {
       useMarasStore.setState({ evaluatingChildId: null })
@@ -132,6 +145,13 @@ export function initializePrismaBridge() {
     console.log('[PrismaBridge] closeMARASView called')
     useMarasStore.getState().setIsOpen(false)
   }
+  window.onGamePausedChanged = (raw: { paused: boolean } | string) => {
+    const data = parsePayload<{ paused: boolean }>(raw)
+    console.log('[PrismaBridge] onGamePausedChanged:', data)
+    if (data && typeof data.paused === 'boolean') {
+      useMarasStore.getState().setGamePaused(data.paused, true)
+    }
+  }
 
   // 1c. Standalone/Blocking Prisma UI Modal callbacks from C++
   window.showMARASModal = (rawModal: PrismaModalPayload | string) => {
@@ -147,6 +167,14 @@ export function initializePrismaBridge() {
   window.clearMARASModal = () => {
     console.log('[PrismaBridge] clearMARASModal called')
     useModalStore.getState().clearModal()
+    if (useMarasStore.getState().isOpen) {
+      window.refocusView?.()
+      setTimeout(() => {
+        if (useMarasStore.getState().isOpen) {
+          window.refocusView?.()
+        }
+      }, 50)
+    }
   }
 
   // Auto-acquire OS/game input focus when clicking or interacting with inputs
@@ -267,10 +295,26 @@ export function initializePrismaBridge() {
 
   // 5. Real-time Event Sink: Relationship Status Changed
   window.onStatusChanged = (raw) => {
-    const data = parsePayload<{ actorA: string; actorB: string; status: number; isOpen?: boolean }>(raw)
+    const data = parsePayload<{
+      actorA: string
+      actorB: string
+      status: number
+      isOpen?: boolean
+      actorAProfile?: NPCProfile
+      actorBProfile?: NPCProfile
+    }>(raw)
     if (!data || !data.actorA || !data.actorB) return
     console.log(`[PrismaBridge] onStatusChanged: ${data.actorA} <-> ${data.actorB} = ${data.status} (isOpen: ${data.isOpen})`)
-    useMarasStore.getState().handleRealtimeStatusChanged(data.actorA, data.actorB, data.status as RelationshipStatus, data.isOpen)
+    useMarasStore
+      .getState()
+      .handleRealtimeStatusChanged(
+        data.actorA,
+        data.actorB,
+        data.status as RelationshipStatus,
+        data.isOpen,
+        data.actorAProfile,
+        data.actorBProfile,
+      )
   }
 
   // 6. Real-time Event Sink: Hierarchy Changed

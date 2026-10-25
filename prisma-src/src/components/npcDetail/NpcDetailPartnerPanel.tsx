@@ -92,7 +92,13 @@ export const NpcDetailPartnerPanel: React.FC = () => {
       const isBioPair =
         (areSameFormId(c.bioMotherId, currentNpcId) && areSameFormId(c.bioFatherId, partnerId)) ||
         (areSameFormId(c.bioMotherId, partnerId) && areSameFormId(c.bioFatherId, currentNpcId))
-      return isGuardianPair || isBioPair
+      const isSecretPartner = Boolean(c.isSecretForPartner ?? c.isSecret)
+      const isPresumedPair =
+        isSecretPartner &&
+        Boolean(c.presumedFatherId) &&
+        ((areSameFormId(c.bioMotherId, currentNpcId) && areSameFormId(c.presumedFatherId, partnerId)) ||
+          (areSameFormId(c.bioMotherId, partnerId) && areSameFormId(c.presumedFatherId, currentNpcId)))
+      return isGuardianPair || isBioPair || isPresumedPair
     })
   }, [children, currentNpcId, partnerId])
 

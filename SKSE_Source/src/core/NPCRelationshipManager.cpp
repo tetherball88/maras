@@ -1646,7 +1646,11 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::PromoteToJilted(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
-        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Jilted, nullptr, sendEvent);
+        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Jilted,
+                                  [this](RE::FormID id, RE::FormID target) {
+                                      EvaluateChildCustodyOnDivorce(id, target);
+                                  },
+                                  sendEvent);
     }
 
     bool NPCRelationshipManager::PromoteToDating(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent, bool breakLovers) {
@@ -1668,7 +1672,11 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::PromoteToExDating(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
-        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::ExDating, nullptr, sendEvent);
+        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::ExDating,
+                                  [this](RE::FormID id, RE::FormID target) {
+                                      EvaluateChildCustodyOnDivorce(id, target);
+                                  },
+                                  sendEvent);
     }
 
     bool NPCRelationshipManager::PromoteToExLover(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {

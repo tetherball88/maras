@@ -84,4 +84,4 @@ Household children assigned to `ChildLogic` (`0xC25`) and `ChildrenSandbox` (`0x
 - **MCM Deprecated**: Mod Configuration Menu (MCM) settings (`TTM_MCM_SettingsPage.psc`) are **deprecated** and retained solely for save backward compatibility. Do **NOT** add new MCM settings or UI fields; all new settings must be integrated into the Prisma UI dashboard instead.
 - **Fertility Integration**:
   - **Fertility Mode Reloaded (FMR)** (`TTM_ServiceFertility.psc`) is the active, supported fertility integration.
-  - **Beeing Female NG** (`TTM_ServiceFertilityBF.psc`) has an outdated implementation awaiting an upgrade; ignore `TTM_ServiceFertilityBF.psc` unless explicitly instructed by the user to work on upgrading it.
+  - **Fertility Mode Reloaded (FMR)** (`TTM_ServiceFertilityFMR.psc`) and **Beeing Female NG** (`TTM_ServiceFertilityBF.psc`) are both active, supported fertility integrations routed through `TTM_ServiceFertility.psc`. Keep both integrations synchronized whenever modifying pregnancy, birth, custody, or child-spawning logic.

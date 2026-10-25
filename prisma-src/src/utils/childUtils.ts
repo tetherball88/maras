@@ -1,5 +1,6 @@
-import { ChildRecord } from '../types'
+import { ChildRecord, CheatingRecord, RelationshipPair, RelationshipStatus } from '../types'
 import { areSameFormId } from './statusAvailability'
+import { PLAYER_FORM_ID } from '../data/mockData'
 
 export interface ChildStatusInfo {
   statusLabel: string
@@ -35,10 +36,54 @@ export function getChildGenderNouns(isFemale?: boolean) {
 }
 
 /**
+ * Checks whether an actor is associated with a child as guardian, biological parent, or active presumed father.
+ */
+export function isActorChild(
+  child: Pick<
+    ChildRecord,
+    | 'guardianAId'
+    | 'guardianBId'
+    | 'bioMotherId'
+    | 'bioFatherId'
+    | 'presumedFatherId'
+    | 'isSecretForPartner'
+    | 'isSecret'
+  >,
+  actorId?: string | null,
+): boolean {
+  if (!actorId) return false
+  if (
+    areSameFormId(child.guardianAId, actorId) ||
+    areSameFormId(child.guardianBId, actorId) ||
+    areSameFormId(child.bioMotherId, actorId) ||
+    areSameFormId(child.bioFatherId, actorId)
+  ) {
+    return true
+  }
+  const isSecretPartner = Boolean(child.isSecretForPartner ?? child.isSecret)
+  if (isSecretPartner && child.presumedFatherId && areSameFormId(child.presumedFatherId, actorId)) {
+    return true
+  }
+  return false
+}
+
+/**
  * Resolves child relationship status relative to a single actor or a pair of actors.
  */
 export function getChildRelationshipStatus(
-  child: Pick<ChildRecord, 'isAdopted' | 'bioMotherId' | 'bioFatherId' | 'isSecret' | 'isSecretForBioFather' | 'isSecretForPartner' | 'gender'>,
+  child: Pick<
+    ChildRecord,
+    | 'isAdopted'
+    | 'guardianAId'
+    | 'guardianBId'
+    | 'bioMotherId'
+    | 'bioFatherId'
+    | 'presumedFatherId'
+    | 'isSecret'
+    | 'isSecretForBioFather'
+    | 'isSecretForPartner'
+    | 'gender'
+  >,
   actorIdOrA?: string | null,
   actorBId?: string | null,
 ): ChildStatusInfo {
@@ -56,11 +101,14 @@ export function getChildRelationshipStatus(
 
   const bioMother = child.bioMotherId
   const bioFather = child.bioFatherId
+  const presumedFather = child.presumedFatherId
 
   // Pair evaluation (e.g., in Partner Panel)
   if (actorIdOrA && actorBId) {
     const isBioA = areSameFormId(bioMother, actorIdOrA) || areSameFormId(bioFather, actorIdOrA)
     const isBioB = areSameFormId(bioMother, actorBId) || areSameFormId(bioFather, actorBId)
+    const isPresumedA = Boolean(presumedFather && areSameFormId(presumedFather, actorIdOrA))
+    const isPresumedB = Boolean(presumedFather && areSameFormId(presumedFather, actorBId))
 
     if (isBioA && isBioB) {
       return {
@@ -69,12 +117,27 @@ export function getChildRelationshipStatus(
         badgeStyle: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
       }
     }
+    if ((isBioA && isPresumedB) || (isBioB && isPresumedA)) {
+      const isSecretPartner = child.isSecretForPartner ?? child.isSecret
+      if (isSecretPartner) {
+        return {
+          statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
+          badgeLabel: `Presumed ${sonOrDaughter}`,
+          badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+        }
+      }
+      return {
+        statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+        badgeLabel: stepNoun,
+        badgeStyle: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
+      }
+    }
     if (isBioA || isBioB) {
       const isSecretPartner = child.isSecretForPartner ?? child.isSecret
       if (isSecretPartner) {
         return {
-          statusLabel: `${stepNoun} / ${sonOrDaughter} (Secret)`,
-          badgeLabel: `${stepNoun} (Secret)`,
+          statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
+          badgeLabel: `Presumed ${sonOrDaughter}`,
           badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
         }
       }
@@ -94,6 +157,10 @@ export function getChildRelationshipStatus(
   // Single actor evaluation (Player or NPC detail view)
   const isBioMotherMatch = actorIdOrA ? areSameFormId(bioMother, actorIdOrA) : false
   const isBioFatherMatch = actorIdOrA ? areSameFormId(bioFather, actorIdOrA) : false
+  const isPresumedFatherMatch = actorIdOrA && presumedFather ? areSameFormId(presumedFather, actorIdOrA) : false
+  const isGuardianMatch = actorIdOrA
+    ? areSameFormId(child.guardianAId, actorIdOrA) || areSameFormId(child.guardianBId, actorIdOrA)
+    : false
 
   if (isBioMotherMatch || isBioFatherMatch) {
     if (isBioFatherMatch && child.isSecretForBioFather) {
@@ -111,10 +178,34 @@ export function getChildRelationshipStatus(
   }
 
   const isSecretPartner = child.isSecretForPartner ?? child.isSecret
+  if (isPresumedFatherMatch) {
+    if (isSecretPartner) {
+      return {
+        statusLabel: isGuardianMatch
+          ? `Presumed ${sonOrDaughter} (Guardian • Secret)`
+          : `Presumed ${sonOrDaughter} (Secret from Partner)`,
+        badgeLabel: `Presumed ${sonOrDaughter}`,
+        badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+      }
+    }
+    if (isGuardianMatch) {
+      return {
+        statusLabel: stepNoun,
+        badgeLabel: stepNoun,
+        badgeStyle: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
+      }
+    }
+    return {
+      statusLabel: `Former Presumed ${sonOrDaughter}`,
+      badgeLabel: `Former Presumed`,
+      badgeStyle: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
+    }
+  }
+
   if (isSecretPartner) {
     return {
-      statusLabel: `${stepNoun} (Secret from Partner)`,
-      badgeLabel: `${stepNoun} (Secret)`,
+      statusLabel: `Presumed ${sonOrDaughter} (Secret from Partner)`,
+      badgeLabel: `Presumed ${sonOrDaughter}`,
       badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     }
   }
@@ -127,11 +218,14 @@ export function getChildRelationshipStatus(
 }
 
 /**
- * Resolves a parent's specific parental role relative to a child (e.g. Biological Mother, Step-father (secret), etc.)
+ * Resolves a parent's specific parental role relative to a child (e.g. Biological Mother, Presumed Father, Step-father, etc.)
  */
 export function getParentRole(
   parentFormId: string,
-  child: Pick<ChildRecord, 'isAdopted' | 'bioMotherId' | 'bioFatherId' | 'isSecret' | 'isSecretForBioFather' | 'isSecretForPartner'>,
+  child: Pick<
+    ChildRecord,
+    'isAdopted' | 'bioMotherId' | 'bioFatherId' | 'presumedFatherId' | 'isSecret' | 'isSecretForBioFather' | 'isSecretForPartner'
+  >,
   parentGender?: 'male' | 'female' | string,
 ): ParentRoleInfo {
   const isFemale = parentGender === 'female'
@@ -145,6 +239,7 @@ export function getParentRole(
 
   const isBioMother = areSameFormId(parentFormId, child.bioMotherId)
   const isBioFather = areSameFormId(parentFormId, child.bioFatherId)
+  const isPresumedFather = Boolean(child.presumedFatherId && areSameFormId(parentFormId, child.presumedFatherId))
 
   if (isBioMother) {
     return {
@@ -166,9 +261,24 @@ export function getParentRole(
 
   // Not a biological parent, but part of the raising household / partner
   const isSecretPartner = child.isSecretForPartner ?? child.isSecret
+  if (isPresumedFather) {
+    if (isSecretPartner) {
+      return {
+        roleLabel: 'Presumed Father (Guardian)',
+        isSecret: true,
+        isSecretForPartner: true,
+        badgeStyle: 'text-purple-300',
+      }
+    }
+    return {
+      roleLabel: 'Step-father',
+      badgeStyle: 'text-sky-300',
+    }
+  }
+
   if (isSecretPartner) {
     return {
-      roleLabel: isMale ? 'Step-father (secret)' : isFemale ? 'Step-mother (secret)' : 'Step-parent (secret)',
+      roleLabel: isMale ? 'Presumed Father (Guardian)' : isFemale ? 'Step-mother (secret)' : 'Step-parent (secret)',
       isSecret: true,
       isSecretForPartner: true,
       badgeStyle: 'text-purple-300',
@@ -178,5 +288,132 @@ export function getParentRole(
   return {
     roleLabel: isMale ? 'Step-father' : isFemale ? 'Step-mother' : 'Step-parent',
     badgeStyle: 'text-sky-300',
+  }
+}
+
+/**
+ * Masks an individual ChildRecord when revealSecrets is false so that undiscovered
+ * paternity secrets appear as normal non-secret parentage (presumed father shown as biological father).
+ */
+export function maskChildRecord(
+  child: ChildRecord,
+  revealSecrets: boolean,
+  npcProfiles?: Map<string, { name?: string }>,
+): ChildRecord {
+  if (revealSecrets) return child
+
+  const isSecretPartner = Boolean(child.isSecretForPartner ?? child.isSecret)
+  const isSecretBio = Boolean(child.isSecretForBioFather)
+  if (!isSecretPartner && !isSecretBio) {
+    return child
+  }
+
+  const cleanId = (id?: string) => (id && id !== '00000000' && id !== '00700000' ? id : undefined)
+
+  if (isSecretPartner) {
+    const presumedId = cleanId(child.presumedFatherId)
+    const presumedName =
+      child.presumedFatherName || (presumedId ? npcProfiles?.get(presumedId)?.name : undefined)
+    return {
+      ...child,
+      ...(child.isAdopted === false
+        ? {
+            bioFatherId: presumedId,
+            bioFatherName: presumedName,
+          }
+        : {}),
+      presumedFatherId: undefined,
+      presumedFatherName: undefined,
+      isSecret: false,
+      isSecretForPartner: false,
+      isSecretForBioFather: false,
+      hasPhenotypeMismatch: false,
+    }
+  }
+
+  // Secret from biological father only (no partner secret)
+  return {
+    ...child,
+    bioFatherId: undefined,
+    bioFatherName: undefined,
+    isSecret: false,
+    isSecretForPartner: false,
+    isSecretForBioFather: false,
+    hasPhenotypeMismatch: false,
+  }
+}
+
+export function maskChildrenMap(
+  rawChildren: Map<string, ChildRecord>,
+  revealSecrets: boolean,
+  npcProfiles?: Map<string, { name?: string }>,
+): Map<string, ChildRecord> {
+  if (revealSecrets) return new Map(rawChildren)
+  const masked = new Map<string, ChildRecord>()
+  for (const [id, child] of rawChildren.entries()) {
+    masked.set(id, maskChildRecord(child, false, npcProfiles))
+  }
+  return masked
+}
+
+/**
+ * Masks undiscovered cheating records and secret affair relationship pairs when revealSecrets is false.
+ */
+export function maskCheatingAndRelationships(
+  rawRelationships: RelationshipPair[],
+  rawCheatingRecords: CheatingRecord[],
+  revealSecrets: boolean,
+): { relationships: RelationshipPair[]; cheatingRecords: CheatingRecord[] } {
+  if (revealSecrets) {
+    return {
+      relationships: [...rawRelationships],
+      cheatingRecords: [...rawCheatingRecords],
+    }
+  }
+
+  const visibleCheating = rawCheatingRecords.filter((cr) => !cr.isSecret)
+
+  const isSecretAffairPair = (actorA: string, actorB: string): boolean => {
+    let hasSecret = false
+    let hasPublic = false
+    for (const cr of rawCheatingRecords) {
+      const matchesPair =
+        (areSameFormId(cr.cheaterId, actorA) && areSameFormId(cr.affairPartnerId, actorB)) ||
+        (areSameFormId(cr.cheaterId, actorB) && areSameFormId(cr.affairPartnerId, actorA))
+      if (matchesPair) {
+        if (cr.isSecret) hasSecret = true
+        else hasPublic = true
+      }
+    }
+    return hasSecret && !hasPublic
+  }
+
+  const visibleRelationships: RelationshipPair[] = []
+  for (const r of rawRelationships) {
+    const isAffairStatus =
+      r.status === RelationshipStatus.Lover ||
+      r.status === RelationshipStatus.Dating ||
+      r.status === RelationshipStatus.ExLover ||
+      r.status === RelationshipStatus.ExDating ||
+      r.status === RelationshipStatus.Candidate
+
+    if (isAffairStatus && isSecretAffairPair(r.actorA, r.actorB)) {
+      if (areSameFormId(r.actorA, PLAYER_FORM_ID) || areSameFormId(r.actorB, PLAYER_FORM_ID)) {
+        visibleRelationships.push({
+          ...r,
+          status: RelationshipStatus.Candidate,
+          isOpen: false,
+          statusHistory: [],
+        })
+      }
+      // For NPC-NPC secret affairs, omit the pair completely while secret
+      continue
+    }
+    visibleRelationships.push(r)
+  }
+
+  return {
+    relationships: visibleRelationships,
+    cheatingRecords: visibleCheating,
   }
 }

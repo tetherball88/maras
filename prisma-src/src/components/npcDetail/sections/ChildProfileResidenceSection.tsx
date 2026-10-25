@@ -1,12 +1,10 @@
 import React, { useState } from 'react'
 import { useMarasStore } from '../../../store/useMarasStore'
-import { confirmRemoveChild } from '../../../store/useModalStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { SelectInput } from '../../shared/SelectInput'
-import { AppTooltip } from '../../shared/AppTooltip'
 import { ChildRelocationModal } from '../ChildRelocationModal'
 import { PLAYER_FORM_ID } from '../../../data/mockData'
-import { Baby, Home, GraduationCap, Swords, AlertTriangle, Trash2 } from 'lucide-react'
+import { Baby, Home, GraduationCap, Swords, AlertTriangle } from 'lucide-react'
 import { formatGameDay } from '../../../utils/dateUtils'
 import { areSameFormId } from '../../../utils/statusAvailability'
 import { resolveIsFemale, getChildGenderNouns } from '../../../utils/childUtils'
@@ -34,7 +32,6 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   const playerHomes = useMarasStore((s) => s.playerHomes)
   const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile)
   const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit)
-  const removeChild = useMarasStore((s) => s.removeChild)
 
   const npc = npcProfiles.get(npcId)
 
@@ -271,6 +268,17 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   </div>
                 </div>
               </div>
+            ) : isPlayerChildResolved && hasSpouseCoParent ? (
+              <div>
+                <span className="text-foreground-muted block mb-[0.125rem]">Assigned Residence</span>
+                <span className="font-medium text-accent-bright flex items-center gap-[0.25rem]">
+                  <Home className="w-[0.875em] h-[0.875em] text-accent" />
+                  <span>{npc?.currentHome || spouseProfile?.currentHome || 'Unassigned'}</span>
+                </span>
+                <p className="text-[0.625rem] text-foreground-muted mt-[0.25rem]">
+                  Residence is controlled by co-parent ({spouseName})&apos;s assigned home.
+                </p>
+              </div>
             ) : isPlayerChildResolved ? (
               <>
                 <label className="text-foreground-muted block mb-[0.125rem] font-medium flex items-center gap-[0.25rem]">
@@ -283,38 +291,17 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   onChange={handleSelectHome}
                   className="w-full text-xs"
                 />
-                {hasSpouseCoParent && (
-                  <p className="text-[0.625rem] text-foreground-muted mt-[0.25rem]">
-                    Changing residence will also relocate co-parent ({spouseName}) and any siblings.
-                  </p>
-                )}
               </>
             ) : (
               <div>
                 <span className="text-foreground-muted block mb-[0.125rem]">Assigned Home</span>
                 <span className="font-medium text-accent-bright flex items-center gap-[0.25rem]">
                   <Home className="w-[0.875em] h-[0.875em] text-accent" />
-                  <span>{npc?.currentHome || 'Unset (Original Location)'}</span>
+                  <span>{npc?.currentHome || npc?.originalHome || (childRecord?.guardianAId && childRecord.guardianAId !== '00000000' ? (npcProfiles.get(childRecord.guardianAId)?.currentHome || npcProfiles.get(childRecord.guardianAId)?.originalHome) : undefined) || 'Following Custodial Parent'}</span>
                 </span>
               </div>
             )}
           </div>
-
-          {childRecord && (
-            <div className="pt-[0.5rem] border-t border-border-divider">
-              <AppTooltip content="Permanently remove this child record from M.A.R.A.S household and family tracking">
-                <button
-                  onClick={() =>
-                    confirmRemoveChild(npcId, displayName, () => removeChild(npcId))
-                  }
-                  className="w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-[0.95em] h-[0.95em]" />
-                  <span>Remove Child Record</span>
-                </button>
-              </AppTooltip>
-            </div>
-          )}
         </div>
       </SectionCard>
 

@@ -659,10 +659,6 @@ namespace MARAS::PapyrusInterface {
                 if (id == 0 || id == kUnknownFatherFormID) {
                     return "";
                 }
-                if (id == kPlayerFormID) {
-                    std::string pName = ActorSvc::GetPlayerName(false);
-                    return !pName.empty() ? pName : "Player";
-                }
                 return ActorSvc::GetName(id);
             };
 

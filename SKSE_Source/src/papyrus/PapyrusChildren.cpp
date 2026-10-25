@@ -393,7 +393,7 @@ namespace MARAS::PapyrusInterface {
 
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (player) {
-            std::string pName = ActorSvc::GetPlayerName(false);
+            std::string pName = ActorSvc::GetName(kPlayerFormID);
             if (StringUtils::CaseInsensitiveEquals(name, pName) ||
                 StringUtils::CaseInsensitiveEquals(name, "Player") ||
                 StringUtils::CaseInsensitiveEquals(name, "The Dragonborn")) {

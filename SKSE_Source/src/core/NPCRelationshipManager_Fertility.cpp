@@ -416,10 +416,11 @@ namespace MARAS {
     }
 
     RE::FormID NPCRelationshipManager::FindChildPaternitySecret(RE::FormID parent1ID, RE::FormID parent2ID, const std::string& childName) const {
-        auto matchesParent = [](const ChildRegistryEntry& entry, RE::FormID pID) -> bool {
+        auto matchesParent = [this](const ChildRegistryEntry& entry, RE::FormID pID) -> bool {
             if (pID == 0) return true;
             return MatchesActor(entry.guardianAID, pID) || MatchesActor(entry.guardianBID, pID) ||
-                   MatchesActor(entry.bioMotherID, pID) || MatchesActor(entry.bioFatherID, pID);
+                   MatchesActor(entry.bioMotherID, pID) || MatchesActor(entry.bioFatherID, pID) ||
+                   MatchesActor(entry.presumedFatherID, pID) || MatchesActor(GetPrimaryPartner(entry.bioMotherID), pID);
         };
 
         bool hasName = !childName.empty() && !StringUtils::CaseInsensitiveEquals(childName, "all");
@@ -499,7 +500,8 @@ namespace MARAS {
         for (const auto& [cID, entry] : childrenByID) {
             if (!entry.paternitySecret.HasActiveSecret() || entry.paternitySecret.discovered) continue;
             if (MatchesActor(entry.guardianAID, actorID) || MatchesActor(entry.bioMotherID, actorID) ||
-                MatchesActor(entry.guardianBID, actorID) || MatchesActor(entry.bioFatherID, actorID)) {
+                MatchesActor(entry.guardianBID, actorID) || MatchesActor(entry.bioFatherID, actorID) ||
+                MatchesActor(entry.presumedFatherID, actorID) || MatchesActor(GetMotherPartner(cID), actorID)) {
                 result.push_back(cID);
             }
         }
@@ -561,12 +563,14 @@ namespace MARAS {
         float cTime = (conceptionTime > 0.0f) ? conceptionTime : (RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f);
 
         RE::FormID gA = motherID;
-        RE::FormID gB = presumedFatherID;
+        RE::FormID gB = (presumedFatherID != 0 && IsMarried(motherID, presumedFatherID)) ? presumedFatherID : 0;
         RE::FormID bioM = motherID;
         RE::FormID bioF = bioFatherID;
 
         PaternitySecret pSec;
-        if (presumedFatherID != 0 && bioFatherID != 0 && bioFatherID != presumedFatherID) {
+        RE::FormID recordedPresumedFatherID = 0;
+        if (presumedFatherID != 0 && bioFatherID != 0 && !MatchesActor(bioFatherID, presumedFatherID)) {
+            recordedPresumedFatherID = presumedFatherID;
             pSec.isSecret = true;
             pSec.isSecretForPartner = true;
             pSec.isSecretForBioFather = true;
@@ -583,11 +587,11 @@ namespace MARAS {
             pSec.hasPhenotypeMismatch = HasPhenotypeMismatch(presumedFatherID, bioFatherID);
         }
 
-        ChildRegistryEntry entry(childID, gA, gB, childName, 0, false, bioM, bioF, true, cTime, 0.0f, pSec, ChildStage::Unborn, "", 2);
+        ChildRegistryEntry entry(childID, gA, gB, childName, 0, false, bioM, bioF, true, cTime, 0.0f, pSec, ChildStage::Unborn, "", 2, recordedPresumedFatherID);
         childrenByID[childID] = entry;
 
-        MARAS_LOG_INFO("[Fertility] Registered Unborn child {:08X} ('{}') for mother {:08X}. Presumed: {:08X}, Bio: {:08X}, Secret: {}",
-                       childID, childName, motherID, gB, bioF, pSec.isSecret);
+        MARAS_LOG_INFO("[Fertility] Registered Unborn child {:08X} ('{}') for mother {:08X}. Presumed: {:08X}, GuardianB: {:08X}, Bio: {:08X}, Secret: {}",
+                       childID, childName, motherID, recordedPresumedFatherID, gB, bioF, pSec.isSecret);
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
 
         // Step-in evaluation when mother has no official partner and bio father also has no main relationship.
@@ -645,6 +649,27 @@ namespace MARAS {
         it->second.birthTimestamp = bTime;
         it->second.timestamp = static_cast<int32_t>(bTime);
         it->second.name = name.empty() ? "Newborn" : name;
+        RE::FormID prevGuardianB = it->second.guardianBID;
+        RE::FormID presumedFatherID = (it->second.presumedFatherID != 0)
+            ? it->second.presumedFatherID
+            : ((prevGuardianB != 0) ? prevGuardianB : GetPrimaryPartner(motherID));
+        if (it->second.presumedFatherID == 0 && presumedFatherID != 0 && it->second.bioFatherID != 0 && !MatchesActor(presumedFatherID, it->second.bioFatherID)) {
+            it->second.presumedFatherID = presumedFatherID;
+        }
+        if (presumedFatherID == 0 && it->second.paternitySecret.isSecretForPartner) {
+            it->second.paternitySecret.isSecretForPartner = false;
+            if (!it->second.paternitySecret.isSecretForBioFather) {
+                it->second.paternitySecret.isSecret = false;
+                it->second.paternitySecret.discovered = true;
+            }
+        }
+        ApplyBirthCustodyRules(uID, it->second, motherID, presumedFatherID, it->second.bioFatherID);
+        UpdateChildBothParentsFaction(uID);
+        UpdateSpouseChildrenFaction(motherID);
+        if (prevGuardianB != 0) UpdateSpouseChildrenFaction(prevGuardianB);
+        if (it->second.guardianAID != 0 && it->second.guardianAID != motherID && it->second.guardianAID != prevGuardianB) {
+            UpdateSpouseChildrenFaction(it->second.guardianAID);
+        }
 
         MARAS_LOG_INFO("[Fertility] Promoted Unborn child {:08X} to Infant ('{}') for mother {:08X}. Birth: {:.2f}, SecretPartner: {}, SecretBio: {}",
                        uID, it->second.name, motherID, bTime,
@@ -837,7 +862,6 @@ namespace MARAS {
                 }
 
                 int secretOthers = 0;
-                std::string lastSecretFather;
                 for (size_t o = 0; o < groups.size(); ++o) {
                     if (static_cast<int>(o) != partnerIdx) {
                         if (hasPrevious) {
@@ -854,7 +878,6 @@ namespace MARAS {
 
                         if (groups[o].isSecret) {
                             secretOthers++;
-                            lastSecretFather = oName;
                         }
 
                         if (!result.bioFatherJson.empty()) {
@@ -865,11 +888,7 @@ namespace MARAS {
                 }
 
                 if (!result.partnerName.empty() && secretOthers > 0) {
-                    if (secretOthers == 1) {
-                        result.message += ", but " + result.partnerName + " doesn't know " + lastSecretFather + " is the biological father.";
-                    } else {
-                        result.message += ", but " + result.partnerName + " is unaware of the true biological paternity.";
-                    }
+                    result.message += ", and she is keeping the true biological paternity a secret from " + result.partnerName + " (her current partner).";
                 } else if (!result.partnerName.empty() && partnerIdx < 0) {
                     result.message += ", though " + result.partnerName + " is her current partner.";
                 } else {
@@ -892,13 +911,13 @@ namespace MARAS {
                     result.message += " with " + result.partnerName + ".";
                 } else if (!result.partnerName.empty() && !singleName.empty() && singleName != "an unknown father" && singleName != "Unknown") {
                     if (isSec) {
-                        result.message += " fathered by " + singleName + ", but " + result.partnerName + " (her current partner) is unaware of the true biological paternity.";
+                        result.message += " fathered by " + singleName + ", though " + result.partnerName + " is her current partner and she is keeping the true paternity a secret.";
                     } else {
                         result.message += " fathered by " + singleName + ", though " + result.partnerName + " is her partner.";
                     }
                 } else if (!result.partnerName.empty()) {
                     if (isSec) {
-                        result.message += ". " + result.partnerName + " (her current partner) is unaware of the true biological paternity.";
+                        result.message += ", though " + result.partnerName + " is her current partner and she is keeping the true paternity a secret.";
                     } else {
                         result.message += " with " + result.partnerName + ".";
                     }
@@ -1331,12 +1350,14 @@ namespace MARAS {
         }
 
         RE::FormID gA = motherID;
-        RE::FormID gB = presumedFatherID;
+        RE::FormID gB = (presumedFatherID != 0 && IsMarried(motherID, presumedFatherID)) ? presumedFatherID : 0;
         RE::FormID bioM = motherID;
         RE::FormID bioF = (bioFatherID != 0) ? bioFatherID : presumedFatherID;
 
         PaternitySecret pSec;
-        if (presumedFatherID != 0 && bioFatherID != 0 && bioFatherID != presumedFatherID) {
+        RE::FormID recordedPresumedFatherID = 0;
+        if (presumedFatherID != 0 && bioFatherID != 0 && !MatchesActor(bioFatherID, presumedFatherID)) {
+            recordedPresumedFatherID = presumedFatherID;
             pSec.isSecret = true;
             pSec.isSecretForPartner = true;
             pSec.isSecretForBioFather = true;
@@ -1355,7 +1376,10 @@ namespace MARAS {
             }
         }
 
-        ChildRegistryEntry entry(childID, gA, gB, childName, static_cast<int32_t>(bTime), false, bioM, bioF, true, cTime, bTime, pSec, ChildStage::Infant);
+        ChildRegistryEntry entry(childID, gA, gB, childName, static_cast<int32_t>(bTime), false, bioM, bioF, true, cTime, bTime, pSec, ChildStage::Infant, "", 2, recordedPresumedFatherID);
+        ApplyBirthCustodyRules(childID, entry, motherID, presumedFatherID, bioF);
+        gA = entry.guardianAID;
+        gB = entry.guardianBID;
         childrenByID[childID] = entry;
 
         MARAS_LOG_INFO("[Fertility] Registered fertility child {:08X} ('{}') to mother {:08X}, presumed father {:08X}, bio father {:08X} (isSecret: {}, secretPartner: {}, secretBio: {}, mismatch: {})",

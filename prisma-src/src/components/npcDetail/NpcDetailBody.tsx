@@ -1,6 +1,7 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { categorizePartners } from '../../utils/partnerCategories'
+import { isActorChild } from '../../utils/childUtils'
 import {
   ProfileCharacteristicsSection,
   AiPackageSection,
@@ -22,13 +23,7 @@ export const NpcDetailBody: React.FC<NpcDetailBodyProps> = ({ npcId }) => {
   const npc = npcProfiles.get(npcId)
   const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy) : null
 
-  const hasChildren = Array.from(children.values()).some(
-    (c) =>
-      c.guardianAId === npcId ||
-      c.guardianBId === npcId ||
-      c.bioMotherId === npcId ||
-      c.bioFatherId === npcId,
-  )
+  const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, npcId))
 
   const hasRelationships = Boolean(
     categorized &&

@@ -24,8 +24,13 @@
      ================================================================= */
     /* Base size — everything in the UI scales from this one value.
      clamp(min, preferred, max): grows with screen width between bounds.
-     Applied ONLY on `html { font-size: var(--ui-font-size) }`. */
+     Applied ONLY on `html { font-size: calc(var(--ui-font-size) * var(--ui-scale, 1)) }`. */
     --ui-font-size: clamp(18px, 1.25vw, 30px);
+
+    /* Accessibility scale multiplier (1 = 100%, 0.75 = 75%, 1.5 = 150%).
+     Scales all fonts, icons, spacing, and window elements proportionally.
+     Can also be adjusted in-game via Dashboard Header or General Settings. */
+    --ui-scale: 1;
 
     /* =================================================================
      2. TYPOGRAPHY

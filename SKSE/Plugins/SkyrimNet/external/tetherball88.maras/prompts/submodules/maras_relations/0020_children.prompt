@@ -44,6 +44,7 @@
                         {% if existsIn(child, "bio_mother") %}{% set bioMotherName = child.bio_mother.name %}{% elif existsIn(group, "other_parent") %}{% set bioMotherName = group.other_parent.name %}{% endif %}
                         {% set secBio = existsIn(pSecret, "is_secret_for_bio_father") and pSecret.is_secret_for_bio_father %}
                         {% set secPartner = existsIn(pSecret, "is_secret_for_partner") and pSecret.is_secret_for_partner %}
+                        {% set partnerIsGuardian = existsIn(pSecret, "presumed_father_is_guardian") and pSecret.presumed_father_is_guardian %}
                         {% if actorUUID == pSecret.biological_father.uuid %}
                             {% if pSecret.is_secret %}
                                 {% if secBio and secPartner %}
@@ -56,7 +57,7 @@
                                     {{child.name}} is {{npcName}}'s biological {{bioRelation}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}, and both {{npcName}} and {{partnerName}} know the truth.
                                 {% endif %}
                             {% else %}
-                                Paternity truth revealed: {{npcName}} is the true biological father of {{child.name}}{% if bioMotherName != "" %} with biological mother {{bioMotherName}}{% endif %}, though {{partnerName}} was initially presumed to be the father. In the household, {{partnerName}} acts as guardian to {{child.name}}. The truth of their paternity is now openly known to everyone involved.
+                                Paternity truth revealed: {{npcName}} is the true biological father of {{child.name}}{% if bioMotherName != "" %} with biological mother {{bioMotherName}}{% endif %}, though {{partnerName}} was initially presumed to be the father.{% if partnerIsGuardian %} In the household, {{partnerName}} acts as guardian to {{child.name}}.{% endif %} The truth of their paternity is now openly known to everyone involved.
                             {% endif %}
                         {% elif actorUUID == pSecret.mother_partner.uuid %}
                             {% if pSecret.is_secret %}
@@ -65,9 +66,9 @@
                                 {% elif secPartner %}
                                     {{npcName}} believes {{child.name}} is their own biological {{bioRelation}}, completely unaware that the true biological father is {{bioFatherName}} (who knows the truth).
                                 {% elif secBio %}
-                                    Paternity truth revealed: {{npcName}} knows that {{child.name}} is not their biological child, but was actually fathered by {{bioFatherName}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}. {{npcName}} acts as guardian, but {{bioFatherName}} has not been told and remains unaware that he is the father.
+                                    Paternity truth revealed: {{npcName}} knows that {{child.name}} is not their biological child, but was actually fathered by {{bioFatherName}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}.{% if partnerIsGuardian %} {{npcName}} acts as guardian, but{% else %} {{npcName}} was initially presumed to be the father, while{% endif %} {{bioFatherName}} has not been told and remains unaware that he is the father.
                                 {% else %}
-                                    Paternity truth revealed: {{npcName}} knows that {{child.name}} is not their biological child, but was fathered by {{bioFatherName}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}. {{npcName}} acts as guardian in the household, and both {{npcName}} and {{bioFatherName}} know the truth.
+                                    Paternity truth revealed: {{npcName}} knows that {{child.name}} is not their biological child, but was fathered by {{bioFatherName}}{% if bioMotherName != "" %} with {{bioMotherName}}{% endif %}.{% if partnerIsGuardian %} {{npcName}} acts as guardian in the household, and both{% else %} Both{% endif %} {{npcName}} and {{bioFatherName}} know the truth.
                                 {% endif %}
                             {% else %}
                                 Paternity truth revealed: {{npcName}} is {{child.name}}'s guardian and knows {{child.name}} is not their biological child. The true biological parents are {% if bioMotherName != "" %}{{bioMotherName}} and {% endif %}{{bioFatherName}}. In the household, {{npcName}} co-parents {{child.name}} as a guardian, and this truth is now fully known and acknowledged by everyone involved.
@@ -79,12 +80,12 @@
                                 {% elif secPartner %}
                                     Secret paternity: {{child.name}} is actually the biological {{bioRelation}} of {{bioFatherName}}{% if bioMotherName != "" %} and {{bioMotherName}}{% endif %}, but {{partnerName}} believes the {{bioRelation}} is theirs. {{bioFatherName}} knows the truth, while {{partnerName}} remains completely unaware{% if existsIn(pSecret, "has_phenotype_mismatch") and pSecret.has_phenotype_mismatch %}; however, noticeable physical differences make the deception fragile{% endif %}.
                                 {% elif secBio %}
-                                    Secret paternity: {{child.name}} is actually the biological {{bioRelation}} of {{bioFatherName}}{% if bioMotherName != "" %} and {{bioMotherName}}{% endif %}, and {{partnerName}} knows this and acts as guardian, but {{bioFatherName}} has not been told that he is the father.
+                                    Secret paternity: {{child.name}} is actually the biological {{bioRelation}} of {{bioFatherName}}{% if bioMotherName != "" %} and {{bioMotherName}}{% endif %}, and {{partnerName}} knows this{% if partnerIsGuardian %} and acts as guardian{% endif %}, but {{bioFatherName}} has not been told that he is the father.
                                 {% else %}
-                                    Paternity truth revealed: {{child.name}}'s true biological father is {{bioFatherName}}{% if bioMotherName != "" %} (biological mother: {{bioMotherName}}){% endif %}, while {{partnerName}} acts as guardian. Both {{partnerName}} and {{bioFatherName}} know the truth.
+                                    Paternity truth revealed: {{child.name}}'s true biological father is {{bioFatherName}}{% if bioMotherName != "" %} (biological mother: {{bioMotherName}}){% endif %}{% if partnerIsGuardian %}, while {{partnerName}} acts as guardian{% else %}, though {{partnerName}} was initially presumed to be the father{% endif %}. Both {{partnerName}} and {{bioFatherName}} know the truth.
                                 {% endif %}
                             {% else %}
-                                Paternity truth revealed: {{child.name}}'s true biological father is {{bioFatherName}}{% if bioMotherName != "" %} (biological mother: {{bioMotherName}}){% endif %}, and {{partnerName}} acts as guardian in the household. Both {{partnerName}} and {{bioFatherName}} are now aware of the true biological paternity.
+                                Paternity truth revealed: {{child.name}}'s true biological father is {{bioFatherName}}{% if bioMotherName != "" %} (biological mother: {{bioMotherName}}){% endif %}{% if partnerIsGuardian %}, and {{partnerName}} acts as guardian in the household{% else %}, though {{partnerName}} was initially presumed to be the father{% endif %}. Both {{partnerName}} and {{bioFatherName}} are now aware of the true biological paternity.
                             {% endif %}
                         {% endif %}
                     {% elif existsIn(child, "step_parents") and existsIn(child, "biological_parents") %}

@@ -72,7 +72,7 @@ When the player relocates a spouse or a child via the Prisma UI Dashboard or dia
 ### Relocating via a Child
 - Verifies that the child belongs to the player's household.
 - Identifies which specific player spouse shares custody of that child:
-  - **Co-Parented Child**: Gathers all sibling children belonging to that same `(Player, Spouse)` branch. If `moveParents` is enabled, moves the co-parent spouse alongside the children to the destination house; otherwise moves only the children of that branch.
+  - **Co-Parented Child**: Gathers all sibling children belonging to that same `(Player, Spouse)` branch. If `moveParents` is enabled, moves the co-parent spouse alongside the children to the destination house (if the co-parent spouse was not previously assigned to any house, they are registered with `stayAtHome = false` so their daily routine is not overridden unless explicitly requested); otherwise moves only the children of that branch.
   - **Single-Parent Player Child (No Co-Guardian)**: If the player is the sole guardian (`coGuardian == 0`), gathers all other single-parent children of the player who also lack a co-guardian and relocates them together.
 
 ---

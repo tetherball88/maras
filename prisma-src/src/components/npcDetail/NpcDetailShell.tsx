@@ -1,5 +1,6 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { confirmRemoveChild } from '../../store/useModalStore'
 import { RelationshipStatus, SocialClass, SkillType, Temperament, AffairStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { StatusBadge } from '../shared/StatusBadge'
@@ -23,6 +24,7 @@ import {
   RefreshCw,
   Flame,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react'
 import { AppTooltip } from '../shared/AppTooltip'
 import { areSameFormId } from '../../utils/statusAvailability'
@@ -41,6 +43,7 @@ export const NpcDetailShell: React.FC = () => {
   const teleportPlayerToNpc = useMarasStore((s) => s.teleportPlayerToNpc)
   const teleportNpcToPlayer = useMarasStore((s) => s.teleportNpcToPlayer)
   const spawnChild = useMarasStore((s) => s.spawnChild)
+  const removeChild = useMarasStore((s) => s.removeChild)
   const setMatchmakingModalOpen = useMarasStore((s) => s.setMatchmakingModalOpen)
   const evaluateChildSecret = useMarasStore((s) => s.evaluateChildSecret)
   const evaluatingChildId = useMarasStore((s) => s.evaluatingChildId)
@@ -94,8 +97,10 @@ export const NpcDetailShell: React.FC = () => {
     childRecord && (
       areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) ||
       areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID) ||
-      areSameFormId(childRecord.bioMotherId, PLAYER_FORM_ID) ||
-      areSameFormId(childRecord.bioFatherId, PLAYER_FORM_ID)
+      ((!childRecord.guardianAId || childRecord.guardianAId === '00000000') && (!childRecord.guardianBId || childRecord.guardianBId === '00000000') && (
+        areSameFormId(childRecord.bioMotherId, PLAYER_FORM_ID) ||
+        areSameFormId(childRecord.bioFatherId, PLAYER_FORM_ID)
+      ))
     )
   )
 
@@ -314,6 +319,23 @@ export const NpcDetailShell: React.FC = () => {
                   <Sparkles className="w-[1em] h-[1em] text-purple-300" />
                 )}
                 <span>{isEvaluatingSecret ? 'Evaluating...' : 'Evaluate Secret'}</span>
+              </button>
+            </AppTooltip>
+          )}
+
+          {childRecord && (
+            <AppTooltip content="Permanently remove this child record from M.A.R.A.S household and family tracking">
+              <button
+                onClick={() =>
+                  confirmRemoveChild(npcId, displayName, () => {
+                    removeChild(npcId)
+                    closeNpcDetail()
+                  })
+                }
+                className="text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 px-[0.625rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer"
+              >
+                <Trash2 className="w-[0.95em] h-[0.95em]" />
+                <span>Remove Child Record</span>
               </button>
             </AppTooltip>
           )}

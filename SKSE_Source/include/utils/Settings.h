@@ -124,6 +124,14 @@ namespace MARAS {
         int32_t paternityBioStepUpChance = 30;         // Biological father step-in % if presumed father breaks up
         bool paternityForceDiceRolls = false;          // Opt out of SkyrimNet LLM evaluation and use dice-roll fallback instead
 
+        // UI secret visibility mode (cosave persisted; false = hide undiscovered secrets by default)
+        bool revealSecretsInUI = false;
+
+        // Prisma UI display, accessibility & pause settings (cosave persisted)
+        bool uiFullScreen = false;
+        float uiScale = 1.0f;
+        bool autoPauseOnOpen = false;
+
         // NPC Scenes settings (cosave persisted)
         bool enableScenes = true;                      // Master toggle for all scenes
         float scenesCooldownHours = 24.0f;             // Minimum game hours between NPC scenes (default 24 = at most one scene per day)

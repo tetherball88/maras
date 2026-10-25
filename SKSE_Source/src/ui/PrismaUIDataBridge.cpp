@@ -154,6 +154,9 @@ namespace MARAS {
                     SendMatchmakingData();
                 } else if (action == "closeUi") {
                     PrismaUIManager::GetSingleton().Hide();
+                } else if (action == "setGamePaused") {
+                    bool paused = GetJsonBool(payload, "paused", false);
+                    PrismaUIManager::GetSingleton().SetDashboardPaused(paused);
                 } else if (action == "setAffection") {
                     ProcessSetAffection(payload);
                 } else if (action == "setSocialClass") {
@@ -192,6 +195,8 @@ namespace MARAS {
                     ProcessAddChild(payload);
                 } else if (action == "removeChild") {
                     ProcessRemoveChild(payload);
+                } else if (action == "updateChild") {
+                    ProcessUpdateChild(payload);
                 } else if (action == "spawnChild") {
                     ProcessSpawnChild(payload);
                 } else if (action == "relocateFamilyUnit") {
@@ -367,6 +372,38 @@ namespace MARAS {
                 }
             }
         }
+        if (origHomeName.empty()) {
+            if (auto childOpt = relMgr.GetChildEntry(formID)) {
+                const auto& cEntry = *childOpt;
+                if (cEntry.guardianAID != kPlayerFormID && cEntry.guardianBID != kPlayerFormID) {
+                    RE::FormID parentID = relMgr.ResolveNonPlayerChildTarget(cEntry);
+                    if (parentID != 0) {
+                        if (const auto* parentProf = relMgr.GetNPCProfile(parentID)) {
+                            if (parentProf->originalHome.has_value() && parentProf->originalHome.value() != 0) {
+                                RE::FormID ohID = parentProf->originalHome.value();
+                                if (auto loc = RE::TESForm::LookupByID<RE::BGSLocation>(ohID)) {
+                                    origHomeName = loc->GetName();
+                                } else if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(ohID)) {
+                                    origHomeName = cell->GetName();
+                                }
+                            }
+                        }
+                        if (origHomeName.empty()) {
+                            if (auto parentActor = RE::TESForm::LookupByID<RE::Actor>(parentID)) {
+                                RE::FormID origCellID = HomeCellService::GetSingleton().GetNpcHome(parentActor);
+                                if (origCellID != 0) {
+                                    if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(origCellID)) {
+                                        if (cell->GetName() && cell->GetName()[0] != '\0') {
+                                            origHomeName = cell->GetName();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (!origHomeName.empty()) {
             profile["originalHome"] = origHomeName;
         }
@@ -432,6 +469,10 @@ namespace MARAS {
         j["paternityBreakupChance"] = settings.paternityBreakupChance;
         j["paternityBioStepUpChance"] = settings.paternityBioStepUpChance;
         j["paternityForceDiceRolls"] = settings.paternityForceDiceRolls;
+        j["revealSecretsInUI"] = settings.revealSecretsInUI;
+        j["uiFullScreen"] = settings.uiFullScreen;
+        j["uiScale"] = RoundFloat(settings.uiScale);
+        j["autoPauseOnOpen"] = settings.autoPauseOnOpen;
         j["enableScenes"] = settings.enableScenes;
         j["scenesCooldownHours"] = RoundFloat(settings.scenesCooldownHours);
         j["enableScenes_Lover"] = settings.enableScenes_Lover;
@@ -472,6 +513,7 @@ namespace MARAS {
     void PrismaUIDataBridge::SendSettingsData() {
         nlohmann::json data;
         data["settings"] = BuildSettingsJson();
+        data["isGamePaused"] = PrismaUIManager::GetSingleton().IsDashboardPaused();
         std::string jsonStr = data.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("receiveMARASOverview", jsonStr.c_str());
     }
@@ -563,6 +605,9 @@ namespace MARAS {
             }
             if (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kPlayerFormID && addedProfiles.insert(cEntry.bioFatherID).second) {
                 profilesArray.push_back(BuildNPCProfileJson(cEntry.bioFatherID));
+            }
+            if (cEntry.presumedFatherID != 0 && cEntry.presumedFatherID != kPlayerFormID && addedProfiles.insert(cEntry.presumedFatherID).second) {
+                profilesArray.push_back(BuildNPCProfileJson(cEntry.presumedFatherID));
             }
             if (cID != 0) {
                 cachedChildRefIDs.insert(cID);
@@ -697,6 +742,7 @@ namespace MARAS {
 
         // Settings snapshot
         data["settings"] = BuildSettingsJson();
+        data["isGamePaused"] = PrismaUIManager::GetSingleton().IsDashboardPaused();
 
         // Player Homes list
         auto& houseSvc = PlayerHouseService::GetSingleton();
@@ -932,11 +978,21 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnStatusChanged(RE::FormID actorA, RE::FormID actorB, uint8_t status) {
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
         nlohmann::json data;
         data["actorA"] = FormIDToString(actorA);
         data["actorB"] = FormIDToString(actorB);
         data["status"] = status;
-        data["originalStatus"] = static_cast<uint8_t>(NPCRelationshipManager::GetSingleton().GetOriginalRelationshipStatus(actorA, actorB));
+        data["originalStatus"] = static_cast<uint8_t>(relMgr.GetOriginalRelationshipStatus(actorA, actorB));
+        if (const auto* relData = relMgr.GetNPCData(actorA, actorB)) {
+            data["isOpen"] = relData->isOpen;
+        }
+        if (actorA != 0) {
+            data["actorAProfile"] = BuildNPCProfileJson(actorA);
+        }
+        if (actorB != 0) {
+            data["actorBProfile"] = BuildNPCProfileJson(actorB);
+        }
         std::string jsonStr = data.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("onStatusChanged", jsonStr.c_str());
     }
@@ -963,12 +1019,12 @@ namespace MARAS {
         cObj["name"] = cName;
         cObj["timestamp"] = entry.timestamp;
         cObj["isAdopted"] = entry.isAdopted;
-        cObj["guardianAId"] = FormIDToString(entry.guardianAID);
-        cObj["guardianBId"] = FormIDToString(entry.guardianBID);
+        cObj["guardianAId"] = entry.guardianAID != 0 ? FormIDToString(entry.guardianAID) : "";
+        cObj["guardianBId"] = entry.guardianBID != 0 ? FormIDToString(entry.guardianBID) : "";
         cObj["guardianAName"] = entry.guardianAID != 0 ? ActorSvc::GetName(entry.guardianAID) : "";
         cObj["guardianBName"] = entry.guardianBID != 0 ? ActorSvc::GetName(entry.guardianBID) : "";
-        cObj["bioMotherId"] = FormIDToString(entry.bioMotherID);
-        cObj["bioFatherId"] = FormIDToString(entry.bioFatherID);
+        cObj["bioMotherId"] = entry.bioMotherID != 0 ? FormIDToString(entry.bioMotherID) : "";
+        cObj["bioFatherId"] = (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) ? FormIDToString(entry.bioFatherID) : "";
         std::string bioMotherName = entry.bioMotherID != 0 ? ActorSvc::GetName(entry.bioMotherID) : "";
         std::string bioFatherName = entry.bioFatherID != 0 ? ActorSvc::GetName(entry.bioFatherID) : "";
         if (bioFatherName.empty() && !entry.paternitySecret.bioFatherName.empty()) {
@@ -976,6 +1032,15 @@ namespace MARAS {
         }
         cObj["bioMotherName"] = bioMotherName;
         cObj["bioFatherName"] = bioFatherName;
+        RE::FormID presumedFatherID = entry.presumedFatherID;
+        if (presumedFatherID == 0 && (entry.paternitySecret.isSecret || entry.paternitySecret.discovered)) {
+            RE::FormID mp = NPCRelationshipManager::GetSingleton().GetMotherPartner(entry.childID);
+            if (mp != 0 && mp != entry.bioFatherID && mp != entry.bioMotherID) {
+                presumedFatherID = mp;
+            }
+        }
+        cObj["presumedFatherId"] = presumedFatherID != 0 ? FormIDToString(presumedFatherID) : "";
+        cObj["presumedFatherName"] = presumedFatherID != 0 ? ActorSvc::GetName(presumedFatherID) : "";
         cObj["conceptionTimestamp"] = entry.conceptionTimestamp;
         cObj["birthTimestamp"] = entry.birthTimestamp;
 
@@ -1239,11 +1304,15 @@ namespace MARAS {
         if (itVal != payload.end()) {
             if (itVal->is_boolean()) {
                 updated = s.SetBoolByKey(key, itVal->get<bool>());
+                if (updated && key == "autoPauseOnOpen" && PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                    PrismaUIManager::GetSingleton().SetDashboardPaused(s.autoPauseOnOpen);
+                }
             } else if (itVal->is_number()) {
                 if (key == "affectionDecayMult" || key == "affectionDecayMultiplier" ||
                     key == "skyrimnetActionRadius" || key == "actionRadius" ||
                     key == "scenesCooldownHours" ||
-                    key == "paternityDailyGrowth" || key == "paternityPhenotypeDailyGrowth") {
+                    key == "paternityDailyGrowth" || key == "paternityPhenotypeDailyGrowth" ||
+                    key == "uiScale") {
                     updated = s.SetFloatByKey(key, itVal->get<float>());
                 } else {
                     updated = s.SetIntByKey(key, itVal->get<int32_t>());
@@ -1485,6 +1554,44 @@ namespace MARAS {
         if (childID != 0) {
             NPCRelationshipManager::GetSingleton().RemoveChild(childID);
             MARAS_LOG_INFO("PrismaUIDataBridge: Removed child {:08X} from relationship pair", childID);
+            SendOverviewData();
+            SendNPCDetail(childID);
+        }
+    }
+
+    void PrismaUIDataBridge::ProcessUpdateChild(const nlohmann::json& payload) {
+        RE::FormID childID = StringToFormID(GetJsonString(payload, "childId"));
+        if (childID == 0) {
+            childID = StringToFormID(GetJsonString(payload, "formId"));
+        }
+        if (childID == 0) return;
+
+        auto& mgr = NPCRelationshipManager::GetSingleton();
+        bool changed = false;
+
+        if (payload.contains("guardianAId")) {
+            RE::FormID gAID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "guardianAId")));
+            changed |= mgr.SetChildGuardian(childID, 0, gAID);
+        }
+        if (payload.contains("guardianBId")) {
+            RE::FormID gBID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "guardianBId")));
+            changed |= mgr.SetChildGuardian(childID, 1, gBID);
+        }
+        if (payload.contains("bioMotherId")) {
+            RE::FormID bioMID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "bioMotherId")));
+            changed |= mgr.SetBioMother(childID, bioMID);
+        }
+        if (payload.contains("bioFatherId")) {
+            RE::FormID bioFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "bioFatherId")));
+            changed |= mgr.SetBioFather(childID, bioFID);
+        }
+        if (payload.contains("presumedFatherId")) {
+            RE::FormID presFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "presumedFatherId")));
+            changed |= mgr.SetPresumedFather(childID, presFID);
+        }
+
+        if (changed) {
+            MARAS_LOG_INFO("PrismaUIDataBridge: Updated child {:08X} parent/guardian assignments", childID);
             SendOverviewData();
             SendNPCDetail(childID);
         }

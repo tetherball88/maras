@@ -81,7 +81,9 @@ namespace MARAS {
 
         if (!a_event->opening && a_event->menuName == "PrismaUI_FocusMenu") {
             SKSE::GetTaskInterface()->AddTask([]() {
-                PrismaUIManager::GetSingleton().TryFlushPostUnfocusCallbacks();
+                auto& mgr = PrismaUIManager::GetSingleton();
+                mgr.TryFlushPostUnfocusCallbacks();
+                mgr.SyncViewVisibilityAndFocus();
             });
         }
 
@@ -305,17 +307,40 @@ namespace MARAS {
             prismaUI->Show(view);
         }
 
-        if (hasModal != m_modalFocusLocked && prismaUI->HasFocus(view)) {
+        const bool shouldPauseGame = hasModal || (m_dashboardOpen && m_dashboardPaused);
+
+        if (shouldPauseGame != m_modalFocusLocked && prismaUI->HasFocus(view)) {
+            m_modalFocusLocked = false;
             prismaUI->Unfocus(view);
+            // PrismaUI->Unfocus closes "PrismaUI_FocusMenu" asynchronously via Skyrim's UIMessageQueue.
+            // Wait for MenuOpenCloseEvent("PrismaUI_FocusMenu", opening=false) (or refocusView) to re-focus
+            // so the queued hide message does not strip focus/cursor right after Focus() is called.
+            if (auto* ui = RE::UI::GetSingleton(); ui && ui->IsMenuOpen("PrismaUI_FocusMenu")) {
+                return;
+            }
         }
 
         // FocusMenu (disableFocusMenu=false) MUST remain enabled so PrismaUI's Scaleform cursor/input menu
         // owns the mouse cursor and routes mouse + keyboard events to the web view.
         if (!prismaUI->HasFocus(view)) {
-            const bool focused = prismaUI->Focus(view, /*pauseGame=*/hasModal, /*disableFocusMenu=*/false);
-            m_modalFocusLocked = hasModal && focused;
+            const bool focused = prismaUI->Focus(view, /*pauseGame=*/shouldPauseGame, /*disableFocusMenu=*/false);
+            m_modalFocusLocked = shouldPauseGame && focused;
             MARAS_LOG_INFO("PrismaUIManager: Focused view {} (pauseGame={}, disableFocusMenu=false, success={})",
-                           view, hasModal, focused);
+                           view, shouldPauseGame, focused);
+        }
+    }
+
+    void PrismaUIManager::SetDashboardPaused(bool paused) {
+        m_dashboardPaused = paused;
+        MARAS_LOG_INFO("PrismaUIManager::SetDashboardPaused: paused={}", m_dashboardPaused);
+        if (m_dashboardOpen) {
+            SyncViewVisibilityAndFocus();
+        }
+        if (IsDomReady()) {
+            nlohmann::json data;
+            data["paused"] = m_dashboardPaused;
+            std::string jsonStr = data.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            InteropCall("onGamePausedChanged", jsonStr.c_str());
         }
     }
 
@@ -373,11 +398,16 @@ namespace MARAS {
         }
 
         MARAS_LOG_INFO("PrismaUIManager::Show() requested");
+        const bool wasOpen = m_dashboardOpen;
         m_dashboardOpen = true;
+        if (!wasOpen) {
+            m_dashboardPaused = Settings::GetSingleton().autoPauseOnOpen;
+        }
 
         const bool wasValid = IsViewValid();
         if (!EnsureViewCreated()) {
             m_dashboardOpen = false;
+            m_dashboardPaused = false;
             return;
         }
 
@@ -392,11 +422,13 @@ namespace MARAS {
     void PrismaUIManager::Hide() {
         if (!prismaUI || !view) {
             m_dashboardOpen = false;
+            m_dashboardPaused = false;
             return;
         }
 
         MARAS_LOG_INFO("PrismaUIManager::Hide() called for view {}", view);
         m_dashboardOpen = false;
+        m_dashboardPaused = false;
 
         if (prismaUI->IsValid(view)) {
             if (m_domReady) {
@@ -432,6 +464,7 @@ namespace MARAS {
 
     void PrismaUIManager::Destroy() {
         m_dashboardOpen = false;
+        m_dashboardPaused = false;
         m_domReady = false;
         m_modalFocusLocked = false;
         m_deferModalsUntilRaceMenuClosed = false;

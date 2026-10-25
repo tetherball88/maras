@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 
 export const SettingsPage: React.FC = () => {
   const activeSubSection = useMarasStore((s) => s.activeSubSection)
+  const uiFullScreen = useMarasStore((s) => Boolean(s.settings.uiFullScreen))
 
   const renderSubSection = () => {
     switch (activeSubSection) {
@@ -41,7 +42,7 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <ScrollArea className="h-full w-full">
-      <div className="max-w-[44rem] mx-auto p-[0.5rem] pr-[1rem] pb-[2rem]">
+      <div className={`${uiFullScreen ? 'max-w-[60rem]' : 'max-w-[44rem]'} mx-auto p-[0.5rem] pr-[1rem] pb-[2rem]`}>
         {renderSubSection()}
       </div>
     </ScrollArea>

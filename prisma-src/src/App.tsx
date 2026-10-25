@@ -24,7 +24,13 @@ export const App: React.FC = () => {
   const activeTab = useMarasStore((s) => s.activeTab)
   const npcDetailId = useMarasStore((s) => s.npcDetailId)
   const setStatusMsg = useMarasStore((s) => s.setStatusMsg)
+  const uiScale = useMarasStore((s) => s.settings.uiScale ?? 1)
   const hasActiveModal = useModalStore((s) => s.activeModal !== null)
+
+  useEffect(() => {
+    const clampedScale = Math.min(1.5, Math.max(0.75, Number.isFinite(uiScale) ? uiScale : 1))
+    document.documentElement.style.setProperty('--ui-scale', String(clampedScale))
+  }, [uiScale])
 
   const inGame = isInGame()
   const style: CSSProperties = !inGame

@@ -113,28 +113,9 @@ namespace MARAS::ActorSvc {
         return nullptr;
     }
 
-    std::string GetPlayerName(bool includeRole) {
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        std::string pName;
-        if (player) {
-            if (const char* displayName = player->GetDisplayFullName(); displayName && *displayName) {
-                pName = displayName;
-            } else if (auto* base = player->GetActorBase()) {
-                if (const char* baseName = base->GetName(); baseName && *baseName) {
-                    pName = baseName;
-                }
-            }
-        }
-        if (pName.empty()) {
-            pName = "Prisoner";
-        }
-        return includeRole ? fmt::format("{} (Player)", pName) : pName;
-    }
-
     std::string GetName(RE::FormID formID) {
         if (formID == 0) return "None";
         if (formID == kUnknownFatherFormID) return "Unknown";
-        if (IsPlayerFormID(formID)) return GetPlayerName(true);
 
         // Fast path: check NPCIndex
         if (auto entry = NPCIndex::GetSingleton().FindByFormID(formID)) {

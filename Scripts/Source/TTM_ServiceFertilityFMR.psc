@@ -265,13 +265,30 @@ Function OnChildSpawned(Form childActor, int childIndex, string childName) globa
         Actor bioMother = MARAS.GetBioMother(childID)
         Actor bioFather = MARAS.GetBioFather(childID)
         Actor player = TTM_Data.GetPlayer()
-        bool isPlayerChild = (player == bioMother || player == bioFather)
-        if (!isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
+        Actor guardianA = MARAS.GetGuardianA(childID)
+        Actor guardianB = MARAS.GetGuardianB(childID)
+        bool isPlayerChild = false
+        if (guardianA != none || guardianB != none)
+            if (guardianA == player || guardianB == player)
+                isPlayerChild = true
+            elseif ((guardianA != none && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != none && MARAS.IsNPCStatus(guardianB, "married")))
+                isPlayerChild = true
+            endif
+        elseif (player == bioMother || player == bioFather)
+            isPlayerChild = true
+        endif
+        if (guardianA == none && guardianB == none && !isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
             isPlayerChild = true
         endif
         if (isPlayerChild)
             TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
-            childrenLogicQst.AdoptChild(child, bioMother = bioMother, bioFather = bioFather, syntheticID = childID, childStage = 2)
+            Actor coSpouse = none
+            if (guardianA != none && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
+                coSpouse = guardianA
+            elseif (guardianB != none && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
+                coSpouse = guardianB
+            endif
+            childrenLogicQst.AdoptChild(child, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = childID, childStage = 2)
         else
             Actor npcMother = bioMother
             Actor npcFather = MARAS.GetMotherPartner(childID)
@@ -282,7 +299,13 @@ Function OnChildSpawned(Form childActor, int childIndex, string childName) globa
             if (npcMother != none)
                 houseLoc = MARAS.GetTenantHouse(npcMother)
             endif
+            if (guardianA != none || guardianB != none)
+                npcMother = guardianA
+                npcFather = guardianB
+            endif
             MARAS.RegisterChildActor(child, npcMother, npcFather, houseLoc, bioMother, bioFather, childID, 2)
+            child.EvaluatePackage()
+            child.MoveToPackageLocation()
         endif
         TTM_Debug.info("TTM_ServiceFertilityFMR: Spawned physical child actor " + child.GetDisplayName() + " re-keyed from synthetic ID " + childID)
     endif

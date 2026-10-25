@@ -45,6 +45,8 @@ namespace MARAS {
         bool IsViewValid() const { return prismaUI && prismaUI->IsValid(view); }
         bool IsDomReady() const { return IsViewValid() && m_domReady; }
         bool IsDashboardOpen() const { return m_dashboardOpen; }
+        bool IsDashboardPaused() const { return m_dashboardPaused; }
+        void SetDashboardPaused(bool paused);
         bool IsVisible() const { return IsViewValid() && !prismaUI->IsHidden(view) && m_dashboardOpen; }
 
         void InteropCall(const char* functionName, const char* argument = "") {
@@ -76,6 +78,7 @@ namespace MARAS {
         bool isListeningInput = false;
         bool m_domReady = false;
         bool m_dashboardOpen = false;
+        bool m_dashboardPaused = false;
         bool m_modalFocusLocked = false;
         bool m_deferModalsUntilRaceMenuClosed = false;
         bool m_pendingNewGameRelationshipScan = false;

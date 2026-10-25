@@ -77,7 +77,15 @@ Spawned children belonging to NPC couples operate under realistic custody routin
 
 ## 3. Marriage, Divorce & Custody Policies
 
-Custody management in M.A.R.A.S. is handled via [`NPCRelationshipManager::EvaluateChildCustodyOnDivorce()`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Children.cpp#L602-L797), operating under configurable gameplay rules:
+Custody management in M.A.R.A.S. is handled via [`NPCRelationshipManager::ResolveSingleCustodian()`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Children.cpp#L488-L547), [`NPCRelationshipManager::ApplyBirthCustodyRules()`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Children.cpp#L549-L599), and [`NPCRelationshipManager::EvaluateChildCustodyOnDivorce()`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Children.cpp#L755-L885), operating under configurable gameplay rules:
+
+### 3.1 Married vs. Unmarried Birth Custody
+- **Married Parents**: When the mother is married (`RelationshipStatus::Married`), both spouses share household guardianship (`guardianA = motherID`, `guardianB = spouseID`) both while `ChildStage::Unborn` and upon birth.
+- **Unmarried Parents (`Dating`, `Engaged`, `Lover`, or Casual/Affair)**: While `ChildStage::Unborn`, only the biological mother is a guardian (`guardianA = motherID`, `guardianB = 0`); an unmarried partner (`Dating` / `Engaged`) is never assigned as a guardian (`GetMotherPartner` dynamically resolves the mother's current partner via `GetPrimaryPartner`). Upon birth (`PromoteUnbornToInfant` / `RegisterFertilityChild`), if the mother is not married, the parents do not share a household; `ApplyBirthCustodyRules` evaluates `ResolveSingleCustodian` between the mother and the aware/presumed father and assigns sole custody (`guardianA = custodian`, `guardianB = 0`).
+  - When a physical child actor is later spawned (`SpawnSyntheticChild`, `TTM_ServiceFertilityFMR.OnChildSpawned`, or `TTM_ServiceFertilityBF.RegisterBeeingFemaleChild`), `isPlayerChild` is determined by **custodial guardianship** (`guardianA` / `guardianB`) rather than biological parentage. Children in an unmarried NPC's custody are registered as non-player children (`TTM_Children_NotPlayer` faction `0x377` + `TTM_ChildrenFollowParent` linked reference `0x376` pointing to their custodial NPC parent) instead of being adopted into a Player house.
+  - If the unmarried parents later marry, `EvaluateChildCustodyOnMarriage` automatically unifies custody (`guardianA = Player`, `guardianB = spouseID`) and transfers the child into the shared household.
+
+### 3.2 Single-Custodian Resolution Rules (`ResolveSingleCustodian`)
 
 1. **Biological Parent Priority** (`childCustodyPrioritizeBioParent`):
    - If one spouse is a biological parent and the other is an adoptive stepparent, custody is automatically awarded to the biological parent.
@@ -145,8 +153,8 @@ If the presumed father leaves (divorces the mother) following discovery:
 2. **Loop Prevention Check**: The candidate pool explicitly excludes any biological father who is divorced from the mother ([`IsMostRecentRelationshipDivorced`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager.cpp#L661-L674)), preventing infinite divorce/remarriage cycling.
 3. If evaluated positively (via SkyrimNet LLM or non-SkyrimNet `paternityBioStepUpChance`), MARAS automatically marries the biological father to the mother ([`ApplyBioFatherStepIn()`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Fertility.cpp#L15-L37)) and transfers household guardianship to him.
 
-### 4.4 Partner Secret Resolution on Divorce
-If the mother and her partner divorce for **any reason** (e.g. player divorce, infidelity, low affection), any active partner-side paternity secrets (`isSecretForPartner`) for their born or unborn children are **immediately resolved** (emitting `maras_paternity_secret_resolved` with `"divorce_revealed"` while preserving `isSecretForBioFather` if the biological father is still unaware), and the bio-father step-in check triggers right away.
+### 4.4 Paternity Secret Resolution on Divorce or Breakup
+If the mother and her partner divorce or break up (`Divorced`, `Jilted`, or `ExDating`) for **any reason**, any active paternity secrets for their born or unborn children (including born children of unmarried couples where the former partner is the `presumedFatherID`) are **immediately resolved** via [`ResolvePaternitySecret()`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Fertility.cpp#L1417) (emitting `maras_paternity_secret_resolved` with `"divorce_revealed"`), and the bio-father step-in check triggers right away. Likewise, if the biological mother and biological father marry each other, any remaining paternity secret on their shared children is automatically resolved.
 
 ---
 

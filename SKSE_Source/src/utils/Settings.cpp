@@ -151,6 +151,10 @@ namespace MARAS {
             visit("scenesCooldownHours", &Settings::scenesCooldownHours, false);
             visit("disablePolygamyQuest", &Settings::disablePolygamyQuest, false);
             visit("matchmakingConfirmResults", &Settings::matchmakingConfirmResults, false);
+            visit("revealSecretsInUI", &Settings::revealSecretsInUI, false);
+            visit("uiFullScreen", &Settings::uiFullScreen, false);
+            visit("uiScale", &Settings::uiScale, false);
+            visit("autoPauseOnOpen", &Settings::autoPauseOnOpen, false);
         }
     }
 
@@ -437,7 +441,11 @@ namespace MARAS {
                     } else if constexpr (std::is_same_v<FieldType, float>) {
                         float val = 0.0f;
                         if (serialization->ReadRecordData(val)) {
-                            if (key != "skyrimnetActionRadius" || val > 0.0f) {
+                            if (key == "uiScale") {
+                                if (!std::isnan(val) && val >= 0.5f && val <= 2.5f) {
+                                    field = val;
+                                }
+                            } else if (key != "skyrimnetActionRadius" || val > 0.0f) {
                                 field = val;
                             }
                             readOk = true;
@@ -590,6 +598,9 @@ namespace MARAS {
                 {"matchmakinggeneratememories", &Settings::matchmakingGenerateMemories},
                 {"matchmakingconfirmresults", &Settings::matchmakingConfirmResults},
                 {"paternityforcedicerolls", &Settings::paternityForceDiceRolls},
+                {"revealsecretsinui", &Settings::revealSecretsInUI},
+                {"uifullscreen", &Settings::uiFullScreen},
+                {"autopauseonopen", &Settings::autoPauseOnOpen},
                 {"enablescenes", &Settings::enableScenes},
                 {"enablescenes_lover", &Settings::enableScenes_Lover},
                 {"enablescenes_dating", &Settings::enableScenes_Dating},
@@ -653,7 +664,8 @@ namespace MARAS {
                 {"actionradius", &Settings::skyrimnetActionRadius},
                 {"scenescooldownhours", &Settings::scenesCooldownHours},
                 {"paternitydailygrowth", &Settings::paternityDailyGrowth},
-                {"paternityphenotypedailygrowth", &Settings::paternityPhenotypeDailyGrowth}
+                {"paternityphenotypedailygrowth", &Settings::paternityPhenotypeDailyGrowth},
+                {"uiscale", &Settings::uiScale}
             };
             return kMap;
         }
@@ -823,6 +835,9 @@ namespace MARAS {
         const std::string lowerKey = StringUtils::ToLowerStd(key);
         const auto& map = GetFloatSettingMap();
         if (auto it = map.find(lowerKey); it != map.end()) {
+            if (lowerKey == "uiscale") {
+                value = std::clamp(value, 0.75f, 1.5f);
+            }
             {
                 std::unique_lock lock(settingsMutex_);
                 this->*(it->second) = value;

@@ -67,6 +67,8 @@
             {% elif existsIn(parents, "paternity_secret") and parents.paternity_secret.is_secret %}
                 {% if existsIn(parents, "mother") and existsIn(parents, "father") %}
                     {{npcName}} is raised as the {{myChildRelation}} of {{parents.mother.name}} and {{parents.father.name}}, believing {{parents.father.name}} is their biological father.
+                {% elif existsIn(parents, "mother") and existsIn(parents.paternity_secret, "mother_partner") and parents.paternity_secret.mother_partner.name != "" and parents.paternity_secret.mother_partner.name != "None" %}
+                    {{npcName}} is raised by {{parents.mother.name}} as a single parent, believing {{parents.paternity_secret.mother_partner.name}} is their biological father.
                 {% elif existsIn(parents, "current_parents") %}
                     {{npcName}} is raised by {{parents.current_parents.names}}.
                 {% elif existsIn(parents, "father") %}
@@ -126,7 +128,11 @@
                     {{npcName}} believes {{pPartnerName}} is their biological father, unaware that their true biological father is actually {{pSecret.biological_father.name}}, though both fathers are aware of the true biological paternity.
                 {% endif %}
             {% else %}
-                Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} raised them as a father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone in the family.
+                {% if existsIn(pSecret, "presumed_father_is_guardian") and pSecret.presumed_father_is_guardian %}
+                    Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} raised them as a father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone in the family.
+                {% else %}
+                    Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} was initially presumed to be their father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone involved.
+                {% endif %}
             {% endif %}
         {% endif %}
         {% if existsIn(parents, "siblings") %}

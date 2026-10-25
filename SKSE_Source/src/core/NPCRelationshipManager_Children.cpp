@@ -19,6 +19,24 @@
 namespace MARAS {
 
     namespace {
+        std::mutex s_pendingMarriageAdoptionsMutex;
+        std::unordered_set<RE::FormID> s_pendingMarriageAdoptions;
+
+        void MarkMarriageAdoptionPending(RE::FormID childID) {
+            std::lock_guard<std::mutex> lock(s_pendingMarriageAdoptionsMutex);
+            s_pendingMarriageAdoptions.insert(childID);
+        }
+
+        void ClearMarriageAdoptionPending(RE::FormID childID) {
+            std::lock_guard<std::mutex> lock(s_pendingMarriageAdoptionsMutex);
+            s_pendingMarriageAdoptions.erase(childID);
+        }
+
+        bool IsMarriageAdoptionPending(RE::FormID childID) {
+            std::lock_guard<std::mutex> lock(s_pendingMarriageAdoptionsMutex);
+            return s_pendingMarriageAdoptions.contains(childID);
+        }
+
         void SyncChildHouseholdState(RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID, RE::FormID explicitHouseID = 0) {
             // A grown-up (Adult) child must not carry child household state, factions or child sandbox/bed packages
             if (NPCRelationshipManager::GetSingleton().GetChildStage(childID) == ChildStage::Adult) {
@@ -31,10 +49,6 @@ namespace MARAS {
             RE::FormID playerID = kPlayerFormID;
 
             if (guardianAID == playerID || guardianBID == playerID) {
-                // If transitioning into player household, clean up non-player 0x377 linked ref and unregister non-player package
-                NPCRelationshipManager::GetSingleton().RemoveChildSandboxAroundParentLinkedRef(childID);
-                PackageOverrideService::GetSingleton().UnregisterActor(childID);
-
                 RE::FormID houseID = explicitHouseID;
                 if (houseID == 0 && guardianBID != 0 && guardianBID != playerID) {
                     houseID = PlayerHouseService::GetSingleton().GetTenantHouseFormID(guardianBID);
@@ -49,11 +63,47 @@ namespace MARAS {
                     houseID = PlayerHouseService::GetSingleton().GetTenantHouseFormID(playerID);
                 }
                 PlayerChildrenService::GetSingleton().OnChildAddedToHousehold(childID, houseID);
+                NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
             } else {
                 PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
                 NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
             }
         }
+
+        class MarriageAdoptionCallback : public RE::BSScript::IStackCallbackFunctor {
+        public:
+            MarriageAdoptionCallback(RE::FormID childID, RE::FormID spouseID)
+                : m_childID(childID), m_spouseID(spouseID) {}
+            ~MarriageAdoptionCallback() override = default;
+
+            void operator()(RE::BSScript::Variable /*a_result*/) override {
+                ClearMarriageAdoptionPending(m_childID);
+                if (auto* taskIF = SKSE::GetTaskInterface()) {
+                    const RE::FormID cID = m_childID;
+                    const RE::FormID spID = m_spouseID;
+                    taskIF->AddTask([cID, spID]() {
+                        auto& relMgr = NPCRelationshipManager::GetSingleton();
+                        if (!relMgr.IsMarried(kPlayerFormID, spID)) return;
+                        auto entryOpt = relMgr.GetChildEntry(cID);
+                        if (!entryOpt) return;
+                        if (!MatchesActor(entryOpt->guardianAID, kPlayerFormID) &&
+                            !MatchesActor(entryOpt->guardianBID, kPlayerFormID)) {
+                            relMgr.RegisterChildActor(
+                                cID, kPlayerFormID, spID, 0,
+                                entryOpt->bioMotherID, entryOpt->bioFatherID, 0,
+                                static_cast<uint8_t>(entryOpt->stage),
+                                entryOpt->isAdopted, true);
+                        }
+                    });
+                }
+            }
+
+            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>& /*a_object*/) override {}
+
+        private:
+            RE::FormID m_childID{ 0 };
+            RE::FormID m_spouseID{ 0 };
+        };
     }  // namespace
 
     RE::FormID NPCRelationshipManager::ResolveNonPlayerChildTarget(const ChildRegistryEntry& entry) const {
@@ -80,6 +130,15 @@ namespace MARAS {
         bool gBAlive = isActorAlive(gB);
         bool bioMAlive = isActorAlive(bioM);
         bool bioFAlive = isActorAlive(bioF);
+
+        // 0. If in Player household (unhoused), prefer the NPC co-guardian spouse first so the child stays with their NPC parent
+        if (gA == kPlayerFormID || gB == kPlayerFormID) {
+            RE::FormID npcCoGuardian = (gA == kPlayerFormID) ? gB : gA;
+            if (npcCoGuardian != 0 && npcCoGuardian != kPlayerFormID && isActorAlive(npcCoGuardian)) {
+                return npcCoGuardian;
+            }
+            return kPlayerFormID;
+        }
 
         // 1. Check if guardian A/B is bio-mother
         if (gA != 0 && gA == bioM && gAAlive) return gA;
@@ -142,11 +201,14 @@ namespace MARAS {
 
         const auto& entry = it->second;
 
-        // Only manage dynamic spawned children (0xFFxxxxxx) at Stage 2 who are not in player household
-        bool isTemporaryID = ((childID >> 24) == 0xFF);
+        // Manage dynamic spawned children (0xFFxxxxxx) at Stage 2 who are not in player household,
+        // OR any spawned Stage 2 player household child who is currently unhoused (house == 0)
+        bool isTemporaryID = ((childID >> 24) == 0xFF) && !IsSyntheticChildID(childID);
         bool isPlayerHousehold = (entry.guardianAID == kPlayerFormID || entry.guardianBID == kPlayerFormID);
+        bool isUnhousedPlayerChild = isPlayerHousehold && !IsSyntheticChildID(childID) &&
+                                     (PlayerChildrenService::GetSingleton().GetChildHouseFormID(childID) == 0);
 
-        if (isTemporaryID && entry.stage == ChildStage::Child && !isPlayerHousehold) {
+        if (entry.stage == ChildStage::Child && ((isTemporaryID && !isPlayerHousehold) || isUnhousedPlayerChild)) {
             RE::FormID targetRefID = ResolveNonPlayerChildTarget(entry);
             auto* keyword = FormCache::GetSingleton().GetChildSandboxAroundParentKeyword();
             RE::FormID childFollowPkgID = 0;
@@ -155,18 +217,20 @@ namespace MARAS {
             }
             Utils::AssignPackageWithLinkedRef(childID, targetRefID, keyword, childFollowPkgID);
 
-            auto* orphanageMarker = FormCache::GetSingleton().GetHonorhallOrphanageCenterMarker();
-            RE::FormID orphanageMarkerID = orphanageMarker ? orphanageMarker->GetFormID() : 0;
-            auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction();
+            if (!isPlayerHousehold) {
+                auto* orphanageMarker = FormCache::GetSingleton().GetHonorhallOrphanageCenterMarker();
+                RE::FormID orphanageMarkerID = orphanageMarker ? orphanageMarker->GetFormID() : 0;
+                auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction();
 
-            if (orphanageMarkerID != 0 && targetRefID == orphanageMarkerID) {
-                if (adoptableFaction) {
-                    Utils::AddToFaction(childID, adoptableFaction, 0);
-                    MARAS_LOG_INFO("UpdateNonPlayerChildPackageOverride: Child {:08X} parents deceased, sent to Honorhall Orphanage. Assigned BYOHRelationshipAdoptableFaction", childID);
-                }
-            } else {
-                if (adoptableFaction) {
-                    Utils::RemoveFromFaction(childID, adoptableFaction);
+                if (orphanageMarkerID != 0 && targetRefID == orphanageMarkerID) {
+                    if (adoptableFaction) {
+                        Utils::AddToFaction(childID, adoptableFaction, 0);
+                        MARAS_LOG_INFO("UpdateNonPlayerChildPackageOverride: Child {:08X} parents deceased, sent to Honorhall Orphanage. Assigned BYOHRelationshipAdoptableFaction", childID);
+                    }
+                } else {
+                    if (adoptableFaction) {
+                        Utils::RemoveFromFaction(childID, adoptableFaction);
+                    }
                 }
             }
         } else {
@@ -177,9 +241,7 @@ namespace MARAS {
 
     void NPCRelationshipManager::ReevaluateAllNonPlayerChildrenPackages() {
         for (const auto& [childID, entry] : childrenByID) {
-            if (entry.guardianAID != kPlayerFormID && entry.guardianBID != kPlayerFormID) {
-                UpdateNonPlayerChildPackageOverride(childID);
-            }
+            UpdateNonPlayerChildPackageOverride(childID);
         }
     }
 
@@ -273,6 +335,7 @@ namespace MARAS {
                                                     std::optional<bool> explicitIsAdopted,
                                                     bool sendEvent) {
         if (childID == 0) return false;
+        ClearMarriageAdoptionPending(childID);
 
         std::string blockReason;
         if (IsChildBlockedFromAdoption(childID, &blockReason)) {
@@ -307,8 +370,8 @@ namespace MARAS {
                 entry.childID = childID;
                 entry.stage = childStage;
                 if (!childName.empty()) entry.name = childName;
-                if (guardianAID != 0) entry.guardianAID = guardianAID;
-                if (guardianBID != 0) entry.guardianBID = guardianBID;
+                if (guardianAID != 0 || guardianBID != 0) entry.guardianAID = guardianAID;
+                if (guardianAID != 0 || guardianBID != 0) entry.guardianBID = guardianBID;
                 if (bioMotherID != 0) entry.bioMotherID = bioMotherID;
                 if (bioFatherID != 0) entry.bioFatherID = bioFatherID;
                 childrenByID.erase(synthIt);
@@ -350,6 +413,12 @@ namespace MARAS {
             entry.isAdopted = hasAnyGuardian && !gAIsBio && !gBIsBio;
         }
 
+        if (entry.stage != ChildStage::Unborn && entry.stage != ChildStage::Adult &&
+            entry.guardianAID != 0 && entry.guardianBID != 0 && entry.guardianAID != entry.guardianBID &&
+            !IsMarried(entry.guardianAID, entry.guardianBID)) {
+            entry.guardianAID = ResolveSingleCustodian(childID, entry, entry.guardianAID, entry.guardianBID);
+            entry.guardianBID = 0;
+        }
         childrenByID[childID] = entry;
 
         MARAS_LOG_INFO("[Children] Registered child actor {:08X} ('{}', stage: {}, adopted: {}, bioM: {:08X}, bioF: {:08X}) to guardians {:08X} / {:08X}",
@@ -370,15 +439,24 @@ namespace MARAS {
 
         if (sendEvent && entry.isAdopted && !wasAlreadyAdopted) {
             SendChildEvent("adopted", childID, entry.guardianAID, entry.guardianBID, 0, "adoption");
+        } else if (sendEvent && (oldGuardianA != entry.guardianAID || oldGuardianB != entry.guardianBID)) {
+            SendChildEvent("guardians_changed", childID, entry.guardianAID, entry.guardianBID, 0, "custody_updated");
         }
 
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
         PrismaUIDataBridge::GetSingleton().SendOverviewData();
         PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+        if (entry.guardianAID != 0 && entry.guardianAID != kPlayerFormID) {
+            PrismaUIDataBridge::GetSingleton().SendNPCDetail(entry.guardianAID);
+        }
+        if (entry.guardianBID != 0 && entry.guardianBID != kPlayerFormID) {
+            PrismaUIDataBridge::GetSingleton().SendNPCDetail(entry.guardianBID);
+        }
         return true;
     }
 
     bool NPCRelationshipManager::RemoveChild(RE::FormID childID) {
+        ClearMarriageAdoptionPending(childID);
         auto entryOpt = GetChildEntry(childID);
         RE::FormID guardianAID = entryOpt ? entryOpt->guardianAID : 0;
         RE::FormID guardianBID = entryOpt ? entryOpt->guardianBID : 0;
@@ -420,6 +498,7 @@ namespace MARAS {
         UpdateSpouseChildrenFaction(oldGB);
         UpdateSpouseChildrenFaction(it->second.guardianAID);
         UpdateSpouseChildrenFaction(it->second.guardianBID);
+        PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
         return true;
     }
 
@@ -444,8 +523,12 @@ namespace MARAS {
         std::vector<RE::FormID> result;
         if (parentID == 0) return result;
         for (const auto& [cID, entry] : childrenByID) {
+            bool isPresumedFather = entry.paternitySecret.isSecretForPartner &&
+                                    ((entry.presumedFatherID != 0 && MatchesActor(entry.presumedFatherID, parentID)) ||
+                                     MatchesActor(GetMotherPartner(cID), parentID));
             if (MatchesActor(entry.guardianAID, parentID) || MatchesActor(entry.guardianBID, parentID) ||
-                MatchesActor(entry.bioMotherID, parentID) || MatchesActor(entry.bioFatherID, parentID)) {
+                MatchesActor(entry.bioMotherID, parentID) || MatchesActor(entry.bioFatherID, parentID) ||
+                isPresumedFather) {
                 result.push_back(cID);
             }
         }
@@ -485,8 +568,135 @@ namespace MARAS {
         return false;
     }
 
+    RE::FormID NPCRelationshipManager::ResolveSingleCustodian(RE::FormID cID, const ChildRegistryEntry& entry, RE::FormID parentA, RE::FormID parentB) const {
+        if (parentA == 0) return parentB;
+        if (parentB == 0 || parentA == parentB) return parentA;
+
+        const auto& s = Settings::GetSingleton();
+
+        // 1. Biological parent priority (if enabled)
+        if (s.childCustodyPrioritizeBioParent) {
+            RE::FormID presumedID = (entry.presumedFatherID != 0) ? entry.presumedFatherID : GetMotherPartner(cID);
+            bool isSecretPresumedA = entry.paternitySecret.isSecretForPartner && presumedID != 0 && MatchesActor(presumedID, parentA);
+            bool isSecretPresumedB = entry.paternitySecret.isSecretForPartner && presumedID != 0 && MatchesActor(presumedID, parentB);
+            bool bioA = MatchesActor(entry.bioMotherID, parentA) || MatchesActor(entry.bioFatherID, parentA) || isSecretPresumedA;
+            bool bioB = MatchesActor(entry.bioMotherID, parentB) || MatchesActor(entry.bioFatherID, parentB) || isSecretPresumedB;
+
+            if (bioA && !bioB) {
+                MARAS_LOG_INFO("Custody resolution: Child {:08X} ('{}') awarded to sole biological parent {:08X}", cID, entry.name, parentA);
+                return parentA;
+            }
+            if (bioB && !bioA) {
+                MARAS_LOG_INFO("Custody resolution: Child {:08X} ('{}') awarded to sole biological parent {:08X}", cID, entry.name, parentB);
+                return parentB;
+            }
+        }
+
+        // 2. Player Custody Override (if Player is involved)
+        if (parentA == kPlayerFormID || parentB == kPlayerFormID) {
+            RE::FormID otherID = (parentA == kPlayerFormID) ? parentB : parentA;
+            if (s.childCustodyPlayerPolicy == Settings::ChildCustodyPlayerPolicy::AlwaysWithPlayer) {
+                MARAS_LOG_INFO("Custody resolution: Child {:08X} ('{}') stays with Player (AlwaysWithPlayer)", cID, entry.name);
+                return kPlayerFormID;
+            }
+            if (s.childCustodyPlayerPolicy == Settings::ChildCustodyPlayerPolicy::NeverWithPlayer) {
+                MARAS_LOG_INFO("Custody resolution: Child {:08X} ('{}') assigned to NPC parent {:08X} (NeverWithPlayer)", cID, entry.name, otherID);
+                return otherID;
+            }
+            // If UseGenderPolicy, fall through to Gender Custody
+        }
+
+        // 3. Gender Custody Policy
+        bool isAFemale = (ActorSvc::GetSex(parentA) == 1);
+        bool isBFemale = (ActorSvc::GetSex(parentB) == 1);
+
+        if (isAFemale != isBFemale) {
+            // Opposite-sex couple
+            RE::FormID mother = isAFemale ? parentA : parentB;
+            RE::FormID father = isAFemale ? parentB : parentA;
+
+            if (s.childCustodyGenderPolicy == Settings::ChildCustodyGenderPolicy::StayWithFather) {
+                MARAS_LOG_INFO("Custody resolution: Child {:08X} ('{}') assigned to father {:08X} (StayWithFather)", cID, entry.name, father);
+                return father;
+            } else {
+                MARAS_LOG_INFO("Custody resolution: Child {:08X} ('{}') assigned to mother {:08X} (StayWithMother)", cID, entry.name, mother);
+                return mother;
+            }
+        } else {
+            // Same-sex couple (or matching sex): 50/50 Coin Flip
+            float roll = Utils::RandomFloat(0.0f, 100.0f);
+            RE::FormID chosen = (roll < 50.0f) ? parentA : parentB;
+            MARAS_LOG_INFO("Custody resolution: Same-sex parents ({:08X} / {:08X}), 50/50 coin flip ({:.1f}) awarded child {:08X} ('{}') to {:08X}",
+                           parentA, parentB, roll, cID, entry.name, chosen);
+            return chosen;
+        }
+    }
+
+    void NPCRelationshipManager::ApplyBirthCustodyRules(RE::FormID childID, ChildRegistryEntry& entry, RE::FormID motherID, RE::FormID presumedFatherID, RE::FormID bioFatherID) {
+        if (motherID == 0) return;
+
+        // 1. If mother is married to presumedFatherID or bioFatherID (or another spouse), they share a married household
+        if (presumedFatherID != 0 && IsMarried(motherID, presumedFatherID)) {
+            entry.guardianAID = motherID;
+            entry.guardianBID = presumedFatherID;
+            return;
+        }
+        if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && IsMarried(motherID, bioFatherID)) {
+            entry.guardianAID = motherID;
+            entry.guardianBID = bioFatherID;
+            return;
+        }
+        if (auto marriedSpouses = GetPartners(motherID, RelationshipStatus::Married); !marriedSpouses.empty()) {
+            entry.guardianAID = motherID;
+            entry.guardianBID = marriedSpouses.front();
+            return;
+        }
+
+        // 2. Mother is NOT married: parents do not share a household, so resolve a single custodial guardian
+        RE::FormID otherParentID = 0;
+        if (presumedFatherID != 0 && entry.paternitySecret.isSecretForPartner) {
+            // Mother's unmarried partner believes the child is theirs
+            otherParentID = presumedFatherID;
+        } else if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && !entry.paternitySecret.isSecretForBioFather) {
+            // Biological father is known and aware of the child
+            otherParentID = bioFatherID;
+        }
+
+        if (otherParentID == 0 || otherParentID == motherID) {
+            entry.guardianAID = motherID;
+            entry.guardianBID = 0;
+            return;
+        }
+
+        RE::FormID custodian = ResolveSingleCustodian(childID, entry, motherID, otherParentID);
+        entry.guardianAID = custodian;
+        entry.guardianBID = 0;
+
+        // If custody went to an NPC father who is married to an NPC spouse, link his spouse as co-guardian
+        if (custodian != motherID && custodian != kPlayerFormID) {
+            auto fatherSpouses = GetPartners(custodian, RelationshipStatus::Married);
+            if (!fatherSpouses.empty()) {
+                entry.guardianBID = fatherSpouses.front();
+            }
+        }
+
+        MARAS_LOG_INFO("[Fertility] Unmarried birth custody for child {:08X} ('{}'): mother={:08X}, otherParent={:08X} -> guardianA={:08X}, guardianB={:08X}",
+                       childID, entry.name, motherID, otherParentID, entry.guardianAID, entry.guardianBID);
+    }
+
     void NPCRelationshipManager::EvaluateChildCustodyOnMarriage(RE::FormID actorA, RE::FormID actorB) {
         if (actorA == 0 || actorB == 0 || actorA == actorB) return;
+
+        // If the biological mother and biological father marry each other, any remaining paternity secret on their shared children is resolved
+        for (auto& [cID, entry] : childrenByID) {
+            const bool bioParentsMarried =
+                (MatchesActor(entry.bioMotherID, actorA) && MatchesActor(entry.bioFatherID, actorB)) ||
+                (MatchesActor(entry.bioMotherID, actorB) && MatchesActor(entry.bioFatherID, actorA));
+            if (bioParentsMarried && entry.paternitySecret.HasActiveSecret()) {
+                ResolvePaternitySecret(cID, /*discoveredByPartner=*/false);
+                PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+            }
+        }
 
         if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
             RE::FormID spouseID = (actorA == kPlayerFormID) ? actorB : actorA;
@@ -521,6 +731,40 @@ namespace MARAS {
                         if (ActorSvc::GetSex(bioP) == 1) entry.bioMotherID = bioP;
                         else entry.bioFatherID = bioP;
                     }
+
+                    if (!IsSyntheticChildID(cID) && entry.stage == ChildStage::Child) {
+                        if (IsMarriageAdoptionPending(cID)) {
+                            continue;
+                        }
+                        auto* childActor = RE::TESForm::LookupByID<RE::Actor>(cID);
+                        if (!childActor) {
+                            childActor = NPCIndex::GetSingleton().GetActorFromFormId(cID);
+                        }
+                        auto* spouseActor = RE::TESForm::LookupByID<RE::Actor>(spouseID);
+                        if (!spouseActor) {
+                            spouseActor = NPCIndex::GetSingleton().GetActorFromFormId(spouseID);
+                        }
+                        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+                        if (childActor && spouseActor && vm) {
+                            MarkMarriageAdoptionPending(cID);
+                            MARAS_LOG_INFO("EvaluateChildCustodyOnMarriage: Dispatching Papyrus AdoptChildGlobal for spawned child {:08X} ('{}') with spouse {:08X}",
+                                           cID, entry.name, spouseID);
+                            if (otherGuardianID != 0 && !MatchesActor(otherGuardianID, spouseID)) {
+                                UpdateSpouseChildrenFaction(otherGuardianID);
+                            }
+                            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(
+                                new MarriageAdoptionCallback(cID, spouseID));
+                            auto childArg = childActor;
+                            auto spouseArg = spouseActor;
+                            RE::TESForm* houseArg = nullptr;
+                            auto args = RE::MakeFunctionArguments(std::move(childArg), std::move(spouseArg), std::move(houseArg));
+                            if (!vm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, callback)) {
+                                ClearMarriageAdoptionPending(cID);
+                            }
+                            continue;
+                        }
+                    }
+
                     entry.guardianAID = kPlayerFormID;
                     entry.guardianBID = spouseID;
                     MARAS_LOG_INFO("Transferring custody of child {:08X} ('{}') to Player/{:08X}", cID, entry.name, spouseID);
@@ -531,22 +775,35 @@ namespace MARAS {
                     SyncChildHouseholdState(cID, kPlayerFormID, spouseID, 0);
                     SendChildEvent("guardians_changed", cID, kPlayerFormID, spouseID, 0, "marriage");
                 }
-                // Case 2: Player has single-parent/single-adopted children prior to marriage -> link new spouse as co-parent
+                // Case 2: Player has single-parent/single-adopted children prior to marriage (or marries the biological parent of a child in Player's household) -> link new spouse as co-parent
                 else if ((MatchesActor(entry.guardianAID, kPlayerFormID) || MatchesActor(entry.guardianBID, kPlayerFormID)) &&
-                         !MatchesActor(entry.guardianAID, spouseID) && !MatchesActor(entry.guardianBID, spouseID) &&
-                         (entry.guardianAID == 0 || entry.guardianBID == 0 || entry.guardianAID == entry.guardianBID)) {
+                         !MatchesActor(entry.guardianAID, spouseID) && !MatchesActor(entry.guardianBID, spouseID)) {
+                    if (entry.stage == ChildStage::Unborn && !MatchesActor(entry.bioMotherID, kPlayerFormID) && !MatchesActor(entry.bioMotherID, spouseID)) {
+                        continue;
+                    }
+                    const bool isSinglePlayerChild = (entry.guardianAID == 0 || entry.guardianBID == 0 || entry.guardianAID == entry.guardianBID);
+                    const bool spouseIsBioParent = !entry.isAdopted &&
+                                                   (MatchesActor(entry.bioMotherID, spouseID) || MatchesActor(entry.bioFatherID, spouseID));
+                    if (!isSinglePlayerChild && !spouseIsBioParent) {
+                        continue;
+                    }
+
+                    RE::FormID prevCoGuardian = MatchesActor(entry.guardianAID, kPlayerFormID) ? entry.guardianBID : entry.guardianAID;
                     entry.guardianAID = kPlayerFormID;
                     entry.guardianBID = spouseID;
-                    MARAS_LOG_INFO("EvaluateChildCustodyOnMarriage: Linking player's single child {:08X} ('{}') to new spouse {:08X}",
+                    MARAS_LOG_INFO("EvaluateChildCustodyOnMarriage: Linking player's child {:08X} ('{}') to new spouse {:08X}",
                                    cID, entry.name, spouseID);
                     UpdateChildBothParentsFaction(cID);
+                    if (prevCoGuardian != 0 && prevCoGuardian != kPlayerFormID && prevCoGuardian != spouseID) {
+                        UpdateSpouseChildrenFaction(prevCoGuardian);
+                    }
 
                     // Auto-assign unhoused spouse to child's house using RelocateFamilyUnit
                     auto& houseSvc = PlayerHouseService::GetSingleton();
                     auto& childSvc = PlayerChildrenService::GetSingleton();
                     RE::FormID childHouseID = childSvc.GetChildHouseFormID(cID);
                     if (childHouseID != 0 && houseSvc.GetTenantHouseFormID(spouseID) == 0) {
-                        houseSvc.RelocateFamilyUnit(spouseID, childHouseID, true);
+                        houseSvc.RelocateFamilyUnit(cID, childHouseID, true);
                         MARAS_LOG_INFO("EvaluateChildCustodyOnMarriage: Auto-relocated unhoused spouse {:08X} to child {:08X}'s house {:08X}",
                                        spouseID, cID, childHouseID);
                     }
@@ -635,8 +892,8 @@ namespace MARAS {
                     }
                 }
 
-                ResolvePaternitySecretForPartner(cID, /*discoveredByPartner=*/true, /*sendEvent=*/false);
-                MARAS_LOG_INFO("[Fertility] Divorce: Auto-resolved partner paternity secret for child {:08X} ('{}')", cID, entry.name);
+                ResolvePaternitySecret(cID, /*discoveredByPartner=*/true);
+                MARAS_LOG_INFO("[Fertility] Divorce/Breakup: Auto-resolved paternity secret for child {:08X} ('{}')", cID, entry.name);
 
                 // Fire SKSE ModCallbackEvent for SkyrimNet AI context and Papyrus listeners
                 if (auto* source = SKSE::GetModCallbackEventSource()) {
@@ -647,104 +904,63 @@ namespace MARAS {
 
                 // On-screen HUD notification if player is involved
                 if (motherID == kPlayerFormID || formerSpouseID == kPlayerFormID || bioFatherID == kPlayerFormID) {
-                    std::string notifyMsg = fmt::format("Paternity secret for {} has been resolved following divorce.",
+                    std::string notifyMsg = fmt::format("Paternity secret for {} has been resolved following breakup.",
                                                         entry.name.empty() ? "the child" : entry.name);
                     RE::SendHUDMessage::ShowHUDMessage(notifyMsg.c_str());
                 }
-            } else if (entry.paternitySecret.isSecretForPartner) {
-                entry.paternitySecret.isSecretForPartner = false;
-                entry.paternitySecret.discoveredByPartner = true;
-                if (!entry.paternitySecret.isSecretForBioFather) {
-                    entry.paternitySecret.isSecret = false;
-                    entry.paternitySecret.discovered = true;
-                }
+            } else if (entry.paternitySecret.isSecretForPartner || entry.paternitySecret.isSecretForBioFather) {
+                ResolvePaternitySecret(cID, /*discoveredByPartner=*/true);
             }
         };
 
-        // 1. Clear assumed father and resolve pregnancy secrets on divorce for unborn children
+        // 1. Clear assumed father and resolve pregnancy secrets on divorce/breakup for unborn children,
+        //    and resolve paternity secrets for born children where the breaking-up partner was the presumedFatherID
         for (auto& [cID, entry] : childrenByID) {
-            if (entry.stage != ChildStage::Unborn) continue;
             bool motherIsA = MatchesActor(entry.bioMotherID, actorA);
             bool motherIsB = MatchesActor(entry.bioMotherID, actorB);
             if (!motherIsA && !motherIsB) continue;
 
             RE::FormID formerSpouseID = motherIsA ? actorB : actorA;
-            bool hasFormerSpouse = MatchesActor(entry.guardianAID, formerSpouseID) ||
-                                   MatchesActor(entry.guardianBID, formerSpouseID);
-            if (hasFormerSpouse) {
+            if (entry.stage == ChildStage::Unborn) {
+                bool hasFormerSpouse = MatchesActor(entry.guardianAID, formerSpouseID) ||
+                                       MatchesActor(entry.guardianBID, formerSpouseID) ||
+                                       MatchesActor(entry.presumedFatherID, formerSpouseID);
+                if (hasFormerSpouse) {
+                    processChildPaternityAndCustody(cID, entry);
+                    if (MatchesActor(entry.guardianAID, formerSpouseID)) {
+                        entry.guardianAID = entry.bioMotherID;
+                    }
+                    if (MatchesActor(entry.guardianBID, formerSpouseID)) {
+                        entry.guardianBID = 0;
+                    }
+                    if (MatchesActor(entry.presumedFatherID, formerSpouseID)) {
+                        entry.presumedFatherID = 0;
+                    }
+                    if (entry.guardianAID == entry.guardianBID) {
+                        entry.guardianBID = 0;
+                    }
+                    MARAS_LOG_INFO("[Fertility] Divorce/Breakup: Cleared presumed father {:08X} and resolved pregnancy secret of mother {:08X}",
+                                   formerSpouseID, entry.bioMotherID);
+                    PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+                }
+            } else if (entry.stage != ChildStage::Adult && MatchesActor(entry.presumedFatherID, formerSpouseID) &&
+                       entry.paternitySecret.HasActiveSecret()) {
                 processChildPaternityAndCustody(cID, entry);
-                if (MatchesActor(entry.guardianAID, formerSpouseID)) {
-                    entry.guardianAID = entry.bioMotherID;
+                // If an unmarried presumed father held sole custody, re-evaluate single custodian now that the secret is exposed
+                if (MatchesActor(entry.guardianAID, formerSpouseID) && entry.guardianBID == 0) {
+                    RE::FormID custodian = ResolveSingleCustodian(cID, entry, entry.bioMotherID, formerSpouseID);
+                    if (custodian != entry.guardianAID) {
+                        entry.guardianAID = custodian;
+                        UpdateChildBothParentsFaction(cID);
+                        SyncChildHouseholdState(cID, entry.guardianAID, entry.guardianBID, 0);
+                        UpdateSpouseChildrenFaction(entry.bioMotherID);
+                        UpdateSpouseChildrenFaction(formerSpouseID);
+                        SendChildEvent("guardians_changed", cID, entry.guardianAID, 0, formerSpouseID, "divorce");
+                    }
                 }
-                if (MatchesActor(entry.guardianBID, formerSpouseID)) {
-                    entry.guardianBID = 0;
-                }
-                if (entry.guardianAID == entry.guardianBID) {
-                    entry.guardianBID = 0;
-                }
-                MARAS_LOG_INFO("[Fertility] Divorce: Cleared presumed father {:08X} and resolved pregnancy secret of mother {:08X}",
-                               formerSpouseID, entry.bioMotherID);
                 PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
             }
         }
-
-        auto resolveDivorceCustodian = [&](RE::FormID cID, const ChildRegistryEntry& entry, RE::FormID parentA, RE::FormID parentB) -> RE::FormID {
-            const auto& s = Settings::GetSingleton();
-
-            // 1. Biological parent priority (if enabled)
-            if (s.childCustodyPrioritizeBioParent) {
-                bool bioA = MatchesActor(entry.bioMotherID, parentA) || MatchesActor(entry.bioFatherID, parentA);
-                bool bioB = MatchesActor(entry.bioMotherID, parentB) || MatchesActor(entry.bioFatherID, parentB);
-
-                if (bioA && !bioB) {
-                    MARAS_LOG_INFO("Divorce custody: Child {:08X} ('{}') awarded to sole biological parent {:08X}", cID, entry.name, parentA);
-                    return parentA;
-                }
-                if (bioB && !bioA) {
-                    MARAS_LOG_INFO("Divorce custody: Child {:08X} ('{}') awarded to sole biological parent {:08X}", cID, entry.name, parentB);
-                    return parentB;
-                }
-            }
-
-            // 2. Player Custody Override (if Player is involved)
-            if (parentA == kPlayerFormID || parentB == kPlayerFormID) {
-                RE::FormID spouseID = (parentA == kPlayerFormID) ? parentB : parentA;
-                if (s.childCustodyPlayerPolicy == Settings::ChildCustodyPlayerPolicy::AlwaysWithPlayer) {
-                    MARAS_LOG_INFO("Divorce custody: Child {:08X} ('{}') stays with Player (AlwaysWithPlayer)", cID, entry.name);
-                    return kPlayerFormID;
-                }
-                if (s.childCustodyPlayerPolicy == Settings::ChildCustodyPlayerPolicy::NeverWithPlayer) {
-                    MARAS_LOG_INFO("Divorce custody: Child {:08X} ('{}') assigned to spouse {:08X} (NeverWithPlayer)", cID, entry.name, spouseID);
-                    return spouseID;
-                }
-                // If UseGenderCustody, fall through to Gender Custody
-            }
-
-            // 3. Gender Custody Policy
-            bool isAFemale = (ActorSvc::GetSex(parentA) == 1);
-            bool isBFemale = (ActorSvc::GetSex(parentB) == 1);
-
-            if (isAFemale != isBFemale) {
-                // Opposite-sex couple
-                RE::FormID mother = isAFemale ? parentA : parentB;
-                RE::FormID father = isAFemale ? parentB : parentA;
-
-                if (s.childCustodyGenderPolicy == Settings::ChildCustodyGenderPolicy::StayWithFather) {
-                    MARAS_LOG_INFO("Divorce custody: Child {:08X} ('{}') assigned to father {:08X} (StayWithFather)", cID, entry.name, father);
-                    return father;
-                } else {
-                    MARAS_LOG_INFO("Divorce custody: Child {:08X} ('{}') assigned to mother {:08X} (StayWithMother)", cID, entry.name, mother);
-                    return mother;
-                }
-            } else {
-                // Same-sex couple (or matching sex): 50/50 Coin Flip
-                float roll = Utils::RandomFloat(0.0f, 100.0f);
-                RE::FormID chosen = (roll < 50.0f) ? parentA : parentB;
-                MARAS_LOG_INFO("Divorce custody: Same-sex couple ({:08X} / {:08X}), 50/50 coin flip ({:.1f}) awarded child {:08X} ('{}') to {:08X}",
-                               parentA, parentB, roll, cID, entry.name, chosen);
-                return chosen;
-            }
-        };
 
         if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
             RE::FormID spouseID = (actorA == kPlayerFormID) ? actorB : actorA;
@@ -757,7 +973,7 @@ namespace MARAS {
                 if (hasPlayer && hasSpouse) {
                     processChildPaternityAndCustody(cID, entry);
 
-                    RE::FormID custodian = resolveDivorceCustodian(cID, entry, kPlayerFormID, spouseID);
+                    RE::FormID custodian = ResolveSingleCustodian(cID, entry, kPlayerFormID, spouseID);
                     entry.guardianAID = custodian;
                     entry.guardianBID = 0;
 
@@ -786,7 +1002,7 @@ namespace MARAS {
 
                 processChildPaternityAndCustody(cID, entry);
 
-                RE::FormID custodian = resolveDivorceCustodian(cID, entry, actorA, actorB);
+                RE::FormID custodian = ResolveSingleCustodian(cID, entry, actorA, actorB);
                 entry.guardianAID = custodian;
                 entry.guardianBID = 0;
 
@@ -814,6 +1030,56 @@ namespace MARAS {
     }
 
     void NPCRelationshipManager::SyncAllMarriedCouplesChildCustody() {
+        // 1. Normalize born children whose guardians are not married to each other,
+        //    and self-heal legacy unmarried Player+NPC births where AdoptChild overwrote NPC custody.
+        for (auto& [cID, entry] : childrenByID) {
+            if (entry.stage == ChildStage::Unborn || entry.stage == ChildStage::Adult) continue;
+
+            if (entry.guardianAID != 0 && entry.guardianBID != 0 && entry.guardianAID != entry.guardianBID) {
+                if (!IsMarried(entry.guardianAID, entry.guardianBID)) {
+                    RE::FormID gA = entry.guardianAID;
+                    RE::FormID gB = entry.guardianBID;
+                    RE::FormID custodian = ResolveSingleCustodian(cID, entry, gA, gB);
+                    RE::FormID formerOther = (custodian == gA) ? gB : gA;
+                    entry.guardianAID = custodian;
+                    entry.guardianBID = 0;
+
+                    UpdateChildBothParentsFaction(cID);
+                    SyncChildHouseholdState(cID, entry.guardianAID, entry.guardianBID, 0);
+                    UpdateSpouseChildrenFaction(custodian);
+                    UpdateSpouseChildrenFaction(formerOther);
+                    PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+                }
+            } else if (!entry.isAdopted && entry.isBiologicalChild &&
+                       entry.guardianAID == kPlayerFormID && entry.guardianBID == 0 &&
+                       entry.bioMotherID != 0 && entry.bioFatherID != 0 &&
+                       entry.bioFatherID != kUnknownFatherFormID &&
+                       (entry.bioMotherID == kPlayerFormID || entry.bioFatherID == kPlayerFormID)) {
+                RE::FormID npcBioParent = (entry.bioMotherID == kPlayerFormID) ? entry.bioFatherID : entry.bioMotherID;
+                if (npcBioParent != 0 && npcBioParent != kPlayerFormID &&
+                    !IsMarried(kPlayerFormID, npcBioParent) && !IsDivorced(kPlayerFormID, npcBioParent)) {
+                    auto* npcActor = RE::TESForm::LookupByID<RE::Actor>(npcBioParent);
+                    if (npcActor && !npcActor->IsDead()) {
+                        RE::FormID expectedCustodian = ResolveSingleCustodian(
+                            cID, entry, entry.bioMotherID, entry.bioFatherID);
+                        if (expectedCustodian == npcBioParent) {
+                            entry.guardianAID = npcBioParent;
+                            entry.guardianBID = 0;
+
+                            UpdateChildBothParentsFaction(cID);
+                            SyncChildHouseholdState(cID, entry.guardianAID, entry.guardianBID, 0);
+                            UpdateSpouseChildrenFaction(npcBioParent);
+                            UpdateSpouseChildrenFaction(kPlayerFormID);
+                            PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+                            MARAS_LOG_INFO("[Children] Repaired unmarried birth custody for child {:08X} ('{}'): restored custody from Player to biological parent {:08X}",
+                                           cID, entry.name, npcBioParent);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Synchronize shared custody across all married couples
         for (const auto& [key, data] : relationshipPairs) {
             if (data.status != RelationshipStatus::Married) continue;
 
@@ -1088,9 +1354,18 @@ namespace MARAS {
         return it->second.bioFatherID;
     }
 
+    RE::FormID NPCRelationshipManager::GetPresumedFather(RE::FormID childID) const {
+        auto it = childrenByID.find(childID);
+        if (it == childrenByID.end()) return 0;
+        return it->second.presumedFatherID;
+    }
+
     RE::FormID NPCRelationshipManager::GetMotherPartner(RE::FormID childID) const {
         auto it = childrenByID.find(childID);
         if (it == childrenByID.end()) return 0;
+        if (it->second.presumedFatherID != 0) {
+            return it->second.presumedFatherID;
+        }
         RE::FormID mID = it->second.bioMotherID;
         if (mID == 0) return 0;
 
@@ -1110,6 +1385,9 @@ namespace MARAS {
         it->second.bioMotherID = motherID;
         if (motherID != 0) {
             it->second.isBiologicalChild = true;
+            it->second.isAdopted = false;
+        } else if (it->second.bioFatherID == 0) {
+            it->second.isBiologicalChild = false;
         }
         MARAS_LOG_INFO("[Lineage] Set child {:08X} bio mother to {:08X}", childID, motherID);
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
@@ -1123,14 +1401,17 @@ namespace MARAS {
         it->second.bioFatherID = fatherID;
         if (fatherID != 0) {
             it->second.isBiologicalChild = true;
+            it->second.isAdopted = false;
+        } else if (it->second.bioMotherID == 0) {
+            it->second.isBiologicalChild = false;
         }
 
-        // An unborn child's paternity secret depends on its bio father: rebuild it when the father is replaced mid-pregnancy
+        auto& pSec = it->second.paternitySecret;
         if (it->second.stage == ChildStage::Unborn) {
-            auto& pSec = it->second.paternitySecret;
             const RE::FormID presumedID = GetMotherPartner(childID);
             if (presumedID != 0 && fatherID != 0 && !MatchesActor(fatherID, presumedID)) {
                 auto* calendar = RE::Calendar::GetSingleton();
+                it->second.presumedFatherID = presumedID;
                 pSec = PaternitySecret{};
                 pSec.isSecret = true;
                 pSec.isSecretForPartner = true;
@@ -1144,12 +1425,63 @@ namespace MARAS {
                 }
                 pSec.hasPhenotypeMismatch = HasPhenotypeMismatch(presumedID, fatherID);
             } else {
+                it->second.presumedFatherID = 0;
                 pSec = PaternitySecret{};
+            }
+        } else if (it->second.presumedFatherID != 0) {
+            if (fatherID != 0 && MatchesActor(fatherID, it->second.presumedFatherID)) {
+                it->second.presumedFatherID = 0;
+                pSec = PaternitySecret{};
+            } else {
+                pSec.bioFatherName = (fatherID != 0 && fatherID != kUnknownFatherFormID) ? ActorSvc::GetName(fatherID) : "";
+                if (auto* r = (fatherID != 0 && fatherID != kUnknownFatherFormID) ? ActorSvc::GetRace(fatherID) : nullptr) {
+                    pSec.bioFatherRaceID = r->GetFormID();
+                } else {
+                    pSec.bioFatherRaceID = 0;
+                }
+                pSec.hasPhenotypeMismatch = (fatherID != 0 && fatherID != kUnknownFatherFormID)
+                    ? HasPhenotypeMismatch(it->second.presumedFatherID, fatherID)
+                    : false;
             }
         }
 
         MARAS_LOG_INFO("[Lineage] Set child {:08X} bio father to {:08X}", childID, fatherID);
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
+        return true;
+    }
+
+    bool NPCRelationshipManager::SetPresumedFather(RE::FormID childID, RE::FormID fatherID) {
+        auto it = childrenByID.find(childID);
+        if (it == childrenByID.end()) return false;
+        if (fatherID != 0) EnsureRegistered(fatherID);
+
+        auto& entry = it->second;
+        auto& pSec = entry.paternitySecret;
+        if (fatherID == 0 || (entry.bioFatherID != 0 && MatchesActor(fatherID, entry.bioFatherID))) {
+            entry.presumedFatherID = 0;
+            pSec = PaternitySecret{};
+        } else {
+            entry.presumedFatherID = fatherID;
+            if (!pSec.isSecret && !pSec.discovered) {
+                auto* calendar = RE::Calendar::GetSingleton();
+                pSec.isSecret = true;
+                pSec.isSecretForPartner = true;
+                pSec.isSecretForBioFather = true;
+                pSec.lastCheckTimestamp = calendar ? calendar->GetDaysPassed() : 0.0f;
+            }
+            if (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) {
+                pSec.bioFatherName = ActorSvc::GetName(entry.bioFatherID);
+                if (auto* r = ActorSvc::GetRace(entry.bioFatherID)) {
+                    pSec.bioFatherRaceID = r->GetFormID();
+                }
+                pSec.hasPhenotypeMismatch = HasPhenotypeMismatch(fatherID, entry.bioFatherID);
+            } else {
+                pSec.hasPhenotypeMismatch = false;
+            }
+        }
+
+        MARAS_LOG_INFO("[Lineage] Set child {:08X} presumed father to {:08X}", childID, entry.presumedFatherID);
+        PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
         return true;
     }
 

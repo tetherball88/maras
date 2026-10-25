@@ -1,3 +1,9 @@
 {% if (render_mode == "full" or render_mode == "transform" or render_mode == "thoughts" or render_mode == "dialogue_target" or render_mode == "ttm_relations") and not decnpc(actorUUID).isVirtual %}
+    {% if ttm_is_registered(actorUUID) %}
+        {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+        {% if existsIn(profile, "parents") or (existsIn(profile, "is_pregnant") and profile.is_pregnant) or length(profile.family) > 0 or (existsIn(profile, "non_custodial_children") and length(profile.non_custodial_children) > 0) or length(profile.current_relationships) > 0 or length(profile.player_co_partners) > 0 or length(profile.past_relationships) > 0 or length(profile.infidelity) > 0 %}
+            Note: The relationship, family, pregnancy, and infidelity sections for {{decnpc(actorUUID).name}} below reflect current in-game state and supersede any conflicting relationship descriptions above.
+        {% endif %}
+    {% endif %}
     {{render_subcomponent("maras_relations", render_mode)}}
 {% endif %}

@@ -112,7 +112,7 @@ Before invoking any JavaScript function, `PrismaUIManager` verifies `IsAvailable
 - `"household"`: Housed spouses, spouse hierarchy array (`0..3`), player homes (capacities, tenants, custom cell info), and household children (`0..5` slots, pets, critters, orders).
 - `"npcs"` / `"npcDetail"`: Full profile for tracked NPCs (`formId`, `name`, `race`, `gender`, `archetypes`, `affection`, `preferredPackageIndex`, `availablePackages`, `relationships`, `children`, `isDeceased`).
 - `"matchmaking"`: Eligible NPC pool, active NPC-to-NPC couples, matchmaking run history, and LLM evaluation status.
-- `"settings"`: Complete `Settings` state including `hasSkyrimNet` and `simulateNoSkyrimNet` for frontend gating.
+- `"settings"`: Complete `Settings` state including `hasSkyrimNet`, `simulateNoSkyrimNet`, `uiFullScreen`, `uiScale`, and `autoPauseOnOpen`, plus `isGamePaused` for dashboard pause state synchronization (`window.onGamePausedChanged` / `setGamePaused`).
 
 ### 3.2 Frontend Gating Rule (`prisma-src/`)
 All SkyrimNet-specific controls in `prisma-src/` inspect `useMarasStore(s => s.settings.hasSkyrimNet)`:

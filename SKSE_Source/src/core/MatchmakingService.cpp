@@ -2057,8 +2057,14 @@ namespace MARAS {
             MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] {} Applying {} match(es) directly without memory ingestion.",
                            !IsSkyrimNetAvailable() ? "SkyrimNet is not available." : "Memory generation is disabled.",
                            approvedMatches.size());
+            bool anyApplied = false;
             for (auto& match : approvedMatches) {
-                ApplyMatch(match);
+                if (ApplyMatch(match)) {
+                    anyApplied = true;
+                }
+            }
+            if (anyApplied) {
+                PrismaUIDataBridge::GetSingleton().SendOverviewData();
             }
             return;
         }
@@ -2152,9 +2158,11 @@ namespace MARAS {
     void MatchmakingService::FinishMemoryBatch(std::shared_ptr<MemoryBatch> batch) {
         if (!batch) return;
 
+        bool anyApplied = false;
         for (auto& task : batch->tasks) {
             if (task.completed && !task.failed) {
                 if (ApplyMatch(task.result)) {
+                    anyApplied = true;
                     MARAS_LOG_INFO("[Matchmaking:FinishMemoryBatch] Successfully applied relationship change for {} (0x{:08X}) <-> {} (0x{:08X}) | Action: {} -> {}",
                                    task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID,
                                    task.result.action, task.result.targetStatus);
@@ -2167,6 +2175,9 @@ namespace MARAS {
                 MARAS_LOG_WARN("[Matchmaking:FinishMemoryBatch] Skipping relationship change for {} <-> {} (Chain cancelled or failed). Status unchanged.",
                                task.result.actorAName, task.result.actorBName);
             }
+        }
+        if (anyApplied) {
+            PrismaUIDataBridge::GetSingleton().SendOverviewData();
         }
         MARAS_LOG_INFO("[Matchmaking:FinishMemoryBatch] Memory batch complete.");
     }

@@ -79,6 +79,8 @@ export interface ChildRecord {
   bioFatherId?: string
   bioMotherName?: string
   bioFatherName?: string
+  presumedFatherId?: string
+  presumedFatherName?: string
   stage?: ChildStage
   isEphemeral?: boolean
   hasRefID?: boolean
@@ -250,6 +252,10 @@ export interface MarasSettings {
   paternityBreakupChance?: number
   paternityBioStepUpChance?: number
   paternityForceDiceRolls?: boolean
+  revealSecretsInUI?: boolean
+  uiFullScreen?: boolean
+  uiScale?: number
+  autoPauseOnOpen?: boolean
 }
 
 export enum MatchmakingOrientation {

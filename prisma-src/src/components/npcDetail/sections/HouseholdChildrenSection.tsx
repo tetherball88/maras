@@ -5,8 +5,7 @@ import { SectionCard } from '../../shared/SectionCard'
 import { AppTooltip } from '../../shared/AppTooltip'
 import { Baby, Trash2 } from 'lucide-react'
 import { formatGameDay } from '../../../utils/dateUtils'
-import { getChildRelationshipStatus } from '../../../utils/childUtils'
-import { areSameFormId } from '../../../utils/statusAvailability'
+import { getChildRelationshipStatus, isActorChild } from '../../../utils/childUtils'
 
 interface HouseholdChildrenSectionProps {
   npcId: string
@@ -23,13 +22,7 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
   const removeChild = useMarasStore((s) => s.removeChild)
 
-  const allChildren = Array.from(children.values()).filter(
-    (c) =>
-      areSameFormId(c.guardianAId, npcId) ||
-      areSameFormId(c.guardianBId, npcId) ||
-      areSameFormId(c.bioMotherId, npcId) ||
-      areSameFormId(c.bioFatherId, npcId),
-  )
+  const allChildren = Array.from(children.values()).filter((c) => isActorChild(c, npcId))
 
   if (allChildren.length === 0) return null
 

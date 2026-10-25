@@ -200,6 +200,7 @@ namespace MARAS {
         if (initialHouseFormID != 0) {
             PlayerHouseService::GetSingleton().RelocateFamilyUnit(childID, initialHouseFormID, true);
         } else {
+            NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
             ApplyPackageForCurrentState(childID);
         }
 
@@ -277,6 +278,7 @@ namespace MARAS {
                 }
             }
 
+            NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
             ApplyPackageForCurrentState(childID);
         }
 

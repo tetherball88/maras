@@ -11,6 +11,7 @@ import {
 } from './sections'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { areSameFormId } from '../../utils/statusAvailability'
+import { isActorChild } from '../../utils/childUtils'
 import { RelationshipStatus } from '../../types'
 import { categorizePartners } from '../../utils/partnerCategories'
 
@@ -35,13 +36,7 @@ export const SpouseDetailBody: React.FC<SpouseDetailBodyProps> = ({ npcId }) => 
   const npc = npcProfiles.get(npcId)
   const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy) : null
 
-  const hasChildren = Array.from(children.values()).some(
-    (c) =>
-      c.guardianAId === npcId ||
-      c.guardianBId === npcId ||
-      c.bioMotherId === npcId ||
-      c.bioFatherId === npcId,
-  )
+  const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, npcId))
 
   const hasRelationships = Boolean(
     categorized &&

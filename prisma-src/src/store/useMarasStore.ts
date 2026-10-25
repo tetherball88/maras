@@ -35,12 +35,14 @@ import {
 import { sendMarasAction } from './prismaBridge'
 import { isInGame as checkIsInGame } from '../lib/utils'
 import { areSameFormId } from '../utils/statusAvailability'
+import { maskChildrenMap, maskCheatingAndRelationships } from '../utils/childUtils'
 
 export type { AiMatchSuggestion }
 
 interface MarasState {
   isOpen: boolean
   isInGame: boolean
+  isGamePaused: boolean
   statusMsg: string
   activeTab: string
   activeSubSection: string | null
@@ -83,6 +85,9 @@ interface MarasState {
   // Core Data
   currentGameDay: number
   npcProfiles: Map<string, NPCProfile>
+  rawRelationships: RelationshipPair[]
+  rawChildren: Map<string, ChildRecord>
+  rawCheatingRecords: CheatingRecord[]
   relationships: RelationshipPair[]
   children: Map<string, ChildRecord>
   cheatingRecords: CheatingRecord[]
@@ -129,6 +134,8 @@ interface MarasState {
   // General Actions
   setStatusMsg: (msg: string) => void
   setIsOpen: (isOpen: boolean) => void
+  setGamePaused: (paused: boolean, skipBridge?: boolean) => void
+  toggleGamePaused: () => void
   setActiveTab: (tab: string) => void
   setActiveSubSection: (subSection: string | null) => void
   setSelectedNpcId: (id: string | null) => void
@@ -152,13 +159,21 @@ interface MarasState {
     hierarchyRanks?: [string, string, string]
     playerHomes?: PlayerHouse[]
     settings?: Partial<MarasSettings>
+    isGamePaused?: boolean
   }) => void
   updateAffection: (formId: string, value: number, skipBridge?: boolean) => void
   updateNPCProfile: (formId: string, updates: Partial<NPCProfile>, skipBridge?: boolean) => void
   setPairIsOpen: (actorA: string, actorB: string, isOpen: boolean, fromMatchmaking?: boolean) => void
   setHierarchyRank: (formId: string, rankIndex: number) => void
   assignRelationshipStatus: (actorA: string, actorB: string, status: RelationshipStatus, dualMemories?: NpcMemoryEntry[], fromMatchmaking?: boolean) => void
-  handleRealtimeStatusChanged: (actorA: string, actorB: string, status: RelationshipStatus, isOpen?: boolean) => void
+  handleRealtimeStatusChanged: (
+    actorA: string,
+    actorB: string,
+    status: RelationshipStatus,
+    isOpen?: boolean,
+    actorAProfile?: NPCProfile,
+    actorBProfile?: NPCProfile,
+  ) => void
   removeRelationship: (actorA: string, actorB: string, fromMatchmaking?: boolean) => void
   addChild: (
     child: {
@@ -190,6 +205,7 @@ interface MarasState {
   setLastNPCIndexDumpResult: (result: DataDumpResult | null) => void
 
   closeUi: () => void
+  refreshData: () => void
   logTestSignal: () => void
 }
 
@@ -209,6 +225,37 @@ const initialChildMap = new Map<string, ChildRecord>()
 if (!isGameBuild) {
   mockChildren.forEach((c) => initialChildMap.set(c.childId, c))
 }
+
+function computeVisibleSecretsState(
+  rawRelationships: RelationshipPair[],
+  rawChildren: Map<string, ChildRecord>,
+  rawCheatingRecords: CheatingRecord[],
+  revealSecrets: boolean,
+  npcProfiles: Map<string, NPCProfile>,
+) {
+  const { relationships, cheatingRecords } = maskCheatingAndRelationships(
+    rawRelationships,
+    rawCheatingRecords,
+    revealSecrets,
+  )
+  const children = maskChildrenMap(rawChildren, revealSecrets, npcProfiles)
+  return {
+    rawRelationships,
+    rawChildren,
+    rawCheatingRecords,
+    relationships,
+    children,
+    cheatingRecords,
+  }
+}
+
+const initialVisibleSecretsState = computeVisibleSecretsState(
+  isGameBuild ? [] : mockRelationships,
+  initialChildMap,
+  isGameBuild ? [] : mockCheatingRecords,
+  Boolean(mockSettings.revealSecretsInUI),
+  initialNpcMap,
+)
 
 // Timers and pending state for debounced bridge updates
 const setAffectionDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -256,6 +303,7 @@ export function flushAllPendingDebouncedActions() {
 export const useMarasStore = create<MarasState>((set, get) => ({
   isOpen: !isGameBuild,
   isInGame: isGameBuild,
+  isGamePaused: !isGameBuild && Boolean(mockSettings.autoPauseOnOpen),
   statusMsg: isGameBuild ? 'M.A.R.A.S Core Active' : 'Prisma UI Dev Mode',
   activeTab: 'overview',
   activeSubSection: 'dashboard',
@@ -294,9 +342,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   currentGameDay: isGameBuild ? 0 : 60.5,
   npcProfiles: initialNpcMap,
-  relationships: isGameBuild ? [] : mockRelationships,
-  children: initialChildMap,
-  cheatingRecords: isGameBuild ? [] : mockCheatingRecords,
+  ...initialVisibleSecretsState,
   affectionData: initialAffectionMap,
   hierarchyRanks: isGameBuild ? ['', '', ''] : mockHierarchyRanks,
   playerHomes: isGameBuild ? [] : mockPlayerHomes,
@@ -705,7 +751,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     if (typeof window !== 'undefined' && !window.marasAction) {
       setTimeout(() => {
         set((state) => {
-          const newChildren = new Map(state.children)
+          const newChildren = new Map(state.rawChildren)
           const child = newChildren.get(childId)
           const newProfiles = new Map(state.npcProfiles)
           const profile = newProfiles.get(childId)
@@ -726,7 +772,13 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           }
 
           return {
-            children: newChildren,
+            ...computeVisibleSecretsState(
+              state.rawRelationships,
+              newChildren,
+              state.rawCheatingRecords,
+              Boolean(state.settings.revealSecretsInUI),
+              newProfiles,
+            ),
             npcProfiles: newProfiles,
             statusMsg: `Child (${childId}) successfully spawned into the world!`,
           }
@@ -737,7 +789,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   handleChildPromoted: (oldId: string, newId: string) => {
     set((state) => {
-      const newChildren = new Map(state.children)
+      const newChildren = new Map(state.rawChildren)
       const oldChild = newChildren.get(oldId)
       if (oldChild) {
         newChildren.delete(oldId)
@@ -760,7 +812,13 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         })
       }
       return {
-        children: newChildren,
+        ...computeVisibleSecretsState(
+          state.rawRelationships,
+          newChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          newProfiles,
+        ),
         npcProfiles: newProfiles,
         npcDetailId: state.npcDetailId === oldId ? newId : state.npcDetailId,
         selectedNpcId: state.selectedNpcId === oldId ? newId : state.selectedNpcId,
@@ -782,7 +840,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     if (typeof window !== 'undefined' && !window.marasAction) {
       setTimeout(() => {
         set((state) => {
-          const newChildren = new Map(state.children)
+          const newChildren = new Map(state.rawChildren)
           const target = newChildren.get(childId)
           if (target) {
             newChildren.set(childId, {
@@ -793,7 +851,13 @@ export const useMarasStore = create<MarasState>((set, get) => ({
             })
           }
           return {
-            children: newChildren,
+            ...computeVisibleSecretsState(
+              state.rawRelationships,
+              newChildren,
+              state.rawCheatingRecords,
+              Boolean(state.settings.revealSecretsInUI),
+              state.npcProfiles,
+            ),
             evaluatingChildId: null,
             statusMsg: `Secret evaluated for child (${childId}).`,
           }
@@ -810,7 +874,27 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   setStatusMsg: (statusMsg: string) => set({ statusMsg }),
   setIsOpen: (isOpen: boolean) => {
-    set({ isOpen })
+    set((state) => ({
+      isOpen,
+      ...(!isOpen
+        ? { isGamePaused: false }
+        : !state.isOpen && !state.isInGame
+          ? { isGamePaused: Boolean(state.settings.autoPauseOnOpen) }
+          : {}),
+    }))
+  },
+  setGamePaused: (paused: boolean, skipBridge = false) => {
+    set({
+      isGamePaused: paused,
+      statusMsg: paused ? 'Game paused.' : 'Game unpaused.',
+    })
+    if (!skipBridge) {
+      sendMarasAction('setGamePaused', { paused })
+    }
+  },
+  toggleGamePaused: () => {
+    const nextPaused = !get().isGamePaused
+    get().setGamePaused(nextPaused)
   },
   setPlayerHomes: (playerHomes: PlayerHouse[]) => set({ playerHomes }),
 
@@ -981,6 +1065,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         updates.currentGameDay = data.currentGameDay
       }
 
+      let nextProfiles = state.npcProfiles
       if (data.npcProfiles && Array.isArray(data.npcProfiles)) {
         const newMap = new Map(state.npcProfiles)
         data.npcProfiles.forEach((npc) => {
@@ -988,23 +1073,27 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           newMap.set(npc.formId, existing ? { ...existing, ...npc } : npc)
         })
         updates.npcProfiles = newMap
+        nextProfiles = newMap
       }
 
+      let nextRawRelationships = state.rawRelationships
       if (data.relationships && Array.isArray(data.relationships)) {
-        updates.relationships = data.relationships
+        nextRawRelationships = data.relationships
       }
 
+      let nextRawChildren = state.rawChildren
       if (data.children && Array.isArray(data.children)) {
-        const newMap = new Map(state.children)
+        const newMap = new Map(state.rawChildren)
         data.children.forEach((c) => {
           const existing = newMap.get(c.childId)
           newMap.set(c.childId, existing ? { ...existing, ...c } : c)
         })
-        updates.children = newMap
+        nextRawChildren = newMap
       }
 
+      let nextRawCheating = state.rawCheatingRecords
       if (data.cheatingRecords && Array.isArray(data.cheatingRecords)) {
-        updates.cheatingRecords = data.cheatingRecords
+        nextRawCheating = data.cheatingRecords
       }
 
       if (data.affectionData && Array.isArray(data.affectionData)) {
@@ -1021,8 +1110,14 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         updates.playerHomes = data.playerHomes
       }
 
+      if (typeof data.isGamePaused === 'boolean') {
+        updates.isGamePaused = data.isGamePaused
+      }
+
+      let nextSettings = state.settings
       if (data.settings) {
-        updates.settings = { ...state.settings, ...data.settings }
+        nextSettings = { ...state.settings, ...data.settings }
+        updates.settings = nextSettings
         if (
           data.settings.matchmakingExcludePlayerActivePartners !== undefined ||
           data.settings.matchmakingConfirmResults !== undefined
@@ -1038,6 +1133,25 @@ export const useMarasStore = create<MarasState>((set, get) => ({
               : {}),
           }
         }
+      }
+
+      if (
+        data.relationships ||
+        data.children ||
+        data.cheatingRecords ||
+        data.npcProfiles ||
+        data.settings?.revealSecretsInUI !== undefined
+      ) {
+        Object.assign(
+          updates,
+          computeVisibleSecretsState(
+            nextRawRelationships,
+            nextRawChildren,
+            nextRawCheating,
+            Boolean(nextSettings.revealSecretsInUI),
+            nextProfiles,
+          ),
+        )
       }
 
       return updates
@@ -1196,7 +1310,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   setPairIsOpen: (actorA: string, actorB: string, isOpen: boolean, fromMatchmaking?: boolean) => {
     sendMarasAction('setPairIsOpen', { actorA, actorB, isOpen, fromMatchmaking })
     set((state) => {
-      const newRels = state.relationships.map((r) => {
+      const newRels = state.rawRelationships.map((r) => {
         if (
           (r.actorA === actorA && r.actorB === actorB) ||
           (r.actorA === actorB && r.actorB === actorA)
@@ -1205,7 +1319,13 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         }
         return r
       })
-      return { relationships: newRels }
+      return computeVisibleSecretsState(
+        newRels,
+        state.rawChildren,
+        state.rawCheatingRecords,
+        Boolean(state.settings.revealSecretsInUI),
+        state.npcProfiles,
+      )
     })
   },
 
@@ -1226,13 +1346,42 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   assignRelationshipStatus: (actorA: string, actorB: string, status: RelationshipStatus, dualMemories?: NpcMemoryEntry[], fromMatchmaking?: boolean) => {
     sendMarasAction('assignRelationship', { actorA, actorB, status, dualMemories, fromMatchmaking })
     set((state) => {
-      const pairIndex = state.relationships.findIndex(
+      let nextProfiles = state.npcProfiles
+      const ensureActorProfile = (formId: string) => {
+        if (!formId || nextProfiles.has(formId)) return
+        const compact = state.allSkyrimNpcs.find((n) => areSameFormId(n.formId, formId))
+        const suggestion = state.aiSuggestions.find(
+          (s) => areSameFormId(s.formId, formId) || (s.actorAFormId && areSameFormId(s.actorAFormId, formId)),
+        )
+        const fallbackName =
+          compact?.name ||
+          (suggestion && areSameFormId(suggestion.formId, formId) ? suggestion.name : suggestion?.actorAName)
+        if (!fallbackName && !compact) return
+        if (nextProfiles === state.npcProfiles) {
+          nextProfiles = new Map(state.npcProfiles)
+        }
+        nextProfiles.set(formId, {
+          formId,
+          name: fallbackName || `NPC ${formId}`,
+          race: compact?.race || 'Nord',
+          gender: compact?.gender || 'male',
+          pluginName: compact?.pluginName,
+          isChild: compact?.isChild,
+          socialClass: SocialClass.Middle,
+          skillType: SkillType.Warrior,
+          temperament: Temperament.Proud,
+        })
+      }
+      ensureActorProfile(actorA)
+      ensureActorProfile(actorB)
+
+      const pairIndex = state.rawRelationships.findIndex(
         (r) =>
           (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
           (areSameFormId(r.actorA, actorB) && areSameFormId(r.actorB, actorA)),
       )
 
-      const newRelationships = [...state.relationships]
+      const newRelationships = [...state.rawRelationships]
       if (pairIndex !== -1) {
         const oldPair = newRelationships[pairIndex]
         newRelationships[pairIndex] = {
@@ -1265,29 +1414,87 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         })
       }
 
-      return { relationships: newRelationships }
+      return {
+        ...(nextProfiles !== state.npcProfiles ? { npcProfiles: nextProfiles } : {}),
+        ...computeVisibleSecretsState(
+          newRelationships,
+          state.rawChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          nextProfiles,
+        ),
+      }
     })
   },
 
-  handleRealtimeStatusChanged: (actorA: string, actorB: string, status: RelationshipStatus, isOpen?: boolean) => {
+  handleRealtimeStatusChanged: (
+    actorA: string,
+    actorB: string,
+    status: RelationshipStatus,
+    isOpen?: boolean,
+    actorAProfile?: NPCProfile,
+    actorBProfile?: NPCProfile,
+  ) => {
     set((state) => {
+      let nextProfiles = state.npcProfiles
+      const upsertRealtimeProfile = (formId: string, incoming?: NPCProfile) => {
+        if (!formId) return
+        if (incoming && incoming.formId) {
+          if (nextProfiles === state.npcProfiles) {
+            nextProfiles = new Map(state.npcProfiles)
+          }
+          const existing = nextProfiles.get(incoming.formId)
+          nextProfiles.set(incoming.formId, existing ? { ...existing, ...incoming } : incoming)
+          return
+        }
+        if (!nextProfiles.has(formId)) {
+          const compact = state.allSkyrimNpcs.find((n) => areSameFormId(n.formId, formId))
+          if (compact) {
+            if (nextProfiles === state.npcProfiles) {
+              nextProfiles = new Map(state.npcProfiles)
+            }
+            nextProfiles.set(formId, {
+              formId,
+              name: compact.name,
+              race: compact.race || 'Nord',
+              gender: compact.gender || 'male',
+              pluginName: compact.pluginName,
+              isChild: compact.isChild,
+              socialClass: SocialClass.Middle,
+              skillType: SkillType.Warrior,
+              temperament: Temperament.Proud,
+            })
+          }
+        }
+      }
+      upsertRealtimeProfile(actorA, actorAProfile)
+      upsertRealtimeProfile(actorB, actorBProfile)
+
       if (status === RelationshipStatus.Candidate || status === RelationshipStatus.Unknown) {
+        const filtered = state.rawRelationships.filter(
+          (r) =>
+            !(
+              (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
+              (areSameFormId(r.actorA, actorB) && areSameFormId(r.actorB, actorA))
+            ),
+        )
         return {
-          relationships: state.relationships.filter(
-            (r) =>
-              !(
-                (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
-                (areSameFormId(r.actorA, actorB) && areSameFormId(r.actorB, actorA))
-              ),
+          ...(nextProfiles !== state.npcProfiles ? { npcProfiles: nextProfiles } : {}),
+          ...computeVisibleSecretsState(
+            filtered,
+            state.rawChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            nextProfiles,
           ),
         }
       }
-      const pairIndex = state.relationships.findIndex(
+      const pairIndex = state.rawRelationships.findIndex(
         (r) =>
           (areSameFormId(r.actorA, actorA) && areSameFormId(r.actorB, actorB)) ||
           (areSameFormId(r.actorA, actorB) && areSameFormId(r.actorB, actorA)),
       )
-      const newRelationships = [...state.relationships]
+      const newRelationships = [...state.rawRelationships]
       if (pairIndex !== -1) {
         const oldPair = newRelationships[pairIndex]
         newRelationships[pairIndex] = {
@@ -1320,7 +1527,16 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           ],
         })
       }
-      return { relationships: newRelationships }
+      return {
+        ...(nextProfiles !== state.npcProfiles ? { npcProfiles: nextProfiles } : {}),
+        ...computeVisibleSecretsState(
+          newRelationships,
+          state.rawChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          nextProfiles,
+        ),
+      }
     })
   },
 
@@ -1350,12 +1566,20 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           ])
         : state.hierarchyRanks
 
+      const nextRawRelationships = state.rawRelationships.filter((r) => !isMatchingPair(r.actorA, r.actorB))
+      const nextRawCheating = state.rawCheatingRecords.filter(
+        (c) =>
+          !isMatchingPair(c.cheaterId, c.affairPartnerId) &&
+          !isMatchingPair(c.cheaterId, c.victimId),
+      )
+
       return {
-        relationships: state.relationships.filter((r) => !isMatchingPair(r.actorA, r.actorB)),
-        cheatingRecords: state.cheatingRecords.filter(
-          (c) =>
-            !isMatchingPair(c.cheaterId, c.affairPartnerId) &&
-            !isMatchingPair(c.cheaterId, c.victimId),
+        ...computeVisibleSecretsState(
+          nextRawRelationships,
+          state.rawChildren,
+          nextRawCheating,
+          Boolean(state.settings.revealSecretsInUI),
+          state.npcProfiles,
         ),
         hierarchyRanks: nextRanks,
         ...(shouldClosePartnerDrawer ? { npcDetailPartnerId: null } : {}),
@@ -1379,7 +1603,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       sendMarasAction('addChild', child)
     }
     set((state) => {
-      const newChildren = new Map(state.children)
+      const newChildren = new Map(state.rawChildren)
       const childNpc = state.npcProfiles.get(child.childId)
       const guardianANpc = state.npcProfiles.get(child.guardianAId)
       const guardianBNpc = child.guardianBId ? state.npcProfiles.get(child.guardianBId) : undefined
@@ -1424,7 +1648,16 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         }
       }
 
-      return { children: newChildren, npcProfiles: newProfiles }
+      return {
+        ...computeVisibleSecretsState(
+          state.rawRelationships,
+          newChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          newProfiles,
+        ),
+        npcProfiles: newProfiles,
+      }
     })
   },
 
@@ -1433,12 +1666,18 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       sendMarasAction('removeChild', { childId })
     }
     set((state) => {
-      const newChildren = new Map(state.children)
+      const newChildren = new Map(state.rawChildren)
       newChildren.delete(childId)
       const newProfiles = new Map(state.npcProfiles)
       newProfiles.delete(childId)
       return {
-        children: newChildren,
+        ...computeVisibleSecretsState(
+          state.rawRelationships,
+          newChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          newProfiles,
+        ),
         npcProfiles: newProfiles,
         npcDetailId: state.npcDetailId === childId ? null : state.npcDetailId,
         selectedNpcId: state.selectedNpcId === childId ? null : state.selectedNpcId,
@@ -1447,16 +1686,45 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   },
 
   updateChild: (childId: string, updates: Partial<ChildRecord>, skipBridge = false) => {
+    const stateSnapshot = get()
+    const rawExisting = stateSnapshot.rawChildren.get(childId)
+    let effectiveUpdates: Partial<ChildRecord> = { ...updates }
+    if (
+      !skipBridge &&
+      !stateSnapshot.settings.revealSecretsInUI &&
+      updates.bioFatherId !== undefined &&
+      Boolean(rawExisting?.isSecretForPartner ?? rawExisting?.isSecret)
+    ) {
+      effectiveUpdates = {
+        ...effectiveUpdates,
+        presumedFatherId: undefined,
+        presumedFatherName: undefined,
+        isSecret: false,
+        isSecretForPartner: false,
+        isSecretForBioFather: false,
+      }
+      sendMarasAction('setPaternitySecretEdges', {
+        childId,
+        isSecretForBioFather: false,
+        isSecretForPartner: false,
+      })
+    }
     if (!skipBridge) {
-      sendMarasAction('updateChild', { childId, ...updates })
+      sendMarasAction('updateChild', {
+        childId,
+        ...effectiveUpdates,
+        ...(effectiveUpdates.presumedFatherId === undefined && 'presumedFatherId' in effectiveUpdates
+          ? { presumedFatherId: '' }
+          : {}),
+      })
     }
     set((state) => {
-      const newChildren = new Map(state.children)
+      const newChildren = new Map(state.rawChildren)
       const existing = newChildren.get(childId)
       if (existing) {
-        newChildren.set(childId, { ...existing, ...updates })
+        newChildren.set(childId, { ...existing, ...effectiveUpdates })
       } else {
-        newChildren.set(childId, updates as ChildRecord)
+        newChildren.set(childId, effectiveUpdates as ChildRecord)
       }
 
       const newProfiles = new Map(state.npcProfiles)
@@ -1464,14 +1732,23 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       if (existingProf) {
         newProfiles.set(childId, {
           ...existingProf,
-          ...(updates.name ? { name: updates.name } : {}),
-          ...(updates.stage ? { stage: updates.stage } : {}),
-          ...(updates.hasRefID !== undefined ? { hasRefID: updates.hasRefID } : {}),
-          ...(updates.isEphemeral !== undefined ? { isEphemeral: updates.isEphemeral } : {}),
+          ...(effectiveUpdates.name ? { name: effectiveUpdates.name } : {}),
+          ...(effectiveUpdates.stage ? { stage: effectiveUpdates.stage } : {}),
+          ...(effectiveUpdates.hasRefID !== undefined ? { hasRefID: effectiveUpdates.hasRefID } : {}),
+          ...(effectiveUpdates.isEphemeral !== undefined ? { isEphemeral: effectiveUpdates.isEphemeral } : {}),
         })
       }
 
-      return { children: newChildren, npcProfiles: newProfiles }
+      return {
+        ...computeVisibleSecretsState(
+          state.rawRelationships,
+          newChildren,
+          state.rawCheatingRecords,
+          Boolean(state.settings.revealSecretsInUI),
+          newProfiles,
+        ),
+        npcProfiles: newProfiles,
+      }
     })
   },
 
@@ -1505,7 +1782,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     sendMarasAction('setPaternitySecretEdges', { childId, isSecretForBioFather, isSecretForPartner })
     set((state) => {
       const isSecret = isSecretForBioFather || isSecretForPartner
-      const newChildren = new Map(state.children)
+      const newChildren = new Map(state.rawChildren)
       const existing = newChildren.get(childId)
       if (existing) {
         newChildren.set(childId, {
@@ -1515,18 +1792,68 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           isSecretForPartner,
         })
       }
-      return { children: newChildren }
+      return computeVisibleSecretsState(
+        state.rawRelationships,
+        newChildren,
+        state.rawCheatingRecords,
+        Boolean(state.settings.revealSecretsInUI),
+        state.npcProfiles,
+      )
     })
   },
 
   updateSetting: <K extends keyof MarasSettings>(key: K, value: MarasSettings[K]) => {
+    let normalizedValue = value
+    if (key === 'uiScale' && typeof value === 'number') {
+      normalizedValue = (Math.round(Math.min(1.5, Math.max(0.75, value)) * 100) / 100) as MarasSettings[K]
+    }
+
     set((state) => {
-      const newSettings = { ...state.settings, [key]: value }
+      const newSettings = { ...state.settings, [key]: normalizedValue }
       if (key === 'simulateNoSkyrimNet') {
-        if (value) {
+        if (normalizedValue) {
           newSettings.hasSkyrimNet = false
         } else if (!isGameBuild) {
           newSettings.hasSkyrimNet = true
+        }
+      }
+      if (key === 'autoPauseOnOpen') {
+        const paused = Boolean(normalizedValue)
+        return {
+          settings: newSettings,
+          isGamePaused: paused,
+          statusMsg: paused
+            ? 'Auto-pause on open enabled (Game Paused).'
+            : 'Auto-pause on open disabled (Game Unpaused).',
+        }
+      }
+      if (key === 'uiFullScreen') {
+        return {
+          settings: newSettings,
+          statusMsg: normalizedValue
+            ? 'Switched to Full Screen mode.'
+            : 'Switched to Windowed mode.',
+        }
+      }
+      if (key === 'uiScale') {
+        return {
+          settings: newSettings,
+          statusMsg: `UI Scale set to ${Math.round(Number(normalizedValue) * 100)}%.`,
+        }
+      }
+      if (key === 'revealSecretsInUI') {
+        return {
+          settings: newSettings,
+          ...computeVisibleSecretsState(
+            state.rawRelationships,
+            state.rawChildren,
+            state.rawCheatingRecords,
+            Boolean(newSettings.revealSecretsInUI),
+            state.npcProfiles,
+          ),
+          statusMsg: normalizedValue
+            ? 'All hidden secrets revealed in dashboard.'
+            : 'Undiscovered secrets hidden (Intrigue Mode).',
         }
       }
       return { settings: newSettings }
@@ -1540,17 +1867,17 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     }
 
     // Debounce continuous numeric settings (sliders and numeric inputs) by 300ms
-    if (typeof value === 'number') {
-      pendingSettingUpdates.set(keyStr, value)
+    if (typeof normalizedValue === 'number') {
+      pendingSettingUpdates.set(keyStr, normalizedValue)
       const timer = setTimeout(() => {
         updateSettingDebounceTimers.delete(keyStr)
         pendingSettingUpdates.delete(keyStr)
-        sendMarasAction('updateSetting', { key, value })
+        sendMarasAction('updateSetting', { key, value: normalizedValue })
       }, 300)
       updateSettingDebounceTimers.set(keyStr, timer)
     } else {
       pendingSettingUpdates.delete(keyStr)
-      sendMarasAction('updateSetting', { key, value })
+      sendMarasAction('updateSetting', { key, value: normalizedValue })
     }
   },
 
@@ -1620,6 +1947,27 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       window.log?.('closeMARAS called (standalone mode)')
     }
     set({ isOpen: false })
+  },
+
+  refreshData: () => {
+    flushAllPendingDebouncedActions()
+    const { isInGame, npcDetailId, npcDetailPartnerId } = get()
+    if (isInGame) {
+      sendMarasAction('fetchOverview')
+      sendMarasAction('fetchNPCList')
+      sendMarasAction('fetchAllSkyrimNpcs')
+      sendMarasAction('fetchMatchmakingData')
+      sendMarasAction('fetchHouseholdBuffs')
+      if (npcDetailId) {
+        sendMarasAction('fetchNPCDetail', { formId: npcDetailId })
+      }
+      if (npcDetailPartnerId) {
+        sendMarasAction('fetchNPCDetail', { formId: npcDetailPartnerId })
+      }
+      set({ statusMsg: 'Dashboard data refreshed from SKSE.' })
+    } else {
+      set({ statusMsg: 'Dashboard data refreshed (Standalone Mode).' })
+    }
   },
 
   logTestSignal: () => {

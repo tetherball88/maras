@@ -14,7 +14,8 @@ namespace MARAS {
         // Version 4: Unified format: NPC-NPC relationship pairs, status history, cheating records,
         //            pending deferred relationships & children, child-centric registry (lifecycle,
         //            fertility, paternity secrets, neutral guardians), and tenant stay-at-home preference.
-        constexpr std::uint32_t kDataVersion = 4;
+        // Version 5: Added presumedFatherID to ChildRegistryEntry in NPCRelationshipData.
+        constexpr std::uint32_t kDataVersion = 5;
 
         // Top-level SKSE co-save record types (11 records).
         // Note: Status history, pending deferred relationships, pending deferred children, and the

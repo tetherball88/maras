@@ -4,14 +4,51 @@ import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SliderInput } from '../shared/SliderInput'
 import { SectionCard } from '../shared/SectionCard'
-import { Sliders } from 'lucide-react'
+import { Sliders, Monitor } from 'lucide-react'
 
 export const GeneralSettings: React.FC = () => {
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
+  const uiScale = settings.uiScale ?? 1.0
 
   return (
     <div className="space-y-[1rem]">
+      <SectionCard title="Interface & Accessibility" icon={Monitor}>
+        <SettingRow
+          label="Auto-Pause Game on Dashboard Open"
+          description="Automatically pause Skyrim whenever the M.A.R.A.S dashboard is opened. You can also pause or unpause at any time using the Pause button in the top-right header bar."
+        >
+          <ToggleSwitch
+            checked={Boolean(settings.autoPauseOnOpen)}
+            onChange={(val) => updateSetting('autoPauseOnOpen', val)}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="Full Screen Mode"
+          description="Open the M.A.R.A.S dashboard in full-screen mode instead of a centered window."
+        >
+          <ToggleSwitch
+            checked={Boolean(settings.uiFullScreen)}
+            onChange={(val) => updateSetting('uiFullScreen', val)}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="UI & Font Scale (Accessibility)"
+          description={`Scale all fonts, icons, cards, and UI elements proportionally across the dashboard and modals (${Math.round(uiScale * 100)}%).`}
+        >
+          <SliderInput
+            value={uiScale}
+            min={0.75}
+            max={1.5}
+            step={0.05}
+            unit="x"
+            onChange={(val) => updateSetting('uiScale', val)}
+          />
+        </SettingRow>
+      </SectionCard>
+
       <SectionCard title="General Mod Settings" icon={Sliders}>
         <SettingRow
           label="Skip Wedding Ceremony"

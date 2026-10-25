@@ -47,7 +47,7 @@ body,
 }
 
 html {
-  font-size: var(--ui-font-size);
+  font-size: calc(var(--ui-font-size) * var(--ui-scale, 1));
   font-family: var(--font-ui);
 }
 

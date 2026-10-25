@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Baby, ChevronRight, Home, HeartHandshake, Sparkles, GraduationCap, Swords, Trash2 } from 'lucide-react'
 import { AppTooltip } from '../shared/AppTooltip'
 import { formatGameDay } from '../../utils/dateUtils'
-import { getChildRelationshipStatus, resolveIsFemale, getChildGenderNouns } from '../../utils/childUtils'
+import { getChildRelationshipStatus, resolveIsFemale, getChildGenderNouns, isActorChild } from '../../utils/childUtils'
 import { ChildStage } from '../../types'
 
 export const ChildrenList: React.FC = () => {
@@ -20,20 +20,22 @@ export const ChildrenList: React.FC = () => {
   const removeChild = useMarasStore((s) => s.removeChild)
 
   const children = Array.from(childrenStore.values())
-    .filter(
-      (c) =>
-        c.guardianAId === PLAYER_FORM_ID ||
-        c.guardianBId === PLAYER_FORM_ID ||
-        c.bioMotherId === PLAYER_FORM_ID ||
-        c.bioFatherId === PLAYER_FORM_ID,
-    )
+    .filter((c) => isActorChild(c, PLAYER_FORM_ID))
     .map((c) => {
-      const partnerId = c.guardianAId === PLAYER_FORM_ID ? c.guardianBId : c.guardianAId
+      const cleanId = (id?: string) => (id && id !== '00000000' && id !== '00700000') ? id : undefined
+      const gA = cleanId(c.guardianAId)
+      const gB = cleanId(c.guardianBId)
+      const isPlayerCustodian = gA === PLAYER_FORM_ID || gB === PLAYER_FORM_ID || (!gA && !gB)
+      const partnerId = isPlayerCustodian
+        ? (gA === PLAYER_FORM_ID ? gB : gA)
+        : (gA || gB || (cleanId(c.bioMotherId) === PLAYER_FORM_ID ? cleanId(c.bioFatherId) : cleanId(c.bioMotherId)))
       const partnerNpc = partnerId ? npcProfiles.get(partnerId) : undefined
-      const partnerName = partnerNpc?.name || (partnerId ? 'Player' : '')
+      const partnerName = partnerNpc?.name || (partnerId === gA ? c.guardianAName : partnerId === gB ? c.guardianBName : '') || ''
       return {
         ...c,
         isAdopted: c.isAdopted ?? true,
+        isPlayerCustodian,
+        partnerId,
         parentPartnerName: partnerName,
       }
     })
@@ -92,7 +94,8 @@ export const ChildrenList: React.FC = () => {
               ? child.name
               : (npc?.name || child.name || `Child ${child.childId}`)
             const race = npc?.race || 'Nord'
-            const home = npc?.currentHome || npc?.originalHome || 'Breezehome'
+            const partnerNpc = child.partnerId ? npcProfiles.get(child.partnerId) : undefined
+            const home = npc?.currentHome || npc?.originalHome || partnerNpc?.currentHome || partnerNpc?.originalHome || (child.isPlayerCustodian ? 'Breezehome' : 'With Custodial Parent')
 
             const stage: ChildStage = child.stage || npc?.stage || 'child'
             const hasRefID = child.hasRefID ?? npc?.hasRefID ?? !child.childId.startsWith('FF7')
@@ -195,7 +198,7 @@ export const ChildrenList: React.FC = () => {
                     )}
 
                     <span>•</span>
-                    <span>{child.parentPartnerName ? `Parents: Player & ${child.parentPartnerName}` : 'Guardian: Player (Sole Guardian)'}</span>
+                    <span>{child.isPlayerCustodian ? (child.parentPartnerName ? `Parents: Player & ${child.parentPartnerName}` : 'Guardian: Player (Sole Guardian)') : `Custody: ${child.parentPartnerName || 'Other Parent'}`}</span>
                     {stage === 'unborn' ? (
                       child.conceptionTimestamp != null && child.conceptionTimestamp > 0 && (
                         <>

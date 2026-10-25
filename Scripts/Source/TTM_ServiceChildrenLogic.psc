@@ -110,6 +110,11 @@ Function AdoptChild(Actor child, Actor spouseToAdopWith = none, Location houseTo
         TTM_Debug.debug("TTM_ServiceChildrenLogic: AdoptChild: child is none.")
         return
     endif
+    int waitTicks = 0
+    while (adoptionInProgress && waitTicks < 300)
+        Utility.WaitMenuMode(0.2)
+        waitTicks += 1
+    endwhile
     if(adoptionInProgress)
         TTM_Debug.debug("TTM_ServiceChildrenLogic: AdoptChild: adoption already in progress.")
         return
@@ -213,7 +218,7 @@ Function AdoptChild(Actor child, Actor spouseToAdopWith = none, Location houseTo
         endif
     endif
     if (houseToMove == none)
-        houseToMove = TTM_ServicePlayerHouse.ChooseHomeForSpouseMsg(child, 0, true)
+        houseToMove = MARAS.ShowChooseHomeModal(child, true)
     endif
     TTM_Debug.debug("TTM_ServiceChildrenLogic: AdoptChild: spouseToAdopWith = " + spouseToAdopWith + ", houseToMove = " + houseToMove)
 
@@ -1345,7 +1350,15 @@ Function SpawnSyntheticChild(int syntheticID)
     endif
 
     ; Spawn child actor using PlaceAtMe with persistent flag = true
-    Actor spawnedChild = player.PlaceAtMe(childBase, 1, true) as Actor
+    Actor spawnAnchor = player
+    if (guardianA != None && guardianA != player)
+        spawnAnchor = guardianA
+    elseif (guardianB != None && guardianB != player)
+        spawnAnchor = guardianB
+    elseif (bioMother != None && bioMother != player)
+        spawnAnchor = bioMother
+    endif
+    Actor spawnedChild = spawnAnchor.PlaceAtMe(childBase, 1, true) as Actor
     if (spawnedChild == None)
         TTM_Debug.err("TTM_ServiceChildrenLogic: PlaceAtMe failed to spawn child for " + syntheticID)
         return
@@ -1375,15 +1388,30 @@ Function SpawnSyntheticChild(int syntheticID)
     endif
 
     ; Ingest / Adopt spawned child into MARAS
-    bool isPlayerChild = (player == bioMother || player == bioFather)
-    if (!isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
+    bool isPlayerChild = false
+    if (guardianA != None || guardianB != None)
+        if (guardianA == player || guardianB == player)
+            isPlayerChild = true
+        elseif ((guardianA != None && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != None && MARAS.IsNPCStatus(guardianB, "married")))
+            isPlayerChild = true
+        endif
+    elseif (player == bioMother || player == bioFather)
+        isPlayerChild = true
+    endif
+    if (guardianA == None && guardianB == None && !isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
         isPlayerChild = true
     endif
 
     TTM_Debug.debug("TTM_ServiceChildrenLogic: isPlayerChild: " + isPlayerChild)
 
     if (isPlayerChild)
-        AdoptChild(spawnedChild, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = 2)
+        Actor coSpouse = None
+        if (guardianA != None && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
+            coSpouse = guardianA
+        elseif (guardianB != None && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
+            coSpouse = guardianB
+        endif
+        AdoptChild(spawnedChild, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = 2)
     else
         Actor gA = guardianA
         Actor gB = guardianB
@@ -1395,6 +1423,8 @@ Function SpawnSyntheticChild(int syntheticID)
             endif
         endif
         MARAS.RegisterChildActor(spawnedChild, gA, gB, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, stage = 2)
+        spawnedChild.EvaluatePackage()
+        spawnedChild.MoveToPackageLocation()
     endif
 
     spawnedChild.EvaluatePackage()

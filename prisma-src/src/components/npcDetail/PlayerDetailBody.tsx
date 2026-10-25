@@ -2,6 +2,7 @@ import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { categorizePartners } from '../../utils/partnerCategories'
+import { isActorChild } from '../../utils/childUtils'
 import {
   PlayerPolicySection,
   HouseholdChildrenSection,
@@ -16,13 +17,7 @@ export const PlayerDetailBody: React.FC = () => {
 
   const categorized = categorizePartners(PLAYER_FORM_ID, relationships, cheatingRecords, settings.enablePolygamy)
 
-  const hasChildren = Array.from(children.values()).some(
-    (c) =>
-      c.guardianAId === PLAYER_FORM_ID ||
-      c.guardianBId === PLAYER_FORM_ID ||
-      c.bioMotherId === PLAYER_FORM_ID ||
-      c.bioFatherId === PLAYER_FORM_ID,
-  )
+  const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, PLAYER_FORM_ID))
 
   const hasRelationships = Boolean(
     categorized &&

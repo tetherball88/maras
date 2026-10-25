@@ -261,12 +261,9 @@ Function RevealChildSecret(Actor akActor, string targetFather, string childName)
     elseif (targetFatherActor == presumedFather || (presumedFatherName != "" && targetFather == presumedFatherName) || StringUtil.Find(targetFather, "presumed") != -1 || StringUtil.Find(targetFather, "assumed") != -1)
         MARAS.ResolvePaternitySecretForPartner(childID, false)
     else
-        ; Fallback: resolve whichever edge is still secret
-        if (MARAS.IsSecretForPartner(childID))
-            MARAS.ResolvePaternitySecretForPartner(childID, false)
-        elseif (MARAS.IsSecretForBioFather(childID))
-            MARAS.ResolvePaternitySecretForBioFather(childID, false)
-        endif
+        ; Fallback: resolve for both
+        MARAS.ResolvePaternitySecretForPartner(childID, false)
+        MARAS.ResolvePaternitySecretForBioFather(childID, false)
     endif
 
     ; If childName was 'all', resolve any other remaining active secrets for other fathers as well
@@ -278,10 +275,13 @@ Function RevealChildSecret(Actor akActor, string targetFather, string childName)
             if (isBoth)
                 MARAS.ResolvePaternitySecretForPartner(nextChildID, false)
                 MARAS.ResolvePaternitySecretForBioFather(nextChildID, false)
-            elseif (targetFatherActor == bioFather || StringUtil.Find(targetFather, "bio") != -1)
+            elseif (targetFatherActor == bioFather || (bioFatherName != "" && targetFather == bioFatherName) || StringUtil.Find(targetFather, "bio") != -1)
                 MARAS.ResolvePaternitySecretForBioFather(nextChildID, false)
+            elseif (targetFatherActor == presumedFather || (presumedFatherName != "" && targetFather == presumedFatherName) || StringUtil.Find(targetFather, "presumed") != -1 || StringUtil.Find(targetFather, "assumed") != -1)
+                MARAS.ResolvePaternitySecretForPartner(nextChildID, false)
             else
                 MARAS.ResolvePaternitySecretForPartner(nextChildID, false)
+                MARAS.ResolvePaternitySecretForBioFather(nextChildID, false)
             endif
             nextChildID = MARAS.FindChildPaternitySecret(akActor, targetFatherActor, "all")
         endWhile
