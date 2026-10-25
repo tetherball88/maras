@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1.alpha - 2026-10-24
+- Fixed Fertility Mode Reloaded (FMR 1.0.7+) newborn children remaining stuck at the `Infant` ("Newborn") stage in Prisma UI when growing up into a young child and being registered as an unrelated adopted orphan when spawned (`TTM_MainController` now subscribes to `FMR_ChildGrewUpWithMother` so `akMother` is received and matched to the mother's synthetic child record).
+- Removed leftover hardcoded `sceneIdx = 4` override in `TTM_NpcsScenes` (`SetupSceneOnLocationChange`) so NPC-NPC ambient banter scenes play all randomized dialogue variants instead of repeating index 4.
+
 ## 2.1.0.alpha - 2026-10-22
 - Added standalone Prisma UI modal system (`PrismaModalManager` and `<PrismaModalHost />`) replacing all native `RE::MessageBoxMenu`, `BGSMessage.Show()`, and `UIExtensions` (`UIListMenu`) popups across C++ and Papyrus — supports thread-safe FIFO modal queuing, checklists with per-row status dropdowns, checkboxes, selects, info boxes, and full keyboard/mouse navigation (`WASD`, Arrow keys, `Tab`, `Enter`/`Space`/`E`) while pausing the game independently of the main dashboard.
 - Migrated all relationship and open-relationship confirmation popups (`ConfirmationModal`), wedding skip prompts (`ShowSkipWeddingModal` with "remember my choice" option), itemized divorce settlement notices (`ShowDivorceSettlementModal` with direct gold payment vs. hold bounty choice), single-step spouse/child residence & schedule selectors (`ShowChooseHomeModal`), co-parent adoption selectors (`ShowChooseAdoptionSpouseModal`), and the debug status spell menu (`ShowDebugStatusModal`) to Prisma UI modals.

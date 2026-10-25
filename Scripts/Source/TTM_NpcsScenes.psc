@@ -143,7 +143,6 @@ Function SetupSceneOnLocationChange()
             selectedScene = MarriedScene
         endif
     endif
-    sceneIdx = 4
     TTM_Debug.debug("TTM_NpcsScenes: SetupSceneOnLocationChange: final sceneIdx: " + sceneIdx)
 
     if(!selectedScene)

@@ -199,7 +199,7 @@ M.A.R.A.S. deliberately avoids duplicating FMR's internal mechanics (menstrual c
 | `FMR_BabyBirth` | `akMother, akFather, iTrackingIndex` | Promotes Unborn record to **Stage 1 (`Infant`)** named `"Newborn"`. |
 | `FMR_Abort` / `FMR_PregnancyCancelled` | `akMother, akFather, iTrackingIndex` | Removes Unborn record; notifies SkyrimNet AI of pregnancy loss. |
 | `FMR_ChildGrewUpNpcNpc` | `akMother, akFather` | Generates lore-friendly racial name; promotes to **Stage 2 (`Child`)** as an **ephemeral child** belonging to NPC couple. |
-| `FMR_ChildGrewUp` | `childIndex, childName, gender, akMother` | Applies player-chosen name; promotes to **Stage 2 (`Child`)** as an ephemeral child scoped to mother. |
+| `FMR_ChildGrewUpWithMother` | `childIndex, childName, gender, akMother` | Applies player-chosen name; promotes to **Stage 2 (`Child`)** as an ephemeral child scoped to mother. |
 | `FMR_ChildSpawned` | `childActor, childIndex, childName` | Re-keys physical `Actor` to existing ephemeral record, linking 3D child with full lineage. |
 | `FMR_ChildSentToTraining` | `childIndex, childName, trainingLoc, class` | Moves child to **Stage 3 (`Training`)**; stores guild training location. |
 | `FMR_AdultChildSpawned` | `adultActor, childIndex, childName` | Promotes child to **Stage 4 (`Adult`)**; binds adult follower actor in dashboard and registers lineage with SkyrimNet AI. |
