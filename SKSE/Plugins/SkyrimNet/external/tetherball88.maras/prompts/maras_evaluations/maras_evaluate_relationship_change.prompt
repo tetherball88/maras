@@ -5,6 +5,21 @@ You are the GameMaster AI. Evaluate whether both actors are willing to transitio
 
 {{render_template("submodules\\guidelines\\0501_relationship_statuses")}}
 
+## Character Profiles & Psychology
+
+### {{ actorName }}
+{% if exists("actorUUID") and actorUUID != 0 %}
+{{ render_character_profile("ttm_gm", actorUUID) }}
+{% endif %}
+
+### {{ partnerName }}
+{% if exists("partnerUUID") and partnerUUID != 0 %}
+{{ render_character_profile("ttm_gm", partnerUUID) }}
+{% endif %}
+
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+
 ---
 
 ## Output

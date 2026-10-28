@@ -76,7 +76,7 @@ namespace MARAS::PapyrusInterface {
     bool CanFormRelationship(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB, std::string status);
 
     bool RecordCheating(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner, bool isSecret);
-    bool SetCheatingDiscovered(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* affairPartner, RE::BSFixedString statusOrResolution);
+    bool SetCheatingDiscovered(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* affairPartner, RE::BSFixedString statusOrResolution, RE::Actor* victim = nullptr);
     bool SetCheatingAffairStatus(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner, std::int32_t affairStatus);
     std::int32_t GetCheatingAffairStatus(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner);
     std::int32_t GetAffairStage(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner);
@@ -238,9 +238,11 @@ namespace MARAS::PapyrusInterface {
     bool ResolvePaternitySecret(RE::StaticFunctionTag*, int32_t childID, bool discoveredByPartner);
     bool ResolvePaternitySecretForPartner(RE::StaticFunctionTag*, int32_t childID, bool discoveredByPartner);
     bool ResolvePaternitySecretForBioFather(RE::StaticFunctionTag*, int32_t childID, bool discoveredByBioFather);
+    bool RevealPregnancyToPartner(RE::StaticFunctionTag*, int32_t childID, bool byVisibleBelly);
     bool SetPaternitySecretEdges(RE::StaticFunctionTag*, int32_t childID, bool secretForBioFather, bool secretForPartner);
     bool IsSecretForBioFather(RE::StaticFunctionTag*, int32_t childID);
     bool IsSecretForPartner(RE::StaticFunctionTag*, int32_t childID);
+    bool IsPregnancySecretForPartner(RE::StaticFunctionTag*, int32_t childID);
     bool SetChildStage(RE::StaticFunctionTag*, int32_t childID, int32_t stage);
     int32_t GetChildStage(RE::StaticFunctionTag*, int32_t childID);
     bool SetChildTrainingLocation(RE::StaticFunctionTag*, int32_t childID, std::string location);
@@ -265,8 +267,8 @@ namespace MARAS::PapyrusInterface {
     int32_t FindChildPaternitySecret(RE::StaticFunctionTag*, RE::Actor* parent1, RE::Actor* parent2, std::string childName);
     std::string BuildPregnancyAnnouncedMessage(RE::StaticFunctionTag*, RE::Actor* mother, RE::Actor* partner, RE::Actor* bioFather, std::string bioFatherName, int32_t childCount);
     std::string BuildPregnancyAnnouncedJson(RE::StaticFunctionTag*, RE::Actor* mother, RE::Actor* partner, RE::Actor* bioFather, std::string bioFatherName, int32_t childCount);
-    std::string BuildChildBirthMessage(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs);
-    std::string BuildChildBirthJson(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs);
+    std::string BuildChildBirthMessage(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs, bool maskSecrets = false);
+    std::string BuildChildBirthJson(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs, bool maskSecrets = false);
 
     std::string GenerateRandomChildName(RE::StaticFunctionTag*, std::string raceName, bool isFemale, bool isUnique);
     std::string GenerateRandomChildNameForActor(RE::StaticFunctionTag*, RE::Actor* actor, bool isUnique);
@@ -379,6 +381,8 @@ namespace MARAS::PapyrusInterface {
     void SetBanterCoupleCooldownHours(RE::StaticFunctionTag*, float afHours);
     void RecordScenePlayed(RE::StaticFunctionTag*, RE::Actor* akActorA, RE::Actor* akActorB);
     bool IsLocationAllowedForScenes(RE::StaticFunctionTag*, RE::BGSLocation* akLocation);
+    bool ShouldTriggerSkyrimNetNarration(RE::StaticFunctionTag*, RE::Actor* speaker, RE::Actor* target = nullptr);
+    bool RegisterSkyrimNetEvent(RE::StaticFunctionTag*, std::string eventType, std::string content, RE::Actor* originatorActor = nullptr, RE::Actor* targetActor = nullptr, bool exactAudience = false, std::vector<RE::Actor*> audience = {});
 
     // Registration function for SKSE
     bool RegisterPapyrusFunctions(RE::BSScript::IVirtualMachine* vm);

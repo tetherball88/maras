@@ -11,6 +11,7 @@
 #include "core/PlayerHouseService.h"
 #include "core/Serialization.h"
 #include "core/SkyrimNetIntegration.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "core/SpouseAssetsService.h"
@@ -232,7 +233,7 @@ namespace MARAS {
         return false;
     }
 
-    int NPCRelationshipManager::BreakAllLoverConnections(RE::FormID actorID, bool onlyCheating) {
+    int NPCRelationshipManager::BreakAllLoverConnections(RE::FormID actorID, bool onlyCheating, bool sendEvent) {
         if (actorID == 0) return 0;
         std::vector<RE::FormID> loversToBreak;
         for (const auto& key : GetActorPairKeys(actorID)) {
@@ -255,7 +256,7 @@ namespace MARAS {
 
         int brokenCount = 0;
         for (RE::FormID partnerID : loversToBreak) {
-            if (PromoteToExLover(actorID, partnerID, /*sendEvent=*/true)) {
+            if (PromoteToExLover(actorID, partnerID, sendEvent)) {
                 ++brokenCount;
             }
         }
@@ -343,6 +344,9 @@ namespace MARAS {
         data.status = status;
 
         if (targetFormID == kPlayerFormID) {
+            if (oldStatus != status && IsActivePartnerStatus(status) && npcFormID != 0 && npcFormID != kPlayerFormID) {
+                AffectionService::GetSingleton().RecordAffectionInteraction(npcFormID);
+            }
             UpdateTrackedFactionRank(npcFormID, status);
             UpdateSpouseCheatingFaction(npcFormID);
             UpdateSpouseOpenRelationshipFaction(npcFormID);
@@ -350,6 +354,9 @@ namespace MARAS {
             UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
             ManageFactions(npcFormID, kPlayerFormID, status);
         } else if (npcFormID == kPlayerFormID) {
+            if (oldStatus != status && IsActivePartnerStatus(status) && targetFormID != 0 && targetFormID != kPlayerFormID) {
+                AffectionService::GetSingleton().RecordAffectionInteraction(targetFormID);
+            }
             UpdateTrackedFactionRank(targetFormID, status);
             UpdateSpouseCheatingFaction(targetFormID);
             UpdateSpouseOpenRelationshipFaction(targetFormID);
@@ -367,6 +374,16 @@ namespace MARAS {
             SendStatusChangedEvent(npcFormID, targetFormID, status);
         }
 
+        MARAS_LOG_INFO("Set status between {:08X} and {:08X} to {}", npcFormID, targetFormID,
+                       Utils::RelationshipStatusToString(status));
+        EvaluateCheatingOnStatusChange(npcFormID, targetFormID, status);
+        if ((sendEvent || SkyrimNetMemoryService::IsMatchmakingApplyActive()) &&
+            oldStatus != status &&
+            status != RelationshipStatus::Candidate && status != RelationshipStatus::Unknown) {
+            SkyrimNetMemoryService::GetSingleton().RecordRelationshipStatusChange(
+                npcFormID, targetFormID, oldStatus, status);
+        }
+
         if (postAction) {
             try {
                 postAction(npcFormID, targetFormID);
@@ -376,9 +393,6 @@ namespace MARAS {
             }
         }
 
-        MARAS_LOG_INFO("Set status between {:08X} and {:08X} to {}", npcFormID, targetFormID,
-                       Utils::RelationshipStatusToString(status));
-        EvaluateCheatingOnStatusChange(npcFormID, targetFormID, status);
         RecalculateAndUpdateGlobals();
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(npcFormID, targetFormID, static_cast<uint8_t>(status));
         return true;
@@ -617,6 +631,7 @@ namespace MARAS {
 
         // 1. Check if incoming actor is a pending child
         auto& npcIndex = NPCIndex::GetSingleton();
+        SkyrimNetMemoryService::SuppressScope suppressMemories;
         auto childIt = pendingChildrenByBaseID.find(baseID);
         if (childIt != pendingChildrenByBaseID.end()) {
             auto pending = childIt->second;
@@ -695,6 +710,7 @@ namespace MARAS {
             UpdateCanFormNonCheatingMainFaction(refID);
         }
 
+        SkyrimNetMemoryService::SuppressScope suppressMemories;
         TryResolvePendingChildren(baseID, refID);
 
         auto it = pendingRelationshipsByBaseID.find(baseID);
@@ -1598,10 +1614,10 @@ namespace MARAS {
         bool res = ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Engaged, nullptr, sendEvent);
         if (res && breakLovers && !IsMainTier(oldStatus)) {
             if (!(npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(npcFormID)) {
-                BreakAllLoverConnections(npcFormID);
+                BreakAllLoverConnections(npcFormID, false, sendEvent);
             }
             if (targetFormID != 0 && !(targetFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(targetFormID)) {
-                BreakAllLoverConnections(targetFormID);
+                BreakAllLoverConnections(targetFormID, false, sendEvent);
             }
         }
         return res;
@@ -1621,10 +1637,10 @@ namespace MARAS {
                                   sendEvent);
         if (res && breakLovers && !IsMainTier(oldStatus)) {
             if (!(npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(npcFormID)) {
-                BreakAllLoverConnections(npcFormID);
+                BreakAllLoverConnections(npcFormID, false, sendEvent);
             }
             if (targetFormID != 0 && !(targetFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(targetFormID)) {
-                BreakAllLoverConnections(targetFormID);
+                BreakAllLoverConnections(targetFormID, false, sendEvent);
             }
         }
         return res;
@@ -1658,10 +1674,10 @@ namespace MARAS {
         bool res = ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Dating, nullptr, sendEvent);
         if (res && breakLovers && !IsMainTier(oldStatus)) {
             if (!(npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(npcFormID)) {
-                BreakAllLoverConnections(npcFormID);
+                BreakAllLoverConnections(npcFormID, false, sendEvent);
             }
             if (targetFormID != 0 && !(targetFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(targetFormID)) {
-                BreakAllLoverConnections(targetFormID);
+                BreakAllLoverConnections(targetFormID, false, sendEvent);
             }
         }
         return res;
@@ -2546,11 +2562,13 @@ namespace MARAS {
             targetStatus == RelationshipStatus::ExLover) {
             GetOrCreatePairData(actorA, actorB).status = vanillaStatus;
         }
+        SkyrimNetMemoryService::SuppressScope suppressMemories;
         return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/false);
     }
 
     void NPCRelationshipManager::ScanExistingRelationships(bool isNewGame) {
         auto startTime = std::chrono::steady_clock::now();
+        SkyrimNetMemoryService::SuppressScope suppressMemories;
         MARAS_LOG_INFO("Starting scanning of existing in-game relationships (Courting, Spouse, Lover, Parent-Child) [isNewGame={}]...", isNewGame);
 
         auto dataHandler = RE::TESDataHandler::GetSingleton();
@@ -3029,6 +3047,7 @@ namespace MARAS {
                         return;
                     }
 
+                    SkyrimNetMemoryService::SuppressScope suppressAuditMemories;
                     auto& idx = NPCIndex::GetSingleton();
                     size_t auditImported = 0;
                     size_t auditDeferred = 0;

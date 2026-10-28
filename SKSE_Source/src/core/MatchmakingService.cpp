@@ -36,13 +36,6 @@ namespace MARAS {
         return defaultVal;
     }
 
-    static float GetJsonFloat(const nlohmann::json& obj, std::string_view key, float defaultVal = 0.0f) {
-        if (obj.is_object() && obj.contains(key) && obj[key].is_number()) {
-            return obj[key].get<float>();
-        }
-        return defaultVal;
-    }
-
     float MatchmakingService::GetCurrentGameDay() const {
         if (auto* calendar = RE::Calendar::GetSingleton()) {
             return calendar->GetDaysPassed();
@@ -554,6 +547,9 @@ namespace MARAS {
         nlohmann::json ctx;
         ctx["maxSuggestions"] = settings.matchmakingMaxSuggestions;
         ctx["gameDay"] = static_cast<int>(currentGameDay);
+        ctx["allowCheating"] = settings.matchmakingAllowCheating;
+        ctx["allowBreakups"] = settings.matchmakingAllowBreakups;
+        ctx["allowOpenClose"] = settings.matchmakingAllowOpenClose;
         ctx["orientationRule"] = GetOrientationRuleText(settings.matchmakingOrientation);
         ctx["cheatingRule"] = BuildCheatingRuleText(settings.matchmakingAllowCheating);
         ctx["allowedOperations"] = BuildAllowedOperationsText(settings.matchmakingAllowBreakups, settings.matchmakingAllowOpenClose);
@@ -605,6 +601,9 @@ namespace MARAS {
         nlohmann::json ctx;
         ctx["maxSuggestions"] = settings.matchmakingMaxSuggestions;
         ctx["gameDay"] = static_cast<int>(currentGameDay);
+        ctx["allowCheating"] = settings.matchmakingAllowCheating;
+        ctx["allowBreakups"] = settings.matchmakingAllowBreakups;
+        ctx["allowOpenClose"] = settings.matchmakingAllowOpenClose;
         ctx["targetName"] = target.name;
         ctx["targetSex"] = target.sex;
         ctx["targetRace"] = target.race;
@@ -2486,6 +2485,25 @@ namespace MARAS {
                 ctx["candidatesList"] = candStream.str();
                 ctx["candidates"] = std::move(candidatesArr);
 
+                nlohmann::json recentEventsParticipants = nlohmann::json::array();
+                auto appendUniqueUUID = [&](uint64_t uuid) {
+                    if (uuid == 0) return;
+                    for (const auto& existing : recentEventsParticipants) {
+                        if (existing.is_number_unsigned() && existing.get<uint64_t>() == uuid) return;
+                    }
+                    recentEventsParticipants.push_back(uuid);
+                };
+                appendUniqueUUID(pSnap.uuid);
+                appendUniqueUUID(GetActorUUID(kPlayerFormID));
+                if (tp.sideLoverID != 0 && ctx.contains("sideLoverUUID")) {
+                    appendUniqueUUID(ctx["sideLoverUUID"].get<uint64_t>());
+                } else {
+                    for (const auto& c : tp.shortlist) {
+                        appendUniqueUUID(c.uuid);
+                    }
+                }
+                ctx["recent_events_participants"] = std::move(recentEventsParticipants);
+
                 std::string contextJson = SafeJsonDump(ctx);
                 std::string promptName = "maras_evaluations/maras_player_partner_cheating";
 
@@ -3406,32 +3424,6 @@ namespace MARAS {
         return ss.str().empty() ? "None (single / no active relationships)" : ss.str();
     }
 
-    nlohmann::json MatchmakingService::BuildMemoriesContext(RE::FormID actorA, RE::FormID actorB, const std::string& targetStatus, const std::string& action) {
-        float currentGameDay = GetCurrentGameDay();
-
-        auto pA = GetActorProfileSnapshot(actorA);
-        auto pB = GetActorProfileSnapshot(actorB);
-
-        MARAS_LOG_INFO("[Matchmaking:BuildMemoriesContext] actorA: {:08X} ({}, UUID: {}), actorB: {:08X} ({}, UUID: {}), targetStatus: {}, action: {}",
-            actorA, pA.name, pA.uuid, actorB, pB.name, pB.uuid, targetStatus, action);
-
-        nlohmann::json ctx;
-        ctx["actorAUUID"] = pA.uuid;
-        ctx["actorBUUID"] = pB.uuid;
-        ctx["actorAName"] = pA.name;
-        ctx["actorARace"] = pA.race;
-        ctx["actorASex"] = pA.sex;
-        ctx["actorARelationships"] = BuildActorDetailedRelationshipsString(actorA);
-        ctx["actorBName"] = pB.name;
-        ctx["actorBRace"] = pB.race;
-        ctx["actorBSex"] = pB.sex;
-        ctx["actorBRelationships"] = BuildActorDetailedRelationshipsString(actorB);
-        ctx["action"] = action.empty() ? "update relationship" : action;
-        ctx["targetStatus"] = targetStatus.empty() ? "dating" : targetStatus;
-        ctx["gameDay"] = static_cast<int>(currentGameDay);
-        return ctx;
-    }
-
     nlohmann::json MatchmakingService::BuildVerifyContext(const MatchmakingResult& result) {
         float currentGameDay = GetCurrentGameDay();
 
@@ -3475,208 +3467,24 @@ namespace MARAS {
         ctx["committedPartnerBName"] = partnerBName;
         ctx["gameDay"] = static_cast<int>(currentGameDay);
 
+        nlohmann::json recentEventsParticipants = nlohmann::json::array();
+        auto appendUniqueUUID = [&](uint64_t uuid) {
+            if (uuid == 0) return;
+            for (const auto& existing : recentEventsParticipants) {
+                if (existing.is_number_unsigned() && existing.get<uint64_t>() == uuid) return;
+            }
+            recentEventsParticipants.push_back(uuid);
+        };
+        appendUniqueUUID(pA.uuid);
+        appendUniqueUUID(pB.uuid);
+        appendUniqueUUID(partnerAUUID);
+        appendUniqueUUID(partnerBUUID);
+        ctx["recent_events_participants"] = std::move(recentEventsParticipants);
+
         MARAS_LOG_INFO("[Matchmaking:BuildVerifyContext] Built verification context for {} <-> {} (Action: {}, Status: {}, Cheating: {})",
                        pA.name, pB.name, ctx["action"].get<std::string>(), ctx["targetStatus"].get<std::string>(), result.isCheating);
 
         return ctx;
-    }
-
-    void MatchmakingService::RequestMemoriesAsync(RE::FormID actorA, RE::FormID actorB,
-                                                  const std::string& targetStatus, const std::string& action,
-                                                  std::function<void(const std::string&)> onSuccess,
-                                                  std::function<void()> onFailure) {
-        auto dispatchFailure = [](std::function<void()>&& cb) {
-            if (!cb) return;
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([cb = std::move(cb)]() {
-                    try {
-                        cb();
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("[Matchmaking:RequestMemoriesAsync] Exception in onFailure callback: {}", e.what());
-                    }
-                });
-            }
-        };
-
-        if (!IsSkyrimNetAvailable()) {
-            MARAS_LOG_WARN("[Matchmaking:RequestMemoriesAsync] SkyrimNet is not available for memory generation");
-            dispatchFailure(std::move(onFailure));
-            return;
-        }
-        if (actorA == 0 || actorB == 0) {
-            MARAS_LOG_WARN("[Matchmaking:RequestMemoriesAsync] Invalid actor FormIDs for memory generation (0x{:08X}, 0x{:08X})", actorA, actorB);
-            dispatchFailure(std::move(onFailure));
-            return;
-        }
-
-        uint64_t uuidA = GetActorUUID(actorA);
-        uint64_t uuidB = GetActorUUID(actorB);
-
-        MARAS_LOG_INFO("[Matchmaking:RequestMemoriesAsync] Requesting memories for {:08X} ({}, UUID: {}) and {:08X} ({}, UUID: {}) with status '{}' action '{}'",
-                       actorA, ActorSvc::GetName(actorA), uuidA, actorB, ActorSvc::GetName(actorB), uuidB, targetStatus, action);
-
-        nlohmann::json ctx = BuildMemoriesContext(actorA, actorB, targetStatus, action);
-        std::string contextJson = SafeJsonDump(ctx);
-        std::string promptName = "maras_evaluations/maras_matchmaking_memories";
-
-        SendCustomPromptToLLM(promptName, "memory", contextJson,
-            [onSuccess = std::move(onSuccess), onFailure = std::move(onFailure)](const char* response, int success) mutable {
-                if (!success || !response || response[0] == '\0') {
-                    if (onFailure) {
-                        if (auto* taskIF = SKSE::GetTaskInterface()) {
-                            taskIF->AddTask([onFailure = std::move(onFailure)]() {
-                                try {
-                                    onFailure();
-                                } catch (const std::exception& e) {
-                                    MARAS_LOG_ERROR("[Matchmaking:RequestMemoriesAsync] Exception in onFailure callback: {}", e.what());
-                                }
-                            });
-                        }
-                    }
-                    return;
-                }
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([respStr = std::string(response), onSuccess = std::move(onSuccess)]() {
-                        try {
-                            if (onSuccess) onSuccess(respStr);
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("[Matchmaking:RequestMemoriesAsync] Exception in onSuccess callback: {}", e.what());
-                        }
-                    });
-                }
-            });
-    }
-
-    void MatchmakingService::RunMemoryGeneration(RE::FormID actorA, RE::FormID actorB, const std::string& targetStatus, const std::string& action) {
-        RequestMemoriesAsync(actorA, actorB, targetStatus, action,
-            [this, actorA, actorB, targetStatus, action](const std::string& respStr) {
-                auto entries = ParseGeneratedMemories(respStr, actorA, actorB);
-                if (entries.empty()) {
-                    MARAS_LOG_WARN("[Matchmaking:RunMemoryGeneration] Failed to parse generated memories for {:08X} & {:08X}", actorA, actorB);
-                    ShowInGameFailedLLMModal(
-                        "MARAS: Memory Generation Failed",
-                        { std::format("• {} & {}: Failed to parse memories array from LLM response (malformed or invalid JSON).", ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)) },
-                        [this, actorA, actorB, targetStatus, action]() {
-                            RunMemoryGeneration(actorA, actorB, targetStatus, action);
-                        },
-                        [actorB]() {
-                            PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
-                        },
-                        false,
-                        true,
-                        "memory"
-                    );
-                    return;
-                }
-                ProcessGeneratedMemories(respStr, actorA, actorB);
-            },
-            [this, actorA, actorB, targetStatus, action]() {
-                ShowInGameFailedLLMModal(
-                    "MARAS: Memory Generation Failed",
-                    { std::format("• {} & {}: LLM memory generation request failed or returned an empty response.", ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)) },
-                    [this, actorA, actorB, targetStatus, action]() {
-                        RunMemoryGeneration(actorA, actorB, targetStatus, action);
-                    },
-                    [actorB]() {
-                        PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
-                    },
-                    true,
-                    false,
-                    "memory"
-                );
-            });
-    }
-
-    std::vector<GeneratedMemoryEntry> MatchmakingService::ParseGeneratedMemories(const std::string& response, RE::FormID actorA, RE::FormID actorB) {
-        std::vector<GeneratedMemoryEntry> entries;
-        nlohmann::json resp = JsonService::ParseLLMJson(response);
-
-        const auto* memsArray = FindJsonArray(resp, "memories");
-        if (!memsArray) {
-            MARAS_LOG_WARN("[Matchmaking] Failed to parse memories array from LLM response (even after sanitization and repair): {}", response);
-            return entries;
-        }
-
-        std::string nameA = ActorSvc::GetName(actorA);
-        std::string nameB = ActorSvc::GetName(actorB);
-        std::string nameALower = StringUtils::ToLowerStd(nameA);
-        std::string nameBLower = StringUtils::ToLowerStd(nameB);
-
-        size_t idx = 0;
-        for (const auto& item : *memsArray) {
-            if (!item.is_object()) continue;
-
-            std::string actorName = GetJsonString(item, "actor");
-            std::string actorNameLower = StringUtils::ToLowerStd(actorName);
-            RE::FormID memActorId = 0;
-
-            if (!nameBLower.empty() && (actorNameLower == nameBLower || actorNameLower.find(nameBLower) != std::string::npos)) {
-                memActorId = actorB;
-            } else if (!nameALower.empty() && (actorNameLower == nameALower || actorNameLower.find(nameALower) != std::string::npos)) {
-                memActorId = actorA;
-            } else {
-                // Fallback by position: first is actorA, second is actorB
-                memActorId = (idx == 0) ? actorA : actorB;
-            }
-
-            // Ensure reference FormID resolution if possible
-            if (auto* refr = ActorSvc::GetReference(memActorId)) {
-                memActorId = refr->GetFormID();
-            } else {
-                RE::FormID ref = NPCIndex::GetSingleton().GetRefID(memActorId);
-                if (ref != 0) memActorId = ref;
-            }
-
-            GeneratedMemoryEntry entry;
-            entry.actorName = actorName.empty() ? (memActorId == actorA ? nameA : nameB) : actorName;
-            entry.actorFormID = memActorId;
-            entry.content = GetJsonString(item, "content");
-            entry.location = GetJsonString(item, "location", "Skyrim");
-            entry.emotion = GetJsonString(item, "emotion", "content");
-            entry.importanceScore = GetJsonFloat(item, "importance_score", 0.7f);
-            entry.type = GetJsonString(item, "type", "RELATIONSHIP");
-
-            if (item.contains("tags") && item["tags"].is_array()) {
-                for (const auto& tag : item["tags"]) {
-                    if (tag.is_string()) {
-                        entry.tags.push_back(tag.get<std::string>());
-                    }
-                }
-            }
-
-            if (!entry.content.empty()) {
-                entries.push_back(std::move(entry));
-            }
-            idx++;
-        }
-
-        return entries;
-    }
-
-    void MatchmakingService::ProcessGeneratedMemories(const std::string& response, RE::FormID actorA, RE::FormID actorB) {
-        auto entries = ParseGeneratedMemories(response, actorA, actorB);
-        if (entries.empty()) {
-            MARAS_LOG_WARN("[Matchmaking:ProcessGeneratedMemories] No valid memories parsed from LLM response");
-            PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
-            return;
-        }
-
-        nlohmann::json outputArray = nlohmann::json::array();
-        for (const auto& entry : entries) {
-            nlohmann::json m;
-            m["actor"] = entry.actorName;
-            m["actorFormId"] = PrismaUIDataBridge::FormIDToString(entry.actorFormID);
-            m["content"] = entry.content;
-            m["location"] = entry.location;
-            m["emotion"] = entry.emotion;
-            m["importance_score"] = entry.importanceScore;
-            m["type"] = entry.type;
-            m["tags"] = entry.tags;
-            outputArray.push_back(m);
-        }
-
-        MARAS_LOG_INFO("[Matchmaking:ProcessGeneratedMemories] Generated {} memories for partner 0x{:08X}", outputArray.size(), actorB);
-        PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, outputArray);
     }
 
     void MatchmakingService::ShowInGameFailedLLMModal(
@@ -4140,150 +3948,24 @@ namespace MARAS {
         }
 
         const auto& settings = Settings::GetSingleton();
-        if (!settings.matchmakingGenerateMemories || !IsSkyrimNetAvailable()) {
-            MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] {} Applying {} match(es) directly without memory ingestion.",
-                           !IsSkyrimNetAvailable() ? "SkyrimNet is not available." : "Memory generation is disabled.",
-                           approvedMatches.size());
-            bool anyApplied = false;
-            for (auto& match : approvedMatches) {
-                if (ApplyMatch(match)) {
-                    anyApplied = true;
-                }
-            }
-            if (anyApplied) {
-                PrismaUIDataBridge::GetSingleton().SendOverviewData();
-            }
-            return;
+        const bool generateMemories = IsSkyrimNetAvailable();
+        // Log matchmaking application and memory mode
+        MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] Applying {} match(es) (isScheduled: {}, generateMemories: {}, useLLMMemories: {}).",
+                       approvedMatches.size(), isScheduledScan, generateMemories, settings.matchmakingGenerateMemories);
+
+        std::optional<SkyrimNetMemoryService::MatchmakingApplyScope> memScope;
+        if (generateMemories) {
+            memScope.emplace();
         }
-
-        auto batch = std::make_shared<MemoryBatch>();
-        batch->isScheduledScan = isScheduledScan;
-        batch->tasks.reserve(approvedMatches.size());
-        for (auto& match : approvedMatches) {
-            MemoryTask task;
-            task.result = std::move(match);
-            batch->tasks.push_back(std::move(task));
-        }
-
-        batch->pendingCount = batch->tasks.size();
-        auto allIndices = MakeBatchIndices(batch->tasks.size());
-
-        MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] Starting memory generation batch for {} approved match(es) (isScheduled: {})",
-                       batch->tasks.size(), isScheduledScan);
-
-        RetryMemoryTasks(batch, allIndices);
-    }
-
-    void MatchmakingService::RetryMemoryTasks(std::shared_ptr<MemoryBatch> batch, const std::vector<size_t>& indicesToRetry) {
-        if (!batch || indicesToRetry.empty()) {
-            return;
-        }
-
-        for (size_t idx : indicesToRetry) {
-            if (idx >= batch->tasks.size()) continue;
-
-            auto& task = batch->tasks[idx];
-            task.completed = false;
-            task.failed = false;
-            task.isInvalidJson = false;
-            task.failureReason.clear();
-            task.generatedMemories.clear();
-
-            nlohmann::json ctx = BuildMemoriesContext(task.result.actorAFormID, task.result.actorBFormID, task.result.targetStatus, task.result.action);
-            std::string contextJson = SafeJsonDump(ctx);
-            std::string promptName = "maras_evaluations/maras_matchmaking_memories";
-
-            MARAS_LOG_INFO("[Matchmaking:RetryMemoryTasks] Requesting memory generation for [{}/{}] {} (0x{:08X}) <-> {} (0x{:08X})",
-                           idx + 1, batch->tasks.size(), task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID);
-
-            SendCustomPromptToLLM(promptName, "memory", contextJson, [this, batch, idx](const char* response, int success) {
-                std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
-                SKSE::GetTaskInterface()->AddTask([this, batch, idx, success, respStr]() {
-                    try {
-                        if (idx >= batch->tasks.size()) return;
-                        auto& t = batch->tasks[idx];
-
-                        if (!success || respStr.empty()) {
-                            t.completed = true;
-                            t.failed = true;
-                            t.isInvalidJson = false;
-                            t.failureReason = "LLM request failed or returned empty response";
-                            MARAS_LOG_WARN("[Matchmaking:RetryMemoryTasks] Memory generation failed for {} <-> {}",
-                                           t.result.actorAName, t.result.actorBName);
-                        } else {
-                            auto memories = ParseGeneratedMemories(respStr, t.result.actorAFormID, t.result.actorBFormID);
-                            if (memories.empty()) {
-                                t.completed = true;
-                                t.failed = true;
-                                t.isInvalidJson = true;
-                                t.failureReason = "Failed to parse memories array from LLM response (malformed or invalid JSON)";
-                                MARAS_LOG_WARN("[Matchmaking:RetryMemoryTasks] Failed to parse memories for {} <-> {}. Raw: {}",
-                                               t.result.actorAName, t.result.actorBName, respStr);
-                            } else {
-                                t.completed = true;
-                                t.failed = false;
-                                t.isInvalidJson = false;
-                                t.generatedMemories = std::move(memories);
-                                MARAS_LOG_INFO("[Matchmaking:RetryMemoryTasks] Parsed {} memories for {} <-> {}",
-                                               t.generatedMemories.size(), t.result.actorAName, t.result.actorBName);
-                            }
-                        }
-
-                        HandleBatchCompletion(batch, "MARAS: Memory Generation Failed", "memory", this,
-                            [this](auto b, const auto& idxs) { RetryMemoryTasks(b, idxs); },
-                            [](auto, const auto&) {},
-                            [this](auto b) { FinishMemoryBatch(b); }
-                        );
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("[Matchmaking:RetryMemoryTasks] Exception in memory task callback: {}", e.what());
-                    }
-                });
-            });
-        }
-    }
-
-    void MatchmakingService::FinishMemoryBatch(std::shared_ptr<MemoryBatch> batch) {
-        if (!batch) return;
 
         bool anyApplied = false;
-        for (auto& task : batch->tasks) {
-            if (task.completed && !task.failed) {
-                if (ApplyMatch(task.result)) {
-                    anyApplied = true;
-                    MARAS_LOG_INFO("[Matchmaking:FinishMemoryBatch] Successfully applied relationship change for {} (0x{:08X}) <-> {} (0x{:08X}) | Action: {} -> {}",
-                                   task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID,
-                                   task.result.action, task.result.targetStatus);
-                    IngestMemories(task.generatedMemories, task.result.actorAFormID, task.result.actorBFormID);
-                } else {
-                    MARAS_LOG_WARN("[Matchmaking:FinishMemoryBatch] ApplyMatch failed for {} <-> {}",
-                                   task.result.actorAName, task.result.actorBName);
-                }
-            } else {
-                MARAS_LOG_WARN("[Matchmaking:FinishMemoryBatch] Skipping relationship change for {} <-> {} (Chain cancelled or failed). Status unchanged.",
-                               task.result.actorAName, task.result.actorBName);
+        for (auto& match : approvedMatches) {
+            if (ApplyMatch(match)) {
+                anyApplied = true;
             }
         }
         if (anyApplied) {
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
-        }
-        MARAS_LOG_INFO("[Matchmaking:FinishMemoryBatch] Memory batch complete.");
-    }
-
-    void MatchmakingService::IngestMemories(const std::vector<GeneratedMemoryEntry>& memories, RE::FormID actorA, RE::FormID actorB) {
-        for (const auto& mem : memories) {
-            RE::FormID targetActor = mem.actorFormID != 0 ? mem.actorFormID : actorA;
-            RE::FormID relatedActor = (targetActor == actorA) ? actorB : actorA;
-
-            AddActorMemory(
-                targetActor,
-                mem.content,
-                mem.importanceScore,
-                mem.type,
-                mem.emotion,
-                mem.location,
-                mem.tags,
-                relatedActor
-            );
         }
     }
 
@@ -4477,15 +4159,27 @@ namespace MARAS {
             if (targetSt == RelationshipStatus::Candidate || targetSt == RelationshipStatus::Unknown) {
                 targetSt = RelationshipStatus::Dating;
             }
-            success = mgr.PromoteToStatusWith(result.actorAFormID, result.actorBFormID, targetSt);
-            if (success && result.action == "new" && targetSt == RelationshipStatus::Lover &&
+            if (result.action == "new" && targetSt == RelationshipStatus::Lover &&
                 result.isCheating && result.affairStage == AffairStage::Talking) {
-                if (mgr.IsPlayerActiveMainPartner(result.actorAFormID) && !mgr.GetPairIsOpen(result.actorAFormID, kPlayerFormID)) {
-                    mgr.SetCheatingAffairStage(result.actorAFormID, kPlayerFormID, result.actorBFormID, AffairStage::Talking);
+                RelationshipStatus oldSt = mgr.GetRelationshipStatus(result.actorAFormID, result.actorBFormID);
+                {
+                    SkyrimNetMemoryService::SuppressScope suppress;
+                    success = mgr.PromoteToStatusWith(result.actorAFormID, result.actorBFormID, targetSt, /*sendEvent=*/false);
                 }
-                if (mgr.IsPlayerActiveMainPartner(result.actorBFormID) && !mgr.GetPairIsOpen(result.actorBFormID, kPlayerFormID)) {
-                    mgr.SetCheatingAffairStage(result.actorBFormID, kPlayerFormID, result.actorAFormID, AffairStage::Talking);
+                if (success) {
+                    if (mgr.IsPlayerActiveMainPartner(result.actorAFormID) && !mgr.GetPairIsOpen(result.actorAFormID, kPlayerFormID)) {
+                        mgr.SetCheatingAffairStage(result.actorAFormID, kPlayerFormID, result.actorBFormID, AffairStage::Talking);
+                    }
+                    if (mgr.IsPlayerActiveMainPartner(result.actorBFormID) && !mgr.GetPairIsOpen(result.actorBFormID, kPlayerFormID)) {
+                        mgr.SetCheatingAffairStage(result.actorBFormID, kPlayerFormID, result.actorAFormID, AffairStage::Talking);
+                    }
+                    if (SkyrimNetMemoryService::IsMatchmakingApplyActive()) {
+                        SkyrimNetMemoryService::GetSingleton().RecordRelationshipStatusChange(
+                            result.actorAFormID, result.actorBFormID, oldSt, targetSt);
+                    }
                 }
+            } else {
+                success = mgr.PromoteToStatusWith(result.actorAFormID, result.actorBFormID, targetSt, /*sendEvent=*/false);
             }
         }
         else if (result.action == "breakup") {
@@ -4502,16 +4196,16 @@ namespace MARAS {
             }
             switch (targetEnum) {
                 case RelationshipStatus::Divorced:
-                    success = mgr.PromoteToDivorced(result.actorAFormID, result.actorBFormID);
+                    success = mgr.PromoteToDivorced(result.actorAFormID, result.actorBFormID, /*sendEvent=*/false);
                     break;
                 case RelationshipStatus::Jilted:
-                    success = mgr.PromoteToJilted(result.actorAFormID, result.actorBFormID);
+                    success = mgr.PromoteToJilted(result.actorAFormID, result.actorBFormID, /*sendEvent=*/false);
                     break;
                 case RelationshipStatus::ExDating:
-                    success = mgr.PromoteToExDating(result.actorAFormID, result.actorBFormID);
+                    success = mgr.PromoteToExDating(result.actorAFormID, result.actorBFormID, /*sendEvent=*/false);
                     break;
                 case RelationshipStatus::ExLover:
-                    success = mgr.PromoteToExLover(result.actorAFormID, result.actorBFormID);
+                    success = mgr.PromoteToExLover(result.actorAFormID, result.actorBFormID, /*sendEvent=*/false);
                     if (success && result.postBreakupIntent != PartnerIntentType::None &&
                         Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
                         mgr.GetPartnerPendingIntent(result.actorAFormID).type == PartnerIntentType::None) {
@@ -4530,12 +4224,12 @@ namespace MARAS {
             }
         }
         else if (result.action == "open") {
-            mgr.SetPairIsOpen(result.actorAFormID, result.actorBFormID, true);
+            mgr.SetPairIsOpen(result.actorAFormID, result.actorBFormID, true, /*sendEvent=*/false);
             result.targetStatus = "open";
             success = true;
         }
         else if (result.action == "close") {
-            mgr.SetPairIsOpen(result.actorAFormID, result.actorBFormID, false);
+            mgr.SetPairIsOpen(result.actorAFormID, result.actorBFormID, false, /*sendEvent=*/false);
             result.targetStatus = "closed";
             success = true;
         }

@@ -100,6 +100,7 @@ namespace MARAS {
         bool isSecret{ false };                 // true = any secret active (isSecretForBioFather || isSecretForPartner)
         bool isSecretForBioFather{ false };     // true = biological father does not know he is the father
         bool isSecretForPartner{ false };       // true = partner does not know bio father != them
+        bool isPregnancySecretForPartner{ false }; // true = while unborn, partner does not even know mother is pregnant yet
         bool discovered{ false };               // true = fully resolved (both know)
         bool discoveredByPartner{ false };      // true = partner found out (or was told)
         bool discoveredByBioFather{ false };    // true = bio father found out (or was told)
@@ -111,13 +112,14 @@ namespace MARAS {
         PaternitySecret() = default;
         PaternitySecret(bool secret, bool disc = false, bool byPartner = false, bool mismatch = false, float lastCheck = 0.0f,
                         const std::string& name = "", RE::FormID raceID = 0,
-                        bool secBio = false, bool secPartner = false, bool byBio = false)
+                        bool secBio = false, bool secPartner = false, bool byBio = false, bool pregSecPartner = false)
             : isSecret(secret), isSecretForBioFather(secBio), isSecretForPartner(secPartner),
+              isPregnancySecretForPartner(pregSecPartner),
               discovered(disc), discoveredByPartner(byPartner), discoveredByBioFather(byBio),
               hasPhenotypeMismatch(mismatch), lastCheckTimestamp(lastCheck),
               bioFatherName(name), bioFatherRaceID(raceID) {}
 
-        bool HasActiveSecret() const { return isSecret && (isSecretForBioFather || isSecretForPartner); }
+        bool HasActiveSecret() const { return isSecret && (isSecretForBioFather || isSecretForPartner || isPregnancySecretForPartner); }
     };
 
     enum class ChildStage : uint8_t {
@@ -131,8 +133,8 @@ namespace MARAS {
     // Structure tracking a child record in the child-centric registry
     struct ChildRegistryEntry {
         RE::FormID childID{ 0 };
-        RE::FormID guardianAID{ 0 };   // Primary custodial guardian (0 = unknown/single)
-        RE::FormID guardianBID{ 0 };   // Secondary custodial guardian (0 = unknown/single)
+        RE::FormID guardianAID{ 0 };   // Neutral custodial guardian slot A (interchangeable with B; 0 = empty)
+        RE::FormID guardianBID{ 0 };   // Neutral custodial guardian slot B (interchangeable with A; 0 = empty)
         std::string name;
         int32_t timestamp{ 0 };
         bool isAdopted{ true };
@@ -156,6 +158,19 @@ namespace MARAS {
               bioMotherID(bioM), bioFatherID(bioF), presumedFatherID(presumedF), isBiologicalChild(bioChild),
               conceptionTimestamp(concTs), birthTimestamp(birthTs), paternitySecret(pSec),
               stage(st), trainingLocation(trainLoc), gender(gen) {}
+
+        // Slot-neutral, order-independent custodial guardian operations
+        bool HasGuardian(RE::FormID actorID) const;
+        bool HasAnyGuardian() const noexcept { return guardianAID != 0 || guardianBID != 0; }
+        int GuardianCount() const;
+        bool IsSingleGuardian() const { return GuardianCount() == 1; }
+        RE::FormID GetSingleGuardian() const;
+        bool IsSoleGuardian(RE::FormID actorID) const { return IsSingleGuardian() && HasGuardian(actorID); }
+        RE::FormID GetOtherGuardian(RE::FormID actorID) const;
+        bool HasSameGuardians(RE::FormID gA, RE::FormID gB) const;
+        std::array<RE::FormID, 2> GetGuardians() const noexcept { return { guardianAID, guardianBID }; }
+        GuardianSetDiff AssignGuardians(RE::FormID newA, RE::FormID newB);
+        GuardianSetDiff RemoveGuardian(RE::FormID actorID);
     };
 
     // Structure tracking a relationship status change transition
@@ -441,7 +456,7 @@ namespace MARAS {
         bool RemoveRelationship(RE::FormID actorA, RE::FormID actorB);
         bool Breakup(RE::FormID actorA, RE::FormID actorB, bool sendEvent = true);
         bool PromoteToStatusWith(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus status, bool sendEvent = true, bool breakLovers = true);
-        int BreakAllLoverConnections(RE::FormID actorID, bool onlyCheating = false);
+        int BreakAllLoverConnections(RE::FormID actorID, bool onlyCheating = false, bool sendEvent = true);
 
         // Bulk retrievals (defaulting to Player target)
         std::vector<RE::FormID> GetAllRegisteredNPCs() const;
@@ -471,7 +486,7 @@ namespace MARAS {
         // Open relationship accessors (per-pair)
         bool IsNPCInOpenRelationship(RE::FormID actorID) const;
         bool GetPairIsOpen(RE::FormID actorA, RE::FormID actorB) const;
-        bool SetPairIsOpen(RE::FormID actorA, RE::FormID actorB, bool isOpen);
+        bool SetPairIsOpen(RE::FormID actorA, RE::FormID actorB, bool isOpen, bool sendEvent = true);
         bool HasAnyOpenMainPair(RE::FormID actorID) const;
 
         // Cheating tracking accessors & mutators
@@ -499,7 +514,7 @@ namespace MARAS {
         void EvaluateCheatingOnStatusChange(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus newStatus);
         bool SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID, AffairDiscovery discovery);
         bool SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID, AffairResolution resolution);
-        bool SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID = 0, const std::string& statusOrResolution = "");
+        bool SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID = 0, const std::string& statusOrResolution = "", RE::FormID victimID = 0);
         void UpdateSpouseCheatingFaction(RE::FormID npcFormID);
         void UpdateSpouseOpenRelationshipFaction(RE::FormID npcFormID);
         void UpdateCanFormNonCheatingMainFaction(RE::FormID npcFormID);
@@ -558,10 +573,11 @@ namespace MARAS {
         RE::FormID FindUnbornChild(RE::FormID motherID) const;
         std::vector<RE::FormID> GetUnbornChildren(RE::FormID motherID) const;
         RE::FormID RegisterFertilityChild(RE::FormID syntheticChildID, RE::FormID motherID, RE::FormID presumedFatherID, RE::FormID bioFatherID, float conceptionTime, float birthTime, const std::string& name);
-        bool ResolvePaternitySecret(RE::FormID childID, bool discoveredByPartner);
+        bool ResolvePaternitySecret(RE::FormID childID, bool discoveredByPartner, bool sendEvent = false);
         bool ResolvePaternitySecretForPartner(RE::FormID childID, bool discoveredByPartner, bool sendEvent = true);
         bool ResolvePaternitySecretForBioFather(RE::FormID childID, bool discoveredByBioFather, bool sendEvent = true);
-        bool SetPaternitySecretEdges(RE::FormID childID, bool secretForBioFather, bool secretForPartner);
+        bool RevealPregnancyToPartner(RE::FormID childID, bool byVisibleBelly = false, bool sendEvent = true);
+        bool SetPaternitySecretEdges(RE::FormID childID, bool secretForBioFather, bool secretForPartner, std::optional<bool> pregnancySecretForPartner = std::nullopt);
         bool SetChildPaternityLastCheck(RE::FormID childID, float currentDay);
         bool EvaluatePaternitySecret(RE::FormID childID);
         bool EvaluatePaternitySecretFallback(RE::FormID childID);
@@ -569,6 +585,7 @@ namespace MARAS {
         void EvaluateBioFatherStepIn(RE::FormID motherID, RE::FormID formerSpouseID = 0);
         bool IsSecretForBioFather(RE::FormID childID) const;
         bool IsSecretForPartner(RE::FormID childID) const;
+        bool IsPregnancySecretForPartner(RE::FormID childID) const;
         bool SetChildStage(RE::FormID childID, ChildStage stage);
         ChildStage GetChildStage(RE::FormID childID) const;
         bool SetChildTrainingLocation(RE::FormID childID, const std::string& location);
@@ -595,8 +612,8 @@ namespace MARAS {
         std::string BuildPregnancyAnnouncedJson(RE::FormID motherID, RE::FormID partnerID = 0, RE::FormID fallbackBioID = 0, const std::string& fallbackBioName = "", int32_t childCount = 1) const;
 
         // Child Birth Message Construction (grouped by biological father)
-        std::string BuildChildBirthMessage(RE::FormID motherID, const std::vector<RE::FormID>& childIDs = {}) const;
-        std::string BuildChildBirthJson(RE::FormID motherID, const std::vector<RE::FormID>& childIDs = {}) const;
+        std::string BuildChildBirthMessage(RE::FormID motherID, const std::vector<RE::FormID>& childIDs = {}, bool maskSecrets = false) const;
+        std::string BuildChildBirthJson(RE::FormID motherID, const std::vector<RE::FormID>& childIDs = {}, bool maskSecrets = false) const;
 
         // Status change history management
         const std::vector<StatusChangeRecord>& GetStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;

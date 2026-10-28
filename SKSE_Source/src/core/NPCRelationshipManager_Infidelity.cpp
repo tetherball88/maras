@@ -1,6 +1,7 @@
 #include "core/NPCRelationshipManager.h"
 
 #include "core/FormCache.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/ActorUtils.h"
@@ -29,19 +30,20 @@ namespace MARAS {
         return (it != relationshipPairs.end()) ? it->second.isOpen : false;
     }
 
-    bool NPCRelationshipManager::SetPairIsOpen(RE::FormID actorA, RE::FormID actorB, bool isOpen) {
+    bool NPCRelationshipManager::SetPairIsOpen(RE::FormID actorA, RE::FormID actorB, bool isOpen, bool sendEvent) {
         if (!EnsureRegistered(actorA) || !EnsureRegistered(actorB)) return false;
         auto& pairData = GetOrCreatePairData(actorA, actorB);
+        const bool wasOpen = pairData.isOpen;
         pairData.isOpen = isOpen;
         RelationshipStatus pairStatus = pairData.status;
         if (isOpen) {
             MarkCheatingAllowedForPair(actorA, actorB);
         } else {
             if (!(actorA == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(actorA)) {
-                BreakAllLoverConnections(actorA);
+                BreakAllLoverConnections(actorA, false, sendEvent);
             }
             if (actorB != 0 && !(actorB == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) && !HasAnyOpenMainPair(actorB)) {
-                BreakAllLoverConnections(actorB);
+                BreakAllLoverConnections(actorB, false, sendEvent);
             }
         }
         if (actorA == kPlayerFormID) {
@@ -59,6 +61,12 @@ namespace MARAS {
             ClearPartnerIntent(actorA);
         }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, static_cast<uint8_t>(pairStatus));
+        if (wasOpen != isOpen && (sendEvent || SkyrimNetMemoryService::IsMatchmakingApplyActive())) {
+            SkyrimNetMemoryService::GetSingleton().RecordOpenRelationshipToggle(actorA, actorB, isOpen);
+        }
+        if (!sendEvent) {
+            return true;
+        }
 
         if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
             nlohmann::json jsonPayload;
@@ -99,6 +107,12 @@ namespace MARAS {
             return false;
         }
 
+        // Dual-stage affair applies strictly to Player's partners cheating on the Player;
+        // when the Player is not the victim, default to Physical (sex) stage right away.
+        if (victimID != kPlayerFormID) {
+            affairStage = AffairStage::Physical;
+        }
+
         auto calendar = RE::Calendar::GetSingleton();
         int32_t currentDay = calendar ? static_cast<int32_t>(calendar->GetDaysPassed()) : 0;
         float currentFloatDay = calendar ? calendar->GetDaysPassed() : 0.0f;
@@ -108,10 +122,11 @@ namespace MARAS {
         bool found = false;
         for (auto& record : pairData.cheatingRecords) {
             if (record.cheaterID == cheaterID && record.victimID == victimID && record.affairPartnerID == affairPartnerID) {
+                bool wasReopened = (record.affairStatus != AffairStatus::Ongoing && affairStatus == AffairStatus::Ongoing);
                 record.count++;
                 record.lastTimestamp = currentDay;
                 // If the affair was finished and is being re-opened, reset secrecy and set Ongoing
-                if (record.affairStatus != AffairStatus::Ongoing && affairStatus == AffairStatus::Ongoing) {
+                if (wasReopened) {
                     record.affairStatus = AffairStatus::Ongoing;
                     record.isSecret = isSecret; // reset secrecy on re-opening
                 } else if (!isSecret) {
@@ -133,7 +148,7 @@ namespace MARAS {
                                            cheaterID, affairPartnerID);
                             SetPartnerPendingIntent(cheaterID, PartnerIntentType::ConfessPhysical, affairPartnerID);
                         }
-                    } else if (record.count == 1) {
+                    } else if (record.count == 1 || wasReopened) {
                         record.affairStage = affairStage;
                         record.stageStartDay = currentFloatDay;
                     }
@@ -364,6 +379,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::SetCheatingAffairStage(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, AffairStage stage) {
+        if (victimID != kPlayerFormID) {
+            stage = AffairStage::Physical;
+        }
+
         RelationshipPairKey key(cheaterID, victimID);
         auto it = relationshipPairs.find(key);
         if (it == relationshipPairs.end()) return false;
@@ -401,6 +420,10 @@ namespace MARAS {
     }
 
     AffairStage NPCRelationshipManager::GetCheatingAffairStage(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID) const {
+        if (victimID != kPlayerFormID) {
+            return AffairStage::Physical;
+        }
+
         RelationshipPairKey key(cheaterID, victimID);
         auto it = relationshipPairs.find(key);
         if (it == relationshipPairs.end()) return AffairStage::Physical;
@@ -513,7 +536,8 @@ namespace MARAS {
                 }
                 const auto* rData = GetNPCData(cheaterID, pID);
                 if (rData && IsMainTier(rData->status) && !rData->isOpen) {
-                    RecordCheating(cheaterID, pID, affairPartnerID, /*isSecret=*/true, aType, AffairStatus::Ongoing);
+                    AffairStage initialStage = (pID == kPlayerFormID) ? AffairStage::Talking : AffairStage::Physical;
+                    RecordCheating(cheaterID, pID, affairPartnerID, /*isSecret=*/true, aType, AffairStatus::Ongoing, initialStage);
                 }
             }
 
@@ -708,7 +732,7 @@ namespace MARAS {
         return SetCheatingDiscovered(cheaterID, affairPartnerID, resStr);
     }
 
-    bool NPCRelationshipManager::SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID, const std::string& statusOrResolution) {
+    bool NPCRelationshipManager::SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID, const std::string& statusOrResolution, RE::FormID targetVictimID) {
         if (cheaterID == 0) return false;
 
         bool updated = false;
@@ -733,6 +757,9 @@ namespace MARAS {
 
             for (auto& rec : pairData.cheatingRecords) {
                 if (rec.cheaterID == cheaterID && rec.affairStatus == AffairStatus::Ongoing) {
+                    if (targetVictimID != 0 && rec.victimID != targetVictimID) {
+                        continue;
+                    }
                     if (affairPartnerID != 0 && rec.affairPartnerID != affairPartnerID) {
                         continue;
                     }
@@ -863,6 +890,10 @@ namespace MARAS {
                             SKSE::ModCallbackEvent modEvent("maras_affair_exposed", jsonStr, 0.0f, senderForm);
                             eventSource->SendEvent(&modEvent);
                             MARAS_LOG_INFO("Sent maras_affair_exposed event (type: {}): {}", Utils::AffairDiscoveryToString(discovery), jsonStr);
+                            if (discovery == AffairDiscovery::Confessed || discovery == AffairDiscovery::Exposed) {
+                                SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(
+                                    ev.cheaterID, ev.victimID, ev.affairPartnerID, std::string(Utils::AffairDiscoveryToString(discovery)));
+                            }
                         } else if (resolution != AffairResolution::None) {
                             jsonPayload["resolution"] = statusOrResolution;
                             std::string jsonStr = jsonPayload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
@@ -871,6 +902,8 @@ namespace MARAS {
                             SKSE::ModCallbackEvent modEvent("maras_affair_resolved", jsonStr, 0.0f, senderForm);
                             eventSource->SendEvent(&modEvent);
                             MARAS_LOG_INFO("Sent maras_affair_resolved event: {}", jsonStr);
+                            SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(
+                                ev.cheaterID, ev.victimID, ev.affairPartnerID, statusOrResolution);
                         }
                     }
                 } else {
@@ -880,7 +913,7 @@ namespace MARAS {
         }
 
         if (!updated) {
-            MARAS_LOG_DEBUG("SetCheatingDiscovered: No matching ongoing cheating record updated for cheater {:08X} with affairPartner {:08X} (statusOrResolution={})", 
+            MARAS_LOG_DEBUG("SetCheatingDiscovered: No matching ongoing cheating record updated for cheater {:08X} with affairPartner {:08X} (statusOrResolution={})",
                             cheaterID, affairPartnerID, statusOrResolution);
         }
         return updated;

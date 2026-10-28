@@ -35,10 +35,16 @@ These rules apply to all Papyrus scripts (`.psc`) in `Scripts/Source/`. They sup
         endif
         Actor player = TTM_Data.GetPlayer()
         string json = BuildJson("ttm_affection_gift", msg)
-        SkyrimNetApi.RegisterEvent("ttm_event", json, player, receiver)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, player, receiver)
     EndFunction
     ```
-- **JSON Formatting**: Always use `TTM_ServiceSkyrimNet.BuildJson(...)` when dispatching JSON payloads to `SkyrimNetApi`.
+- **C++ Event Bridge & Audience Control (`MARAS.RegisterSkyrimNetEvent`)**:
+  - Do **not** call `SkyrimNetApi.RegisterEvent` or `SkyrimNetApi.DirectNarration` directly from Papyrus, as SkyrimNet's Papyrus API always broadcasts to all nearby actors (`EventAudience::Nearby`).
+  - Always use `MARAS.RegisterSkyrimNetEvent(eventType, content, originatorActor, targetActor, exactAudience, audience)` (or `TTM_ServiceSkyrimNet.DirectNarration(content, originator, target, exactAudience, audience)`).
+  - Normal interpersonal, relationship, household, and public events default to `exactAudience = false` (`EventAudience::Nearby`) so nearby actors can naturally overhear them.
+  - Pass `exactAudience = true` (`EventAudience::Exact`) **only** for private internal thoughts/discoveries (`RegisterPregnancyAnnounced`, where only `mother` receives the event) or when an undiscovered paternity secret is present in the event text (`RegisterPaternitySecretEvent` when one father still doesn't know, and `RegisterChildBirthBatch` / `RegisterChildBirth` / `RegisterChildGrewUp` / `RegisterChildSentToTraining` / `RegisterChildBecameAdult` when an active paternity secret is in the message).
+  - When an event involves an undiscovered paternity secret, split the event into a secret-aware event sent only to privy actors (`mother`, and `bioFather` if `!isSecretForBio`) and a secret-masked event (`maskSecrets = true`) sent only to the deceived partner (`targetActor = None`, `audience = [presumedFather]`).
+- **JSON Formatting**: Always use `TTM_ServiceSkyrimNet.BuildJson(...)` when dispatching JSON payloads to `MARAS.RegisterSkyrimNetEvent`.
 
 ---
 

@@ -23,24 +23,27 @@ You are the GameMaster AI for Skyrim. Evaluate an ongoing paternity intrigue sit
 
 ### Mother: {{ motherName }}
 {% if motherUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", motherUUID) }}
+{{ render_character_profile("ttm_gm", motherUUID) }}
 {% endif %}
 
 
 ### Presumed Father: {{ presumedFatherName }}
 {% if presumedFatherUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", presumedFatherUUID) }}
+{{ render_character_profile("ttm_gm", presumedFatherUUID) }}
 {% endif %}
 
 
 ### True Biological Father: {{ bioFatherName }}
 {% if bioFatherUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", bioFatherUUID) }}
+{{ render_character_profile("ttm_gm", bioFatherUUID) }}
 {% endif %}
+
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
 
 
 ## Evaluation Guidelines
-Evaluate the character profiles, personality traits, and memories of each individual to determine their emotional, psychological, and moral reaction:
+Evaluate the character profiles, personality traits, memories, and recent events/dialogues of each individual to determine their emotional, psychological, and moral reaction:
 1. **Outcome** (`"outcome"`):
    - `"remains_secret"`: The secret is kept for now. No one learns anything new.
    - `"mother_confessed_presumed"`: Mother confesses the truth to the partner/presumed father (due to guilt, fear, or conscience). Only if `isSecretForPresumedFather` is true.

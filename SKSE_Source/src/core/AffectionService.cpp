@@ -84,6 +84,7 @@ namespace MARAS {
             {"slept", {0, 8}},
             {"promotion", {-24, 24}},
             {"loneliness", {-16, 6}},
+            {"family", {0, 6}},
         };
     }
 
@@ -95,8 +96,8 @@ namespace MARAS {
         auto key = NormalizeType(type);
         dailyAffection_[npcFormID][key] += amount;
 
-        // Only record positive, non-loneliness interactions as player attention
-        if (amount > 0.0f && key != "loneliness") {
+        // Record positive interactions as player attention
+        if (amount > 0.0f) {
             RecordAffectionInteraction(npcFormID);
         }
 
@@ -350,16 +351,16 @@ namespace MARAS {
         MARAS_LOG_INFO("Processing affection decay for {} player partner(s) on day change", activePartnerCount);
 
         for (auto npcFormID : uniquePartners) {
-            float daysSince = GetDaysSinceLastAffection(npcFormID);
-
-            // Only apply decay if no affection received for more than the threshold
-            if (daysSince <= Settings::GetSingleton().GetLonelinessDecayStartDays()) {
-                continue;
-            }
-
             // Check if NPC is currently following (teammate/follower)
             auto actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
             bool isFollowing = actor && Utils::IsPlayerFollower(actor);
+
+            float daysSince = GetDaysSinceLastAffection(npcFormID);
+
+            // Only apply decay if not following and no affection received for more than the threshold
+            if (!isFollowing && daysSince <= Settings::GetSingleton().GetLonelinessDecayStartDays()) {
+                continue;
+            }
 
             float lonelinessAffection = CalculateLonelinessDecay(npcFormID, isFollowing, activePartnerCount);
 

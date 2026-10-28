@@ -82,6 +82,7 @@ flowchart TD
   - [NameService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/NameService.md) — Lore-friendly race-specific child naming and species-aware critter naming.
 - **AI, Autonomous World & Scene Coordination**:
   - [SkyrimNetIntegration.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetIntegration.md) — Dynamic `SkyrimNet.dll` binding, 21+ prompt decorators, async LLM evaluation pipelines, and memory/event dispatch.
+  - [SkyrimNetProfileService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetProfileService.md) — Asynchronous per-save SkyrimNet character profile generation for newly spawned placed Young Child (`Stage 2`) and Adult Child (`Stage 4`) actors.
   - [MatchmakingService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/MatchmakingService.md) — Autonomous and manual NPC-to-NPC pairing, orientation rules, LLM compatibility verification, and dual memory generation.
   - [BanterCoordinatorService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/BanterCoordinatorService.md) — Two-tier ambient couple banter, affair drama triggers, and non-SkyrimNet scene fallback.
   - [IntimateThreadService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/IntimateThreadService.md) — OStim Standalone thread monitoring, bed-search heuristics, pregnancy/affair hooks, and post-scene pillow talk.

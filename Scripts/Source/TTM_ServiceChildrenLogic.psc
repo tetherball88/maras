@@ -226,15 +226,20 @@ Function AdoptChild(Actor child, Actor spouseToAdopWith = none, Location houseTo
     ; C++ RegisterChildActor snapshots native factions, clears external factions, and assigns household factions
     MARAS.RegisterChildActor(child, player, spouseToAdopWith, houseToMove, bioMother, bioFather, syntheticChildID, childStage, sendEvent = !isMigrating)
 
-    if (!isMigrating && spouseToAdopWith != none && spouseToAdopWith != player)
+    if (!isMigrating && syntheticChildID == 0 && spouseToAdopWith != none && spouseToAdopWith != player)
         TTM_ServiceAffection.ApplyChildAdoptedAffection(spouseToAdopWith)
     endif
 
     if (!isMigrating)
         lastChildAdoptedTimestamp = Utility.GetCurrentGameTime() + 3
         playerLastSeen = Utility.GetCurrentGameTime()
+        if (houseToMove != none && player.GetCurrentLocation() == houseToMove)
+            PlayerLocationChanged(houseToMove, none, true)
+        endif
         child.EvaluatePackage()
-        Game.AddAchievement(61)
+        if (syntheticChildID == 0)
+            Game.AddAchievement(61)
+        endif
     else
         child.EvaluatePackage()
     endif
@@ -280,6 +285,7 @@ Function StartGame(int gameToPlay, Actor childToPlay)
 	StopGames()
 	;Unblock games for this child, if they were blocked.
 	UnblockGames(childToPlay)
+	MARAS.RecordChildInteraction(childToPlay)
 	;Run the game.
 	if gameToPlay == 1
 		WIGamesTagStart.SendStoryEvent(CurrentHomeExterior.GetLocation(), Game.GetPlayer(), childToPlay)
@@ -320,6 +326,9 @@ EndFunction
 Function ExecuteOrderById(Actor child, float orderId, int duration = 3)
     TTM_Debug.debug("ExecuteOrderById: child = " + child + ", orderId = " + orderId + ", duration = " + duration)
     MARAS.IssueChildOrder(child, orderId, duration)
+    if (orderId < 10.0)
+        MARAS.RecordChildInteraction(child)
+    endif
 EndFunction
 
 ;Issue the 'Never Speak to You Again' order, which causes both kids to flee to their rooms and lasts for 24h.
@@ -409,6 +418,7 @@ EndFunction
 
 Function UpdateGiftValues(Actor child, int EmotionalValue, int RealValue)
 	GiftReaction = GiftReaction + EmotionalValue
+	MARAS.RecordChildInteraction(child)
 EndFunction
 
 Function GiftFinish(Actor child)
@@ -548,6 +558,7 @@ Function AdoptPetForChild(Actor child)
 	Actor newPet = TransientPet.GetActorRef()
 	TransientPet.Clear()
 	MARAS.AssignChildPet(child, newPet)
+	MARAS.RecordChildInteraction(child)
 EndFunction
 
 ;Reject the pet under consideration for a child, recording retry timestamp (15d cooldown).
@@ -571,6 +582,7 @@ Function GiveAllowance(Actor child, int AllowanceAmount)
         child.AddItem(Gold001, AllowanceAmount)
         SetPoor(AllowanceAmount)
         PlayerBeggarAbility()
+        MARAS.RecordChildInteraction(child)
     else
         SetPoor(0)
     endif
@@ -673,6 +685,7 @@ Function AdoptCritter(Actor child)
     if (critterAk)
 		MARAS.AssignChildCritter(child, critterAk)
 		critterAk.EvaluatePackage()
+		MARAS.RecordChildInteraction(child)
 	endif
 EndFunction
 
@@ -986,6 +999,7 @@ Function FGReceivePoorGift(Actor child)
 	int roll = Utility.RandomInt(0, temp.GetSize() - 1)
 	Game.GetPlayer().AddItem(temp.GetAt(roll), 1)
 	ChangePoorCount(2)
+	MARAS.RecordChildInteraction(child)
 EndFunction
 
 ;Give Player Gift Event: Roll up a gift, give it, and deduct the cost.
@@ -1001,6 +1015,7 @@ Function FGReceiveGift(Actor child)
 	deduction = (deduction / 2) + Utility.RandomInt(0, deduction / 2)
 ; 	;Debug.Trace("Deducting: " + deduction)
 	child.RemoveItem(Gold001, deduction * luck)
+	MARAS.RecordChildInteraction(child)
 EndFunction
 
 ;Name-Calling Events (6 & 7)

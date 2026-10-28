@@ -2,66 +2,126 @@
     {% set npcName = decnpc(actorUUID).name %}
     {% set profile = ttm_npc_relationship_profile(actorUUID) %}
     {% if existsIn(profile, "is_pregnant") and profile.is_pregnant %}
-        ## {{npcName}}'s pregnancy
         {% set preg = profile.pregnancy %}
-        {% if existsIn(preg, "child_count") and preg.child_count > 1 and existsIn(preg, "groups") and length(preg.groups) > 0 %}
-            {{npcName}} is currently pregnant with {{preg.child_count}} children{% if existsIn(preg, "mother_partner") and preg.mother_partner.name != "" %}; {{preg.mother_partner.name}} is her partner{% endif %}.
-            {%- for grp in preg.groups %}
-                {%- if existsIn(grp.bio_father, "name") and grp.bio_father.name != "Unknown" %}
-                    {%- set bioName = grp.bio_father.name %}
-                {%- else %}
-                    {%- set bioName = "an unknown father" %}
-                {%- endif %}
-                {%- if grp.is_mother_partner %}
-                    {% if grp.count == 1 %} 1 child is from {{bioName}}.{% else %} {{grp.count}} children are from {{bioName}}.{% endif %}
-                {%- elif existsIn(preg, "mother_partner") and preg.mother_partner.name != "" %}
-                    {%- set partnerName = preg.mother_partner.name %}
-                    {%- if grp.is_secret_for_partner and grp.is_secret_for_bio_father %}
-                        {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}, and {{npcName}} has not told either her partner {{partnerName}} or {{bioName}} that {{bioName}} is the biological father.
-                    {%- elif grp.is_secret_for_partner %}
-                        {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; {{bioName}} knows he is the biological father, but {{npcName}} is keeping the true paternity hidden from her partner {{partnerName}}.
-                    {%- elif grp.is_secret_for_bio_father %}
-                        {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; her partner {{partnerName}} knows the truth, but {{bioName}} has not been told that he is the father.
-                    {%- elif bioName != "an unknown father" and partnerName != bioName %}
-                        {% if grp.count == 1 %} 1 child is from {{bioName}}{% else %} {{grp.count}} children are from {{bioName}}{% endif %}, though {{partnerName}} is her partner; the true biological paternity is known to both {{partnerName}} and {{bioName}}.
+        {% set isPregHiddenFromPartner = existsIn(preg, "is_pregnancy_secret_for_partner") and preg.is_pregnancy_secret_for_partner %}
+        {% if render_mode == "dialogue_target" %}
+            {% if not isPregHiddenFromPartner %}
+                ## {{npcName}}'s pregnancy
+                {{npcName}} is currently pregnant.
+            {% endif %}
+        {% else %}
+            ## {{npcName}}'s pregnancy
+            {% if existsIn(preg, "child_count") and preg.child_count > 1 and existsIn(preg, "groups") and length(preg.groups) > 0 %}
+                {{npcName}} is currently pregnant with {{preg.child_count}} children{% if existsIn(preg, "mother_partner") and preg.mother_partner.name != "" %}; {{preg.mother_partner.name}} is her partner{% endif %}.
+                {%- for grp in preg.groups %}
+                    {%- if existsIn(grp.bio_father, "name") and grp.bio_father.name != "Unknown" %}
+                        {%- set bioName = grp.bio_father.name %}
+                    {%- else %}
+                        {%- set bioName = "an unknown father" %}
+                    {%- endif %}
+                    {%- set grpPregHidden = existsIn(grp, "is_pregnancy_secret_for_partner") and grp.is_pregnancy_secret_for_partner %}
+                    {%- if grp.is_mother_partner %}
+                        {% if grp.count == 1 %} 1 child is from {{bioName}}.{% else %} {{grp.count}} children are from {{bioName}}.{% endif %}
+                    {%- elif existsIn(preg, "mother_partner") and preg.mother_partner.name != "" %}
+                        {%- set partnerName = preg.mother_partner.name %}
+                        {%- if grp.is_secret_for_partner and grp.is_secret_for_bio_father %}
+                            {% if grpPregHidden %}
+                                {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; her pregnancy is still early and not visibly showing yet, so NEITHER her partner {{partnerName}} NOR {{bioName}} knows she is pregnant yet ({{npcName}} must not assume either of them knows unless she tells them).
+                            {% else %}
+                                {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; her partner {{partnerName}} knows she is pregnant and assumes the baby is his, while neither {{partnerName}} nor {{bioName}} knows that {{bioName}} is the true biological father.
+                            {% endif %}
+                        {%- elif grp.is_secret_for_partner %}
+                            {% if grpPregHidden %}
+                                {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; {{bioName}} knows she is pregnant with his child, but her partner {{partnerName}} does NOT even know she is pregnant yet.
+                            {% else %}
+                                {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; {{bioName}} knows he is the biological father, while her partner {{partnerName}} knows she is pregnant and believes the baby is his, unaware of the truth.
+                            {% endif %}
+                        {%- elif grp.is_secret_for_bio_father %}
+                            {% if grp.count == 1 %} 1 child was fathered by {{bioName}}{% else %} {{grp.count}} children were fathered by {{bioName}}{% endif %}; her partner {{partnerName}} knows the truth, but {{bioName}} has not been told that he is the father.
+                        {%- elif bioName != "an unknown father" and partnerName != bioName %}
+                            {% if grp.count == 1 %} 1 child is from {{bioName}}{% else %} {{grp.count}} children are from {{bioName}}{% endif %}, though {{partnerName}} is her partner; the true biological paternity is known to both {{partnerName}} and {{bioName}}.
+                        {%- else %}
+                            {% if grp.count == 1 %} 1 child is from {{bioName}}.{% else %} {{grp.count}} children are from {{bioName}}.{% endif %}
+                        {%- endif %}
+                    {%- elif grp.is_secret %}
+                        {% if grp.count == 1 %} 1 child is from {{bioName}}{% else %} {{grp.count}} children are from {{bioName}}{% endif %}, but it is a secret as of now.
                     {%- else %}
                         {% if grp.count == 1 %} 1 child is from {{bioName}}.{% else %} {{grp.count}} children are from {{bioName}}.{% endif %}
                     {%- endif %}
-                {%- elif grp.is_secret %}
-                    {% if grp.count == 1 %} 1 child is from {{bioName}}{% else %} {{grp.count}} children are from {{bioName}}{% endif %}, but it is a secret as of now.
-                {%- else %}
-                    {% if grp.count == 1 %} 1 child is from {{bioName}}.{% else %} {{grp.count}} children are from {{bioName}}.{% endif %}
-                {%- endif %}
-            {%- endfor %}
-        {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "is_secret") and profile.pregnancy.is_secret %}
-            {% if existsIn(preg, "bio_father") and preg.bio_father.name != "Unknown" %}
-                {% set bioName = preg.bio_father.name %}
-            {% else %}
-                {% set bioName = "unknown" %}
-            {% endif %}
-            {% if existsIn(preg, "mother_partner") and existsIn(preg.mother_partner, "name") and preg.mother_partner.name != "" and preg.mother_partner.name != bioName %}
-                {% if existsIn(preg, "is_secret_for_partner") and existsIn(preg, "is_secret_for_bio_father") and preg.is_secret_for_partner and preg.is_secret_for_bio_father %}
-                    {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{preg.mother_partner.name}} is her partner). {{npcName}} has not told either {{preg.mother_partner.name}} or {{bioName}} that {{bioName}} is the child's biological father.
-                {% elif existsIn(preg, "is_secret_for_partner") and preg.is_secret_for_partner %}
-                    {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{preg.mother_partner.name}} is her partner). {{bioName}} knows he is the biological father, but {{npcName}} is keeping the true paternity hidden from {{preg.mother_partner.name}}.
-                {% elif existsIn(preg, "is_secret_for_bio_father") and preg.is_secret_for_bio_father %}
-                    {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{preg.mother_partner.name}} is her partner). {{preg.mother_partner.name}} knows the truth, but {{bioName}} has not been told that he is the father.
+                {%- endfor %}
+            {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "is_secret") and profile.pregnancy.is_secret %}
+                {% if existsIn(preg, "bio_father") and preg.bio_father.name != "Unknown" %}
+                    {% set bioName = preg.bio_father.name %}
                 {% else %}
-                    {{npcName}} is currently pregnant with a child fathered by {{bioName}}, though {{preg.mother_partner.name}} is her partner. Both {{preg.mother_partner.name}} and {{bioName}} are aware of the true biological paternity.
+                    {% set bioName = "unknown" %}
                 {% endif %}
-            {% elif existsIn(preg, "mother_partner") and existsIn(preg.mother_partner, "name") and preg.mother_partner.name != "" %}
-                {{npcName}} is currently pregnant with child with {{preg.mother_partner.name}}.
+                {% if existsIn(preg, "mother_partner") and existsIn(preg.mother_partner, "name") and preg.mother_partner.name != "" and preg.mother_partner.name != bioName %}
+                    {% set partnerName = preg.mother_partner.name %}
+                    {% if existsIn(preg, "is_secret_for_partner") and existsIn(preg, "is_secret_for_bio_father") and preg.is_secret_for_partner and preg.is_secret_for_bio_father %}
+                        {% if isPregHiddenFromPartner %}
+                            {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{partnerName}} is her partner). Her pregnancy is still early and not visibly showing yet: NEITHER her partner {{partnerName}} NOR {{bioName}} knows she is pregnant yet. {{npcName}} must NOT assume {{partnerName}} or {{bioName}} already knows about the pregnancy until she tells them or her belly begins to show. When speaking to {{partnerName}}, she can keep the pregnancy hidden for now, announce the pregnancy while letting {{partnerName}} believe the baby is his, or confess that {{bioName}} is the father; when speaking to {{bioName}}, she can tell him he is the father or keep it secret.
+                        {% else %}
+                            {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{partnerName}} is her partner). {{partnerName}} knows she is pregnant and believes the unborn baby is his, unaware that {{bioName}} is the true biological father. Meanwhile, {{bioName}} has not been told that he fathered the child.
+                        {% endif %}
+                    {% elif existsIn(preg, "is_secret_for_partner") and preg.is_secret_for_partner %}
+                        {% if isPregHiddenFromPartner %}
+                            {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{partnerName}} is her partner). {{bioName}} knows she is pregnant with his child, but her pregnancy is still early and her partner {{partnerName}} does NOT even know she is pregnant yet. {{npcName}} must NOT assume {{partnerName}} knows about the pregnancy until she tells him or her belly begins to show (she can either announce the pregnancy while letting {{partnerName}} believe the baby is his, or confess the true paternity).
+                        {% else %}
+                            {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{partnerName}} is her partner). {{bioName}} knows he is the biological father, while {{partnerName}} knows she is pregnant and believes the unborn baby is his, unaware of the truth.
+                        {% endif %}
+                    {% elif existsIn(preg, "is_secret_for_bio_father") and preg.is_secret_for_bio_father %}
+                        {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{partnerName}} is her partner). {{partnerName}} knows that {{bioName}} is the biological father, but {{bioName}} has not been told yet.
+                    {% else %}
+                        {{npcName}} is currently pregnant with a child fathered by {{bioName}} (while {{partnerName}} is her partner). Both {{partnerName}} and {{bioName}} know that {{bioName}} is the biological father.
+                    {% endif %}
+                {% elif existsIn(preg, "mother_partner") and existsIn(preg.mother_partner, "name") and preg.mother_partner.name != "" %}
+                    {{npcName}} is currently pregnant with child with {{preg.mother_partner.name}}.
+                {% else %}
+                    {{npcName}} is currently pregnant with child{% if bioName != "unknown" %} fathered by {{bioName}}{% endif %}.
+                {% endif %}
+            {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "has_paternity_secret") and profile.pregnancy.has_paternity_secret and existsIn(profile.pregnancy, "mother_partner") and existsIn(profile.pregnancy, "bio_father") and profile.pregnancy.bio_father.name != "Unknown" and profile.pregnancy.mother_partner.name != profile.pregnancy.bio_father.name %}
+                {{npcName}} is currently pregnant with a child fathered by {{profile.pregnancy.bio_father.name}} (while {{profile.pregnancy.mother_partner.name}} is her partner). Both {{profile.pregnancy.mother_partner.name}} and {{profile.pregnancy.bio_father.name}} know that {{profile.pregnancy.bio_father.name}} is the biological father.
+            {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "mother_partner") and existsIn(profile.pregnancy.mother_partner, "name") and profile.pregnancy.mother_partner.name != "" %}
+                {{npcName}} is currently pregnant with child with {{profile.pregnancy.mother_partner.name}}.
+            {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "bio_father") and existsIn(profile.pregnancy.bio_father, "name") and profile.pregnancy.bio_father.name != "Unknown" %}
+                {{npcName}} is currently pregnant with child fathered by {{profile.pregnancy.bio_father.name}}.
             {% else %}
-                {{npcName}} is currently pregnant with child{% if bioName != "unknown" %} fathered by {{bioName}}{% endif %}.
+                {{npcName}} is currently pregnant with child.
             {% endif %}
-        {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "has_paternity_secret") and profile.pregnancy.has_paternity_secret and existsIn(profile.pregnancy, "mother_partner") and existsIn(profile.pregnancy, "bio_father") and profile.pregnancy.bio_father.name != "Unknown" and profile.pregnancy.mother_partner.name != profile.pregnancy.bio_father.name %}
-            {{npcName}} is currently pregnant with child fathered by {{profile.pregnancy.bio_father.name}}, though {{profile.pregnancy.mother_partner.name}} is her partner; the true biological paternity is known to both {{profile.pregnancy.mother_partner.name}} and {{profile.pregnancy.bio_father.name}}.
-        {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "mother_partner") and existsIn(profile.pregnancy.mother_partner, "name") and profile.pregnancy.mother_partner.name != "" %}
-            {{npcName}} is currently pregnant with child with {{profile.pregnancy.mother_partner.name}}.
-        {% elif existsIn(profile, "pregnancy") and existsIn(profile.pregnancy, "bio_father") and existsIn(profile.pregnancy.bio_father, "name") and profile.pregnancy.bio_father.name != "Unknown" %}
-            {{npcName}} is currently pregnant with child fathered by {{profile.pregnancy.bio_father.name}}.
-        {% else %}
-            {{npcName}} is currently pregnant with child.
         {% endif %}
+    {% endif %}
+    {% if render_mode != "dialogue_target" and existsIn(profile, "expecting_pregnancies") and length(profile.expecting_pregnancies) > 0 %}
+        {% set hasOwnExpecting = false %}
+        {% for exp in profile.expecting_pregnancies %}
+            {% if exp.role != "partner_knows_truth" %}
+                {% set hasOwnExpecting = true %}
+            {% endif %}
+        {% endfor %}
+        {% if hasOwnExpecting %}
+            ## Expecting a child
+        {% else %}
+            ## Partner's pregnancy
+        {% endif %}
+        {% for exp in profile.expecting_pregnancies %}
+            {% if exp.role == "partner_bio_father" %}
+                {{npcName}}'s partner {{exp.mother.name}} is currently pregnant with their child.
+            {% elif exp.role == "presumed_father_unaware" %}
+                {{npcName}}'s partner {{exp.mother.name}} is currently pregnant, and {{npcName}} believes the unborn baby is his own biological child.
+            {% elif exp.role == "partner_knows_truth" %}
+                {{npcName}}'s partner {{exp.mother.name}} is currently pregnant with a child fathered by {% if existsIn(exp, "bio_father") %}{{exp.bio_father.name}}{% else %}another man{% endif %} (not {{npcName}}), and {{npcName}} is aware of the truth.
+            {% elif exp.role == "bio_father_knows" %}
+                {% if existsIn(exp, "mother_partner") and exp.mother_partner.name != "" %}
+                    {% if existsIn(exp, "is_pregnancy_secret_for_partner") and exp.is_pregnancy_secret_for_partner %}
+                        {{exp.mother.name}} is currently pregnant with {{npcName}}'s biological child (while {{exp.mother_partner.name}} is her partner). {{npcName}} knows he is the father, whereas her partner {{exp.mother_partner.name}} does not even know {{exp.mother.name}} is pregnant yet.
+                    {% elif existsIn(exp, "is_secret_for_partner") and exp.is_secret_for_partner %}
+                        {{exp.mother.name}} is currently pregnant with {{npcName}}'s biological child (while {{exp.mother_partner.name}} is her partner). {{npcName}} knows he is the father, while {{exp.mother_partner.name}} believes the unborn baby is his.
+                    {% else %}
+                        {{exp.mother.name}} is currently pregnant with {{npcName}}'s biological child (while {{exp.mother_partner.name}} is her partner), and both {{npcName}} and {{exp.mother_partner.name}} know the truth.
+                    {% endif %}
+                {% else %}
+                    {{exp.mother.name}} is currently pregnant with {{npcName}}'s biological child.
+                {% endif %}
+            {% endif %}
+        {% endfor %}
     {% endif %}
 {% endif %}

@@ -14,18 +14,30 @@ Find up to {{ maxSuggestions }} potential romantic partners or relationship upda
 
 ## Rules & Constraints
 - Suggest partners from the candidate list ONLY. The player character is NOT eligible.
-- Check the target NPC's status:
-  - If `[can form main]`: Free to form a main-tier relationship (dating, engaged, married) or casual lover.
-  - If `[secondary only (allowed)]`: Has an open main partner. Allowed to form casual secondary (lover) relationships.
-  - If `[secondary only (cheating)]`: Has an exclusive main partner. Secondary relationship would be cheating (causes drama).
-- **Advancing Relationships:** Existing relationships can advance (dating->engaged, engaged->married). Casual lovers can advance to main-tier (lover->dating or lover->engaged) if neither character has another committed main partner.
-- **Lover Cheating:** When suggesting a `lover` relationship, set `"cheating": true` if either character has an exclusive main partner (`[secondary only (cheating)]`), or `"cheating": false` if allowed.
+- **Target Eligibility ({{ targetName }} — `[{{ targetEligibility }}]`):**
+{% if targetEligibility == "can form main" %}
+  - **{{ targetName }}** is currently single/uncommitted in the main tier and is free to form a main-tier relationship (`dating`, `engaged`, `married`) or a casual `lover` relationship.
+{% elif targetEligibility == "secondary only (allowed)" %}
+  - **{{ targetName }}** has an open main-tier relationship and is allowed to form casual secondary (`lover`) relationships without it counting as cheating.
+{% else %}
+  - **{{ targetName }}** has an exclusive main-tier partner; forming any secondary (`lover`) relationship counts as cheating/infidelity.
+{% endif %}
+- **Candidate Status Tags (in Candidate Pool below):**
+  - `[can form main]`: Free to form a main-tier relationship (`dating`, `engaged`, `married`) or casual `lover`.
+  - `[secondary only (allowed)]`: Has an open main partner; allowed to form casual secondary (`lover`) relationships without cheating.
+  - `[secondary only (cheating)]`: Has an exclusive main partner; a secondary (`lover`) relationship is cheating.
+- **Advancing Relationships:** Existing relationships can advance (dating->engaged, engaged->married). Casual lovers can advance to main-tier (lover->dating or lover->engaged) when neither character has another committed main partner.
+{% if exists("allowCheating") and not allowCheating %}
+- **Lover Cheating:** Cheating is disabled; never suggest a `lover` relationship for any character marked `[secondary only (cheating)]`, and always set `"cheating": false`.
+{% else %}
+- **Lover Cheating:** For `lover` suggestions, set `"cheating": true` when either character is marked `[secondary only (cheating)]`, and `"cheating": false` when both are `[can form main]` or `[secondary only (allowed)]`.
+{% endif %}
 - **Orientation Rule:** {{ orientationRule }}
 - **Cheating Rule:** {{ cheatingRule }}
 - **Breakup Rule:** {{ breakupRule }}
 - **Open/Close Rule:** {{ openCloseRule }}
-- Do NOT suggest candidates who already appear in the target's current relationships (unless advancing, breaking up, or modifying).
-- **Avoid Celebrity Defaults:** Do NOT default to Companions / followers / jarls. Vilkas, Farkas, Erik the Slayer, Lydia, Aela, Serana, Brynjolf may ONLY be suggested if you cite 2+ specific shared traits beyond "brave Nord warrior" and no non-famous alternative fits.
+- Do NOT suggest candidates who already appear in the target's current relationships (except when advancing, breaking up, or modifying an existing pair).
+- **Avoid Celebrity Defaults:** Do NOT default to Companions / followers / jarls. Vilkas, Farkas, Erik the Slayer, Lydia, Aela, Serana, Brynjolf may ONLY be suggested when citing 2+ specific shared traits beyond "brave Nord warrior" and no non-famous alternative fits.
 - **Diversity & Geographic Spread:** The suggestions MUST span at least 3 different holds, 3 different occupations, and at most 1 Companion.
 - **Penalize Popularity:** Prefer a well-fitting obscure NPC over a vaguely-fitting famous NPC.
 - **Single Suggestion Per Candidate:** Suggest at most ONE operation per candidate NPC in the list. Never suggest multiple or conflicting actions for the same character in one batch (e.g. do NOT propose both advance and breakup for Bassianus).

@@ -3,7 +3,7 @@ import { useMarasStore } from '../../store/useMarasStore'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SectionCard } from '../shared/SectionCard'
-import { CheckCircle, AlertTriangle, Target } from 'lucide-react'
+import { CheckCircle, AlertTriangle, Target, Brain } from 'lucide-react'
 
 export const SkyrimNetSettings: React.FC = () => {
   const settings = useMarasStore((s) => s.settings)
@@ -73,6 +73,20 @@ export const SkyrimNetSettings: React.FC = () => {
             }}
             disabled={isGatedDisabled}
             className="w-28 px-2 py-1 bg-surface-secondary border border-border-light rounded text-sm text-foreground-primary focus:outline-none focus:border-primary disabled:opacity-50 text-right"
+          />
+        </SettingRow>
+      </SectionCard>
+
+      <SectionCard title="AI Memory Generation" icon={Brain}>
+        <SettingRow
+          label="LLM-Generated Memories"
+          description="When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request."
+          disabled={isGatedDisabled}
+        >
+          <ToggleSwitch
+            checked={settings.skyrimnetUseLLMMemories ?? true}
+            onChange={(val) => updateSetting('skyrimnetUseLLMMemories', val)}
+            disabled={isGatedDisabled}
           />
         </SettingRow>
       </SectionCard>

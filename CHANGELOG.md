@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.4.0.alpha - 2026-11-05
+
+### Added
+- **Two-Stage Affair Pregnancy Secrecy (Hidden Early Pregnancy -> Visible Belly)**:
+  - **Hidden Early Pregnancy**: When a partnered woman gets pregnant by someone other than her partner, neither her partner nor the biological father initially knows she is pregnant yet, and the usual pregnancy affection boost is held back until her partner actually finds out.
+  - **Announcing vs. Confessing in Dialogue**: With SkyrimNet, a pregnant mother can keep the pregnancy quiet while she decides what to do, tell the biological father in private, confess the affair to her partner, or **announce the pregnancy to her partner while letting him believe the baby is his**.
+  - **Visible 2nd-Trimester Belly**: Once her pregnancy begins to show in the **2nd trimester** (in both Fertility Mode Reloaded and Beeing Female NG) and she still hasn't told her partner, her partner automatically notices she is pregnant and naturally assumes the baby is his—while the biological father remains in the dark unless someone tells him.
+  - **Dashboard Pregnancy Secret Controls**: Added an **Unaware of Pregnancy** badge and a secret toggle on unborn child profiles so you can see or change whether the mother's partner knows about the pregnancy yet.
+- **Quality Time with Kids Boosts Partner Affection**:
+  - Spending time with your household children—playing games, giving gifts or allowance, adopting pets or critters, receiving a gift from a child, or asking them to do chores—while your co-parent partner is in the same room or area now awards daily **Family Affection** (`+1` to `+3` per interaction based on their personality, up to `+6`/day) and resets their loneliness timer.
+- **Automatic SkyrimNet Biographies for Grown Children**:
+  - When a baby born in your playthrough grows up and appears in the world as a **Young Child** or **Adult Child**, M.A.R.A.S now automatically generates a personalized SkyrimNet character profile for them shaped by their parents' appearance, personality, skills, and hidden heritage (such as vampirism or magic), their family history, where they trained, and who they believe their parents are.
+- **Connected SkyrimNet Episode Memories & Non-LLM Memory Option**:
+  - **Shared Scene Memories**: Major life events—proposals, marriages, breakups, divorces, open/close relationship agreements, affair discoveries and confessions, pregnancy announcements, paternity reveals, child births, adoptions, and custody changes—now group connected moments that unfold within 90 seconds into a **single shared memory episode**. Every participant remembers the same scene from their own point of view without leaking secrets they weren't there for or don't know about.
+  - **Instant Non-AI Memory Toggle**: Added an **LLM-Generated Memories** toggle in **Settings -> SkyrimNet** (and updated **Settings -> Matchmaking**). Turn it off if you prefer M.A.R.A.S to build clean, instant first-person memories without sending extra requests to your AI model.
+- **Fertility Mode Reloaded Miscarriage Support**:
+  - Added support for Fertility Mode Reloaded miscarriage events, automatically clearing the unborn pregnancy record, applying the emotional affection impact on the parents, and notifying SkyrimNet when nearby.
+
+### Changed
+- **Smarter SkyrimNet Event Narration (No More Off-Screen Interruptions)**:
+  - SkyrimNet NPCs now only react aloud to relationship, pregnancy, child, and affair events when the people involved are **actually nearby in the same area as you**. Background matchmaking, distant births or breakups in other cities, daily affection changes, and dashboard edits are still saved to character history and memories, but will no longer make nearby NPCs around you react to events happening across Skyrim.
+  - Removed duplicate back-to-back AI reactions when an NPC initiates a proposal, breakup, affair confession, or paternity reveal in dialogue, or when one event triggers several family updates at once (such as a divorce also transferring child custody).
+- **One-Sided Breakups & Paternity Realizations**:
+  - You and NPCs can now end a relationship, call off an engagement, or divorce through SkyrimNet even when the other partner is not standing nearby, and fathers can piece together a child's paternity when either the mother or the child is present.
+- **Built-In OStim & SexLab Intimacy Affection**:
+  - Intimate scenes with your partners in **OStim** and **SexLab** now award intimacy affection directly when the scene finishes (`+8` for non-sexual intimacy, `+15` for sexual scenes) without relying on external tracking scripts.
+
+### Fixed
+- **Sleeping Near Partners Anywhere**: Sleeping in the same room or area as any active partner (**Dating**, **Lover**, **Engaged**, or **Married**) now properly grants daily **Sleeping Nearby** affection and resets their loneliness timer, even when sleeping at an inn, camp, or unowned home rather than an assigned player house.
+- **Follower Partner Loneliness & Adventuring Bonus**: Partners traveling with you as an active follower now receive their daily `+6` adventuring affection bonus every day and keep their loneliness timer at zero, instead of waiting until after the loneliness day threshold had passed.
+- **New Relationship Loneliness Reset**: Starting or advancing an active relationship with a partner (**Dating**, **Lover**, **Engaged**, or **Married**) now immediately resets their last-interaction timer so new partners don't carry over old neglect days.
+- **Partner-Only "Talking Stage" Affairs**: Fixed NPC-to-NPC affairs showing a **Talking Stage** badge; the two-stage affair progression (`Talking Stage` -> `Physical Affair`) now applies strictly to your own partners, while NPC-to-NPC affairs start directly as a regular affair.
+- **Multi-Partner Affair Confessions & Exposures**: Confessing, exposing, or resolving an affair in dialogue when someone has multiple partners now only reveals or resolves the affair for the specific partner involved in the conversation instead of all of their partners at once.
+- **Child Guardians & Family Relocation**: Fixed cases where the order of Guardian A and Guardian B slots could prevent shared children from relocating to a new home together with their parents, or trigger adoption affection bonuses and achievements when a biological child grew up.
+
 ## 2.3.0.alpha - 2026-10-27
 
 ### Added

@@ -15,7 +15,7 @@ eventCriteria:
 audience: "nearby_npcs"
 response:
   type: "direct_narration"
-  content: "Have {{originator}} and nearby family members address the change in {{event_json.child}}'s parental custody ({{event_json.reason}}) in a way that fits their personalities and family situation."
+  content: "Have {{originator}}{% if exists(\"target\") and target != \"\" and target != \"None\" and target != originator %} and {{target}}{% endif %} address the change in {{event_json.child}}'s parental custody ({{event_json.reason}}) in a way that fits their personalities and family situation."
 
 enabled: true
 interrupt: false

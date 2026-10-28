@@ -756,7 +756,7 @@ namespace MARAS::PapyrusInterface {
             cheater->GetFormID(), victim->GetFormID(), affairPartner->GetFormID(), isSecret);
     }
 
-    bool SetCheatingDiscovered(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* affairPartner, RE::BSFixedString statusOrResolution) {
+    bool SetCheatingDiscovered(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* affairPartner, RE::BSFixedString statusOrResolution, RE::Actor* victim) {
         if (!cheater) {
             MARAS_LOG_WARN("SetCheatingDiscovered: null cheater argument provided");
             return false;
@@ -764,7 +764,8 @@ namespace MARAS::PapyrusInterface {
         RE::FormID cheaterID = cheater->GetFormID();
         RE::FormID partnerID = affairPartner ? affairPartner->GetFormID() : 0;
         std::lock_guard lock(GetPapyrusMutex());
-        return NPCRelationshipManager::GetSingleton().SetCheatingDiscovered(cheaterID, partnerID, statusOrResolution.c_str());
+        RE::FormID victimID = victim ? victim->GetFormID() : 0;
+        return NPCRelationshipManager::GetSingleton().SetCheatingDiscovered(cheaterID, partnerID, statusOrResolution.c_str(), victimID);
     }
 
     bool SetCheatingAffairStatus(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim, RE::Actor* affairPartner, std::int32_t affairStatus) {

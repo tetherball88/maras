@@ -100,6 +100,18 @@ namespace MARAS {
         _Count
     };
 
+    // Deterministic set difference between an old guardian pair and a new guardian pair
+    struct GuardianSetDiff {
+        bool changed{ false };
+        RE::FormID removedA{ 0 };
+        RE::FormID removedB{ 0 };
+        RE::FormID addedA{ 0 };
+        RE::FormID addedB{ 0 };
+
+        RE::FormID PrimaryRemoved() const noexcept { return removedA != 0 ? removedA : removedB; }
+        RE::FormID PrimaryAdded() const noexcept { return addedA != 0 ? addedA : addedB; }
+    };
+
     // Compile-time validation: ensure enums fit in uint8_t for serialization
     static_assert(static_cast<uint8_t>(SocialClass::_Count) <= 255,
                   "SocialClass enum exceeds uint8_t range");

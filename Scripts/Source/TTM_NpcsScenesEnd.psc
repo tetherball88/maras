@@ -14,6 +14,7 @@ Function Fragment_0()
 ;BEGIN CODE
     TTM_Debug.debug("TTM_NpcsScenesEnd: Scene ended.")
     TTM_NpcsScenes npcsSceneQst = GetOwningQuest() as TTM_NpcsScenes
+    TTM_ServiceSkyrimNet.SuppressNextActionNarration()
 
     if(self == CheatingDiscoveredScene)
         Actor npc1 = npc1Alias.GetActorRef()

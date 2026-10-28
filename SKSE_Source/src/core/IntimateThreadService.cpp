@@ -2,6 +2,7 @@
 
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -765,6 +766,7 @@ namespace MARAS {
         eventSource->SendEvent(&modEvent);
         MARAS_LOG_INFO("IntimateThreadService: Sent maras_cheating_caught event: victim={:08X}, cheater={:08X}, partner={:08X}, walkIn={}",
                        victimID, cheaterID, partnerID, isWalkIn);
+        SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(cheaterID, victimID, partnerID, "caught", isWalkIn);
     }
 
     void IntimateThreadService::SendOpenRelationshipWalkInEvent(RE::Actor* witnessActor, RE::Actor* partnerActor, RE::Actor* sexPartnerActor,

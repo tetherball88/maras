@@ -86,9 +86,9 @@ flowchart LR
     ReviewCheck -- "Disabled" --> MemCheck{"matchmakingGenerateMemories?"}
     ReviewModal -- "Approved Pairs" --> MemCheck
     ReviewModal -- "Discard All" --> Reject
-    MemCheck -- "Enabled" --> MemBatch["Batch Stage 2: Dual Memory Generation\n(maras_matchmaking_memories)"]
+    MemCheck -- "Enabled" --> MemBatch["ApplyMatch within MatchmakingApplyScope\n-> SkyrimNetMemoryService (maras_event_memories)"]
     MemCheck -- "Disabled" --> ApplyDirect["ApplyMatch Directly"]
-    MemBatch --> ApplyAndIngest["ApplyMatch + IngestMemories into SkyrimNet"]
+    MemBatch --> ApplyAndIngest["90s Episode Flush -> IngestMemories into SkyrimNet"]
 ```
 
 ---
@@ -152,7 +152,7 @@ All five Partner Agency actions (Actions A, B, C, D, and E) follow the same 2-st
     - `"breakup_open_lover"` (Action B): Evaluates whether the partner amicably ends their consensual open-relationship fling (`"willBreakup"`).
     - `"suggest_open"` / `"suggest_close"` (Action E): Evaluates whether the partner decides to approach the player on next home arrival (`"willSuggest"`).
     - `"candidate_select"` (Action C & D): Evaluates the Top-8 candidate shortlist (`"willCheat"`, `"chosenCandidate"`).
-  - Approved new side lovers (`"new"`) and approved side-lover breakups (`"breakup"`) pass through the optional Review Modal (`playerPartnerCheatingConfirmResults`) and **Dual First-Person Memory Generation** (`ExecuteMemoryBatchOrApply` $\rightarrow$ `maras_matchmaking_memories`) before `ApplyMatch` commits the state change (and queues `postBreakupIntent` if `"willConfess": true`).
+  - Approved new side lovers (`"new"`) and approved side-lover breakups (`"breakup"`) pass through the optional Review Modal (`playerPartnerCheatingConfirmResults`) and—when `matchmakingGenerateMemories` is enabled—apply inside `SkyrimNetMemoryService::MatchmakingApplyScope` (`ExecuteMemoryBatchOrApply` $\rightarrow$ `SkyrimNetMemoryService` $\rightarrow$ `maras_event_memories.prompt`) so all state changes record into the unified 90-second memory episode pipeline (and queue `postBreakupIntent` if `"willConfess": true`).
 - **When SkyrimNet is absent or `playerPartnerCheatingUseLLM` is `false`**:
   - Actions A, B, and E apply their Stage 1 C++ dice-roll outcomes directly (with Actions A and B still routing through `playerPartnerCheatingConfirmResults` if enabled), and Actions C & D select from the Top-8 candidate shortlist via weighted dice roll proportional to composite candidate score.
 1. **Confronted Affair Hard-Block**: Any candidate with `AffairStatus::EndedConfronted` is permanently excluded (`-1000`).

@@ -28,7 +28,7 @@ Vanilla Skyrim treats family life like a strict apartment lease: *"Maximum 2 chi
 > When using an optional fertility engine, the following minimum versions are **strictly required**:
 > - **Fertility Mode Reloaded (FMR)**: **v1.0.7 or higher**
 > - **Beeing Female NG**: **v3.6.4 or higher**
-> 
+>
 > Older versions lack essential lifecycle ModEvents and parameter payloads required for M.A.R.A.S.'s pregnancy and child lifecycle integration.
 
 ---
@@ -105,7 +105,9 @@ When a marriage ends in divorce, who gets the kids? M.A.R.A.S resolves custody s
 ## 6. Secret Dads & Paternity Bombshells 🕵️‍♂️💣
 
 What happens when a married (or dating/engaged) woman gets pregnant by someone who is **not** her committed partner?
-M.A.R.A.S automatically creates a **Paternity Secret**! At first, neither the deceived partner nor the real biological father knows the truth.
+M.A.R.A.S automatically creates a **Paternity Secret**!
+- **Early Pregnancy (Keeping It Quiet)**: Right after conception, **neither her partner nor the biological father even knows she is pregnant yet**! With SkyrimNet AI, the mother can keep the pregnancy quiet while she decides what to do, tell the biological father in private, confess the affair to her partner, or **announce the pregnancy to her partner while letting him believe the baby is his**.
+- **When the Belly Shows (2nd Trimester)**: Pregnancy isn't something you can hide forever! Once her belly becomes visibly rounded in the 2nd trimester (or she gives birth) and she still hasn't told her partner, her partner automatically notices she is pregnant and naturally assumes the baby is his—while the true biological father remains in the dark unless someone tells him!
 
 ### 🔍 How the Secret Comes Out
 - **The Ticking Clock**: Every day that passes as the child grows older increases the chance that someone connects the dots.

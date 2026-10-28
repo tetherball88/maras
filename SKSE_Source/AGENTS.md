@@ -129,4 +129,16 @@ All persistent state is serialized in `src/core/Serialization.cpp` under UID `'M
 - **Validate Enum Casts from Papyrus `Int` Parameters**: Always bounds-check `int32_t` arguments received from Papyrus before `static_cast`ing to `uint8_t`-backed enums (`RelationshipStatus`, `ChildStage`, `AffairStatus`, gender codes).
 - **Public C DLL API (`include/MARAS_PublicAPI.h`)**: When exposing new core C++ capabilities for companion DLLs (such as `MARASUnleashed.dll`), update `MARAS_API` in `MARAS_PublicAPI.h` and `src/MARAS_PublicAPI.cpp`.
 
+---
+
+## 10. Slot-Neutral Custodial Guardian Operations (`ChildRegistryEntry`)
+
+- **Never Perform Positional `guardianAID` / `guardianBID` Comparisons**:
+  - `ChildRegistryEntry::guardianAID` and `ChildRegistryEntry::guardianBID` are strictly interchangeable neutral slots (`(A, B)` is identical to `(B, A)`, and `(A, 0)` is identical to `(0, A)`).
+  - **NEVER** write positional inequality checks (`oldGA != entry.guardianAID || oldGB != entry.guardianBID`), single-slot assumptions (`entry.guardianAID != 0 && entry.guardianBID == 0`), or manual slot-shifting (`entry.guardianAID = entry.guardianBID; entry.guardianBID = 0;`).
+  - **NEVER** use `Utils::MatchesActor(a, b)` alone to compare two guardian pairs when a slot can be `0`, because `Utils::MatchesActor(0, 0)` returns `false`. Use `Utils::MatchesActorOrEmpty`, `Utils::SameGuardianSet`, `Utils::DiffGuardianSets`, or `ChildRegistryEntry` methods instead.
+- **Always Use `ChildRegistryEntry` Slot-Neutral Methods**:
+  - Membership & Queries: `entry.HasGuardian(actorID)`, `entry.HasAnyGuardian()`, `entry.GuardianCount()`, `entry.IsSingleGuardian()`, `entry.GetSingleGuardian()`, `entry.IsSoleGuardian(actorID)`, `entry.GetOtherGuardian(actorID)`, `entry.HasSameGuardians(gA, gB)`.
+  - Mutations & Diffing: `entry.AssignGuardians(newA, newB)` and `entry.RemoveGuardian(actorID)`, which return a `GuardianSetDiff` (`diff.changed`, `diff.PrimaryRemoved()`, `diff.PrimaryAdded()`) and preserve existing slot positions whenever the guardian set is unchanged or a surviving guardian remains.
+
 

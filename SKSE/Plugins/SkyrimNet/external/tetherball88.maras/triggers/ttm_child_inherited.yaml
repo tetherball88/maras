@@ -15,7 +15,7 @@ eventCriteria:
 audience: "nearby_npcs"
 response:
   type: "direct_narration"
-  content: "Have {{originator}} and nearby family members react to {{originator}} taking custody and guardianship of {{event_json.child}} following the death of {{event_json.child}}'s parent in a way that fits their personalities."
+  content: "Have {{originator}}{% if exists(\"target\") and target != \"\" and target != \"None\" and target != originator %} and {{target}}{% endif %} react to {{originator}} taking custody and guardianship of {{event_json.child}} following the death of {{event_json.child}}'s parent in a way that fits their personalities."
 
 enabled: true
 interrupt: false

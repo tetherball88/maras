@@ -54,6 +54,7 @@ namespace MARAS {
         float affectionDecayMultiplier = 1.0f;
         int32_t lonelinessThresholdDays = 2;
         float skyrimnetActionRadius = 3000.0f;
+        bool skyrimnetUseLLMMemories = true;
         bool disablePolygamyQuest = false;
         bool migratedFromStorageUtil = false;
         bool initialRelationshipScanDone = false;

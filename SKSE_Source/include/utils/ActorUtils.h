@@ -12,6 +12,7 @@
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/PackageOverrideService.h"
+#include "core/RelationshipTypes.h"
 #include "services/ActorService.h"
 #include "utils/Common.h"
 #include "utils/StringUtils.h"
@@ -374,6 +375,57 @@ namespace MARAS::Utils {
         }
 
         return result;
+    }
+
+    inline bool MatchesActor(RE::FormID idInEntry, RE::FormID targetID);
+
+    // Matches two guardian/actor slots where 0 == 0 is treated as an empty-slot match
+    inline bool MatchesActorOrEmpty(RE::FormID slotA, RE::FormID slotB) {
+        if (slotA == 0 && slotB == 0) return true;
+        if (slotA == 0 || slotB == 0) return false;
+        return MatchesActor(slotA, slotB);
+    }
+
+    // Order-independent equality check for two guardian pairs (handles (A,B)==(B,A), (A,0)==(0,A), and (0,0)==(0,0))
+    inline bool SameGuardianSet(RE::FormID a1, RE::FormID b1, RE::FormID a2, RE::FormID b2) {
+        if (a1 != 0 && b1 != 0 && MatchesActor(a1, b1)) b1 = 0;
+        if (a2 != 0 && b2 != 0 && MatchesActor(a2, b2)) b2 = 0;
+        return (MatchesActorOrEmpty(a1, a2) && MatchesActorOrEmpty(b1, b2)) ||
+               (MatchesActorOrEmpty(a1, b2) && MatchesActorOrEmpty(b1, a2));
+    }
+
+    using MARAS::GuardianSetDiff;
+
+    inline GuardianSetDiff DiffGuardianSets(RE::FormID oldA, RE::FormID oldB, RE::FormID newA, RE::FormID newB) {
+        if (oldA != 0 && oldB != 0 && MatchesActor(oldA, oldB)) oldB = 0;
+        if (newA != 0 && newB != 0 && MatchesActor(newA, newB)) newB = 0;
+
+        GuardianSetDiff diff{};
+        auto inNew = [newA, newB](RE::FormID id) {
+            return id != 0 && (MatchesActor(newA, id) || MatchesActor(newB, id));
+        };
+        auto inOld = [oldA, oldB](RE::FormID id) {
+            return id != 0 && (MatchesActor(oldA, id) || MatchesActor(oldB, id));
+        };
+
+        if (oldA != 0 && !inNew(oldA)) {
+            diff.removedA = oldA;
+        }
+        if (oldB != 0 && !inNew(oldB)) {
+            if (diff.removedA == 0) diff.removedA = oldB;
+            else diff.removedB = oldB;
+        }
+
+        if (newA != 0 && !inOld(newA)) {
+            diff.addedA = newA;
+        }
+        if (newB != 0 && !inOld(newB)) {
+            if (diff.addedA == 0) diff.addedA = newB;
+            else diff.addedB = newB;
+        }
+
+        diff.changed = !SameGuardianSet(oldA, oldB, newA, newB);
+        return diff;
     }
 
     inline bool MatchesActor(RE::FormID idInEntry, RE::FormID targetID) {

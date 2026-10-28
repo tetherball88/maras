@@ -1,0 +1,28 @@
+{# Renders involved adults' full character profiles (ttm_gm) and chronological family recent events for child bio generation/update #}
+{% if exists("actorUUID") and actorUUID != 0 and ttm_is_registered(actorUUID) %}
+    {% set npcName = decnpc(actorUUID).name %}
+    {% set profile = ttm_npc_relationship_profile(actorUUID) %}
+    {% if existsIn(profile, "parents") %}
+        {% set parents = profile.parents %}
+        {% set adultsList = [] %}
+        {% if existsIn(parents, "bio_generation_adults") and length(parents.bio_generation_adults) > 0 %}
+            {% set adultsList = parents.bio_generation_adults %}
+        {% elif existsIn(parents, "involved_adults") and length(parents.involved_adults) > 0 %}
+            {% set adultsList = parents.involved_adults %}
+        {% endif %}
+        {% if length(adultsList) > 0 %}
+## Involved Parties — Character Profiles & Memories (Context for {{npcName}}'s Biological Heritage & Household Upbringing)
+            {% for adult in adultsList %}
+                {% if existsIn(adult, "uuid") and adult.uuid != 0 %}
+### {{adult.name}} ({{adult.role}})
+{{ render_character_profile("ttm_gm", adult.uuid) }}
+
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        {% if existsIn(parents, "recent_events_participants") and length(parents.recent_events_participants) > 0 %}
+## Family & Household Recent Events (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+        {% endif %}
+    {% endif %}
+{% endif %}

@@ -76,7 +76,7 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
               (cr.affairStatus === undefined || cr.affairStatus === AffairStatus.Ongoing)
           )
           const affairIncidents = affairRecords.reduce((sum, cr) => sum + (cr.count || 1), 0)
-          const isTalkingAffair = affairRecords.some((cr) => cr.affairStage === AffairStage.Talking)
+          const isTalkingAffair = affairRecords.some((cr) => cr.victimId === PLAYER_FORM_ID && cr.affairStage === AffairStage.Talking)
           const isUnofficialAffair = affairRecords.length > 0 && (r.status === RelationshipStatus.Candidate || r.status === RelationshipStatus.Unknown)
 
           return (

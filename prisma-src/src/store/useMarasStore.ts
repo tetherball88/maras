@@ -188,7 +188,7 @@ interface MarasState {
   removeChild: (childId: string, skipBridge?: boolean) => void
   updateChild: (childId: string, updates: Partial<ChildRecord>, skipBridge?: boolean) => void
   relocateFamilyUnit: (params: { childId: string; home: string; coParentId?: string; siblingIds?: string[] }) => void
-  setPaternitySecretEdges: (childId: string, isSecretForBioFather: boolean, isSecretForPartner: boolean) => void
+  setPaternitySecretEdges: (childId: string, isSecretForBioFather: boolean, isSecretForPartner: boolean, isPregnancySecretForPartner?: boolean) => void
   updateSetting: <K extends keyof MarasSettings>(key: K, value: MarasSettings[K]) => void
 
   // Diagnostics & Data Export
@@ -1849,7 +1849,40 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     })
   },
 
-  setPaternitySecretEdges: (childId: string, isSecretForBioFather: boolean, isSecretForPartner: boolean) => {
+  setPaternitySecretEdges: (childId: string, isSecretForBioFather: boolean, isSecretForPartner: boolean, isPregnancySecretForPartner?: boolean) => {
+    sendMarasAction('setPaternitySecretEdges', {
+      childId,
+      isSecretForBioFather,
+      isSecretForPartner,
+      ...(isPregnancySecretForPartner !== undefined ? { isPregnancySecretForPartner } : {}),
+    })
+    set((state) => {
+      const newChildren = new Map(state.rawChildren)
+      const existing = newChildren.get(childId)
+      const nextPregSecret =
+        existing?.stage === 'unborn' && isSecretForPartner
+          ? (isPregnancySecretForPartner ?? Boolean(existing?.isPregnancySecretForPartner))
+          : false
+      const isSecret = isSecretForBioFather || isSecretForPartner || nextPregSecret
+      if (existing) {
+        newChildren.set(childId, {
+          ...existing,
+          isSecret,
+          isSecretForBioFather,
+          isSecretForPartner,
+          isPregnancySecretForPartner: nextPregSecret,
+        })
+      }
+      return computeVisibleSecretsState(
+        state.rawRelationships,
+        newChildren,
+        state.rawCheatingRecords,
+        Boolean(state.settings.revealSecretsInUI),
+        state.npcProfiles,
+      )
+    })
+  },
+  /*
     sendMarasAction('setPaternitySecretEdges', { childId, isSecretForBioFather, isSecretForPartner })
     set((state) => {
       const isSecret = isSecretForBioFather || isSecretForPartner
@@ -1873,6 +1906,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     })
   },
 
+  */
   updateSetting: <K extends keyof MarasSettings>(key: K, value: MarasSettings[K]) => {
     let normalizedValue = value
     if (key === 'uiScale' && typeof value === 'number') {

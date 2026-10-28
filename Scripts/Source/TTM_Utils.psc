@@ -75,7 +75,11 @@ Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor ak
         return
     endif
 
-    SkyrimNetApi.DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, TTM_Data.GetPlayer())
+    Actor target = akTarget
+    if(!target)
+        target = TTM_Data.GetPlayer()
+    endif
+    TTM_ServiceSkyrimNet.DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, target)
 EndFunction
 
 Function ReinforceEnablePolygamySpouseAlias() global

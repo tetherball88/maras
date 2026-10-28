@@ -13,7 +13,7 @@
 ## 2. Core Features & Mechanics
 
 ### 2.1 Daily Accumulation vs. Permanent Affection (Anti-Spam System)
-- **Intraday Buffering**: When the player performs positive or negative actions during the day (giving gifts, talking, intimate scenes, completing quests, or getting caught cheating), the points are not added directly to the partner's permanent score. Instead, they accumulate in **daily category buckets** (e.g., `"gift"`, `"visit"`, `"intimacy"`, `"loneliness"`).
+- **Intraday Buffering**: When the player performs positive or negative actions during the day (giving gifts, talking, intimate scenes, sleeping in the same cell, spending time with shared children, or hierarchy rank changes), the points are not added directly to the partner's permanent score. Instead, they accumulate in **daily category buckets** (`"gift"`, `"dialoguestarted"`, `"intimacy"`, `"slept"`, `"family"`, `"promotion"`, `"loneliness"`). Any positive daily affection gain—as well as starting or advancing an active relationship with the player (`Dating`, `Lover`, `Engaged`, `Married`)—also records an affection interaction timestamp (`RecordAffectionInteraction`), resetting the partner's loneliness timer to `0` days.
 - **Per-Category Daily Caps**: Each category can have a minimum and maximum daily cap. Even if a player gives 20 gifts in a single afternoon, the `"gift"` bucket is clamped to its daily ceiling when the day ends.
 - **End-of-Day Commit**: At the start of each new in-game day, all clamped daily buckets are summed together and committed to the partner's **Permanent Affection** (`0–100`), and the daily buckets reset for the new day.
 
@@ -33,7 +33,8 @@ A partner's permanent affection score places them into one of four emotional sta
 ### 2.3 Loneliness Decay & Adventuring Together
 Every day, the service checks how many days have passed since each player partner last received any affection interaction:
 - **Configurable Loneliness Threshold (`lonelinessThresholdDays`, default `2` days)**: If you interacted with a partner within the last `lonelinessThresholdDays` ($L$, configurable from `1` to `14` days in Settings; accessed via `Settings::GetLonelinessDecayStartDays()`), they suffer zero loneliness decay. This same master time unit $L$ also scales all Tier 2 Player-Partner Agency time windows in `Settings.h`.
-- **Adventuring Bonus (`+6` Affection/Day)**: If a partner is currently traveling with you as an active **Follower**, they never suffer loneliness decay—instead, they *gain* `+6` daily affection from spending time by your side!
+- **Adventuring Bonus (`+6` Affection/Day)**: If a partner is currently traveling with you as an active **Follower**, they never suffer loneliness decay—instead, they *gain* `+6` daily affection every day from spending time by your side and continuously reset their last-interaction timestamp!
+- **Shared Parenting at Home (`"family"` Bucket, `0` to `+6`/Day)**: Whenever the player interacts with a household child (`PlayerChildrenService::RecordChildInteraction` — playing games, giving gifts or allowance, adopting a pet/critter, receiving a child's gift, or issuing normal household orders) while the child's co-parent/guardian (who is an active partner of the player, respecting paternity secret masking) is in the same cell, that partner gains daily `"family"` affection (`+2` base; `+3` for *Romantic* or *Humble*, `+1` for *Independent*) and resets their loneliness timer.
 - **Personalized Neglect Decay**: If a partner is left behind for more than 2 days, their daily affection loss is tailored to six factors:
   1. **Personality (Temperament)**:
      - *Independent* partners barely mind being left alone (`-1`/day).

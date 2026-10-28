@@ -70,6 +70,14 @@ Function OnFMRPregnancyCancelled(Form akMother, Form akFather, int iTrackingInde
     TTM_ServiceFertilityFMR.OnPregnancyCancelled(akMother, akFather, iTrackingIndex)
 EndFunction
 
+Function OnFMRBabyMiscarriage(Form akMother, string cause) global
+    TTM_ServiceFertilityFMR.OnMiscarriage(akMother, cause)
+EndFunction
+
+Function OnFMRActorStatus(Form akMother, int factionRank, string fatherName, int fatherRaceId) global
+    TTM_ServiceFertilityFMR.OnActorStatus(akMother, factionRank, fatherName, fatherRaceId)
+EndFunction
+
 Function OnFMRChildGrewUp(int childIndex, string childName, int gender, Form akMother) global
     TTM_ServiceFertilityFMR.OnChildGrewUp(childIndex, childName, gender, akMother as Actor)
 EndFunction

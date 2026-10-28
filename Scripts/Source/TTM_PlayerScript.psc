@@ -86,6 +86,21 @@ EndEvent
 
 Function ApplySleepRestedSpell()
     Actor player = TTM_Data.GetPlayer()
+    Cell playerCell = player.GetParentCell()
+    if(playerCell)
+        Actor[] partners = MARAS.GetRelationshipPartners(player, "all")
+        int p = 0
+        while(p < partners.Length)
+            Actor partner = partners[p]
+            if(partner && partner.GetParentCell() == playerCell)
+                if(MARAS.IsNPCStatus(partner, "married") || MARAS.IsNPCStatus(partner, "engaged") || MARAS.IsNPCStatus(partner, "dating") || MARAS.IsNPCStatus(partner, "lover"))
+                    TTM_ServiceAffection.AddSleptAffection(partner)
+                endif
+            endif
+            p += 1
+        endwhile
+    endif
+
     Location loc = player.GetCurrentLocation()
     Actor[] tenants = MARAS.GetPlayerHouseTenants(loc)
     PlayerSleepQuestScript sleepQst = TTM_Data.GetPlayerSleepQuest() as PlayerSleepQuestScript

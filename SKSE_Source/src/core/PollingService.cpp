@@ -10,6 +10,7 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerChildrenService.h"
 #include "core/MatchmakingService.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/Settings.h"
@@ -90,6 +91,9 @@ namespace MARAS {
             }
             lastChildOrderCheck_ = now;
         }
+
+        // Flush expired 90s memory episodes
+        SkyrimNetMemoryService::GetSingleton().Tick();
     }
 
     void PollingService::CheckTeammateChanges() {

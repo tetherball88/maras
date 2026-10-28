@@ -30,6 +30,7 @@ Function ProposeRelationshipChange(Actor akActor, Actor partner, string suggeste
                 TTM_Debug.debug("ProposeRelationshipChange(" + suggestedStatus + "): State changed while confirmation was pending; ignoring.")
                 return
             endif
+            TTM_ServiceSkyrimNet.SuppressNextActionNarration()
             bool success = MARAS.PromoteNPCToStatusWith(partner, akActor, suggestedStatus)
             if (!success)
                 TTM_Debug.debug("ProposeRelationshipChange: Action " + suggestedStatus + " blocked by relationship rules.")
@@ -54,8 +55,14 @@ Function ProposeRelationshipChange(Actor akActor, Actor partner, string suggeste
     msg += " to " + TTM_Utils.GetActorName(partner) + ". " + TTM_Utils.GetActorName(partner) + " must answer and accept or reject the proposal."
 
     ; prompt for partner to answer
+    if(!MARAS.ShouldTriggerSkyrimNetNarration(partner, akActor))
+        return
+    endif
     Utility.Wait(5.0)
-    SkyrimNetApi.DirectNarration(msg, partner, akActor)
+    if(!MARAS.ShouldTriggerSkyrimNetNarration(partner, akActor))
+        return
+    endif
+    TTM_ServiceSkyrimNet.DirectNarration(msg, partner, akActor)
 EndFunction
 
 ; One sided decision.
@@ -92,6 +99,7 @@ Function ConsiderRelationshipChange(Actor akActor, Actor partner, string decisio
                 TTM_Debug.debug("ConsiderRelationshipChange(" + status + "): State changed while confirmation was pending; ignoring.")
                 return
             endif
+            TTM_ServiceSkyrimNet.SuppressNextActionNarration()
             bool success = MARAS.PromoteNPCToStatusWith(partner, akActor, status)
             if (!success)
                 TTM_Debug.debug("ConsiderRelationshipChange: Action " + status + " blocked by relationship rules.")
@@ -106,7 +114,8 @@ Function ConsiderRelationshipChange(Actor akActor, Actor partner, string decisio
         if (partner == player && akActor != none)
             TTM_ServiceAffection.AdjustPlayerPartnerAffection(akActor, -15.0, "proposal_rejected_by_partner")
         endif
-        TTM_ServiceSkyrimNet.RegisterProposalDecision(partner, akActor, status, decision, reasoning)
+        TTM_ServiceSkyrimNet.SuppressNextActionNarration()
+        TTM_ServiceSkyrimNet.RegisterProposalDecision(partner, akActor, status, decision, reasoning, true)
     endif
 EndFunction
 
@@ -165,6 +174,7 @@ Function BreakupRelationship(Actor akActor, string partnerName, string status, s
             TTM_Debug.debug("BreakupRelationship(" + status + "): State changed while confirmation was pending; ignoring.")
             return
         endif
+        TTM_ServiceSkyrimNet.SuppressNextActionNarration()
         bool success = MARAS.PromoteNPCToStatusWith(partner, akActor, status)
         if (!success)
             TTM_Debug.debug("BreakupRelationship: Action " + status + " blocked by relationship rules.")
@@ -207,6 +217,7 @@ Function SetOpenRelationshipChange(Actor akActor, Actor partner, bool isOpen, st
             TTM_Debug.debug("SetOpenRelationshipChange(" + actionType + "): State changed while confirmation was pending; ignoring.")
             return
         endif
+        TTM_ServiceSkyrimNet.SuppressNextActionNarration()
         MARAS.SetPairIsOpen(akActor, partner, isOpen)
     else
         TTM_Debug.debug("SetOpenRelationshipChange: Action " + actionType + " declined (modalResult=" + modalResult + ")")
@@ -227,13 +238,15 @@ Function QuestDivorceResolutionActionExecute(Actor akActor, string decision)
 EndFunction
 
 ; Mother reveals paternity secret of child to presumed father, biological father, or both
-Function RevealChildSecret(Actor akActor, string targetFather, string childName)
-    TTM_Debug.debug("RevealChildSecret: " + TTM_Utils.GetActorName(akActor) + " revealing secret to '" + targetFather + "' for child '" + childName)
+Function RevealChildSecret(Actor akActor, string targetFather, string childName, string revealMode = "true_paternity")
+    TTM_Debug.debug("RevealChildSecret: " + TTM_Utils.GetActorName(akActor) + " revealing secret to '" + targetFather + "' for child '" + childName + "' (mode='" + revealMode + "')")
+    ; Logged above with revealMode
     if (!akActor)
         return
     endif
 
-    bool isBoth = (targetFather == "both")
+    bool isBoth = (targetFather == "both" || targetFather == "Both" || StringUtil.Find(targetFather, "Both") != -1 || StringUtil.Find(targetFather, "both") != -1)
+    bool isPregnancyOnly = (revealMode == "pregnancy_only" || revealMode == "announce_pregnancy" || revealMode == "hide_paternity" || StringUtil.Find(revealMode, "pregnancy_only") != -1 || StringUtil.Find(targetFather, "pregnancy_only") != -1)
     Actor targetFatherActor = None
     if (!isBoth && targetFather != "")
         targetFatherActor = MARAS.FindActorByName(targetFather)
@@ -253,35 +266,45 @@ Function RevealChildSecret(Actor akActor, string targetFather, string childName)
     string bioFatherName = TTM_Utils.GetActorName(bioFather)
     string presumedFatherName = TTM_Utils.GetActorName(presumedFather)
 
+    if (isPregnancyOnly)
+        if (!MARAS.IsPregnancySecretForPartner(childID))
+            TTM_Debug.debug("RevealChildSecret: Ignoring pregnancy_only reveal for child " + childID + " because partner is already aware of the pregnancy")
+            return
+        endif
+        TTM_ServiceSkyrimNet.SuppressNextActionNarration()
+        MARAS.RevealPregnancyToPartner(childID, false)
+        if (isBoth)
+            MARAS.ResolvePaternitySecretForBioFather(childID, false)
+        endif
+        return
+    endif
+
+    TTM_ServiceSkyrimNet.SuppressNextActionNarration()
     if (isBoth)
-        MARAS.ResolvePaternitySecretForPartner(childID, false)
-        MARAS.ResolvePaternitySecretForBioFather(childID, false)
+        MARAS.ResolvePaternitySecret(childID, false)
     elseif (targetFatherActor == bioFather || (bioFatherName != "" && targetFather == bioFatherName) || StringUtil.Find(targetFather, "bio") != -1)
         MARAS.ResolvePaternitySecretForBioFather(childID, false)
-    elseif (targetFatherActor == presumedFather || (presumedFatherName != "" && targetFather == presumedFatherName) || StringUtil.Find(targetFather, "presumed") != -1 || StringUtil.Find(targetFather, "assumed") != -1)
+    elseif (targetFatherActor == presumedFather || (presumedFatherName != "" && targetFather == presumedFatherName) || StringUtil.Find(targetFather, "presumed") != -1 || StringUtil.Find(targetFather, "assumed") != -1 || StringUtil.Find(targetFather, "partner") != -1)
         MARAS.ResolvePaternitySecretForPartner(childID, false)
     else
         ; Fallback: resolve for both
-        MARAS.ResolvePaternitySecretForPartner(childID, false)
-        MARAS.ResolvePaternitySecretForBioFather(childID, false)
+        MARAS.ResolvePaternitySecret(childID, false)
     endif
 
     ; If childName was 'all', resolve any other remaining active secrets for other fathers as well
-    if (childName == "all")
+    if (childName == "all" && !isPregnancyOnly)
         int nextChildID = MARAS.FindChildPaternitySecret(akActor, targetFatherActor, "all")
         int guardLoop = 0
         while (nextChildID != 0 && nextChildID != childID && guardLoop < 10)
             guardLoop += 1
             if (isBoth)
-                MARAS.ResolvePaternitySecretForPartner(nextChildID, false)
-                MARAS.ResolvePaternitySecretForBioFather(nextChildID, false)
+                MARAS.ResolvePaternitySecret(nextChildID, false)
             elseif (targetFatherActor == bioFather || (bioFatherName != "" && targetFather == bioFatherName) || StringUtil.Find(targetFather, "bio") != -1)
                 MARAS.ResolvePaternitySecretForBioFather(nextChildID, false)
-            elseif (targetFatherActor == presumedFather || (presumedFatherName != "" && targetFather == presumedFatherName) || StringUtil.Find(targetFather, "presumed") != -1 || StringUtil.Find(targetFather, "assumed") != -1)
+            elseif (targetFatherActor == presumedFather || (presumedFatherName != "" && targetFather == presumedFatherName) || StringUtil.Find(targetFather, "presumed") != -1 || StringUtil.Find(targetFather, "assumed") != -1 || StringUtil.Find(targetFather, "partner") != -1)
                 MARAS.ResolvePaternitySecretForPartner(nextChildID, false)
             else
-                MARAS.ResolvePaternitySecretForPartner(nextChildID, false)
-                MARAS.ResolvePaternitySecretForBioFather(nextChildID, false)
+                MARAS.ResolvePaternitySecret(nextChildID, false)
             endif
             nextChildID = MARAS.FindChildPaternitySecret(akActor, targetFatherActor, "all")
         endWhile
@@ -315,6 +338,7 @@ Function DiscoverChildPaternity(Actor akActor, string childName, string motherNa
         motherActor = MARAS.GetBioMother(childID)
     endif
 
+    TTM_ServiceSkyrimNet.SuppressNextActionNarration()
     if (akActor == presumedFather || (akActor != bioFather && MARAS.IsSecretForPartner(childID)))
         MARAS.ResolvePaternitySecretForPartner(childID, true)
     else
@@ -322,7 +346,8 @@ Function DiscoverChildPaternity(Actor akActor, string childName, string motherNa
     endif
 
     ; If childName was 'all', resolve any other remaining active secrets for this father as well
-    if (childName == "all")
+    bool isPregnancyOnly = false
+    if (childName == "all" && !isPregnancyOnly)
         int nextChildID = MARAS.FindChildPaternitySecret(akActor, motherActor, "all")
         int guardLoop = 0
         while (nextChildID != 0 && nextChildID != childID && guardLoop < 10)
@@ -358,10 +383,11 @@ Function ConfessAffair(Actor akActor, string victimName, string affairPartnerNam
     Actor victim = ResolveActorByName(victimName)
     Actor affairPartner = ResolveActorByName(affairPartnerName)
 
-    ; Mark affair as discovered in SKSE with type "confessed" - fires maras_affair_exposed
-    bool success = MARAS.SetCheatingDiscovered(akActor, affairPartner, "confessed")
+    ; Mark affair as discovered in SKSE with type "confessed" scoped to victim - fires maras_affair_exposed
+    TTM_ServiceSkyrimNet.SuppressNextActionNarration()
+    bool success = MARAS.SetCheatingDiscovered(akActor, affairPartner, "confessed", victim)
     if (!success)
-        TTM_Debug.warn("ConfessAffair: SetCheatingDiscovered returned false for cheater=" + TTM_Utils.GetActorName(akActor) + ", partner=" + TTM_Utils.GetActorName(affairPartner))
+        TTM_Debug.warn("ConfessAffair: SetCheatingDiscovered returned false for cheater=" + TTM_Utils.GetActorName(akActor) + ", partner=" + TTM_Utils.GetActorName(affairPartner) + ", victim=" + TTM_Utils.GetActorName(victim))
     endif
 EndFunction
 
@@ -375,10 +401,11 @@ Function ExposeAffair(Actor akActor, string victimName, string cheaterName, stri
     Actor victim = ResolveActorByName(victimName)
     Actor cheater = ResolveActorByName(cheaterName)
 
-    ; Mark affair as discovered in SKSE with type "exposed" - fires maras_affair_exposed
-    bool success = MARAS.SetCheatingDiscovered(cheater, akActor, "exposed")
+    ; Mark affair as discovered in SKSE with type "exposed" scoped to victim - fires maras_affair_exposed
+    TTM_ServiceSkyrimNet.SuppressNextActionNarration()
+    bool success = MARAS.SetCheatingDiscovered(cheater, akActor, "exposed", victim)
     if (!success)
-        TTM_Debug.warn("ExposeAffair: SetCheatingDiscovered returned false for cheater=" + TTM_Utils.GetActorName(cheater) + ", partner=" + TTM_Utils.GetActorName(akActor))
+        TTM_Debug.warn("ExposeAffair: SetCheatingDiscovered returned false for cheater=" + TTM_Utils.GetActorName(cheater) + ", partner=" + TTM_Utils.GetActorName(akActor) + ", victim=" + TTM_Utils.GetActorName(victim))
     endif
 EndFunction
 
@@ -393,16 +420,16 @@ Function ResolveAffair(Actor akActor, string partnerName, string affairPartnerNa
     Actor affairPartner = ResolveActorByName(affairPartnerName)
 
     Actor cheater = akActor
+    Actor victim = otherParty
     if (otherParty && MARAS.HasCheatedOn(otherParty, akActor))
         cheater = otherParty
+        victim = akActor
     endif
 
-    ; Mark affair resolution in SKSE - fires maras_affair_resolved
-    bool success = MARAS.SetCheatingDiscovered(cheater, affairPartner, resolution)
+    ; Mark affair resolution in SKSE scoped to victim - fires maras_affair_resolved
+    TTM_ServiceSkyrimNet.SuppressNextActionNarration()
+    bool success = MARAS.SetCheatingDiscovered(cheater, affairPartner, resolution, victim)
     if (!success)
-        TTM_Debug.warn("ResolveAffair: SetCheatingDiscovered returned false for cheater=" + TTM_Utils.GetActorName(cheater) + ", partner=" + TTM_Utils.GetActorName(affairPartner) + ", res=" + resolution)
+        TTM_Debug.warn("ResolveAffair: SetCheatingDiscovered returned false for cheater=" + TTM_Utils.GetActorName(cheater) + ", partner=" + TTM_Utils.GetActorName(affairPartner) + ", victim=" + TTM_Utils.GetActorName(victim) + ", res=" + resolution)
     endif
 EndFunction
-
-
-

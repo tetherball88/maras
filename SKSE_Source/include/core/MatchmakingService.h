@@ -2,6 +2,7 @@
 
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "utils/Common.h"
 
 namespace SKSE {
@@ -9,17 +10,6 @@ namespace SKSE {
 }
 
 namespace MARAS {
-
-    struct GeneratedMemoryEntry {
-        std::string actorName;
-        RE::FormID actorFormID = 0;
-        std::string content;
-        std::string location;
-        std::string emotion;
-        float importanceScore = 0.7f;
-        std::string type = "RELATIONSHIP";
-        std::vector<std::string> tags;
-    };
 
     struct MatchmakingResult {
         std::string actorAName;
@@ -51,10 +41,6 @@ namespace MARAS {
         std::string verificationReason;
     };
 
-    struct MemoryTask : BatchTaskBase {
-        std::vector<GeneratedMemoryEntry> generatedMemories;
-    };
-
     template <typename TaskType>
     struct BatchBase {
         std::vector<TaskType> tasks;
@@ -63,7 +49,6 @@ namespace MARAS {
     };
 
     using VerificationBatch = BatchBase<VerificationTask>;
-    using MemoryBatch = BatchBase<MemoryTask>;
 
     struct DiceRollActionSlot {
         std::string action;       // "new", "advance", "breakup", "open", "close", "open_or_close"
@@ -93,12 +78,6 @@ namespace MARAS {
         void RunGlobalMatchmaking(bool autoApply = false);
         void ProcessGlobalManualResults(const std::string& response);
 
-        // Memory generation & ingestion
-        void RunMemoryGeneration(RE::FormID actorA, RE::FormID actorB, const std::string& targetStatus, const std::string& action);
-        void ProcessGeneratedMemories(const std::string& response, RE::FormID actorA, RE::FormID actorB);
-        std::vector<GeneratedMemoryEntry> ParseGeneratedMemories(const std::string& response, RE::FormID actorA, RE::FormID actorB);
-        void IngestMemories(const std::vector<GeneratedMemoryEntry>& memories, RE::FormID actorA, RE::FormID actorB);
-
         // Batched Verification & Memory Generation Pipelines
         void StartVerificationBatch(std::vector<MatchmakingResult> candidates, bool isScheduledScan = true);
         void RetryVerificationTasks(std::shared_ptr<VerificationBatch> batch, const std::vector<size_t>& indicesToRetry);
@@ -106,8 +85,6 @@ namespace MARAS {
 
         void StartMemoryBatch(std::vector<MatchmakingResult> verifiedMatches, bool isScheduledScan = true);
         void ExecuteMemoryBatchOrApply(std::vector<MatchmakingResult> approvedMatches, bool isScheduledScan = true);
-        void RetryMemoryTasks(std::shared_ptr<MemoryBatch> batch, const std::vector<size_t>& indicesToRetry);
-        void FinishMemoryBatch(std::shared_ptr<MemoryBatch> batch);
 
         void ShowMatchmakingReviewModal(std::vector<MatchmakingResult> candidates,
                                         bool isScheduledScan,
@@ -124,7 +101,6 @@ namespace MARAS {
         // Context builders
         nlohmann::json BuildScheduledContext(float currentGameDay);
         nlohmann::json BuildManualContext(RE::FormID targetNpcFormID, float currentGameDay);
-        nlohmann::json BuildMemoriesContext(RE::FormID actorA, RE::FormID actorB, const std::string& targetStatus, const std::string& action);
         nlohmann::json BuildVerifyContext(const MatchmakingResult& result);
 
         // Response parser & validation
@@ -162,11 +138,6 @@ namespace MARAS {
 
         void ProcessScheduledResults(const std::string& response, bool isScheduledScan = true);
         void ProcessManualResults(const std::string& response, RE::FormID targetNpcFormID);
-
-        void RequestMemoriesAsync(RE::FormID actorA, RE::FormID actorB,
-                                  const std::string& targetStatus, const std::string& action,
-                                  std::function<void(const std::string&)> onSuccess,
-                                  std::function<void()> onFailure = nullptr);
 
         std::string BuildExistingPairsString();
         std::string BuildTargetRelationshipsString(RE::FormID targetNpcFormID);

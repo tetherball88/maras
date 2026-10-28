@@ -52,7 +52,8 @@ Here is how your everyday actions stack up, and how your partner's **Temperament
 | 🗣️ **Checking In (Dialogue)** | **`0` to `+5`** | Just starting a conversation gives **`+1`** per chat (up to 5 times a day). Easiest way to say *"Hey, I'm still alive!"* |
 | 🎁 **Giving Gifts** | **`0` to `+15`** | Based on the item's gold value and their **Social Class**. **Romantic ❤️** partners get **`1.5x`** bonus points from gifts! |
 | 🛏️ **Sleeping Nearby** | **`0` to `+8`** | Sleeping in the same home/area gives **`+3`** by default (**`+5`** for **Romantic ❤️**, **`+4`** for **Jealous 👀**, **`+1`** for **Independent 🐺**). |
-| 🔥 **Intimate Moments** | **`-22` to `+22`** | Intimate scenes (OStim) scale with personality: **Romantic ❤️** & **Jealous 👀** get **`1.5x`**, while **Independent 🐺** gets **`0.5x`**. |
+| 🔥 **Intimate Moments** | **`-22` to `+22`** | Intimate scenes (OStim / SexLab) scale with personality: **Romantic ❤️** & **Jealous 👀** get **`1.5x`**, while **Independent 🐺** gets **`0.5x`**. |
+| 👨‍👩‍👧 **Quality Time with Kids** | **`0` to `+6`** | Playing games, giving gifts/allowance, adopting pets, or doing chores with a child while your co-parent partner is in the same room/area gives **`+2`** per interaction (**`+3`** for **Romantic ❤️** & **Humble 🌱**, **`+1`** for **Independent 🐺**) and resets their loneliness timer! |
 | 👑 **Hierarchy Promotions / Demotions** | **`-24` to `+24`** | Moving a spouse up or down in your Spouse Hierarchy gives **`+8` / `-8`** per rank step (**`+12` / `-12`** for **Proud 👑**, **`+4` / `-4`** for **Humble 🌱**). |
 | 🧭 **Adventuring vs. Loneliness** | **`-16` to `+6`** | Traveling together as a follower gives **`+6`/day**! Leaving them behind for more than 2 days causes **Loneliness Decay** (`-1` to `-4`/day base, modified by stage, open status, or unresolved cheating). |
 

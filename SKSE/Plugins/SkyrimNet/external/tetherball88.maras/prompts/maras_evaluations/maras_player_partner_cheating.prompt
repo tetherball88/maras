@@ -27,9 +27,9 @@ You are a Narrative Relationship Psychologist and Game Master AI in The Elder Sc
 - **Known Betrayal by {{ playerName }}:** {{ playerName }} was caught/exposed cheating on {{ partnerName }}{% if playerAffairPartnerName != "" %} with {{ playerAffairPartnerName }}{% endif %}.
 {% endif %}
 
-### {{ partnerName }} — Biography, Memories & Recent Events
+### {{ partnerName }} — Biography & Memories
 {% if partnerUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", partnerUUID) }}
+{{ render_character_profile("ttm_gm", partnerUUID) }}
 {% else %}
 - **Race / Gender:** {{ partnerRace }} {{ partnerSex }}
 - **Relationships:** {{ partnerRelationships }}
@@ -43,12 +43,15 @@ You are a Narrative Relationship Psychologist and Game Master AI in The Elder Sc
 - **Current Affair Stage:** {{ affairStage }} ({% if affairStage == "talking" %}Talking Stage — emotional intimacy, secret notes, stolen conversations; has not yet crossed into physical intimacy{% else %}Physical Stage — full physical infidelity{% endif %})
 {% endif %}
 
-### {{ sideLoverName }} — Biography, Memories & Recent Events
+### {{ sideLoverName }} — Biography & Memories
 {% if exists("sideLoverUUID") and sideLoverUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", sideLoverUUID) }}
+{{ render_character_profile("ttm_gm", sideLoverUUID) }}
 {% else %}
 - **Race / Gender:** {{ sideLoverRace }} {{ sideLoverSex }}
 {% endif %}
+
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
 
 ## Evaluation Guidelines
 Base your decision strictly on **{{ partnerName }}**'s and **{{ sideLoverName }}**'s character biographies, personalities, long-term memories, recent events/dialogues, and how present or absent **{{ playerName }}** has been:
@@ -92,6 +95,9 @@ Return a single raw JSON object. No markdown, no code fences. Must start with `{
 {% endraw %}
 {% endif %}
 {% else if exists("evalMode") and (evalMode == "suggest_open" or evalMode == "suggest_close") %}
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+
 ## Evaluation Guidelines
 Base your decision strictly on **{{ partnerName }}**'s biography, personality, long-term memories, household situation, and recent events/dialogues with **{{ playerName }}**:
 {% if evalMode == "suggest_open" %}
@@ -128,6 +134,9 @@ Return a single raw JSON object. No markdown, no code fences. Must start with `{
 {% endif %}
 {% endfor %}
 {% endif %}
+
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
 
 ## Evaluation Guidelines
 Base your decision strictly on **{{ partnerName }}**'s biography, personality, long-term memories, recent events/dialogues, how present or absent **{{ playerName }}** has been, and the biographies of the shortlisted candidates:

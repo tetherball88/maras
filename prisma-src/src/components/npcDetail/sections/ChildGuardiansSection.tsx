@@ -94,16 +94,21 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
   const childRecord = children.get(npcId)
 
   const isSecretForPartner = Boolean(childRecord?.isSecretForPartner ?? childRecord?.isSecret)
+  const isPregnancySecretForPartner = Boolean(
+    childRecord?.stage === 'unborn' && childRecord?.isPregnancySecretForPartner,
+  )
   const isSecretForBio = Boolean(childRecord?.isSecretForBioFather)
-  const hasActiveSecret = isSecretForPartner || isSecretForBio
+  const hasActiveSecret = isSecretForPartner || isSecretForBio || isPregnancySecretForPartner
 
-  const handleToggleSecret = (type: 'partner' | 'bio', checked: boolean) => {
+  const handleToggleSecret = (type: 'partner' | 'bio' | 'pregnancy', checked: boolean) => {
     if (!childRecord) return
     const currentPartner = isSecretForPartner
     const currentBio = isSecretForBio
-    const newPartner = type === 'partner' ? checked : currentPartner
+    const currentPreg = isPregnancySecretForPartner
+    const newPartner = type === 'partner' ? checked : type === 'pregnancy' && checked ? true : currentPartner
     const newBio = type === 'bio' ? checked : currentBio
-    setPaternitySecretEdges(childRecord.childId, newBio, newPartner)
+    const newPreg = type === 'pregnancy' ? checked : !newPartner ? false : currentPreg
+    setPaternitySecretEdges(childRecord.childId, newBio, newPartner, newPreg)
   }
 
   const playerName = npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
@@ -280,6 +285,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
       } else if (!nextId) {
         updates.isSecret = false
         updates.isSecretForPartner = false
+        updates.isPregnancySecretForPartner = false
       }
     }
 
@@ -305,7 +311,13 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
               const isPlayerParent = Boolean(profile?.formId && areSameFormId(profile.formId, PLAYER_FORM_ID))
               const roleInfo = profile?.formId
                 ? getParentRole(profile.formId, childRecord || {}, profile.gender)
-                : { roleLabel: fallbackLabel, isSecret: false, isSecretForPartner: false, badgeStyle: 'text-foreground-muted' }
+                : {
+                    roleLabel: fallbackLabel,
+                    isSecret: false,
+                    isSecretForPartner: false,
+                    isPregnancySecretForPartner: false,
+                    badgeStyle: 'text-foreground-muted',
+                  }
 
               return (
                 <div
@@ -324,10 +336,24 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                       </span>
                       {roleInfo.isSecret && (
                         <span
-                          className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider"
-                          title={roleInfo.isSecretForPartner ? 'Partner believes the child is theirs' : 'Secret from parent'}
+                          className={`text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded font-semibold uppercase tracking-wider ${
+                            roleInfo.isPregnancySecretForPartner
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          }`}
+                          title={
+                            roleInfo.isPregnancySecretForPartner
+                              ? 'Partner does not even know the mother is pregnant yet'
+                              : roleInfo.isSecretForPartner
+                                ? 'Partner believes the child is theirs'
+                                : 'Secret from parent'
+                          }
                         >
-                          {roleInfo.isSecretForPartner ? 'Secret from Partner' : 'Secret'}
+                          {roleInfo.isPregnancySecretForPartner
+                            ? 'Unaware of Pregnancy'
+                            : roleInfo.isSecretForPartner
+                              ? 'Secret from Partner'
+                              : 'Secret'}
                         </span>
                       )}
                     </div>
@@ -480,7 +506,14 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                     <div className="flex items-center gap-[0.25rem]">
                       <span className="text-[0.625rem] text-purple-300 font-medium">Presumed Father</span>
                       {presumedFatherProfile && (
-                        isSecretForPartner ? (
+                        isPregnancySecretForPartner ? (
+                          <span
+                            className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase tracking-wider"
+                            title="Partner does not even know the mother is pregnant yet"
+                          >
+                            Unaware of Pregnancy
+                          </span>
+                        ) : isSecretForPartner ? (
                           <span
                             className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider"
                             title="Partner believes the child is his biological child"
@@ -654,7 +687,29 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                       Secret from Partner
                     </span>
                     <span className="text-[0.6875rem] text-foreground-muted block leading-tight">
-                      Partner believes the child is theirs; true biological parentage is hidden from them.
+                      {isPregnancySecretForPartner
+                        ? 'True biological parentage is hidden from partner (who is also unaware of the pregnancy).'
+                        : 'Partner believes the child is theirs; true biological parentage is hidden from them.'}
+                    </span>
+                  </div>
+                </label>
+              )}
+
+              {/* Pregnancy Unannounced to Partner (Unborn only) */}
+              {childRecord?.stage === 'unborn' && (isSecretForPartner || isPregnancySecretForPartner) && (
+                <label className="flex items-start gap-[0.625rem] p-[0.625rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded cursor-pointer transition-colors select-none group">
+                  <input
+                    type="checkbox"
+                    checked={isPregnancySecretForPartner}
+                    onChange={(e) => handleToggleSecret('pregnancy', e.target.checked)}
+                    className="mt-[0.125rem] h-4 w-4 rounded border-border-divider text-amber-500 focus:ring-amber-500/20 accent-amber-500 cursor-pointer flex-shrink-0"
+                  />
+                  <div className="text-left space-y-[0.125rem]">
+                    <span className="text-xs font-semibold text-foreground-primary group-hover:text-amber-300 transition-colors block">
+                      Pregnancy Unannounced to Partner
+                    </span>
+                    <span className="text-[0.6875rem] text-foreground-muted block leading-tight">
+                      Partner does not even know the mother is pregnant yet (revealed when she tells him or when her belly shows).
                     </span>
                   </div>
                 </label>

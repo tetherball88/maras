@@ -7843,6 +7843,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     globalBanCritter: false,
     globalBanPet: false,
     skyrimnetActionRadius: 3e3,
+    skyrimnetUseLLMMemories: true,
     matchmakingExcludePlayerActivePartners: false,
     matchmakingConfirmResults: false,
     playerPartnerCheatingAgencyEnabled: true,
@@ -15157,7 +15158,15 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       };
     }
     const isSecretPartner = child.isSecretForPartner ?? child.isSecret;
+    const isPregSecretPartner = Boolean(child.stage === "unborn" && child.isPregnancySecretForPartner);
     if (isPresumedFatherMatch) {
+      if (isPregSecretPartner) {
+        return {
+          statusLabel: `Unaware of Pregnancy (Presumed Father)`,
+          badgeLabel: `Unaware of Pregnancy`,
+          badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+        };
+      }
       if (isSecretPartner) {
         return {
           statusLabel: isGuardianMatch ? `Presumed ${sonOrDaughter} (Guardian • Secret)` : `Presumed ${sonOrDaughter} (Secret from Partner)`,
@@ -15220,12 +15229,14 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       };
     }
     const isSecretPartner = child.isSecretForPartner ?? child.isSecret;
+    const isPregSecretPartner = Boolean(child.stage === "unborn" && child.isPregnancySecretForPartner);
     if (isPresumedFather) {
       if (isSecretPartner) {
         return {
           roleLabel: "Presumed Father (Guardian)",
           isSecret: true,
           isSecretForPartner: true,
+          isPregnancySecretForPartner: isPregSecretPartner,
           badgeStyle: "text-purple-300"
         };
       }
@@ -15239,6 +15250,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         roleLabel: isMale ? "Presumed Father (Guardian)" : isFemale ? "Step-mother (secret)" : "Step-parent (secret)",
         isSecret: true,
         isSecretForPartner: true,
+        isPregnancySecretForPartner: isPregSecretPartner,
         badgeStyle: "text-purple-300"
       };
     }
@@ -15268,6 +15280,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         presumedFatherName: void 0,
         isSecret: false,
         isSecretForPartner: false,
+        isPregnancySecretForPartner: false,
         isSecretForBioFather: false,
         hasPhenotypeMismatch: false
       };
@@ -15278,6 +15291,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       bioFatherName: void 0,
       isSecret: false,
       isSecretForPartner: false,
+      isPregnancySecretForPartner: false,
       isSecretForBioFather: false,
       hasPhenotypeMismatch: false
     };
@@ -16713,18 +16727,25 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         };
       });
     },
-    setPaternitySecretEdges: (childId, isSecretForBioFather, isSecretForPartner) => {
-      sendMarasAction("setPaternitySecretEdges", { childId, isSecretForBioFather, isSecretForPartner });
+    setPaternitySecretEdges: (childId, isSecretForBioFather, isSecretForPartner, isPregnancySecretForPartner) => {
+      sendMarasAction("setPaternitySecretEdges", {
+        childId,
+        isSecretForBioFather,
+        isSecretForPartner,
+        ...isPregnancySecretForPartner !== void 0 ? { isPregnancySecretForPartner } : {}
+      });
       set((state) => {
-        const isSecret = isSecretForBioFather || isSecretForPartner;
         const newChildren = new Map(state.rawChildren);
         const existing = newChildren.get(childId);
+        const nextPregSecret = (existing == null ? void 0 : existing.stage) === "unborn" && isSecretForPartner ? isPregnancySecretForPartner ?? Boolean(existing == null ? void 0 : existing.isPregnancySecretForPartner) : false;
+        const isSecret = isSecretForBioFather || isSecretForPartner || nextPregSecret;
         if (existing) {
           newChildren.set(childId, {
             ...existing,
             isSecret,
             isSecretForBioFather,
-            isSecretForPartner
+            isSecretForPartner,
+            isPregnancySecretForPartner: nextPregSecret
           });
         }
         return computeVisibleSecretsState(
@@ -16736,6 +16757,31 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         );
       });
     },
+    /*
+        sendMarasAction('setPaternitySecretEdges', { childId, isSecretForBioFather, isSecretForPartner })
+        set((state) => {
+          const isSecret = isSecretForBioFather || isSecretForPartner
+          const newChildren = new Map(state.rawChildren)
+          const existing = newChildren.get(childId)
+          if (existing) {
+            newChildren.set(childId, {
+              ...existing,
+              isSecret,
+              isSecretForBioFather,
+              isSecretForPartner,
+            })
+          }
+          return computeVisibleSecretsState(
+            state.rawRelationships,
+            newChildren,
+            state.rawCheatingRecords,
+            Boolean(state.settings.revealSecretsInUI),
+            state.npcProfiles,
+          )
+        })
+      },
+    
+      */
     updateSetting: (key, value) => {
       let normalizedValue = value;
       if (key === "uiScale" && typeof value === "number") {
@@ -17050,6 +17096,35 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     ["path", { d: "M20 14h2", key: "4cs60a" }],
     ["path", { d: "M15 13v2", key: "1xurst" }],
     ["path", { d: "M9 13v2", key: "rq6x2g" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Brain = createLucideIcon("Brain", [
+    [
+      "path",
+      {
+        d: "M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z",
+        key: "l5xja"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z",
+        key: "ep3f8r"
+      }
+    ],
+    ["path", { d: "M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4", key: "1p4c4q" }],
+    ["path", { d: "M17.599 6.5a3 3 0 0 0 .399-1.375", key: "tmeiqw" }],
+    ["path", { d: "M6.003 5.125A3 3 0 0 0 6.401 6.5", key: "105sqy" }],
+    ["path", { d: "M3.477 10.896a4 4 0 0 1 .585-.396", key: "ql3yin" }],
+    ["path", { d: "M19.938 10.5a4 4 0 0 1 .585.396", key: "1qfode" }],
+    ["path", { d: "M6 18a4 4 0 0 1-1.967-.516", key: "2e4loj" }],
+    ["path", { d: "M19.967 17.484A4 4 0 0 1 18 18", key: "159ez6" }]
   ]);
   /**
    * @license lucide-react v0.460.0 - ISC
@@ -29775,7 +29850,7 @@ Defaulting to \`null\`.`;
                 )
               }
             ),
-            useLLM && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            hasSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SettingRow,
                 {
@@ -29793,8 +29868,8 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SettingRow,
                 {
-                  label: "Generate Memories",
-                  description: "When enabled, generates AI memories for NPCs involved in scheduled matchmaking relationship changes.",
+                  label: "LLM-Generated Memories",
+                  description: "When enabled, matchmaking uses SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, matchmaking memories are built programmatically without sending an LLM request.",
                   children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     ToggleSwitch,
                     {
@@ -31583,6 +31658,22 @@ Defaulting to \`null\`.`;
             }
           )
         }
+      ) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "AI Memory Generation", icon: Brain, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SettingRow,
+        {
+          label: "LLM-Generated Memories",
+          description: "When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request.",
+          disabled: isGatedDisabled,
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToggleSwitch,
+            {
+              checked: settings.skyrimnetUseLLMMemories ?? true,
+              onChange: (val) => updateSetting("skyrimnetUseLLMMemories", val),
+              disabled: isGatedDisabled
+            }
+          )
+        }
       ) })
     ] });
   };
@@ -32128,7 +32219,7 @@ Defaulting to \`null\`.`;
                     const typeLabel = cr.affairType === AffairType.Lover ? "Lover" : cr.affairType === AffairType.Dating ? "Dating" : "Casual";
                     const statusLabel = cr.affairStatus === AffairStatus.Ongoing ? "Ongoing" : cr.affairStatus === AffairStatus.EndedBreakup ? "Ended (Breakup)" : cr.affairStatus === AffairStatus.EndedVictimSplit ? "Ended (Divorce/Split)" : cr.affairStatus === AffairStatus.Allowed ? "Allowed (Open)" : cr.affairStatus === AffairStatus.EndedConfronted ? "Ended (Confronted)" : "Ongoing";
                     const isOngoing = cr.affairStatus === void 0 || cr.affairStatus === AffairStatus.Ongoing;
-                    const isTalkingStage = cr.affairStage === AffairStage.Talking;
+                    const isTalkingStage = cr.victimId === PLAYER_FORM_ID && cr.affairStage === AffairStage.Talking;
                     const stageLabel = isTalkingStage ? "Talking Stage" : "Physical Affair";
                     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-destructive/10 text-destructive text-[0.6875rem] p-[0.375rem] rounded border border-destructive/20 flex justify-between items-center gap-[0.5rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.125rem]", children: [
@@ -33040,7 +33131,7 @@ Defaulting to \`null\`.`;
           (cr) => cr.cheaterId === currentNpcId && cr.affairPartnerId === partnerId && (cr.affairStatus === void 0 || cr.affairStatus === AffairStatus.Ongoing)
         );
         const affairIncidents = affairRecords.reduce((sum, cr) => sum + (cr.count || 1), 0);
-        const isTalkingAffair = affairRecords.some((cr) => cr.affairStage === AffairStage.Talking);
+        const isTalkingAffair = affairRecords.some((cr) => cr.victimId === PLAYER_FORM_ID && cr.affairStage === AffairStage.Talking);
         const isUnofficialAffair = affairRecords.length > 0 && (r2.status === RelationshipStatus.Candidate || r2.status === RelationshipStatus.Unknown);
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
@@ -33598,15 +33689,20 @@ Defaulting to \`null\`.`;
     };
     const childRecord = children.get(npcId);
     const isSecretForPartner = Boolean((childRecord == null ? void 0 : childRecord.isSecretForPartner) ?? (childRecord == null ? void 0 : childRecord.isSecret));
+    const isPregnancySecretForPartner = Boolean(
+      (childRecord == null ? void 0 : childRecord.stage) === "unborn" && (childRecord == null ? void 0 : childRecord.isPregnancySecretForPartner)
+    );
     const isSecretForBio = Boolean(childRecord == null ? void 0 : childRecord.isSecretForBioFather);
-    const hasActiveSecret = isSecretForPartner || isSecretForBio;
+    const hasActiveSecret = isSecretForPartner || isSecretForBio || isPregnancySecretForPartner;
     const handleToggleSecret = (type, checked) => {
       if (!childRecord) return;
       const currentPartner = isSecretForPartner;
       const currentBio = isSecretForBio;
-      const newPartner = type === "partner" ? checked : currentPartner;
+      const currentPreg = isPregnancySecretForPartner;
+      const newPartner = type === "partner" ? checked : type === "pregnancy" && checked ? true : currentPartner;
       const newBio = type === "bio" ? checked : currentBio;
-      setPaternitySecretEdges(childRecord.childId, newBio, newPartner);
+      const newPreg = type === "pregnancy" ? checked : !newPartner ? false : currentPreg;
+      setPaternitySecretEdges(childRecord.childId, newBio, newPartner, newPreg);
     };
     const playerName = ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
     const playerProfile = npcProfiles.get(PLAYER_FORM_ID);
@@ -33761,6 +33857,7 @@ Defaulting to \`null\`.`;
         } else if (!nextId) {
           updates.isSecret = false;
           updates.isSecretForPartner = false;
+          updates.isPregnancySecretForPartner = false;
         }
       }
       updateChild(childRecord.childId, updates);
@@ -33776,7 +33873,13 @@ Defaulting to \`null\`.`;
         ].map(({ slot, profile, fallbackLabel }) => {
           const isSelectedSlot = activeSlot === slot;
           const isPlayerParent = Boolean((profile == null ? void 0 : profile.formId) && areSameFormId(profile.formId, PLAYER_FORM_ID));
-          const roleInfo = (profile == null ? void 0 : profile.formId) ? getParentRole(profile.formId, childRecord || {}, profile.gender) : { roleLabel: fallbackLabel, isSecret: false, isSecretForPartner: false, badgeStyle: "text-foreground-muted" };
+          const roleInfo = (profile == null ? void 0 : profile.formId) ? getParentRole(profile.formId, childRecord || {}, profile.gender) : {
+            roleLabel: fallbackLabel,
+            isSecret: false,
+            isSecretForPartner: false,
+            isPregnancySecretForPartner: false,
+            badgeStyle: "text-foreground-muted"
+          };
           return /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
@@ -33789,9 +33892,9 @@ Defaulting to \`null\`.`;
                     roleInfo.isSecret && /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "span",
                       {
-                        className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
-                        title: roleInfo.isSecretForPartner ? "Partner believes the child is theirs" : "Secret from parent",
-                        children: roleInfo.isSecretForPartner ? "Secret from Partner" : "Secret"
+                        className: `text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded font-semibold uppercase tracking-wider ${roleInfo.isPregnancySecretForPartner ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"}`,
+                        title: roleInfo.isPregnancySecretForPartner ? "Partner does not even know the mother is pregnant yet" : roleInfo.isSecretForPartner ? "Partner believes the child is theirs" : "Secret from parent",
+                        children: roleInfo.isPregnancySecretForPartner ? "Unaware of Pregnancy" : roleInfo.isSecretForPartner ? "Secret from Partner" : "Secret"
                       }
                     )
                   ] }),
@@ -33916,7 +34019,14 @@ Defaulting to \`null\`.`;
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem] flex-wrap", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-purple-300 font-medium", children: "Presumed Father" }),
-                      presumedFatherProfile && (isSecretForPartner ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      presumedFatherProfile && (isPregnancySecretForPartner ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase tracking-wider",
+                          title: "Partner does not even know the mother is pregnant yet",
+                          children: "Unaware of Pregnancy"
+                        }
+                      ) : isSecretForPartner ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "span",
                         {
                           className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
@@ -34059,7 +34169,22 @@ Defaulting to \`null\`.`;
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left space-y-[0.125rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-purple-300 transition-colors block", children: "Secret from Partner" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: "Partner believes the child is theirs; true biological parentage is hidden from them." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: isPregnancySecretForPartner ? "True biological parentage is hidden from partner (who is also unaware of the pregnancy)." : "Partner believes the child is theirs; true biological parentage is hidden from them." })
+            ] })
+          ] }),
+          (childRecord == null ? void 0 : childRecord.stage) === "unborn" && (isSecretForPartner || isPregnancySecretForPartner) && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-start gap-[0.625rem] p-[0.625rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded cursor-pointer transition-colors select-none group", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                type: "checkbox",
+                checked: isPregnancySecretForPartner,
+                onChange: (e) => handleToggleSecret("pregnancy", e.target.checked),
+                className: "mt-[0.125rem] h-4 w-4 rounded border-border-divider text-amber-500 focus:ring-amber-500/20 accent-amber-500 cursor-pointer flex-shrink-0"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left space-y-[0.125rem]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-amber-300 transition-colors block", children: "Pregnancy Unannounced to Partner" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: "Partner does not even know the mother is pregnant yet (revealed when she tells him or when her belly shows)." })
             ] })
           ] }),
           isSecretForBio && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-start gap-[0.625rem] p-[0.625rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded cursor-pointer transition-colors select-none group", children: [

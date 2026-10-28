@@ -7,6 +7,22 @@ namespace MARAS {
     // Checks if SkyrimNet.dll is currently loaded into the process.
     bool IsSkyrimNetAvailable();
 
+    // Checks whether SkyrimNet live narration/triggers should fire for the given event participant(s).
+    // Returns true only when SkyrimNet is available, speaker (and target, if provided) are 3D-loaded
+    // and within skyrimnetActionRadius of the player in the same cell/worldspace, and at least one NPC is present.
+    bool ShouldTriggerSkyrimNetNarration(RE::Actor* speaker, RE::Actor* target = nullptr);
+
+    // Registers an event with SkyrimNet via its C++ PublicRegisterEvent export.
+    // When exactAudience is true (or audienceFormIDs is non-empty), uses EventAudience::Exact
+    // so only originatorFormID, targetFormID, and audienceFormIDs receive the event in their history/prompts.
+    // When exactAudience is false and audienceFormIDs is empty, uses EventAudience::Nearby.
+    bool RegisterSkyrimNetEvent(const std::string& eventType,
+                                const std::string& content,
+                                RE::FormID originatorFormID = 0,
+                                RE::FormID targetFormID = 0,
+                                bool exactAudience = false,
+                                const std::vector<RE::FormID>& audienceFormIDs = {});
+
     // Attempts to locate SkyrimNet.dll in the current process and registers
     // MARAS decorators via its PublicRegisterDecorator export.
     // Must be called at kPostPostLoad (after all SKSE plugins are loaded).
@@ -43,7 +59,7 @@ namespace MARAS {
     // Ingests a new memory record into SkyrimNet's memory database for the specified actor.
     bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float importance,
                         const std::string& memoryType, const std::string& emotion, const std::string& location,
-                        const std::vector<std::string>& tags, RE::FormID relatedActorFormID = 0);
+                        const std::vector<std::string>& tags, const std::vector<RE::FormID>& relatedActorFormIDs = {});
 
     // Returns the SkyrimNet UUID for the specified Actor FormID.
     uint64_t GetActorUUID(RE::FormID formID);

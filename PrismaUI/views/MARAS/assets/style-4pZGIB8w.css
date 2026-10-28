@@ -2203,6 +2203,10 @@ video {
 .text-amber-400\/90 {
   color: rgb(251 191 36 / 0.9);
 }
+.text-amber-500 {
+  --tw-text-opacity: 1;
+  color: rgb(245 158 11 / var(--tw-text-opacity, 1));
+}
 .text-amber-500\/90 {
   color: rgb(245 158 11 / 0.9);
 }
@@ -2367,6 +2371,9 @@ video {
 }
 .accent-accent {
   accent-color: var(--accent);
+}
+.accent-amber-500 {
+  accent-color: #f59e0b;
 }
 .accent-indigo-500 {
   accent-color: #6366f1;
@@ -2824,6 +2831,10 @@ html {
   --tw-ring-color: var(--accent-bright);
 }
 
+.focus\:ring-amber-500\/20:focus {
+  --tw-ring-color: rgb(245 158 11 / 0.2);
+}
+
 .focus\:ring-indigo-500\/20:focus {
   --tw-ring-color: rgb(99 102 241 / 0.2);
 }
@@ -2905,6 +2916,11 @@ html {
 
 .group:hover .group-hover\:text-accent-bright {
   color: var(--accent-bright);
+}
+
+.group:hover .group-hover\:text-amber-300 {
+  --tw-text-opacity: 1;
+  color: rgb(252 211 77 / var(--tw-text-opacity, 1));
 }
 
 .group:hover .group-hover\:text-indigo-300 {

@@ -36,7 +36,7 @@
                     {% elif existsIn(child, "stage") and child.stage == "adult" %}
                         {{child.name}} is a grown adult {{childRelation}} (who has completed their training and is now an adult follower).
                     {% endif %}
-                    {% if existsIn(child, "paternity_secret") and existsIn(child.paternity_secret, "mother_partner") and child.paternity_secret.mother_partner.name != "" and child.paternity_secret.mother_partner.name != "None" and child.paternity_secret.mother_partner.uuid != 0 %}
+                    {% if render_mode != "dialogue_target" and existsIn(child, "paternity_secret") and existsIn(child.paternity_secret, "mother_partner") and child.paternity_secret.mother_partner.name != "" and child.paternity_secret.mother_partner.name != "None" and child.paternity_secret.mother_partner.uuid != 0 %}
                         {% set pSecret = child.paternity_secret %}
                         {% set bioFatherName = pSecret.biological_father.name %}
                         {% set partnerName = pSecret.mother_partner.name %}

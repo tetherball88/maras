@@ -266,7 +266,7 @@ export const MatchmakingSettings: React.FC = () => {
           </SettingRow>
         )}
 
-        {useLLM && (
+        {hasSkyrimNet && (
           <>
             <SettingRow
               label="Evaluation Step"
@@ -279,8 +279,8 @@ export const MatchmakingSettings: React.FC = () => {
             </SettingRow>
 
             <SettingRow
-              label="Generate Memories"
-              description="When enabled, generates AI memories for NPCs involved in scheduled matchmaking relationship changes."
+              label="LLM-Generated Memories"
+              description="When enabled, matchmaking uses SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, matchmaking memories are built programmatically without sending an LLM request."
             >
               <ToggleSwitch
                 checked={matchmakingSettings.generateMemories ?? true}

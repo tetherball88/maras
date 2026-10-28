@@ -5,6 +5,7 @@
 #include "core/IntimateThreadService.h"
 #include "core/LoggingService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SkyrimNetIntegration.h"
 #include "services/ActorService.h"
 #include "ui/ConfirmationModal.h"
 #include "ui/PrismaModalManager.h"
@@ -885,6 +886,29 @@ namespace MARAS::PapyrusInterface {
         return BanterCoordinatorService::GetSingleton().IsLocationAllowedForScenes(akLocation);
     }
 
+    bool ShouldTriggerSkyrimNetNarration(RE::StaticFunctionTag*, RE::Actor* speaker, RE::Actor* target) {
+        return MARAS::ShouldTriggerSkyrimNetNarration(speaker, target);
+    }
+
+    bool RegisterSkyrimNetEvent(RE::StaticFunctionTag*,
+                                std::string eventType,
+                                std::string content,
+                                RE::Actor* originatorActor,
+                                RE::Actor* targetActor,
+                                bool exactAudience,
+                                std::vector<RE::Actor*> audience) {
+        RE::FormID origID = originatorActor ? originatorActor->GetFormID() : 0;
+        RE::FormID targID = targetActor ? targetActor->GetFormID() : 0;
+        std::vector<RE::FormID> audienceIDs;
+        audienceIDs.reserve(audience.size());
+        for (RE::Actor* actor : audience) {
+            if (actor) {
+                audienceIDs.push_back(actor->GetFormID());
+            }
+        }
+        return MARAS::RegisterSkyrimNetEvent(eventType, content, origID, targID, exactAudience, audienceIDs);
+    }
+
     // ========================================
     // Registration function for SKSE
     // ========================================
@@ -1166,9 +1190,11 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("ResolvePaternitySecret", "MARAS", ResolvePaternitySecret);
         vm->RegisterFunction("ResolvePaternitySecretForPartner", "MARAS", ResolvePaternitySecretForPartner);
         vm->RegisterFunction("ResolvePaternitySecretForBioFather", "MARAS", ResolvePaternitySecretForBioFather);
+        vm->RegisterFunction("RevealPregnancyToPartner", "MARAS", RevealPregnancyToPartner);
         vm->RegisterFunction("SetPaternitySecretEdges", "MARAS", SetPaternitySecretEdges);
         vm->RegisterFunction("IsSecretForBioFather", "MARAS", IsSecretForBioFather);
         vm->RegisterFunction("IsSecretForPartner", "MARAS", IsSecretForPartner);
+        vm->RegisterFunction("IsPregnancySecretForPartner", "MARAS", IsPregnancySecretForPartner);
         vm->RegisterFunction("SetChildStage", "MARAS", SetChildStage);
         vm->RegisterFunction("GetChildStage", "MARAS", GetChildStage);
         vm->RegisterFunction("SetChildTrainingLocation", "MARAS", SetChildTrainingLocation);
@@ -1219,6 +1245,8 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("SetBanterCoupleCooldownHours", "MARAS", SetBanterCoupleCooldownHours);
         vm->RegisterFunction("RecordScenePlayed", "MARAS", RecordScenePlayed);
         vm->RegisterFunction("IsLocationAllowedForScenes", "MARAS", IsLocationAllowedForScenes);
+        vm->RegisterFunction("ShouldTriggerSkyrimNetNarration", "MARAS", ShouldTriggerSkyrimNetNarration);
+        vm->RegisterFunction("RegisterSkyrimNetEvent", "MARAS", RegisterSkyrimNetEvent);
 
         MARAS_LOG_INFO("Registered MARAS Papyrus functions including Confirmation Modal and Settings");
         return true;

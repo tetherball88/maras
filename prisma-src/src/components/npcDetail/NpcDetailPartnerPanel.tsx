@@ -353,7 +353,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                                     cr.affairStatus === AffairStatus.Allowed ? 'Allowed (Open)' :
                                       cr.affairStatus === AffairStatus.EndedConfronted ? 'Ended (Confronted)' : 'Ongoing'
                             const isOngoing = cr.affairStatus === undefined || cr.affairStatus === AffairStatus.Ongoing
-                            const isTalkingStage = cr.affairStage === AffairStage.Talking
+                            const isTalkingStage = cr.victimId === PLAYER_FORM_ID && cr.affairStage === AffairStage.Talking
                             const stageLabel = isTalkingStage ? 'Talking Stage' : 'Physical Affair'
 
                             return (

@@ -2,6 +2,9 @@
 
 #include <RE/E/ExtraFactionChanges.h>
 
+#include <unordered_set>
+
+#include "core/AffectionService.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -839,6 +842,52 @@ namespace MARAS {
             }
             it->second.lastInteractionTimestamp = currentDays;
             MARAS_LOG_INFO("RecordChildInteraction: child {:08X} timestamp = {:.2f}", childID, currentDays);
+
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            auto* playerCell = player ? player->GetParentCell() : nullptr;
+            if (playerCell) {
+                auto& relMgr = NPCRelationshipManager::GetSingleton();
+                auto entryOpt = relMgr.GetChildEntry(childID);
+                if (entryOpt.has_value()) {
+                    const auto& entry = *entryOpt;
+                    std::unordered_set<RE::FormID> coParentIDs;
+                    auto addCandidate = [&](RE::FormID id) {
+                        if (id != 0 && id != kPlayerFormID) {
+                            coParentIDs.insert(id);
+                        }
+                    };
+                    addCandidate(entry.guardianAID);
+                    addCandidate(entry.guardianBID);
+                    addCandidate(entry.bioMotherID);
+                    if (entry.paternitySecret.isSecretForPartner) {
+                        addCandidate(entry.presumedFatherID != 0 ? entry.presumedFatherID : relMgr.GetMotherPartner(childID));
+                    }
+                    if (!entry.paternitySecret.isSecretForBioFather) {
+                        addCandidate(entry.bioFatherID);
+                    }
+
+                    for (RE::FormID partnerID : coParentIDs) {
+                        auto status = relMgr.GetRelationshipStatus(partnerID, kPlayerFormID);
+                        if (!NPCRelationshipManager::IsActivePartnerStatus(status)) {
+                            continue;
+                        }
+                        auto* partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
+                        if (!partnerActor || partnerActor->GetParentCell() != playerCell) {
+                            continue;
+                        }
+
+                        float affection = 2.0f;
+                        auto temperament = relMgr.GetTemperament(partnerID);
+                        if (temperament == Temperament::Romantic || temperament == Temperament::Humble) {
+                            affection = 3.0f;
+                        } else if (temperament == Temperament::Independent) {
+                            affection = 1.0f;
+                        }
+
+                        AffectionService::GetSingleton().AddAffection(partnerID, affection, "family");
+                    }
+                }
+            }
         }
     }
 

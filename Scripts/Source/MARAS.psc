@@ -144,7 +144,7 @@ bool Function RecordCheating(Actor cheater, Actor victim, Actor affairPartner, b
    If statusOrResolution is a resolution ("confronted", "breakup", "allowed"), the affair is resolved and fires maras_affair_resolved.
    If empty (""), the affair remains ongoing but is marked known across affected pairs without firing an event.
    Also updates the TTM_SpouseCheating faction for any affected player partner. /;
-bool Function SetCheatingDiscovered(Actor cheater, Actor affairPartner = none, string statusOrResolution = "") global native
+bool Function SetCheatingDiscovered(Actor cheater, Actor affairPartner = none, string statusOrResolution = "", Actor victim = none) global native
 
 ;/ Set the affair status for a cheating record /;
 bool Function SetCheatingAffairStatus(Actor cheater, Actor victim, Actor affairPartner, int affairStatus) global native
@@ -682,6 +682,9 @@ bool Function ResolvePaternitySecretForPartner(int childID, bool discoveredByPar
 ;/ Resolve paternity secret specifically from biological father perspective /;
 bool Function ResolvePaternitySecretForBioFather(int childID, bool discoveredByBioFather = false) global native
 
+;/ Reveal pregnancy to the mother's partner while keeping true biological paternity secret /;
+bool Function RevealPregnancyToPartner(int childID, bool byVisibleBelly = false) global native
+
 ;/ Set knowledge edges for biological father and partner /;
 bool Function SetPaternitySecretEdges(int childID, bool secretForBioFather, bool secretForPartner) global native
 
@@ -690,6 +693,9 @@ bool Function IsSecretForBioFather(int childID) global native
 
 ;/ Check if paternity is still secret from the mother's partner /;
 bool Function IsSecretForPartner(int childID) global native
+
+;/ Check if the pregnancy itself is still unannounced / secret from the mother's partner /;
+bool Function IsPregnancySecretForPartner(int childID) global native
 
 ;/ Find paternity secret record for parents and child name /;
 int Function FindChildPaternitySecret(Actor parent1, Actor parent2 = None, string childName = "") global native
@@ -744,10 +750,10 @@ string Function BuildPregnancyAnnouncedMessage(Actor mother, Actor partner = Non
 string Function BuildPregnancyAnnouncedJson(Actor mother, Actor partner = None, Actor bioFather = None, string bioFatherName = "", int childCount = 1) global native
 
 ;/ Build localized display text for child birth /;
-string Function BuildChildBirthMessage(Actor mother, int[] childIDs = None) global native
+string Function BuildChildBirthMessage(Actor mother, int[] childIDs = None, bool maskSecrets = false) global native
 
 ;/ Build JSON payload for child birth /;
-string Function BuildChildBirthJson(Actor mother, int[] childIDs = None) global native
+string Function BuildChildBirthJson(Actor mother, int[] childIDs = None, bool maskSecrets = false) global native
 
 
 ;/ =====================================================================
@@ -1020,6 +1026,17 @@ int Function CheckAndSetActionCooldown(string actionType, Actor[] actors) global
 ; ── Actor Discovery ───────────────────────────────────────────────────
 ;/ Search active game world for an actor by display name /;
 Actor Function FindActorByName(string name) global native
+
+;/ Checks whether SkyrimNet live narration/triggers should fire for the given event participant(s).
+   Returns true only when SkyrimNet is available, speaker (and target, if provided) are 3D-loaded and within
+   skyrimnetActionRadius of the player in the same cell/worldspace, and at least one NPC is present. /;
+bool Function ShouldTriggerSkyrimNetNarration(Actor speaker, Actor target = None) global native
+
+;/ Registers an event with SkyrimNet via its C++ PublicRegisterEvent export.
+   When exactAudience is true (or audience contains actors), uses EventAudience::Exact so only
+   originatorActor, targetActor, and actors in audience receive the event in their history/prompts.
+   When exactAudience is false and audience is empty/None, uses EventAudience::Nearby (all nearby actors). /;
+bool Function RegisterSkyrimNetEvent(string eventType, string content, Actor originatorActor = None, Actor targetActor = None, bool exactAudience = false, Actor[] audience = None) global native
 
 
 ;/ =====================================================================

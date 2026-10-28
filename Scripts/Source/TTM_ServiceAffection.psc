@@ -7,6 +7,7 @@ Function Maintenance() global
     MARAS.SetAffectionMinMax("slept", 0, 8)
     MARAS.SetAffectionMinMax("promotion", -24, 24)
     MARAS.SetAffectionMinMax("loneliness", -16, 6)
+    MARAS.SetAffectionMinMax("family", 0, 6)
 EndFunction
 
 Function AddIntimacyAffection(Actor spouse, float affection) global
@@ -124,6 +125,16 @@ Function AdjustPlayerPartnerAffection(Actor partner, float baseDelta, string con
 EndFunction
 
 Function ApplyPregnancyConceivedAffection(Actor partner, bool isPlayerPregnant = false) global
+    Actor motherActor = partner
+    if (isPlayerPregnant)
+        motherActor = TTM_Data.GetPlayer()
+    endif
+    if (motherActor != None)
+        int unbornID = MARAS.FindUnbornChild(motherActor)
+        if (unbornID != 0 && MARAS.IsPregnancySecretForPartner(unbornID))
+            return
+        endif
+    endif
     float baseDelta = 20.0
     string reason = "pregnancy_conceived"
     if (isPlayerPregnant)
@@ -259,6 +270,14 @@ Function ApplyPaternitySecretForChild(int childID, string outcomeType) global
     Actor presumedFather = MARAS.GetMotherPartner(childID)
     Actor bioFather = MARAS.GetBioFather(childID)
 
+
+    if (outcomeType == "mother_confessed_presumed_unannounced")
+        outcomeType = "mother_confessed_presumed"
+    elseif (outcomeType == "presumed_father_learnt_unannounced")
+        outcomeType = "presumed_father_learnt"
+    elseif (outcomeType == "mother_confessed_both_unannounced")
+        outcomeType = "mother_confessed_both"
+    endif
     if (outcomeType == "mother_confessed_bio" || outcomeType == "bio_father_learnt")
         if (bioFather == player && mother)
             AdjustPlayerPartnerAffection(mother, 15.0, "paternity_secret_" + outcomeType)
@@ -276,6 +295,12 @@ Function ApplyPaternitySecretForChild(int childID, string outcomeType) global
             AdjustPlayerPartnerAffection(mother, -40.0, "paternity_secret_" + outcomeType)
         elseif (mother == player && presumedFather)
             AdjustPlayerPartnerAffection(presumedFather, -40.0, "paternity_secret_" + outcomeType)
+        endif
+    elseif (outcomeType == "mother_shared_pregnancy_presumed" || outcomeType == "pregnancy_visible_presumed")
+        if (mother == player && presumedFather)
+            ApplyPregnancyConceivedAffection(presumedFather, true)
+        elseif (presumedFather == player && mother)
+            ApplyPregnancyConceivedAffection(mother, false)
         endif
     elseif (outcomeType == "mother_confessed_both")
         if (presumedFather == player && mother)

@@ -26,6 +26,7 @@
 #include "core/QuestEventHandler.h"
 #include "core/Serialization.h"
 #include "core/SkyrimNetIntegration.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
@@ -213,6 +214,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS::PrismaUIManager::GetSingleton().Destroy();
                         MARAS::IntimateThreadService::GetSingleton().ClearAll();
                         MARAS::ChildrenFleeService::GetSingleton().Reset();
+                        MARAS::SkyrimNetMemoryService::GetSingleton().Revert();
                         break;
 
                     case SKSE::MessagingInterface::kPostLoadGame:

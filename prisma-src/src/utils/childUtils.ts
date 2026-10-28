@@ -12,6 +12,7 @@ export interface ParentRoleInfo {
   roleLabel: string
   isSecret?: boolean
   isSecretForPartner?: boolean
+  isPregnancySecretForPartner?: boolean
   isSecretForBioFather?: boolean
   badgeStyle?: string
 }
@@ -82,6 +83,8 @@ export function getChildRelationshipStatus(
     | 'isSecret'
     | 'isSecretForBioFather'
     | 'isSecretForPartner'
+    | 'isPregnancySecretForPartner'
+    | 'stage'
     | 'gender'
   >,
   actorIdOrA?: string | null,
@@ -178,7 +181,15 @@ export function getChildRelationshipStatus(
   }
 
   const isSecretPartner = child.isSecretForPartner ?? child.isSecret
+  const isPregSecretPartner = Boolean(child.stage === 'unborn' && child.isPregnancySecretForPartner)
   if (isPresumedFatherMatch) {
+    if (isPregSecretPartner) {
+      return {
+        statusLabel: `Unaware of Pregnancy (Presumed Father)`,
+        badgeLabel: `Unaware of Pregnancy`,
+        badgeStyle: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+      }
+    }
     if (isSecretPartner) {
       return {
         statusLabel: isGuardianMatch
@@ -224,7 +235,15 @@ export function getParentRole(
   parentFormId: string,
   child: Pick<
     ChildRecord,
-    'isAdopted' | 'bioMotherId' | 'bioFatherId' | 'presumedFatherId' | 'isSecret' | 'isSecretForBioFather' | 'isSecretForPartner'
+    | 'isAdopted'
+    | 'bioMotherId'
+    | 'bioFatherId'
+    | 'presumedFatherId'
+    | 'isSecret'
+    | 'isSecretForBioFather'
+    | 'isSecretForPartner'
+    | 'isPregnancySecretForPartner'
+    | 'stage'
   >,
   parentGender?: 'male' | 'female' | string,
 ): ParentRoleInfo {
@@ -261,12 +280,14 @@ export function getParentRole(
 
   // Not a biological parent, but part of the raising household / partner
   const isSecretPartner = child.isSecretForPartner ?? child.isSecret
+  const isPregSecretPartner = Boolean(child.stage === 'unborn' && child.isPregnancySecretForPartner)
   if (isPresumedFather) {
     if (isSecretPartner) {
       return {
         roleLabel: 'Presumed Father (Guardian)',
         isSecret: true,
         isSecretForPartner: true,
+        isPregnancySecretForPartner: isPregSecretPartner,
         badgeStyle: 'text-purple-300',
       }
     }
@@ -281,6 +302,7 @@ export function getParentRole(
       roleLabel: isMale ? 'Presumed Father (Guardian)' : isFemale ? 'Step-mother (secret)' : 'Step-parent (secret)',
       isSecret: true,
       isSecretForPartner: true,
+      isPregnancySecretForPartner: isPregSecretPartner,
       badgeStyle: 'text-purple-300',
     }
   }
@@ -326,6 +348,7 @@ export function maskChildRecord(
       presumedFatherName: undefined,
       isSecret: false,
       isSecretForPartner: false,
+      isPregnancySecretForPartner: false,
       isSecretForBioFather: false,
       hasPhenotypeMismatch: false,
     }
@@ -338,6 +361,7 @@ export function maskChildRecord(
     bioFatherName: undefined,
     isSecret: false,
     isSecretForPartner: false,
+    isPregnancySecretForPartner: false,
     isSecretForBioFather: false,
     hasPhenotypeMismatch: false,
   }

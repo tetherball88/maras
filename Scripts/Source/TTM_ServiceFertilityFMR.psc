@@ -71,6 +71,28 @@ Function OnConception(Form akMother, Form akFather, int iTrackingIndex) global
     endif
 EndFunction
 
+;/
+  OnActorStatus: Fired by FMR via "FMR_ActorStatus" ModEvent with factionRank (1-100 = pregnancy %, 120 = labor).
+  When pregnancy enters the 2nd/3rd trimester (rank >= 34) or labor (rank == 120), the belly is visibly rounded,
+  so any unannounced pregnancy secret is revealed to the mother's partner.
+/;
+Function OnActorStatus(Form akMother, int factionRank, string fatherName, int fatherRaceId) global
+    if (TTM_ServiceFertility.GetActiveEngine() != 1)
+        return
+    endif
+    Actor mother = akMother as Actor
+    if (!mother)
+        return
+    endif
+    if ((factionRank >= 34 && factionRank <= 100) || factionRank == 120)
+        int unbornID = MARAS.FindUnbornChild(mother)
+        if (unbornID != 0 && MARAS.IsPregnancySecretForPartner(unbornID))
+            TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " reached visible pregnancy stage (FMR rank=" + factionRank + "), revealing pregnancy to partner.")
+            MARAS.RevealPregnancyToPartner(unbornID, true)
+        endif
+    endif
+EndFunction
+
 Function OnBabyBirth(Form akMother, Form akFather, int iTrackingIndex) global
     if (TTM_ServiceFertility.GetActiveEngine() != 1)
         return
@@ -166,6 +188,52 @@ Function OnAbort(Form akMother, Form akFather, int iTrackingIndex) global
             eventPartner = bioFather
         endif
         TTM_ServiceSkyrimNet.RegisterPregnancyLost(mother, eventPartner, "abortion")
+    endif
+EndFunction
+
+;/
+  OnMiscarriage: Fired by FMR via "FMR_BabyMiscarriage" ModEvent when a pregnancy ends in miscarriage.
+/;
+Function OnMiscarriage(Form akMother, string cause) global
+    if (TTM_ServiceFertility.GetActiveEngine() != 1)
+        return
+    endif
+    Actor mother = akMother as Actor
+    if (!mother)
+        return
+    endif
+    int unbornID = MARAS.FindUnbornChild(mother)
+    Actor bioFather = none
+    if (unbornID != 0)
+        bioFather = MARAS.GetBioFather(unbornID)
+    endif
+    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
+    if (!MARAS.RemoveUnbornChild(mother))
+        return
+    endif
+    TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " had a miscarriage (FMR_BabyMiscarriage: " + cause + ")")
+
+    Actor player = TTM_Data.GetPlayer()
+    if (mother == player)
+        if (presumedFather)
+            TTM_ServiceAffection.ApplyPregnancyLostAffection(presumedFather, "miscarriage")
+        elseif (bioFather)
+            TTM_ServiceAffection.ApplyPregnancyLostAffection(bioFather, "miscarriage")
+        endif
+    else
+        if (presumedFather == player)
+            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "miscarriage")
+        elseif (presumedFather == none && bioFather == player)
+            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "miscarriage")
+        endif
+    endif
+
+    if (TTM_Data.GetHasSkyrimNet())
+        Actor eventPartner = presumedFather
+        if (eventPartner == none)
+            eventPartner = bioFather
+        endif
+        TTM_ServiceSkyrimNet.RegisterPregnancyLost(mother, eventPartner, "miscarriage")
     endif
 EndFunction
 
@@ -445,6 +513,12 @@ Function Migrate() global
                 ; Active pregnancy in FMR (NPC-NPC or NPC-Player)
                 Actor father = fmrStorage.CurrentFatherRef[tIdx] as Actor
                 int unbornID = MARAS.RegisterUnbornChild(mother, father, conceptionTime)
+                if (fmrStorage.ImmersiveEffectsFaction)
+                    int fmrRank = mother.GetFactionRank(fmrStorage.ImmersiveEffectsFaction)
+                    if (((fmrRank >= 34 && fmrRank <= 100) || fmrRank == 120) && MARAS.IsPregnancySecretForPartner(unbornID))
+                        MARAS.RevealPregnancyToPartner(unbornID, true)
+                    endif
+                endif
                 TTM_Debug.info("TTM_ServiceFertilityFMR: Migrated active FMR pregnancy: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Unborn ID=" + unbornID + ")")
             endif
 

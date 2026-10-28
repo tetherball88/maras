@@ -97,6 +97,7 @@ export interface ChildRecord {
   isSecret?: boolean
   isSecretForBioFather?: boolean
   isSecretForPartner?: boolean
+  isPregnancySecretForPartner?: boolean
   hasPhenotypeMismatch?: boolean
   discoveredByPartner?: boolean
   discoveredByBioFather?: boolean
@@ -238,6 +239,7 @@ export interface MarasSettings {
   globalBanCritter?: boolean
   globalBanPet?: boolean
   skyrimnetActionRadius?: number
+  skyrimnetUseLLMMemories?: boolean
   matchmakingEnabled?: boolean
   matchmakingIntervalDays?: number
   matchmakingMaxSuggestions?: number

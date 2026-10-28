@@ -80,6 +80,8 @@ Function Maintenance()
         RegisterForModEvent("FMR_Conception", "OnFMRConception")
         RegisterForModEvent("FMR_BabyBirth", "OnFMRBabyBirth")
         RegisterForModEvent("FMR_Abort", "OnFMRAbort")
+        RegisterForModEvent("FMR_BabyMiscarriage", "OnFMRBabyMiscarriage")
+        RegisterForModEvent("FMR_ActorStatus", "OnFMRActorStatus")
         RegisterForModEvent("FMR_PregnancyCancelled", "OnFMRPregnancyCancelled")
         UnregisterForModEvent("FMR_ChildGrewUp")
         RegisterForModEvent("FMR_ChildGrewUpWithMother", "OnFMRChildGrewUp")
@@ -351,6 +353,14 @@ Event OnFMRAbort(Form akMother, Form akFather, int iTrackingIndex)
     TTM_ServiceFertility.OnFMRAbort(akMother, akFather, iTrackingIndex)
 EndEvent
 
+Event OnFMRBabyMiscarriage(Form akMother, string cause)
+    TTM_ServiceFertility.OnFMRBabyMiscarriage(akMother, cause)
+EndEvent
+
+Event OnFMRActorStatus(Form akMother, int factionRank, string fatherName, int fatherRaceId)
+    TTM_ServiceFertility.OnFMRActorStatus(akMother, factionRank, fatherName, fatherRaceId)
+EndEvent
+
 Event OnSpawnSyntheticChild(string eventName, string strArg, float afChildId, Form sender)
     int childID = afChildId as int
     TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
@@ -501,8 +511,8 @@ Event OnChildEvent(string eventName, string strArg, float numArg, Form sender)
     if(!child)
         child = MARAS.GetJsonActor(strArg, "child")
     endif
-    Actor parentA = MARAS.GetJsonActor(strArg, "parentA")
-    Actor parentB = MARAS.GetJsonActor(strArg, "parentB")
+    Actor guardianA = MARAS.GetJsonActor(strArg, "guardianA")
+    Actor guardianB = MARAS.GetJsonActor(strArg, "guardianB")
     Actor other = MARAS.GetJsonActor(strArg, "other")
     string reason = MARAS.GetJsonString(strArg, "reason")
 
@@ -510,21 +520,21 @@ Event OnChildEvent(string eventName, string strArg, float numArg, Form sender)
 
     if(eventType == "adopted")
         Actor player = TTM_Data.GetPlayer()
-        if (parentA == player && parentB != player && parentB != None)
-            TTM_ServiceAffection.ApplyChildAdoptedAffection(parentB)
-        elseif (parentB == player && parentA != player && parentA != None)
-            TTM_ServiceAffection.ApplyChildAdoptedAffection(parentA)
+        if (guardianA == player && guardianB != player && guardianB != None)
+            TTM_ServiceAffection.ApplyChildAdoptedAffection(guardianB)
+        elseif (guardianB == player && guardianA != player && guardianA != None)
+            TTM_ServiceAffection.ApplyChildAdoptedAffection(guardianA)
         endif
         if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildAdopted(child, parentA, parentB)
+            TTM_ServiceSkyrimNet.RegisterChildAdopted(child, guardianA, guardianB)
         endif
     elseif(eventType == "inherited")
         if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildInherited(child, other, parentA, parentB)
+            TTM_ServiceSkyrimNet.RegisterChildInherited(child, other, guardianA, guardianB)
         endif
-    elseif(eventType == "parents_changed")
+    elseif(eventType == "guardians_changed")
         if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildParentsChanged(child, parentA, parentB, reason)
+            TTM_ServiceSkyrimNet.RegisterChildParentsChanged(child, guardianA, guardianB, reason)
         endif
     endif
 EndEvent

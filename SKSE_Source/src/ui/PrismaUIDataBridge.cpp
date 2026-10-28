@@ -9,6 +9,7 @@
 #include "core/LoggingService.h"
 #include "core/NPCIndex.h"
 #include "core/MatchmakingService.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "core/DeceasedRegistry.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -446,6 +447,7 @@ namespace MARAS {
         j["actionsCooldown"] = settings.actionsCooldown;
         j["actionsDeclineCooldown"] = settings.actionsDeclineCooldown;
         j["skyrimnetActionRadius"] = RoundFloat(settings.skyrimnetActionRadius);
+        j["skyrimnetUseLLMMemories"] = settings.skyrimnetUseLLMMemories;
         j["matchmakingExcludePlayerActivePartners"] = settings.matchmakingExcludePlayerActivePartners;
         j["matchmakingConfirmResults"] = settings.matchmakingConfirmResults;
         j["playerPartnerCheatingAgencyEnabled"] = settings.playerPartnerCheatingAgencyEnabled;
@@ -755,7 +757,7 @@ namespace MARAS {
                 cObj["isSecret"] = c.isSecret;
                 cObj["affairType"] = static_cast<uint8_t>(c.affairType);
                 cObj["affairStatus"] = static_cast<uint8_t>(c.affairStatus);
-                cObj["affairStage"] = static_cast<uint8_t>(c.affairStage);
+                cObj["affairStage"] = static_cast<uint8_t>((c.victimID == kPlayerFormID) ? c.affairStage : AffairStage::Physical);
                 cheatingArray.push_back(cObj);
             }
         }
@@ -1048,7 +1050,7 @@ namespace MARAS {
         std::string action = GetJsonString(payload, "action", "new");
 
         if (targetId != 0 && partnerId != 0) {
-            MatchmakingService::GetSingleton().RunMemoryGeneration(targetId, partnerId, targetStatus, action);
+            SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(targetId, partnerId, targetStatus, action);
         }
     }
 
@@ -1178,13 +1180,7 @@ namespace MARAS {
         }
         cObj["bioMotherName"] = bioMotherName;
         cObj["bioFatherName"] = bioFatherName;
-        RE::FormID presumedFatherID = entry.presumedFatherID;
-        if (presumedFatherID == 0 && (entry.paternitySecret.isSecret || entry.paternitySecret.discovered)) {
-            RE::FormID mp = NPCRelationshipManager::GetSingleton().GetMotherPartner(entry.childID);
-            if (mp != 0 && mp != entry.bioFatherID && mp != entry.bioMotherID) {
-                presumedFatherID = mp;
-            }
-        }
+        RE::FormID presumedFatherID = NPCRelationshipManager::GetSingleton().GetPresumedFather(entry.childID);
         cObj["presumedFatherId"] = presumedFatherID != 0 ? FormIDToString(presumedFatherID) : "";
         cObj["presumedFatherName"] = presumedFatherID != 0 ? ActorSvc::GetName(presumedFatherID) : "";
         cObj["conceptionTimestamp"] = entry.conceptionTimestamp;
@@ -1212,9 +1208,10 @@ namespace MARAS {
             cObj["trainingLocation"] = entry.trainingLocation;
         }
         cObj["isBiologicalChild"] = entry.isBiologicalChild;
-        cObj["isSecret"] = entry.paternitySecret.isSecret && !entry.paternitySecret.discovered;
+        cObj["isSecret"] = entry.paternitySecret.HasActiveSecret();
         cObj["isSecretForBioFather"] = entry.paternitySecret.isSecretForBioFather;
         cObj["isSecretForPartner"] = entry.paternitySecret.isSecretForPartner;
+        cObj["isPregnancySecretForPartner"] = entry.paternitySecret.isPregnancySecretForPartner;
         cObj["hasPhenotypeMismatch"] = entry.paternitySecret.hasPhenotypeMismatch;
         cObj["discoveredByPartner"] = entry.paternitySecret.discoveredByPartner;
         cObj["discoveredByBioFather"] = entry.paternitySecret.discoveredByBioFather;
@@ -1302,7 +1299,38 @@ namespace MARAS {
         bool isOpen = GetJsonBool(payload, "isOpen", false);
 
         if (actorA != 0 && actorB != 0) {
-            NPCRelationshipManager::GetSingleton().SetPairIsOpen(actorA, actorB, isOpen);
+            const bool fromMatchmaking = GetJsonBool(payload, "fromMatchmaking", false);
+            const bool sendEvent = !(fromMatchmaking && actorA != kPlayerFormID && actorB != kPlayerFormID);
+            const bool hasDualMemories = payload.contains("dualMemories") && payload["dualMemories"].is_array() && !payload["dualMemories"].empty();
+            std::optional<SkyrimNetMemoryService::SuppressScope> suppressScope;
+            std::optional<SkyrimNetMemoryService::MatchmakingApplyScope> mmScope;
+            if (hasDualMemories) {
+                suppressScope.emplace();
+            } else if (fromMatchmaking && IsSkyrimNetAvailable()) {
+                mmScope.emplace();
+            }
+            NPCRelationshipManager::GetSingleton().SetPairIsOpen(actorA, actorB, isOpen, sendEvent);
+            if (hasDualMemories) {
+                std::vector<GeneratedMemoryEntry> entries;
+                for (const auto& item : payload["dualMemories"]) {
+                    if (!item.is_object()) continue;
+                    GeneratedMemoryEntry entry;
+                    entry.actorName = GetJsonString(item, "actor");
+                    entry.actorFormID = ResolveToPlacedRefID(StringToFormID(GetJsonString(item, "actorFormId")));
+                    entry.content = GetJsonString(item, "content");
+                    entry.location = GetJsonString(item, "location", "Skyrim");
+                    entry.emotion = GetJsonString(item, "emotion", "content");
+                    entry.importanceScore = GetJsonFloat(item, "importance_score", 0.7f);
+                    entry.type = GetJsonString(item, "type", "RELATIONSHIP");
+                    if (item.contains("tags") && item["tags"].is_array()) {
+                        for (const auto& tag : item["tags"]) {
+                            if (tag.is_string()) entry.tags.push_back(tag.get<std::string>());
+                        }
+                    }
+                    entries.push_back(std::move(entry));
+                }
+                SkyrimNetMemoryService::GetSingleton().IngestMemories(entries, { actorA, actorB });
+            }
             if (GetJsonBool(payload, "fromMatchmaking", false)) {
                 float today = MatchmakingService::GetSingleton().GetCurrentGameDay();
                 MatchmakingService::GetSingleton().RecordNpcCooldown(actorA, today);
@@ -1355,7 +1383,17 @@ namespace MARAS {
         }
 
         auto status = static_cast<RelationshipStatus>(statusVal);
-        bool success = NPCRelationshipManager::GetSingleton().PromoteToStatusWith(actorA, actorB, status);
+        const bool isMatchmakingApply = GetJsonBool(payload, "fromMatchmaking", false) || payload.contains("dualMemories");
+        const bool sendEvent = !(isMatchmakingApply && actorA != kPlayerFormID && actorB != kPlayerFormID);
+        const bool hasDualMemories = payload.contains("dualMemories") && payload["dualMemories"].is_array() && !payload["dualMemories"].empty();
+        std::optional<SkyrimNetMemoryService::SuppressScope> suppressScope;
+        std::optional<SkyrimNetMemoryService::MatchmakingApplyScope> mmScope;
+        if (hasDualMemories) {
+            suppressScope.emplace();
+        } else if (isMatchmakingApply && IsSkyrimNetAvailable()) {
+            mmScope.emplace();
+        }
+        bool success = NPCRelationshipManager::GetSingleton().PromoteToStatusWith(actorA, actorB, status, sendEvent);
         if (!success) {
             std::string reason;
             NPCRelationshipManager::GetSingleton().CanFormRelationship(actorA, actorB, status, &reason);
@@ -1372,7 +1410,7 @@ namespace MARAS {
             PrismaUIManager::GetSingleton().InteropCall("onActionRejected", jsonStr.c_str());
         } else {
             // Ingest any dual memories attached to this assignment
-            if (payload.contains("dualMemories") && payload["dualMemories"].is_array()) {
+            if (hasDualMemories) {
                 std::vector<GeneratedMemoryEntry> entries;
                 for (const auto& item : payload["dualMemories"]) {
                     if (!item.is_object()) continue;
@@ -1391,7 +1429,7 @@ namespace MARAS {
                     }
                     entries.push_back(entry);
                 }
-                MatchmakingService::GetSingleton().IngestMemories(entries, actorA, actorB);
+                SkyrimNetMemoryService::GetSingleton().IngestMemories(entries, { actorA, actorB });
             }
 
             if (GetJsonBool(payload, "fromMatchmaking", false) || payload.contains("dualMemories")) {
@@ -1804,9 +1842,13 @@ namespace MARAS {
         }
         bool secretBio = GetJsonBool(payload, "isSecretForBioFather", false);
         bool secretPartner = GetJsonBool(payload, "isSecretForPartner", false);
+        std::optional<bool> pregSecretPartner = std::nullopt;
+        if (payload.contains("isPregnancySecretForPartner") && payload["isPregnancySecretForPartner"].is_boolean()) {
+            pregSecretPartner = payload["isPregnancySecretForPartner"].get<bool>();
+        }
 
         if (childID != 0) {
-            NPCRelationshipManager::GetSingleton().SetPaternitySecretEdges(childID, secretBio, secretPartner);
+            NPCRelationshipManager::GetSingleton().SetPaternitySecretEdges(childID, secretBio, secretPartner, pregSecretPartner);
             MARAS_LOG_INFO("PrismaUIDataBridge: SetPaternitySecretEdges child {:08X} -> secretBio: {}, secretPartner: {}",
                            childID, secretBio, secretPartner);
             SendNPCDetail(childID);

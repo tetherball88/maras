@@ -114,6 +114,14 @@ Actor[] Function GetThreadActors(int threadID) global
     return slThread.GetPositions()
 EndFunction
 
+bool Function IsThreadSexual(int threadID) global
+    SexLabThread slThread = SexLabUtil.GetAPI().GetThread(threadID)
+    if(!slThread)
+        return false
+    endif
+    return slThread.IsSceneVaginal() || slThread.IsSceneAnal() || slThread.IsSceneOral()
+EndFunction
+
 Function ReportStageInteractions(int threadID) global
     SexLabThread slThread = SexLabUtil.GetAPI().GetThread(threadID)
     if(!slThread || !(slThread.IsSceneVaginal() || slThread.IsSceneAnal() || slThread.IsSceneOral()))

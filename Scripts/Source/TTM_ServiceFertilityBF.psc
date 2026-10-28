@@ -587,7 +587,15 @@ Function OnStateChange(string eventName, string strArg, float numArg, Form sende
     if (!mother)
         return
     endif
-    if (StorageUtil.GetIntValue(mother, "FW.CurrentState", -1) != 8)
+    int currentState = StorageUtil.GetIntValue(mother, "FW.CurrentState", -1)
+    if (currentState == 5 || currentState == 6 || currentState == 7)
+        int unbornID = MARAS.FindUnbornChild(mother)
+        if (unbornID != 0 && MARAS.IsPregnancySecretForPartner(unbornID))
+            MARAS.RevealPregnancyToPartner(unbornID, true)
+        endif
+        return
+    endif
+    if (currentState != 8)
         return
     endif
     int leftover = MARAS.GetUnbornChildCount(mother)
@@ -704,6 +712,9 @@ Function MigrateMother(Actor mother) global
                 bioFather = StorageUtil.FormListGet(mother, "FW.ChildFather", 0) as Actor
             endif
             int unbornID = MARAS.RegisterUnbornChild(mother, bioFather, conceptionTime, false)
+            if (currentState >= 5 && MARAS.IsPregnancySecretForPartner(unbornID))
+                MARAS.RevealPregnancyToPartner(unbornID, true)
+            endif
             TTM_Debug.info("TTM_ServiceFertilityBF: Migrated active pregnancy: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(bioFather) + " (Unborn ID=" + unbornID + ")")
             i += 1
         endWhile

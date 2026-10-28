@@ -408,17 +408,6 @@ namespace MARAS {
         }
 
         auto& relMgr = NPCRelationshipManager::GetSingleton();
-        auto& idx = NPCIndex::GetSingleton();
-
-        auto matches = [&idx](RE::FormID stored, RE::FormID target) -> bool {
-            if (stored == 0 || target == 0) return false;
-            if (stored == target) return true;
-            RE::FormID tRef = idx.GetRefID(target);
-            if (tRef != 0 && stored == tRef) return true;
-            RE::FormID tBase = idx.GetBaseID(target);
-            if (tBase != 0 && stored == tBase) return true;
-            return false;
-        };
 
         auto isHouseholdChildEntry = [](RE::FormID cID, const ChildRegistryEntry& cEntry) -> bool {
             if (cID == 0) return false;
@@ -440,10 +429,7 @@ namespace MARAS {
                 return {};
             }
 
-            RE::FormID gA = childOpt.has_value() ? childOpt->guardianAID : 0;
-            RE::FormID gB = childOpt.has_value() ? childOpt->guardianBID : 0;
-
-            bool playerIsGuardian = matches(gA, kPlayerFormID) || matches(gB, kPlayerFormID) ||
+            bool playerIsGuardian = (childOpt.has_value() && childOpt->HasGuardian(kPlayerFormID)) ||
                                     relMgr.IsGuardian(npcFormID, kPlayerFormID);
 
             if (!playerIsGuardian) {
@@ -452,41 +438,20 @@ namespace MARAS {
             }
 
             // Identify which specific Spouse shares custodial guardianship of this child with the Player
-            if (matches(gA, kPlayerFormID)) {
-                targetSpouseID = gB;
-            } else if (matches(gB, kPlayerFormID)) {
-                targetSpouseID = gA;
-            } else {
-                targetSpouseID = relMgr.GetCoGuardian(npcFormID, kPlayerFormID);
-            }
+            targetSpouseID = childOpt.has_value() ? childOpt->GetOtherGuardian(kPlayerFormID)
+                                                  : relMgr.GetCoGuardian(npcFormID, kPlayerFormID);
 
-            if (matches(targetSpouseID, kPlayerFormID)) {
+            if (Utils::MatchesActor(targetSpouseID, kPlayerFormID)) {
                 targetSpouseID = 0;
             }
 
             familyChildren.insert(npcFormID);
 
-            if (targetSpouseID != 0) {
-                // Collect children whose custodial guardians are (Player, targetSpouseID)
-                for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
-                    if (!isHouseholdChildEntry(cID, cEntry)) continue;
-                    bool hasPlayer = matches(cEntry.guardianAID, kPlayerFormID) ||
-                                     matches(cEntry.guardianBID, kPlayerFormID);
-                    bool hasThisSpouse = matches(cEntry.guardianAID, targetSpouseID) ||
-                                         matches(cEntry.guardianBID, targetSpouseID);
-                    if (hasPlayer && hasThisSpouse) {
-                        familyChildren.insert(cID);
-                    }
-                }
-            } else {
-                // Single-parent child of the Player (no spouse co-guardian)
-                for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
-                    if (!isHouseholdChildEntry(cID, cEntry)) continue;
-                    bool hasPlayer = matches(cEntry.guardianAID, kPlayerFormID) ||
-                                     matches(cEntry.guardianBID, kPlayerFormID);
-                    if (hasPlayer && relMgr.GetCoGuardian(cID, kPlayerFormID) == 0) {
-                        familyChildren.insert(cID);
-                    }
+            // Collect all household children sharing the exact same guardian set (Player + targetSpouseID, or sole Player when targetSpouseID == 0)
+            for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
+                if (!isHouseholdChildEntry(cID, cEntry)) continue;
+                if (cEntry.HasSameGuardians(kPlayerFormID, targetSpouseID)) {
+                    familyChildren.insert(cID);
                 }
             }
         } else {
@@ -508,14 +473,10 @@ namespace MARAS {
 
             targetSpouseID = npcFormID;
 
-            // Collect children whose custodial guardians are (Player, targetSpouseID)!
+            // Collect children whose custodial guardians are (Player, targetSpouseID) in either slot order
             for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
                 if (!isHouseholdChildEntry(cID, cEntry)) continue;
-                bool hasPlayer = matches(cEntry.guardianAID, kPlayerFormID) ||
-                                 matches(cEntry.guardianBID, kPlayerFormID);
-                bool hasThisSpouse = matches(cEntry.guardianAID, targetSpouseID) ||
-                                     matches(cEntry.guardianBID, targetSpouseID);
-                if (hasPlayer && hasThisSpouse) {
+                if (cEntry.HasSameGuardians(kPlayerFormID, targetSpouseID)) {
                     familyChildren.insert(cID);
                 }
             }
@@ -525,7 +486,7 @@ namespace MARAS {
         std::unordered_set<RE::FormID> relocatedSet;
 
         // 1. Relocate the specific Spouse (if present and requested, or if the Spouse was the primary target)
-        if (targetSpouseID != 0 && !matches(targetSpouseID, kPlayerFormID) && (moveParents || !isChild)) {
+        if (targetSpouseID != 0 && !Utils::MatchesActor(targetSpouseID, kPlayerFormID) && (moveParents || !isChild)) {
             if (relocatedSet.insert(targetSpouseID).second) {
                 bool stayAtHome = (GetTenantHouseFormID(targetSpouseID) != 0) ? GetTenantStayAtHome(targetSpouseID) : !isChild;
                 (void)RegisterTenantInPlayerHouse(targetSpouseID, playerHouseFormID, stayAtHome);
@@ -744,3 +705,4 @@ namespace MARAS {
     }
 
 }  // namespace MARAS
+

@@ -1,10 +1,16 @@
 {% if render_mode == "ttm_gm" %}
 #### Summary
 {{ render_character_profile("bio_summary", actorUUID) }}
+#### Background
+{{ render_character_profile("bio_background", actorUUID) }}
 #### Personality
 {{ render_character_profile("bio_personality", actorUUID) }}
 #### Appearance
 {{ render_character_profile("bio_appearance", actorUUID) }}
+#### Occupation
+{{ render_character_profile("bio_occupation", actorUUID) }}
+#### Skills & Abilities
+{{ render_character_profile("bio_skills", actorUUID) }}
 #### Relationships
 {{ render_character_profile("bio_relationships", actorUUID) }}
 {{ render_character_profile("ttm_relations", actorUUID) }}

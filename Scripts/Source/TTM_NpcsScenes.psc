@@ -221,9 +221,11 @@ Function SetupSceneOnLocationChange(Actor forcedNpc1 = none, Actor forcedNpc2 = 
     endif
 
     if(shouldExposeCheating || (isCheating && npc1MainPartner && npc1MainPartner.GetParentCell() == player.GetParentCell()))
+        TTM_ServiceSkyrimNet.SuppressNextActionNarration()
         MARAS.SetCheatingDiscovered(npc1, npc2, "exposed")
     endif
     if((isForced || isCheating) && npc2MainPartner && npc2MainPartner.GetParentCell() == player.GetParentCell())
+        TTM_ServiceSkyrimNet.SuppressNextActionNarration()
         MARAS.SetCheatingDiscovered(npc2, npc1, "exposed")
     endif
 

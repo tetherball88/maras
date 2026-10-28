@@ -42,6 +42,9 @@ Your role is to verify whether a proposed relationship change between characters
 {{ render_character_profile("ttm_gm", committedPartnerBUUID) }}
 {% endif %}
 
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+
 ## Evaluation Guidelines
 Evaluate the character profiles, personalities, long-term memories, and recent events carefully:
 

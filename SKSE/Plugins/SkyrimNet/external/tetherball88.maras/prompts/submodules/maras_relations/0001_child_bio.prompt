@@ -22,7 +22,7 @@
             {% set bioRelation = "son" %}
         {% endif %}
         {% if existsIn(parents, "stage") and parents.stage == "adult" %}
-            {{npcName}} is a grown adult {{myChildRelation}} (completed training, now an adult follower).
+            {{npcName}} is a grown adult {{myChildRelation}} (completed training{% if existsIn(parents, "training_location") %} at {{parents.training_location}}{% endif %}, now an adult follower).
         {% elif existsIn(parents, "stage") and parents.stage == "training" %}
             {{npcName}} is a {{myChildRelation}} currently away from home undergoing training{% if existsIn(parents, "training_location") %} at {{parents.training_location}}{% endif %}.
         {% elif existsIn(parents, "stage") and parents.stage == "infant" %}
@@ -64,7 +64,7 @@
                 {% elif existsIn(parents, "current_parents") %}
                     {{npcName}} is the {{myChildRelation}} of {{parents.current_parents.names}}.
                 {% endif %}
-            {% elif existsIn(parents, "paternity_secret") and parents.paternity_secret.is_secret %}
+            {% elif existsIn(parents, "paternity_secret") and existsIn(parents.paternity_secret, "is_secret_for_partner") and parents.paternity_secret.is_secret_for_partner %}
                 {% if existsIn(parents, "mother") and existsIn(parents, "father") %}
                     {{npcName}} is raised as the {{myChildRelation}} of {{parents.mother.name}} and {{parents.father.name}}, believing {{parents.father.name}} is their biological father.
                 {% elif existsIn(parents, "mother") and existsIn(parents.paternity_secret, "mother_partner") and parents.paternity_secret.mother_partner.name != "" and parents.paternity_secret.mother_partner.name != "None" %}
@@ -117,21 +117,32 @@
             {% endif %}
             {% set pSecBio = existsIn(pSecret, "is_secret_for_bio_father") and pSecret.is_secret_for_bio_father %}
             {% set pSecPartner = existsIn(pSecret, "is_secret_for_partner") and pSecret.is_secret_for_partner %}
-            {% if pSecret.is_secret %}
-                {% if pSecPartner and pSecBio %}
-                    {{npcName}} believes {{pPartnerName}} is their biological father, completely unaware that their true biological father is actually {{pSecret.biological_father.name}}. Their mother is keeping this secret from {{npcName}}, {{pPartnerName}}, and {{pSecret.biological_father.name}}.
-                {% elif pSecPartner %}
-                    {{npcName}} believes {{pPartnerName}} is their biological father, completely unaware that their true biological father is actually {{pSecret.biological_father.name}}. {{pSecret.biological_father.name}} knows the truth, while {{npcName}} and {{pPartnerName}} remain completely unaware.
-                {% elif pSecBio %}
-                    {{npcName}} believes {{pPartnerName}} is their biological father, unaware that their true biological father is actually {{pSecret.biological_father.name}}. {{pPartnerName}} knows the truth, but {{npcName}} and {{pSecret.biological_father.name}} have not been told.
+            {% set pPartnerIsGuardian = existsIn(pSecret, "presumed_father_is_guardian") and pSecret.presumed_father_is_guardian %}
+            {% if render_mode != "dialogue_target" %}
+                {% if pSecret.is_secret %}
+                    {% if pSecPartner and pSecBio %}
+                        {{npcName}} believes {{pPartnerName}} is their biological father, completely unaware that their true biological father is actually {{pSecret.biological_father.name}}. Their mother is keeping this secret from {{npcName}}, {{pPartnerName}}, and {{pSecret.biological_father.name}}.
+                    {% elif pSecPartner %}
+                        {{npcName}} believes {{pPartnerName}} is their biological father, completely unaware that their true biological father is actually {{pSecret.biological_father.name}}. {{pSecret.biological_father.name}} knows the truth, while {{npcName}} and {{pPartnerName}} remain completely unaware.
+                    {% elif pSecBio %}
+                        {% if pPartnerIsGuardian %}
+                            Paternity truth known in household: {{npcName}} knows that while {{pPartnerName}} raises them as a father figure and guardian alongside their mother, their true biological father is actually {{pSecret.biological_father.name}} (though {{pSecret.biological_father.name}} himself has not been told and remains unaware of his paternity).
+                        {% else %}
+                            Paternity truth known in household: {{npcName}} knows that while {{pPartnerName}} was initially presumed to be their father, their true biological father is actually {{pSecret.biological_father.name}} (though {{pSecret.biological_father.name}} himself has not been told and remains unaware of his paternity).
+                        {% endif %}
+                    {% else %}
+                        {% if pPartnerIsGuardian %}
+                            Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} raises them as a father figure and guardian in the household, their true biological father is actually {{pSecret.biological_father.name}}. Both {{pPartnerName}} and {{pSecret.biological_father.name}} know the truth.
+                        {% else %}
+                            Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} was initially presumed to be their father, their true biological father is actually {{pSecret.biological_father.name}}. Both {{pPartnerName}} and {{pSecret.biological_father.name}} know the truth.
+                        {% endif %}
+                    {% endif %}
                 {% else %}
-                    {{npcName}} believes {{pPartnerName}} is their biological father, unaware that their true biological father is actually {{pSecret.biological_father.name}}, though both fathers are aware of the true biological paternity.
-                {% endif %}
-            {% else %}
-                {% if existsIn(pSecret, "presumed_father_is_guardian") and pSecret.presumed_father_is_guardian %}
-                    Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} raised them as a father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone in the family.
-                {% else %}
-                    Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} was initially presumed to be their father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone involved.
+                    {% if pPartnerIsGuardian %}
+                        Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} raises them as a father figure and guardian in the household, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone in the family.
+                    {% else %}
+                        Paternity truth revealed: {{npcName}} knows that while {{pPartnerName}} was initially presumed to be their father, their true biological father is actually {{pSecret.biological_father.name}}. This truth is now openly known to everyone involved.
+                    {% endif %}
                 {% endif %}
             {% endif %}
         {% endif %}

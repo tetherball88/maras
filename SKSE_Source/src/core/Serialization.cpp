@@ -10,6 +10,8 @@
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SkyrimNetMemoryService.h"
+#include "core/SkyrimNetProfileService.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "ui/ConfirmationModal.h"
@@ -90,6 +92,8 @@ namespace MARAS::Serialization {
             return;
         }
 
+        SkyrimNetMemoryService::SuppressScope suppressMemories;
+        SkyrimNetProfileService::SuppressScope suppressProfiles;
         auto& manager = NPCRelationshipManager::GetSingleton();
 
         std::uint32_t type = 0;
@@ -190,6 +194,8 @@ namespace MARAS::Serialization {
         PackageOverrideService::GetSingleton().Revert();
         IntimateThreadService::GetSingleton().ClearAll();
         ChildrenFleeService::GetSingleton().Reset();
+        SkyrimNetMemoryService::GetSingleton().Revert();
+        SkyrimNetProfileService::GetSingleton().Revert();
         ConfirmationModal::GetSingleton().Revert();
         PrismaModalManager::GetSingleton().Revert();
         PrismaUIManager::GetSingleton().ResetNewGameDeferral();

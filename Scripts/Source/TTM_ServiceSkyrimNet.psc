@@ -30,14 +30,50 @@ Function SimulatePostWeddingIfSkippedBehavior(Actor npc) global
         return
     endif
     Actor player = TTM_Data.GetPlayer()
-    DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(npc) + " got married!", npc)
+    DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(npc) + " got married!", npc, player)
 EndFunction
 
-Function DirectNarration(String content, Actor originatorActor = None, Actor targetActor = None) global
+Function DirectNarration(String content, Actor originatorActor = None, Actor targetActor = None, bool exactAudience = false, Actor[] audience = None) global
     if(!TTM_Data.GetHasSkyrimNet())
         return
     endif
-    SkyrimNetApi.DirectNarration(content, originatorActor, targetActor)
+    if(originatorActor != None && !MARAS.ShouldTriggerSkyrimNetNarration(originatorActor, targetActor))
+        return
+    endif
+    MARAS.RegisterSkyrimNetEvent("direct_narration", content, originatorActor, targetActor, exactAudience, audience)
+EndFunction
+
+Actor[] Function MakeAudience2(Actor a, Actor b = None) global
+    Actor[] aud = new Actor[2]
+    aud[0] = a
+    aud[1] = b
+    return aud
+EndFunction
+
+Actor[] Function MakeAudience3(Actor a, Actor b = None, Actor c = None) global
+    Actor[] aud = new Actor[3]
+    aud[0] = a
+    aud[1] = b
+    aud[2] = c
+    return aud
+EndFunction
+
+;/
+  Marks a short real-time suppression window so thatModCallbackEvents fired by
+  SkyrimNet dialogue actions (where the speaker already spoke the line in dialogue)
+  or cascading secondary events still log to recent_events with skipTrigger = true
+  instead of firing a redundant second direct_narration trigger.
+/;
+Function SuppressNextActionNarration(float durationSeconds = 5.0) global
+    StorageUtil.SetFloatValue(none, "TTM_SkyrimNet_SuppressActionNarrationUntil", Utility.GetCurrentRealTime() + durationSeconds)
+EndFunction
+
+bool Function IsActionNarrationSuppressed() global
+    float until = StorageUtil.GetFloatValue(none, "TTM_SkyrimNet_SuppressActionNarrationUntil", 0.0)
+    if(until > 0.0 && Utility.GetCurrentRealTime() < until)
+        return true
+    endif
+    return false
 EndFunction
 
 Function RegisterPlayerGotPolygamyBlessing(Actor spouse) global
@@ -48,8 +84,9 @@ Function RegisterPlayerGotPolygamyBlessing(Actor spouse) global
     string playerName = TTM_Utils.GetActorName(player)
     string spouseName = TTM_Utils.GetActorName(spouse)
     string msg = playerName + " got Mara's blessing to enter polygamy marriage. " + spouseName + " agreed with " + playerName + "'s new Dragonborn reality and new way of their marriage'."
-    string json = BuildJson("ttm_polygamy_blessing", msg)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, player, spouse)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(player, spouse)
+    string json = BuildJson("ttm_polygamy_blessing", msg, skipTrigger = skipTrigger)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, player, spouse)
 EndFunction
 
 Function RegisterAffectionGift(string msg, Actor receiver) global
@@ -57,12 +94,13 @@ Function RegisterAffectionGift(string msg, Actor receiver) global
         return
     endif
     Actor player = TTM_Data.GetPlayer()
-    string json = BuildJson("ttm_affection_gift", msg)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, player, receiver)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(player, receiver)
+    string json = BuildJson("ttm_affection_gift", msg, skipTrigger = skipTrigger)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, player, receiver)
 EndFunction
 
-Function RegisterMaritalStatusChangeEvent(Actor initiator, Actor acceptor, string newStatus) global
-    if(!TTM_Data.GetHasSkyrimNet() || newStatus == "candidate")
+Function RegisterMaritalStatusChangeEvent(Actor initiator, Actor acceptor, string newStatus, bool skipTrigger = false) global
+    if(!TTM_Data.GetHasSkyrimNet() || newStatus == "candidate" || !initiator || !acceptor)
         return
     endif
     string type = "ttm_marital_status_change"
@@ -79,12 +117,22 @@ Function RegisterMaritalStatusChangeEvent(Actor initiator, Actor acceptor, strin
         msg +=  " just got " + newStatus + "."
     endif
 
-    string json = BuildJson("ttm_marital_status_change", msg, newStatus = newStatus)
+    if(!skipTrigger)
+        if(IsActionNarrationSuppressed())
+            skipTrigger = true
+        else
+            skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(initiator, acceptor)
+        endif
+    endif
+    string json = BuildJson("ttm_marital_status_change", msg, skipTrigger = skipTrigger, newStatus = newStatus)
 
-    SkyrimNetApi.RegisterEvent("ttm_event", json, initiator, acceptor)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, initiator, acceptor)
+    if(!skipTrigger && newStatus != "lover" && newStatus != "engaged")
+        SuppressNextActionNarration(3.0)
+    endif
 EndFunction
 
-Function RegisterOpenRelationshipChangeEvent(Actor initiator, Actor partner, bool isOpen) global
+Function RegisterOpenRelationshipChangeEvent(Actor initiator, Actor partner, bool isOpen, bool skipTrigger = false) global
     if(!TTM_Data.GetHasSkyrimNet() || !initiator || !partner)
         return
     endif
@@ -96,8 +144,18 @@ Function RegisterOpenRelationshipChangeEvent(Actor initiator, Actor partner, boo
     else
         msg = initiatorName + " and " + partnerName + " closed their open relationship, returning to exclusive monogamy."
     endif
-    string json = BuildJson("ttm_open_relationship_change", msg, parentA = initiatorName, parentB = partnerName, isOpen = isOpen, hasIsOpen = true)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, initiator, partner)
+    if(!skipTrigger)
+        if(IsActionNarrationSuppressed())
+            skipTrigger = true
+        else
+            skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(initiator, partner)
+        endif
+    endif
+    string json = BuildJson("ttm_open_relationship_change", msg, skipTrigger = skipTrigger, parentA = initiatorName, parentB = partnerName, isOpen = isOpen, hasIsOpen = true)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, initiator, partner)
+    if(!skipTrigger)
+        SuppressNextActionNarration(3.0)
+    endif
 EndFunction
 
 Function RegisterMaritalHiearchyChangeEvent(Actor spouse, bool isDemoted) global
@@ -113,8 +171,9 @@ Function RegisterMaritalHiearchyChangeEvent(Actor spouse, bool isDemoted) global
     string playerName = TTM_Utils.GetActorName(player)
     string spouseName = TTM_Utils.GetActorName(spouse)
     string msg = playerName + " has " + promotionKeyword + " " + spouseName + " in the household hierarchy."
-    string json = BuildJson("ttm_spouse_hierarchy_change", msg, isDemoted = isDemoted)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, player, spouse)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(player, spouse)
+    string json = BuildJson("ttm_spouse_hierarchy_change", msg, skipTrigger = skipTrigger, isDemoted = isDemoted)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, player, spouse)
 EndFunction
 
 Function RegisterMariatalAffectionChangeEvent(Actor spouse, string affectionLevel, string direction) global
@@ -136,11 +195,12 @@ Function RegisterMariatalAffectionChangeEvent(Actor spouse, string affectionLeve
     elseif(affectionLevel == "happy")
         msg += " they can't wish for a better relationship."
     endif
-    string json = BuildJson("ttm_spouse_affection_change", msg, affectionLevel = affectionLevel, affectionDirection = direction)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, spouse, player)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(spouse, player)
+    string json = BuildJson("ttm_spouse_affection_change", msg, skipTrigger = skipTrigger, affectionLevel = affectionLevel, affectionDirection = direction)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, spouse, player)
 EndFunction
 
-Function RegisterProposalDecision(Actor initiator, Actor acceptor, string status, string decision, string reasoning = "") global
+Function RegisterProposalDecision(Actor initiator, Actor acceptor, string status, string decision, string reasoning = "", bool skipTrigger = true) global
     if(!TTM_Data.GetHasSkyrimNet())
         return
     endif
@@ -163,23 +223,33 @@ Function RegisterProposalDecision(Actor initiator, Actor acceptor, string status
         msg += " " + TTM_Utils.GetActorName(acceptor) + " rejected the proposal. "
     endif
 
-    string json = BuildJson("ttm_dating_proposal", msg)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, initiator, acceptor)
+    if(!skipTrigger)
+        if(IsActionNarrationSuppressed())
+            skipTrigger = true
+        else
+            skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(initiator, acceptor)
+        endif
+    endif
+    string json = BuildJson("ttm_dating_proposal", msg, skipTrigger = skipTrigger)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, initiator, acceptor)
 EndFunction
 
 Function RegisterActionDeclineEvent(string json, Actor akSpeaker, Actor akTarget = none) global
     if(!TTM_Data.GetHasSkyrimNet())
         return
     endif
-    SkyrimNetApi.RegisterEvent("ttm_event", json, akSpeaker, akTarget)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, akSpeaker, akTarget)
 EndFunction
 
 Function RegisterActionDecline(Actor initiator, Actor acceptor, string actionType, string msg, bool skipTrigger = true) global
     if(!TTM_Data.GetHasSkyrimNet())
         return
     endif
+    if(!skipTrigger)
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(initiator, acceptor)
+    endif
     string json = BuildJson("ttm_action_decline", msg, skipTrigger = skipTrigger, declinedAction = actionType)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, initiator, acceptor)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, initiator, acceptor)
 EndFunction
 
 Function RegisterChildAdopted(Actor child, Actor parentA, Actor parentB = none) global
@@ -195,11 +265,39 @@ Function RegisterChildAdopted(Actor child, Actor parentA, Actor parentB = none) 
     else
         msg = parentAName + " has adopted " + childName + ". " + childName + " is now part of " + parentAName + "'s family."
     endif
-    string json = BuildJson("ttm_child_adopted", msg, child = childName, parentA = parentAName, parentB = TTM_Utils.GetActorName(parentB))
-    SkyrimNetApi.RegisterEvent("ttm_event", json, parentA, child)
-    if(parentB != none && parentB != parentA)
-        SkyrimNetApi.RegisterEvent("ttm_event", json, parentB, child)
+    bool pAPresent = (parentA != none && MARAS.ShouldTriggerSkyrimNetNarration(parentA, none))
+    bool pBPresent = (parentB != none && parentB != parentA && MARAS.ShouldTriggerSkyrimNetNarration(parentB, none))
+    Actor speaker = parentA
+    Actor target = none
+    bool skipTrigger = true
+    if(pAPresent && pBPresent)
+        speaker = parentA
+        target = parentB
+        skipTrigger = false
+    elseif(pAPresent)
+        speaker = parentA
+        if(MARAS.ShouldTriggerSkyrimNetNarration(parentA, child))
+            target = child
+        endif
+        skipTrigger = false
+    elseif(pBPresent)
+        speaker = parentB
+        if(MARAS.ShouldTriggerSkyrimNetNarration(parentB, child))
+            target = child
+        endif
+        skipTrigger = false
+    else
+        if(speaker == none)
+            speaker = parentB
+        endif
+        if(parentB != none && parentB != speaker)
+            target = parentB
+        else
+            target = child
+        endif
     endif
+    string json = BuildJson("ttm_child_adopted", msg, skipTrigger = skipTrigger, child = childName, parentA = parentAName, parentB = TTM_Utils.GetActorName(parentB))
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target)
 EndFunction
 
 Function RegisterChildInherited(Actor child, Actor deceasedParent, Actor newParent, Actor coParent = none) global
@@ -216,11 +314,39 @@ Function RegisterChildInherited(Actor child, Actor deceasedParent, Actor newPare
     else
         msg = "Following the death of " + deceasedName + ", " + newParentName + " has become the sole guardian of " + childName + "."
     endif
-    string json = BuildJson("ttm_child_inherited", msg, child = childName, parentA = newParentName, parentB = TTM_Utils.GetActorName(coParent), reason = "spouse_death")
-    SkyrimNetApi.RegisterEvent("ttm_event", json, newParent, child)
-    if(coParent != none && coParent != newParent)
-        SkyrimNetApi.RegisterEvent("ttm_event", json, coParent, child)
+    bool pAPresent = (newParent != none && MARAS.ShouldTriggerSkyrimNetNarration(newParent, none))
+    bool pBPresent = (coParent != none && coParent != newParent && MARAS.ShouldTriggerSkyrimNetNarration(coParent, none))
+    Actor speaker = newParent
+    Actor target = none
+    bool skipTrigger = true
+    if(pAPresent && pBPresent)
+        speaker = newParent
+        target = coParent
+        skipTrigger = false
+    elseif(pAPresent)
+        speaker = newParent
+        if(MARAS.ShouldTriggerSkyrimNetNarration(newParent, child))
+            target = child
+        endif
+        skipTrigger = false
+    elseif(pBPresent)
+        speaker = coParent
+        if(MARAS.ShouldTriggerSkyrimNetNarration(coParent, child))
+            target = child
+        endif
+        skipTrigger = false
+    else
+        if(speaker == none)
+            speaker = coParent
+        endif
+        if(coParent != none && coParent != speaker)
+            target = coParent
+        else
+            target = child
+        endif
     endif
+    string json = BuildJson("ttm_child_inherited", msg, skipTrigger = skipTrigger, child = childName, parentA = newParentName, parentB = TTM_Utils.GetActorName(coParent), reason = "spouse_death")
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target)
 EndFunction
 
 Function RegisterChildParentsChanged(Actor child, Actor parentA, Actor parentB = none, string reason = "marriage") global
@@ -243,11 +369,40 @@ Function RegisterChildParentsChanged(Actor child, Actor parentA, Actor parentB =
             msg += " as sole guardian."
         endif
     endif
-    string json = BuildJson("ttm_child_parents_changed", msg, child = childName, parentA = parentAName, parentB = TTM_Utils.GetActorName(parentB), reason = reason)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, parentA, child)
-    if(parentB != none && parentB != parentA)
-        SkyrimNetApi.RegisterEvent("ttm_event", json, parentB, child)
+    bool isCascade = (reason == "marriage" || reason == "divorce" || IsActionNarrationSuppressed())
+    bool pAPresent = (parentA != none && MARAS.ShouldTriggerSkyrimNetNarration(parentA, none))
+    bool pBPresent = (parentB != none && parentB != parentA && MARAS.ShouldTriggerSkyrimNetNarration(parentB, none))
+    Actor speaker = parentA
+    Actor target = none
+    bool skipTrigger = true
+    if(pAPresent && pBPresent)
+        speaker = parentA
+        target = parentB
+        skipTrigger = isCascade
+    elseif(pAPresent)
+        speaker = parentA
+        if(MARAS.ShouldTriggerSkyrimNetNarration(parentA, child))
+            target = child
+        endif
+        skipTrigger = isCascade
+    elseif(pBPresent)
+        speaker = parentB
+        if(MARAS.ShouldTriggerSkyrimNetNarration(parentB, child))
+            target = child
+        endif
+        skipTrigger = isCascade
+    else
+        if(speaker == none)
+            speaker = parentB
+        endif
+        if(parentB != none && parentB != speaker)
+            target = parentB
+        else
+            target = child
+        endif
     endif
+    string json = BuildJson("ttm_child_parents_changed", msg, skipTrigger = skipTrigger, child = childName, parentA = parentAName, parentB = TTM_Utils.GetActorName(parentB), reason = reason)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target)
 EndFunction
 
 Function RegisterPregnancyAnnounced(Actor mother, Actor partner = none, Actor bioFather = none, string bioFatherName = "", int childCount = 1) global
@@ -257,7 +412,7 @@ Function RegisterPregnancyAnnounced(Actor mother, Actor partner = none, Actor bi
 
     string json = MARAS.BuildPregnancyAnnouncedJson(mother, partner, bioFather, bioFatherName, childCount)
     if (json != "")
-        SkyrimNetApi.RegisterEvent("ttm_event", json, mother, none)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, mother, none, true)
     endif
 EndFunction
 
@@ -271,8 +426,13 @@ Function RegisterPregnancyLost(Actor mother, Actor partner = none, string reason
         partnerName = TTM_Utils.GetActorName(partner)
     endif
     string msg = motherName + " has suffered a tragic pregnancy loss (" + reason + ")."
-    string json = BuildJson("ttm_pregnancy_lost", msg, parentA = motherName, parentB = partnerName, reason = reason)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, mother, partner)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(mother, none)
+    Actor eventTarget = partner
+    if(eventTarget != none && !MARAS.ShouldTriggerSkyrimNetNarration(mother, eventTarget))
+        eventTarget = none
+    endif
+    string json = BuildJson("ttm_pregnancy_lost", msg, skipTrigger = skipTrigger, parentA = motherName, parentB = partnerName, reason = reason)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, mother, eventTarget)
 EndFunction
 
 Function RegisterChildBirthBatch(Actor mother, int[] childIDs = none) global
@@ -280,9 +440,65 @@ Function RegisterChildBirthBatch(Actor mother, int[] childIDs = none) global
         return
     endif
 
-    string json = MARAS.BuildChildBirthJson(mother, childIDs)
-    if (json != "")
-        SkyrimNetApi.RegisterEvent("ttm_event", json, mother, none)
+    string json = MARAS.BuildChildBirthJson(mother, childIDs, false)
+    if (json == "")
+        return
+    endif
+
+    Actor partner = MARAS.GetPrimaryPartner(mother)
+    if (partner == none && childIDs.Length > 0)
+        partner = MARAS.GetMotherPartner(childIDs[0])
+    endif
+    if (partner == mother)
+        partner = none
+    endif
+
+    bool anySecretForPartner = false
+    bool anySecretForBio = false
+    Actor awareBioFather = none
+    Actor firstBioFather = none
+    int i = 0
+    while (i < childIDs.Length)
+        int cID = childIDs[i]
+        if (cID != 0)
+            Actor bFather = MARAS.GetBioFather(cID)
+            if (firstBioFather == none && bFather != none)
+                firstBioFather = bFather
+            endif
+            bool secP = MARAS.IsSecretForPartner(cID)
+            bool secB = MARAS.IsSecretForBioFather(cID)
+            if (secP)
+                anySecretForPartner = true
+            endif
+            if (secB)
+                anySecretForBio = true
+            elseif (bFather != none && bFather != partner && awareBioFather == none)
+                awareBioFather = bFather
+            endif
+        endif
+        i += 1
+    endWhile
+
+    if (!anySecretForPartner && !anySecretForBio)
+        Actor publicTarget = partner
+        if (publicTarget == none)
+            publicTarget = firstBioFather
+        endif
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, mother, publicTarget, false)
+        return
+    endif
+
+    Actor privyPartner = none
+    if (!anySecretForPartner)
+        privyPartner = partner
+    endif
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, mother, none, true, MakeAudience3(mother, privyPartner, awareBioFather))
+
+    if (anySecretForPartner && partner != none)
+        string maskedJson = MARAS.BuildChildBirthJson(mother, childIDs, true)
+        if (maskedJson != "")
+            MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, partner, none, true, MakeAudience2(partner, none))
+        endif
     endif
 EndFunction
 
@@ -295,15 +511,16 @@ Function RegisterChildBirth(int childID, string childName = "") global
     if (mother != none)
         int[] childIDs = new int[1]
         childIDs[0] = childID
-        string cJson = MARAS.BuildChildBirthJson(mother, childIDs)
-        if (cJson != "")
-            SkyrimNetApi.RegisterEvent("ttm_event", cJson, mother, none)
-            return
-        endif
+        RegisterChildBirthBatch(mother, childIDs)
+        return
     endif
 
     if(childName == "")
         childName = MARAS.GetChildName(childID)
+    endif
+    bool hasGivenName = (childName != "" && childName != "Newborn")
+    if(!hasGivenName)
+        childName = "child"
     endif
     Actor presumedFather = MARAS.GetMotherPartner(childID)
     Actor bioFather = MARAS.GetBioFather(childID)
@@ -329,20 +546,37 @@ Function RegisterChildBirth(int childID, string childName = "") global
         childGenderStr = "female"
     endif
     string msg = ""
-
-    if(isSecretForAssumed && isSecretForBio && presumedFather != none)
-        msg = motherName + " gave birth to " + childName + ". " + presumedFatherName + " believes the newborn " + childRelation + " is his, unaware that the true biological father is " + bioFatherName + ". Furthermore, " + bioFatherName + " has not been informed that he fathered the child."
-    elseif(isSecretForAssumed && presumedFather != none)
-        msg = motherName + " gave birth to " + childName + ". " + presumedFatherName + " believes the newborn " + childRelation + " is his, unaware that the true biological father is " + bioFatherName + "."
-    elseif(isSecretForBio && bioFather != none)
-        msg = motherName + " gave birth to " + childName + ", a " + childRelation + " fathered by " + bioFatherName + ", though " + bioFatherName + " is unaware of the child."
-    elseif(bioFather != none)
-        msg = motherName + " gave birth to a healthy " + childRelation + ", " + childName + ", fathered by " + bioFatherName + "."
-    else
-        msg = motherName + " gave birth to a newborn " + childRelation + ", " + childName + "."
+    string nameClause = ""
+    if(hasGivenName)
+        nameClause = ", " + childName + ","
+    endif
+    string birthTarget = "a newborn " + childRelation
+    if(hasGivenName)
+        birthTarget = childName
     endif
 
-    string json = BuildJson("ttm_child_birth", msg, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+    if(isSecretForAssumed && isSecretForBio && presumedFather != none)
+        msg = motherName + " gave birth to " + birthTarget + ". " + presumedFatherName + " believes the newborn " + childRelation + " is his, unaware that the true biological father is " + bioFatherName + ". Furthermore, " + bioFatherName + " has not been informed that he fathered the child."
+    elseif(isSecretForAssumed && presumedFather != none)
+        msg = motherName + " gave birth to " + birthTarget + ". " + presumedFatherName + " believes the newborn " + childRelation + " is his, unaware that the true biological father is " + bioFatherName + "."
+    elseif(isSecretForBio && bioFather != none)
+        if(hasGivenName)
+            msg = motherName + " gave birth to " + childName + ", a " + childRelation + " fathered by " + bioFatherName + ", though " + bioFatherName + " is unaware of the child."
+        else
+            msg = motherName + " gave birth to a " + childRelation + " fathered by " + bioFatherName + ", though " + bioFatherName + " is unaware of the child."
+        endif
+    elseif(bioFather != none)
+        msg = motherName + " gave birth to a healthy " + childRelation + nameClause + " fathered by " + bioFatherName + "."
+    else
+        if(hasGivenName)
+            msg = motherName + " gave birth to a newborn " + childRelation + ", " + childName + "."
+        else
+            msg = motherName + " gave birth to a newborn " + childRelation + "."
+        endif
+    endif
+
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(mother, none)
+    string json = BuildJson("ttm_child_birth", msg, skipTrigger = skipTrigger, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
     Actor speaker = mother
     if(speaker == none)
         speaker = presumedFather
@@ -350,7 +584,22 @@ Function RegisterChildBirth(int childID, string childName = "") global
     if(speaker == none)
         speaker = TTM_Data.GetPlayer()
     endif
-    SkyrimNetApi.RegisterEvent("ttm_event", json, speaker, none)
+    if (isSecretForAssumed && presumedFather != none)
+        Actor awareBio = bioFather
+        if (isSecretForBio)
+            awareBio = none
+        endif
+        if (mother != none || awareBio != none)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, awareBio))
+        endif
+        string maskedMsg = motherName + " gave birth to a healthy " + childRelation + nameClause + " fathered by " + presumedFatherName + "."
+        string maskedJson = BuildJson("ttm_child_birth", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, none))
+    elseif (isSecretForBio)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, presumedFather))
+    else
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, presumedFather, false)
+    endif
 EndFunction
 
 Function RegisterChildGrewUp(int childID, string childName = "") global
@@ -400,7 +649,10 @@ Function RegisterChildGrewUp(int childID, string childName = "") global
         msg = childName + " has grown from infancy into a young " + childRelation + "."
     endif
 
-    string json = BuildJson("ttm_child_grew_up", msg, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+    Actor childActor = Game.GetForm(childID) as Actor
+    bool shouldTrigger = (childActor != none && MARAS.ShouldTriggerSkyrimNetNarration(childActor, none)) || (mother != none && MARAS.ShouldTriggerSkyrimNetNarration(mother, none))
+    bool skipTrigger = !shouldTrigger
+    string json = BuildJson("ttm_child_grew_up", msg, skipTrigger = skipTrigger, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
     Actor speaker = mother
     if(speaker == none)
         speaker = presumedFather
@@ -408,7 +660,27 @@ Function RegisterChildGrewUp(int childID, string childName = "") global
     if(speaker == none)
         speaker = TTM_Data.GetPlayer()
     endif
-    SkyrimNetApi.RegisterEvent("ttm_event", json, speaker, none)
+    Actor awareBio = bioFather
+    if(isSecretForBio)
+        awareBio = none
+    endif
+    if(isSecretForAssumed && presumedFather != none)
+        if(mother != none || awareBio != none)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, awareBio))
+        endif
+        string maskedMsg = ""
+        if(motherName != "" && presumedFatherName != "")
+            maskedMsg = motherName + " and " + presumedFatherName + "'s " + childRelation + ", " + childName + ", has grown from infancy into a young child."
+        else
+            maskedMsg = childName + " has grown from infancy into a young " + childRelation + "."
+        endif
+        string maskedJson = BuildJson("ttm_child_grew_up", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, childActor))
+    elseif(isSecretForBio)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience3(mother, presumedFather, childActor))
+    else
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, childActor, false)
+    endif
 EndFunction
 
 Function RegisterChildSentToTraining(int childID, string childName = "", string trainingLocation = "") global
@@ -467,7 +739,8 @@ Function RegisterChildSentToTraining(int childID, string childName = "", string 
         msg = childName + " has been sent away from home for training" + locText + "."
     endif
 
-    string json = BuildJson("ttm_child_sent_to_training", msg, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, trainingLocation = trainingLocation, gender = childGenderStr, relation = childRelation)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(mother, none)
+    string json = BuildJson("ttm_child_sent_to_training", msg, skipTrigger = skipTrigger, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, trainingLocation = trainingLocation, gender = childGenderStr, relation = childRelation)
     Actor speaker = mother
     if(speaker == none)
         speaker = presumedFather
@@ -475,7 +748,29 @@ Function RegisterChildSentToTraining(int childID, string childName = "", string 
     if(speaker == none)
         speaker = TTM_Data.GetPlayer()
     endif
-    SkyrimNetApi.RegisterEvent("ttm_event", json, speaker, none)
+    Actor awareBio = bioFather
+    if(isSecretForBio)
+        awareBio = none
+    endif
+    if(isSecretForAssumed && presumedFather != none)
+        if(mother != none || awareBio != none)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, awareBio))
+        endif
+        string maskedMsg = ""
+        if(motherName != "" && presumedFatherName != "")
+            maskedMsg = motherName + " and " + presumedFatherName + " have sent their " + childRelation + ", " + childName + ", away from home for training" + locText + "."
+        elseif(presumedFatherName != "")
+            maskedMsg = presumedFatherName + " has sent his " + childRelation + ", " + childName + ", away from home for training" + locText + "."
+        else
+            maskedMsg = childName + " has been sent away from home for training" + locText + "."
+        endif
+        string maskedJson = BuildJson("ttm_child_sent_to_training", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, trainingLocation = trainingLocation, gender = childGenderStr, relation = childRelation)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, none))
+    elseif(isSecretForBio)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, presumedFather))
+    else
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, presumedFather, false)
+    endif
 EndFunction
 
 Function RegisterChildBecameAdult(int childID, string childName = "") global
@@ -530,7 +825,10 @@ Function RegisterChildBecameAdult(int childID, string childName = "") global
         msg = childName + " has completed " + possPronoun + " training and come of age as an adult."
     endif
 
-    string json = BuildJson("ttm_child_became_adult", msg, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+    Actor adultActor = Game.GetForm(childID) as Actor
+    bool shouldTrigger = (adultActor != none && MARAS.ShouldTriggerSkyrimNetNarration(adultActor, none)) || (mother != none && MARAS.ShouldTriggerSkyrimNetNarration(mother, none))
+    bool skipTrigger = !shouldTrigger
+    string json = BuildJson("ttm_child_became_adult", msg, skipTrigger = skipTrigger, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
     Actor speaker = mother
     if(speaker == none)
         speaker = presumedFather
@@ -538,36 +836,72 @@ Function RegisterChildBecameAdult(int childID, string childName = "") global
     if(speaker == none)
         speaker = TTM_Data.GetPlayer()
     endif
-    SkyrimNetApi.RegisterEvent("ttm_event", json, speaker, none)
+    Actor awareBio = bioFather
+    if(isSecretForBio)
+        awareBio = none
+    endif
+    if(isSecretForAssumed && presumedFather != none)
+        if(mother != none || awareBio != none)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, awareBio))
+        endif
+        string maskedMsg = ""
+        if(motherName != "" && presumedFatherName != "")
+            maskedMsg = motherName + " and " + presumedFatherName + "'s " + childRelation + ", " + childName + ", has completed " + possPronoun + " training and come of age as an adult."
+        elseif(presumedFatherName != "")
+            maskedMsg = presumedFatherName + "'s " + childRelation + ", " + childName + ", has completed " + possPronoun + " training and come of age as an adult."
+        else
+            maskedMsg = childName + " has completed " + possPronoun + " training and come of age as an adult."
+        endif
+        string maskedJson = BuildJson("ttm_child_became_adult", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, adultActor))
+    elseif(isSecretForBio)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience3(mother, presumedFather, adultActor))
+    else
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, adultActor, false)
+    endif
 EndFunction
 
 
 ;/
   RegisterPaternitySecretEvent:
-  Dispatches a SkyrimNet event (skipTrigger=true) for paternity secret resolution.
-  Handles exactly 5 canonical cases:
+  Dispatches a SkyrimNet event for paternity secret resolution.
+  Handles canonical cases:
   - "mother_confessed_bio"
   - "mother_confessed_presumed"
   - "mother_confessed_both"
   - "bio_father_learnt"
   - "presumed_father_learnt"
+  - "mother_shared_pregnancy_presumed"
+  - "pregnancy_visible_presumed"
+  - "divorce_revealed"
 /;
 Function RegisterPaternitySecretEvent(int childID, string caseType, string customSummary = "") global
     if(!TTM_Data.GetHasSkyrimNet() || childID == 0)
         return
     endif
 
+    bool wasPregUnannounced = false
+    if(caseType == "mother_confessed_presumed_unannounced")
+        caseType = "mother_confessed_presumed"
+        wasPregUnannounced = true
+    elseif(caseType == "presumed_father_learnt_unannounced")
+        caseType = "presumed_father_learnt"
+        wasPregUnannounced = true
+    elseif(caseType == "mother_confessed_both_unannounced")
+        caseType = "mother_confessed_both"
+        wasPregUnannounced = true
+    endif
+
     Actor mother = MARAS.GetBioMother(childID)
     Actor presumedFather = MARAS.GetMotherPartner(childID)
     Actor bioFather = MARAS.GetBioFather(childID)
 
+    bool isUnborn = (MARAS.GetChildStage(childID) == 0)
     string childName = MARAS.GetChildName(childID)
-    if(childName == "")
-        if(MARAS.GetChildStage(childID) == 0)
-            childName = "unborn child"
-        else
-            childName = "the child"
-        endif
+    if(isUnborn)
+        childName = "unborn child"
+    elseif(childName == "" || childName == "Newborn")
+        childName = "the child"
     endif
 
     string motherName = TTM_Utils.GetActorName(mother)
@@ -579,6 +913,7 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
 
     bool stillSecretAssumed = MARAS.IsSecretForPartner(childID)
     bool stillSecretBio = MARAS.IsSecretForBioFather(childID)
+    bool stillPregSecretAssumed = MARAS.IsPregnancySecretForPartner(childID)
 
     if (presumedFather == mother || presumedFather == none)
         presumedFather = none
@@ -596,10 +931,24 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
     ; 1. MOTHER CONFESSED TO BIO FATHER
     ; =========================================================================
     if(caseType == "mother_confessed_bio")
-        if(stillSecretAssumed)
-            msg = motherName + " confessed to " + bioFatherName + " that he is the true biological father of " + childName + ". However, " + presumedFatherName + " does not know and still believes the child is his."
+        if(isUnborn)
+            if(stillSecretAssumed)
+                if(stillPregSecretAssumed)
+                    msg = motherName + " confessed to " + bioFatherName + " that she is pregnant with his child. However, her partner " + presumedFatherName + " does not even know she is pregnant yet."
+                else
+                    msg = motherName + " confessed to " + bioFatherName + " that she is pregnant with his child. However, her partner " + presumedFatherName + " does not know the truth and believes the unborn baby is his."
+                endif
+            elseif(presumedFather != none)
+                msg = motherName + " confessed to " + bioFatherName + " that she is pregnant with his child. Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+            else
+                msg = motherName + " confessed to " + bioFatherName + " that she is pregnant with his child."
+            endif
         else
-            msg = motherName + " confessed to " + bioFatherName + " that he is the true biological father of " + childName + ". Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+            if(stillSecretAssumed)
+                msg = motherName + " confessed to " + bioFatherName + " that he is the true biological father of " + childName + ". However, " + presumedFatherName + " does not know and still believes the child is his."
+            else
+                msg = motherName + " confessed to " + bioFatherName + " that he is the true biological father of " + childName + ". Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+            endif
         endif
         speaker = mother
         target = bioFather
@@ -608,10 +957,26 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
     ; 2. MOTHER CONFESSED TO PRESUMED FATHER
     ; =========================================================================
     elseif(caseType == "mother_confessed_presumed")
-        if(stillSecretBio)
-            msg = motherName + " confessed to " + presumedFatherName + " that " + childName + " was biologically fathered by " + bioFatherName + ", not him. However, " + bioFatherName + " does not know that he is the biological father."
+        if(isUnborn)
+            if(wasPregUnannounced)
+                if(stillSecretBio)
+                    msg = motherName + " confessed to her partner " + presumedFatherName + " that she is pregnant, and that the baby was fathered by " + bioFatherName + ", not him (" + presumedFatherName + " did not previously know she was pregnant). However, " + bioFatherName + " has not been told yet."
+                else
+                    msg = motherName + " confessed to her partner " + presumedFatherName + " that she is pregnant, and that the baby was fathered by " + bioFatherName + ", not him (" + presumedFatherName + " did not previously know she was pregnant). Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+                endif
+            else
+                if(stillSecretBio)
+                    msg = motherName + " confessed to " + presumedFatherName + " that the unborn baby she is carrying (which he believed was his) was actually fathered by " + bioFatherName + ", not him. However, " + bioFatherName + " does not know that he is the biological father."
+                else
+                    msg = motherName + " confessed to " + presumedFatherName + " that the unborn baby she is carrying (which he believed was his) was actually fathered by " + bioFatherName + ", not him. Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+                endif
+            endif
         else
-            msg = motherName + " confessed to " + presumedFatherName + " that " + childName + " was biologically fathered by " + bioFatherName + ", not him. Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+            if(stillSecretBio)
+                msg = motherName + " confessed to " + presumedFatherName + " that " + childName + " was biologically fathered by " + bioFatherName + ", not him. However, " + bioFatherName + " does not know that he is the biological father."
+            else
+                msg = motherName + " confessed to " + presumedFatherName + " that " + childName + " was biologically fathered by " + bioFatherName + ", not him. Both " + presumedFatherName + " and " + bioFatherName + " now know the truth."
+            endif
         endif
         speaker = mother
         target = presumedFather
@@ -620,7 +985,15 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
     ; 3. MOTHER CONFESSED TO BOTH
     ; =========================================================================
     elseif(caseType == "mother_confessed_both")
-        msg = motherName + " has revealed the truth of " + childName + "'s biological paternity: both " + presumedFatherName + " and " + bioFatherName + " now know that " + bioFatherName + " is the true biological father."
+        if(isUnborn)
+            if(wasPregUnannounced)
+                msg = motherName + " revealed in front of both her partner " + presumedFatherName + " and " + bioFatherName + " that she is pregnant with " + bioFatherName + "'s child. " + presumedFatherName + " did not previously know she was pregnant and has just learned both that she is expecting and that " + bioFatherName + " is the father."
+            else
+                msg = motherName + " revealed to both her partner " + presumedFatherName + " and " + bioFatherName + " that the unborn baby she is carrying was fathered by " + bioFatherName + ", not " + presumedFatherName + "."
+            endif
+        else
+            msg = motherName + " has revealed the truth of " + childName + "'s biological paternity: both " + presumedFatherName + " and " + bioFatherName + " now know that " + bioFatherName + " is the true biological father."
+        endif
         speaker = mother
         target = none
 
@@ -628,10 +1001,22 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
     ; 4. BIO FATHER LEARNT
     ; =========================================================================
     elseif(caseType == "bio_father_learnt")
-        if(stillSecretAssumed)
-            msg = bioFatherName + " has learned that he is the true biological father of " + childName + " with " + motherName + ". However, " + presumedFatherName + " does not know and still believes the child is his."
+        if(isUnborn)
+            if(stillSecretAssumed)
+                if(stillPregSecretAssumed)
+                    msg = bioFatherName + " has learned that " + motherName + " is pregnant with his child. However, her partner " + presumedFatherName + " does not even know she is pregnant yet."
+                else
+                    msg = bioFatherName + " has learned that " + motherName + " is pregnant with his child. However, her partner " + presumedFatherName + " does not know and still believes the unborn baby is his."
+                endif
+            else
+                msg = bioFatherName + " has learned that " + motherName + " is pregnant with his child. Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the true biological paternity."
+            endif
         else
-            msg = bioFatherName + " has learned that he is the true biological father of " + childName + " with " + motherName + ". Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the true biological paternity."
+            if(stillSecretAssumed)
+                msg = bioFatherName + " has learned that he is the true biological father of " + childName + " with " + motherName + ". However, " + presumedFatherName + " does not know and still believes the child is his."
+            else
+                msg = bioFatherName + " has learned that he is the true biological father of " + childName + " with " + motherName + ". Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the true biological paternity."
+            endif
         endif
         speaker = bioFather
         target = mother
@@ -640,16 +1025,59 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
     ; 5. PRESUMED FATHER LEARNT
     ; =========================================================================
     elseif(caseType == "presumed_father_learnt")
-        if(stillSecretBio)
-            msg = presumedFatherName + " has learned that " + childName + " was biologically fathered by " + bioFatherName + ", not him. However, " + bioFatherName + " does not know that he is the biological father."
+        if(isUnborn)
+            if(wasPregUnannounced)
+                if(stillSecretBio)
+                    msg = presumedFatherName + " has discovered that his partner " + motherName + " is pregnant with a child fathered by " + bioFatherName + ", not him (" + presumedFatherName + " did not previously know she was pregnant). However, " + bioFatherName + " does not know yet."
+                else
+                    msg = presumedFatherName + " has discovered that his partner " + motherName + " is pregnant with a child fathered by " + bioFatherName + ", not him (" + presumedFatherName + " did not previously know she was pregnant). Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the truth."
+                endif
+            else
+                if(stillSecretBio)
+                    msg = presumedFatherName + " has learned that the unborn baby " + motherName + " is carrying (which he believed was his) was actually fathered by " + bioFatherName + ", not him. However, " + bioFatherName + " does not know that he is the biological father."
+                else
+                    msg = presumedFatherName + " has learned that the unborn baby " + motherName + " is carrying (which he believed was his) was actually fathered by " + bioFatherName + ", not him. Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the truth."
+                endif
+            endif
         else
-            msg = presumedFatherName + " has learned that " + childName + " was biologically fathered by " + bioFatherName + ", not him. Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the true biological paternity."
+            if(stillSecretBio)
+                msg = presumedFatherName + " has learned that " + childName + " was biologically fathered by " + bioFatherName + ", not him. However, " + bioFatherName + " does not know that he is the biological father."
+            else
+                msg = presumedFatherName + " has learned that " + childName + " was biologically fathered by " + bioFatherName + ", not him. Both " + presumedFatherName + " and " + bioFatherName + " are now aware of the true biological paternity."
+            endif
         endif
         speaker = presumedFather
         target = mother
 
     ; =========================================================================
-    ; 6. DIVORCE REVEALED
+    ; 6. MOTHER SHARED PREGNANCY (PARTNER PRESUMES PATERNITY)
+    ; =========================================================================
+    elseif(caseType == "mother_shared_pregnancy_presumed")
+        if(stillSecretBio)
+            msg = motherName + " shared the news of her pregnancy with her partner " + presumedFatherName + ", letting him believe the unborn baby is his while concealing that " + bioFatherName + " is the true biological father. " + bioFatherName + " still does not know about the pregnancy."
+        else
+            msg = motherName + " shared the news of her pregnancy with her partner " + presumedFatherName + ", letting him believe the unborn baby is his while concealing that " + bioFatherName + " is the true biological father (though " + bioFatherName + " already knows the truth)."
+        endif
+        speaker = mother
+        target = presumedFather
+
+    ; =========================================================================
+    ; 7. PREGNANCY VISIBLY SHOWS (PARTNER PRESUMES PATERNITY)
+    ; =========================================================================
+    elseif(caseType == "pregnancy_visible_presumed")
+        if(stillSecretBio)
+            msg = motherName + "'s pregnancy has become visibly rounded and can no longer be hidden. Because she never confessed the affair, her partner " + presumedFatherName + " now knows she is pregnant and naturally assumes the unborn baby is his, unaware that " + bioFatherName + " is the true biological father."
+        else
+            msg = motherName + "'s pregnancy has become visibly rounded and can no longer be hidden. Her partner " + presumedFatherName + " now knows she is pregnant and assumes the unborn baby is his, unaware that " + bioFatherName + " is the true biological father (while " + bioFatherName + " already knows the truth)."
+        endif
+        speaker = presumedFather
+        if(speaker == none)
+            speaker = mother
+        endif
+        target = mother
+
+    ; =========================================================================
+    ; 8. DIVORCE REVEALED
     ; =========================================================================
     elseif(caseType == "divorce_revealed")
         msg = "Following " + motherName + "'s divorce, the paternity secret of " + childName + " has been resolved: " + bioFatherName + " is recognized as the true biological father."
@@ -675,47 +1103,108 @@ Function RegisterPaternitySecretEvent(int childID, string caseType, string custo
         speaker = TTM_Data.GetPlayer()
     endif
 
-    string json = BuildJson("ttm_paternity_secret_resolved", msg, skipTrigger = false, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, paternityOutcome = caseType)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, speaker, target)
-    TTM_Debug.info("TTM_ServiceSkyrimNet.RegisterPaternitySecretEvent: [" + caseType + "] (skipTrigger=false) " + msg)
-EndFunction
+    bool skipTrigger = true
+    if(caseType == "divorce_revealed" || IsActionNarrationSuppressed())
+        skipTrigger = true
+    elseif(caseType == "mother_confessed_both")
+        skipTrigger = !(MARAS.ShouldTriggerSkyrimNetNarration(mother, presumedFather) || MARAS.ShouldTriggerSkyrimNetNarration(mother, bioFather))
+    elseif(caseType == "mother_confessed_bio")
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(mother, bioFather)
+    elseif(caseType == "mother_confessed_presumed" || caseType == "mother_shared_pregnancy_presumed")
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(mother, presumedFather)
+    elseif(caseType == "bio_father_learnt")
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(bioFather, none)
+        if(target != none && !MARAS.ShouldTriggerSkyrimNetNarration(bioFather, target))
+            target = none
+        endif
+    elseif(caseType == "presumed_father_learnt")
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(presumedFather, none)
+        if(target != none && !MARAS.ShouldTriggerSkyrimNetNarration(presumedFather, target))
+            target = none
+        endif
+    elseif(caseType == "pregnancy_visible_presumed")
+        Actor pSpeaker = presumedFather
+        if(pSpeaker == none)
+            pSpeaker = mother
+        endif
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(pSpeaker, mother)
+    else
+        Actor fSpeaker = bioFather
+        if(fSpeaker == none)
+            fSpeaker = presumedFather
+        endif
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(fSpeaker, mother)
+    endif
 
-Function RegisterPaternitySecretLearned(int childID, Actor fatherWhoLearned, bool isDiscovery, Actor mother = none, bool isBoth = false, bool isConfession = false) global
-    Actor bioFather = MARAS.GetBioFather(childID)
-    string caseType = ""
-    if (isConfession)
-        if (isBoth)
-            caseType = "mother_confessed_both"
-        elseif (fatherWhoLearned == bioFather)
-            caseType = "mother_confessed_bio"
+    string json = BuildJson("ttm_paternity_secret_resolved", msg, skipTrigger = skipTrigger, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, paternityOutcome = caseType)
+    if(caseType == "mother_confessed_bio")
+        if(stillSecretAssumed)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, true, MakeAudience2(mother, bioFather))
         else
-            caseType = "mother_confessed_presumed"
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, false)
+        endif
+    elseif(caseType == "mother_confessed_presumed")
+        if(stillSecretBio)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, true, MakeAudience2(mother, presumedFather))
+        else
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, false)
+        endif
+    elseif(caseType == "mother_confessed_both")
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, false)
+    elseif(caseType == "bio_father_learnt")
+        if(stillSecretAssumed)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, true, MakeAudience2(bioFather, mother))
+        else
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, false)
+        endif
+    elseif(caseType == "presumed_father_learnt")
+        if(stillSecretBio)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, true, MakeAudience2(presumedFather, mother))
+        else
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, false)
+        endif
+    elseif(caseType == "mother_shared_pregnancy_presumed")
+        Actor awareBio = bioFather
+        if(stillSecretBio)
+            awareBio = none
+        endif
+        bool skipTriggerMother = skipTrigger
+        if(mother == TTM_Data.GetPlayer())
+            skipTriggerMother = true
+        endif
+        string jsonMother = BuildJson("ttm_paternity_secret_resolved", msg, skipTrigger = skipTriggerMother, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, paternityOutcome = caseType)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", jsonMother, mother, none, true, MakeAudience2(mother, awareBio))
+        if(presumedFather != none)
+            bool skipTriggerPartner = true
+            if(mother == TTM_Data.GetPlayer() && !IsActionNarrationSuppressed())
+                skipTriggerPartner = !MARAS.ShouldTriggerSkyrimNetNarration(presumedFather, mother)
+                if(!skipTriggerPartner)
+                    skipTrigger = false
+                endif
+            endif
+            string maskedMsg = motherName + " shared the news of her pregnancy with her partner " + presumedFatherName + ", telling him that she is expecting his child."
+            string jsonPartner = BuildJson("ttm_paternity_secret_resolved", maskedMsg, skipTrigger = skipTriggerPartner, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, paternityOutcome = caseType)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", jsonPartner, presumedFather, none, true, MakeAudience2(presumedFather, none))
+        endif
+    elseif(caseType == "pregnancy_visible_presumed")
+        Actor awareBio = bioFather
+        if(stillSecretBio)
+            awareBio = none
+        endif
+        string jsonMother = BuildJson("ttm_paternity_secret_resolved", msg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = bioFatherName, presumedFather = presumedFatherName, paternityOutcome = caseType)
+        MARAS.RegisterSkyrimNetEvent("ttm_event", jsonMother, mother, none, true, MakeAudience2(mother, awareBio))
+        if(presumedFather != none)
+            string maskedMsg = motherName + "'s pregnancy has become visibly rounded. Her partner " + presumedFatherName + " now knows she is pregnant and naturally assumes the unborn baby is his."
+            string jsonPartner = BuildJson("ttm_paternity_secret_resolved", maskedMsg, skipTrigger = skipTrigger, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, paternityOutcome = caseType)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", jsonPartner, presumedFather, none, true, MakeAudience2(presumedFather, none))
         endif
     else
-        if (fatherWhoLearned == bioFather)
-            caseType = "bio_father_learnt"
-        else
-            caseType = "presumed_father_learnt"
-        endif
+        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, target, false)
     endif
-    RegisterPaternitySecretEvent(childID, caseType)
-EndFunction
-
-Function RegisterPaternitySecretResolved(Actor mother, string childName, Actor bioFather, Actor presumedFather, string outcome, string summary = "", int childID = 0) global
-    if(!TTM_Data.GetHasSkyrimNet() || childID == 0)
-        return
+    if(!skipTrigger)
+        SuppressNextActionNarration(3.0)
     endif
-    string caseType = outcome
-    if (outcome == "confession")
-        caseType = "mother_confessed_presumed"
-    elseif (outcome == "discovery" || outcome == "assumed_father_resolved")
-        caseType = "presumed_father_learnt"
-    elseif (outcome == "bio_father_resolved")
-        caseType = "bio_father_learnt"
-    elseif (outcome == "both_fathers_resolved")
-        caseType = "mother_confessed_both"
-    endif
-    RegisterPaternitySecretEvent(childID, caseType)
+    TTM_Debug.info("TTM_ServiceSkyrimNet.RegisterPaternitySecretEvent: [" + caseType + "] (skipTrigger=" + skipTrigger + ") " + msg)
 EndFunction
 
 Function RegisterAffairConfessed(Actor cheater, Actor victim, Actor affairPartner, string reasoning = "") global
@@ -733,8 +1222,15 @@ Function RegisterAffairConfessed(Actor cheater, Actor victim, Actor affairPartne
         msg += " with " + partnerName
     endif
     msg += "."
-    string json = BuildJson("ttm_affair_confessed", msg, skipTrigger = false, cheater = cheaterName, victim = victimName, affairPartner = partnerName)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, cheater, victim)
+    bool skipTrigger = true
+    if(!IsActionNarrationSuppressed())
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(cheater, victim)
+    endif
+    string json = BuildJson("ttm_affair_confessed", msg, skipTrigger = skipTrigger, cheater = cheaterName, victim = victimName, affairPartner = partnerName)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, cheater, victim)
+    if(!skipTrigger)
+        SuppressNextActionNarration(3.0)
+    endif
 EndFunction
 
 Function RegisterAffairExposed(Actor affairPartner, Actor victim, Actor cheater, string reasoning = "") global
@@ -752,8 +1248,15 @@ Function RegisterAffairExposed(Actor affairPartner, Actor victim, Actor cheater,
         msg += " with " + cheaterName
     endif
     msg += " directly to " + victimName + "."
-    string json = BuildJson("ttm_affair_exposed", msg, skipTrigger = false, cheater = cheaterName, victim = victimName, affairPartner = partnerName)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, affairPartner, victim)
+    bool skipTrigger = true
+    if(!IsActionNarrationSuppressed())
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(affairPartner, victim)
+    endif
+    string json = BuildJson("ttm_affair_exposed", msg, skipTrigger = skipTrigger, cheater = cheaterName, victim = victimName, affairPartner = partnerName)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, affairPartner, victim)
+    if(!skipTrigger)
+        SuppressNextActionNarration(3.0)
+    endif
 EndFunction
 
 Function RegisterAffairResolved(Actor initiator, Actor otherParty, Actor affairPartner, string resolution, string reasoning = "") global
@@ -776,8 +1279,15 @@ Function RegisterAffairResolved(Actor initiator, Actor otherParty, Actor affairP
     else
         msg = initName + " and " + otherName + " resolved their situation (" + resolution + ")."
     endif
-    string json = BuildJson("ttm_affair_resolved", msg, skipTrigger = false, cheater = initName, victim = otherName, affairPartner = partnerName, resolution = resolution)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, initiator, otherParty)
+    bool skipTrigger = true
+    if(!IsActionNarrationSuppressed())
+        skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(initiator, otherParty)
+    endif
+    string json = BuildJson("ttm_affair_resolved", msg, skipTrigger = skipTrigger, cheater = initName, victim = otherName, affairPartner = partnerName, resolution = resolution)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, initiator, otherParty)
+    if(!skipTrigger)
+        SuppressNextActionNarration(3.0)
+    endif
 EndFunction
 
 Function RegisterCheatingCaught(Actor victim, Actor cheater, Actor affairPartner, bool isWalkIn = false) global
@@ -798,10 +1308,11 @@ Function RegisterCheatingCaught(Actor victim, Actor cheater, Actor affairPartner
         msg = victimName + " discovered and caught " + cheaterName + " cheating with " + partnerName + "!"
     endif
 
-    string json = BuildJson("ttm_cheating_caught", msg, skipTrigger = false, \
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(victim, cheater)
+    string json = BuildJson("ttm_cheating_caught", msg, skipTrigger = skipTrigger, \
         cheater = cheaterName, victim = victimName, affairPartner = partnerName, \
         isWalkIn = isWalkIn, hasIsWalkIn = true)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, victim, cheater)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, victim, cheater)
 EndFunction
 
 Function RegisterOpenRelationshipWalkIn(Actor witness, Actor partner, Actor sexPartner, bool isWalkIn = false) global
@@ -817,10 +1328,11 @@ Function RegisterOpenRelationshipWalkIn(Actor witness, Actor partner, Actor sexP
 
     string msg = witnessName + " walked in on " + partnerName + " being intimate with " + sexPartnerName + " under their open relationship arrangement."
 
-    string json = BuildJson("ttm_open_relationship_walkin", msg, skipTrigger = false, \
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(witness, partner)
+    string json = BuildJson("ttm_open_relationship_walkin", msg, skipTrigger = skipTrigger, \
         partner = partnerName, victim = witnessName, affairPartner = sexPartnerName, \
         isOpen = true, hasIsOpen = true, isWalkIn = isWalkIn, hasIsWalkIn = true)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, witness, partner)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, witness, partner)
 EndFunction
 
 Function RegisterLaborStarted(Actor mother, Actor partner = none, int childCount = 1) global
@@ -839,8 +1351,16 @@ Function RegisterLaborStarted(Actor mother, Actor partner = none, int childCount
     if(partnerName != "")
         msg += " " + partnerName + " is at her side supporting her."
     endif
-    string json = BuildJson("ttm_labor_started", msg, skipTrigger = false, mother = motherName, partner = partnerName)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, mother, partner)
+    bool skipTrigger = !MARAS.ShouldTriggerSkyrimNetNarration(mother, none)
+    Actor eventTarget = partner
+    if(eventTarget != none && !MARAS.ShouldTriggerSkyrimNetNarration(mother, eventTarget))
+        eventTarget = none
+    endif
+    string json = BuildJson("ttm_labor_started", msg, skipTrigger = skipTrigger, mother = motherName, partner = partnerName)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, mother, eventTarget, false)
+    if(!skipTrigger)
+        SuppressNextActionNarration(3.0)
+    endif
 EndFunction
 
 Function RegisterLaborProgress(Actor mother, int bornCount, int totalCount) global
@@ -851,7 +1371,7 @@ Function RegisterLaborProgress(Actor mother, int bornCount, int totalCount) glob
     int remaining = totalCount - bornCount
     string msg = motherName + "'s labor continues: " + bornCount + " out of " + totalCount + " children are born, " + remaining + " to go."
     string json = BuildJson("ttm_labor_progress", msg, skipTrigger = true, mother = motherName)
-    SkyrimNetApi.RegisterEvent("ttm_event", json, mother, none)
+    MARAS.RegisterSkyrimNetEvent("ttm_event", json, mother, none, false)
 EndFunction
 
 Function RegisterEventSchema() global
@@ -925,12 +1445,10 @@ string Function BuildJson(string type, \
     string jsonData = "{"
     jsonData += "\"type\": \""+type+"\""
     jsonData += ",\"msg\": \""+msg+"\""
-    jsonData += ",\"skipTrigger\": "
-
     if(skipTrigger)
-        jsonData += "true"
+        jsonData += ", \"skipTrigger\": true"
     else
-        jsonData += "false"
+        jsonData += ", \"skipTrigger\": false"
     endif
 
     if(declinedAction != "")
@@ -1040,6 +1558,3 @@ string Function BuildJson(string type, \
     jsonData += "}"
     return jsonData
 EndFunction
-
-
-

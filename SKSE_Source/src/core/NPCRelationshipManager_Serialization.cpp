@@ -3,6 +3,7 @@
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/Serialization.h"
+#include "core/SkyrimNetProfileService.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -274,6 +275,25 @@ namespace MARAS {
                 !serialization->WriteRecordData(intent.createdGameDay) ||
                 !serialization->WriteRecordData(intent.relatedLoverID)) {
                 MARAS_LOG_ERROR("Failed to write pending partner intent for {:08X}", partnerID);
+                return false;
+            }
+        }
+
+        // Save Pregnancy Secret Extension Block ('PRG1' = 0x50524731)
+        constexpr std::uint32_t kPregnancySecretExtMagic = 0x50524731;
+        if (!serialization->WriteRecordData(kPregnancySecretExtMagic)) {
+            MARAS_LOG_ERROR("Failed to write pregnancy secret extension magic");
+            return false;
+        }
+        std::uint32_t pregSecretCount = static_cast<std::uint32_t>(childrenByID.size());
+        if (!serialization->WriteRecordData(pregSecretCount)) {
+            MARAS_LOG_ERROR("Failed to write pregnancy secret count");
+            return false;
+        }
+        for (const auto& [cID, entry] : childrenByID) {
+            if (!serialization->WriteRecordData(entry.childID) ||
+                !serialization->WriteRecordData(entry.paternitySecret.isPregnancySecretForPartner)) {
+                MARAS_LOG_ERROR("Failed to write pregnancy secret state for child {:08X}", cID);
                 return false;
             }
         }
@@ -741,9 +761,16 @@ namespace MARAS {
                         RE::FormID guardianB = newPB;
                         RE::FormID bioMother = newBioA;
                         RE::FormID bioFather = newBioB;
+                        if (newPresumedFather != 0 &&
+                            ((!pSec.isSecret && !pSec.discovered) ||
+                             MatchesActor(newPresumedFather, bioMother) ||
+                             (bioFather != 0 && MatchesActor(newPresumedFather, bioFather)))) {
+                            newPresumedFather = 0;
+                        }
 
                         childrenByID.emplace(newChild, ChildRegistryEntry(newChild, guardianA, guardianB, childName, ts, isAdopted, bioMother, bioFather,
                                                                           isBioChild, concTs, birthTs, pSec, stage, trainingLoc, childGender, newPresumedFather));
+                        SkyrimNetProfileService::GetSingleton().MarkActorStageUpdated(newChild, stage);
                     }
                 }
             }
@@ -807,8 +834,10 @@ namespace MARAS {
                                 if (itPair != relationshipPairs.end()) {
                                     for (auto& rec : itPair->second.cheatingRecords) {
                                         if (rec.cheaterID == newCheater && rec.victimID == newVictim && rec.affairPartnerID == newAffair) {
-                                            if (rawStage < static_cast<std::uint8_t>(AffairStage::_Count)) {
+                                            if (newVictim == kPlayerFormID && rawStage < static_cast<std::uint8_t>(AffairStage::_Count)) {
                                                 rec.affairStage = static_cast<AffairStage>(rawStage);
+                                            } else {
+                                                rec.affairStage = AffairStage::Physical;
                                             }
                                             rec.stageStartDay = stStartDay;
                                             break;
@@ -840,6 +869,43 @@ namespace MARAS {
                                 rawIntent > 0 && rawIntent < static_cast<std::uint8_t>(PartnerIntentType::_Count)) {
                                 pendingPartnerIntents_[newPartner] = PendingPartnerIntent(
                                     static_cast<PartnerIntentType>(rawIntent), createdDay, newLover);
+                            }
+                        }
+                    }
+
+                    // Optional Pregnancy Secret Extension Block ('PRG1' = 0x50524731)
+                    constexpr std::uint32_t kPregnancySecretExtMagic = 0x50524731;
+                    if (hasRemainingBytes(sizeof(std::uint32_t))) {
+                        std::uint32_t prgMagic = 0;
+                        if (readValue(prgMagic) && prgMagic == kPregnancySecretExtMagic) {
+                            std::uint32_t pregSecretCount = 0;
+                            if (readValue(pregSecretCount)) {
+                                for (std::uint32_t pIdx = 0; pIdx < pregSecretCount; ++pIdx) {
+                                    RE::FormID oldChild = 0, newChild = 0;
+                                    bool isPregSecret = false;
+                                    if (!readValue(oldChild) || !readValue(isPregSecret)) {
+                                        break;
+                                    }
+                                    bool validChild = false;
+                                    if (oldChild == kPlayerFormID) {
+                                        newChild = kPlayerFormID;
+                                        validChild = true;
+                                    } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                        newChild = oldChild;
+                                        validChild = true;
+                                    } else {
+                                        validChild = serialization->ResolveFormID(oldChild, newChild);
+                                    }
+                                    if (validChild) {
+                                        auto itChild = childrenByID.find(newChild);
+                                        if (itChild != childrenByID.end()) {
+                                            itChild->second.paternitySecret.isPregnancySecretForPartner =
+                                                (itChild->second.stage == ChildStage::Unborn && itChild->second.paternitySecret.isSecretForPartner)
+                                                    ? isPregSecret
+                                                    : false;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

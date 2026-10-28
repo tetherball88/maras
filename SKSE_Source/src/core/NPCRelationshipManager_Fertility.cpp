@@ -2,6 +2,7 @@
 
 #include "core/NPCIndex.h"
 #include "core/SkyrimNetIntegration.h"
+#include "core/SkyrimNetMemoryService.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -78,7 +79,7 @@ namespace MARAS {
         for (auto& [cID, entry] : childrenByID) {
             if (entry.stage == ChildStage::Adult) continue;
 
-            bool withMother = MatchesActor(entry.guardianAID, motherID) || MatchesActor(entry.guardianBID, motherID);
+            bool withMother = entry.HasGuardian(motherID);
             if (!withMother) continue;
 
             RE::FormID bioFatherID = GetBioFather(cID);
@@ -99,7 +100,8 @@ namespace MARAS {
 
             float ageDays = (entry.stage == ChildStage::Unborn) ? 0.0f : std::max(0.0f, currentDay - entry.birthTimestamp);
             bool isPreg = (entry.stage == ChildStage::Unborn);
-            candidates.push_back({ bioFatherID, isPreg, entry.name.empty() ? ActorSvc::GetName(cID) : entry.name, ageDays });
+            std::string candChildName = (entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name;
+            candidates.push_back({ bioFatherID, isPreg, candChildName, ageDays });
             seenFathers.insert(bioFatherID);
         }
 
@@ -165,6 +167,15 @@ namespace MARAS {
             ctx["isPregnancy"] = cand.isPregnancy;
             ctx["childName"] = cand.childName;
             ctx["childAgeDays"] = static_cast<int>(std::round(cand.childAgeDays));
+
+            nlohmann::json recentEventsParticipants = nlohmann::json::array();
+            uint64_t motherUUID = ctx["motherUUID"].get<uint64_t>();
+            uint64_t bioFatherUUID = ctx["bioFatherUUID"].get<uint64_t>();
+            uint64_t formerSpouseUUID = ctx["formerSpouseUUID"].get<uint64_t>();
+            if (motherUUID != 0) recentEventsParticipants.push_back(motherUUID);
+            if (bioFatherUUID != 0 && bioFatherUUID != motherUUID) recentEventsParticipants.push_back(bioFatherUUID);
+            if (formerSpouseUUID != 0 && formerSpouseUUID != motherUUID && formerSpouseUUID != bioFatherUUID) recentEventsParticipants.push_back(formerSpouseUUID);
+            ctx["recent_events_participants"] = std::move(recentEventsParticipants);
 
             std::string promptName = "maras_evaluations/maras_step_in_evaluation";
             std::string contextJson = ctx.dump();
@@ -418,7 +429,7 @@ namespace MARAS {
     RE::FormID NPCRelationshipManager::FindChildPaternitySecret(RE::FormID parent1ID, RE::FormID parent2ID, const std::string& childName) const {
         auto matchesParent = [this](const ChildRegistryEntry& entry, RE::FormID pID) -> bool {
             if (pID == 0) return true;
-            return MatchesActor(entry.guardianAID, pID) || MatchesActor(entry.guardianBID, pID) ||
+            return entry.HasGuardian(pID) ||
                    MatchesActor(entry.bioMotherID, pID) || MatchesActor(entry.bioFatherID, pID) ||
                    MatchesActor(entry.presumedFatherID, pID) || MatchesActor(GetPrimaryPartner(entry.bioMotherID), pID);
         };
@@ -499,8 +510,8 @@ namespace MARAS {
         if (actorID == 0) return result;
         for (const auto& [cID, entry] : childrenByID) {
             if (!entry.paternitySecret.HasActiveSecret() || entry.paternitySecret.discovered) continue;
-            if (MatchesActor(entry.guardianAID, actorID) || MatchesActor(entry.bioMotherID, actorID) ||
-                MatchesActor(entry.guardianBID, actorID) || MatchesActor(entry.bioFatherID, actorID) ||
+            if (entry.HasGuardian(actorID) || MatchesActor(entry.bioMotherID, actorID) ||
+                MatchesActor(entry.bioFatherID, actorID) ||
                 MatchesActor(entry.presumedFatherID, actorID) || MatchesActor(GetMotherPartner(cID), actorID)) {
                 result.push_back(cID);
             }
@@ -578,6 +589,7 @@ namespace MARAS {
             pSec.isSecret = true;
             pSec.isSecretForPartner = true;
             pSec.isSecretForBioFather = true;
+            pSec.isPregnancySecretForPartner = true;
             pSec.discovered = false;
             pSec.discoveredByPartner = false;
             pSec.discoveredByBioFather = false;
@@ -653,13 +665,22 @@ namespace MARAS {
         it->second.birthTimestamp = bTime;
         it->second.timestamp = static_cast<int32_t>(bTime);
         it->second.name = name.empty() ? "Newborn" : name;
-        RE::FormID prevGuardianB = it->second.guardianBID;
-        RE::FormID presumedFatherID = (it->second.presumedFatherID != 0)
-            ? it->second.presumedFatherID
-            : ((prevGuardianB != 0) ? prevGuardianB : GetPrimaryPartner(motherID));
-        if (it->second.presumedFatherID == 0 && presumedFatherID != 0 && it->second.bioFatherID != 0 && !MatchesActor(presumedFatherID, it->second.bioFatherID)) {
-            it->second.presumedFatherID = presumedFatherID;
+        it->second.paternitySecret.isPregnancySecretForPartner = false;
+        RE::FormID prevCoGuardian = GetCoGuardian(uID, motherID);
+        if (!it->second.paternitySecret.isSecret && !it->second.paternitySecret.discovered) {
+            it->second.presumedFatherID = 0;
+        } else if (it->second.presumedFatherID == 0 ||
+                   MatchesActor(it->second.presumedFatherID, motherID) ||
+                   (it->second.bioFatherID != 0 && MatchesActor(it->second.presumedFatherID, it->second.bioFatherID))) {
+            RE::FormID partnerID = GetPrimaryPartner(motherID);
+            if (partnerID != 0 && !MatchesActor(partnerID, motherID) &&
+                (it->second.bioFatherID == 0 || !MatchesActor(partnerID, it->second.bioFatherID))) {
+                it->second.presumedFatherID = partnerID;
+            } else {
+                it->second.presumedFatherID = 0;
+            }
         }
+        RE::FormID presumedFatherID = it->second.presumedFatherID;
         if (presumedFatherID == 0 && it->second.paternitySecret.isSecretForPartner) {
             it->second.paternitySecret.isSecretForPartner = false;
             if (!it->second.paternitySecret.isSecretForBioFather) {
@@ -670,9 +691,13 @@ namespace MARAS {
         ApplyBirthCustodyRules(uID, it->second, motherID, presumedFatherID, it->second.bioFatherID);
         UpdateChildBothParentsFaction(uID);
         UpdateSpouseChildrenFaction(motherID);
-        if (prevGuardianB != 0) UpdateSpouseChildrenFaction(prevGuardianB);
-        if (it->second.guardianAID != 0 && it->second.guardianAID != motherID && it->second.guardianAID != prevGuardianB) {
+        if (prevCoGuardian != 0) UpdateSpouseChildrenFaction(prevCoGuardian);
+        if (it->second.guardianAID != 0 && it->second.guardianAID != motherID && it->second.guardianAID != prevCoGuardian) {
             UpdateSpouseChildrenFaction(it->second.guardianAID);
+        }
+        if (it->second.guardianBID != 0 && it->second.guardianBID != motherID && it->second.guardianBID != prevCoGuardian &&
+            it->second.guardianBID != it->second.guardianAID) {
+            UpdateSpouseChildrenFaction(it->second.guardianBID);
         }
 
         MARAS_LOG_INFO("[Fertility] Promoted Unborn child {:08X} to Infant ('{}') for mother {:08X}. Birth: {:.2f}, SecretPartner: {}, SecretBio: {}",
@@ -892,7 +917,7 @@ namespace MARAS {
                 }
 
                 if (!result.partnerName.empty() && secretOthers > 0) {
-                    result.message += ", and she is keeping the true biological paternity a secret from " + result.partnerName + " (her current partner).";
+                    result.message += ", while her current partner " + result.partnerName + " does not know she is pregnant yet and neither " + result.partnerName + " nor the biological father knows unless she chooses to tell them right now.";
                 } else if (!result.partnerName.empty() && partnerIdx < 0) {
                     result.message += ", though " + result.partnerName + " is her current partner.";
                 } else {
@@ -915,13 +940,13 @@ namespace MARAS {
                     result.message += " with " + result.partnerName + ".";
                 } else if (!result.partnerName.empty() && !singleName.empty() && singleName != "an unknown father" && singleName != "Unknown") {
                     if (isSec) {
-                        result.message += " fathered by " + singleName + ", though " + result.partnerName + " is her current partner and she is keeping the true paternity a secret.";
+                        result.message += " fathered by " + singleName + " (while " + result.partnerName + " is her current partner). Neither " + result.partnerName + " nor " + singleName + " knows that she is pregnant yet unless she chooses to tell them right now.";
                     } else {
                         result.message += " fathered by " + singleName + ", though " + result.partnerName + " is her partner.";
                     }
                 } else if (!result.partnerName.empty()) {
                     if (isSec) {
-                        result.message += ", though " + result.partnerName + " is her current partner and she is keeping the true paternity a secret.";
+                        result.message += " (while " + result.partnerName + " is her current partner). " + result.partnerName + " does not know that she is pregnant yet unless she chooses to tell him right now.";
                     } else {
                         result.message += " with " + result.partnerName + ".";
                     }
@@ -968,9 +993,10 @@ namespace MARAS {
         std::string FormatChildItem(const BirthChildItem& c, bool withArticle = true) {
             std::string rel = c.relation.empty() ? "child" : c.relation;
             if (!withArticle) {
-                return rel + ", " + c.name;
+                return c.name.empty() ? rel : (rel + ", " + c.name);
             }
-            return (rel == "child" ? "a child, " : (rel == "son" ? "a son, " : "a daughter, ")) + c.name;
+            std::string base = (rel == "child" ? "a child" : (rel == "son" ? "a son" : "a daughter"));
+            return c.name.empty() ? base : (base + ", " + c.name);
         }
 
         std::string FormatChildrenGroup(const std::vector<BirthChildItem>& children) {
@@ -982,10 +1008,10 @@ namespace MARAS {
                 bool bothGirls = (children[0].gender == 1 && children[1].gender == 1);
                 bool bothBoys = (children[0].gender == 0 && children[1].gender == 0);
                 if (bothGirls) {
-                    return "twin daughters, " + children[0].name + " and " + children[1].name;
+                    return (!children[0].name.empty() && !children[1].name.empty()) ? ("twin daughters, " + children[0].name + " and " + children[1].name) : "twin daughters";
                 }
                 if (bothBoys) {
-                    return "twin sons, " + children[0].name + " and " + children[1].name;
+                    return (!children[0].name.empty() && !children[1].name.empty()) ? ("twin sons, " + children[0].name + " and " + children[1].name) : "twin sons";
                 }
                 return FormatChildItem(children[0], true) + ", and " + FormatChildItem(children[1], true);
             }
@@ -993,10 +1019,10 @@ namespace MARAS {
                 bool allGirls = (children[0].gender == 1 && children[1].gender == 1 && children[2].gender == 1);
                 bool allBoys = (children[0].gender == 0 && children[1].gender == 0 && children[2].gender == 0);
                 if (allGirls) {
-                    return "triplet daughters, " + children[0].name + ", " + children[1].name + ", and " + children[2].name;
+                    return (!children[0].name.empty() && !children[1].name.empty() && !children[2].name.empty()) ? ("triplet daughters, " + children[0].name + ", " + children[1].name + ", and " + children[2].name) : "triplet daughters";
                 }
                 if (allBoys) {
-                    return "triplet sons, " + children[0].name + ", " + children[1].name + ", and " + children[2].name;
+                    return (!children[0].name.empty() && !children[1].name.empty() && !children[2].name.empty()) ? ("triplet sons, " + children[0].name + ", " + children[1].name + ", and " + children[2].name) : "triplet sons";
                 }
             }
 
@@ -1013,7 +1039,8 @@ namespace MARAS {
         ChildBirthResult BuildChildBirthInternal(
             const NPCRelationshipManager& mgr,
             RE::FormID motherID,
-            const std::vector<RE::FormID>& childIDs)
+            const std::vector<RE::FormID>& childIDs,
+            bool maskSecrets = false)
         {
             ChildBirthResult result;
             if (motherID == 0) return result;
@@ -1022,6 +1049,15 @@ namespace MARAS {
             if (result.motherName.empty()) result.motherName = "Mother";
 
             RE::FormID partnerID = mgr.GetPrimaryPartner(motherID);
+            if (partnerID == 0) {
+                for (RE::FormID cID : childIDs) {
+                    RE::FormID mpID = mgr.GetMotherPartner(cID);
+                    if (mpID != 0 && !MatchesActor(mpID, motherID)) {
+                        partnerID = mpID;
+                        break;
+                    }
+                }
+            }
             if (partnerID != 0) {
                 result.partnerName = ActorSvc::GetName(partnerID);
             }
@@ -1030,8 +1066,7 @@ namespace MARAS {
             if (targetIDs.empty()) {
                 for (const auto& [cID, entry] : mgr.GetAllChildren()) {
                     RE::FormID actualMotherID = mgr.GetBioMother(cID);
-                    if (MatchesActor(actualMotherID, motherID) || MatchesActor(entry.guardianAID, motherID) ||
-                        MatchesActor(entry.guardianBID, motherID)) {
+                    if (MatchesActor(actualMotherID, motherID) || entry.HasGuardian(motherID)) {
                         if (entry.stage == ChildStage::Infant || entry.stage == ChildStage::Child) {
                             targetIDs.push_back(cID);
                         }
@@ -1048,7 +1083,7 @@ namespace MARAS {
 
                 BirthChildItem item;
                 item.childID = cID;
-                item.name = childOpt->name.empty() ? "Newborn" : childOpt->name;
+                item.name = (childOpt->name.empty() || StringUtils::CaseInsensitiveEquals(childOpt->name, "Newborn")) ? "" : childOpt->name;
                 item.gender = childOpt->gender;
                 if (item.gender == 0) {
                     item.relation = "son";
@@ -1078,11 +1113,17 @@ namespace MARAS {
                 if (!isSecPartner && partnerID != 0 && !isPart) {
                     isSecPartner = true;
                 }
+                if (maskSecrets && isSecPartner && partnerID != 0) {
+                    bID = partnerID;
+                    fName = result.partnerName;
+                    isPart = true;
+                    isSecPartner = false;
+                }
                 item.isSecretForPartner = isSecPartner;
-                item.isSecretForBio = childOpt->paternitySecret.isSecretForBioFather;
+                item.isSecretForBio = maskSecrets ? false : childOpt->paternitySecret.isSecretForBioFather;
 
                 ChildBirthResult::ChildJsonInfo cJson;
-                cJson.name = item.name;
+                cJson.name = item.name.empty() ? "child" : item.name;
                 cJson.gender = (item.gender == 0 ? "male" : (item.gender == 1 ? "female" : "unknown"));
                 cJson.relation = item.relation;
                 cJson.bioFather = fName;
@@ -1123,9 +1164,9 @@ namespace MARAS {
                 if (totalChildren == 1) {
                     const auto& c = fg.children.front();
                     if (fg.isPartner) {
-                        result.message = result.motherName + " gave birth to a healthy " + c.relation + ", " + c.name + ", fathered by " + fg.name + ".";
+                        result.message = result.motherName + " gave birth to a healthy " + c.relation + (c.name.empty() ? "" : ", " + c.name + ",") + " fathered by " + fg.name + ".";
                     } else if (!result.partnerName.empty()) {
-                        result.message = result.motherName + " gave birth to " + c.name + ". ";
+                        result.message = result.motherName + " gave birth to " + (c.name.empty() ? ("a newborn " + c.relation) : c.name) + ". ";
                         if (c.isSecretForPartner) {
                             result.message += result.partnerName + " believes the newborn " + c.relation + " is his, unaware that the true biological father is " + fg.name + ".";
                         } else {
@@ -1136,9 +1177,9 @@ namespace MARAS {
                         }
                     } else {
                         if (c.isSecretForBio) {
-                            result.message = result.motherName + " gave birth to " + c.name + ", a " + c.relation + " fathered by " + fg.name + ", though " + fg.name + " is unaware of the child.";
+                            result.message = result.motherName + " gave birth to " + (c.name.empty() ? ("a " + c.relation) : (c.name + ", a " + c.relation)) + " fathered by " + fg.name + ", though " + fg.name + " is unaware of the child.";
                         } else {
-                            result.message = result.motherName + " gave birth to a healthy " + c.relation + ", " + c.name + ", fathered by " + fg.name + ".";
+                            result.message = result.motherName + " gave birth to a healthy " + c.relation + (c.name.empty() ? "" : ", " + c.name + ",") + " fathered by " + fg.name + ".";
                         }
                     }
                 } else {
@@ -1261,30 +1302,53 @@ namespace MARAS {
         if (res.message.empty()) return "";
 
         nlohmann::json j;
+        RE::Actor* motherActor = (motherID == kPlayerFormID)
+                                     ? RE::PlayerCharacter::GetSingleton()
+                                     : NPCIndex::GetSingleton().GetActorFromFormId(motherID);
+        bool skipTrigger = !ShouldTriggerSkyrimNetNarration(motherActor, nullptr);
+
         j["type"] = "ttm_pregnancy_announced";
+        j["skipTrigger"] = skipTrigger;
         j["msg"] = res.message;
-        j["skipTrigger"] = false;
+        // computed dynamically above via ShouldTriggerSkyrimNetNarration
         if (!res.motherName.empty()) j["mother"] = res.motherName;
         if (!res.partnerName.empty()) j["partner"] = res.partnerName;
         if (!res.bioFatherJson.empty()) j["bioFather"] = res.bioFatherJson;
 
-        MARAS_LOG_INFO("[PregnancyAnnounced] {}", res.message);
-        return j.dump();
+        MARAS_LOG_INFO("[PregnancyAnnounced] (skipTrigger={}) {}", skipTrigger, res.message);
+        SkyrimNetMemoryService::GetSingleton().RecordPregnancyDiscovered(motherID, partnerID, fallbackBioID, fallbackBioName, childCount);
+        return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+
     }
 
-    std::string NPCRelationshipManager::BuildChildBirthMessage(RE::FormID motherID, const std::vector<RE::FormID>& childIDs) const {
-        auto res = BuildChildBirthInternal(*this, motherID, childIDs);
+    std::string NPCRelationshipManager::BuildChildBirthMessage(RE::FormID motherID, const std::vector<RE::FormID>& childIDs, bool maskSecrets) const {
+        auto res = BuildChildBirthInternal(*this, motherID, childIDs, maskSecrets);
         return res.message;
     }
 
-    std::string NPCRelationshipManager::BuildChildBirthJson(RE::FormID motherID, const std::vector<RE::FormID>& childIDs) const {
-        auto res = BuildChildBirthInternal(*this, motherID, childIDs);
+    std::string NPCRelationshipManager::BuildChildBirthJson(RE::FormID motherID, const std::vector<RE::FormID>& childIDs, bool maskSecrets) const {
+        auto res = BuildChildBirthInternal(*this, motherID, childIDs, maskSecrets);
         if (res.message.empty()) return "";
 
         nlohmann::json j;
+        RE::Actor* motherActor = (motherID == kPlayerFormID)
+                                     ? RE::PlayerCharacter::GetSingleton()
+                                     : NPCIndex::GetSingleton().GetActorFromFormId(motherID);
+        bool skipTrigger = !ShouldTriggerSkyrimNetNarration(motherActor, nullptr);
+        if (maskSecrets) {
+            if (motherID != kPlayerFormID) {
+                skipTrigger = true;
+            } else {
+                RE::FormID partnerID = GetPrimaryPartner(motherID);
+                RE::Actor* partnerActor = (partnerID != 0) ? NPCIndex::GetSingleton().GetActorFromFormId(partnerID) : nullptr;
+                skipTrigger = !ShouldTriggerSkyrimNetNarration(partnerActor, motherActor);
+            }
+        }
+
         j["type"] = "ttm_child_birth";
+        j["skipTrigger"] = skipTrigger;
         j["msg"] = res.message;
-        j["skipTrigger"] = false;
+        // computed dynamically above via ShouldTriggerSkyrimNetNarration
         if (!res.motherName.empty()) {
             j["mother"] = res.motherName;
         }
@@ -1303,8 +1367,12 @@ namespace MARAS {
         }
         j["children"] = childrenArr;
 
-        MARAS_LOG_INFO("[ChildBirth] {}", res.message);
-        return j.dump();
+        MARAS_LOG_INFO("[ChildBirth] (maskSecrets={}, skipTrigger={}) {}", maskSecrets, skipTrigger, res.message);
+        if (!maskSecrets) {
+            SkyrimNetMemoryService::GetSingleton().RecordChildBirth(motherID, childIDs);
+        }
+        return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+
     }
 
     RE::FormID NPCRelationshipManager::RegisterFertilityChild(RE::FormID syntheticChildID, RE::FormID motherID, RE::FormID presumedFatherID, RE::FormID bioFatherID, float conceptionTime, float birthTime, const std::string& name) {
@@ -1416,14 +1484,21 @@ namespace MARAS {
         return childID;
     }
 
-    bool NPCRelationshipManager::ResolvePaternitySecret(RE::FormID childID, bool discoveredByPartner) {
+    bool NPCRelationshipManager::ResolvePaternitySecret(RE::FormID childID, bool discoveredByPartner, bool sendEvent) {
         auto it = childrenByID.find(childID);
         if (it != childrenByID.end()) {
+            bool wasSecretPartner = it->second.paternitySecret.isSecretForPartner;
+            bool wasSecretBio = it->second.paternitySecret.isSecretForBioFather;
+            bool wasPregSecretPartner = (it->second.stage == ChildStage::Unborn) &&
+                                        wasSecretPartner &&
+                                        it->second.paternitySecret.isPregnancySecretForPartner;
+
             it->second.paternitySecret.discovered = true;
             it->second.paternitySecret.discoveredByPartner = discoveredByPartner;
             it->second.paternitySecret.isSecret = false;
             it->second.paternitySecret.isSecretForPartner = false;
             it->second.paternitySecret.isSecretForBioFather = false;
+            it->second.paternitySecret.isPregnancySecretForPartner = false;
             MARAS_LOG_INFO("[Fertility] Fully resolved paternity secret for child {:08X} (discoveredByPartner: {})", childID, discoveredByPartner);
 
             // If this is an unborn child, also resolve for all unborn siblings from the same biological father
@@ -1432,15 +1507,36 @@ namespace MARAS {
                 RE::FormID bioFatherID = GetBioFather(childID);
                 for (auto& [sibID, sibEntry] : childrenByID) {
                     if (sibID != childID && sibEntry.stage == ChildStage::Unborn &&
-                        MatchesActor(GetBioMother(sibID), motherID) && MatchesActor(GetBioFather(sibID), bioFatherID)) {
-                        sibEntry.paternitySecret.discovered = true;
-                        sibEntry.paternitySecret.discoveredByPartner = discoveredByPartner;
-                        sibEntry.paternitySecret.isSecret = false;
-                        sibEntry.paternitySecret.isSecretForPartner = false;
-                        sibEntry.paternitySecret.isSecretForBioFather = false;
-                        MARAS_LOG_INFO("[Fertility] Also fully resolved paternity secret on unborn sibling {:08X}", sibID);
+                        MatchesActor(GetBioMother(sibID), motherID)) {
+                        sibEntry.paternitySecret.isPregnancySecretForPartner = false;
+                        if (MatchesActor(GetBioFather(sibID), bioFatherID)) {
+                            sibEntry.paternitySecret.discovered = true;
+                            sibEntry.paternitySecret.discoveredByPartner = discoveredByPartner;
+                            sibEntry.paternitySecret.isSecret = false;
+                            sibEntry.paternitySecret.isSecretForPartner = false;
+                            sibEntry.paternitySecret.isSecretForBioFather = false;
+                            MARAS_LOG_INFO("[Fertility] Also fully resolved paternity secret on unborn sibling {:08X}", sibID);
+                        }
                     }
                 }
+            }
+
+            if (sendEvent && (wasSecretPartner || wasSecretBio)) {
+                std::string baseOutcome;
+                if (wasSecretPartner && wasSecretBio) {
+                    baseOutcome = "mother_confessed_both";
+                } else if (wasSecretPartner) {
+                    baseOutcome = discoveredByPartner ? "presumed_father_learnt" : "mother_confessed_presumed";
+                } else {
+                    baseOutcome = "mother_confessed_bio";
+                }
+                std::string eventOutcome = (wasSecretPartner && wasPregSecretPartner) ? (baseOutcome + "_unannounced") : baseOutcome;
+                if (auto* source = SKSE::GetModCallbackEventSource()) {
+                    float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
+                    source->SendEvent(&modEvent);
+                }
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, baseOutcome, "none", wasPregSecretPartner);
             }
             return true;
         }
@@ -1450,7 +1546,13 @@ namespace MARAS {
     bool NPCRelationshipManager::ResolvePaternitySecretForPartner(RE::FormID childID, bool discoveredByPartner, bool sendEvent) {
         auto it = childrenByID.find(childID);
         if (it != childrenByID.end()) {
+            if (!it->second.paternitySecret.isSecretForPartner) {
+                return false;
+            }
+            bool wasPregSecretPartner = (it->second.stage == ChildStage::Unborn) &&
+                                        it->second.paternitySecret.isPregnancySecretForPartner;
             it->second.paternitySecret.isSecretForPartner = false;
+            it->second.paternitySecret.isPregnancySecretForPartner = false;
             it->second.paternitySecret.discoveredByPartner = discoveredByPartner;
             if (!it->second.paternitySecret.isSecretForBioFather) {
                 it->second.paternitySecret.discovered = true;
@@ -1465,25 +1567,30 @@ namespace MARAS {
                 RE::FormID bioFatherID = GetBioFather(childID);
                 for (auto& [sibID, sibEntry] : childrenByID) {
                     if (sibID != childID && sibEntry.stage == ChildStage::Unborn &&
-                        MatchesActor(GetBioMother(sibID), motherID) && MatchesActor(GetBioFather(sibID), bioFatherID)) {
-                        sibEntry.paternitySecret.isSecretForPartner = false;
-                        sibEntry.paternitySecret.discoveredByPartner = discoveredByPartner;
-                        if (!sibEntry.paternitySecret.isSecretForBioFather) {
-                            sibEntry.paternitySecret.discovered = true;
-                            sibEntry.paternitySecret.isSecret = false;
+                        MatchesActor(GetBioMother(sibID), motherID)) {
+                        sibEntry.paternitySecret.isPregnancySecretForPartner = false;
+                        if (MatchesActor(GetBioFather(sibID), bioFatherID)) {
+                            sibEntry.paternitySecret.isSecretForPartner = false;
+                            sibEntry.paternitySecret.discoveredByPartner = discoveredByPartner;
+                            if (!sibEntry.paternitySecret.isSecretForBioFather) {
+                                sibEntry.paternitySecret.discovered = true;
+                                sibEntry.paternitySecret.isSecret = false;
+                            }
+                            MARAS_LOG_INFO("[Fertility] Also resolved paternity secret for partner on unborn sibling {:08X}", sibID);
                         }
-                        MARAS_LOG_INFO("[Fertility] Also resolved paternity secret for partner on unborn sibling {:08X}", sibID);
                     }
                 }
             }
 
             if (sendEvent) {
+                std::string baseOutcome = discoveredByPartner ? "presumed_father_learnt" : "mother_confessed_presumed";
+                std::string eventOutcome = wasPregSecretPartner ? (baseOutcome + "_unannounced") : baseOutcome;
                 if (auto* source = SKSE::GetModCallbackEventSource()) {
-                    std::string outcome = discoveredByPartner ? "presumed_father_learnt" : "mother_confessed_presumed";
                     float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", outcome, childIdFloat, nullptr);
+                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
                     source->SendEvent(&modEvent);
                 }
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, baseOutcome, "none", wasPregSecretPartner);
             }
 
             return true;
@@ -1491,9 +1598,52 @@ namespace MARAS {
         return false;
     }
 
+    bool NPCRelationshipManager::RevealPregnancyToPartner(RE::FormID childID, bool byVisibleBelly, bool sendEvent) {
+        auto it = childrenByID.find(childID);
+        if (it == childrenByID.end() || it->second.stage != ChildStage::Unborn) {
+            return false;
+        }
+        if (!it->second.paternitySecret.isPregnancySecretForPartner) {
+            return false;
+        }
+
+        it->second.paternitySecret.isPregnancySecretForPartner = false;
+        MARAS_LOG_INFO("[Fertility] Revealed pregnancy to partner on unborn child {:08X} (byVisibleBelly: {}, paternityStillSecretForPartner: {})",
+                       childID, byVisibleBelly, it->second.paternitySecret.isSecretForPartner);
+        PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
+
+        RE::FormID motherID = GetBioMother(childID);
+        if (motherID != 0) {
+            for (auto& [sibID, sibEntry] : childrenByID) {
+                if (sibID != childID && sibEntry.stage == ChildStage::Unborn &&
+                    MatchesActor(GetBioMother(sibID), motherID) &&
+                    sibEntry.paternitySecret.isPregnancySecretForPartner) {
+                    sibEntry.paternitySecret.isPregnancySecretForPartner = false;
+                    MARAS_LOG_INFO("[Fertility] Also revealed pregnancy to partner on unborn sibling {:08X}", sibID);
+                    PrismaUIDataBridge::GetSingleton().OnChildUpdated(sibEntry);
+                }
+            }
+        }
+
+        if (sendEvent) {
+            std::string outcome = byVisibleBelly ? "pregnancy_visible_presumed" : "mother_shared_pregnancy_presumed";
+            if (auto* source = SKSE::GetModCallbackEventSource()) {
+                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", outcome, childIdFloat, nullptr);
+                source->SendEvent(&modEvent);
+            }
+            SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, outcome);
+        }
+
+        return true;
+    }
+
     bool NPCRelationshipManager::ResolvePaternitySecretForBioFather(RE::FormID childID, bool discoveredByBioFather, bool sendEvent) {
         auto it = childrenByID.find(childID);
         if (it != childrenByID.end()) {
+            if (!it->second.paternitySecret.isSecretForBioFather) {
+                return false;
+            }
             it->second.paternitySecret.isSecretForBioFather = false;
             it->second.paternitySecret.discoveredByBioFather = discoveredByBioFather;
             if (!it->second.paternitySecret.isSecretForPartner) {
@@ -1522,12 +1672,13 @@ namespace MARAS {
             }
 
             if (sendEvent) {
+                std::string outcome = discoveredByBioFather ? "bio_father_learnt" : "mother_confessed_bio";
                 if (auto* source = SKSE::GetModCallbackEventSource()) {
-                    std::string outcome = discoveredByBioFather ? "bio_father_learnt" : "mother_confessed_bio";
                     float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
                     SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", outcome, childIdFloat, nullptr);
                     source->SendEvent(&modEvent);
                 }
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, outcome);
             }
 
             return true;
@@ -1535,35 +1686,59 @@ namespace MARAS {
         return false;
     }
 
-    bool NPCRelationshipManager::SetPaternitySecretEdges(RE::FormID childID, bool secretForBioFather, bool secretForPartner) {
+    bool NPCRelationshipManager::SetPaternitySecretEdges(RE::FormID childID, bool secretForBioFather, bool secretForPartner, std::optional<bool> pregnancySecretForPartner) {
         auto it = childrenByID.find(childID);
         if (it != childrenByID.end()) {
             bool wasSecretBio = it->second.paternitySecret.isSecretForBioFather;
-            bool wasSecretPartner = it->second.paternitySecret.isSecretForPartner;
+                const bool wasSecretPartner = (it->second.paternitySecret.isSecretForPartner);
+            bool wasPregnancySecretPartner = (it->second.stage == ChildStage::Unborn) && it->second.paternitySecret.isPregnancySecretForPartner;
 
             it->second.paternitySecret.isSecretForBioFather = secretForBioFather;
             it->second.paternitySecret.isSecretForPartner = secretForPartner;
+            if (!secretForPartner || it->second.stage != ChildStage::Unborn) {
+                it->second.paternitySecret.isPregnancySecretForPartner = false;
+            } else if (pregnancySecretForPartner.has_value()) {
+                it->second.paternitySecret.isPregnancySecretForPartner = *pregnancySecretForPartner;
+            }
             it->second.paternitySecret.isSecret = secretForBioFather || secretForPartner;
             it->second.paternitySecret.discovered = !it->second.paternitySecret.isSecret;
             it->second.paternitySecret.discoveredByPartner = !secretForPartner;
             it->second.paternitySecret.discoveredByBioFather = !secretForBioFather;
-            MARAS_LOG_INFO("[Fertility] Set paternity secret edges on child {:08X} (secretBio: {}, secretPartner: {})",
-                           childID, secretForBioFather, secretForPartner);
+            MARAS_LOG_INFO("[Fertility] Set paternity secret edges on child {:08X} (secretBio: {}, secretPartner: {}, pregSecretPartner: {})",
+                           childID, secretForBioFather, secretForPartner, it->second.paternitySecret.isPregnancySecretForPartner);
 
             // If a secret edge was lifted/learned, notify SkyrimNet via mod event
             bool bioLearned = wasSecretBio && !secretForBioFather;
             bool partnerLearned = wasSecretPartner && !secretForPartner;
+            bool pregnancyLearnedOnly = !partnerLearned && secretForPartner && wasPregnancySecretPartner && !it->second.paternitySecret.isPregnancySecretForPartner;
 
             if (auto* source = SKSE::GetModCallbackEventSource()) {
                 float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                if (bioLearned) {
+                if (bioLearned && partnerLearned) {
+                    std::string eventOutcome = wasPregnancySecretPartner ? "mother_confessed_both_unannounced" : "mother_confessed_both";
+                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
+                    source->SendEvent(&modEvent);
+                } else if (bioLearned) {
                     SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", "bio_father_learnt", childIdFloat, nullptr);
                     source->SendEvent(&modEvent);
-                }
-                if (partnerLearned) {
-                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", "presumed_father_learnt", childIdFloat, nullptr);
+                } else if (partnerLearned) {
+                    std::string eventOutcome = wasPregnancySecretPartner ? "presumed_father_learnt_unannounced" : "presumed_father_learnt";
+                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
+                    source->SendEvent(&modEvent);
+                } else if (pregnancyLearnedOnly) {
+                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", "mother_shared_pregnancy_presumed", childIdFloat, nullptr);
                     source->SendEvent(&modEvent);
                 }
+            }
+
+            if (bioLearned && partnerLearned) {
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, "mother_confessed_both", "none", wasPregnancySecretPartner);
+            } else if (bioLearned) {
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, "bio_father_learnt");
+            } else if (partnerLearned) {
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, "presumed_father_learnt", "none", wasPregnancySecretPartner);
+            } else if (pregnancyLearnedOnly) {
+                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, "mother_shared_pregnancy_presumed");
             }
 
             return true;
@@ -1671,6 +1846,16 @@ namespace MARAS {
         return false;
     }
 
+    bool NPCRelationshipManager::IsPregnancySecretForPartner(RE::FormID childID) const {
+        auto it = childrenByID.find(childID);
+        if (it != childrenByID.end()) {
+            if (it->second.stage != ChildStage::Unborn) return false;
+            if (GetMotherPartner(childID) == 0) return false;
+            return it->second.paternitySecret.isSecretForPartner && it->second.paternitySecret.isPregnancySecretForPartner;
+        }
+        return false;
+    }
+
     bool NPCRelationshipManager::SetChildStage(RE::FormID childID, ChildStage stage) {
         auto it = childrenByID.find(childID);
         if (it != childrenByID.end()) {
@@ -1762,7 +1947,7 @@ namespace MARAS {
         // First pass: match synthetic ID with exact mother and name
         for (const auto& [cID, entry] : childrenByID) {
             if (!IsSyntheticChildID(cID)) continue;
-            if (motherID != 0 && !MatchesActor(entry.guardianAID, motherID) && !MatchesActor(entry.guardianBID, motherID) &&
+            if (motherID != 0 && !entry.HasGuardian(motherID) &&
                 !MatchesActor(entry.bioMotherID, motherID) && !MatchesActor(GetBioMother(cID), motherID)) {
                 continue;
             }
@@ -1775,7 +1960,7 @@ namespace MARAS {
         if (motherID != 0 && name.empty()) {
             for (const auto& [cID, entry] : childrenByID) {
                 if (!IsSyntheticChildID(cID)) continue;
-                if (MatchesActor(entry.guardianAID, motherID) || MatchesActor(entry.guardianBID, motherID) ||
+                if (entry.HasGuardian(motherID) ||
                     MatchesActor(entry.bioMotherID, motherID) || MatchesActor(GetBioMother(cID), motherID)) {
                     return cID;
                 }
@@ -1852,4 +2037,3 @@ namespace MARAS {
     }
 
 }  // namespace MARAS
-

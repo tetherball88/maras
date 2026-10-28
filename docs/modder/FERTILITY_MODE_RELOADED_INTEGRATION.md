@@ -135,7 +135,22 @@ A child born naturally possesses a **Paternity Secret** whenever the biological 
 - `isSecret = true`
 - `isSecretForPartner = true` (partner unaware)
 - `isSecretForBioFather = true` (bio-father unaware)
+- `isPregnancySecretForPartner = true` (while `ChildStage::Unborn`, the mother's partner does not even know she is pregnant yet until she announces it or her belly visibly shows)
 - `hasPhenotypeMismatch = true` (evaluated when distinct racial phenotypes exist between presumed father and bio-father).
+
+### 4.1.1 Two-Phase Pregnancy & Paternity Secrecy Lifecycle
+1. **Phase 1 — Unannounced Affair Pregnancy (`isPregnancySecretForPartner = true`)**:
+   - At conception, when `bioFatherID != presumedFatherID`, neither the mother's partner nor the biological father knows she is pregnant yet.
+   - Positive pregnancy conception affection (`ApplyPregnancyConceivedAffection`) for the partner is deferred while `isPregnancySecretForPartner` is `true`.
+   - In SkyrimNet dialogue (`RevealChildSecret`), the mother can:
+     - Announce the pregnancy to her partner while letting him believe the baby is his (`revealMode = 'pregnancy_only'` $\rightarrow$ `RevealPregnancyToPartner(childID, false)`, which clears `isPregnancySecretForPartner = false`, keeps `isSecretForPartner = true`, awards the deferred pregnancy affection, and emits `maras_paternity_secret_resolved` with `"mother_shared_pregnancy_presumed"`).
+     - Confess the true biological paternity to her partner (`revealMode = 'true_paternity'` $\rightarrow$ `ResolvePaternitySecretForPartner`), tell the biological father (`ResolvePaternitySecretForBioFather`), or tell `'Both'` (`ResolvePaternitySecret` with `sendEvent = true`, emitting a single unified `"mother_confessed_both"` event). When paternity is revealed while `isPregnancySecretForPartner` was still `true`, both the SkyrimNet event (`_unannounced` variant) and `SkyrimNetMemoryService::RecordPaternityReveal` explicitly record that the partner had not previously known she was pregnant and learned about both the pregnancy and the affair paternity simultaneously.
+2. **Phase 2 — Visible Belly / Presumed Paternity (`isPregnancySecretForPartner = false`, `isSecretForPartner = true`)**:
+   - If the mother still has not told her partner by the time her belly becomes visibly rounded (at the start of the **2nd trimester**: `FMR_ActorStatus` / `ImmersiveEffectsFaction` rank $\ge 34$ in Fertility Mode Reloaded, or state `5`/`6`/`7` in Beeing Female NG `OnStateChange`), M.A.R.A.S automatically calls `RevealPregnancyToPartner(childID, true)` (emitting `"pregnancy_visible_presumed"`).
+   - Her partner now knows she is pregnant and naturally assumes the unborn child is his (`isPregnancySecretForPartner = false`, `isSecretForPartner = true`), while the biological father still only knows if told (`isSecretForBioFather = true`).
+3. **Perspective-Bound Prompt & Action Masking**:
+   - `BuildRelationshipProfileJSON` populates `expecting_pregnancies` for expectant fathers, strictly omitting the pregnancy for the partner while `isPregnancySecretForPartner` is `true` and for the biological father while `isSecretForBioFather` is `true`, and never leaking `bio_father` to an unaware partner.
+   - `0010_pregnancy.prompt`, `0020_children.prompt`, and `0050_infidelity.prompt` suppress unannounced pregnancies and active paternity/infidelity secrets when rendered in `dialogue_target` mode so speaking to the mother never leaks her secret into the interlocutor's system prompt.
 
 ### 4.2 Discovery Progression: SkyrimNet vs. Non-SkyrimNet
 - **Daily Scaling**: With each passing day, discovery probability for born children increases:
@@ -203,9 +218,11 @@ M.A.R.A.S. deliberately avoids duplicating FMR's internal mechanics (menstrual c
 
 | FMR ModEvent | Parameters | M.A.R.A.S. Handler Action |
 |---|---|---|
-| `FMR_Conception` | `akMother, akFather, iTrackingIndex` | Registers Unborn child record; sets bio-father & presumed father; initializes paternity secret if sire $\neq$ partner. |
+| `FMR_Conception` | `akMother, akFather, iTrackingIndex` | Registers Unborn child record; sets bio-father & presumed father; initializes paternity secret (`isPregnancySecretForPartner = true`) if sire $\neq$ partner. |
+| `FMR_ActorStatus` | `akMother, factionRank, fatherName, fatherRaceId` | When pregnancy reaches 2nd/3rd trimester (`factionRank` 34–100) or labor (`120`), automatically reveals unannounced pregnancy to the partner (`RevealPregnancyToPartner(unbornID, true)`). |
+
 | `FMR_BabyBirth` | `akMother, akFather, iTrackingIndex` | Promotes Unborn record to **Stage 1 (`Infant`)** named `"Newborn"`. |
-| `FMR_Abort` / `FMR_PregnancyCancelled` | `akMother, akFather, iTrackingIndex` | Removes Unborn record; notifies SkyrimNet AI of pregnancy loss. |
+| `FMR_Abort` / `FMR_BabyMiscarriage` / `FMR_PregnancyCancelled` | `akMother, ...` | Removes Unborn record; applies pregnancy loss affection and notifies SkyrimNet AI of pregnancy loss. |
 | `FMR_ChildGrewUpNpcNpc` | `akMother, akFather` | Generates lore-friendly racial name; promotes to **Stage 2 (`Child`)** as an **ephemeral child** belonging to NPC couple. |
 | `FMR_ChildGrewUpWithMother` | `childIndex, childName, gender, akMother` | Applies player-chosen name; promotes to **Stage 2 (`Child`)** as an ephemeral child scoped to mother. |
 | `FMR_ChildSpawned` | `childActor, childIndex, childName` | Re-keys physical `Actor` to existing ephemeral record, linking 3D child with full lineage. |

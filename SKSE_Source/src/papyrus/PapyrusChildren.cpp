@@ -487,7 +487,7 @@ namespace MARAS::PapyrusInterface {
 
     bool ResolvePaternitySecret(RE::StaticFunctionTag*, int32_t childID, bool discoveredByPartner) {
         std::lock_guard lock(GetPapyrusMutex());
-        return NPCRelationshipManager::GetSingleton().ResolvePaternitySecret(static_cast<RE::FormID>(childID), discoveredByPartner);
+        return NPCRelationshipManager::GetSingleton().ResolvePaternitySecret(static_cast<RE::FormID>(childID), discoveredByPartner, true);
     }
 
     bool ResolvePaternitySecretForPartner(RE::StaticFunctionTag*, int32_t childID, bool discoveredByPartner) {
@@ -498,6 +498,11 @@ namespace MARAS::PapyrusInterface {
     bool ResolvePaternitySecretForBioFather(RE::StaticFunctionTag*, int32_t childID, bool discoveredByBioFather) {
         std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().ResolvePaternitySecretForBioFather(static_cast<RE::FormID>(childID), discoveredByBioFather);
+    }
+
+    bool RevealPregnancyToPartner(RE::StaticFunctionTag*, int32_t childID, bool byVisibleBelly) {
+        std::lock_guard lock(GetPapyrusMutex());
+        return NPCRelationshipManager::GetSingleton().RevealPregnancyToPartner(static_cast<RE::FormID>(childID), byVisibleBelly, true);
     }
 
     bool SetPaternitySecretEdges(RE::StaticFunctionTag*, int32_t childID, bool secretForBioFather, bool secretForPartner) {
@@ -513,6 +518,11 @@ namespace MARAS::PapyrusInterface {
     bool IsSecretForPartner(RE::StaticFunctionTag*, int32_t childID) {
         std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsSecretForPartner(static_cast<RE::FormID>(childID));
+    }
+
+    bool IsPregnancySecretForPartner(RE::StaticFunctionTag*, int32_t childID) {
+        std::lock_guard lock(GetPapyrusMutex());
+        return NPCRelationshipManager::GetSingleton().IsPregnancySecretForPartner(static_cast<RE::FormID>(childID));
     }
 
     bool SetChildStage(RE::StaticFunctionTag*, int32_t childID, int32_t stage) {
@@ -705,7 +715,7 @@ namespace MARAS::PapyrusInterface {
         return NPCRelationshipManager::GetSingleton().BuildPregnancyAnnouncedJson(mID, pID, bID, bioFatherName, childCount);
     }
 
-    std::string BuildChildBirthMessage(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs) {
+    std::string BuildChildBirthMessage(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs, bool maskSecrets) {
         if (!mother) return "";
         RE::FormID mID = mother->GetFormID();
         std::vector<RE::FormID> cIDs;
@@ -714,10 +724,10 @@ namespace MARAS::PapyrusInterface {
             cIDs.push_back(static_cast<RE::FormID>(id));
         }
         std::lock_guard lock(GetPapyrusMutex());
-        return NPCRelationshipManager::GetSingleton().BuildChildBirthMessage(mID, cIDs);
+        return NPCRelationshipManager::GetSingleton().BuildChildBirthMessage(mID, cIDs, maskSecrets);
     }
 
-    std::string BuildChildBirthJson(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs) {
+    std::string BuildChildBirthJson(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs, bool maskSecrets) {
         if (!mother) return "";
         RE::FormID mID = mother->GetFormID();
         std::vector<RE::FormID> cIDs;
@@ -726,7 +736,7 @@ namespace MARAS::PapyrusInterface {
             cIDs.push_back(static_cast<RE::FormID>(id));
         }
         std::lock_guard lock(GetPapyrusMutex());
-        return NPCRelationshipManager::GetSingleton().BuildChildBirthJson(mID, cIDs);
+        return NPCRelationshipManager::GetSingleton().BuildChildBirthJson(mID, cIDs, maskSecrets);
     }
 
     // ========================================

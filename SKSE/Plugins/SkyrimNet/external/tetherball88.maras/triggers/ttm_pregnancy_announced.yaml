@@ -1,5 +1,5 @@
 name: "ttm_pregnancy_announced"
-description: "Direct narration when an NPC is surprised to discover she is pregnant in MARAS"
+description: "Direct narration when an NPC discovers she is pregnant in MARAS"
 
 eventCriteria:
   eventType: "ttm_event"
@@ -12,10 +12,10 @@ eventCriteria:
       operator: "equals"
       value: false
 
-audience: "nearby_npcs"
+audience: "originator"
 response:
   type: "direct_narration"
-  content: "Have {{originator}} react to discovering her pregnancy in a way that fits her personality and current situation, keeping any secret about the child's true paternity concealed if applicable."
+  content: "Have {{originator}} react to discovering her pregnancy in a way that fits her personality and current situation."
 
 enabled: true
 interrupt: false

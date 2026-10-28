@@ -23,23 +23,26 @@ You are the GameMaster AI for Skyrim. Evaluate an ongoing paternity situation.
 
 ### Mother: {{ motherName }}
 {% if motherUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", motherUUID) }}
+{{ render_character_profile("ttm_gm", motherUUID) }}
 {% endif %}
 
 
 ### Biological Father: {{ bioFatherName }}
 {% if bioFatherUUID != 0 %}
-{{ render_character_profile("ttm_gm_with_recent_events", bioFatherUUID) }}
+{{ render_character_profile("ttm_gm", bioFatherUUID) }}
 {% endif %}
 
 {% if formerSpouseUUID != 0 %}
 ### Former Spouse: {{ formerSpouseName }}
-{{ render_character_profile("ttm_gm_with_recent_events", formerSpouseUUID) }}
+{{ render_character_profile("ttm_gm", formerSpouseUUID) }}
 {% endif %}
+
+## Recent Events & Dialogue History (Chronological)
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
 
 
 ## Evaluation Guidelines
-Evaluate the character profiles, personality traits, and morality of {{ bioFatherName }} and {{ motherName }}.
+Evaluate the character profiles, personality traits, morality, and recent events/dialogues of {{ bioFatherName }} and {{ motherName }}.
 {% if formerSpouseUUID != 0 %}
 Now that {{ motherName }} is divorced from {{ formerSpouseName }}, determine whether {{ bioFatherName }} steps in to claim his biological child, marry {{ motherName }}, and take responsibility as a family.
 {% else %}

@@ -15,7 +15,7 @@ eventCriteria:
 audience: "nearby_npcs"
 response:
   type: "direct_narration"
-  content: "Have {{originator}} and nearby family members speak about sending {{event_json.child}} away for training in a way that reflects their personalities and views as parents."
+  content: "Have {{originator}}{% if exists(\"target\") and target != \"\" and target != \"None\" and target != originator %} and {{target}}{% endif %} speak about sending {{event_json.child}} away for training in a way that reflects their personalities and views as parents."
 
 enabled: true
 interrupt: true

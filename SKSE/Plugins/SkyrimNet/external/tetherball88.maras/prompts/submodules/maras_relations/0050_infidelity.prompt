@@ -1,4 +1,4 @@
-{% if ttm_is_registered(actorUUID) %}
+{% if render_mode != "dialogue_target" and ttm_is_registered(actorUUID) %}
     {% set npcName = decnpc(actorUUID).name %}
     {% set profile = ttm_npc_relationship_profile(actorUUID) %}
 
