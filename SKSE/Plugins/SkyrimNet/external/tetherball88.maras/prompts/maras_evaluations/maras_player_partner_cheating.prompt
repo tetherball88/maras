@@ -20,6 +20,9 @@ You are a Narrative Relationship Psychologist and Game Master AI in The Elder Sc
 - **Relationship with {{ playerName }}:** {{ playerRelationshipStatus }}{% if isOpenRelationship %} (Open Relationship — side lovers are consensually permitted){% else %} (Closed / Exclusive){% endif %}
 - **Current Habitat / Location:** {{ partnerCurrentLocation }}
 - **Recent Presence & Attention from {{ playerName }}:** {{ playerPresenceHint }}
+{% if exists("temptationDrivers") and temptationDrivers != "" %}
+- **Active Relationship Pressures / Temptation Drivers:** {{ temptationDrivers }}
+{% endif %}
 {% if sharedChildrenCount > 0 %}
 - **Shared Children with {{ playerName }}:** {{ sharedChildrenCount }}
 {% endif %}
@@ -61,7 +64,7 @@ Base your decision strictly on **{{ partnerName }}**'s and **{{ sideLoverName }}
    - If **{{ partnerName }}** feels remorse, values their bond or family with **{{ playerName }}** (especially if **{{ playerName }}** has been spending time with them recently, or while the affair is still in the `talking` stage before becoming physical), or if their dynamic with **{{ sideLoverName }}** has grown strained or stale, set `"willBreakup": true`.
    - If **{{ partnerName }}**'s recent events and memories show bitter estrangement from **{{ playerName }}**, prolonged loneliness from **{{ playerName }}**'s absence, resentment over **{{ playerName }}**'s own infidelity, or deep passion with **{{ sideLoverName }}**, set `"willBreakup": false`.
 2. **Should {{ partnerName }} Confess to {{ playerName }} (`willConfess`)?**
-   - If `{{ canConfess }}` is true: decide from **{{ partnerName }}**'s personality and recent dialogues with **{{ playerName }}** whether conscience or honesty drives them to confess the affair when **{{ playerName }}** next comes home (`"willConfess": true`), or whether pride, secrecy, or fear of losing **{{ playerName }}** keeps them silent (`"willConfess": false`).
+   - If `{{ canConfess }}` is true: decide from **{{ partnerName }}**'s personality and recent dialogues with **{{ playerName }}** whether they confess or admit the affair when **{{ playerName }}** next comes home (`"willConfess": true` — whether from conscience, pressure, exhaustion from hiding it, pragmatism, or confrontation), or keep it secret (`"willConfess": false`).
    - If `{{ canConfess }}` is false, always set `"willConfess": false`.
 3. **Reason / Memory Summary:**
    - Provide a concise 1–2 sentence `"reason"` explaining why **{{ partnerName }}** ended (or continued) the secret affair with **{{ sideLoverName }}**, grounded in their personalities, memories, and recent events. If `"willBreakup": true`, write it as an in-world narrative summary suitable for character memory.
@@ -147,9 +150,8 @@ Base your decision strictly on **{{ partnerName }}**'s biography, personality, l
 {% else %}
 1. **Evaluate Faithfulness vs. Temptation (Talking Stage Affair):**
    - Remember this begins at the **Talking Stage** (secret letters, lingering conversations, stolen glances, emotional/flirtatious closeness) rather than immediate physical intimacy.
-   - Examine **{{ partnerName }}**'s biography, values, memories, and recent dialogues/events with **{{ playerName }}**, along with **{{ playerName }}**'s recent presence or absence (`{{ playerPresenceHint }}`).
-   - If **{{ partnerName }}** is deeply devoted, recently shared warm moments with **{{ playerName }}**, and has no compelling grievance or irresistible personal history with a candidate, they should stay faithful (`"willCheat": false`).
-   - If **{{ partnerName }}**'s recent events, memories, or **{{ playerName }}**'s prolonged absence/betrayal show loneliness, emotional distance, or domestic friction—AND a shortlisted candidate fits **{{ partnerName }}**'s story (such as a former flame, someone living under the same roof, or a close guildmate/neighbor they interact with)—they may begin a Talking Stage affair (`"willCheat": true`).
+   - An empty `Recent Events & Dialogue History` section simply means **{{ playerName }}** has not been nearby recently—do NOT treat empty recent events as proof that **{{ partnerName }}** is content or unwilling to stray.
+   - Weigh **{{ partnerName }}**'s devotion and values against their current situation (`{{ playerPresenceHint }}`{% if exists("temptationDrivers") and temptationDrivers != "" %}; `{{ temptationDrivers }}`{% endif %}): if temptation (loneliness, resentment, boredom, flattery, or attraction) outweighs their restraint AND a shortlisted candidate has genuine chemistry, proximity, or history with **{{ partnerName }}**, set `"willCheat": true`; if **{{ partnerName }}** remains devoted to **{{ playerName }}** or none of the candidates fit, set `"willCheat": false`.
 {% endif %}
 2. **Strict Candidate Selection Rule:**
    - If `"willCheat": true`, `"chosenCandidate"` MUST be the exact full name of ONE candidate from the Shortlisted Paramour Candidates list above. Never invent a name outside the list, and never pick `{{ playerName }}`.

@@ -503,16 +503,6 @@ namespace MARAS::PapyrusInterface {
         }
     }
 
-    bool EvaluateRelationshipStatusChange(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* partner, std::string targetStatus) {
-        if (!npc || !partner) {
-            MARAS_LOG_WARN("EvaluateRelationshipStatusChange: null actor provided");
-            return false;
-        }
-
-        std::lock_guard lock(GetPapyrusMutex());
-        return MARAS::EvaluateRelationshipStatusChange(npc->GetFormID(), partner->GetFormID(), targetStatus);
-    }
-
     bool Breakup(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB) {
         if (!actorA || !actorB) {
             MARAS_LOG_WARN("Breakup: null actor provided (actorA={}, actorB={})",

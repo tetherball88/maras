@@ -5,6 +5,7 @@
 #include "core/HomeCellService.h"
 #include "core/PlayerHouseService.h"
 #include "core/SpouseHierarchyManager.h"
+#include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/LoggingService.h"
 #include "services/ActorService.h"
@@ -2393,6 +2394,11 @@ namespace MARAS {
                                               c.connectionTag, c.locationName, c.eligibility);
 
                     nlohmann::json cObj;
+                    cObj["key"] = std::format("c_{}", ci + 1);
+                    cObj["criterion"] = SkyrimNetDecisions::SanitizeSingleLine(
+                        std::format("{} chooses {} ({} {}, {}, Location: {}, Status: {})",
+                                    tp.partnerName, c.name, c.race, c.sex,
+                                    c.connectionTag, c.locationName, c.eligibility));
                     cObj["name"] = c.name;
                     cObj["uuid"] = c.uuid;
                     cObj["race"] = c.race;
@@ -2505,46 +2511,57 @@ namespace MARAS {
                 ctx["recent_events_participants"] = std::move(recentEventsParticipants);
 
                 std::string contextJson = SafeJsonDump(ctx);
-                std::string promptName = "maras_evaluations/maras_player_partner_cheating";
+                std::string affairStageStr = GetJsonString(ctx, "affairStage", "talking");
 
                 MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Requesting Stage 2 evaluation for '{}' (0x{:08X}) | evalMode='{}' | isOpen={} | candidates={} | sideLover='{}' (0x{:08X})",
                                tp.partnerName, tp.partnerID, tp.evalMode, tp.isOpenRelationshipLover,
                                tp.shortlist.size(), tp.sideLoverName, tp.sideLoverID);
 
-                SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson,
-                    [this, b, idx, runPartnerCheatingTasks, finalizeInfidelityMatches](const char* response, int success) {
-                        std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
-                        SKSE::GetTaskInterface()->AddTask([this, b, idx, success, respStr, runPartnerCheatingTasks, finalizeInfidelityMatches]() {
+                SkyrimNetDecisions::EvaluatePartnerAgency(
+                    contextJson,
+                    tp.evalMode,
+                    tp.canConfess,
+                    tp.partnerName,
+                    tp.sideLoverName,
+                    affairStageStr,
+                    [this, b, idx, runPartnerCheatingTasks, finalizeInfidelityMatches](const SkyrimNetDecisions::PartnerAgencyEvalResult& res) {
+                        SKSE::GetTaskInterface()->AddTask([this, b, idx, res, runPartnerCheatingTasks, finalizeInfidelityMatches]() {
                             try {
                                 if (idx >= b->tasks.size()) return;
                                 auto& t = b->tasks[idx];
-                                if (!success || respStr.empty()) {
+                                if (!res.success) {
                                     t.completed = true;
                                     t.failed = true;
-                                    t.isInvalidJson = false;
-                                    t.failureReason = "LLM request failed or returned empty response";
-                                    MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Request failed or returned empty response for '{}' (0x{:08X}, evalMode='{}')",
-                                                   t.partner.partnerName, t.partner.partnerID, t.partner.evalMode);
+                                    t.isInvalidJson = (res.failureType == LLMFailureType::InvalidJson);
+                                    t.failureReason = res.failureDetail.empty() ? "LLM evaluation failed" : res.failureDetail;
+                                    MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Evaluation failed for '{}' (0x{:08X}, evalMode='{}'): {}",
+                                                   t.partner.partnerName, t.partner.partnerID, t.partner.evalMode, t.failureReason);
                                 } else {
-                                    nlohmann::json resp = JsonService::ParseLLMJson(respStr);
-                                    if (resp.is_discarded() || !resp.is_object()) {
-                                        t.completed = true;
-                                        t.failed = true;
-                                        t.isInvalidJson = true;
-                                        t.failureReason = "Malformed / unrepairable JSON response";
-                                        MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Malformed JSON response for '{}' (0x{:08X}, evalMode='{}'). Raw: {}",
-                                                       t.partner.partnerName, t.partner.partnerID, t.partner.evalMode, respStr);
-                                    } else {
-                                        t.completed = true;
-                                        t.failed = false;
-                                        t.willCheat = GetJsonBool(resp, "willCheat", GetJsonBool(resp, "will_cheat", false));
-                                        t.willBreakup = GetJsonBool(resp, "willBreakup", GetJsonBool(resp, "will_breakup", false));
-                                        t.willConfess = GetJsonBool(resp, "willConfess", GetJsonBool(resp, "will_confess", false));
-                                        t.willSuggest = GetJsonBool(resp, "willSuggest", GetJsonBool(resp, "will_suggest", false));
-                                        t.chosenCandidateName = GetJsonString(resp, "chosenCandidate", GetJsonString(resp, "chosen_candidate", ""));
-                                        t.reasoning = GetJsonString(resp, "reason", GetJsonString(resp, "reasoning", ""));
+                                    t.completed = true;
+                                    t.failed = false;
+                                    t.willCheat = res.willCheat;
+                                    t.willBreakup = res.willBreakup;
+                                    t.willConfess = res.willConfess;
+                                    t.willSuggest = res.willSuggest;
+                                    t.chosenCandidateName = res.chosenCandidateName;
+                                    t.reasoning = res.reasoning;
 
-                                        if (t.willCheat && !t.chosenCandidateName.empty()) {
+                                    if (t.willCheat) {
+                                        if (res.chosenCandidateIndex >= 0 &&
+                                            static_cast<size_t>(res.chosenCandidateIndex) < t.partner.shortlist.size()) {
+                                            const auto& c = t.partner.shortlist[static_cast<size_t>(res.chosenCandidateIndex)];
+                                            t.chosenCandidateID = c.formID;
+                                            t.chosenCandidateName = c.name;
+                                            if (t.partner.isOpenRelationshipLover) {
+                                                t.reasoning = std::format("{} formed an open-relationship lover bond with {} ({}) driven by {} ({}).",
+                                                                          t.partner.partnerName, c.name, c.connectionTag,
+                                                                          t.partner.driversSummary, res.reasoning);
+                                            } else {
+                                                t.reasoning = std::format("{} began a secret talking-stage affair with {} ({}) driven by {} ({}).",
+                                                                          t.partner.partnerName, c.name, c.connectionTag,
+                                                                          t.partner.driversSummary, res.reasoning);
+                                            }
+                                        } else if (!t.chosenCandidateName.empty()) {
                                             for (const auto& c : t.partner.shortlist) {
                                                 if (StringUtils::CaseInsensitiveEquals(c.name, t.chosenCandidateName) ||
                                                     StringUtils::Contains(c.name, t.chosenCandidateName)) {
@@ -2560,17 +2577,17 @@ namespace MARAS {
                                                 }
                                             }
                                         }
-                                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Result for '{}' (0x{:08X}, evalMode='{}'): willCheat={}, willBreakup={}, willConfess={}, willSuggest={}, chosenCandidate='{}' (0x{:08X}), reason='{}'",
-                                                       t.partner.partnerName, t.partner.partnerID, t.partner.evalMode,
-                                                       t.willCheat, t.willBreakup, t.willConfess, t.willSuggest,
-                                                       t.chosenCandidateName, t.chosenCandidateID, t.reasoning);
                                     }
+                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Result for '{}' (0x{:08X}, evalMode='{}'): willCheat={}, willBreakup={}, willConfess={}, willSuggest={}, chosenCandidate='{}' (0x{:08X}), reason='{}'",
+                                                   t.partner.partnerName, t.partner.partnerID, t.partner.evalMode,
+                                                   t.willCheat, t.willBreakup, t.willConfess, t.willSuggest,
+                                                   t.chosenCandidateName, t.chosenCandidateID, t.reasoning);
                                 }
 
                                 HandleBatchCompletion(
                                     b,
                                     "MARAS: Partner Infidelity Evaluation Failed",
-                                    "gamemaster_evaluation",
+                                    res.usedDecisions ? "decisions" : "gamemaster_evaluation",
                                     this,
                                     [runPartnerCheatingTasks](auto batchPtr, const auto& retryIdxs) {
                                         (*runPartnerCheatingTasks)(batchPtr, retryIdxs);
@@ -3836,58 +3853,54 @@ namespace MARAS {
 
             nlohmann::json ctx = BuildVerifyContext(task.result);
             std::string contextJson = SafeJsonDump(ctx);
-            std::string promptName = "maras_evaluations/maras_matchmaking_verify";
 
             MARAS_LOG_INFO("[Matchmaking:RetryVerificationTasks] Requesting narrative verification for [{}/{}] {} (0x{:08X}) <-> {} (0x{:08X}) (Action: {} -> {})",
                            idx + 1, batch->tasks.size(), task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID,
                            task.result.action, task.result.targetStatus);
 
-            SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, batch, idx](const char* response, int success) {
-                std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
-                SKSE::GetTaskInterface()->AddTask([this, batch, idx, success, respStr]() {
-                    try {
-                        if (idx >= batch->tasks.size()) return;
-                        auto& t = batch->tasks[idx];
+            SkyrimNetDecisions::EvaluateMatchmakingVerify(
+                contextJson,
+                task.result.action,
+                task.result.targetStatus,
+                task.result.actorAName,
+                task.result.actorBName,
+                [this, batch, idx](const SkyrimNetDecisions::MatchmakingVerifyEvalResult& res) {
+                    SKSE::GetTaskInterface()->AddTask([this, batch, idx, res]() {
+                        try {
+                            if (idx >= batch->tasks.size()) return;
+                            auto& t = batch->tasks[idx];
 
-                        if (!success || respStr.empty()) {
-                            t.completed = true;
-                            t.failed = true;
-                            t.isInvalidJson = false;
-                            t.failureReason = "LLM request failed or returned empty response";
-                            MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Verification request failed for {} <-> {}",
-                                           t.result.actorAName, t.result.actorBName);
-                        } else {
-                            nlohmann::json resp = JsonService::ParseLLMJson(respStr);
-                            if (resp.is_discarded()) {
+                            if (!res.success) {
                                 t.completed = true;
                                 t.failed = true;
-                                t.isInvalidJson = true;
-                                t.failureReason = "Malformed / unrepairable JSON response";
-                                MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Failed to parse verification JSON for {} <-> {}. Raw: {}",
-                                               t.result.actorAName, t.result.actorBName, respStr);
+                                t.isInvalidJson = (res.failureType == LLMFailureType::InvalidJson);
+                                t.failureReason = res.failureDetail.empty() ? "LLM verification failed" : res.failureDetail;
+                                MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Verification failed for {} <-> {}: {}",
+                                               t.result.actorAName, t.result.actorBName, t.failureReason);
                             } else {
                                 t.completed = true;
                                 t.failed = false;
                                 t.isInvalidJson = false;
-                                t.suitable = GetJsonBool(resp, "suitable", GetJsonBool(resp, "allow", false));
-                                t.verificationReason = GetJsonString(resp, "reason", "No reason provided");
+                                t.suitable = res.suitable;
+                                t.verificationReason = res.reason.empty() ? "No reason provided" : res.reason;
                                 MARAS_LOG_INFO("[Matchmaking:RetryVerificationTasks] Verification for {} <-> {}: suitable={}, reason='{}'",
                                                t.result.actorAName, t.result.actorBName, t.suitable, t.verificationReason);
                             }
-                        }
 
-                        HandleBatchCompletion(batch, "MARAS: Verification Request Failed", "gamemaster_evaluation", this,
-                            [this](auto b, const auto& idxs) { RetryVerificationTasks(b, idxs); },
-                            [](auto b, const auto& idxs) {
-                                for (size_t fi : idxs) b->tasks[fi].suitable = false;
-                            },
-                            [this](auto b) { FinishVerificationBatch(b); }
-                        );
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("[Matchmaking:RetryVerificationTasks] Exception in verification task callback: {}", e.what());
-                    }
+                            HandleBatchCompletion(batch, "MARAS: Verification Request Failed",
+                                res.usedDecisions ? "decisions" : "gamemaster_evaluation",
+                                this,
+                                [this](auto b, const auto& idxs) { RetryVerificationTasks(b, idxs); },
+                                [](auto b, const auto& idxs) {
+                                    for (size_t fi : idxs) b->tasks[fi].suitable = false;
+                                },
+                                [this](auto b) { FinishVerificationBatch(b); }
+                            );
+                        } catch (const std::exception& e) {
+                            MARAS_LOG_ERROR("[Matchmaking:RetryVerificationTasks] Exception in verification task callback: {}", e.what());
+                        }
+                    });
                 });
-            });
         }
     }
 

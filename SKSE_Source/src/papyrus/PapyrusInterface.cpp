@@ -1015,7 +1015,7 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetNpcStatusEnum", "MARAS", GetNpcStatusEnum);
         vm->RegisterFunction("GetNpcStatusNameWith", "MARAS", GetNpcStatusNameWith);
         vm->RegisterFunction("GetNpcStatusEnumWith", "MARAS", GetNpcStatusEnumWith);
-        vm->RegisterFunction("EvaluateRelationshipStatusChange", "MARAS", EvaluateRelationshipStatusChange);
+
         vm->RegisterFunction("IsNPCInOpenRelationship", "MARAS", IsNPCInOpenRelationship);
         vm->RegisterFunction("GetPairIsOpen", "MARAS", GetPairIsOpen);
         vm->RegisterFunction("SetPairIsOpen", "MARAS", SetPairIsOpen);

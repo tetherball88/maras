@@ -15,21 +15,19 @@ Your role is to verify whether a proposed relationship change between characters
 ## Character Profiles & Psychology
 
 ### {{ actorAName }}
-{% if actorAUUID != 0 %}
-{{ render_character_profile("ttm_gm", actorAUUID) }}
-{% else %}
 - **Race:** {{ actorARace }}, **Gender:** {{ actorASex }}
 - **Existing Relationships:**
 {{ actorARelationships }}
+{% if actorAUUID != 0 %}
+{{ render_character_profile("ttm_gm", actorAUUID) }}
 {% endif %}
 
 ### {{ actorBName }}
-{% if actorBUUID != 0 %}
-{{ render_character_profile("ttm_gm", actorBUUID) }}
-{% else %}
 - **Race:** {{ actorBRace }}, **Gender:** {{ actorBSex }}
 - **Existing Relationships:**
 {{ actorBRelationships }}
+{% if actorBUUID != 0 %}
+{{ render_character_profile("ttm_gm", actorBUUID) }}
 {% endif %}
 
 {% if committedPartnerAUUID != 0 %}
@@ -47,20 +45,19 @@ Your role is to verify whether a proposed relationship change between characters
 
 ## Evaluation Guidelines
 Evaluate the character profiles, personalities, long-term memories, and recent events carefully:
+- **Note on Off-Screen Life**: If `Recent Events & Dialogue History` is empty, it simply means the Player has not been nearby recently; judge based on the characters' biographies, personalities, values, and existing relationships.
 
 1. **Infidelity & Cheating Verification**:
    - If the proposed status involves cheating (either character is already married, engaged, or exclusively dating another partner):
-   - Examine their dynamic with their current partner. If they are deeply in love, devoted, or share warm/tender recent memories, starting an affair is OUT OF CHARACTER and MUST BE REJECTED.
-   - Only permit infidelity if their profile or memories show genuine estrangement, bitter domestic conflict, deceitful/hedonistic traits, moral corruption, or mutual neglect.
+   - Weigh the character's loyalty and bond with their current partner against the plausibility of temptation (such as loneliness, dissatisfaction, ambition, vanity, or chemistry with the proposed partner).
+   - If they are devoted to their partner or incompatible with the proposed affair partner, reject (`"suitable": false`); if yielding to this affair fits their personalities, circumstances, and mutual attraction, approve (`"suitable": true`).
 
 2. **Divorce & Breakup Verification**:
-   - If the proposed action is a breakup or divorce:
-   - Examine their shared relationship dynamic and memories. If they are happily married/engaged, share deep affection, or have harmonious memories of family life, divorce is OUT OF PLACE and MUST BE REJECTED.
-   - Only permit a breakup if there is clear evidence of severe conflict, betrayal, prolonged emotional drift, or deep irreconcilable differences.
+   - Breaking up or divorcing is unilateral: it only requires at least one partner to want to end the relationship.
+   - Weigh their personalities, values, relationship dynamic, and memories: if both are content, compatible, and committed to staying together, reject (`"suitable": false`); if conflict, betrayal, emotional drift, or incompatibility would plausibly lead either partner to end the relationship, approve (`"suitable": true`).
 
-3. **New Relationships & Advancements**:
-   - Are their personalities, cultural backgrounds, and life goals compatible?
-   - Does this connection make narrative sense given their recent experiences and personal history?
+3. **New Relationships, Advancements & Open/Close Transitions**:
+   - Forming, advancing, opening, or closing a relationship is bilateral and requires both characters to be compatible and willing based on their personalities, values, backgrounds, and the commitment level of `{{ targetStatus }}` (e.g., casual `lover` vs. committed `dating`, `engaged`, or `married`).
 
 ## Response Format
 Respond ONLY with a single raw JSON object. No markdown formatting, no code fences. Must start with `{` and end with `}`:

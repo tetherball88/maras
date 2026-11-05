@@ -1,0 +1,83 @@
+[ state paternity_context ]
+Evaluate an ongoing paternity intrigue situation involving a newborn or young child in Skyrim:
+- Mother: {{ motherName }} ({{ motherRace }})
+- Presumed Father (partner): {{ presumedFatherName }} ({{ presumedFatherRace }})
+- Relationship between Mother and Presumed Father: {{ maritalStatus }}
+- True Biological Father: {{ bioFatherName }} ({{ bioFatherRace }})
+- Affair Status: {{ affairStatus }}
+- Child: {{ childName }}{% if exists("childRelation") %} ({{ childRelation }}){% endif %} (Age: {{ childAgeDays }} days)
+- Timing: {% if isAtBirth %}At the moment of childbirth / newborn delivery{% else %}Child is growing older (daily observation){% endif %}
+- Current Secrecy:
+  - Secret from Presumed Father ({{ presumedFatherName }}): {{ isSecretForPresumedFather }}
+  - Secret from Biological Father ({{ bioFatherName }}): {{ isSecretForBioFather }}
+{% if hasVisualDiscrepancy %}
+- CRITICAL VISUAL DISCREPANCY: {{ visualDiscrepancyDescription }} Because the biological father and presumed father belong to starkly different racial phenotype categories, the child's physical traits, complexion, or beast/elven features cannot plausibly belong to {{ presumedFatherName }}.
+{% else %}
+- Physical traits: Both fathers share similar racial phenotypes. Do NOT use matching phenotypes as a reason to default to keeping the secret. Paternity can still be questioned, suspected, or uncovered through family resemblance, conception timing, suspicious behavior, rumors, or guilt.
+{% endif %}
+[ end state ]
+
+[ state mother_profile ]
+{% if motherUUID != 0 %}
+{{ render_character_profile("ttm_gm", motherUUID) }}
+{% else %}
+{{ motherName }} ({{ motherRace }})
+{% endif %}
+[ end state ]
+
+[ state presumed_father_profile ]
+{% if presumedFatherUUID != 0 %}
+{{ render_character_profile("ttm_gm", presumedFatherUUID) }}
+{% else %}
+{{ presumedFatherName }} ({{ presumedFatherRace }})
+{% endif %}
+[ end state ]
+
+[ state bio_father_profile ]
+{% if bioFatherUUID != 0 %}
+{{ render_character_profile("ttm_gm", bioFatherUUID) }}
+{% else %}
+{{ bioFatherName }} ({{ bioFatherRace }})
+{% endif %}
+[ end state ]
+
+[ state recent_events_and_dialogues ]
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+[ end state ]
+
+[ state evaluation_guidelines ]
+Evaluate the character profiles, personality traits, memories, and recent events/dialogues of each individual to determine:
+1. Whether the paternity secret remains hidden or is revealed/discovered by {{ presumedFatherName }}, {{ bioFatherName }}, or both.
+2. How {{ presumedFatherName }} reacts toward {{ motherName }} if he learns the child is not biologically his.
+[ end state ]
+
+[ question outcome choice ]
+[ criteria ]
+remains_secret: The paternity secret remains hidden for now and no one learns anything new
+{% if isSecretForPresumedFather %}
+mother_confessed_presumed: {{ motherName }} confesses or admits to {{ presumedFatherName }} that he is not the child's biological father
+presumed_father_learnt: {{ presumedFatherName }} independently realizes or discovers that the child is not biologically his
+{% endif %}
+{% if isSecretForBioFather %}
+mother_confessed_bio: {{ motherName }} privately informs {{ bioFatherName }} that he is the true biological father
+bio_father_learnt: {{ bioFatherName }} independently realizes or discovers that the child is biologically his
+{% endif %}
+{% if isSecretForPresumedFather and isSecretForBioFather %}
+mother_confessed_both: {{ motherName }} confesses or admits the truth to both {{ presumedFatherName }} and {{ bioFatherName }}
+{% endif %}
+[ end criteria ]
+[ end question ]
+
+{% if isSecretForPresumedFather %}
+[ question partner_reaction choice ]
+[ criteria ]
+none: If {{ presumedFatherName }} learns the truth, he stays with {{ motherName }} without ending their relationship
+{% if maritalStatus == "married" or maritalStatus == "Married" %}
+divorce: If {{ presumedFatherName }} learns the truth, he refuses to stay with {{ motherName }} and divorces her
+{% else %}
+breakup: If {{ presumedFatherName }} learns the truth, he refuses to stay with {{ motherName }} and breaks up with her
+{% endif %}
+[ end criteria ]
+[ end question ]
+{% endif %}
+

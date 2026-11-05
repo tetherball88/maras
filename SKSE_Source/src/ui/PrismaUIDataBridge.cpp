@@ -448,6 +448,7 @@ namespace MARAS {
         j["actionsDeclineCooldown"] = settings.actionsDeclineCooldown;
         j["skyrimnetActionRadius"] = RoundFloat(settings.skyrimnetActionRadius);
         j["skyrimnetUseLLMMemories"] = settings.skyrimnetUseLLMMemories;
+        j["skyrimnetUseDecisions"] = settings.skyrimnetUseDecisions;
         j["matchmakingExcludePlayerActivePartners"] = settings.matchmakingExcludePlayerActivePartners;
         j["matchmakingConfirmResults"] = settings.matchmakingConfirmResults;
         j["playerPartnerCheatingAgencyEnabled"] = settings.playerPartnerCheatingAgencyEnabled;

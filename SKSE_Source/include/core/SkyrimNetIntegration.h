@@ -46,15 +46,16 @@ namespace MARAS {
                            std::function<void()> onIgnore,
                            std::string_view llmVariant = "gamemaster_evaluation");
 
-    // Sends an LLM prompt to SkyrimNet to evaluate a proposed relationship status change between two actors.
-    // Includes a Prisma UI retry/ignore modal on LLM request or parse failure.
-    bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partnerFormID, const std::string& targetStatus, const std::string& evalId = "");
-
     // Evaluates secret paternity resolution (confession / discovery / remains hidden) for a child.
     bool EvaluatePaternitySecret(RE::FormID childID);
 
     // Sends an arbitrary custom prompt to SkyrimNet LLM with async callback.
     bool SendCustomPromptToLLM(const std::string& promptName, const std::string& variant, const std::string& contextJson, std::function<void(const char* response, int success)> callback);
+
+    // Sends a custom Jev decision template (`prompts/decisions/<templateName>.prompt`) to SkyrimNet's
+    // Decisions API (`PublicSendCustomDecisionToLLM`, SkyrimNet API v12+) with async callback.
+    bool SendCustomDecisionToLLM(const std::string& templateName, const std::string& contextJson, int maxProbabilities,
+                                 std::function<void(const char* answer, const char* resultJson, int success)> callback);
 
     // Ingests a new memory record into SkyrimNet's memory database for the specified actor.
     bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float importance,

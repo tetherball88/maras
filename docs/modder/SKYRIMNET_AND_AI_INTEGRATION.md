@@ -30,7 +30,8 @@ Located in `SKSE_Source/include/core/SkyrimNetIntegration.h` and `src/core/Skyri
 ### 2.1 Resolved DLL Exports from `SkyrimNet.dll`
 - `PublicRegisterDecorator`: Registers C++ callbacks exposed to SkyrimNet Jinja/Inja prompt templates.
 - `PublicRenderTemplate`: Renders a named prompt template in `external/tetherball88.maras/prompts/` with a JSON context object.
-- `PublicSendCustomPrompt`: Dispatches an asynchronous LLM completion request (used by `MatchmakingService` and `NPCRelationshipManager` for background evaluations) and returns the response to a C++ callback.
+- `PublicSendCustomPromptToLLM`: Dispatches an asynchronous Chat LLM completion request (`gamemaster_evaluation` or `memory` variant) and returns the response to a C++ callback.
+- `PublicSendCustomDecisionToLLM` (SkyrimNet Public API v12+): Dispatches a structured Jev decision evaluation (`decisions/*.prompt`) against SkyrimNet's `decisions` model slot and returns typed per-decision JSON (`{"decisions": {"<key>": {"selected": "...", "value": ...}}}`) to `SkyrimNetDecisions`. When `skyrimnetUseDecisions` is disabled or SkyrimNet returns `"error": "no_decisions_route"`, `SkyrimNetDecisions` automatically falls back to `PublicSendCustomPromptToLLM` (`maras_evaluations/*.prompt`).
 - `PublicCalculateActorUUID`: Resolves an `RE::Actor*` FormID into SkyrimNet's internal 64-bit Actor UUID.
 - `PublicCreateMemory`: Injects a first-person narrative memory directly into an NPC's SkyrimNet long-term memory database (complete with importance score, emotion tag, location, and participant UUIDs).
 - `PublicRequestProfileUpdate` (SkyrimNet Public API v13+): Queues an asynchronous dynamic character profile generation/update on SkyrimNet's internal worker thread pool with caller-provided `additionalInstructions` and `updatableBlocksCSV` overrides (used by [`SkyrimNetProfileService`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetProfileService.md), with legacy fallback for SkyrimNet `< v13`).
@@ -152,12 +153,18 @@ Listen for `ttm_event` dispatches from `TTM_ServiceSkyrimNet.psc` (matched via `
 ### 6.3 Prompt Templates (`prompts/`)
 - `submodules/character_bio/0450_maras_character_bio.prompt`: Injects the NPC's M.A.R.A.S archetype, partners, household rank, children, and any active affair/paternity secrets into their core character biography (and `submodules/maras_relations/0001_child_bio.prompt` renders child/adult parentage, stage, and `training_location`). In addition, [`SkyrimNetProfileService`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetProfileService.md) asynchronously generates and saves a per-save 10-block character profile (`saves/<saveId>/prompts/characters/<bioTemplateName>.prompt`) whenever a placed Young Child (`Stage 2`) or Adult Child (`Stage 4`) actor is newly spawned into the world.
 - `submodules/guidelines/0900_maras_guidelines.prompt`: Instructs the LLM on when to invoke M.A.R.A.S actions (proposals, breakups, affair confessions/exposures, paternity reveals) and how to roleplay affection tiers and temperament.
-- `maras_evaluations/*.prompt`:
+- `decisions/*.prompt` (Typed Jev Decisions via `PublicSendCustomDecisionToLLM` / `SkyrimNetDecisions`, enabled when `skyrimnetUseDecisions = true` with automatic fallback to `maras_evaluations/*.prompt`):
+  1. `maras_step_in_evaluation.prompt` — Boolean `step_in` decision evaluating whether a biological father steps in after a paternity-driven divorce.
+  2. `maras_paternity_evaluation.prompt` — Multi-decision schema (`mother_confesses`, `partner_reaction`, `presumed_discovers`, `bio_father_learns`) resolving paternity secrets.
+  3. `maras_player_partner_cheating.prompt` — Mode-switched Jev decisions (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`) for Tier 2 Player-Partner Agency.
+  4. `maras_matchmaking_verify.prompt` — Per-actor matchmaking validator using bilateral consent (`willing_a && willing_b`) for `new`/`advance`/`open`/`close` and unilateral initiation (`wants_breakup_a || wants_breakup_b`) for `breakup`.
+- `maras_evaluations/*.prompt` (Chat LLM JSON prompts via `PublicSendCustomPromptToLLM`):
   1. `maras_matchmaking_scheduled.prompt` — Multi-pair autonomous matchmaking evaluator.
   2. `maras_matchmaking_manual.prompt` — Targeted single-NPC or pair matchmaking evaluator.
-  3. `maras_matchmaking_verify.prompt` — Sanity/lore/relationship validator for proposed matches.
+  3. `maras_matchmaking_verify.prompt` — Legacy/fallback sanity, lore, and relationship validator for proposed matches.
   4. `maras_event_memories.prompt` — Unified multi-participant episode memory generator (`SkyrimNetMemoryService`, used when `skyrimnetUseLLMMemories` is enabled; when disabled, `SkyrimNetMemoryService::BuildProgrammaticMemories` constructs first-person memories in C++ without an LLM call).
-  5. `maras_paternity_secret_eval.prompt` — Evaluates whether a mother conceals an affair child's paternity.
-  6. `maras_player_partner_cheating.prompt` — Evaluates Tier 2 Player-Partner Agency actions (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`).
-  7. `maras_npc_couple_banter.prompt` — Generates contextual conversation seeds for `BanterCoordinatorService`.
+  5. `maras_paternity_evaluation.prompt` — Legacy/fallback evaluator for whether a paternity secret is exposed at birth or from the Dashboard.
+  6. `maras_step_in_evaluation.prompt` — Legacy/fallback evaluator for biological father step-in after a paternity divorce.
+  7. `maras_player_partner_cheating.prompt` — Legacy/fallback evaluator for Tier 2 Player-Partner Agency actions (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`).
+  8. `maras_npc_couple_banter.prompt` — Generates contextual conversation seeds for `BanterCoordinatorService`.
 

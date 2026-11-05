@@ -1,6 +1,7 @@
 #include "core/NPCRelationshipManager.h"
 
 #include "core/NPCIndex.h"
+#include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "services/ActorService.h"
@@ -177,37 +178,15 @@ namespace MARAS {
             if (formerSpouseUUID != 0 && formerSpouseUUID != motherUUID && formerSpouseUUID != bioFatherUUID) recentEventsParticipants.push_back(formerSpouseUUID);
             ctx["recent_events_participants"] = std::move(recentEventsParticipants);
 
-            std::string promptName = "maras_evaluations/maras_step_in_evaluation";
-            std::string contextJson = ctx.dump();
+            std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
-            SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson,
-                [this, motherID, motherName, bioFatherName, cand, processNext, index](const char* response, int success) {
-                    bool validJson = false;
-                    bool steppedIn = false;
-                    std::string failureDetail;
-                    LLMFailureType failureType = LLMFailureType::RequestFailed;
-
-                    if (success && response && response[0] != '\0') {
-                        nlohmann::json resp = JsonService::ParseLLMJson(response);
-                        if (!resp.is_discarded() && resp.is_object()) {
-                            validJson = true;
-                            steppedIn = resp.value("bio_father_steps_in", false);
-                            std::string reason = resp.value("reason", "");
-                            spdlog::info("[SkyrimNet] Step-in LLM evaluation for bio father {:08X} with mother {:08X}: steppedIn={}, reason='{}'",
-                                         cand.bioFatherID, motherID, steppedIn, reason);
-                        } else {
-                            failureType = LLMFailureType::InvalidJson;
-                            failureDetail = "AI model returned broken or unreadable JSON.";
-                            spdlog::warn("[SkyrimNet] Step-in LLM evaluation returned malformed JSON for {:08X} & {:08X}: {}",
-                                         cand.bioFatherID, motherID, response);
-                        }
-                    } else {
-                        failureType = LLMFailureType::RequestFailed;
-                        failureDetail = "HTTP / connection request failed or returned an empty response.";
-                        spdlog::warn("[SkyrimNet] Step-in LLM call failed for {:08X} & {:08X}", cand.bioFatherID, motherID);
-                    }
-
-                    if (validJson) {
+            SkyrimNetDecisions::EvaluateStepIn(
+                contextJson,
+                [this, motherID, motherName, bioFatherName, cand, processNext, index](const SkyrimNetDecisions::StepInEvalResult& res) {
+                    if (res.success) {
+                        bool steppedIn = res.steppedIn;
+                        spdlog::info("[SkyrimNet] Step-in evaluation for bio father {:08X} with mother {:08X} (usedDecisions={}): steppedIn={}, reason='{}'",
+                                     cand.bioFatherID, motherID, res.usedDecisions, steppedIn, res.reason);
                         SKSE::GetTaskInterface()->AddTask([this, motherID, cand, steppedIn, processNext, index]() {
                             if (!*processNext) {
                                 return;
@@ -222,6 +201,9 @@ namespace MARAS {
                         return;
                     }
 
+                    spdlog::warn("[SkyrimNet] Step-in evaluation failed for {:08X} & {:08X} (usedDecisions={}, detail='{}')",
+                                 cand.bioFatherID, motherID, res.usedDecisions, res.failureDetail);
+
                     ModalRequest req;
                     req.title = "Bio-Father Step-In Evaluation Failed";
                     req.subtitle = "SkyrimNet LLM Request Failed";
@@ -234,12 +216,12 @@ namespace MARAS {
                     req.controls.push_back(ModalControl::MakeInfoBox(
                         "error_details",
                         "Failure Details",
-                        std::format("{} & {} ({})\n{}", bioFatherName, motherName, childDesc, failureDetail),
+                        std::format("{} & {} ({})\n{}", bioFatherName, motherName, childDesc, res.failureDetail),
                         ModalTone::Warning));
                     req.controls.push_back(ModalControl::MakeInfoBox(
                         "error_guidance",
-                        GetLLMFailureGuidanceTitle(failureType),
-                        GetLLMFailureGuidance(failureType, "gamemaster_evaluation"),
+                        GetLLMFailureGuidanceTitle(res.failureType),
+                        GetLLMFailureGuidance(res.failureType, res.usedDecisions ? "decisions" : "gamemaster_evaluation"),
                         ModalTone::Default));
 
                     req.buttons.push_back(ModalButton::Make("retry", "Retry LLM Request", ModalButtonVariant::Primary));
