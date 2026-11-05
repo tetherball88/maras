@@ -3,7 +3,7 @@ scriptname TTM_ServiceIntimateMoments extends Quest
 ; This script is for integrations with animation frameworks
 
 Function Maintenance()
-    if(Game.GetModByName("TT_LoversLedger.esp") != 255)
+    if(Game.GetModByName("TT_LoversLedger.esp") != 255 || Game.GetLightModByName("TT_LoversLedger.esp") != 65535)
         TTM_Data.SetHasTTLL()
     endif
 
@@ -174,7 +174,7 @@ Function CleanupSexLabThread(int threadID)
 EndFunction
 
 float Function GetNpcPlayerIntimacy(Actor npc)
-    if(TTM_Data.GetHasTTLL())
+    if(!TTM_Data.GetHasTTLL())
         return 0
     endif
 
@@ -183,12 +183,12 @@ float Function GetNpcPlayerIntimacy(Actor npc)
     Actor player = TTM_Data.GetPlayer()
     if(TTLL_Store.GetLoverInt(npc, player, "exclusivesex") >= 1)
         res += 10
-    elseif(TTLL_Store.GetLoverInt(npc, player, "groupsex") >= 1)
+    elseif(TTLL_Store.GetLoverInt(npc, player, "partOfSameGroupSex") >= 1)
         res += 6
     endif
 
     Form[] topThreeLovers = TTLL_Store.GetAllLovers(npc, 3)
-    int isPlayerTopLover = 0
+    int isPlayerTopLover = -1
     int i = 0
     while(i < topThreeLovers.Length)
         ActorBase topLoverBase = topThreeLovers[i] as ActorBase
@@ -198,7 +198,7 @@ float Function GetNpcPlayerIntimacy(Actor npc)
         i += 1
     endwhile
 
-    if(isPlayerTopLover)
+    if(isPlayerTopLover >= 0)
         res += 2 * (3 - isPlayerTopLover)
     endif
 
