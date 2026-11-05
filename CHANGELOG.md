@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.5.0.alpha - 2026-11-06
+
+### Added
+- **SkyrimNet Decisions Model Integration (Jev Decision Engine)**:
+  - **Structured Single-Pass AI Decisions**: Integrated SkyrimNet's **Decisions API** (`prompts/decisions/`) for M.A.R.A.S background evaluations. Instead of asking a chat model to write freeform JSON, evaluations now use SkyrimNet's dedicated **Decisions** model slot for fast, single-pass probability and choice scoring—eliminating broken/unreadable JSON errors and recording AI confidence scores:
+    - **Matchmaking Verification**: Evaluates each character's willingness independently—requiring mutual consent from both NPCs to start, advance, open, or close a relationship, while allowing unilateral breakups or divorces when either partner wants out.
+    - **Player Partner Agency**: Evaluates whether a tempted or open-relationship partner stays faithful or picks a specific candidate from their shortlist, whether they end an ongoing affair (and whether they confess when you return home), whether they end an open-relationship fling, and whether they ask to open or close your relationship.
+    - **Paternity Secret Evaluations**: Evaluates whether a paternity secret stays hidden, is confessed by the mother, or is discovered by the presumed or biological father, along with whether the deceived partner stays or ends the relationship.
+    - **Biological Father Step-In**: Evaluates whether a child's true biological father steps forward to claim his child and marry the mother after a paternity-driven divorce.
+  - **Automatic Chat LLM Fallback**: If no **Decisions** model route is configured in SkyrimNet (or if you turn the feature off), M.A.R.A.S automatically falls back to the standard **GameMaster** Chat LLM evaluation prompts without interrupting your game.
+  - **"Use SkyrimNet Decisions (Jev)" Setting**: Added a toggle in **Settings -> SkyrimNet** (enabled by default) to switch between SkyrimNet's Decisions engine and legacy Chat LLM evaluation prompts.
+
+### Changed
+- **Smarter AI Evaluation Guidelines (Decisions & Chat Prompts)**:
+  - **Off-Screen NPC Life Awareness**: Clarified in matchmaking verification and partner agency prompts that an empty recent-events log simply means you haven't been nearby recently, preventing the AI from treating a lack of player-witnessed dialogue as proof that an NPC is content or unwilling to act.
+  - **Unilateral Breakups vs. Mutual Commitments**: Updated matchmaking verification rules in both Decisions and Chat prompts so breakups and divorces only require one unhappy partner, while new relationships, advancements, and open/close transitions require both characters to be compatible and willing.
+  - **Explicit Temptation Drivers & Confession Motives**: Partner agency and paternity prompts now pass active temptation pressures directly into the evaluation context and recognize broader motives for confessing an affair or paternity secret (such as pressure, exhaustion from hiding it, pragmatism, or confrontation—not only guilt).
+  - **Model-Aware Retry Guidance**: LLM failure/retry modals now indicate whether an evaluation failed on the **Decisions** or **GameMaster** model slot.
+- **Cleaned Up Legacy Evaluation Hook**: Removed the unused `EvaluateRelationshipStatusChange` Papyrus function and its legacy `maras_evaluate_relationship_change.prompt` template.
+
 ## 2.4.0.alpha - 2026-11-05
 
 ### Added

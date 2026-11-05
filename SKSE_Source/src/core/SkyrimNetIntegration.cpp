@@ -1,4 +1,5 @@
 #include "core/SkyrimNetIntegration.h"
+#include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/AffectionService.h"
@@ -2331,11 +2332,15 @@ void RegisterSkyrimNetDecorators()
 }
 
 using PublicSendCustomPromptToLLM_t = bool (*)(const char* promptName, const char* variant, const char* contextJson, std::function<void(const char* response, int success)> callback);
+using PublicSendCustomDecisionToLLM_t = bool (*)(const char* templateName, const char* contextJson, int maxProbabilities, std::function<void(const char* answer, const char* resultJson, int success)> callback);
 
 namespace {
     std::string GetModelSlotDisplayName(std::string_view llmVariant) {
         if (llmVariant == "memory") {
             return "Memory";
+        }
+        if (llmVariant == "decisions") {
+            return "Decisions";
         }
         return "GameMaster";
     }
@@ -2428,156 +2433,6 @@ void ShowLLMRetryModal(const std::string& evaluationType,
         });
 }
 
-bool EvaluateRelationshipStatusChange(RE::FormID actorFormID, RE::FormID partnerFormID, const std::string& targetStatus, const std::string& evalId) {
-    if (!IsSkyrimNetAvailable()) {
-        MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: SkyrimNet is not available or simulated as disabled");
-        return false;
-    }
-
-    HMODULE hMod = GetModuleHandleW(L"SkyrimNet.dll");
-    if (!hMod) {
-        MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: SkyrimNet.dll not found in process");
-        return false;
-    }
-
-    auto fnSendLLM = reinterpret_cast<PublicSendCustomPromptToLLM_t>(GetProcAddress(hMod, "PublicSendCustomPromptToLLM"));
-    if (!fnSendLLM) {
-        MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: PublicSendCustomPromptToLLM export not found in SkyrimNet.dll");
-        return false;
-    }
-
-    if (!ActorSvc::IsValid(actorFormID) || !ActorSvc::IsValid(partnerFormID)) {
-        MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: invalid actor/partner FormIDs {:08X} / {:08X}", actorFormID, partnerFormID);
-        return false;
-    }
-
-    std::string currentStatusStr(Utils::RelationshipStatusToString(NPCRelationshipManager::GetSingleton().GetRelationshipStatus(actorFormID, partnerFormID)));
-    std::string actorName = ActorSvc::GetName(actorFormID);
-    std::string partnerName = ActorSvc::GetName(partnerFormID);
-    uint64_t actorUUID = GetActorUUID(actorFormID);
-    uint64_t partnerUUID = GetActorUUID(partnerFormID);
-
-    nlohmann::json ctx;
-    ctx["actorName"] = actorName;
-    ctx["actorFormId"] = fmt::format("0x{:08X}", actorFormID);
-    ctx["actorUUID"] = actorUUID;
-    ctx["partnerName"] = partnerName;
-    ctx["partnerFormId"] = fmt::format("0x{:08X}", partnerFormID);
-    ctx["partnerUUID"] = partnerUUID;
-    ctx["currentStatus"] = currentStatusStr;
-    ctx["targetStatus"] = targetStatus;
-    if (!evalId.empty()) {
-        ctx["evalId"] = evalId;
-    }
-    nlohmann::json recentEventsParticipants = nlohmann::json::array();
-    if (actorUUID != 0) recentEventsParticipants.push_back(actorUUID);
-    if (partnerUUID != 0 && partnerUUID != actorUUID) recentEventsParticipants.push_back(partnerUUID);
-    ctx["recent_events_participants"] = std::move(recentEventsParticipants);
-
-    std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-    std::string promptName = "maras_evaluations/maras_evaluate_relationship_change";
-    std::string llmVariant = "gamemaster_evaluation";
-
-    auto callbackHolder = std::make_shared<std::function<void(const char*, int)>>();
-
-    *callbackHolder = [callbackHolder, actorFormID, partnerFormID, actorName, partnerName, currentStatusStr, targetStatus, evalId, contextJson, promptName, llmVariant, fnSendLLM](const char* response, int success) {
-        try {
-            MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange callback: success={}", success);
-
-            auto queueRetryModal = [&](const std::string& errorDetail, LLMFailureType failureType) {
-                std::function<void(const char*, int)> savedCb = std::move(*callbackHolder);
-                *callbackHolder = nullptr;
-
-                auto retryAction = [callbackHolder, savedCb = std::move(savedCb), promptName, llmVariant, contextJson, fnSendLLM]() mutable {
-                    MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange: retrying LLM request.");
-                    *callbackHolder = std::move(savedCb);
-                    if (*callbackHolder) {
-                        if (!fnSendLLM(promptName.c_str(), llmVariant.c_str(), contextJson.c_str(), *callbackHolder)) {
-                            *callbackHolder = nullptr;
-                        }
-                    }
-                };
-
-                auto ignoreAction = [callbackHolder]() {
-                    MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange: player chose to ignore failed evaluation.");
-                    *callbackHolder = nullptr;
-                };
-
-                std::string fullDescription = fmt::format(
-                    "{} & {} ({} -> {})\n{}",
-                    actorName, partnerName, currentStatusStr, targetStatus, errorDetail);
-
-                ShowLLMRetryModal(
-                    "Relationship Status Change",
-                    fullDescription,
-                    failureType,
-                    std::move(retryAction),
-                    std::move(ignoreAction),
-                    llmVariant);
-            };
-
-            if (!success || !response || response[0] == '\0') {
-                MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: LLM returned failure or empty response.");
-                queueRetryModal("HTTP / connection request failed or returned an empty response.", LLMFailureType::RequestFailed);
-                return;
-            }
-
-            nlohmann::json resp = JsonService::ParseLLMJson(response);
-
-            if (resp.is_discarded() || !resp.is_object()) {
-                MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: LLM response was not valid JSON (even after sanitization and repair). Raw: {}", response);
-                queueRetryModal("AI model returned broken or unreadable JSON.", LLMFailureType::InvalidJson);
-                return;
-            }
-
-            bool allow = false;
-            if (resp.contains("allow") && resp["allow"].is_boolean()) {
-                allow = resp["allow"].get<bool>();
-            } else if (resp.contains("start") && resp["start"].is_boolean()) {
-                allow = resp["start"].get<bool>();
-            }
-
-            std::string reason = (resp.contains("reason") && resp["reason"].is_string())
-                ? resp["reason"].get<std::string>()
-                : "";
-
-            *callbackHolder = nullptr;
-
-            MARAS_LOG_INFO("[SkyrimNet] EvaluateRelationshipStatusChange result: allow={}, reason='{}'", allow, reason);
-
-            if (allow) {
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([actorFormID, partnerFormID, targetStatus]() {
-                        try {
-                            NPCRelationshipManager::GetSingleton().PromoteToStatusWith(actorFormID, partnerFormID, Utils::StringToRelationshipStatus(targetStatus));
-                            MARAS_LOG_INFO("[SkyrimNet] Promoted relationship between {:08X} and {:08X} to '{}' after LLM evaluation", actorFormID, partnerFormID, targetStatus);
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("[SkyrimNet] Exception in EvaluateRelationshipStatusChange game-thread task: {}", e.what());
-                        }
-                    });
-                }
-            } else {
-                MARAS_LOG_INFO("[SkyrimNet] LLM evaluation declined status change to '{}' between {:08X} and {:08X}", targetStatus, actorFormID, partnerFormID);
-            }
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("[SkyrimNet] Exception in EvaluateRelationshipStatusChange callback: {}", e.what());
-            *callbackHolder = nullptr;
-        } catch (...) {
-            MARAS_LOG_ERROR("[SkyrimNet] Unknown exception in EvaluateRelationshipStatusChange callback");
-            *callbackHolder = nullptr;
-        }
-    };
-
-    bool queued = fnSendLLM(promptName.c_str(), llmVariant.c_str(), contextJson.c_str(), *callbackHolder);
-    if (!queued) {
-        *callbackHolder = nullptr;
-        MARAS_LOG_WARN("[SkyrimNet] EvaluateRelationshipStatusChange: fnSendLLM returned false (immediate failure)");
-        return false;
-    }
-
-    return true;
-}
-
 bool SendCustomPromptToLLM(const std::string& promptName, const std::string& variant, const std::string& contextJson, std::function<void(const char* response, int success)> callback) {
     if (!IsSkyrimNetAvailable()) {
         MARAS_LOG_WARN("[SkyrimNet] SendCustomPromptToLLM: SkyrimNet is not available or simulated as disabled");
@@ -2597,6 +2452,28 @@ bool SendCustomPromptToLLM(const std::string& promptName, const std::string& var
     }
 
     return fnSendLLM(promptName.c_str(), variant.c_str(), contextJson.c_str(), std::move(callback));
+}
+
+bool SendCustomDecisionToLLM(const std::string& templateName, const std::string& contextJson, int maxProbabilities,
+                             std::function<void(const char* answer, const char* resultJson, int success)> callback) {
+    if (!IsSkyrimNetAvailable()) {
+        MARAS_LOG_WARN("[SkyrimNet] SendCustomDecisionToLLM: SkyrimNet is not available or simulated as disabled");
+        return false;
+    }
+
+    HMODULE hMod = GetModuleHandleW(L"SkyrimNet.dll");
+    if (!hMod) {
+        MARAS_LOG_WARN("[SkyrimNet] SendCustomDecisionToLLM: SkyrimNet.dll not found in process");
+        return false;
+    }
+
+    auto fnSendDecision = reinterpret_cast<PublicSendCustomDecisionToLLM_t>(GetProcAddress(hMod, "PublicSendCustomDecisionToLLM"));
+    if (!fnSendDecision) {
+        MARAS_LOG_WARN("[SkyrimNet] SendCustomDecisionToLLM: PublicSendCustomDecisionToLLM export not found in SkyrimNet.dll");
+        return false;
+    }
+
+    return fnSendDecision(templateName.c_str(), contextJson.c_str(), maxProbabilities, std::move(callback));
 }
 
 using PublicAddMemory_t = int (*)(
@@ -2715,22 +2592,24 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
 
         std::string childName = ctx["childName"].get<std::string>();
         std::string motherName = ctx["motherName"].get<std::string>();
+        bool isSecretForPresumedFather = entry.paternitySecret.isSecretForPartner;
         std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        std::string promptName = "maras_evaluations/maras_paternity_evaluation";
 
-        auto callbackHolder = std::make_shared<std::function<void(const char*, int)>>();
+        auto callbackHolder = std::make_shared<std::function<void(const SkyrimNetDecisions::PaternityEvalResult&)>>();
 
-        *callbackHolder = [callbackHolder, childID, motherID, presumedFatherID, bioFatherID, childName, motherName, promptName, contextJson](const char* response, int success) {
+        *callbackHolder = [callbackHolder, childID, motherID, presumedFatherID, bioFatherID, childName, motherName, isSecretForPresumedFather, contextJson](const SkyrimNetDecisions::PaternityEvalResult& res) {
             try {
-                auto queueRetryModal = [&](const std::string& errorDetail, LLMFailureType failureType) {
-                    std::function<void(const char*, int)> savedCb = std::move(*callbackHolder);
+                if (!res.success) {
+                    MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: evaluation failed (usedDecisions={}, detail='{}').",
+                                   res.usedDecisions, res.failureDetail);
+                    std::function<void(const SkyrimNetDecisions::PaternityEvalResult&)> savedCb = std::move(*callbackHolder);
                     *callbackHolder = nullptr;
 
-                    auto retryAction = [callbackHolder, savedCb = std::move(savedCb), promptName, contextJson, childID]() mutable {
-                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: retrying LLM request for child {:08X}.", childID);
+                    auto retryAction = [callbackHolder, savedCb = std::move(savedCb), contextJson, isSecretForPresumedFather, childID]() mutable {
+                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: retrying evaluation for child {:08X}.", childID);
                         *callbackHolder = std::move(savedCb);
                         if (*callbackHolder) {
-                            if (!SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, *callbackHolder)) {
+                            if (!SkyrimNetDecisions::EvaluatePaternity(contextJson, isSecretForPresumedFather, *callbackHolder)) {
                                 *callbackHolder = nullptr;
                                 PrismaUIDataBridge::GetSingleton().SendOverviewData();
                                 PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
@@ -2747,59 +2626,26 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
 
                     std::string fullDescription = fmt::format(
                         "Child: {} (Mother: {})\n{}",
-                        childName, motherName, errorDetail);
+                        childName, motherName, res.failureDetail);
 
                     ShowLLMRetryModal(
                         "Paternity Secret Evaluation",
                         fullDescription,
-                        failureType,
+                        res.failureType,
                         std::move(retryAction),
                         std::move(ignoreAction),
-                        "gamemaster_evaluation");
-                };
-
-                if (!success || !response || response[0] == '\0') {
-                    MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: LLM request failed or returned empty response.");
-                    queueRetryModal("HTTP / connection request failed or returned an empty response.", LLMFailureType::RequestFailed);
-                    return;
-                }
-
-                nlohmann::json resp = JsonService::ParseLLMJson(response);
-                if (resp.is_discarded() || !resp.is_object()) {
-                    MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: Failed to parse LLM response: {}", response);
-                    queueRetryModal("AI model returned broken or unreadable JSON.", LLMFailureType::InvalidJson);
+                        res.usedDecisions ? "decisions" : "gamemaster_evaluation");
                     return;
                 }
 
                 *callbackHolder = nullptr;
 
-                auto getStr = [&](const char* key, const char* defaultVal) -> std::string {
-                    return (resp.contains(key) && resp[key].is_string()) ? resp[key].get<std::string>() : defaultVal;
-                };
-                auto getBool = [&](const char* key, bool defaultVal) -> bool {
-                    return (resp.contains(key) && resp[key].is_boolean()) ? resp[key].get<bool>() : defaultVal;
-                };
+                std::string outcome = res.outcome;
+                std::string partnerReaction = res.partnerReaction;
+                std::string summary = res.summary;
 
-                std::string outcome = getStr("outcome", "");
-                if (outcome.empty()) {
-                    outcome = getStr("event", "remains_secret");
-                }
-
-                // Normalize legacy prompt values if returned
-                if (outcome == "confession") {
-                    outcome = "mother_confessed_presumed";
-                } else if (outcome == "discovery") {
-                    outcome = "presumed_father_learnt";
-                } else if (outcome == "remains_secret" || outcome == "none") {
-                    bool bioInformed = getBool("bio_father_informed", false) || getBool("bio_father_aware", false);
-                    outcome = bioInformed ? "bio_father_learnt" : "none";
-                }
-
-                std::string partnerReaction = getStr("partner_reaction", "none");
-                std::string summary = getStr("summary", "");
-
-                MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret result: outcome='{}', reaction='{}'",
-                             outcome, partnerReaction);
+                MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret result (usedDecisions={}): outcome='{}', reaction='{}', summary='{}'",
+                               res.usedDecisions, outcome, partnerReaction, summary);
 
                 if (auto* taskIF = SKSE::GetTaskInterface()) {
                     taskIF->AddTask([childID, motherID, presumedFatherID, bioFatherID, outcome, partnerReaction, summary]() {
@@ -2853,7 +2699,7 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
             }
         };
 
-        bool queued = SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, *callbackHolder);
+        bool queued = SkyrimNetDecisions::EvaluatePaternity(contextJson, isSecretForPresumedFather, *callbackHolder);
         if (!queued) {
             *callbackHolder = nullptr;
             return false;

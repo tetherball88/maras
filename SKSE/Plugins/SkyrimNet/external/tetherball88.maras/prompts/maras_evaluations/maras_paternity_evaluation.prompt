@@ -46,7 +46,7 @@ You are the GameMaster AI for Skyrim. Evaluate an ongoing paternity intrigue sit
 Evaluate the character profiles, personality traits, memories, and recent events/dialogues of each individual to determine their emotional, psychological, and moral reaction:
 1. **Outcome** (`"outcome"`):
    - `"remains_secret"`: The secret is kept for now. No one learns anything new.
-   - `"mother_confessed_presumed"`: Mother confesses the truth to the partner/presumed father (due to guilt, fear, or conscience). Only if `isSecretForPresumedFather` is true.
+   - `"mother_confessed_presumed"`: Mother confesses or admits the truth to the partner/presumed father (whether from conscience, pressure, feeling cornered, exhaustion from hiding it, pragmatism, or defiance). Only if `isSecretForPresumedFather` is true.
    - `"mother_confessed_bio"`: Mother informs/confesses to the true biological father that he is the father. Only if `isSecretForBioFather` is true.
    - `"mother_confessed_both"`: Mother confesses the truth openly to both men.
    - `"presumed_father_learnt"`: Presumed father realizes or discovers the truth independently (strongly favored if `hasVisualDiscrepancy` is true, or through rumors/suspicion). Only if `isSecretForPresumedFather` is true.

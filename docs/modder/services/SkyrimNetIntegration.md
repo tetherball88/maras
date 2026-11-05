@@ -10,7 +10,7 @@
 
 - **Dynamic DLL Discovery (`IsSkyrimNetAvailable`)**:
   - Checks whether `SkyrimNet.dll` is mapped into the Skyrim process (`GetModuleHandleW`) and respects the developer testing override `simulateNoSkyrimNet`.
-  - Resolves all SkyrimNet C API functions (`PublicRegisterDecorator`, `PublicFormIDToUUID`, `PublicGetPluginConfigValue`, `PublicSendCustomPromptToLLM`, `PublicAddMemory`) dynamically so M.A.R.A.S runs without hard DLL dependencies when SkyrimNet is not installed.
+  - Resolves all SkyrimNet C API functions (`PublicRegisterDecorator`, `PublicFormIDToUUID`, `PublicGetPluginConfigValue`, `PublicSendCustomPromptToLLM`, `PublicSendCustomDecisionToLLM`, `PublicAddMemory`) dynamically so M.A.R.A.S runs without hard DLL dependencies when SkyrimNet is not installed.
 - **Base-First UUID Resolution**:
   - When converting an actor's FormID to a 64-bit SkyrimNet UUID (`FormIDToUUID`), the service first attempts to resolve the actor's **Base NPC FormID (`TESNPC`)** via `PublicFormIDToUUID`, falling back to the placed Reference FormID if the base returns `0`.
 - **Action Proximity Radius**:
@@ -70,17 +70,21 @@ In addition to `ttm_npc_relationship_profile` and `ttm_is_registered`, the servi
 
 ---
 
-## 4. LLM Evaluations & Paternity Secret Resolution
+## 4. Jev Decisions (`SkyrimNetDecisions`) & LLM Evaluations
 
-1. **Relationship Status Change Evaluation (`EvaluateRelationshipStatusChange`)**:
-   - Sends `maras_evaluations/maras_evaluate_relationship_change` (`gamemaster_evaluation` variant) to decide whether an NPC pair should transition to `targetStatus`.
-   - If the LLM returns `allow: true` (or `start: true`), promotes the pair in `NPCRelationshipManager`.
-   - If the HTTP request fails or returns unrepairable JSON, displays an in-game `Retry / Ignore` modal (`ShowLLMRetryModal`).
-2. **Paternity Secret Evaluation (`EvaluatePaternitySecret`)**:
-   - Triggered at birth or from the Prisma UI (`maras_evaluations/maras_paternity_evaluation`), passing mother, presumed father, and biological father profiles plus any racial phenotype mismatch description (`GetVisualDiscrepancyDescription`).
-   - Resolves five canonical outcomes on the main thread:
+Structured classification evaluations are handled by `SkyrimNetDecisions` ([SkyrimNetDecisions.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/SkyrimNetDecisions.cpp)), which dispatches Jev decision prompts (`decisions/*.prompt`) via `PublicSendCustomDecisionToLLM` when `skyrimnetUseDecisions` is enabled (`true` by default) and automatically falls back to `PublicSendCustomPromptToLLM` (`maras_evaluations/*.prompt`) when `skyrimnetUseDecisions` is disabled or SkyrimNet returns `"error": "no_decisions_route"`:
+
+1. **Paternity Secret Evaluation (`EvaluatePaternitySecret` / `SkyrimNetDecisions::EvaluatePaternity`)**:
+   - Triggered at birth or from the Prisma UI (`decisions/maras_paternity_evaluation` or fallback `maras_evaluations/maras_paternity_evaluation`), passing mother, presumed father, and biological father profiles plus any racial phenotype mismatch description (`GetVisualDiscrepancyDescription`).
+   - Evaluates `[DECISION: mother_confesses]`, `[DECISION: partner_reaction]`, `[DECISION: presumed_discovers]`, and `[DECISION: bio_father_learns]` and maps them to five canonical outcomes on the main thread:
      - `mother_confessed_presumed` / `presumed_father_learnt`: Resolves the secret for the deceived partner and applies `partner_reaction` (`divorce` or `breakup` -> `ExDating`).
      - `mother_confessed_bio` / `bio_father_learnt`: Resolves the secret for the biological father.
      - `mother_confessed_both`: Resolves both edges simultaneously and applies `partner_reaction`.
    - Fires the `maras_paternity_secret_resolved` SKSE ModCallbackEvent and refreshes the Prisma UI.
+2. **Biological Father Step-In Evaluation (`NPCRelationshipManager::EvaluateBioFatherStepIn` / `SkyrimNetDecisions::EvaluateStepIn`)**:
+   - Evaluates `decisions/maras_step_in_evaluation` (`[DECISION: step_in]`) when a deceived husband divorces a mother over a paternity scandal to determine whether the biological father steps in (`married`, `dating`, or `lover`).
+3. **Player-Partner Agency Evaluation (`MatchmakingService::TryScheduledPlayerPartnerInfidelity` / `SkyrimNetDecisions::EvaluatePartnerAgency`)**:
+   - Evaluates `decisions/maras_player_partner_cheating` across all 5 `evalMode`s (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`). In `candidate_select` mode, dynamically builds `c_1`..`c_N` choice keys for each shortlisted candidate plus `none` (stay faithful).
+4. **Matchmaking Verification (`MatchmakingService::RetryVerificationTasks` / `SkyrimNetDecisions::EvaluateMatchmakingVerify`)**:
+   - Evaluates `decisions/maras_matchmaking_verify` for each proposed NPC–NPC transition using bilateral consent (`willing_a && willing_b`) for `new`, `advance`, `open`, and `close` transitions, and unilateral initiation (`wants_breakup_a || wants_breakup_b`) for `breakup` transitions.
 

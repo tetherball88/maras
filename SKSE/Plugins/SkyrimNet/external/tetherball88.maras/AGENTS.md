@@ -28,10 +28,20 @@ These rules apply to all files in `SKSE/Plugins/SkyrimNet/external/tetherball88.
 
 ---
 
-## 3. C++ Evaluation Prompt JSON Contracts (`prompts/maras_evaluations/`)
+## 3. C++ Evaluation & Jev Decision Prompts (`prompts/decisions/` and `prompts/maras_evaluations/`)
 
-The prompt templates in `prompts/maras_evaluations/` (`matchmaking_global.prompt`, `matchmaking_manual.prompt`, `matchmaking_verification.prompt`, `matchmaking_memory_batch.prompt`, `paternity_secret_eval.prompt`, etc.) are invoked asynchronously by C++ (`MatchmakingService` and `NPCRelationshipManager`) via `PublicSendCustomPrompt` and parsed by C++ JSON parsers (`nlohmann::json`):
+M.A.R.A.S uses two categories of C++-invoked prompts:
 
-- **Strict Output Schema**: Never rename or remove required JSON output keys instructed in `prompts/maras_evaluations/*.prompt` without simultaneously updating the corresponding C++ response parser in `SKSE_Source/src/core/MatchmakingService.cpp` or `NPCRelationshipManager.cpp`.
-- **Strict Input Context**: Any new `{{ variable }}` referenced in an evaluation prompt must be populated in the JSON context object passed to `RenderTemplate` in C++.
+1. **Jev Decision Prompts (`prompts/decisions/*.prompt`)**:
+   - Invoked via `PublicSendCustomDecisionToLLM` (`SkyrimNetDecisions.cpp`) when `skyrimnetUseDecisions` is enabled (`true` by default):
+     - `maras_step_in_evaluation.prompt` — Evaluates whether a biological father steps in after a paternity-driven divorce (`[DECISION: step_in]`).
+     - `maras_paternity_evaluation.prompt` — Evaluates paternity secret exposure and partner reaction (`[DECISION: mother_confesses]`, `[DECISION: partner_reaction]`, `[DECISION: presumed_discovers]`, `[DECISION: bio_father_learns]`).
+     - `maras_player_partner_cheating.prompt` — Evaluates Tier 2 Player-Partner Agency across all 5 `evalMode`s (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`).
+     - `maras_matchmaking_verify.prompt` — Verifies proposed matchmaking transitions using per-actor consent (`willing_a && willing_b` for `new`/`advance`/`open`/`close`) or unilateral initiation (`wants_breakup_a || wants_breakup_b` for `breakup`).
+   - **Strict Jev Schema Formatting**: Every `[DECISION: key]` block after `# DECISION SCHEMA` must keep each option (`option_key: Single-line criterion`) on a single line with no embedded newlines, colons in keys, or brackets. Never rename decision keys or option keys without updating `SKSE_Source/src/core/SkyrimNetDecisions.cpp`.
+
+2. **Chat Evaluation Prompts (`prompts/maras_evaluations/*.prompt`)**:
+   - Invoked via `PublicSendCustomPromptToLLM` for open-ended JSON generation (`maras_matchmaking_scheduled.prompt`, `maras_matchmaking_manual.prompt`, `maras_event_memories.prompt`, `maras_npc_couple_banter.prompt`) and as automatic fallbacks when `skyrimnetUseDecisions` is disabled or SkyrimNet's `decisions` model slot returns `"error": "no_decisions_route"`.
+   - **Strict Output Schema**: Never rename or remove required JSON output keys instructed in `prompts/maras_evaluations/*.prompt` without simultaneously updating the corresponding C++ response parser in `SKSE_Source/src/core/MatchmakingService.cpp`, `SkyrimNetDecisions.cpp`, or `SkyrimNetIntegration.cpp`.
+   - **Strict Input Context**: Any new `{{ variable }}` referenced in a decision or evaluation prompt must be populated in the JSON context object passed from C++.
 

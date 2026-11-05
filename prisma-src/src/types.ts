@@ -240,6 +240,7 @@ export interface MarasSettings {
   globalBanPet?: boolean
   skyrimnetActionRadius?: number
   skyrimnetUseLLMMemories?: boolean
+  skyrimnetUseDecisions?: boolean
   matchmakingEnabled?: boolean
   matchmakingIntervalDays?: number
   matchmakingMaxSuggestions?: number

@@ -45,7 +45,7 @@ namespace MARAS::PapyrusInterface {
     bool PromoteNPCToStatusByEnum(RE::StaticFunctionTag*, RE::Actor* npc, std::int32_t statusEnum, bool sendEvent = true);
     bool PromoteNPCToStatusWith(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* target, std::string statusType, bool sendEvent = true);
     bool PromoteNPCToStatusWithByEnum(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* target, std::int32_t statusEnum, bool sendEvent = true);
-    bool EvaluateRelationshipStatusChange(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* partner, std::string targetStatus);
+
     bool Breakup(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB);
     std::int32_t BreakAllLoverConnections(RE::StaticFunctionTag*, RE::Actor* npc, bool onlyCheating);
 

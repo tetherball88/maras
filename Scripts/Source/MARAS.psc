@@ -77,8 +77,8 @@ bool Function PromoteNPCToStatusWith(Actor npc, Actor target, string statusType,
 ;/ Promote/demote NPC to a status by enum with a specific target /;
 bool Function PromoteNPCToStatusWithByEnum(Actor npc, Actor target, int statusEnum, bool sendEvent = true) global native
 
-;/ Evaluate whether a status change is valid and apply it /;
-bool Function EvaluateRelationshipStatusChange(Actor akActor, Actor partner, string targetStatus) global native
+
+
 
 ;/ Break up the relationship between two actors based on their current relationship:
    Married -> Divorced, Engaged -> Jilted, Dating -> Ex-Dating, Lover -> Ex-Lover /;

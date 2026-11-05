@@ -7844,6 +7844,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     globalBanPet: false,
     skyrimnetActionRadius: 3e3,
     skyrimnetUseLLMMemories: true,
+    skyrimnetUseDecisions: true,
     matchmakingExcludePlayerActivePartners: false,
     matchmakingConfirmResults: false,
     playerPartnerCheatingAgencyEnabled: true,
@@ -31659,22 +31660,40 @@ Defaulting to \`null\`.`;
           )
         }
       ) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "AI Memory Generation", icon: Brain, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "LLM-Generated Memories",
-          description: "When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request.",
-          disabled: isGatedDisabled,
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: settings.skyrimnetUseLLMMemories ?? true,
-              onChange: (val) => updateSetting("skyrimnetUseLLMMemories", val),
-              disabled: isGatedDisabled
-            }
-          )
-        }
-      ) })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "AI Evaluation & Memory Engine", icon: Brain, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Use SkyrimNet Decisions (Jev)",
+            description: "When enabled, matchmaking verification, player-partner agency, paternity secret reveals, and bio-father step-in evaluations use SkyrimNet's typed Jev Decisions API (single-pass probability scoring with no broken JSON errors). Automatically falls back to the legacy Chat LLM prompt if no Decisions route is configured in SkyrimNet.",
+            disabled: isGatedDisabled,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: settings.skyrimnetUseDecisions ?? true,
+                onChange: (val) => updateSetting("skyrimnetUseDecisions", val),
+                disabled: isGatedDisabled
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "LLM-Generated Memories",
+            description: "When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request.",
+            disabled: isGatedDisabled,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: settings.skyrimnetUseLLMMemories ?? true,
+                onChange: (val) => updateSetting("skyrimnetUseLLMMemories", val),
+                disabled: isGatedDisabled
+              }
+            )
+          }
+        )
+      ] })
     ] });
   };
   const CheatsSettings = () => {

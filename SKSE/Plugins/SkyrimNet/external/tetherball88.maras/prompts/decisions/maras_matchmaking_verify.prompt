@@ -1,0 +1,115 @@
+[ state relationship_guidelines ]
+{{render_template("submodules\\guidelines\\0501_relationship_statuses")}}
+[ end state ]
+
+[ state proposed_relationship_change ]
+- Current Game Day: {{ gameDay }}
+- Primary Character: {{ actorAName }}
+- Target / Partner: {{ actorBName }}
+- Proposed Action: {{ action }}
+- Proposed Target Status: {{ targetStatus }}
+- Infidelity / Cheating Involved: {{ isCheating }}
+[ end state ]
+
+[ state actor_a_profile ]
+- Name: {{ actorAName }} ({{ actorARace }}, {{ actorASex }})
+- Existing Relationships:
+{{ actorARelationships }}
+{% if actorAUUID != 0 %}
+{{ render_character_profile("ttm_gm", actorAUUID) }}
+{% endif %}
+[ end state ]
+
+[ state actor_b_profile ]
+- Name: {{ actorBName }} ({{ actorBRace }}, {{ actorBSex }})
+- Existing Relationships:
+{{ actorBRelationships }}
+{% if actorBUUID != 0 %}
+{{ render_character_profile("ttm_gm", actorBUUID) }}
+{% endif %}
+[ end state ]
+
+{% if committedPartnerAUUID != 0 %}
+[ state committed_partner_a_profile ]
+Current Primary Partner of {{ actorAName }} ({{ committedPartnerAName }}):
+{{ render_character_profile("ttm_gm", committedPartnerAUUID) }}
+[ end state ]
+{% endif %}
+
+{% if committedPartnerBUUID != 0 %}
+[ state committed_partner_b_profile ]
+Current Primary Partner of {{ actorBName }} ({{ committedPartnerBName }}):
+{{ render_character_profile("ttm_gm", committedPartnerBUUID) }}
+[ end state ]
+{% endif %}
+
+[ state recent_events_and_dialogues ]
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+[ end state ]
+
+[ state evaluation_guidelines ]
+Evaluate each character's profile, personality, long-term memories, existing commitments, and recent events independently:
+- Note on Off-Screen Life: If `recent_events_and_dialogues` is empty, it simply means the Player has not been nearby recently; judge based on the characters' biographies, personalities, values, and existing relationships.
+1. Infidelity & Cheating Verification:
+   - If the proposed status involves cheating (either character is already married, engaged, or exclusively dating another partner):
+   - Weigh the character's loyalty and bond with their current partner against the plausibility of temptation (such as loneliness, dissatisfaction, ambition, vanity, or chemistry with the proposed partner).
+   - If they are devoted to their partner or incompatible with the proposed affair partner, mark `false`; if yielding to this affair fits their personality, circumstances, and attraction to the proposed partner, mark `true`.
+2. Divorce & Breakup Verification:
+   - Breaking up or divorcing is unilateral: it only requires at least one partner (`wants_breakup_a` or `wants_breakup_b`) to want to end the relationship.
+   - Weigh their personality, values, relationship dynamic, and memories: if they are content, compatible, or committed to staying together, mark `false`; if conflict, betrayal, emotional drift, or incompatibility would plausibly lead them to end the relationship, mark `true`.
+3. New Relationships, Advancements & Open/Close Transitions:
+   - Forming, advancing, opening, or closing a relationship is bilateral and requires BOTH {{ actorAName }} and {{ actorBName }} to be willing and compatible based on their personalities, values, backgrounds, and the commitment level of `{{ targetStatus }}` (e.g., casual `lover` vs. committed `dating`, `engaged`, or `married`).
+[ end state ]
+
+{% if action == "breakup" %}
+[ question wants_breakup_a noul ]
+[ criteria ]
+true: {{ actorAName }} wants to end their relationship with {{ actorBName }} and transition to {{ targetStatus }} based on their personality, relationship dynamic, and memories
+false: {{ actorAName }} wants to stay together with {{ actorBName }} and does not wish to break up or divorce
+[ end criteria ]
+[ end question ]
+
+[ question wants_breakup_b noul ]
+[ criteria ]
+true: {{ actorBName }} wants to end their relationship with {{ actorAName }} and transition to {{ targetStatus }} based on their personality, relationship dynamic, and memories
+false: {{ actorBName }} wants to stay together with {{ actorAName }} and does not wish to break up or divorce
+[ end criteria ]
+[ end question ]
+{% else %}
+[ question willing_a noul ]
+[ criteria ]
+{% if action == "open" %}
+true: {{ actorAName }} willingly agrees with {{ actorBName }} to open their relationship to allow consensual outside lovers
+false: {{ actorAName }} refuses or is unwilling to open their relationship with {{ actorBName }}
+{% else if action == "close" %}
+true: {{ actorAName }} willingly agrees with {{ actorBName }} to close their relationship and commit to exclusivity
+false: {{ actorAName }} refuses or is unwilling to close their relationship with {{ actorBName }}
+{% else if isCheating %}
+true: {{ actorAName }} is willing to enter a {{ targetStatus }} relationship with {{ actorBName }} despite the infidelity involved
+false: {{ actorAName }} refuses or is unwilling to enter a {{ targetStatus }} relationship with {{ actorBName }}
+{% else %}
+true: {{ actorAName }} is willing and compatible to enter or advance to a {{ targetStatus }} relationship with {{ actorBName }}
+false: {{ actorAName }} is unwilling or incompatible to enter or advance to a {{ targetStatus }} relationship with {{ actorBName }}
+{% endif %}
+[ end criteria ]
+[ end question ]
+
+[ question willing_b noul ]
+[ criteria ]
+{% if action == "open" %}
+true: {{ actorBName }} willingly agrees with {{ actorAName }} to open their relationship to allow consensual outside lovers
+false: {{ actorBName }} refuses or is unwilling to open their relationship with {{ actorAName }}
+{% else if action == "close" %}
+true: {{ actorBName }} willingly agrees with {{ actorAName }} to close their relationship and commit to exclusivity
+false: {{ actorBName }} refuses or is unwilling to close their relationship with {{ actorAName }}
+{% else if isCheating %}
+true: {{ actorBName }} is willing to enter a {{ targetStatus }} relationship with {{ actorAName }} despite the infidelity involved
+false: {{ actorBName }} refuses or is unwilling to enter a {{ targetStatus }} relationship with {{ actorAName }}
+{% else %}
+true: {{ actorBName }} is willing and compatible to enter or advance to a {{ targetStatus }} relationship with {{ actorAName }}
+false: {{ actorBName }} is unwilling or incompatible to enter or advance to a {{ targetStatus }} relationship with {{ actorAName }}
+{% endif %}
+[ end criteria ]
+[ end question ]
+{% endif %}
+

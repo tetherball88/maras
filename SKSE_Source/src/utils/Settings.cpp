@@ -187,6 +187,7 @@ namespace MARAS {
             visit("multRomanticAttendedBreakup", &Settings::multRomanticAttendedBreakup, false);
             visit("multSuggestOpenNeglectMin", &Settings::multSuggestOpenNeglectMin, false);
             visit("skyrimnetUseLLMMemories", &Settings::skyrimnetUseLLMMemories, false);
+            visit("skyrimnetUseDecisions", &Settings::skyrimnetUseDecisions, false);
         }
     }
 
@@ -636,6 +637,7 @@ namespace MARAS {
                 {"matchmakingevaluationstep", &Settings::matchmakingEvaluationStep},
                 {"matchmakinggeneratememories", &Settings::matchmakingGenerateMemories},
                 {"skyrimnetusellmmemories", &Settings::skyrimnetUseLLMMemories},
+                {"skyrimnetusedecisions", &Settings::skyrimnetUseDecisions},
                 {"matchmakingconfirmresults", &Settings::matchmakingConfirmResults},
                 {"paternityforcedicerolls", &Settings::paternityForceDiceRolls},
                 {"revealsecretsinui", &Settings::revealSecretsInUI},

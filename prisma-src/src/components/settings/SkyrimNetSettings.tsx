@@ -77,7 +77,18 @@ export const SkyrimNetSettings: React.FC = () => {
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="AI Memory Generation" icon={Brain}>
+      <SectionCard title="AI Evaluation & Memory Engine" icon={Brain}>
+        <SettingRow
+          label="Use SkyrimNet Decisions (Jev)"
+          description="When enabled, matchmaking verification, player-partner agency, paternity secret reveals, and bio-father step-in evaluations use SkyrimNet's typed Jev Decisions API (single-pass probability scoring with no broken JSON errors). Automatically falls back to the legacy Chat LLM prompt if no Decisions route is configured in SkyrimNet."
+          disabled={isGatedDisabled}
+        >
+          <ToggleSwitch
+            checked={settings.skyrimnetUseDecisions ?? true}
+            onChange={(val) => updateSetting('skyrimnetUseDecisions', val)}
+            disabled={isGatedDisabled}
+          />
+        </SettingRow>
         <SettingRow
           label="LLM-Generated Memories"
           description="When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request."

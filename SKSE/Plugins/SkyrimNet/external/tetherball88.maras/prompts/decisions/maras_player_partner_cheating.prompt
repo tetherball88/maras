@@ -1,0 +1,150 @@
+[ state relationship_guidelines ]
+{{render_template("submodules\\guidelines\\0501_relationship_statuses")}}
+[ end state ]
+
+[ state partner_context ]
+- Target Partner: {{ partnerName }}
+- Relationship with {{ playerName }}: {{ playerRelationshipStatus }}{% if isOpenRelationship %} (Open Relationship — side lovers are consensually permitted){% else %} (Closed / Exclusive){% endif %}
+- Current Habitat / Location: {{ partnerCurrentLocation }}
+- Recent Presence & Attention from {{ playerName }}: {{ playerPresenceHint }}
+{% if exists("temptationDrivers") and temptationDrivers != "" %}
+- Active Relationship Pressures / Temptation Drivers: {{ temptationDrivers }}
+{% endif %}
+{% if sharedChildrenCount > 0 %}
+- Shared Children with {{ playerName }}: {{ sharedChildrenCount }}
+{% endif %}
+{% if not isOpenRelationship and playerCheatedOnPartner %}
+- Known Betrayal by {{ playerName }}: {{ playerName }} was caught/exposed cheating on {{ partnerName }}{% if playerAffairPartnerName != "" %} with {{ playerAffairPartnerName }}{% endif %}.
+{% endif %}
+[ end state ]
+
+[ state partner_profile ]
+{% if partnerUUID != 0 %}
+{{ render_character_profile("ttm_gm", partnerUUID) }}
+{% else %}
+- Race / Gender: {{ partnerRace }} {{ partnerSex }}
+- Relationships: {{ partnerRelationships }}
+{% endif %}
+[ end state ]
+
+{% if exists("evalMode") and (evalMode == "breakup_affair" or evalMode == "breakup_open_lover") %}
+[ state side_lover_context ]
+- Current Side Lover: {{ sideLoverName }}
+- Current Location: {{ sideLoverLocation }}
+- Side Relationship History: This side relationship {{ sideLoverDurationHint }}.
+{% if evalMode == "breakup_affair" %}
+- Current Affair Stage: {{ affairStage }} ({% if affairStage == "talking" %}Talking Stage — emotional intimacy, secret notes, stolen conversations; has not yet crossed into physical intimacy{% else %}Physical Stage — full physical infidelity{% endif %})
+{% endif %}
+[ end state ]
+
+[ state side_lover_profile ]
+{% if exists("sideLoverUUID") and sideLoverUUID != 0 %}
+{{ render_character_profile("ttm_gm", sideLoverUUID) }}
+{% else %}
+- Race / Gender: {{ sideLoverRace }} {{ sideLoverSex }}
+{% endif %}
+[ end state ]
+{% else if not (exists("evalMode") and (evalMode == "suggest_open" or evalMode == "suggest_close")) %}
+[ state shortlisted_candidates ]
+Shortlisted Paramour Candidates ({{ candidatesCount }} NPCs):
+{{ candidatesList }}
+
+{% if exists("candidates") and length(candidates) > 0 %}
+{% for cand in candidates %}
+### {{ cand.name }} ({{ cand.key }}) — {{ cand.connectionTag }} [{{ cand.eligibility }}]
+{% if cand.uuid != 0 %}
+{{ render_character_profile("ttm_gm", cand.uuid) }}
+{% endif %}
+{% endfor %}
+{% endif %}
+[ end state ]
+{% endif %}
+
+[ state recent_events_and_dialogues ]
+{{ render_template("helpers\\maras_actor_bio_recent_events") }}
+[ end state ]
+
+[ state evaluation_guidelines ]
+{% if exists("evalMode") and evalMode == "breakup_affair" %}
+Base your decision strictly on {{ partnerName }}'s and {{ sideLoverName }}'s character biographies, personalities, long-term memories, recent events/dialogues, and how present or absent {{ playerName }} has been:
+- If {{ partnerName }} feels remorse, values their bond or family with {{ playerName }} (especially if {{ playerName }} has been spending time with them recently, or while the affair is still in the talking stage before becoming physical), or if their dynamic with {{ sideLoverName }} has grown strained or stale, they should end the affair.
+- If {{ partnerName }}'s recent events and memories show bitter estrangement from {{ playerName }}, prolonged loneliness from {{ playerName }}'s absence, resentment over {{ playerName }}'s own infidelity, or deep passion with {{ sideLoverName }}, they continue the affair.
+{% if canConfess %}
+- Also evaluate whether {{ partnerName }} decides to confess or admit the secret affair to {{ playerName }} when {{ playerName }} next comes home (for any reason—conscience, pressure, exhaustion from hiding it, pragmatism, or confrontation), or decides to keep it secret.
+{% endif %}
+{% else if exists("evalMode") and evalMode == "breakup_open_lover" %}
+Base your decision strictly on {{ partnerName }}'s and {{ sideLoverName }}'s biographies, personalities, memories, and recent events/dialogues:
+- If the casual fling has naturally run its course, if {{ partnerName }}'s attention is focused on {{ playerName }} after recent time together, or if {{ partnerName }} and {{ sideLoverName }} lack deeper long-term spark in their recent interactions, they should end the fling.
+- If their personalities, shared memories, or {{ playerName }}'s continued absence give {{ partnerName }} good reason to keep seeing {{ sideLoverName }}, they continue the fling.
+{% else if exists("evalMode") and evalMode == "suggest_open" %}
+Base your decision strictly on {{ partnerName }}'s biography, personality, long-term memories, household situation, and recent events/dialogues with {{ playerName }}:
+- {{ partnerName }} is currently in a closed/exclusive relationship with {{ playerName }}.
+- Judging from {{ partnerName }}'s personality, views on independence/romance, household situation (such as whether {{ playerName }} has other partners or has left {{ partnerName }} alone for a long time), and recent dialogues, decide whether {{ partnerName }} would openly ask {{ playerName }} to allow outside lovers rather than stay strictly exclusive or cheat in secret.
+{% else if exists("evalMode") and evalMode == "suggest_close" %}
+Base your decision strictly on {{ partnerName }}'s biography, personality, long-term memories, household situation, and recent events/dialogues with {{ playerName }}:
+- {{ partnerName }} and {{ playerName }} are currently in an open relationship.
+- Judging from {{ partnerName }}'s biography, possessiveness/devotion, family life, and recent conversations or memories with {{ playerName }}, decide whether {{ partnerName }} has grown tired of sharing and wants to ask {{ playerName }} to commit to an exclusive relationship, or remains comfortable with their open arrangement.
+{% else if isOpenRelationship %}
+Base your decision strictly on {{ partnerName }}'s biography, personality, long-term memories, recent events/dialogues, how present or absent {{ playerName }} has been, and the biographies of the shortlisted candidates:
+- Because {{ partnerName }} and {{ playerName }} have an open relationship, taking a side lover is consensually permitted and is NOT betrayal.
+- Examine {{ partnerName }}'s personality, recent events, and how long {{ playerName }} has been away ({{ playerPresenceHint }}). Decide whether {{ partnerName }} would welcome a side lover right now and which candidate in the shortlist has genuine chemistry, shared history, or natural daily proximity with {{ partnerName }}, or choose none if no candidate fits.
+{% else %}
+Base your decision on {{ partnerName }}'s biography, personality, long-term memories, recent events/dialogues, how present or absent {{ playerName }} has been ({{ playerPresenceHint }}), and the biographies of the shortlisted candidates:
+- Remember this begins at the Talking Stage (secret letters, lingering conversations, stolen glances, emotional/flirtatious closeness) rather than immediate physical intimacy.
+- An empty `recent_events_and_dialogues` section simply means {{ playerName }} has not been nearby recently—do NOT treat empty recent events as proof that {{ partnerName }} is content or unwilling to stray.
+- Weigh {{ partnerName }}'s devotion and values against their current situation ({{ playerPresenceHint }}{% if exists("temptationDrivers") and temptationDrivers != "" %}; {{ temptationDrivers }}{% endif %}): if temptation (loneliness, resentment, boredom, flattery, or attraction) outweighs their restraint AND a shortlisted candidate has genuine chemistry, proximity, or history with {{ partnerName }}, choose that candidate; if {{ partnerName }} remains devoted to {{ playerName }} or none of the candidates fit, choose `none` (stay faithful).
+{% endif %}
+[ end state ]
+
+{% if exists("evalMode") and evalMode == "breakup_affair" %}
+[ question will_breakup noul ]
+[ criteria ]
+true: {{ partnerName }} decides to end their secret {{ affairStage }} affair with {{ sideLoverName }}
+false: {{ partnerName }} continues their secret {{ affairStage }} affair with {{ sideLoverName }}
+[ end criteria ]
+[ end question ]
+
+{% if canConfess %}
+[ question will_confess noul ]
+[ criteria ]
+true: {{ partnerName }} decides to confess or admit the secret affair to {{ playerName }} when {{ playerName }} next returns home
+false: {{ partnerName }} decides to keep the affair secret from {{ playerName }} and not confess
+[ end criteria ]
+[ end question ]
+{% endif %}
+{% else if exists("evalMode") and evalMode == "breakup_open_lover" %}
+[ question will_breakup noul ]
+[ criteria ]
+true: {{ partnerName }} decides to amicably end their open-relationship fling with {{ sideLoverName }}
+false: {{ partnerName }} continues their open-relationship fling with {{ sideLoverName }}
+[ end criteria ]
+[ end question ]
+{% else if exists("evalMode") and evalMode == "suggest_open" %}
+[ question will_suggest noul ]
+[ criteria ]
+true: {{ partnerName }} decides to approach {{ playerName }} when they next return home to propose opening their relationship to allow consensual outside lovers
+false: {{ partnerName }} stays quiet for now and does not ask {{ playerName }} to open their relationship
+[ end criteria ]
+[ end question ]
+{% else if exists("evalMode") and evalMode == "suggest_close" %}
+[ question will_suggest noul ]
+[ criteria ]
+true: {{ partnerName }} decides to approach {{ playerName }} when they next return home to ask to close their relationship and become exclusive again
+false: {{ partnerName }} remains content with their open relationship arrangement and does not ask to close it
+[ end criteria ]
+[ end question ]
+{% else %}
+[ question decision choice ]
+[ criteria ]
+{% if isOpenRelationship %}
+none: {{ partnerName }} declines to pursue any side lover right now
+{% else %}
+none: {{ partnerName }} remains faithful to {{ playerName }} and does not start an affair with any candidate
+{% endif %}
+{% for cand in candidates %}
+{{ cand.key }}: {{ cand.criterion }}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+{% endif %}
+
