@@ -1,4 +1,7 @@
 #include "ui/PrismaUIDataBridge.h"
+#include "core/AdultChildProgression.h"
+#include "core/AdultChildTravelService.h"
+#include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/AffectionService.h"
 #include "core/SpouseHierarchyManager.h"
@@ -89,6 +92,10 @@ namespace MARAS {
             }
             RE::FormID ref = NPCIndex::GetSingleton().GetRefID(id);
             return ref != 0 ? ref : id;
+        }
+
+        inline double RoundFloat(float val, double factor = 100.0) {
+            return std::round(static_cast<double>(val) * factor) / factor;
         }
 
     }  // namespace
@@ -200,6 +207,10 @@ namespace MARAS {
                     ProcessUpdateChild(payload);
                 } else if (action == "spawnChild") {
                     ProcessSpawnChild(payload);
+                } else if (action == "sendChildToTraining") {
+                    ProcessSendChildToTraining(payload);
+                } else if (action == "completeChildTraining") {
+                    ProcessCompleteChildTraining(payload);
                 } else if (action == "relocateFamilyUnit") {
                     ProcessRelocateFamilyUnit(payload);
                 } else if (action == "setPaternitySecretEdges") {
@@ -328,6 +339,18 @@ namespace MARAS {
             if (!cEntry.trainingLocation.empty()) {
                 profile["trainingLocation"] = cEntry.trainingLocation;
             }
+            int32_t resolvedProfileTrainIdx = cEntry.trainingClassIndex;
+            if (!AdultChildProgression::IsValidTrainingClass(resolvedProfileTrainIdx) && !cEntry.trainingLocation.empty()) {
+                resolvedProfileTrainIdx = AdultChildProgression::FindTrainingClassByLocation(cEntry.trainingLocation);
+            }
+            if (AdultChildProgression::IsValidTrainingClass(resolvedProfileTrainIdx)) {
+                profile["trainingClassIndex"] = resolvedProfileTrainIdx;
+                profile["trainingClassName"] = std::string(NPCRelationshipManager::GetTrainingClassName(resolvedProfileTrainIdx));
+            }
+            if (cEntry.trainingStartGameDay >= 0.0f) {
+                profile["trainingStartGameDay"] = RoundFloat(cEntry.trainingStartGameDay);
+            }
+            profile["hasBeastblood"] = cEntry.hasBeastblood;
             if (cEntry.stage == ChildStage::Unborn || cEntry.gender == 2) {
                 profile["gender"] = "unknown";
             } else {
@@ -335,7 +358,7 @@ namespace MARAS {
             }
         }
 
-        // Home resolution: check tenant registration in PlayerHouseService or profile currentHome
+        // Home resolution: check tenant registration in PlayerHouseService, profile currentHome, or adult child travel destination
         auto& houseSvc = PlayerHouseService::GetSingleton();
         RE::FormID tenantHouseID = houseSvc.GetTenantHouseFormID(formID);
         std::string currentHomeName = PlayerHouseService::GetHouseName(tenantHouseID);
@@ -344,6 +367,11 @@ namespace MARAS {
                 if (npcProf->currentHome.has_value() && npcProf->currentHome.value() != 0) {
                     currentHomeName = PlayerHouseService::GetHouseName(npcProf->currentHome.value());
                 }
+            }
+        }
+        if (currentHomeName.empty()) {
+            if (auto childOpt = relMgr.GetChildEntry(formID); childOpt && childOpt->stage == ChildStage::Adult && !IsSyntheticChildID(formID)) {
+                currentHomeName = AdultChildTravelService::GetSingleton().GetCurrentDestinationName(formID);
             }
         }
         if (!currentHomeName.empty()) {
@@ -410,12 +438,6 @@ namespace MARAS {
             profile["originalHome"] = origHomeName;
         }
         return profile;
-    }
-
-    namespace {
-        inline double RoundFloat(float val, double factor = 100.0) {
-            return std::round(static_cast<double>(val) * factor) / factor;
-        }
     }
 
     nlohmann::json PrismaUIDataBridge::BuildSettingsJson() {
@@ -493,6 +515,13 @@ namespace MARAS {
         j["childCustodyPrioritizeBioParent"] = settings.childCustodyPrioritizeBioParent;
         j["globalBanCritter"] = settings.IsGlobalCritterBanned();
         j["globalBanPet"] = settings.IsGlobalPetBanned();
+        j["childTrainingDurationDays"] = settings.childTrainingDurationDays;
+        j["childTrainingCost"] = settings.childTrainingCost;
+        j["childTrainingRequireFaction"] = settings.childTrainingRequireFaction;
+        j["playerTrainingFactions"] = AdultChildProgression::GetSingleton().BuildPlayerTrainingEligibilityJson();
+        j["trainingCatalog"] = AdultChildProgression::GetSingleton().BuildTrainingCatalogJson(
+            std::max(0, settings.childTrainingCost));
+
         j["paternityBaseChance"] = settings.paternityBaseChance;
         j["paternityDailyGrowth"] = RoundFloat(settings.paternityDailyGrowth);
         j["paternityMaxChance"] = settings.paternityMaxChance;
@@ -535,7 +564,7 @@ namespace MARAS {
         j["enableScenes_LocTypeLumberMill"] = settings.enableScenes_LocTypeLumberMill;
 
         bool playerHasDebug = false;
-        if (auto player = RE::PlayerCharacter::GetSingleton()) {
+        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
             auto debugSpell = Utils::LookupForm<RE::SpellItem>(0xD, "TT_MARAS.esp", "PrismaUIDataBridge: debugSpell");
             if (debugSpell) {
                 playerHasDebug = player->HasSpell(debugSpell);
@@ -659,8 +688,7 @@ namespace MARAS {
                 if (currentRace.empty() || currentRace == "Nord") {
                     RE::FormID motherID = relMgr.GetBioMother(cID);
                     RE::FormID parentFormID = motherID != 0 ? motherID :
-                        (cEntry.bioFatherID != 0 ? cEntry.bioFatherID :
-                        (cEntry.guardianAID != 0 ? cEntry.guardianAID : cEntry.guardianBID));
+                        (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kUnknownFatherFormID ? cEntry.bioFatherID : 0);
                     if (parentFormID != 0) {
                         childObj["race"] = ActorSvc::GetRaceName(parentFormID);
                     }
@@ -856,8 +884,7 @@ namespace MARAS {
                     if (currentRace.empty() || currentRace == "Nord") {
                         RE::FormID motherID = relMgr.GetBioMother(cID);
                         RE::FormID parentFormID = motherID != 0 ? motherID :
-                            (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kUnknownFatherFormID ? cEntry.bioFatherID :
-                            (cEntry.guardianAID != 0 ? cEntry.guardianAID : cEntry.guardianBID));
+                            (cEntry.bioFatherID != 0 && cEntry.bioFatherID != kUnknownFatherFormID ? cEntry.bioFatherID : 0);
                         if (parentFormID != 0) {
                             childObj["race"] = ActorSvc::GetRaceName(parentFormID);
                         }
@@ -1208,7 +1235,20 @@ namespace MARAS {
         if (!entry.trainingLocation.empty()) {
             cObj["trainingLocation"] = entry.trainingLocation;
         }
+        int32_t resolvedChildTrainIdx = entry.trainingClassIndex;
+        if (!AdultChildProgression::IsValidTrainingClass(resolvedChildTrainIdx) && !entry.trainingLocation.empty()) {
+            resolvedChildTrainIdx = AdultChildProgression::FindTrainingClassByLocation(entry.trainingLocation);
+        }
+        if (AdultChildProgression::IsValidTrainingClass(resolvedChildTrainIdx)) {
+            cObj["trainingClassIndex"] = resolvedChildTrainIdx;
+            cObj["trainingClassName"] = std::string(NPCRelationshipManager::GetTrainingClassName(resolvedChildTrainIdx));
+        }
+        if (entry.trainingStartGameDay >= 0.0f) {
+            cObj["trainingStartGameDay"] = RoundFloat(entry.trainingStartGameDay);
+        }
         cObj["isBiologicalChild"] = entry.isBiologicalChild;
+        cObj["hasBeastblood"] = entry.hasBeastblood;
+        cObj["trainingDiscounts"] = AdultChildProgression::GetSingleton().BuildChildTrainingDiscountsJson(entry);
         cObj["isSecret"] = entry.paternitySecret.HasActiveSecret();
         cObj["isSecretForBioFather"] = entry.paternitySecret.isSecretForBioFather;
         cObj["isSecretForPartner"] = entry.paternitySecret.isSecretForPartner;
@@ -1778,6 +1818,9 @@ namespace MARAS {
             RE::FormID presFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "presumedFatherId")));
             changed |= mgr.SetPresumedFather(childID, presFID);
         }
+        if (payload.contains("hasBeastblood")) {
+            changed |= mgr.SetChildBeastblood(childID, GetJsonBool(payload, "hasBeastblood", false));
+        }
 
         if (changed) {
             MARAS_LOG_INFO("PrismaUIDataBridge: Updated child {:08X} parent/guardian assignments", childID);
@@ -1800,6 +1843,41 @@ namespace MARAS {
                 eventSource->SendEvent(&modEvent);
                 MARAS_LOG_INFO("PrismaUIDataBridge: Dispatched maras_spawn_synthetic_child for {:08X}", childID);
             }
+        }
+    }
+
+    void PrismaUIDataBridge::ProcessSendChildToTraining(const nlohmann::json& payload) {
+        RE::FormID childID = StringToFormID(GetJsonString(payload, "childId"));
+        if (childID == 0) {
+            childID = StringToFormID(GetJsonString(payload, "formId"));
+        }
+        int32_t classIdx = GetJsonInt(payload, "trainingClassIndex", 1);
+        if (childID == 0 || !AdultChildProgression::IsValidTrainingClass(classIdx)) {
+            MARAS_LOG_WARN("PrismaUIDataBridge: ProcessSendChildToTraining rejected invalid payload (childID={:08X}, classIdx={})",
+                           childID, classIdx);
+            return;
+        }
+        MARAS_LOG_INFO("PrismaUIDataBridge: ProcessSendChildToTraining child {:08X} -> classIdx {} ('{}')",
+                       childID, classIdx, AdultChildProgression::GetTrainingClassName(classIdx));
+        std::string failReason;
+        if (!NPCRelationshipManager::GetSingleton().SendChildToTraining(childID, classIdx, &failReason)) {
+            MARAS_LOG_WARN("PrismaUIDataBridge: SendChildToTraining failed for child {:08X} -> classIdx {}: {}",
+                           childID, classIdx, failReason.empty() ? "unknown reason" : failReason);
+        }
+    }
+
+    void PrismaUIDataBridge::ProcessCompleteChildTraining(const nlohmann::json& payload) {
+        RE::FormID childID = StringToFormID(GetJsonString(payload, "childId"));
+        if (childID == 0) {
+            childID = StringToFormID(GetJsonString(payload, "formId"));
+        }
+        if (childID == 0) {
+            MARAS_LOG_WARN("PrismaUIDataBridge: ProcessCompleteChildTraining rejected payload with childID=0");
+            return;
+        }
+        MARAS_LOG_INFO("PrismaUIDataBridge: ProcessCompleteChildTraining child {:08X}", childID);
+        if (!NPCRelationshipManager::GetSingleton().CompleteChildTraining(childID)) {
+            MARAS_LOG_WARN("PrismaUIDataBridge: CompleteChildTraining returned false for child {:08X}", childID);
         }
     }
 

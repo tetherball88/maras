@@ -25,6 +25,7 @@ import {
   Flame,
   AlertTriangle,
   Trash2,
+  Swords,
 } from 'lucide-react'
 import { AppTooltip } from '../shared/AppTooltip'
 import { areSameFormId } from '../../utils/statusAvailability'
@@ -107,6 +108,7 @@ export const NpcDetailShell: React.FC = () => {
   const hasSecret = Boolean(
     childRecord && (childRecord.isSecret || childRecord.isSecretForPartner || childRecord.isSecretForBioFather)
   )
+  const hasBeastblood = Boolean(childRecord?.hasBeastblood || npc?.hasBeastblood)
   const isEvaluatingSecret = Boolean(
     childRecord && evaluatingChildId && areSameFormId(evaluatingChildId, childRecord.childId)
   )
@@ -247,6 +249,13 @@ export const NpcDetailShell: React.FC = () => {
                       Child
                     </span>
                   )}
+                  {hasBeastblood && (
+                    <AppTooltip content="Carries Hircine's Beastblood (Lycanthropy)">
+                      <span className="px-[0.375rem] py-[0.125rem] bg-amber-600/20 text-amber-200 border border-amber-500/40 rounded text-[0.6875rem] font-bold">
+                        🐺 Beastblood
+                      </span>
+                    </AppTooltip>
+                  )}
                 </>
               )}
               {npc && !isPlayer && !isChild && (
@@ -293,6 +302,18 @@ export const NpcDetailShell: React.FC = () => {
               >
                 <UserPlus className="w-[1em] h-[1em] text-emerald-400" />
                 <span>Spawn Child</span>
+              </button>
+            </AppTooltip>
+          )}
+
+          {isChild && !hasRefID && stage === 'adult' && (
+            <AppTooltip content="Spawn physical adult child actor into the world (PlaceAtMe persistent) and carry over childhood SkyrimNet bio">
+              <button
+                onClick={() => spawnChild(npcId)}
+                className="text-xs font-semibold text-amber-200 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm"
+              >
+                <Swords className="w-[1em] h-[1em] text-amber-400" />
+                <span>Spawn Adult</span>
               </button>
             </AppTooltip>
           )}

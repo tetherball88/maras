@@ -148,16 +148,44 @@ namespace MARAS {
         ChildStage stage{ ChildStage::Child }; // developmental lifecycle stage
         std::string trainingLocation;          // location name if away for training
         uint8_t gender{ 2 };                   // 0 = male (son), 1 = female (daughter), 2 = unknown/unborn
+        int32_t trainingClassIndex{ -1 };      // -1 = None, 0..19 = Mage..Dread Scion
+        float trainingStartGameDay{ 0.0f };    // GameDaysPassed when Stage 3 (Training) started
+        std::string savedBioTemplateName;      // SkyrimNet bioTemplateName captured before Stage 2 actor despawn
+        uint8_t savedRaceIndex{ 255 };         // 0..9 FMR race index captured from Stage 2 actor or parents
+
+        // Per-actor visual genetics & RPG progression state (persisted in 'CHD1' extension block)
+        RE::FormID hairColorFormID{ 0 };       // Inherited BGSColorForm from biological parents
+        RE::FormID eyesPartFormID{ 0 };        // Inherited/resolved kEyes BGSHeadPart for adult child
+        RE::FormID hairPartFormID{ 0 };        // Inherited/resolved kHair BGSHeadPart for adult child
+        RE::FormID facialHairPartFormID{ 0 };  // Inherited/resolved kFacialHair BGSHeadPart for male adult child
+        float heightScale{ 1.0f };             // Inherited height scale averaged from biological parents
+        bool rpgApplied{ false };              // True once 3-pillar RPG stats/spells/gear have been applied to Stage 4 actor
+
+        // Lycanthropy / Beastblood inheritance & training state (persisted in 'LYC1' extension block)
+        bool hasBeastblood{ false };           // True if child inherited Lycanthropy (50% 1 parent, 100% 2 parents) or trained at Frostmoon Crag / The Underforge
+        bool beastbloodEvaluated{ false };     // True once genetic Beastblood inheritance roll has been evaluated
+
+        // Lineage skill snapshots & dynamic progression state (persisted in 'CHD2' extension block)
+        bool bioLineageEvaluated{ false };                  // True once bio-parent skill bonuses have been snapshotted at birth
+        bool guardianLineageEvaluated{ false };             // True once custodial-guardian mentorship bonuses have been snapshotted at graduation
+        std::array<std::uint8_t, 18> bioSkillBonuses{};     // Snapshotted bio-parent skill bonuses (+2..+8 per parent on 4 signature skills)
+        std::array<std::uint8_t, 18> guardianSkillBonuses{}; // Snapshotted guardian mentorship bonuses (+2..+7 per guardian on 4 signature skills)
+        std::string daedricBlessingId;                      // Snapshotted Daedric Patron blessing ID rolled at graduation (empty if none)
+        std::uint16_t lastAppliedLevel{ 0 };                // Last EffectiveLevel (10..50) applied to the Stage 4 adult actor
 
         ChildRegistryEntry() = default;
         ChildRegistryEntry(RE::FormID cID, RE::FormID gA, RE::FormID gB, const std::string& n, int32_t ts = 0, bool adopted = true,
                            RE::FormID bioM = 0, RE::FormID bioF = 0, bool bioChild = false, float concTs = 0.0f, float birthTs = 0.0f,
                            PaternitySecret pSec = {}, ChildStage st = ChildStage::Child, const std::string& trainLoc = "",
-                           uint8_t gen = 2, RE::FormID presumedF = 0)
+                           uint8_t gen = 2, RE::FormID presumedF = 0,
+                           int32_t trainClassIdx = -1, float trainStartDay = 0.0f,
+                           const std::string& savedBio = "", uint8_t savedRace = 255)
             : childID(cID), guardianAID(gA), guardianBID(gB), name(n), timestamp(ts), isAdopted(adopted),
               bioMotherID(bioM), bioFatherID(bioF), presumedFatherID(presumedF), isBiologicalChild(bioChild),
               conceptionTimestamp(concTs), birthTimestamp(birthTs), paternitySecret(pSec),
-              stage(st), trainingLocation(trainLoc), gender(gen) {}
+              stage(st), trainingLocation(trainLoc), gender(gen),
+              trainingClassIndex(trainClassIdx), trainingStartGameDay(trainStartDay),
+              savedBioTemplateName(savedBio), savedRaceIndex(savedRace) {}
 
         // Slot-neutral, order-independent custodial guardian operations
         bool HasGuardian(RE::FormID actorID) const;
@@ -275,6 +303,7 @@ namespace MARAS {
 
     // Main storage and management class
     class NPCRelationshipManager {
+        friend class AdultChildProgression;
     private:
         // Master set - all registered NPCs
         std::unordered_set<RE::FormID> allRegistered;
@@ -548,6 +577,12 @@ namespace MARAS {
         void UpdateNonPlayerChildPackageOverride(RE::FormID childID);
         void ReevaluateAllNonPlayerChildrenPackages();
 
+        // Child Visual Genetics & 3-Pillar RPG Customization (Bio Parents + Guardians + Training)
+        void InitializeAndApplyChildVisualsAndRPG(RE::FormID childID);
+        void ApplyChildVisualsToActor(RE::Actor* actor, ChildRegistryEntry& entry);
+        void ApplyChildVisualsOn3DLoad(RE::Actor* actor);
+        void ReassertAllChildVisualsOnLoad();
+
         // Custodial Guardianship accessors
         RE::FormID GetGuardianA(RE::FormID childID) const;
         RE::FormID GetGuardianB(RE::FormID childID) const;
@@ -590,6 +625,19 @@ namespace MARAS {
         ChildStage GetChildStage(RE::FormID childID) const;
         bool SetChildTrainingLocation(RE::FormID childID, const std::string& location);
         std::string GetChildTrainingLocation(RE::FormID childID) const;
+        static std::string_view GetTrainingClassName(int32_t classIndex);
+        static std::string_view GetTrainingLocationName(int32_t classIndex);
+        static bool IsPlayerEligibleForTrainingClass(int32_t classIndex, std::string* outReason = nullptr);
+        static bool IsActorWerewolf(RE::FormID actorID);
+        static void EvaluateChildBeastbloodInheritance(ChildRegistryEntry& entry);
+        bool HasChildBeastblood(RE::FormID childID) const;
+        bool SetChildBeastblood(RE::FormID childID, bool hasBeastblood);
+        static uint8_t ResolveActorFMRRaceIndex(RE::FormID actorID);
+        bool SendChildToTraining(RE::FormID childID, int32_t trainingClassIndex, std::string* outReason = nullptr);
+        bool CompleteChildTraining(RE::FormID childID);
+        void CheckChildrenTrainingProgress(float currentGameDay);
+        int32_t GetChildTrainingClass(RE::FormID childID) const;
+        int32_t GetChildSavedRaceIndex(RE::FormID childID) const;
         bool SetChildGender(RE::FormID childID, uint8_t gender);
         uint8_t GetChildGender(RE::FormID childID) const;
         RE::FormID FindSyntheticChild(RE::FormID motherID, const std::string& name = "") const;

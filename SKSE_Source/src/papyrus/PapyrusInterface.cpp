@@ -1199,6 +1199,8 @@ namespace MARAS::PapyrusInterface {
         vm->RegisterFunction("GetChildStage", "MARAS", GetChildStage);
         vm->RegisterFunction("SetChildTrainingLocation", "MARAS", SetChildTrainingLocation);
         vm->RegisterFunction("GetChildTrainingLocation", "MARAS", GetChildTrainingLocation);
+        vm->RegisterFunction("GetChildTrainingClass", "MARAS", GetChildTrainingClass);
+        vm->RegisterFunction("GetChildSavedRaceIndex", "MARAS", GetChildSavedRaceIndex);
         vm->RegisterFunction("SetChildGender", "MARAS", SetChildGender);
         vm->RegisterFunction("GetChildGender", "MARAS", GetChildGender);
         vm->RegisterFunction("SetChildGuardian", "MARAS", SetChildGuardian);

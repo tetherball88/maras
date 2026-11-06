@@ -35,6 +35,7 @@ Function TakeOverChild(Actor child) global
         child.RemoveFromFaction(followerFaction)
     endif
     StorageUtil.SetIntValue(child, "FW.Child.Order", 11)
+    StorageUtil.SetIntValue(child, "FW.Child.GrownUp", 1)
 EndFunction
 
 ;/
@@ -796,7 +797,7 @@ Function MigrateChildActor(Actor childActor) global
         syntheticID = MARAS.FindSyntheticChild(none, childName)
     endif
 
-    if (StorageUtil.GetIntValue(childActor, "FW.Child.GrownUp", 0) == 1)
+    if (!childActor.IsChild() && StorageUtil.GetIntValue(childActor, "FW.Child.GrownUp", 0) == 1)
         MARAS.RegisterChildActor(childActor, none, none, none, mother, father, syntheticID, 4, sendEvent = false) ; Stage 4 = Adult
     else
         RegisterBeeingFemaleChild(childActor, mother, father, syntheticID, 2, isMigrating = true)

@@ -3,12 +3,13 @@ import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { SelectInput } from '../../shared/SelectInput'
 import { ChildRelocationModal } from '../ChildRelocationModal'
+import { ChildTrainingModal } from '../ChildTrainingModal'
 import { PLAYER_FORM_ID } from '../../../data/mockData'
-import { Baby, Home, GraduationCap, Swords, AlertTriangle } from 'lucide-react'
+import { Baby, Home, GraduationCap, Swords, AlertTriangle, UserPlus, CheckCircle2 } from 'lucide-react'
 import { formatGameDay } from '../../../utils/dateUtils'
 import { areSameFormId } from '../../../utils/statusAvailability'
 import { resolveIsFemale, getChildGenderNouns } from '../../../utils/childUtils'
-import { RelationshipStatus, ChildStage } from '../../../types'
+import { RelationshipStatus, ChildStage, TrainingCatalogItem } from '../../../types'
 
 interface ChildProfileResidenceSectionProps {
   npcId: string
@@ -30,8 +31,14 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   const children = useMarasStore((s) => s.children)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
   const playerHomes = useMarasStore((s) => s.playerHomes)
+  const settings = useMarasStore((s) => s.settings)
   const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile)
   const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit)
+  const spawnChild = useMarasStore((s) => s.spawnChild)
+  const sendChildToTraining = useMarasStore((s) => s.sendChildToTraining)
+  const completeChildTraining = useMarasStore((s) => s.completeChildTraining)
+
+  const [isTrainingModalOpen, setIsTrainingModalOpen] = useState<boolean>(false)
 
   const npc = npcProfiles.get(npcId)
 
@@ -40,6 +47,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
 
   const stage: ChildStage = childRecord?.stage || npc?.stage || 'child'
   const hasRefID = childRecord?.hasRefID ?? npc?.hasRefID ?? !npcId.startsWith('FF7')
+  const hasBeastblood = Boolean(childRecord?.hasBeastblood || npc?.hasBeastblood)
   const isFemale = resolveIsFemale(childRecord, npc)
   const { sonOrDaughter } = getChildGenderNouns(isFemale)
 
@@ -178,12 +186,25 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                 ) : stage === 'training' ? (
                   <>
                     <GraduationCap className="w-[0.875em] h-[0.875em]" />
-                    <span>In Training ({sonOrDaughter}) {childRecord?.trainingLocation ? `(${childRecord.trainingLocation})` : ''}</span>
+                    <span>
+                      In Training ({sonOrDaughter})
+                      {(childRecord?.trainingClassName || npc?.trainingClassName)
+                        ? ` — ${childRecord?.trainingClassName || npc?.trainingClassName}`
+                        : ''}
+                      {(childRecord?.trainingLocation || npc?.trainingLocation)
+                        ? ` (${childRecord?.trainingLocation || npc?.trainingLocation})`
+                        : ''}
+                    </span>
                   </>
                 ) : stage === 'adult' ? (
                   <>
                     <Swords className="w-[0.875em] h-[0.875em]" />
-                    <span>{hasRefID ? `Adult Follower (${sonOrDaughter})` : `Adult ${sonOrDaughter} (Unsummoned)`}</span>
+                    <span>
+                      {hasRefID ? `Adult ${sonOrDaughter}` : `Adult ${sonOrDaughter} (Ready to Spawn)`}
+                      {(childRecord?.trainingClassName || npc?.trainingClassName)
+                        ? ` — ${childRecord?.trainingClassName || npc?.trainingClassName}`
+                        : ''}
+                    </span>
                   </>
                 ) : !hasRefID ? (
                   <>
@@ -206,6 +227,14 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                     : ''
                 )}
               </span>
+              {hasBeastblood && (
+                <span
+                  className="inline-flex items-center gap-[0.25rem] ml-[0.375rem] px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-bold bg-amber-600/20 text-amber-200 border border-amber-500/40"
+                  title="Carries Hircine's Beastblood (inherited from a werewolf biological parent)"
+                >
+                  <span>🐺 Beastblood</span>
+                </span>
+              )}
             </div>
 
             {hasSpouseCoParent && spouseName && (
@@ -239,34 +268,98 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                 </div>
               </div>
             ) : stage === 'training' ? (
-              <div className="p-[0.625rem] bg-purple-500/10 border border-purple-500/30 rounded flex items-center gap-[0.625rem] text-purple-300">
-                <GraduationCap className="w-[1.25em] h-[1.25em] flex-shrink-0 text-purple-400" />
-                <div>
-                  <div className="font-semibold text-xs text-purple-200">Undergoing Apprenticeship / Training</div>
-                  <div className="text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]">
-                    Currently stationed away at <strong className="text-purple-100">{childRecord?.trainingLocation || 'Skyrim Academy'}</strong>. Household assignment is paused until training concludes.
+              (() => {
+                const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14)
+                const startDay = childRecord?.trainingStartGameDay ?? npc?.trainingStartGameDay ?? currentGameDay
+                const elapsedDays = Math.max(0, currentGameDay - startDay)
+                const progressPct = Math.min(100, Math.round((elapsedDays / durationDays) * 100))
+                const remainingDays = Math.max(0, Math.ceil(durationDays - elapsedDays))
+                const trainClass = childRecord?.trainingClassName || npc?.trainingClassName || 'Warrior'
+                const trainLoc = childRecord?.trainingLocation || npc?.trainingLocation || 'Skyrim Academy'
+                return (
+                  <div className="p-[0.75rem] bg-purple-500/10 border border-purple-500/30 rounded space-y-[0.5rem] text-purple-300">
+                    <div className="flex items-start justify-between gap-[0.5rem]">
+                      <div className="flex items-center gap-[0.5rem]">
+                        <GraduationCap className="w-[1.25em] h-[1.25em] flex-shrink-0 text-purple-400" />
+                        <div>
+                          <div className="font-semibold text-xs text-purple-200">
+                            Training as {trainClass} at {trainLoc}
+                          </div>
+                          <div className="text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]">
+                            {remainingDays > 0
+                              ? `${remainingDays} day(s) remaining (${Math.floor(elapsedDays)} / ${durationDays} days)`
+                              : `Training duration completed (${durationDays} days)`}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => completeChildTraining(npcId)}
+                        className="text-xs font-semibold text-purple-100 bg-purple-600/30 hover:bg-purple-600/45 border border-purple-400/50 px-[0.625rem] py-[0.3125rem] rounded transition-colors flex items-center gap-[0.3125rem] cursor-pointer flex-shrink-0"
+                      >
+                        <CheckCircle2 className="w-[0.95em] h-[0.95em] text-purple-300" />
+                        <span>Complete Training Early</span>
+                      </button>
+                    </div>
+                    <div className="w-full h-[0.375rem] bg-panel-inset rounded-full overflow-hidden border border-purple-500/20">
+                      <div
+                        className="h-full bg-purple-500 transition-transform origin-left"
+                        style={{ transform: `scaleX(${progressPct / 100})` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()
+            ) : stage === 'adult' && !hasRefID ? (
+              <div className="p-[0.75rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center justify-between gap-[0.75rem] text-amber-300">
+                <div className="flex items-center gap-[0.625rem]">
+                  <Swords className="w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" />
+                  <div>
+                    <div className="font-semibold text-xs text-amber-200">
+                      Training Complete — Ready to Spawn Adult {(childRecord?.trainingClassName || npc?.trainingClassName) ? `(${childRecord?.trainingClassName || npc?.trainingClassName})` : ''}
+                    </div>
+                    <div className="text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]">
+                      This offspring has completed their training and reached adulthood. Spawn their adult actor to send them out into Skyrim as an independent traveling adventurer available for hire.
+                    </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => spawnChild(npcId)}
+                  className="text-xs font-semibold text-amber-100 bg-amber-600/30 hover:bg-amber-600/45 border border-amber-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0"
+                >
+                  <Swords className="w-[1em] h-[1em] text-amber-300" />
+                  <span>Spawn Adult</span>
+                </button>
               </div>
-            ) : stage === 'adult' && !hasRefID ? (
+            ) : stage === 'adult' ? (
               <div className="p-[0.625rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-[0.625rem] text-amber-300">
                 <Swords className="w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" />
                 <div>
-                  <div className="font-semibold text-xs text-amber-200">Adult Follower Awaiting Summon</div>
+                  <div className="font-semibold text-xs text-amber-200">
+                    Independent Traveling Adventurer — {npc?.currentHome || 'Traveling Skyrim'}
+                  </div>
                   <div className="text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]">
-                    This offspring has completed their training and reached adulthood. Summon them via follower dialogue or the MCM to bring their physical 3D actor into the world.
+                    Travels independently between Skyrim&apos;s inns, cities, and family homes, and is available to be hired as a follower.
                   </div>
                 </div>
               </div>
             ) : !hasRefID ? (
-              <div className="p-[0.625rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-[0.625rem] text-amber-300">
-                <AlertTriangle className="w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" />
-                <div>
-                  <div className="font-semibold text-xs text-amber-200">Unspawned {sonOrDaughter} Dependent</div>
-                  <div className="text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]">
-                    This child is registered in the family record. Once adopted or spawned as an active Hearthfire kid, an in-game residence can be designated.
+              <div className="p-[0.75rem] bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between gap-[0.75rem] text-emerald-300">
+                <div className="flex items-center gap-[0.625rem]">
+                  <AlertTriangle className="w-[1.25em] h-[1.25em] flex-shrink-0 text-emerald-400" />
+                  <div>
+                    <div className="font-semibold text-xs text-emerald-200">Unspawned Young {sonOrDaughter}</div>
+                    <div className="text-[0.6875rem] text-emerald-200/80 mt-[0.0625rem]">
+                      Spawn this young child into the world to assign a household bed and AI sandbox, or send them directly to adolescent training below.
+                    </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => spawnChild(npcId)}
+                  className="text-xs font-semibold text-emerald-100 bg-emerald-600/30 hover:bg-emerald-600/45 border border-emerald-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0"
+                >
+                  <UserPlus className="w-[1em] h-[1em] text-emerald-300" />
+                  <span>Spawn Child</span>
+                </button>
               </div>
             ) : isPlayerChildResolved && hasSpouseCoParent ? (
               <div>
@@ -302,6 +395,72 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               </div>
             )}
           </div>
+
+          {/* Adolescent Training Initiation — Available for both unspawned and physically spawned Stage 2 children */}
+          {stage === 'child' && childRecord && (() => {
+            const trainingCatalog: TrainingCatalogItem[] = settings.trainingCatalog ?? []
+            const requireFaction = (settings.childTrainingRequireFaction ?? true) && isPlayerChildResolved
+            const playerFactions = settings.playerTrainingFactions
+            const baseCost = isPlayerChildResolved ? Math.max(0, settings.childTrainingCost ?? 2000) : 0
+            const playerGold = playerFactions?.playerGold ?? 999999
+            const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14)
+
+            const isEntryUnlocked = (t: TrainingCatalogItem): boolean => {
+              if (t.requirementMet !== undefined) {
+                return Boolean(t.requirementMet)
+              }
+              if (t.factionKey && playerFactions) {
+                return Boolean(playerFactions[t.factionKey])
+              }
+              return true
+            }
+
+            return (
+              <div className="pt-[0.625rem] border-t border-border-divider space-y-[0.5rem]">
+                <div className="flex items-center justify-between gap-[0.75rem]">
+                  <div>
+                    <span className="font-semibold text-foreground-primary flex items-center gap-[0.375rem]">
+                      <GraduationCap className="w-[1em] h-[1em] text-purple-400" />
+                      <span>Adolescent Training &amp; Class Path</span>
+                    </span>
+                    <p className="text-[0.6875rem] text-foreground-muted mt-[0.125rem]">
+                      Enroll {displayName} in one of {trainingCatalog.length} academies, guilds, or Daedric covenants ({durationDays} day curriculum).
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsTrainingModalOpen(true)}
+                    className="text-xs font-semibold px-[0.875rem] py-[0.4375rem] rounded border transition-colors flex items-center gap-[0.375rem] flex-shrink-0 text-purple-100 bg-purple-600/25 hover:bg-purple-600/40 border-purple-500/45 cursor-pointer"
+                  >
+                    <GraduationCap className="w-[0.95em] h-[0.95em] text-purple-300" />
+                    <span>{hasRefID ? 'Despawn Child & Send to Training' : 'Send to Training'}</span>
+                  </button>
+                </div>
+
+                {hasRefID && (
+                  <p className="text-[0.625rem] text-foreground-muted">
+                    Sending a spawned child to training will despawn their young child actor, preserve their SkyrimNet childhood biography, and allow you to spawn their adult actor after {durationDays} day(s).
+                  </p>
+                )}
+
+                <ChildTrainingModal
+                  isOpen={isTrainingModalOpen}
+                  onClose={() => setIsTrainingModalOpen(false)}
+                  onSelectTraining={(classIdx) => sendChildToTraining(npcId, classIdx)}
+                  childName={displayName}
+                  hasRefID={hasRefID}
+                  hasBeastblood={hasBeastblood}
+                  trainingDiscounts={childRecord?.trainingDiscounts}
+                  isPlayerChild={isPlayerChildResolved}
+                  durationDays={durationDays}
+                  baseCost={baseCost}
+                  playerGold={playerGold}
+                  requireFaction={requireFaction}
+                  trainingCatalog={trainingCatalog}
+                  isEntryUnlocked={isEntryUnlocked}
+                />
+              </div>
+            )
+          })()}
         </div>
       </SectionCard>
 

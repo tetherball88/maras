@@ -10,6 +10,11 @@ These rules apply to all Papyrus scripts (`.psc`) in `Scripts/Source/`. They sup
   - Script names and global helper scripts must use the `TTM_` prefix (e.g., `TTM_ServiceSkyrimNet`, `TTM_Data`, `TTM_Utils`), except for `MARAS.psc`.
   - Use `PascalCase` for script names, function names, and properties.
 - **Null Safety**: Validate actor arguments (`if (!akActor)`) before calling name formatting, faction mutations, or event dispatches.
+- **Logging (`TTM_Debug`)**: Always use `TTM_Debug.trace(...)`, `TTM_Debug.debug(...)`, `TTM_Debug.info(...)`, `TTM_Debug.warn(...)`, and `TTM_Debug.err(...)` with the right severity level:
+  - `TTM_Debug.err` / `TTM_Debug.warn`: Failed spawns, missing forms/quests, or invalid state arguments.
+  - `TTM_Debug.info`: Major lifecycle milestones (e.g., child spawned, household assignment completed).
+  - `TTM_Debug.debug`: Intermediate resolution details (e.g., resolved `raceIdx`, `fmrSlot`, `ActorBase`, package evaluation).
+  - `TTM_Debug.trace`: High-frequency or verbose loop tracing.
 - **No Array Comparison with `None`**:
   - Never compare an array variable to `None` or `none` (e.g., `if (actors != none)` or `if (actors == none)`). In Papyrus, comparing arrays directly to `None` produces a compiler type mismatch error.
   - Instead, check the array's length: `if (actors.Length > 0)` or `if (actors.Length == 0)`. Querying `.Length` on an empty or uninitialized array in Papyrus safely evaluates to `0`.

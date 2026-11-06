@@ -3,6 +3,7 @@
 #include "RE/B/BGSScene.h"
 #include "RE/B/BGSSceneAction.h"
 #include "RE/B/BGSSceneActionPackage.h"
+#include "core/AdultChildTravelService.h"
 #include "core/FormCache.h"
 #include "core/ChildrenFleeService.h"
 #include "core/NPCIndex.h"
@@ -633,7 +634,7 @@ namespace MARAS {
             }
         }
 
-        // Also collect all non-player 0xFF Stage 2 children and unhoused player Stage 2 children
+        // Also collect all non-player 0xFF Stage 2 children, unhoused player Stage 2 children, and traveling Stage 4 adult children
         if (!childFollowPkgID) {
             if (auto* childPkg = FormCache::GetSingleton().GetChildrenNonPlayerFollowParentPackage()) {
                 childFollowPkgID = childPkg->GetFormID();
@@ -642,7 +643,8 @@ namespace MARAS {
         if (childFollowPkgID != 0) {
             const auto& allChildren = NPCRelationshipManager::GetSingleton().GetAllChildren();
             for (const auto& [childID, entry] : allChildren) {
-                if (!IsSyntheticChildID(childID) && entry.stage == ChildStage::Child) {
+                if (IsSyntheticChildID(childID)) continue;
+                if (entry.stage == ChildStage::Child) {
                     const bool isPlayerHousehold = (entry.guardianAID == kPlayerFormID || entry.guardianBID == kPlayerFormID);
                     const bool isNonPlayerTempChild = ((childID >> 24) == 0xFF) && !isPlayerHousehold;
                     const bool isUnhousedPlayerChild = isPlayerHousehold &&
@@ -652,6 +654,12 @@ namespace MARAS {
                         // Proactively re-assert 0x377 linked reference on save load
                         RE::FormID targetRefID = NPCRelationshipManager::GetSingleton().ResolveNonPlayerChildTarget(entry);
                         NPCRelationshipManager::GetSingleton().SetChildSandboxAroundParentLinkedRef(childID, targetRefID);
+                    }
+                } else if (entry.stage == ChildStage::Adult) {
+                    newRegistry[childID] = childFollowPkgID;
+                    RE::FormID targetMarkerID = AdultChildTravelService::GetSingleton().GetCurrentTargetMarkerID(childID);
+                    if (targetMarkerID != 0) {
+                        NPCRelationshipManager::GetSingleton().SetChildSandboxAroundParentLinkedRef(childID, targetMarkerID);
                     }
                 }
             }

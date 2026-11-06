@@ -97,3 +97,17 @@ Do **NOT** silently assume "skip if no SkyrimNet" without confirming with the us
   - **Player Guides**: `docs/player/PLAYER_GUIDE.md`, `docs/player/RELATIONSHIP_OVERVIEW.md`, `docs/player/AFFECTION_SYSTEM.md`, `docs/player/ARCHETYPES_AND_BUFFS.md`, `docs/player/FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md`, `docs/player/SKYRIMNET_INTEGRATION_GUIDE.md`, `docs/player/UI_DASHBOARD_GUIDE.md` when player-facing mechanics or UI workflows change.
 - **Feature & Behavior Focus (No Header Copy-Pasting)**: When updating or creating service documentation in `docs/modder/services/`, document **what the service does, how its features and mechanics work, formulas, edge cases, and interactions**. Do **NOT** copy-paste raw C++ function declarations, method signatures, argument lists, struct definitions, or enum tables from `.h` files.
 
+---
+
+## 5. Logging & Diagnostic Discipline (`MARAS.log`)
+
+- **Log Levels & Signal-to-Noise Balance**: Always use the appropriate log level so `MARAS.log` has **just enough structured context to diagnose issues quickly without log spam**:
+  - **`ERROR` (`MARAS_LOG_ERROR` / `TTM_Debug.err`)**: Broken invariants, missing critical config fields (reject the config entry rather than guessing by name or silently substituting fake defaults), failed form/file lookups that break a feature, serialization failures, or caught exceptions.
+  - **`WARN` (`MARAS_LOG_WARN` / `TTM_Debug.warn`)**: Recoverable anomalies, unexpected null actors/forms, rejected invalid parameters, or skipped optional integrations.
+  - **`INFO` (`MARAS_LOG_INFO` / `TTM_Debug.info`)**: High-level state transitions and one-shot lifecycle events only (plugin init, config/save load summary, relationship status change, child birth/training/graduation summary, house assignment). **Never** log per-frame, per-tick, or per-inventory-item loops at `INFO`.
+  - **`DEBUG` (`MARAS_LOG_DEBUG` / `TTM_Debug.debug`)**: Decision inputs and resolved values needed to debug why a specific outcome happened (e.g., resolved `ActorBase` FormIDs, race/slot indices, dice rolls vs. thresholds, 3D load visual/equipment application, eligibility checks).
+  - **`TRACE` (`MARAS_LOG_TRACE` / `TTM_Debug.trace`)**: Verbose inner-loop dumps (e.g., per-item inventory enumeration, polling tick details, raw payload dumps).
+- **Include Concrete Identifiers**: Every `INFO`/`DEBUG`/`WARN`/`ERROR` log for an actor, child, or form **must** include concrete identifiers (hex FormID `{:08X}`, actor/child name, and relevant enum/index values) so issues can be pinpointed from a single log read without guessing.
+- **Add Targeted Logs Instead of Guessing**: When investigating a bug where the root cause is not immediately proven by existing logs or code inspection, add targeted `DEBUG`/`INFO` logs at the exact boundary in question and ask the user to reproduce rather than guessing or spinning on unverified theories.
+
+

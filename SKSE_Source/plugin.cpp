@@ -2,6 +2,8 @@
 
 #include <spdlog/sinks/basic_file_sink.h>
 
+#include "core/AdultChildProgression.h"
+#include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
 #include "core/BanterCoordinatorService.h"
 #include "core/BonusesService.h"
@@ -113,10 +115,22 @@ namespace {
         RE::BSEventNotifyControl ProcessEvent(const RE::TESObjectLoadedEvent* a_event,
                                               RE::BSTEventSource<RE::TESObjectLoadedEvent>*) override {
             if (a_event && a_event->loaded) {
-                if (auto* form = RE::TESForm::LookupByID(a_event->formID)) {
+                const RE::FormID loadedFormID = a_event->formID;
+                if (auto* form = RE::TESForm::LookupByID(loadedFormID)) {
                     if (auto* actor = form->As<RE::Actor>()) {
                         MARAS::NPCIndex::GetSingleton().RegisterLoadedActor(actor);
                         MARAS::NPCRelationshipManager::GetSingleton().TryResolvePendingRelationships(actor);
+                        if (MARAS::NPCRelationshipManager::GetSingleton().IsChildNPC(loadedFormID)) {
+                            if (const auto* taskInterface = SKSE::GetTaskInterface()) {
+                                taskInterface->AddTask([loadedFormID]() {
+                                    if (auto* f = RE::TESForm::LookupByID(loadedFormID)) {
+                                        if (auto* a = f->As<RE::Actor>()) {
+                                            MARAS::NPCRelationshipManager::GetSingleton().ApplyChildVisualsOn3DLoad(a);
+                                        }
+                                    }
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -223,9 +237,10 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS_LOG_INFO("New game/Load (isNewGame={})...", isNewGame);
                         MARAS::NPCIndex::GetSingleton().RefreshIndex();
 
-                        // Load runtime-only bonuses.json and marriage difficulty config on game load
+                        // Load runtime-only bonuses.json, marriage difficulty config, and child training config on game load
                         MARAS::BonusesService::GetSingleton().LoadFromFile();
                         MARAS::MarriageDifficulty::LoadConfig();
+                        MARAS::AdultChildProgression::GetSingleton().LoadConfig();
 
                         // Initialize/reset polling service state to prevent false events from previous save
                         MARAS::PollingService::GetSingleton().Initialize();
@@ -234,6 +249,8 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
                         // Re-derive children's package/LinkedRef/pet-LinkedRef state after load
                         MARAS::PlayerChildrenService::GetSingleton().ReassertAllOnLoad();
+                        MARAS::AdultChildTravelService::GetSingleton().ReassertAllOnLoad();
+                        MARAS::NPCRelationshipManager::GetSingleton().ReassertAllChildVisualsOnLoad();
 
                         // Ensure PlayerMarriedFaction is removed if polygamy is enabled
                         MARAS::FactionService::GetSingleton().SanitizePlayerMarriedFaction();
@@ -283,6 +300,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
                         // Build the home/cell index (doors, persistent actors, furniture owners)
                         MARAS::HomeCellService::GetSingleton().BuildIndex();
+                        MARAS::AdultChildTravelService::GetSingleton().BuildDestinationIndex();
 
                         // Build the centralized NPC index (all unique/named NPCs, base->ref resolution)
                         MARAS::NPCIndex::GetSingleton().BuildIndex();
@@ -328,8 +346,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         // Initialize PrismaUI
                         MARAS::PrismaUIManager::GetSingleton().Initialize();
 
-                        // Load random child and critter names from JSON configs once at startup
+                        // Load random child and critter names and child training catalog from JSON configs at startup
                         MARAS::NameService::GetSingleton().LoadFromFile();
+                        MARAS::AdultChildProgression::GetSingleton().LoadConfig();
 
                         if (auto* console = RE::ConsoleLog::GetSingleton()) {
                             console->Print("MARAS: Ready");

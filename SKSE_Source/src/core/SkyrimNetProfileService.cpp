@@ -1,5 +1,6 @@
 #include "core/SkyrimNetProfileService.h"
 
+#include "core/AdultChildProgression.h"
 #include "core/HomeCellService.h"
 #include "core/LoggingService.h"
 #include "core/NPCRelationshipManager.h"
@@ -310,6 +311,8 @@ namespace MARAS {
             bool isFemale = false;
             bool isAdopted = false;
             bool isBiologicalChild = false;
+            bool hasBeastblood = false;
+            bool trainedInWerewolfPack = false;
 
             // Biological Mother
             RE::FormID bioMotherID = 0;
@@ -354,6 +357,9 @@ namespace MARAS {
             std::vector<std::string> siblingNames;
             std::string homeLocationName;
             std::string trainingLocation;
+            std::string trainingClassName;
+            std::string trainingDescription;
+            std::string savedChildhoodBioTemplateName;
             std::string generationGuidance;
         };
 
@@ -435,9 +441,19 @@ namespace MARAS {
             if (!d.homeLocationName.empty()) {
                 ss << "- **Family Home / Upbringing Location**: " << d.homeLocationName << ".\n";
             }
-            if (d.stage == ChildStage::Adult && !d.trainingLocation.empty()) {
-                ss << "- **Completed Adolescent Training At**: " << d.trainingLocation
-                   << " (reflect this training background in their skills, personality, background, and occupation).\n";
+            if (d.stage == ChildStage::Adult && (!d.trainingLocation.empty() || !d.trainingClassName.empty())) {
+                ss << "- **Completed Adolescent Training**: ";
+                if (!d.trainingClassName.empty() && !d.trainingLocation.empty()) {
+                    ss << d.trainingClassName << " training at " << d.trainingLocation;
+                } else if (!d.trainingLocation.empty()) {
+                    ss << "At " << d.trainingLocation;
+                } else {
+                    ss << d.trainingClassName;
+                }
+                if (!d.trainingDescription.empty()) {
+                    ss << " — " << d.trainingDescription;
+                }
+                ss << " (reflect this training background in their skills, personality, background, and occupation).\n";
             }
 
             ss << "\n## Biological Inheritance vs. Household Upbringing Rules\n";
@@ -461,6 +477,23 @@ namespace MARAS {
             if (d.hasPhenotypeMismatch && !d.visualDiscrepancyDescription.empty()) {
                 ss << "   - **CRITICAL PHENOTYPE DISCREPANCY**: " << d.visualDiscrepancyDescription
                    << " Ensure " << d.childName << "'s `appearance` accurately reflects this biological heritage.\n";
+            }
+            if (d.hasBeastblood) {
+                if (d.stage == ChildStage::Adult) {
+                    ss << "   - **LYCANTHROPY / HIRCINE'S BEASTBLOOD**: " << d.childName
+                       << " carries Hircine's Beastblood (inherited genetically from werewolf biological parentage"
+                       << (d.trainedInWerewolfPack && !d.trainingLocation.empty()
+                               ? " and honed through pack training at " + d.trainingLocation
+                               : "")
+                       << "). As an adult, " << d.childName
+                       << " possesses complete immunity to disease, heightened predatory senses, lupine endurance, and the ability to assume Beast Form (`Werewolf`), "
+                       << "though in daily life and towns " << d.childName << " walks in human form and keeps the Beastblood guarded from outsiders (do NOT reveal lycanthropy in `summary` due to the Stranger Test; weave it into `background`, `personality`, and `skills`).\n";
+                } else {
+                    ss << "   - **INHERITED BEASTBLOOD (LATENT LYCANTHROPY)**: " << d.childName
+                       << " inherited Hircine's Beastblood genetically from a werewolf biological parent. As a young child, " << d.childName
+                       << " cannot yet transform into a full werewolf beast, but the dormant Beastblood manifests as unnaturally sharp senses (hearing and smell), "
+                       << "boundless physical stamina, immunity to common sickness, and a restless, wolfish instinct (keep this subtle in `summary` and reflect it in `appearance`, `personality`, and `skills`).\n";
+                }
             }
             const std::string bioFatherLabel = d.bioFatherName.empty() ? "the biological father" : d.bioFatherName;
             const std::string bioMotherLabel = d.motherName.empty() ? "the biological mother" : d.motherName;
@@ -777,7 +810,16 @@ namespace MARAS {
                 }
                 data.isAdopted = entry.isAdopted;
                 data.isBiologicalChild = entry.isBiologicalChild;
+                data.hasBeastblood = entry.hasBeastblood;
+                int32_t trainIdx = entry.trainingClassIndex;
+                if (!AdultChildProgression::IsValidTrainingClass(trainIdx) && !entry.trainingLocation.empty()) {
+                    trainIdx = AdultChildProgression::FindTrainingClassByLocation(entry.trainingLocation);
+                }
+                data.trainedInWerewolfPack = AdultChildProgression::DoesTrainingRequireBeastblood(trainIdx);
                 data.trainingLocation = StringUtils::TrimStd(entry.trainingLocation);
+                data.trainingClassName = std::string(NPCRelationshipManager::GetTrainingClassName(trainIdx));
+                data.trainingDescription = std::string(AdultChildProgression::GetTrainingDescription(trainIdx));
+                data.savedChildhoodBioTemplateName = StringUtils::TrimStd(entry.savedBioTemplateName);
 
                 const auto& sec = entry.paternitySecret;
                 data.bioMotherID = mgr.GetBioMother(childID);
@@ -971,6 +1013,108 @@ namespace MARAS {
             return data;
         }
 
+        std::string CarryOverChildhoodBioFromDisk(const ChildProfileContextData& taskData) {
+            if (taskData.stage != ChildStage::Adult || taskData.savedChildhoodBioTemplateName.empty()) {
+                return "";
+            }
+
+            const std::string srcFileName = taskData.savedChildhoodBioTemplateName + ".prompt";
+            std::vector<std::filesystem::path> candidatePaths;
+            if (!taskData.saveId.empty()) {
+                candidatePaths.push_back(std::filesystem::path("Data/SKSE/Plugins/SkyrimNet/saves") / taskData.saveId / "prompts/characters/dynamic" / srcFileName);
+                candidatePaths.push_back(std::filesystem::path("Data/SKSE/Plugins/SkyrimNet/saves") / taskData.saveId / "prompts/characters" / srcFileName);
+            }
+            candidatePaths.push_back(std::filesystem::path("Data/SKSE/Plugins/SkyrimNet/prompts/characters/dynamic") / srcFileName);
+            candidatePaths.push_back(std::filesystem::path("Data/SKSE/Plugins/SkyrimNet/prompts/characters") / srcFileName);
+
+            std::filesystem::path foundPath;
+            std::string rawContent;
+            for (const auto& p : candidatePaths) {
+                std::error_code ec;
+                if (std::filesystem::exists(p, ec) && !ec) {
+                    std::ifstream in(p, std::ios::binary);
+                    if (in.is_open()) {
+                        std::ostringstream buf;
+                        buf << in.rdbuf();
+                        rawContent = buf.str();
+                        if (!rawContent.empty()) {
+                            foundPath = p;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (rawContent.empty()) {
+                MARAS_LOG_INFO("[SkyrimNetProfile] No existing childhood prompt file found for savedBioTemplateName='{}' (child {:08X} '{}')",
+                               taskData.savedChildhoodBioTemplateName, taskData.childID, taskData.childName);
+                return "";
+            }
+
+            // Copy childhood .prompt file to the new adult actor's bioTemplateName path so SkyrimNet evolves the existing profile
+            if (!taskData.bioTemplateName.empty() && taskData.bioTemplateName != taskData.savedChildhoodBioTemplateName) {
+                const std::string dstFileName = taskData.bioTemplateName + ".prompt";
+                std::filesystem::path dstPath;
+                if (!taskData.saveId.empty()) {
+                    dstPath = std::filesystem::path("Data/SKSE/Plugins/SkyrimNet/saves") / taskData.saveId / "prompts/characters/dynamic" / dstFileName;
+                } else {
+                    dstPath = foundPath.parent_path() / dstFileName;
+                }
+
+                std::error_code ec;
+                std::filesystem::create_directories(dstPath.parent_path(), ec);
+                std::filesystem::copy_file(foundPath, dstPath, std::filesystem::copy_options::overwrite_existing, ec);
+                if (!ec) {
+                    MARAS_LOG_INFO("[SkyrimNetProfile] Copied childhood bio '{}' -> '{}' for adult child {:08X} ('{}')",
+                                   foundPath.string(), dstPath.string(), taskData.childID, taskData.childName);
+                } else {
+                    MARAS_LOG_WARN("[SkyrimNetProfile] Failed to copy childhood bio '{}' -> '{}': {}",
+                                   foundPath.string(), dstPath.string(), ec.message());
+                }
+            }
+
+            struct BlockDef {
+                const char* key;
+                const char* title;
+            };
+            constexpr BlockDef kBlocks[] = {
+                {"summary", "Childhood Summary"},
+                {"background", "Childhood Background"},
+                {"personality", "Childhood Personality"},
+                {"appearance", "Childhood Appearance"},
+                {"occupation", "Childhood Role"},
+                {"skills", "Childhood Skills & Interests"},
+                {"speech_style", "Childhood Speech Style"},
+                {"aspirations", "Childhood Aspirations"},
+                {"relationships", "Childhood Relationships"}
+            };
+
+            std::ostringstream out;
+            out << "## Existing Childhood Biography for " << taskData.childName
+                << " (CARRY OVER & EVOLVE INTO ADULTHOOD)\n"
+                << "CRITICAL INSTRUCTION: Below is " << taskData.childName
+                << "'s established childhood biography from before "
+                << (taskData.isFemale ? "she" : "he") << " left for training";
+            if (!taskData.trainingClassName.empty() || !taskData.trainingLocation.empty()) {
+                out << " (" << taskData.trainingClassName
+                    << (!taskData.trainingLocation.empty() ? " at " + taskData.trainingLocation : "") << ")";
+            }
+            out << ". You MUST preserve and carry forward " << taskData.childName
+                << "'s childhood memories, core personality traits, inherited physical appearance, and family relationships, "
+                << "while naturally maturing and evolving every section into a young adult who has completed training and returned home.\n\n";
+
+            bool anyBlock = false;
+            for (const auto& b : kBlocks) {
+                std::string blockText = ExtractPromptBlock(rawContent, b.key);
+                if (!blockText.empty()) {
+                    anyBlock = true;
+                    out << "### " << b.title << "\n" << blockText << "\n\n";
+                }
+            }
+
+            return anyBlock ? StringUtils::TrimStd(out.str()) : "";
+        }
+
         void ExecuteAsyncChildProfileFlow(ChildProfileContextData taskData) {
             try {
                 auto* requestProfileUpdateFn = FindRequestProfileUpdate();
@@ -978,6 +1122,13 @@ namespace MARAS {
                     MARAS_LOG_WARN("[SkyrimNetProfile] PublicRequestProfileUpdate not available in SkyrimNet.dll; skipping profile update for {:08X} ('{}', stage={})",
                                    taskData.childID, taskData.childName, static_cast<int>(taskData.stage));
                     return;
+                }
+
+                // 0. If this is an Adult Child (Stage 4) who previously had a spawned Young Child bio,
+                //    copy the childhood .prompt file and inject childhood bio continuity context.
+                std::string childhoodCarryOver = CarryOverChildhoodBioFromDisk(taskData);
+                if (!childhoodCarryOver.empty()) {
+                    taskData.generationGuidance += "\n\n" + childhoodCarryOver;
                 }
 
                 const auto endpoint = ReadSkyrimNetWebServerConfig();
@@ -1005,6 +1156,13 @@ namespace MARAS {
         }
 
     }  // namespace
+
+    std::string SkyrimNetProfileService::GetActorBioTemplateName(RE::FormID actorFormID) const {
+        if (!IsSkyrimNetAvailable() || actorFormID == 0 || IsSyntheticChildID(actorFormID)) {
+            return "";
+        }
+        return ResolvePlacedActorBioTemplateName(actorFormID);
+    }
 
     void SkyrimNetProfileService::Revert() {
         std::lock_guard<std::mutex> lock(mutex_);

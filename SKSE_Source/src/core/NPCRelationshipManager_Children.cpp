@@ -1,8 +1,11 @@
 #include "core/NPCRelationshipManager.h"
 
+#include "core/AdultChildProgression.h"
+#include "core/AdultChildTravelService.h"
 #include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
+#include "core/NPCTypeDeterminer.h"
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
@@ -17,7 +20,9 @@
 #include "utils/FormUtils.h"
 #include "utils/Settings.h"
 
+#include <RE/E/ExtraCombatStyle.h>
 #include <RE/S/SendHUDMessage.h>
+#include <random>
 
 namespace MARAS {
 
@@ -117,16 +122,19 @@ namespace MARAS {
         }
 
         void SyncChildHouseholdState(RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID, RE::FormID explicitHouseID = 0) {
-            // A grown-up (Adult) child must not carry child household state, factions or child sandbox/bed packages
-            if (NPCRelationshipManager::GetSingleton().GetChildStage(childID) == ChildStage::Adult) {
-                PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
-                NPCRelationshipManager::GetSingleton().RemoveChildSandboxAroundParentLinkedRef(childID);
-                PackageOverrideService::GetSingleton().UnregisterActor(childID);
-                return;
-            }
-
             const bool hasPlayer = Utils::MatchesActor(guardianAID, kPlayerFormID) ||
                                    Utils::MatchesActor(guardianBID, kPlayerFormID);
+
+            // A grown-up (Adult) child must not carry young-child household state, factions or child bed packages,
+            // and is not registered as a house tenant — instead they travel Skyrim independently via AdultChildTravelService.
+            if (NPCRelationshipManager::GetSingleton().GetChildStage(childID) == ChildStage::Adult) {
+                PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
+                if (!IsSyntheticChildID(childID)) {
+                    (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(childID);
+                }
+                NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
+                return;
+            }
 
             if (hasPlayer) {
                 RE::FormID houseID = explicitHouseID;
@@ -200,7 +208,7 @@ namespace MARAS {
         RE::FormID gA = entry.guardianAID;
         RE::FormID gB = entry.guardianBID;
         RE::FormID bioM = entry.bioMotherID;
-        RE::FormID bioF = entry.bioFatherID;
+        RE::FormID bioF = (entry.bioFatherID != kUnknownFatherFormID) ? entry.bioFatherID : 0;
 
         bool gAAlive = isActorAlive(gA);
         bool gBAlive = isActorAlive(gB);
@@ -277,14 +285,27 @@ namespace MARAS {
 
         const auto& entry = it->second;
 
+        if (entry.stage == ChildStage::Adult) {
+            if (!IsSyntheticChildID(childID)) {
+                AdultChildTravelService::GetSingleton().AssignOrUpdateDestination(childID, false);
+            } else {
+                AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
+                RemoveChildSandboxAroundParentLinkedRef(childID);
+                PackageOverrideService::GetSingleton().UnregisterActor(childID);
+            }
+            return;
+        }
+
         // Manage dynamic spawned children (0xFFxxxxxx) at Stage 2 who are not in player household,
         // OR any spawned Stage 2 player household child who is currently unhoused (house == 0)
         bool isTemporaryID = ((childID >> 24) == 0xFF) && !IsSyntheticChildID(childID);
         bool isPlayerHousehold = entry.HasGuardian(kPlayerFormID);
         bool isUnhousedPlayerChild = isPlayerHousehold && !IsSyntheticChildID(childID) &&
+                                     (entry.stage == ChildStage::Child) &&
                                      (PlayerChildrenService::GetSingleton().GetChildHouseFormID(childID) == 0);
 
-        if (entry.stage == ChildStage::Child && ((isTemporaryID && !isPlayerHousehold) || isUnhousedPlayerChild)) {
+        if (entry.stage == ChildStage::Child &&
+            ((isTemporaryID && !isPlayerHousehold) || isUnhousedPlayerChild)) {
             RE::FormID targetRefID = ResolveNonPlayerChildTarget(entry);
             auto* keyword = FormCache::GetSingleton().GetChildSandboxAroundParentKeyword();
             RE::FormID childFollowPkgID = 0;
@@ -308,8 +329,11 @@ namespace MARAS {
                         Utils::RemoveFromFaction(childID, adoptableFaction);
                     }
                 }
+            } else if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
+                Utils::RemoveFromFaction(childID, adoptableFaction);
             }
-        } else if (entry.stage == ChildStage::Child && isPlayerHousehold && !IsSyntheticChildID(childID)) {
+        } else if (entry.stage == ChildStage::Child &&
+                   isPlayerHousehold && !IsSyntheticChildID(childID)) {
             RemoveChildSandboxAroundParentLinkedRef(childID);
             if (PlayerHouseService::GetSingleton().GetTenantStayAtHome(childID)) {
                 PackageOverrideService::GetSingleton().RegisterActor(childID);
@@ -319,11 +343,13 @@ namespace MARAS {
         } else {
             RemoveChildSandboxAroundParentLinkedRef(childID);
             PackageOverrideService::GetSingleton().UnregisterActor(childID);
+            AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
         }
     }
 
     void NPCRelationshipManager::ReevaluateAllNonPlayerChildrenPackages() {
         for (const auto& [childID, entry] : childrenByID) {
+            if (entry.stage == ChildStage::Adult) continue;
             UpdateNonPlayerChildPackageOverride(childID);
         }
     }
@@ -340,7 +366,12 @@ namespace MARAS {
         nlohmann::json payload;
         payload["eventType"] = eventType;
         payload["child"] = fmt::format("0x{:08X}", childID);
-        payload["childName"] = ActorSvc::GetName(childID);
+        payload["childId"] = static_cast<int32_t>(childID);
+        std::string resolvedChildName = GetChildName(childID);
+        if (resolvedChildName.empty() && !IsSyntheticChildID(childID)) {
+            resolvedChildName = ActorSvc::GetName(childID);
+        }
+        payload["childName"] = resolvedChildName;
 
         if (guardianAID != 0) {
             payload["guardianA"] = fmt::format("0x{:08X}", guardianAID);
@@ -368,8 +399,8 @@ namespace MARAS {
 
         payload["reason"] = reason;
 
-        std::string jsonStr = payload.dump();
-        auto* childForm = RE::TESForm::LookupByID(childID);
+        std::string jsonStr = payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        RE::TESForm* childForm = IsSyntheticChildID(childID) ? nullptr : RE::TESForm::LookupByID(childID);
         SKSE::ModCallbackEvent modEvent("maras_child_event", jsonStr, 0.0f, childForm);
         eventSource->SendEvent(&modEvent);
         MARAS_LOG_INFO("Sent maras_child_event: {}", jsonStr);
@@ -520,7 +551,33 @@ namespace MARAS {
         if (entry.bioMotherID != 0) EnsureRegistered(entry.bioMotherID);
         if (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) EnsureRegistered(entry.bioFatherID);
         if (entry.presumedFatherID != 0) EnsureRegistered(entry.presumedFatherID);
+
+        if (entry.savedRaceIndex > 9) {
+            uint8_t resolvedRace = ResolveActorFMRRaceIndex(childID);
+            if (resolvedRace > 9 && entry.bioMotherID != 0) resolvedRace = ResolveActorFMRRaceIndex(entry.bioMotherID);
+            if (resolvedRace > 9 && entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) resolvedRace = ResolveActorFMRRaceIndex(entry.bioFatherID);
+            if (resolvedRace <= 9) {
+                entry.savedRaceIndex = resolvedRace;
+            }
+        }
+
+        EvaluateChildBeastbloodInheritance(entry);
+        if (entry.stage != ChildStage::Unborn && !entry.bioLineageEvaluated) {
+            AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, entry);
+        }
+
         childrenByID[childID] = entry;
+
+        if (!IsSyntheticChildID(childID) && entry.stage == ChildStage::Adult) {
+            if (auto* followerFaction = FormCache::GetSingleton().GetPotentialFollowerFaction()) {
+                Utils::AddToFaction(childID, followerFaction, 0);
+            }
+        }
+
+        if (!IsSyntheticChildID(childID) && (entry.stage == ChildStage::Child || entry.stage == ChildStage::Adult)) {
+            InitializeAndApplyChildVisualsAndRPG(childID);
+            entry = childrenByID[childID];
+        }
 
         MARAS_LOG_INFO("[Children] Registered child actor {:08X} ('{}', stage: {}, adopted: {}, bioM: {:08X}, bioF: {:08X}) to guardians {:08X} / {:08X}",
                        childID, entry.name, static_cast<int>(entry.stage), entry.isAdopted, entry.bioMotherID, entry.bioFatherID, entry.guardianAID, entry.guardianBID);
@@ -583,6 +640,7 @@ namespace MARAS {
             }
             RemoveChildSandboxAroundParentLinkedRef(childID);
             PackageOverrideService::GetSingleton().UnregisterActor(childID);
+            AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
         }
         PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
         bool removed = childrenByID.erase(childID) > 0;
@@ -1508,7 +1566,13 @@ namespace MARAS {
         } else if (it->second.bioFatherID == 0) {
             it->second.isBiologicalChild = false;
         }
-        MARAS_LOG_INFO("[Lineage] Set child {:08X} bio mother to {:08X}", childID, motherID);
+        it->second.beastbloodEvaluated = false;
+        EvaluateChildBeastbloodInheritance(it->second);
+        it->second.bioLineageEvaluated = false;
+        if (it->second.stage != ChildStage::Unborn) {
+            AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, it->second);
+        }
+        MARAS_LOG_INFO("[Lineage] Set child {:08X} bio mother to {:08X} (hasBeastblood={})", childID, motherID, it->second.hasBeastblood);
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
         return true;
     }
@@ -1523,6 +1587,12 @@ namespace MARAS {
             it->second.isAdopted = false;
         } else if (it->second.bioMotherID == 0) {
             it->second.isBiologicalChild = false;
+        }
+        it->second.beastbloodEvaluated = false;
+        EvaluateChildBeastbloodInheritance(it->second);
+        it->second.bioLineageEvaluated = false;
+        if (it->second.stage != ChildStage::Unborn) {
+            AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, it->second);
         }
 
         auto& pSec = it->second.paternitySecret;
@@ -1616,6 +1686,166 @@ namespace MARAS {
             return it->second.name;
         }
         return "";
+    }
+
+    void NPCRelationshipManager::InitializeAndApplyChildVisualsAndRPG(RE::FormID childID) {
+        AdultChildProgression::GetSingleton().InitializeAndApplyChildVisualsAndRPG(*this, childID);
+    }
+
+    void NPCRelationshipManager::ApplyChildVisualsToActor(RE::Actor* actor, ChildRegistryEntry& entry) {
+        AdultChildProgression::GetSingleton().ApplyChildVisualsToActor(actor, entry);
+    }
+
+    void NPCRelationshipManager::ApplyChildVisualsOn3DLoad(RE::Actor* actor) {
+        AdultChildProgression::GetSingleton().ApplyChildVisualsOn3DLoad(*this, actor);
+    }
+
+    void NPCRelationshipManager::ReassertAllChildVisualsOnLoad() {
+        AdultChildProgression::GetSingleton().ReassertAllChildVisualsOnLoad(*this);
+    }
+
+    bool NPCRelationshipManager::IsActorWerewolf(RE::FormID actorID) {
+        if (actorID == 0 || actorID == kUnknownFatherFormID) {
+            return false;
+        }
+
+        const auto& relMgr = GetSingleton();
+        auto childIt = relMgr.childrenByID.find(actorID);
+        if (childIt != relMgr.childrenByID.end() && childIt->second.hasBeastblood) {
+            return true;
+        }
+
+        auto& cache = FormCache::GetSingleton();
+        auto* wwChangeSpell = cache.GetWerewolfChangeSpell();
+        auto* wwImmunitySpell = cache.GetWerewolfImmunitySpell();
+        auto* wwBeastRace = cache.GetWerewolfBeastRace();
+
+        if (Utils::MatchesActor(actorID, kPlayerFormID)) {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            if (!player) return false;
+            if (wwBeastRace && player->GetRace() == wwBeastRace) return true;
+            if (wwChangeSpell && player->HasSpell(wwChangeSpell)) return true;
+            if (wwImmunitySpell && player->HasSpell(wwImmunitySpell)) return true;
+            return false;
+        }
+
+        RE::Actor* actor = NPCIndex::GetSingleton().GetActorFromFormId(actorID);
+        if (!actor) {
+            if (auto* form = RE::TESForm::LookupByID(actorID)) {
+                actor = form->As<RE::Actor>();
+            }
+        }
+        RE::TESNPC* base = actor ? actor->GetActorBase() : ActorSvc::GetActorBase(actorID);
+        const RE::FormID baseID = base ? base->GetFormID() : 0;
+        const RE::FormID refID = actor ? actor->GetFormID() : actorID;
+
+        // Farkas (0x01A692 / 0x01A693) and Vilkas (0x01A694 / 0x01A695) can be cured via Purity quests CR13 / CR14
+        if (baseID == 0x0001A692 || refID == 0x0001A693) {
+            if (auto* cr13 = cache.GetCR13Quest(); cr13 && cr13->IsCompleted()) {
+                return false;
+            }
+        }
+        if (baseID == 0x0001A694 || refID == 0x0001A695) {
+            if (auto* cr14 = cache.GetCR14Quest(); cr14 && cr14->IsCompleted()) {
+                return false;
+            }
+        }
+
+        // Canon werewolf NPCs in Skyrim.esm whose base NPC records do not carry CompanionsCircle
+        if (baseID == 0x0001BDB0 || refID == 0x0001BDE7 || // Arnbjorn (Dark Brotherhood)
+            baseID == 0x000136AC || refID == 0x0002ABBD) { // Sinding (Ill Met By Moonlight)
+            return true;
+        }
+
+        auto* playerWwFaction = cache.GetPlayerWerewolfFaction();
+        auto* wwFaction = cache.GetWerewolfFaction();
+        auto* circleFaction = cache.GetCompanionsCircleFaction();
+        auto* frostmoonFaction = cache.GetFrostmoonWerewolvesFaction();
+
+        if (actor) {
+            if (wwBeastRace && actor->GetRace() == wwBeastRace) return true;
+            if (wwChangeSpell && actor->HasSpell(wwChangeSpell)) return true;
+            if (wwImmunitySpell && actor->HasSpell(wwImmunitySpell)) return true;
+            if (playerWwFaction && actor->IsInFaction(playerWwFaction)) return true;
+            if (wwFaction && actor->IsInFaction(wwFaction)) return true;
+            if (circleFaction && actor->IsInFaction(circleFaction)) return true;
+            if (frostmoonFaction && actor->IsInFaction(frostmoonFaction)) return true;
+        }
+
+        if (base) {
+            if (wwBeastRace && base->race == wwBeastRace) return true;
+            if (auto* spellData = base->GetSpellList()) {
+                for (std::uint32_t i = 0; i < spellData->numSpells; ++i) {
+                    auto* sp = spellData->spells ? spellData->spells[i] : nullptr;
+                    if (sp && (sp == wwChangeSpell || sp == wwImmunitySpell)) {
+                        return true;
+                    }
+                }
+            }
+            for (const auto& f : base->factions) {
+                if (f.rank < 0 || !f.faction) continue;
+                if (f.faction == playerWwFaction ||
+                    f.faction == wwFaction ||
+                    f.faction == circleFaction ||
+                    f.faction == frostmoonFaction) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    void NPCRelationshipManager::EvaluateChildBeastbloodInheritance(ChildRegistryEntry& entry) {
+        if (entry.beastbloodEvaluated) {
+            return;
+        }
+
+        const bool motherHas = (entry.bioMotherID != 0) && IsActorWerewolf(entry.bioMotherID);
+        const bool fatherHas = (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) && IsActorWerewolf(entry.bioFatherID);
+        const int wwParentCount = (motherHas ? 1 : 0) + (fatherHas ? 1 : 0);
+
+        if (wwParentCount >= 2) {
+            entry.hasBeastblood = true;
+            entry.beastbloodEvaluated = true;
+            MARAS_LOG_INFO("[Beastblood] Child {:08X} ('{}') inherited Beastblood (100% — both bio parents {:08X} & {:08X} are werewolves)",
+                           entry.childID, entry.name, entry.bioMotherID, entry.bioFatherID);
+        } else if (wwParentCount == 1) {
+            std::uint64_t seed = (static_cast<std::uint64_t>(entry.childID) * 0x9E3779B97F4A7C15ULL) ^
+                                 (static_cast<std::uint64_t>(entry.bioMotherID) * 0xBF58476D1CE4E5B9ULL) ^
+                                 (static_cast<std::uint64_t>(entry.bioFatherID) * 0x94D049BB133111EBULL);
+            seed ^= (seed >> 30);
+            seed *= 0xBF58476D1CE4E5B9ULL;
+            seed ^= (seed >> 27);
+            seed *= 0x94D049BB133111EBULL;
+            seed ^= (seed >> 31);
+            entry.hasBeastblood = ((seed & 1ULL) != 0);
+            entry.beastbloodEvaluated = true;
+            MARAS_LOG_INFO("[Beastblood] Child {:08X} ('{}') 50% Beastblood inheritance roll (mother={:08X}[{}], father={:08X}[{}]) -> {}",
+                           entry.childID, entry.name, entry.bioMotherID, motherHas, entry.bioFatherID, fatherHas,
+                           entry.hasBeastblood ? "INHERITED" : "MORTAL");
+        } else {
+            entry.hasBeastblood = false;
+            if (entry.bioMotherID != 0 ||
+                (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) ||
+                entry.isAdopted) {
+                entry.beastbloodEvaluated = true;
+            }
+        }
+    }
+
+    bool NPCRelationshipManager::HasChildBeastblood(RE::FormID childID) const {
+        auto it = childrenByID.find(childID);
+        return (it != childrenByID.end()) ? it->second.hasBeastblood : false;
+    }
+
+    bool NPCRelationshipManager::SetChildBeastblood(RE::FormID childID, bool hasBeastblood) {
+        auto it = childrenByID.find(childID);
+        if (it == childrenByID.end()) return false;
+        it->second.hasBeastblood = hasBeastblood;
+        it->second.beastbloodEvaluated = true;
+        PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
+        return true;
     }
 
 }  // namespace MARAS

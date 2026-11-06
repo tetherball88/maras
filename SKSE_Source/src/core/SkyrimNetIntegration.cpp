@@ -884,6 +884,7 @@ namespace {
                 petObj["type"] = CleanAnimalRaceName(ActorSvc::GetRaceName(petID));
                 childObj["pet"] = petObj;
             }
+            childObj["has_beastblood"] = childEntry.hasBeastblood;
 
             return childObj;
         };
@@ -984,6 +985,7 @@ namespace {
             nlohmann::json parentage;
             parentage["is_adopted"] = asChild.isAdopted;
             parentage["is_biological"] = asChild.isBiologicalChild;
+            parentage["has_beastblood"] = asChild.hasBeastblood;
 
             const auto& sec = asChild.paternitySecret;
             RE::FormID asChildMotherID = mgr.GetBioMother(actorFormID);

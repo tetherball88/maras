@@ -1,5 +1,6 @@
 #include "core/Serialization.h"
 
+#include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
 #include "core/BanterCoordinatorService.h"
 #include "core/DeceasedRegistry.h"
@@ -79,6 +80,10 @@ namespace MARAS::Serialization {
 
         saveRecord(kBanterData, kDataVersion, "banter coordinator data", [&]() {
             return BanterCoordinatorService::GetSingleton().Save(serialization);
+        });
+
+        saveRecord(kAdultChildTravelData, kDataVersion, "adult child travel data", [&]() {
+            return AdultChildTravelService::GetSingleton().Save(serialization);
         });
 
         saveRecord(kPluginSettingsData, kDataVersion, "plugin settings", [&]() {
@@ -167,6 +172,12 @@ namespace MARAS::Serialization {
                 } else {
                     MARAS_LOG_INFO("Successfully loaded banter coordinator data");
                 }
+            } else if (type == kAdultChildTravelData) {
+                if (!AdultChildTravelService::GetSingleton().Load(serialization, version)) {
+                    MARAS_LOG_ERROR("Failed to load adult child travel data");
+                } else {
+                    MARAS_LOG_INFO("Successfully loaded adult child travel data");
+                }
             } else if (type == kPluginSettingsData) {
                 if (!Settings::GetSingleton().LoadGameSettings(serialization)) {
                     MARAS_LOG_ERROR("Failed to load plugin settings");
@@ -187,6 +198,7 @@ namespace MARAS::Serialization {
         PlayerHouseService::GetSingleton().Revert();
         SpouseAssetsService::GetSingleton().Revert();
         PlayerChildrenService::GetSingleton().Revert();
+        AdultChildTravelService::GetSingleton().Revert();
         MatchmakingService::GetSingleton().Revert();
         DeceasedRegistry::GetSingleton().Revert();
         BanterCoordinatorService::GetSingleton().Revert();

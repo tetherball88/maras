@@ -127,6 +127,8 @@ interface MarasState {
   dismissChildCritter: (npcId: string) => void
   dismissChildPet: (npcId: string) => void
   spawnChild: (childId: string) => void
+  sendChildToTraining: (childId: string, trainingClassIndex: number) => void
+  completeChildTraining: (childId: string) => void
   handleChildPromoted: (oldId: string, newId: string) => void
   evaluatingChildId: string | null
   evaluateChildSecret: (childId: string) => void
@@ -210,6 +212,19 @@ interface MarasState {
 }
 
 const isGameBuild = checkIsInGame()
+
+if (!isGameBuild && typeof window !== 'undefined' && typeof fetch === 'function') {
+  fetch('./__dev/trainingCatalog.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((catalog) => {
+      if (Array.isArray(catalog)) {
+        useMarasStore.setState((state) => ({
+          settings: { ...state.settings, trainingCatalog: catalog },
+        }))
+      }
+    })
+    .catch(() => {})
+}
 
 const initialNpcMap = new Map<string, NPCProfile>()
 if (!isGameBuild) {
@@ -819,6 +834,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   },
 
   handleChildPromoted: (oldId: string, newId: string) => {
+    const isSyntheticTarget = newId.toUpperCase().startsWith('FF7')
     set((state) => {
       const newChildren = new Map(state.rawChildren)
       const oldChild = newChildren.get(oldId)
@@ -827,8 +843,8 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         newChildren.set(newId, {
           ...oldChild,
           childId: newId,
-          hasRefID: true,
-          isEphemeral: false,
+          hasRefID: !isSyntheticTarget,
+          isEphemeral: isSyntheticTarget,
         })
       }
       const newProfiles = new Map(state.npcProfiles)
@@ -838,8 +854,8 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         newProfiles.set(newId, {
           ...oldProf,
           formId: newId,
-          hasRefID: true,
-          isEphemeral: false,
+          hasRefID: !isSyntheticTarget,
+          isEphemeral: isSyntheticTarget,
         })
       }
       return {
@@ -853,11 +869,124 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         npcProfiles: newProfiles,
         npcDetailId: state.npcDetailId === oldId ? newId : state.npcDetailId,
         selectedNpcId: state.selectedNpcId === oldId ? newId : state.selectedNpcId,
-        statusMsg: `Child spawned successfully.`,
+        statusMsg: isSyntheticTarget ? `Child sent to training.` : `Child spawned successfully.`,
       }
     })
     sendMarasAction('fetchNPCDetail', { formId: newId })
     sendMarasAction('fetchOverview')
+  },
+
+  sendChildToTraining: (childId: string, trainingClassIndex: number) => {
+    sendMarasAction('sendChildToTraining', { childId, trainingClassIndex })
+    set({ statusMsg: `Sending child (${childId}) to training...` })
+
+    if (typeof window !== 'undefined' && !window.marasAction) {
+      const TRAINING_INFO = [
+        { className: 'Mage', location: 'College of Winterhold' },
+        { className: 'Warrior', location: 'Jorrvaskr' },
+        { className: 'Thief', location: 'The Cistern' },
+        { className: 'Assassin', location: 'The Sanctuary' },
+        { className: 'Bard', location: 'The Bards College' },
+        { className: 'Stormcloak', location: 'Palace of the Kings' },
+        { className: 'Legionnaire', location: 'Castle Dour' },
+        { className: 'Dragon Slayer', location: 'Sky Haven Temple' },
+        { className: 'Dawnguard', location: 'Fort Dawnguard' },
+        { className: 'Necromancer', location: 'College of Whispers' },
+        { className: 'Vigilant', location: "Stendarr's Beacon" },
+      ]
+      const info = TRAINING_INFO[trainingClassIndex] || TRAINING_INFO[1]
+      setTimeout(() => {
+        set((state) => {
+          const newChildren = new Map(state.rawChildren)
+          const child = newChildren.get(childId)
+          const newProfiles = new Map(state.npcProfiles)
+          const profile = newProfiles.get(childId)
+
+          if (child) {
+            newChildren.set(childId, {
+              ...child,
+              stage: 'training',
+              hasRefID: false,
+              isEphemeral: true,
+              trainingClassIndex,
+              trainingClassName: info.className,
+              trainingLocation: info.location,
+              trainingStartGameDay: state.currentGameDay,
+            })
+          }
+          if (profile) {
+            newProfiles.set(childId, {
+              ...profile,
+              stage: 'training',
+              hasRefID: false,
+              isEphemeral: true,
+              trainingClassIndex,
+              trainingClassName: info.className,
+              trainingLocation: info.location,
+              trainingStartGameDay: state.currentGameDay,
+            })
+          }
+
+          return {
+            ...computeVisibleSecretsState(
+              state.rawRelationships,
+              newChildren,
+              state.rawCheatingRecords,
+              Boolean(state.settings.revealSecretsInUI),
+              newProfiles,
+            ),
+            npcProfiles: newProfiles,
+            statusMsg: `Child (${childId}) sent to ${info.location} to train as a ${info.className}!`,
+          }
+        })
+      }, 200)
+    }
+  },
+
+  completeChildTraining: (childId: string) => {
+    sendMarasAction('completeChildTraining', { childId })
+    set({ statusMsg: `Completing training for child (${childId})...` })
+
+    if (typeof window !== 'undefined' && !window.marasAction) {
+      setTimeout(() => {
+        set((state) => {
+          const newChildren = new Map(state.rawChildren)
+          const child = newChildren.get(childId)
+          const newProfiles = new Map(state.npcProfiles)
+          const profile = newProfiles.get(childId)
+
+          if (child) {
+            newChildren.set(childId, {
+              ...child,
+              stage: 'adult',
+              hasRefID: false,
+              isEphemeral: true,
+            })
+          }
+          if (profile) {
+            newProfiles.set(childId, {
+              ...profile,
+              isChild: false,
+              stage: 'adult',
+              hasRefID: false,
+              isEphemeral: true,
+            })
+          }
+
+          return {
+            ...computeVisibleSecretsState(
+              state.rawRelationships,
+              newChildren,
+              state.rawCheatingRecords,
+              Boolean(state.settings.revealSecretsInUI),
+              newProfiles,
+            ),
+            npcProfiles: newProfiles,
+            statusMsg: `Child (${childId}) has completed training and is ready to be spawned as an adult!`,
+          }
+        })
+      }, 200)
+    }
   },
 
   evaluateChildSecret: (childId: string) => {

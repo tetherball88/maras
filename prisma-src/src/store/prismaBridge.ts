@@ -81,6 +81,14 @@ export function spawnChild(childId: string) {
   sendMarasAction('spawnChild', { childId })
 }
 
+export function sendChildToTraining(childId: string, trainingClassIndex: number) {
+  sendMarasAction('sendChildToTraining', { childId, trainingClassIndex })
+}
+
+export function completeChildTraining(childId: string) {
+  sendMarasAction('completeChildTraining', { childId })
+}
+
 export function initializePrismaBridge() {
   if (typeof window === 'undefined') return
 
@@ -221,6 +229,9 @@ export function initializePrismaBridge() {
         isEphemeral: item.isEphemeral ?? existing?.isEphemeral,
         hasRefID: item.hasRefID ?? existing?.hasRefID,
         trainingLocation: item.trainingLocation ?? existing?.trainingLocation,
+        trainingClassIndex: item.trainingClassIndex ?? existing?.trainingClassIndex,
+        trainingClassName: item.trainingClassName ?? existing?.trainingClassName,
+        trainingStartGameDay: item.trainingStartGameDay ?? existing?.trainingStartGameDay,
         critterBanned: existing?.critterBanned ?? item.critterBanned,
         petBanned: existing?.petBanned ?? item.petBanned,
         currentCritter: item.currentCritter !== undefined ? item.currentCritter : existing?.currentCritter,
@@ -271,6 +282,9 @@ export function initializePrismaBridge() {
           isEphemeral: detail.isEphemeral,
           hasRefID: detail.hasRefID,
           trainingLocation: detail.trainingLocation,
+          trainingClassIndex: detail.trainingClassIndex,
+          trainingClassName: detail.trainingClassName,
+          trainingStartGameDay: detail.trainingStartGameDay,
           critterBanned: detail.critterBanned,
           petBanned: detail.petBanned,
           currentCritter: detail.currentCritter,

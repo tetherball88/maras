@@ -52,6 +52,9 @@ namespace MARAS {
         // placed child actor (ChildStage::Child or ChildStage::Adult only).
         void RequestChildProfileUpdate(RE::FormID childID, ChildStage stage);
 
+        // Resolve the SkyrimNet bioTemplateName for a placed actor (used to snapshot childhood bio before despawn)
+        std::string GetActorBioTemplateName(RE::FormID actorFormID) const;
+
         // Request an asynchronous SkyrimNet dynamic profile update for any placed actor with optional
         // additional LLM instructions and comma-separated updatable block names via PublicRequestProfileUpdate.
         bool RequestActorProfileUpdate(RE::FormID actorFormID,

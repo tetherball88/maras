@@ -668,6 +668,12 @@ bool Function SetChildTrainingLocation(int childID, string location) global nati
 ;/ Get the training/schooling location string for a child /;
 string Function GetChildTrainingLocation(int childID) global native
 
+;/ Get the training class index (0..10) for a child (-1 if none) /;
+int Function GetChildTrainingClass(int childID) global native
+
+;/ Get the saved FMR race index (0..9) for a child (-1 if unresolved) /;
+int Function GetChildSavedRaceIndex(int childID) global native
+
 ;/ Look up a synthetic child ID by mother and name /;
 int Function FindSyntheticChild(Actor mother, string name = "") global native
 

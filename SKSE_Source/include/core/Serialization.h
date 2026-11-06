@@ -15,7 +15,9 @@ namespace MARAS {
         //            pending deferred relationships & children, child-centric registry (lifecycle,
         //            fertility, paternity secrets, neutral guardians), and tenant stay-at-home preference.
         // Version 5: Added presumedFatherID to ChildRegistryEntry in NPCRelationshipData.
-        constexpr std::uint32_t kDataVersion = 5;
+        // Version 6: Added trainingClassIndex, trainingStartGameDay, savedBioTemplateName, and savedRaceIndex
+        //            to ChildRegistryEntry in NPCRelationshipData.
+        constexpr std::uint32_t kDataVersion = 6;
 
         // Top-level SKSE co-save record types (11 records).
         // Note: Status history, pending deferred relationships, pending deferred children, and the
@@ -39,6 +41,8 @@ namespace MARAS {
         constexpr std::uint32_t kDeceasedRegistryData = 'DCSD';
         // Banter coordinator persistent data
         constexpr std::uint32_t kBanterData = 'BNTR';
+        // Adult child travel service persistent data
+        constexpr std::uint32_t kAdultChildTravelData = 'ACTR';
         // Plugin settings (persistable global settings such as log level)
         constexpr std::uint32_t kPluginSettingsData = 'CNFG';
 
