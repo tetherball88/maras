@@ -252,6 +252,11 @@ namespace MARAS {
         bool IsGlobalPetBanned() const { return bGlobalBanPet; }
         void SetGlobalPetBanned(bool banned) { bGlobalBanPet = banned; }
 
+        // Child Training & Adulthood settings (cosave persisted)
+        int32_t childTrainingDurationDays = 14;        // In-game days spent in Stage 3 (Training) before graduating to Stage 4 (Adult)
+        int32_t childTrainingCost = 2000;              // Gold cost when sending a Player child to training
+        bool childTrainingRequireFaction = true;       // When true, faction-guarded training locations require Player faction membership
+
         // SKSE cosave serialization
         bool SaveGameSettings(SKSE::SerializationInterface* serialization) const;
         bool LoadGameSettings(SKSE::SerializationInterface* serialization);

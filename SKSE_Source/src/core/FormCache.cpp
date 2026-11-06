@@ -8,6 +8,8 @@ namespace MARAS {
     namespace {
         constexpr std::string_view PLUGIN_NAME = "TT_MARAS.esp";
         constexpr std::string_view HEARTHFIRES_ESM = "HearthFires.esm";
+        constexpr std::string_view DAWNGUARD_ESM = "Dawnguard.esm";
+        constexpr std::string_view DRAGONBORN_ESM = "Dragonborn.esm";
         constexpr std::string_view SKYRIM_ESM = "Skyrim.esm";
 
         template <typename T>
@@ -87,6 +89,13 @@ namespace MARAS {
         (void)GetBrotherhoodFaction();
         (void)GetCollegeFaction();
         (void)GetBardsFaction();
+        (void)GetBladesFaction();
+        (void)GetDawnguardFaction();
+        (void)GetPotentialFollowerFaction();
+        (void)GetWerewolfFaction();
+        (void)GetPlayerWerewolfFaction();
+        (void)GetCompanionsCircleFaction();
+        (void)GetFrostmoonWerewolvesFaction();
 
         (void)GetMerchantFaction();
         (void)GetApothecaryFaction();
@@ -140,6 +149,14 @@ namespace MARAS {
         (void)GetBardsQuest();
         (void)GetDragonbornQuest();
         (void)GetDB01();
+        (void)GetC03Quest();
+        (void)GetCR13Quest();
+        (void)GetCR14Quest();
+        (void)GetDA05Quest();
+
+        (void)GetWerewolfChangeSpell();
+        (void)GetWerewolfImmunitySpell();
+        (void)GetWerewolfBeastRace();
 
         (void)GetLoveInterestsCount();
         (void)GetSpousesCount();
@@ -171,12 +188,15 @@ namespace MARAS {
         (void)GetLocTypeFarmKeyword();
 
         (void)GetHomeSandboxMarkerStatic();
+        (void)GetLocationCenterMarkerRefType();
+        (void)GetGoldBaseObject();
         (void)GetHonorhallOrphanageCenterMarker();
 
         (void)GetHomeSandboxPackage();
         (void)GetPetCritterHomeSandboxPackage();
         (void)GetChildrenNonPlayerFollowParentPackage();
         (void)GetChildrenFleeIntimateScenePackage();
+        (void)GetAdultChildTravelSandboxPackage();
     }
 
     // TT_MARAS.esp Faction getters
@@ -265,6 +285,14 @@ namespace MARAS {
         return LazyLoadForm(homeSandboxMarkerStatic_, 0x76, "home sandbox marker static");
     }
 
+    RE::BGSLocationRefType* FormCache::GetLocationCenterMarkerRefType() {
+        return LazyLoadSkyrimForm(locationCenterMarkerRefType_, 0x1bdf1, "LocationCenterMarker ref type");
+    }
+
+    RE::TESBoundObject* FormCache::GetGoldBaseObject() {
+        return LazyLoadSkyrimForm(goldBaseObject_, 0x0000000f, "Gold001 base object");
+    }
+
     RE::TESObjectREFR* FormCache::GetHonorhallOrphanageCenterMarker() {
         return LazyLoadSkyrimForm(honorhallOrphanageCenterMarker_, 0x1f357, "Honorhall Orphanage center marker");
     }
@@ -283,6 +311,10 @@ namespace MARAS {
 
     RE::TESPackage* FormCache::GetChildrenFleeIntimateScenePackage() {
         return LazyLoadForm(childrenFleeIntimateScenePackage_, 0x5DE, "children flee intimate scene package");
+    }
+
+    RE::TESPackage* FormCache::GetAdultChildTravelSandboxPackage() {
+        return LazyLoadForm(adultChildTravelSandboxPackage_, 0xDD3, "adult child travel sandbox package");
     }
 
     // MARAS housed spouses merchant factions
@@ -456,8 +488,36 @@ namespace MARAS {
         return LazyLoadSkyrimForm(bardsFaction_, 0xc13c7, "Bards faction");
     }
 
+    RE::TESFaction* FormCache::GetBladesFaction() {
+        return LazyLoadSkyrimForm(bladesFaction_, 0x72834, "Blades faction");
+    }
+
+    RE::TESFaction* FormCache::GetDawnguardFaction() {
+        return LazyLoadPluginForm(dawnguardFaction_, 0x14217, DAWNGUARD_ESM, "Dawnguard faction");
+    }
+
+    RE::TESFaction* FormCache::GetPotentialFollowerFaction() {
+        return LazyLoadSkyrimForm(potentialFollowerFaction_, 0x5C84D, "Potential follower faction");
+    }
+
     RE::TESFaction* FormCache::GetCurrentFollowerFaction() {
         return LazyLoadSkyrimForm(currentFollowerFaction_, 0x5C84E, "Current follower faction");
+    }
+
+    RE::TESFaction* FormCache::GetWerewolfFaction() {
+        return LazyLoadSkyrimForm(werewolfFaction_, 0x43594, "Werewolf faction");
+    }
+
+    RE::TESFaction* FormCache::GetPlayerWerewolfFaction() {
+        return LazyLoadSkyrimForm(playerWerewolfFaction_, 0x91822, "Player werewolf faction");
+    }
+
+    RE::TESFaction* FormCache::GetCompanionsCircleFaction() {
+        return LazyLoadSkyrimForm(companionsCircleFaction_, 0xFF234, "Companions Circle faction");
+    }
+
+    RE::TESFaction* FormCache::GetFrostmoonWerewolvesFaction() {
+        return LazyLoadPluginForm(frostmoonWerewolvesFaction_, 0x1DC61, DRAGONBORN_ESM, "Frostmoon Werewolves faction");
     }
 
     // Skyrim.esm Quest getters (Thane quests, cached)
@@ -520,6 +580,34 @@ namespace MARAS {
 
     RE::TESQuest* FormCache::GetDB01() {
         return LazyLoadSkyrimForm(db01Quest_, 0x1ea50, "DB01 Innocence Lost quest");
+    }
+
+    RE::TESQuest* FormCache::GetC03Quest() {
+        return LazyLoadSkyrimForm(c03Quest_, 0x1CEF4, "C03 The Silver Hand quest");
+    }
+
+    RE::TESQuest* FormCache::GetCR13Quest() {
+        return LazyLoadSkyrimForm(cr13Quest_, 0xE3163, "CR13 Farkas Purity quest");
+    }
+
+    RE::TESQuest* FormCache::GetCR14Quest() {
+        return LazyLoadSkyrimForm(cr14Quest_, 0xE3156, "CR14 Vilkas Purity quest");
+    }
+
+    RE::TESQuest* FormCache::GetDA05Quest() {
+        return LazyLoadSkyrimForm(da05Quest_, 0x2A49A, "DA05 Ill Met By Moonlight quest");
+    }
+
+    RE::SpellItem* FormCache::GetWerewolfChangeSpell() {
+        return LazyLoadSkyrimForm(werewolfChangeSpell_, 0x92C48, "WerewolfChange Beast Form spell");
+    }
+
+    RE::SpellItem* FormCache::GetWerewolfImmunitySpell() {
+        return LazyLoadSkyrimForm(werewolfImmunitySpell_, 0xF5BA0, "WerewolfImmunity ability");
+    }
+
+    RE::TESRace* FormCache::GetWerewolfBeastRace() {
+        return LazyLoadSkyrimForm(werewolfBeastRace_, 0xCDD84, "WerewolfBeastRace");
     }
 
     // Skyrim.esm Keyword getters (cached)

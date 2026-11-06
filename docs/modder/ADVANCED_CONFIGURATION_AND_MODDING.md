@@ -34,6 +34,7 @@ All external configuration files live under `Data/SKSE/Plugins/`:
 | `SKSE/Plugins/MARAS/marriageDifficultyConfig.json` | Weights, clamps, prestige targets, and guild alignment tables for marriage proposal calculations. | Every save load & new game |
 | `SKSE/Plugins/MARAS/childrenNames.json` | Race-keyed male and female name pools for newborn and NPC-couple children. | `kDataLoaded` & save load |
 | `SKSE/Plugins/MARAS/critterNames.json` | Species-keyed (`fox`, `arctic_fox`, `hare`, `mudcrab`, `skeever`) name pools for adopted child critters. | `kDataLoaded` & save load |
+| `SKSE/Plugins/MARAS/childTraining.yaml` & `childTraining/*.yaml` | Extensible child training locations, adult class outcomes (skills, spells, perks, outfits, items, combat styles, tuition multipliers, guild/quest gates), and Daedric Champion Lineage blessings with inline `#` comments. | `kDataLoaded` & every save load / new game |
 | `SKSE/Plugins/MARAS/npc_index_overrides.ini` | Manual `NPCIndex` inclusion/exclusion rules (`[Include]`, `[Exclude]`, `[ExcludeNames]`, `[ExcludeEditorIDs]`, `[ExcludePlugins]`) for custom or modded NPCs. | `kDataLoaded` (`NPCIndex::BuildIndex`) |
 
 ---
@@ -115,6 +116,76 @@ Custom races are automatically matched to canonical pools by stripping `Race` / 
 
 ### 4.2 `Data/SKSE/Plugins/MARAS/critterNames.json`
 Contains species-keyed name arrays (`fox`, `arctic_fox`, `hare`, `mudcrab`, `skeever`) used when a household child brings home a wild critter.
+
+---
+
+## 4.3 Child Training & Adult Progression Configuration (`childTraining.yaml` & `childTraining/*.yaml`)
+
+[`AdultChildProgression`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/include/core/AdultChildProgression.h) loads its adolescent training catalog and Daedric Champion Lineage blessings from:
+1. **Base Catalog**: [`Data/SKSE/Plugins/MARAS/childTraining.yaml`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE/Plugins/MARAS/childTraining.yaml)
+2. **Modder Extension / Override Drop-Ins**: `Data/SKSE/Plugins/MARAS/childTraining/*.yaml` (loaded in alphabetical filename order after `childTraining.yaml`).
+
+### Override vs. Extension Behavior
+- If an entry in `childTraining/*.yaml` has an `id` matching an existing training location (e.g., `warrior` or `mage`), any fields provided in the override file **patch/replace** that entry in-place while preserving its index.
+- If an entry in `childTraining/*.yaml` has a new `id` (e.g., `morag_tong` or `psijic_monk`), it is **appended** as a new training path and automatically appears in the Prisma UI Dashboard's Adolescent Training modal!
+- **Location Images (`image`)**: Each training location specifies an `image` path (by default `"Data/SKSE/Plugins/MARAS/childTraining/images/<id>.webp"`). When the image file exists on disk in `Data/SKSE/Plugins/MARAS/childTraining/images/`, C++ loads and caches it for rendering in the Prisma UI Training Modal (`ChildTrainingModal.tsx`), falling back cleanly to a styled emblem placeholder if the image file has not yet been placed on disk.
+- Every form reference (`combatStyle`, `outfit`, `requirements.faction`, `requirements.quest`, `spells[]`, `perks[]`, `items[].form`) uses standard `"__formData|<PluginName>|<0xHexFormID>"` syntax (supporting both 24-bit `.esp`/`.esm` and 12-bit light `.esl` plugins) and supports inline `#` comments to document EditorIDs and form names. If a referenced plugin is not installed in the player's load order, missing spells/perks/items are safely skipped.
+- **Automatic + Explicit Perk Distribution**: In addition to any explicit `perks:` listed on a training location or Daedric blessing, `AdultChildProgression::ApplyAdultChildPerks` automatically grants `LightFoot` (`0x05820C`) and evaluates the adult child's final skill levels against tiered thresholds (`25..90`) to grant vanilla weapon, armor, stealth, and magic perks.
+
+### Example Extension File (`Data/SKSE/Plugins/MARAS/childTraining/MoragTong_Patch.yaml`)
+```yaml
+trainingLocations:
+  - id: morag_tong
+    name: Morag Tong
+    location: Raven Rock Sanctum
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/morag_tong.webp"
+    description: "Sanctioned Dunmeri executioner training in Solstheim, mastering dual-blade precision, shadow magic, and honourable writ assassination."
+    costMultiplier: 1.65
+    skillType: rogue
+    hmsWeights: { health: 0.35, magicka: 0.25, stamina: 0.40 }
+    ai:
+      morality: 0      # Any Crime
+      minConfidence: 3 # Brave
+    requirements:
+      key: inMoragTong
+      label: Solstheim Patronage
+      quest: "__formData|Dragonborn.esm|0x018B15" # DLC2RR02 ("Served Cold")
+      minQuestStage: 200
+    combatStyle: "__formData|Skyrim.esm|0x1051FA" # csAssassin
+    outfit: "__formData|Dragonborn.esm|0x0376F8"  # DLC2MoragTongOutfit (Morag Tong Chitin Armor Set)
+    skills:
+      oneHanded: 60
+      sneak: 60
+      lightArmor: 50
+      illusion: 45
+      archery: 40
+    spells:
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+    perks:
+      - "__formData|Skyrim.esm|0x106256" # DualFlurry30 (20% Faster Dual-Wield Attacks)
+      - "__formData|Skyrim.esm|0x106258" # DualSavagery (50% Bonus Dual-Wield Power Attack Damage)
+      - "__formData|Skyrim.esm|0x058210" # Backstab (6x One-Handed Sneak Attack Damage)
+      - "__formData|Skyrim.esm|0x058213" # AssassinsBlade (15x Dagger Sneak Attack Damage)
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (All Spells Are Silent)
+    items:
+      - { form: "__formData|Skyrim.esm|0x013986", count: 1 } # Steel Dagger
+      - { form: "__formData|Skyrim.esm|0x013985", count: 1 } # Hunting Bow
+
+daedricBlessings:
+  - id: azura
+    name: "Azura (Twilight Foresight)"
+    quest: "__formData|Skyrim.esm|0x028AD6" # DA01 ("The Black Star")
+    hmsBonus: { health: 0, magicka: 75, stamina: 0 }
+    skills:
+      illusion: 15
+      restoration: 15
+    spells:
+      - "__formData|Skyrim.esm|0x05AD5E" # Ebonyflesh
+    perks:
+      - "__formData|Skyrim.esm|0x0581F7" # WardAbsorb (Wards Recharge Magicka From Incoming Spells)
+      - "__formData|Skyrim.esm|0x0581E4" # HypnoticGaze (Calm Spells Work on Higher-Level Opponents)
+```
 
 ---
 

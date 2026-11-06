@@ -61,14 +61,21 @@ namespace MARAS {
         // Keywords getters
         RE::BGSKeyword* GetIgnoreProposeKeyword();
 
-        // Skyrim.esm faction getters
+        // Skyrim.esm & Dawnguard.esm faction getters
         RE::TESFaction* GetPlayerFaction();
         RE::TESFaction* GetCompanionsFaction();
         RE::TESFaction* GetThievesFaction();
         RE::TESFaction* GetBrotherhoodFaction();
         RE::TESFaction* GetCollegeFaction();
         RE::TESFaction* GetBardsFaction();
+        RE::TESFaction* GetBladesFaction();
+        RE::TESFaction* GetDawnguardFaction();
+        RE::TESFaction* GetPotentialFollowerFaction();
         RE::TESFaction* GetCurrentFollowerFaction();
+        RE::TESFaction* GetWerewolfFaction();
+        RE::TESFaction* GetPlayerWerewolfFaction();
+        RE::TESFaction* GetCompanionsCircleFaction();
+        RE::TESFaction* GetFrostmoonWerewolvesFaction();
 
         // Skyrim merchant factions
         RE::TESFaction* GetMerchantFaction();
@@ -110,6 +117,15 @@ namespace MARAS {
         RE::TESQuest* GetBardsQuest();
         RE::TESQuest* GetDragonbornQuest();
         RE::TESQuest* GetDB01();
+        RE::TESQuest* GetC03Quest();
+        RE::TESQuest* GetCR13Quest();
+        RE::TESQuest* GetCR14Quest();
+        RE::TESQuest* GetDA05Quest();
+
+        // Werewolf / Lycanthropy spell & race getters (Skyrim.esm)
+        RE::SpellItem* GetWerewolfChangeSpell();
+        RE::SpellItem* GetWerewolfImmunitySpell();
+        RE::TESRace* GetWerewolfBeastRace();
 
         // Global getters (TT_MARAS.esp)
         RE::TESGlobal* GetLoveInterestsCount();
@@ -142,8 +158,10 @@ namespace MARAS {
         RE::BGSKeyword* GetLocTypeLumberMillKeyword();
         RE::BGSKeyword* GetLocTypeFarmKeyword();
 
-        // Static object getters
+        // Static object & ref type getters
         RE::TESObjectSTAT* GetHomeSandboxMarkerStatic();
+        RE::BGSLocationRefType* GetLocationCenterMarkerRefType();
+        RE::TESBoundObject* GetGoldBaseObject();
 
         // Object reference getters
         RE::TESObjectREFR* GetHonorhallOrphanageCenterMarker();
@@ -153,6 +171,7 @@ namespace MARAS {
         RE::TESPackage* GetPetCritterHomeSandboxPackage();
         RE::TESPackage* GetChildrenNonPlayerFollowParentPackage();
         RE::TESPackage* GetChildrenFleeIntimateScenePackage();
+        RE::TESPackage* GetAdultChildTravelSandboxPackage();
 
     private:
         FormCache() = default;
@@ -189,13 +208,20 @@ namespace MARAS {
         RE::TESFaction* playerBedOwnershipFaction_{nullptr};
         RE::TESFaction* currentFollowerFaction_{nullptr};
 
-        // Skyrim.esm general & guild factions
+        // Skyrim.esm & Dawnguard.esm general & guild factions
         RE::TESFaction* playerFaction_{nullptr};
         RE::TESFaction* companionsFaction_{nullptr};
         RE::TESFaction* thievesFaction_{nullptr};
         RE::TESFaction* brotherhoodFaction_{nullptr};
         RE::TESFaction* collegeFaction_{nullptr};
         RE::TESFaction* bardsFaction_{nullptr};
+        RE::TESFaction* bladesFaction_{nullptr};
+        RE::TESFaction* dawnguardFaction_{nullptr};
+        RE::TESFaction* potentialFollowerFaction_{nullptr};
+        RE::TESFaction* werewolfFaction_{nullptr};
+        RE::TESFaction* playerWerewolfFaction_{nullptr};
+        RE::TESFaction* companionsCircleFaction_{nullptr};
+        RE::TESFaction* frostmoonWerewolvesFaction_{nullptr};
 
         // Skyrim.esm merchant factions
         RE::TESFaction* merchantFaction_{nullptr};
@@ -251,6 +277,15 @@ namespace MARAS {
         RE::TESQuest* bardsQuest_{nullptr};
         RE::TESQuest* dragonbornQuest_{nullptr};
         RE::TESQuest* db01Quest_{nullptr};
+        RE::TESQuest* c03Quest_{nullptr};
+        RE::TESQuest* cr13Quest_{nullptr};
+        RE::TESQuest* cr14Quest_{nullptr};
+        RE::TESQuest* da05Quest_{nullptr};
+
+        // Werewolf / Lycanthropy spells & race (cached)
+        RE::SpellItem* werewolfChangeSpell_{nullptr};
+        RE::SpellItem* werewolfImmunitySpell_{nullptr};
+        RE::TESRace* werewolfBeastRace_{nullptr};
 
         // Globals (cached)
         RE::TESGlobal* loveInterestsCount_{nullptr};
@@ -282,12 +317,15 @@ namespace MARAS {
         RE::BGSKeyword* locTypeFarmKeyword_{nullptr};
         // Static objects & refs (cached)
         RE::TESObjectSTAT* homeSandboxMarkerStatic_{nullptr};
+        RE::BGSLocationRefType* locationCenterMarkerRefType_{nullptr};
+        RE::TESBoundObject* goldBaseObject_{nullptr};
         RE::TESObjectREFR* honorhallOrphanageCenterMarker_{nullptr};
         // Packages (cached)
         RE::TESPackage* homeSandboxPackage_{nullptr};
         RE::TESPackage* petCritterHomeSandboxPackage_{nullptr};
         RE::TESPackage* childrenNonPlayerFollowParentPackage_{nullptr};
         RE::TESPackage* childrenFleeIntimateScenePackage_{nullptr};
+        RE::TESPackage* adultChildTravelSandboxPackage_{nullptr};
     };
 
 }  // namespace MARAS

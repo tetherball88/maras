@@ -52,6 +52,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
+#include <yaml-cpp/yaml.h>
 
 // Required at global scope for CommonLibSSE's generated __MARASPlugin.cpp ("MARAS"sv)
 using namespace std::string_view_literals;

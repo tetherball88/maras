@@ -72,6 +72,11 @@ export interface CheatingRecord {
 
 export type ChildStage = 'unborn' | 'infant' | 'child' | 'training' | 'adult'
 
+export interface TrainingDiscountEntry {
+  percent: number
+  reason: string
+}
+
 export interface ChildRecord {
   childId: string
   name: string
@@ -91,6 +96,9 @@ export interface ChildRecord {
   isEphemeral?: boolean
   hasRefID?: boolean
   trainingLocation?: string
+  trainingClassIndex?: number
+  trainingClassName?: string
+  trainingStartGameDay?: number
   isBiologicalChild?: boolean
   conceptionTimestamp?: number
   birthTimestamp?: number
@@ -101,6 +109,8 @@ export interface ChildRecord {
   hasPhenotypeMismatch?: boolean
   discoveredByPartner?: boolean
   discoveredByBioFather?: boolean
+  hasBeastblood?: boolean
+  trainingDiscounts?: Record<string, TrainingDiscountEntry>
   gender?: 'male' | 'female' | 'unknown' | 'undefined'
 }
 
@@ -149,6 +159,9 @@ export interface NPCProfile {
   isEphemeral?: boolean
   hasRefID?: boolean
   trainingLocation?: string
+  trainingClassIndex?: number
+  trainingClassName?: string
+  trainingStartGameDay?: number
   critterBanned?: boolean
   petBanned?: boolean
   currentCritter?: ChildCompanionInfo | null
@@ -156,6 +169,7 @@ export interface NPCProfile {
   pluginName?: string
   blockedFromAdoptionReason?: string
   pendingIntent?: string
+  hasBeastblood?: boolean
 }
 
 export interface RelationshipPair {
@@ -171,6 +185,21 @@ export interface AffectionData {
   permanent: number
   decayMultiplier: number
   daysSinceLastInteraction: number
+}
+
+export interface TrainingCatalogItem {
+  index: number
+  id?: string
+  className: string
+  location: string
+  description?: string
+  image?: string
+  costMultiplier: number
+  effectiveCost?: number
+  requirementMet?: boolean
+  factionKey?: string
+  factionLabel?: string
+  requiresBeastblood?: boolean
 }
 
 export interface MarasSettings {
@@ -238,6 +267,14 @@ export interface MarasSettings {
   childCustodyPrioritizeBioParent: boolean
   globalBanCritter?: boolean
   globalBanPet?: boolean
+  childTrainingDurationDays?: number
+  childTrainingCost?: number
+  childTrainingRequireFaction?: boolean
+  playerTrainingFactions?: {
+    playerGold: number
+    [key: string]: boolean | number | undefined
+  }
+  trainingCatalog?: TrainingCatalogItem[]
   skyrimnetActionRadius?: number
   skyrimnetUseLLMMemories?: boolean
   skyrimnetUseDecisions?: boolean

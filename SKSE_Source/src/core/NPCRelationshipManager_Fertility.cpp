@@ -1,9 +1,15 @@
 #include "core/NPCRelationshipManager.h"
 
+#include "core/AdultChildProgression.h"
+#include "core/FormCache.h"
 #include "core/NPCIndex.h"
+#include "core/PackageOverrideService.h"
+#include "core/PlayerChildrenService.h"
+#include "core/PlayerHouseService.h"
 #include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
+#include "core/SkyrimNetProfileService.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -586,6 +592,7 @@ namespace MARAS {
         }
 
         ChildRegistryEntry entry(childID, gA, gB, childName, 0, false, bioM, bioF, true, cTime, 0.0f, pSec, ChildStage::Unborn, "", 2, recordedPresumedFatherID);
+        EvaluateChildBeastbloodInheritance(entry);
         childrenByID[childID] = entry;
 
         MARAS_LOG_INFO("[Fertility] Registered Unborn child {:08X} ('{}') for mother {:08X}. Presumed: {:08X}, GuardianB: {:08X}, Bio: {:08X}, Secret: {}",
@@ -671,6 +678,8 @@ namespace MARAS {
             }
         }
         ApplyBirthCustodyRules(uID, it->second, motherID, presumedFatherID, it->second.bioFatherID);
+        EvaluateChildBeastbloodInheritance(it->second);
+        AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, it->second);
         UpdateChildBothParentsFaction(uID);
         UpdateSpouseChildrenFaction(motherID);
         if (prevCoGuardian != 0) UpdateSpouseChildrenFaction(prevCoGuardian);
@@ -1436,6 +1445,8 @@ namespace MARAS {
 
         ChildRegistryEntry entry(childID, gA, gB, childName, static_cast<int32_t>(bTime), false, bioM, bioF, true, cTime, bTime, pSec, ChildStage::Infant, "", 2, recordedPresumedFatherID);
         ApplyBirthCustodyRules(childID, entry, motherID, presumedFatherID, bioF);
+        EvaluateChildBeastbloodInheritance(entry);
+        AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, entry);
         gA = entry.guardianAID;
         gB = entry.guardianBID;
         childrenByID[childID] = entry;
@@ -1864,6 +1875,13 @@ namespace MARAS {
         if (it != childrenByID.end()) {
             it->second.trainingLocation = location;
             it->second.stage = ChildStage::Training;
+            if (it->second.trainingStartGameDay <= 0.0f) {
+                auto* calendar = RE::Calendar::GetSingleton();
+                it->second.trainingStartGameDay = calendar ? calendar->GetDaysPassed() : 0.0f;
+            }
+            if (it->second.trainingClassIndex < 0) {
+                it->second.trainingClassIndex = AdultChildProgression::FindTrainingClassByLocation(location);
+            }
             MARAS_LOG_INFO("[Fertility] Set child {:08X} training location to '{}'", childID, location);
             UpdateNonPlayerChildPackageOverride(childID);
             PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
@@ -1879,6 +1897,288 @@ namespace MARAS {
             return it->second.trainingLocation;
         }
         return "";
+    }
+
+    std::string_view NPCRelationshipManager::GetTrainingClassName(int32_t classIndex) {
+        return AdultChildProgression::GetTrainingClassName(classIndex);
+    }
+
+    std::string_view NPCRelationshipManager::GetTrainingLocationName(int32_t classIndex) {
+        return AdultChildProgression::GetTrainingLocationName(classIndex);
+    }
+
+    bool NPCRelationshipManager::IsPlayerEligibleForTrainingClass(int32_t classIndex, std::string* outReason) {
+        return AdultChildProgression::GetSingleton().IsPlayerEligibleForTrainingClass(classIndex, outReason);
+    }
+
+    uint8_t NPCRelationshipManager::ResolveActorFMRRaceIndex(RE::FormID actorID) {
+        if (actorID == 0 || IsSyntheticChildID(actorID)) {
+            return 255;
+        }
+
+        std::string combined;
+        if (auto* race = ActorSvc::GetRace(actorID)) {
+            if (const char* edid = race->GetFormEditorID(); edid && edid[0] != '\0') {
+                combined += edid;
+                combined += ' ';
+            }
+            if (const char* rName = race->GetName(); rName && rName[0] != '\0') {
+                combined += rName;
+            }
+        } else {
+            combined = ActorSvc::GetRaceName(actorID);
+        }
+
+        if (combined.empty()) {
+            return 255;
+        }
+
+        const std::string lower = StringUtils::ToLowerStd(combined);
+        // Must match Fertility Mode Reloaded (_JSW_BB_Storage.BirthMotherRace / GetRaceNameForStorage) 0..9 order:
+        // 0=Argonian, 1=Breton, 2=Dark Elf, 3=High Elf, 4=Imperial, 5=Khajiit, 6=Nord, 7=Orc, 8=Redguard, 9=Wood Elf
+        if (lower.find("argonian") != std::string::npos) return 0;
+        if (lower.find("breton") != std::string::npos) return 1;
+        if (lower.find("darkelf") != std::string::npos || lower.find("dark elf") != std::string::npos || lower.find("dunmer") != std::string::npos) return 2;
+        if (lower.find("highelf") != std::string::npos || lower.find("high elf") != std::string::npos || lower.find("altmer") != std::string::npos) return 3;
+        if (lower.find("imperial") != std::string::npos) return 4;
+        if (lower.find("khajiit") != std::string::npos) return 5;
+        if (lower.find("nord") != std::string::npos) return 6;
+        if (lower.find("orc") != std::string::npos || lower.find("orsimer") != std::string::npos) return 7;
+        if (lower.find("redguard") != std::string::npos) return 8;
+        if (lower.find("woodelf") != std::string::npos || lower.find("wood elf") != std::string::npos || lower.find("bosmer") != std::string::npos) return 9;
+        return 255;
+    }
+
+    bool NPCRelationshipManager::SendChildToTraining(RE::FormID childID, int32_t trainingClassIndex, std::string* outReason) {
+        if (!AdultChildProgression::IsValidTrainingClass(trainingClassIndex)) {
+            if (outReason) *outReason = "Invalid training class index";
+            MARAS_LOG_WARN("[Training] SendChildToTraining failed for child {:08X}: invalid trainingClassIndex={}",
+                           childID, trainingClassIndex);
+            return false;
+        }
+
+        auto it = childrenByID.find(childID);
+        if (it == childrenByID.end()) {
+            if (outReason) *outReason = "Child record not found";
+            MARAS_LOG_WARN("[Training] SendChildToTraining failed: child {:08X} not found in childrenByID", childID);
+            return false;
+        }
+        if (it->second.stage != ChildStage::Child) {
+            if (outReason) *outReason = "Only Stage 2 (Young Child) children can be sent to training";
+            MARAS_LOG_WARN("[Training] SendChildToTraining failed for child {:08X} ('{}'): invalid stage={} (expected Stage 2 Child)",
+                           childID, it->second.name, static_cast<int>(it->second.stage));
+            return false;
+        }
+
+        ChildRegistryEntry entry = it->second;
+        EvaluateChildBeastbloodInheritance(entry);
+        if (AdultChildProgression::DoesTrainingRequireBeastblood(trainingClassIndex) && !entry.hasBeastblood) {
+            if (outReason) {
+                *outReason = "Requires child to carry Hircine's Beastblood (inherited Lycanthropy)";
+            }
+            MARAS_LOG_WARN("[Training] SendChildToTraining blocked for child {:08X} ('{}'): classIdx={} ('{}') requires Beastblood",
+                           childID, entry.name, trainingClassIndex, GetTrainingClassName(trainingClassIndex));
+            return false;
+        }
+
+        const bool isPlayerChild = entry.HasGuardian(kPlayerFormID);
+        int32_t paidTuitionGold = 0;
+        int32_t appliedDiscountPercent = 0;
+        std::string appliedDiscountReason;
+
+        if (isPlayerChild) {
+            std::string eligReason;
+            if (!IsPlayerEligibleForTrainingClass(trainingClassIndex, &eligReason)) {
+                if (outReason) *outReason = eligReason;
+                MARAS_LOG_WARN("[Training] SendChildToTraining blocked for child {:08X} ('{}') at classIdx={} ('{}'): {}",
+                               childID, entry.name, trainingClassIndex, GetTrainingClassName(trainingClassIndex), eligReason);
+                return false;
+            }
+
+            const int32_t baseCost = std::max(0, Settings::GetSingleton().childTrainingCost);
+            const auto discountInfo = AdultChildProgression::GetSingleton().EvaluateChildTrainingDiscount(entry, trainingClassIndex);
+            const int32_t cost = AdultChildProgression::GetDiscountedTrainingCost(trainingClassIndex, baseCost, discountInfo.discountPercent);
+            appliedDiscountPercent = discountInfo.discountPercent;
+            appliedDiscountReason = discountInfo.reason;
+            if (cost > 0) {
+                auto* player = RE::PlayerCharacter::GetSingleton();
+                auto* goldForm = FormCache::GetSingleton().GetGoldBaseObject();
+                const int32_t playerGold = player ? player->GetGoldAmount() : 0;
+                if (!player || !goldForm || playerGold < cost) {
+                    const std::string goldMsg = std::format("Not enough gold ({} required, {} available)", cost, playerGold);
+                    if (outReason) {
+                        *outReason = goldMsg;
+                    }
+                    MARAS_LOG_WARN("[Training] SendChildToTraining blocked for child {:08X} ('{}'): {}",
+                                   childID, entry.name, goldMsg);
+                    return false;
+                }
+                player->RemoveItem(goldForm, cost, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                paidTuitionGold = cost;
+            }
+        }
+
+        if (entry.gender > 1) {
+            entry.gender = GetChildGender(childID);
+        }
+        if (entry.savedRaceIndex > 9) {
+            uint8_t resolvedRace = ResolveActorFMRRaceIndex(childID);
+            if (resolvedRace > 9 && entry.bioMotherID != 0) resolvedRace = ResolveActorFMRRaceIndex(entry.bioMotherID);
+            if (resolvedRace > 9 && entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) resolvedRace = ResolveActorFMRRaceIndex(entry.bioFatherID);
+            if (resolvedRace <= 9) {
+                entry.savedRaceIndex = resolvedRace;
+            }
+        }
+
+        auto* calendar = RE::Calendar::GetSingleton();
+        const float currentDay = calendar ? calendar->GetDaysPassed() : 0.0f;
+
+        entry.trainingClassIndex = trainingClassIndex;
+        entry.trainingLocation = std::string(GetTrainingLocationName(trainingClassIndex));
+        entry.trainingStartGameDay = currentDay;
+        entry.stage = ChildStage::Training;
+
+        RE::FormID targetChildID = childID;
+
+        if (!IsSyntheticChildID(childID)) {
+            if (IsSkyrimNetAvailable()) {
+                std::string bioTpl = SkyrimNetProfileService::GetSingleton().GetActorBioTemplateName(childID);
+                if (!bioTpl.empty()) {
+                    entry.savedBioTemplateName = bioTpl;
+                    MARAS_LOG_INFO("[Training] Captured childhood SkyrimNet bioTemplateName='{}' for child {:08X} ('{}')",
+                                   bioTpl, childID, entry.name);
+                }
+            }
+
+            auto& childSvc = PlayerChildrenService::GetSingleton();
+            if (RE::FormID critterID = childSvc.GetCritter(childID); critterID != 0) {
+                if (auto* critterActor = RE::TESForm::LookupByID<RE::Actor>(critterID)) {
+                    critterActor->Disable();
+                    critterActor->SetDelete(true);
+                }
+                childSvc.RemoveCritter(childID);
+            }
+            if (childSvc.GetPet(childID) != 0) {
+                childSvc.RemovePet(childID);
+            }
+            childSvc.OnChildRemovedFromHousehold(childID);
+            (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(childID);
+            RemoveChildSandboxAroundParentLinkedRef(childID);
+            PackageOverrideService::GetSingleton().UnregisterActor(childID);
+
+            if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
+                childActor->Disable();
+                childActor->SetDelete(true);
+            }
+
+            targetChildID = nextSyntheticChildID_++;
+            entry.childID = targetChildID;
+
+            childrenByID.erase(childID);
+            childrenByID[targetChildID] = entry;
+
+            if (entry.guardianAID != 0) UpdateSpouseChildrenFaction(entry.guardianAID);
+            if (entry.guardianBID != 0) UpdateSpouseChildrenFaction(entry.guardianBID);
+
+            PrismaUIDataBridge::GetSingleton().OnChildRemoved(childID);
+            PrismaUIDataBridge::GetSingleton().OnChildPromoted(childID, targetChildID);
+            PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+            PrismaUIDataBridge::GetSingleton().SendOverviewData();
+            PrismaUIDataBridge::GetSingleton().SendNPCDetail(targetChildID);
+        } else {
+            childrenByID[childID] = entry;
+            PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+            PrismaUIDataBridge::GetSingleton().SendOverviewData();
+            PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+        }
+
+        const std::string className = std::string(GetTrainingClassName(trainingClassIndex));
+        MARAS_LOG_INFO(
+            "[Training] Sent child {:08X} -> {:08X} ('{}') to '{}' for '{}' training (classIdx={}, startDay={:.2f}, "
+            "tuitionPaid={}g, discount={}% [{}], hasBeastblood={}, savedBio='{}', savedRace={})",
+            childID, targetChildID, entry.name, entry.trainingLocation, className, trainingClassIndex,
+            entry.trainingStartGameDay, paidTuitionGold, appliedDiscountPercent,
+            appliedDiscountReason.empty() ? "None" : appliedDiscountReason, entry.hasBeastblood,
+            entry.savedBioTemplateName, entry.savedRaceIndex);
+
+        RE::SendHUDMessage::ShowHUDMessage(std::format("{} has been sent to {} to train as a {}.",
+                                          entry.name.empty() ? "Child" : entry.name,
+                                          entry.trainingLocation,
+                                          className).c_str());
+
+        SendChildEvent("sent_to_training", targetChildID, entry.guardianAID, entry.guardianBID, 0, entry.trainingLocation);
+        return true;
+    }
+
+    bool NPCRelationshipManager::CompleteChildTraining(RE::FormID childID) {
+        auto it = childrenByID.find(childID);
+        if (it == childrenByID.end()) {
+            MARAS_LOG_WARN("[Training] CompleteChildTraining failed: child {:08X} not found in childrenByID", childID);
+            return false;
+        }
+        if (it->second.stage != ChildStage::Training) {
+            MARAS_LOG_WARN("[Training] CompleteChildTraining failed for child {:08X} ('{}'): current stage={} (expected Stage 3 Training)",
+                           childID, it->second.name, static_cast<int>(it->second.stage));
+            return false;
+        }
+
+        it->second.stage = ChildStage::Adult;
+        EvaluateChildBeastbloodInheritance(it->second);
+        ChildRegistryEntry entry = it->second;
+
+        const std::string className = std::string(GetTrainingClassName(entry.trainingClassIndex));
+        MARAS_LOG_INFO("[Training] Child {:08X} ('{}') completed {} training at {} and graduated to Stage 4 (Adult)",
+                       childID, entry.name, className, entry.trainingLocation);
+
+        RE::SendHUDMessage::ShowHUDMessage(std::format("{} has completed {} training at {} and is ready to return as an adult!",
+                                          entry.name.empty() ? "Your child" : entry.name,
+                                          className.empty() ? "adolescent" : className,
+                                          entry.trainingLocation.empty() ? "their academy" : entry.trainingLocation).c_str());
+
+        SendChildEvent("became_adult", childID, entry.guardianAID, entry.guardianBID, 0, entry.trainingLocation);
+
+        PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+        PrismaUIDataBridge::GetSingleton().SendOverviewData();
+        PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+        return true;
+    }
+
+    void NPCRelationshipManager::CheckChildrenTrainingProgress(float currentGameDay) {
+        if (currentGameDay <= 0.0f) return;
+
+        const float requiredDays = static_cast<float>(std::max(1, Settings::GetSingleton().childTrainingDurationDays));
+        std::vector<RE::FormID> graduatedIDs;
+
+        for (const auto& [cID, entry] : childrenByID) {
+            if (entry.stage != ChildStage::Training) continue;
+            if (entry.trainingStartGameDay <= 0.0f) continue;
+            const float elapsedDays = currentGameDay - entry.trainingStartGameDay;
+            if (elapsedDays >= requiredDays) {
+                MARAS_LOG_INFO("[Training] Child {:08X} ('{}') reached training duration ({:.2f} / {:.1f} days at '{}') — graduating to Adult",
+                               cID, entry.name, elapsedDays, requiredDays, entry.trainingLocation);
+                graduatedIDs.push_back(cID);
+            }
+        }
+
+        for (RE::FormID cID : graduatedIDs) {
+            CompleteChildTraining(cID);
+        }
+    }
+
+    int32_t NPCRelationshipManager::GetChildTrainingClass(RE::FormID childID) const {
+        auto it = childrenByID.find(childID);
+        if (it != childrenByID.end()) {
+            return it->second.trainingClassIndex;
+        }
+        return -1;
+    }
+
+    int32_t NPCRelationshipManager::GetChildSavedRaceIndex(RE::FormID childID) const {
+        auto it = childrenByID.find(childID);
+        if (it != childrenByID.end() && it->second.savedRaceIndex <= 9) {
+            return static_cast<int32_t>(it->second.savedRaceIndex);
+        }
+        return -1;
     }
 
     bool NPCRelationshipManager::SetChildGender(RE::FormID childID, uint8_t gender) {

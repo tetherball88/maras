@@ -1,0 +1,1674 @@
+# ==============================================================================
+# M.A.R.A.S — Child Training & Adult Progression Configuration
+# ==============================================================================
+# This file defines the adolescent training locations/classes and passive Daedric
+# Champion Lineage blessings for grown-up children (Stage 3 -> Stage 4).
+#
+# HOW TO EXTEND OR OVERRIDE (MODDER DROP-INS):
+#   Drop additional .yaml files into:
+#     Data/SKSE/Plugins/MARAS/childTraining/
+#   - If an entry's `id` matches an existing entry below, any fields you specify
+#     will patch/override that entry in-place while preserving its index.
+#   - If an entry's `id` is new, it will be appended as a brand-new training path
+#     and automatically appear in the Prisma UI Dashboard!
+#
+# FORM KEY SYNTAX:
+#   "__formData|<PluginName>|<0xHexFormID>"
+#   Supports both standard 24-bit plugins (.esm/.esp) and 12-bit light plugins (.esl).
+#   If a plugin is not installed in the player's load order, missing spells/items
+#   are safely skipped, and combatStyle/outfit arrays fall back to the next entry.
+#
+# AI MORALITY & CONFIDENCE VALUES:
+#   morality      : -1 = Inherit from Custodial Guardians, 0 = Any Crime,
+#                    1 = Violence Against Enemies, 2 = Property Crime Only, 3 = No Crime
+#   minConfidence : 1 = Cautious, 2 = Average, 3 = Brave, 4 = Foolhardy
+#
+# PARENT AFFILIATION DISCOUNTS (`affiliation:`):
+#   If at least one of the child's parents/guardians belongs to the training group:
+#   - Member (memberFactions / memberQuests / memberWerewolf): 10% tuition discount
+#   - Leader (leaderFactions / leaderFactionRank / leaderQuests / leaderNpcs): 25% tuition discount
+#
+# SKILL WEIGHTS (`skills:` in trainingLocations):
+#   Use Creation Kit-style integer weights from 1 to 5:
+#     5 = Primary signature skill (scales +25 at Player Lv 10 -> +80 at Player Lv 50+)
+#     4 = Secondary core skill    (scales +20 at Player Lv 10 -> +64 at Player Lv 50+)
+#     3 = Tertiary combat skill   (scales +15 at Player Lv 10 -> +48 at Player Lv 50+)
+#     2 = Minor support skill     (scales +10 at Player Lv 10 -> +32 at Player Lv 50+)
+#     1 = Utility/Flavor skill    (scales +5  at Player Lv 10 -> +16 at Player Lv 50+)
+#
+# PERK PROGRESSION (`perks:` in trainingLocations):
+#   List all perks (and ranks) available to the training path. At runtime, M.A.R.A.S
+#   reads each perk's skill/level requirement directly from the BGSPerk record, grants
+#   only the perks whose requirement the child currently meets, and automatically
+#   unlocks/upgrades higher ranks (`nextPerk`) as the child levels up (Lv 10 -> Lv 50).
+# ==============================================================================
+
+trainingLocations:
+  # ----------------------------------------------------------------------------
+  # 0. Arcane Evoker — College of Winterhold
+  # ----------------------------------------------------------------------------
+  - id: mage
+    name: Arcane Evoker
+    location: College of Winterhold
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/College of Winterhold.webp"
+    description: "Apprenticed beneath the windswept spires of the College of Winterhold, initiates spend their days immersed in the ancient tomes of the Arcanaeum and rigorous elemental trials in the Hall of the Elements. Under the tutelage of senior wizards, they master tri-elemental Destruction—hurling Fireballs, Ice Storms, and Chain Lightning—while weaving Ironflesh armor, Steadfast Wards, and protective elemental cloaks to survive the deadliest arcane duels."
+    costMultiplier: 1.95
+    skillType: mage
+    hmsWeights: { health: 0.20, magicka: 0.70, stamina: 0.10 }
+    ai:
+      morality: -1      # Inherit morality from custodial guardians
+      minConfidence: 2  # At least Average confidence
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x01F259" # CollegeofWinterholdFaction
+      leaderFactions:
+        - "__formData|Skyrim.esm|0x103372" # CollegeofWinterholdArchMageFaction
+      leaderFactionRank: 5
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01F258" # MG08 ("The Eye of Magnus" — Arch-Mage)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01C19F" # Savos Aren
+        - "__formData|Skyrim.esm|0x01C1A0" # Mirabelle Ervine
+        - "__formData|Skyrim.esm|0x01C19E" # Tolfdir
+    npcClass: "__formData|Skyrim.esm|0x01E7D0"    # CombatMageDestruction (Arcane Evoker)
+    combatStyle: "__formData|Skyrim.esm|0x03BE1C" # csHumanMagic (Offensive Elemental Spellcaster)
+    outfit: "__formData|Skyrim.esm|0x10DD34"      # CollegeExpertDestructionOutfit (College Robes, Hood & Boots)
+    skills:
+      destruction: 5
+      alteration: 4
+      conjuration: 3
+      restoration: 3
+      enchanting: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCD" # Flames (Novice Fire Concentration)
+      - "__formData|Skyrim.esm|0x02B96B" # Frostbite (Novice Frost Concentration)
+      - "__formData|Skyrim.esm|0x02DD2A" # Sparks (Novice Shock Concentration)
+      - "__formData|Skyrim.esm|0x012FD0" # Firebolt (Apprentice Fire Projectile)
+      - "__formData|Skyrim.esm|0x02B96C" # Ice Spike (Apprentice Frost Projectile)
+      - "__formData|Skyrim.esm|0x02DD29" # Lightning Bolt (Apprentice Shock Projectile)
+      - "__formData|Skyrim.esm|0x01C789" # Fireball (Adept Fire AoE Explosion)
+      - "__formData|Skyrim.esm|0x045F9C" # Ice Storm (Adept Frost AoE Whirlwind)
+      - "__formData|Skyrim.esm|0x045F9D" # Chain Lightning (Adept Shock Jumping Bolt)
+      - "__formData|Skyrim.esm|0x035D7F" # Wall of Flames (Expert Fire Hazard)
+      - "__formData|Skyrim.esm|0x03AE9F" # Flame Cloak (Adept Fire Cloak Aura)
+      - "__formData|Skyrim.esm|0x03AEA3" # Lightning Cloak (Adept Shock Cloak Aura)
+      - "__formData|Skyrim.esm|0x0211F1" # Steadfast Ward (Apprentice Magic Ward)
+      - "__formData|Skyrim.esm|0x05AD5C" # Oakflesh (Novice Alteration Armor)
+      - "__formData|Skyrim.esm|0x051B16" # Ironflesh (Adept Alteration Armor)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CA8" # DestructionNovice00 (Req: Destruction 0)
+      - "__formData|Skyrim.esm|0x0C44BF" # DestructionApprentice25 (Req: Destruction 25)
+      - "__formData|Skyrim.esm|0x0C44C0" # DestructionAdept50 (Req: Destruction 50)
+      - "__formData|Skyrim.esm|0x0C44C1" # DestructionExpert75 (Req: Destruction 75)
+      - "__formData|Skyrim.esm|0x0581E7" # AugmentedFlames (Req: Destruction 30 — +25% Fire Damage)
+      - "__formData|Skyrim.esm|0x10FCF8" # AugmentedFlames60 (Req: Destruction 60 — +50% Fire Damage)
+      - "__formData|Skyrim.esm|0x0581EA" # AugmentedFrost (Req: Destruction 30 — +25% Frost Damage)
+      - "__formData|Skyrim.esm|0x10FCF9" # AugmentedFrost60 (Req: Destruction 60 — +50% Frost Damage)
+      - "__formData|Skyrim.esm|0x058200" # AugmentedShock (Req: Destruction 30 — +25% Shock Damage)
+      - "__formData|Skyrim.esm|0x10FCFA" # AugmentedShock60 (Req: Destruction 60 — +50% Shock Damage)
+      - "__formData|Skyrim.esm|0x0F2CA6" # AlterationNovice00 (Req: Alteration 0)
+      - "__formData|Skyrim.esm|0x0C44B7" # AlterationApprentice25 (Req: Alteration 25)
+      - "__formData|Skyrim.esm|0x0C44B8" # AlterationAdept50 (Req: Alteration 50)
+      - "__formData|Skyrim.esm|0x0D7999" # MageArmor30 (Req: Alteration 30 — 2x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0D799A" # MageArmor50 (Req: Alteration 50 — 2.5x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0D799B" # MageArmor70 (Req: Alteration 70 — 3x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x053128" # MagicResistance30 (Req: Alteration 30 — +10% Magic Resistance)
+      - "__formData|Skyrim.esm|0x053129" # MagicResistance50 (Req: Alteration 50 — +20% Magic Resistance)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+    items: []
+
+  # ----------------------------------------------------------------------------
+  # 1. Shield-Brother Vanguard — Jorrvaskr (The Companions)
+  # ----------------------------------------------------------------------------
+  - id: warrior
+    name: Shield-Brother Vanguard
+    location: Jorrvaskr
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Jorrvaskr.webp"
+    description: "Raised in the proud martial tradition of Ysgramor's Companions, young aspirants train in the courtyard behind Jorrvaskr and feast beneath its overturned longship roof in Whiterun. Tempered by daily sparring with the Circle, shield-wall drills, and hours at Eorlund Gray-Mane's forge, graduates return home clad in heavy Wolf armor, bearing a balanced Skyforge Steel blade, an iron-rimmed shield, and an unshakeable code of frontline honor."
+    costMultiplier: 1.50
+    skillType: warrior
+    hmsWeights: { health: 0.70, magicka: 0.05, stamina: 0.25 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x048362" # CompanionsFaction
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01CEF6" # C06 ("Glory of the Dead" — Harbinger)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01A68E" # Kodlak Whitemane
+    npcClass: "__formData|Skyrim.esm|0x013176"    # CombatWarrior1H (Shield-Brother Vanguard)
+    combatStyle: "__formData|Skyrim.esm|0x103508" # csWECompanion (Aggressive Frontline Melee Vanguard)
+    outfit: "__formData|Skyrim.esm|0x0B3E8D"      # ArmorCompanionsOutfitNoHelmet (Wolf Heavy Armor Set)
+    skills:
+      oneHanded: 5
+      block: 4
+      heavyArmor: 4
+      twoHanded: 3
+      smithing: 1
+    spells: []
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BCCAE" # ShieldWall00 (Req: Block 0 — +20% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079355" # ShieldWall20 (Req: Block 20 — +25% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079356" # ShieldWall40 (Req: Block 40 — +30% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079357" # ShieldWall60 (Req: Block 60 — +35% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x058F68" # DeflectArrows (Req: Block 30 — Arrows Hit Shield for No Damage)
+      - "__formData|Skyrim.esm|0x058F69" # ElementalProtection (Req: Block 50 — 50% Elemental Reduction While Blocking)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079362" # Juggernaut60 (Req: Heavy Armor 60 — +80% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079374" # Juggernaut80 (Req: Heavy Armor 80 — +100% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x058F6C" # TowerOfStrength (Req: Heavy Armor 50 — 50% Less Stagger)
+      - "__formData|Skyrim.esm|0x058F6D" # Conditioning (Req: Heavy Armor 70 — Heavy Armor Weighs Nothing)
+    items:
+      - { form: "__formData|Skyrim.esm|0x09F25C", count: 1 } # SkyforgeSteelSword (Skyforge Steel Sword)
+      - { form: "__formData|Skyrim.esm|0x013955", count: 1 } # ArmorSteelShield (Steel Shield)
+
+  # ----------------------------------------------------------------------------
+  # 2. Shadowfoot Infiltrator — The Cistern (Thieves Guild)
+  # ----------------------------------------------------------------------------
+  - id: thief
+    name: Shadowfoot Infiltrator
+    location: The Cistern
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Cistern - Thieves Guild.webp"
+    description: "Inducted into the subterranean vaults of the Ratway Cistern beneath Riften, recruits learn the unwritten rules of shadows, coin, and leverage from the Thieves Guild's veteran larcenists. Trained to move unseen across rooftops, pick masterwork tumblers, lift purses without a whisper, and loose ambush volleys from the dark, they graduate in supple Guild leather armor armed with a silent dagger and hunting bow."
+    costMultiplier: 1.15
+    skillType: rogue
+    hmsWeights: { health: 0.25, magicka: 0.05, stamina: 0.70 }
+    ai:
+      morality: 0       # Any Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: inThievesGuild
+      label: Thieves Guild
+      faction: "__formData|Skyrim.esm|0x029DA9" # ThievesGuildFaction
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x029DA9" # ThievesGuildFaction
+      leaderFactionRank: 4
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x0D7D69" # TGLeadership ("Under New Management" — Guild Master)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01B07C" # Mercer Frey
+        - "__formData|Skyrim.esm|0x01B07D" # Brynjolf
+    npcClass: "__formData|Skyrim.esm|0x01317E"    # CombatThief (Shadowfoot Infiltrator)
+    combatStyle: "__formData|Skyrim.esm|0x10350A" # csWEThiefMissile (Ranged Bow & Evasive Skirmisher)
+    outfit: "__formData|Skyrim.esm|0x0E49B2"      # ThievesGuildDelvinOutfit (Thieves Guild Leather Armor Set)
+    skills:
+      archery: 5
+      oneHanded: 4
+      lightArmor: 4
+      sneak: 3
+      pickpocket: 1
+      lockpicking: 1
+    spells: []
+    perks:
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x079354" # Overdraw80 (Req: Archery 80 — +100% Bow Damage)
+      - "__formData|Skyrim.esm|0x058F62" # PowerShot (Req: Archery 50 — Arrows Stagger 50% of the Time)
+      - "__formData|Skyrim.esm|0x058F63" # Ranger (Req: Archery 60 — Move Faster with Drawn Bow)
+      - "__formData|Skyrim.esm|0x105F19" # QuickShot (Req: Archery 70 — Draw Bow 30% Faster)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x0BE126" # Stealth00 (Req: Sneak 0 — 20% Harder to Detect)
+      - "__formData|Skyrim.esm|0x0C07C6" # Stealth20 (Req: Sneak 20 — 25% Harder to Detect)
+      - "__formData|Skyrim.esm|0x0C07C7" # Stealth40 (Req: Sneak 40 — 30% Harder to Detect)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+    items:
+      - { form: "__formData|Skyrim.esm|0x01397E", count: 1 }   # Iron Dagger
+      - { form: "__formData|Skyrim.esm|0x013985", count: 1 }   # Hunting Bow
+      - { form: "__formData|Skyrim.esm|0x01397F", count: 100 } # Steel Arrows (x100)
+
+  # ----------------------------------------------------------------------------
+  # 3. Dark Brotherhood Silencer — The Sanctuary (Dark Brotherhood)
+  # ----------------------------------------------------------------------------
+  - id: assassin
+    name: Dark Brotherhood Silencer
+    location: The Sanctuary
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Sanctuary - Dark Brotherhood.webp"
+    description: "Steeped in the dread Five Tenets of Sithis and the Night Mother within a hidden Dark Brotherhood Sanctuary, initiates undergo merciless conditioning in the art of the unseen kill. They learn to brew virulent alchemical toxins, cloak their footsteps in Muffle and Invisibility magic, and strike from the shadows with lethal precision, emerging in blood-black Shrouded armor as cold, unflinching executioners."
+    costMultiplier: 1.45
+    skillType: rogue
+    hmsWeights: { health: 0.25, magicka: 0.15, stamina: 0.60 }
+    ai:
+      morality: 0       # Any Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: inDarkBrotherhood
+      label: Dark Brotherhood
+      faction: "__formData|Skyrim.esm|0x01BDB3" # DarkBrotherhoodFaction
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x01BDB3" # DarkBrotherhoodFaction
+      leaderFactionRank: 3
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x03CEDA" # DB10 ("Hail Sithis!" — Listener)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01BDB4" # Astrid
+    npcClass: "__formData|Skyrim.esm|0x01317F"    # CombatAssassin (Dark Brotherhood Silencer)
+    combatStyle: "__formData|Skyrim.esm|0x1051FA" # csWEAssassinMissile (Aggressive Stealth & Blade Executioner)
+    outfit: "__formData|Skyrim.esm|0x0D3BF9"      # DBArmorNoHood (Shrouded Armor Set)
+    skills:
+      oneHanded: 5
+      archery: 4
+      lightArmor: 4
+      sneak: 3
+      illusion: 2
+      alchemy: 1
+    spells:
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+      - "__formData|Skyrim.esm|0x105F24" # Silence (Req: Sneak 70 — Walking and Running Do Not Affect Detection)
+      - "__formData|Skyrim.esm|0x0C44C3" # IllusionApprentice25 (Req: Illusion 25)
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (Req: Illusion 50 — All Spells Are Silent to Others)
+    items:
+      - { form: "__formData|Skyrim.esm|0x01397E", count: 1 }   # Iron Dagger
+      - { form: "__formData|Skyrim.esm|0x013985", count: 1 }   # Hunting Bow
+      - { form: "__formData|Skyrim.esm|0x01397F", count: 100 } # Steel Arrows (x100)
+
+  # ----------------------------------------------------------------------------
+  # 4. Spellsword Skald — The Bards College
+  # ----------------------------------------------------------------------------
+  - id: bard
+    name: Spellsword Skald
+    location: The Bards College
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Bards College.webp"
+    description: "Educated in the candlelit halls of Solitude's Bards College, young skalds study ancient Nordic verse, courtly rhetoric, and the subtle art of swaying both jarls and battlefields. Combining silver-tongued Speechcraft with dueling steel, they weave Illusion enchantments—inspiring allies with Rally and Courage or sowing chaos with Fury and Pacify—while sustaining companions with Restoration healing and Oakflesh wards."
+    costMultiplier: 1.30
+    skillType: orator
+    hmsWeights: { health: 0.35, magicka: 0.45, stamina: 0.20 }
+    ai:
+      morality: -1      # Inherit morality from custodial guardians
+      minConfidence: 2  # At least Average confidence
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x0C13C7" # SolitudeBardsCollegeFaction
+      memberQuests:
+        - "__formData|Skyrim.esm|0x053511" # MS05 ("Tending the Flames")
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x0132AD" # Viarmo (Headmaster)
+    npcClass: "__formData|Skyrim.esm|0x01325D"    # Bard (Spellsword Skald)
+    combatStyle: "__formData|Skyrim.esm|0x1034FD" # csWESpellsword (Balanced One-Handed + Spell Support)
+    outfit: "__formData|Skyrim.esm|0x09D5E0"      # FineClothesOutfit01 (Fine Noble/Bard Clothes & Boots)
+    skills:
+      illusion: 5
+      restoration: 4
+      oneHanded: 4
+      alteration: 3
+      speech: 2
+      pickpocket: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCC" # Healing (Novice Self-Heal)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Skyrim.esm|0x012FD2" # Heal Other (Adept Ally Heal)
+      - "__formData|Skyrim.esm|0x04DEE8" # Courage (Novice Illusion Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEEB" # Fury (Novice Illusion Frenzy)
+      - "__formData|Skyrim.esm|0x04DEE9" # Calm (Apprentice Illusion Pacify)
+      - "__formData|Skyrim.esm|0x04DEEA" # Fear (Apprentice Illusion Fear)
+      - "__formData|Skyrim.esm|0x04DEEC" # Rally (Adept Illusion AoE Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEED" # Pacify (Expert Illusion AoE Calm)
+      - "__formData|Skyrim.esm|0x05AD5C" # Oakflesh (Novice Alteration Armor)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CA9" # IllusionNovice00 (Req: Illusion 0)
+      - "__formData|Skyrim.esm|0x0C44C3" # IllusionApprentice25 (Req: Illusion 25)
+      - "__formData|Skyrim.esm|0x0C44C4" # IllusionAdept50 (Req: Illusion 50)
+      - "__formData|Skyrim.esm|0x0C44C5" # IllusionExpert75 (Req: Illusion 75)
+      - "__formData|Skyrim.esm|0x0581E1" # Animage (Req: Illusion 20 — Illusion Works on Higher-Level Animals)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Req: Illusion 40 — Illusion Works on Higher-Level People)
+      - "__formData|Skyrim.esm|0x0F2CAA" # RestorationNovice00 (Req: Restoration 0)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0C44C8" # RestorationAdept50 (Req: Restoration 50)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F9" # Respite (Req: Restoration 40 — Healing Spells Restore Stamina)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0D7999" # MageArmor30 (Req: Alteration 30 — 2x Flesh Spell Armor in Clothes)
+      - "__formData|Skyrim.esm|0x0D799A" # MageArmor50 (Req: Alteration 50 — 2.5x Flesh Spell Armor in Clothes)
+    items:
+      - { form: "__formData|Skyrim.esm|0x013986", count: 1 } # Steel Dagger
+
+  # ----------------------------------------------------------------------------
+  # 5. Stormcloak Shock-Trooper — Palace of the Kings
+  # ----------------------------------------------------------------------------
+  - id: stormcloak
+    name: Stormcloak Shock-Trooper
+    location: Palace of the Kings
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Palace of the Kings - Stormcloak.webp"
+    description: "Hardened on the frozen flagstones of Windhelm's Palace of the Kings, recruits endure brutal Eastmarch conditioning alongside Ulfric Stormcloak's veteran Huscarls. Emphasizing raw Nordic ferocity and mobility over heavy plate, they master the crushing momentum of two-handed battleaxes, bone-jarring shield bashes, and winter survival, returning home in Stormcloak furs ready to cleave through any frontline."
+    costMultiplier: 1.00
+    skillType: warrior
+    hmsWeights: { health: 0.70, magicka: 0.05, stamina: 0.25 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x02BF9B" # CWSonsFaction
+        - "__formData|Skyrim.esm|0x01C9FD" # CWSonsFactionNPC
+      leaderFactionRank: 4
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01414D" # Ulfric Stormcloak
+        - "__formData|Skyrim.esm|0x014128" # Galmar Stone-Fist
+    npcClass: "__formData|Skyrim.esm|0x013280"    # SoldierSonsSkyrimNotGuard (Stormcloak Shock-Trooper)
+    combatStyle: "__formData|Skyrim.esm|0x105546" # csWEBerserker (Aggressive Two-Handed Shock Trooper)
+    outfit: "__formData|Skyrim.esm|0x0ABF56"      # CWSoldierSonsSoldierOutfitNoHelmet (Stormcloak Cuirass, Fur Gauntlets & Boots)
+    skills:
+      twoHanded: 5
+      lightArmor: 4
+      block: 4
+      archery: 2
+      smithing: 1
+    spells: []
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE8" # Barbarian00 (Req: Two-Handed 0 — +20% 2H Damage)
+      - "__formData|Skyrim.esm|0x079346" # Barbarian20 (Req: Two-Handed 20 — +40% 2H Damage)
+      - "__formData|Skyrim.esm|0x079347" # Barbarian40 (Req: Two-Handed 40 — +60% 2H Damage)
+      - "__formData|Skyrim.esm|0x079348" # Barbarian60 (Req: Two-Handed 60 — +80% 2H Damage)
+      - "__formData|Skyrim.esm|0x079349" # Barbarian80 (Req: Two-Handed 80 — +100% 2H Damage)
+      - "__formData|Skyrim.esm|0x052D52" # DevastatingBlow (Req: Two-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x0BCCAE" # ShieldWall00 (Req: Block 0 — +20% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079355" # ShieldWall20 (Req: Block 20 — +25% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079356" # ShieldWall40 (Req: Block 40 — +30% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079357" # ShieldWall60 (Req: Block 60 — +35% Block Effectiveness)
+    items:
+      - { form: "__formData|Skyrim.esm|0x013984", count: 1 } # SteelBattleaxe (Steel Battleaxe)
+
+  # ----------------------------------------------------------------------------
+  # 6. Imperial Praetorian — Castle Dour
+  # ----------------------------------------------------------------------------
+  - id: legionnaire
+    name: Imperial Praetorian
+    location: Castle Dour
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Castle Dour - Legionnaire.webp"
+    description: "Drilled beneath the banners of the Red Diamond inside Solitude's Castle Dour, cadets are forged in the time-tested martial doctrine of the Imperial Legion. Through relentless formation marches, discipline under fire, and tactical versatility, they learn to soften enemy ranks with disciplined Imperial bow volleys before locking heavy shields and advancing with gladius-style Imperial steel."
+    costMultiplier: 1.10
+    skillType: warrior
+    hmsWeights: { health: 0.65, magicka: 0.05, stamina: 0.30 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x02BF9A" # CWImperialFaction
+        - "__formData|Skyrim.esm|0x01C9FC" # CWImperialFactionNPC
+      leaderFactionRank: 4
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01327E" # General Tullius
+        - "__formData|Skyrim.esm|0x0132A1" # Legate Rikke
+    npcClass: "__formData|Skyrim.esm|0x01327F"    # SoldierImperialNotGuard (Imperial Praetorian)
+    combatStyle: "__formData|Skyrim.esm|0x10D970" # csCWMissionScouts (Tactical Sword & Shield + Bow Volley)
+    outfit: "__formData|Skyrim.esm|0x0AD23D"      # ArmorImperialHeavyOutfitNoHelmet (Imperial Legion Heavy Armor Set)
+    skills:
+      oneHanded: 5
+      archery: 4
+      block: 4
+      heavyArmor: 4
+      smithing: 1
+    spells: []
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x0BCCAE" # ShieldWall00 (Req: Block 0 — +20% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079355" # ShieldWall20 (Req: Block 20 — +25% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079356" # ShieldWall40 (Req: Block 40 — +30% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079357" # ShieldWall60 (Req: Block 60 — +35% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x058F68" # DeflectArrows (Req: Block 30 — Arrows Hit Shield for No Damage)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079362" # Juggernaut60 (Req: Heavy Armor 60 — +80% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x058F6D" # Conditioning (Req: Heavy Armor 70 — Heavy Armor Weighs Nothing)
+    items:
+      - { form: "__formData|Skyrim.esm|0x0135B8", count: 1 }   # Imperialsword (Imperial Sword)
+      - { form: "__formData|Skyrim.esm|0x0135BA", count: 1 }   # ArmorImperialShield (Heavy Imperial Shield)
+      - { form: "__formData|Skyrim.esm|0x013841", count: 1 }   # ImperialBow (Imperial Bow)
+      - { form: "__formData|Skyrim.esm|0x01397F", count: 100 } # SteelArrow (Steel Arrows x100)
+
+  # ----------------------------------------------------------------------------
+  # 7. Akaviri Dragonguard — Sky Haven Temple (The Blades)
+  # ----------------------------------------------------------------------------
+  - id: dragon_slayer
+    name: Akaviri Dragonguard
+    location: Sky Haven Temple
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Sky Haven Temple.webp"
+    description: "Trained high above the Karth River within the ancient halls of Sky Haven Temple, initiates study the lost dragon-hunting treatises carved by the Akaviri Dragonguard and preserved by the Blades. Outfitted in ceremonial Akaviri heavy plate with a razor-sharp Blades katana and shield, they master parrying monstrous strikes and channeling Close Wounds Restoration magic to endure the fury of dragons."
+    costMultiplier: 2.20
+    skillType: warrior
+    hmsWeights: { health: 0.65, magicka: 0.15, stamina: 0.20 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: inBlades
+      label: The Blades
+      faction: "__formData|Skyrim.esm|0x072834" # BladesFaction
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x072834" # BladesFaction
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x036192" # MQ203 ("Alduin's Wall" — Dragonborn)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x013478" # Delphine
+        - "__formData|Skyrim.esm|0x013358" # Esbern
+    npcClass: "__formData|Skyrim.esm|0x021A74"    # Blade (Akaviri Dragonguard)
+    combatStyle: "__formData|Skyrim.esm|0x10D4BE" # csDelphine (Akaviri Dragonguard Master Swordsman)
+    outfit: "__formData|Skyrim.esm|0x108DBE"      # ArmorBladesOutfitNoHelmet (Full Akaviri Blades Heavy Plate)
+    skills:
+      oneHanded: 5
+      block: 4
+      heavyArmor: 4
+      restoration: 3
+      smithing: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCC" # Healing (Novice Self-Heal)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Skyrim.esm|0x0B62EF" # Close Wounds (Adept High-Magnitude Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BCCAE" # ShieldWall00 (Req: Block 0 — +20% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079355" # ShieldWall20 (Req: Block 20 — +25% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079356" # ShieldWall40 (Req: Block 40 — +30% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x079357" # ShieldWall60 (Req: Block 60 — +35% Block Effectiveness)
+      - "__formData|Skyrim.esm|0x058F68" # DeflectArrows (Req: Block 30 — Arrows Hit Shield for No Damage)
+      - "__formData|Skyrim.esm|0x0D8C33" # QuickReflexes (Req: Block 30 — Slow Time When Blocking Power Attack)
+      - "__formData|Skyrim.esm|0x058F69" # ElementalProtection (Req: Block 50 — 50% Elemental Reduction While Blocking)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079362" # Juggernaut60 (Req: Heavy Armor 60 — +80% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079374" # Juggernaut80 (Req: Heavy Armor 80 — +100% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x058F6D" # Conditioning (Req: Heavy Armor 70 — Heavy Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x0F2CAA" # RestorationNovice00 (Req: Restoration 0)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0C44C8" # RestorationAdept50 (Req: Restoration 50)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+    items:
+      - { form: "__formData|Skyrim.esm|0x03AEB9", count: 1 } # Blades Sword (Akaviri Katana)
+      - { form: "__formData|Skyrim.esm|0x04F912", count: 1 } # Blades Shield (Akaviri Shield)
+
+  # ----------------------------------------------------------------------------
+  # 8. Dawnguard Inquisitor — Fort Dawnguard
+  # ----------------------------------------------------------------------------
+  - id: dawnguard
+    name: Dawnguard Inquisitor
+    location: Fort Dawnguard
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Fort Dawnguard.webp"
+    description: "Sequestered within the fortified stone walls of Fort Dawnguard in Dayspring Canyon, recruits are drilled by veteran vampire hunters to stalk the creatures of the night. They master the mechanical punch of the Dawnguard crossbow, close-quarters war axe combat, and sacred solar Restoration—searing the undead with Sun Fire, Vampire's Bane, and the blazing mantle of Stendarr's Aura."
+    costMultiplier: 1.80
+    skillType: ranger
+    hmsWeights: { health: 0.50, magicka: 0.25, stamina: 0.25 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: inDawnguard
+      label: The Dawnguard
+      faction: "__formData|Dawnguard.esm|0x014217" # DLC1DawnguardFaction
+    affiliation:
+      memberFactions:
+        - "__formData|Dawnguard.esm|0x014217" # DLC1DawnguardFaction
+      leaderQuests:
+        - "__formData|Dawnguard.esm|0x007C25" # DLC1VQ08 ("Kindred Judgment")
+      leaderNpcs:
+        - "__formData|Dawnguard.esm|0x00336A" # Isran
+    npcClass: "__formData|Skyrim.esm|0x013181"    # CombatRanger (Dawnguard Inquisitor)
+    combatStyle:
+      - "__formData|Dawnguard.esm|0x010D8C" # DLC1csCelann (Dawnguard Crossbow + Melee Hunter)
+      - "__formData|Skyrim.esm|0x10D970"    # csCWMissionScouts (Fallback if Dawnguard.esm absent)
+    outfit:
+      - "__formData|Dawnguard.esm|0x0146B7" # DLC1OutfitDawnguard04 (Dawnguard Armor Set)
+      - "__formData|Skyrim.esm|0x0AD23D"    # ArmorImperialHeavyOutfitNoHelmet (Fallback if Dawnguard.esm absent)
+    skills:
+      archery: 5
+      oneHanded: 4
+      lightArmor: 4
+      restoration: 3
+      smithing: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCC"    # Healing (Novice Self-Heal)
+      - "__formData|Skyrim.esm|0x02F3B8"    # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Dawnguard.esm|0x003F52" # Sun Fire (Apprentice Solar Fire vs Undead)
+      - "__formData|Dawnguard.esm|0x0038B6" # Vampire's Bane (Adept Solar Explosion vs Undead)
+      - "__formData|Dawnguard.esm|0x0038B5" # Stendarr's Aura (Adept Solar Cloak Aura)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow/Crossbow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow/Crossbow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow/Crossbow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow/Crossbow Damage)
+      - "__formData|Skyrim.esm|0x079354" # Overdraw80 (Req: Archery 80 — +100% Bow/Crossbow Damage)
+      - "__formData|Skyrim.esm|0x058F62" # PowerShot (Req: Archery 50 — Bolts/Arrows Stagger 50% of the Time)
+      - "__formData|Skyrim.esm|0x058F63" # Ranger (Req: Archery 60 — Move Faster with Drawn Crossbow/Bow)
+      - "__formData|Skyrim.esm|0x105F19" # QuickShot (Req: Archery 70 — Reload/Draw 30% Faster)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x0F2CAA" # RestorationNovice00 (Req: Restoration 0)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0C44C8" # RestorationAdept50 (Req: Restoration 50)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F9" # Respite (Req: Restoration 40 — Healing Spells Restore Stamina)
+      - "__formData|Skyrim.esm|0x0581E4" # Necromage (Req: Restoration 70 — Spells More Effective vs Undead)
+    items:
+      - { form: "__formData|Dawnguard.esm|0x00D098", count: 1 } # Dawnguard War Axe
+      - { form: "__formData|Dawnguard.esm|0x000801", count: 1 } # Dawnguard Crossbow
+
+  # ----------------------------------------------------------------------------
+  # 9. Whispers Necromancer — College of Whispers
+  # ----------------------------------------------------------------------------
+  - id: necromancer
+    name: Whispers Necromancer
+    location: College of Whispers
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/College of Whispers.webp"
+    description: "Sent south to the politically sanctioned halls of Cyrodiil's College of Whispers, acolytes delve into the forbidden intersections of Conjuration, soul-binding, and necromantic servitude. Unburdened by common taboos, they learn to trap souls, command risen Revenants and Dread Zombies with a necromantic staff, and freeze the living in their tracks with biting Ice Storms and Frost Cloaks."
+    costMultiplier: 2.10
+    skillType: mage
+    hmsWeights: { health: 0.20, magicka: 0.70, stamina: 0.10 }
+    ai:
+      morality: 0       # Any Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x034B74" # NecromancerFaction
+        - "__formData|Skyrim.esm|0x01F259" # CollegeofWinterholdFaction
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01F258" # MG08 ("The Eye of Magnus" — Arch-Mage)
+    npcClass: "__formData|Skyrim.esm|0x0C969F"    # CombatMageNecro (Whispers Necromancer)
+    combatStyle: "__formData|Skyrim.esm|0x044CD0" # csWarlock (Corpse Reanimation + Frost Caster)
+    outfit: "__formData|Skyrim.esm|0x1093AF"      # WarlockOutfitSimple (Necromancer Robes, Hood & Boots)
+    skills:
+      conjuration: 5
+      destruction: 4
+      alteration: 4
+      restoration: 3
+      illusion: 2
+      enchanting: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCD" # Flames (Novice Fire Concentration)
+      - "__formData|Skyrim.esm|0x02B96B" # Frostbite (Novice Frost Concentration)
+      - "__formData|Skyrim.esm|0x02B96C" # Ice Spike (Apprentice Frost Projectile)
+      - "__formData|Skyrim.esm|0x045F9C" # Ice Storm (Adept Frost AoE Whirlwind)
+      - "__formData|Skyrim.esm|0x03AEA2" # Frost Cloak (Adept Frost Cloak Aura)
+      - "__formData|Skyrim.esm|0x07E8E1" # Raise Zombie (Novice Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x065BD7" # Reanimate Corpse (Apprentice Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x096D94" # Revenant (Adept Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x096D95" # Dread Zombie (Expert Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x04DBA4" # Soul Trap (Apprentice Soul Binding)
+      - "__formData|Skyrim.esm|0x013018" # Lesser Ward (Novice Magic Ward)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CA7" # ConjurationNovice00 (Req: Conjuration 0)
+      - "__formData|Skyrim.esm|0x0C44BB" # ConjurationApprentice25 (Req: Conjuration 25)
+      - "__formData|Skyrim.esm|0x0C44BC" # ConjurationAdept50 (Req: Conjuration 50)
+      - "__formData|Skyrim.esm|0x0C44BD" # ConjurationExpert75 (Req: Conjuration 75)
+      - "__formData|Skyrim.esm|0x0581DD" # Necromancy (Req: Conjuration 40 — Greater Duration for Reanimated Undead)
+      - "__formData|Skyrim.esm|0x0581DE" # DarkSouls (Req: Conjuration 70 — Reanimated Undead Have +100 Health)
+      - "__formData|Skyrim.esm|0x0D5F1C" # TwinSouls (Req: Conjuration 100 — Two Atronachs or Reanimated Zombies)
+      - "__formData|Skyrim.esm|0x0F2CA8" # DestructionNovice00 (Req: Destruction 0)
+      - "__formData|Skyrim.esm|0x0C44BF" # DestructionApprentice25 (Req: Destruction 25)
+      - "__formData|Skyrim.esm|0x0C44C0" # DestructionAdept50 (Req: Destruction 50)
+      - "__formData|Skyrim.esm|0x0581EA" # AugmentedFrost (Req: Destruction 30 — +25% Frost Damage)
+      - "__formData|Skyrim.esm|0x10FCF9" # AugmentedFrost60 (Req: Destruction 60 — +50% Frost Damage)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581E4" # Necromage (Req: Restoration 70 — Spells More Effective vs Undead)
+    items:
+      - { form: "__formData|Skyrim.esm|0x029B7C", count: 1 } # StaffDreadZombie (Staff of Dread Zombies)
+
+  # ----------------------------------------------------------------------------
+  # 10. Paladin of Stendarr — Stendarr's Beacon
+  # ----------------------------------------------------------------------------
+  - id: vigilant
+    name: Paladin of Stendarr
+    location: "Stendarr's Beacon"
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Stendarr's Beacon.webp"
+    description: "Sworn to the unyielding tenets of the God of Mercy and Righteous Rule at Stendarr's Beacon in the mountains of the Pale, novitiates are tempered into zealous witchhunters. Clad in heavy gauntlets and consecrated robes, they wade into battle with a steel mace in one hand and a Steadfast Ward in the other, fortifying their flesh with Alteration magic while banishing Daedra, witches, and the undead."
+    costMultiplier: 1.35
+    skillType: mage
+    hmsWeights: { health: 0.50, magicka: 0.40, stamina: 0.10 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x0B3292" # VigilantOfStendarrFaction
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x0BFB55" # Keeper Carcette
+    npcClass: "__formData|Skyrim.esm|0x10BFEF"    # Vigilant1hMeleeClass (Paladin of Stendarr)
+    combatStyle: "__formData|Skyrim.esm|0x107812" # csSpellsword (Mace + Ward/Heal Witchhunter Paladin)
+    outfit: "__formData|Skyrim.esm|0x10BFEE"      # VigilantCarcetteOutfit (Vigilant Robes, Heavy Gauntlets & Boots)
+    skills:
+      restoration: 5
+      oneHanded: 4
+      block: 4
+      heavyArmor: 3
+      alteration: 3
+    spells:
+      - "__formData|Skyrim.esm|0x012FCC" # Healing (Novice Self-Heal)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Skyrim.esm|0x012FD2" # Heal Other (Adept Ally Heal)
+      - "__formData|Skyrim.esm|0x0211F1" # Steadfast Ward (Apprentice Magic Ward)
+      - "__formData|Skyrim.esm|0x05AD5C" # Oakflesh (Novice Alteration Armor)
+      - "__formData|Skyrim.esm|0x05AD5D" # Stoneflesh (Apprentice Alteration Armor)
+      - "__formData|Skyrim.esm|0x04B146" # Turn Lesser Undead (Apprentice Turn Undead)
+      - "__formData|Skyrim.esm|0x05DD5D" # Turn Undead (Adept Turn Undead)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CAA" # RestorationNovice00 (Req: Restoration 0)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0C44C8" # RestorationAdept50 (Req: Restoration 50)
+      - "__formData|Skyrim.esm|0x0C44C9" # RestorationExpert75 (Req: Restoration 75)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F9" # Respite (Req: Restoration 40 — Healing Spells Restore Stamina)
+      - "__formData|Skyrim.esm|0x068BCC" # WardAbsorb (Req: Restoration 60 — Wards Recharge Magicka)
+      - "__formData|Skyrim.esm|0x0581E4" # Necromage (Req: Restoration 70 — Spells More Effective vs Undead)
+      - "__formData|Skyrim.esm|0x0F2CA6" # AlterationNovice00 (Req: Alteration 0)
+      - "__formData|Skyrim.esm|0x0C44B7" # AlterationApprentice25 (Req: Alteration 25)
+      - "__formData|Skyrim.esm|0x053128" # MagicResistance30 (Req: Alteration 30 — +10% Magic Resistance)
+      - "__formData|Skyrim.esm|0x053129" # MagicResistance50 (Req: Alteration 50 — +20% Magic Resistance)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+    items:
+      - { form: "__formData|Skyrim.esm|0x013988", count: 1 } # Steel Mace
+
+  # ----------------------------------------------------------------------------
+  # 11. Cleric of Kynareth — Temple of Kynareth
+  # ----------------------------------------------------------------------------
+  - id: healer
+    name: Cleric of Kynareth
+    location: Temple of Kynareth
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Temple of Kynareth.webp"
+    description: "Apprenticed beneath the boughs of the sacred Gildergreen in Whiterun's Temple of Kynareth, acolytes dedicate themselves to the preservation of life, herbalism, and restorative grace. Shunning bloodshed for sanctuary, they master Grand Healing, Greater Wards, Ironflesh protection, and holy Circles of Protection, wielding a Staff of Grand Healing and rallying cries to keep their companions standing through the direst peril."
+    costMultiplier: 1.85
+    skillType: mage
+    hmsWeights: { health: 0.30, magicka: 0.60, stamina: 0.10 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 2  # At least Average confidence
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x0ECC44" # WhiterunTempleofKynarethFaction
+      memberQuests:
+        - "__formData|Skyrim.esm|0x01C48E" # T03 ("The Blessings of Nature")
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x013BA5" # Danica Pure-Spring (Head Priestess)
+    npcClass: "__formData|Skyrim.esm|0x013276"    # Priest (Cleric of Kynareth)
+    combatStyle: "__formData|Skyrim.esm|0x10611C" # csWEMageShieldStaff (Dedicated Support Cleric & Defensive Caster)
+    outfit: "__formData|Skyrim.esm|0x0D3E0A"      # CollegeAdeptRestorationOutfitNoHood (Restoration Robes & Boots)
+    skills:
+      restoration: 5
+      alteration: 4
+      illusion: 3
+      speech: 1
+      alchemy: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCC" # Healing (Novice Self-Heal)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Skyrim.esm|0x0B62EF" # Close Wounds (Adept Self-Heal)
+      - "__formData|Skyrim.esm|0x0B62EE" # Grand Healing (Expert AoE Party Heal)
+      - "__formData|Skyrim.esm|0x012FD2" # Heal Other (Adept Ally Heal)
+      - "__formData|Skyrim.esm|0x04D3F2" # Healing Hands (Novice Ally Heal Concentration)
+      - "__formData|Skyrim.esm|0x0211F1" # Steadfast Ward (Apprentice Magic Ward)
+      - "__formData|Skyrim.esm|0x0211F0" # Greater Ward (Adept High-Strength Magic Ward)
+      - "__formData|Skyrim.esm|0x05DD5D" # Turn Undead (Adept Turn Undead)
+      - "__formData|Skyrim.esm|0x05DD5E" # Turn Greater Undead (Expert Turn Undead)
+      - "__formData|Skyrim.esm|0x05DD60" # Repel Undead (Expert AoE Turn Undead)
+      - "__formData|Skyrim.esm|0x05312D" # Circle of Protection (Expert Sanctuary Circle)
+      - "__formData|Skyrim.esm|0x05AD5C" # Oakflesh (Novice Alteration Armor)
+      - "__formData|Skyrim.esm|0x05AD5D" # Stoneflesh (Apprentice Alteration Armor)
+      - "__formData|Skyrim.esm|0x051B16" # Ironflesh (Adept Alteration Armor)
+      - "__formData|Skyrim.esm|0x04DEE8" # Courage (Novice Illusion Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEEC" # Rally (Adept Illusion AoE Ally Buff)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CAA" # RestorationNovice00 (Req: Restoration 0)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0C44C8" # RestorationAdept50 (Req: Restoration 50)
+      - "__formData|Skyrim.esm|0x0C44C9" # RestorationExpert75 (Req: Restoration 75)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F9" # Respite (Req: Restoration 40 — Healing Spells Restore Stamina)
+      - "__formData|Skyrim.esm|0x068BCC" # WardAbsorb (Req: Restoration 60 — Wards Recharge Magicka)
+      - "__formData|Skyrim.esm|0x0A3F64" # AvoidDeath (Req: Restoration 90 — Auto-Heals 250 HP Below 10% HP)
+      - "__formData|Skyrim.esm|0x0F2CA6" # AlterationNovice00 (Req: Alteration 0)
+      - "__formData|Skyrim.esm|0x0C44B7" # AlterationApprentice25 (Req: Alteration 25)
+      - "__formData|Skyrim.esm|0x0C44B8" # AlterationAdept50 (Req: Alteration 50)
+      - "__formData|Skyrim.esm|0x0D7999" # MageArmor30 (Req: Alteration 30 — 2x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0D799A" # MageArmor50 (Req: Alteration 50 — 2.5x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0D799B" # MageArmor70 (Req: Alteration 70 — 3x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0581FC" # Stability (Req: Alteration 70 — Alteration Spells Have Greater Duration)
+    items:
+      - { form: "__formData|Skyrim.esm|0x029B99", count: 1 } # StaffHealOther (Staff of Tandem / Ally Heal Support Staff)
+
+  # ----------------------------------------------------------------------------
+  # 12. Telvanni Spellwright — House Telvanni
+  # ----------------------------------------------------------------------------
+  - id: conjurer
+    name: Telvanni Spellwright
+    location: House Telvanni
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/House Telvanni.webp"
+    description: "Trained in the mushroom-tower citadels of Great House Telvanni in Morrowind, apprentices are steeped in ruthlessly pragmatic Dunmeri wizardry where arcane mastery is the only law. They learn to tear open the barriers of Oblivion—binding Flame, Frost, and Storm Atronachs to their will—while manifesting mystic Bound Bows and Swords and hurling crackling bolts of Shock magic."
+    costMultiplier: 2.25
+    skillType: mage
+    hmsWeights: { health: 0.25, magicka: 0.60, stamina: 0.15 }
+    ai:
+      morality: -1      # Inherit morality from custodial guardians
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Dragonborn.esm|0x017775" # DLC2TelMithrynFaction
+      memberQuests:
+        - "__formData|Dragonborn.esm|0x0195A1" # DLC2TT2 ("Old Friends" — House Telvanni induction)
+      leaderNpcs:
+        - "__formData|Dragonborn.esm|0x01773A" # Master Neloth
+    npcClass: "__formData|Skyrim.esm|0x01CE14"    # CombatMageConjurer (Telvanni Spellwright)
+    combatStyle: "__formData|Skyrim.esm|0x10554E" # csWERangedConjurer (Summoner + Bound Weapon / Shock Caster)
+    outfit: "__formData|Skyrim.esm|0x0D3E04"      # CollegeAdeptConjurationOutfitNoHood (Conjurer Robes & Boots)
+    skills:
+      conjuration: 5
+      archery: 4
+      alteration: 4
+      destruction: 3
+      enchanting: 1
+    spells:
+      - "__formData|Skyrim.esm|0x0640B6" # Conjure Familiar (Novice Spectral Wolf)
+      - "__formData|Skyrim.esm|0x0204C3" # Conjure Flame Atronach (Apprentice Daedra Summon)
+      - "__formData|Skyrim.esm|0x0204C4" # Conjure Frost Atronach (Adept Daedra Summon)
+      - "__formData|Skyrim.esm|0x0204C5" # Conjure Storm Atronach (Expert Daedra Summon)
+      - "__formData|Skyrim.esm|0x0211EB" # Bound Sword (Novice Mystic One-Handed Sword)
+      - "__formData|Skyrim.esm|0x0211ED" # Bound Bow (Adept Mystic Bow & Arrows)
+      - "__formData|Skyrim.esm|0x04DBA4" # Soul Trap (Apprentice Soul Binding)
+      - "__formData|Skyrim.esm|0x02DD29" # Lightning Bolt (Apprentice Shock Projectile)
+      - "__formData|Skyrim.esm|0x05AD5C" # Oakflesh (Novice Alteration Armor)
+      - "__formData|Skyrim.esm|0x051B16" # Ironflesh (Adept Alteration Armor)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CA7" # ConjurationNovice00 (Req: Conjuration 0)
+      - "__formData|Skyrim.esm|0x0C44BB" # ConjurationApprentice25 (Req: Conjuration 25)
+      - "__formData|Skyrim.esm|0x0C44BC" # ConjurationAdept50 (Req: Conjuration 50)
+      - "__formData|Skyrim.esm|0x0C44BD" # ConjurationExpert75 (Req: Conjuration 75)
+      - "__formData|Skyrim.esm|0x0640B3" # MysticBinding (Req: Conjuration 20 — Bound Weapons Deal More Damage)
+      - "__formData|Skyrim.esm|0x0CB419" # Atromancy (Req: Conjuration 40 — Double Duration for Atronachs)
+      - "__formData|Skyrim.esm|0x0CB41A" # ElementalPotency (Req: Conjuration 80 — Atronachs Are 50% More Powerful)
+      - "__formData|Skyrim.esm|0x0D5F1C" # TwinSouls (Req: Conjuration 100 — Two Atronachs or Reanimated Zombies)
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bound Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bound Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bound Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bound Bow Damage)
+      - "__formData|Skyrim.esm|0x0F2CA6" # AlterationNovice00 (Req: Alteration 0)
+      - "__formData|Skyrim.esm|0x0C44B7" # AlterationApprentice25 (Req: Alteration 25)
+      - "__formData|Skyrim.esm|0x0C44B8" # AlterationAdept50 (Req: Alteration 50)
+      - "__formData|Skyrim.esm|0x0D7999" # MageArmor30 (Req: Alteration 30 — 2x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0D799A" # MageArmor50 (Req: Alteration 50 — 2.5x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0C44BF" # DestructionApprentice25 (Req: Destruction 25)
+      - "__formData|Skyrim.esm|0x058200" # AugmentedShock (Req: Destruction 30 — +25% Shock Damage)
+    items: []
+
+  # ----------------------------------------------------------------------------
+  # 13. Julianos Mindweaver — School of Julianos
+  # ----------------------------------------------------------------------------
+  - id: illusionist
+    name: Julianos Mindweaver
+    location: School of Julianos
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/School of Julianos.webp"
+    description: "Tutored in logic, perception, and cognitive arcana by the monastic scholars of the School of Julianos in Cyrodiil, initiates learn that the deadliest battlefield is the mortal mind. Equipped with Master Robes of Illusion, a Staff of Frenzy, and an Elven dagger, they bend enemies to madness, terror, or docile calm with Rout, Frenzy, and Pacify before vanishing into total Invisibility."
+    costMultiplier: 2.40
+    skillType: mage
+    hmsWeights: { health: 0.25, magicka: 0.55, stamina: 0.20 }
+    ai:
+      morality: -1      # Inherit morality from custodial guardians
+      minConfidence: 2  # At least Average confidence
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x01F259" # CollegeofWinterholdFaction
+        - "__formData|Skyrim.esm|0x050921" # JobSpellFaction
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01F258" # MG08 ("The Eye of Magnus" — Arch-Mage)
+    npcClass: "__formData|Skyrim.esm|0x01317C"    # CombatNightblade (Julianos Mindweaver)
+    combatStyle: "__formData|Skyrim.esm|0x1034FD" # csWESpellsword (Tactical Mindweaver & Blade Duelist)
+    outfit: "__formData|Skyrim.esm|0x10DD37"      # CollegeAdeptIllusionOutfitNoHood (Robes of Illusion & Boots)
+    skills:
+      illusion: 5
+      alteration: 4
+      oneHanded: 4
+      sneak: 3
+      restoration: 2
+      speech: 1
+    spells:
+      - "__formData|Skyrim.esm|0x021143" # Clairvoyance / Candlelight (Novice Guidance)
+      - "__formData|Skyrim.esm|0x04DEE8" # Courage (Novice Illusion Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEE9" # Fury (Novice Illusion Frenzy)
+      - "__formData|Skyrim.esm|0x04DEEA" # Calm (Apprentice Illusion Pacify)
+      - "__formData|Skyrim.esm|0x04DEEC" # Rally (Adept Illusion AoE Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEED" # Pacify (Expert Illusion AoE Calm)
+      - "__formData|Skyrim.esm|0x04DEEE" # Frenzy (Adept Illusion AoE Frenzy)
+      - "__formData|Skyrim.esm|0x04DEEF" # Rout (Expert Illusion AoE Fear)
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Skyrim.esm|0x05AD5D" # Stoneflesh (Apprentice Alteration Armor)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CA9" # IllusionNovice00 (Req: Illusion 0)
+      - "__formData|Skyrim.esm|0x0C44C3" # IllusionApprentice25 (Req: Illusion 25)
+      - "__formData|Skyrim.esm|0x0C44C4" # IllusionAdept50 (Req: Illusion 50)
+      - "__formData|Skyrim.esm|0x0C44C5" # IllusionExpert75 (Req: Illusion 75)
+      - "__formData|Skyrim.esm|0x0581E1" # Animage (Req: Illusion 20 — Illusion Works on Higher-Level Animals)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Req: Illusion 40 — Illusion Works on Higher-Level People)
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (Req: Illusion 50 — All Spells Are Silent to Others)
+      - "__formData|Skyrim.esm|0x059B76" # MasterOfTheMind (Req: Illusion 90 — Works on Undead, Daedra & Automatons)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0D7999" # MageArmor30 (Req: Alteration 30 — 2x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0D799A" # MageArmor50 (Req: Alteration 50 — 2.5x Flesh Spell Armor in Robes)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+    items:
+      - { form: "__formData|Skyrim.esm|0x01399E", count: 1 } # Elven Dagger
+      - { form: "__formData|Skyrim.esm|0x029B8F", count: 1 } # Staff of Frenzy
+
+  # ----------------------------------------------------------------------------
+  # 14. Synod Warmage — The Synod Conclave
+  # ----------------------------------------------------------------------------
+  - id: battlemage
+    name: Synod Warmage
+    location: The Synod Conclave
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Synod Conclave.webp"
+    description: "Commissioned into the Imperial Synod Conclave in the heart of Cyrodiil, cadets undergo the rigorous martial-arcane synthesis once favored by the old Imperial Battlemages. Encased in heavy warmage plate and Ironflesh wards, they charge into the fray with an enchanted Elven Sword of Scorching in one hand and devastating barrages of Fireball, Chain Lightning, and elemental cloaks in the other."
+    costMultiplier: 2.50
+    skillType: mage
+    hmsWeights: { health: 0.45, magicka: 0.45, stamina: 0.10 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x02BF9A" # CWImperialFaction
+        - "__formData|Skyrim.esm|0x01C9FC" # CWImperialFactionNPC
+        - "__formData|Skyrim.esm|0x01F259" # CollegeofWinterholdFaction
+      leaderFactionRank: 4
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01F258" # MG08 ("The Eye of Magnus" — Arch-Mage)
+    npcClass: "__formData|Skyrim.esm|0x013177"    # CombatSpellsword (Synod Warmage)
+    combatStyle: "__formData|Skyrim.esm|0x04C2AA" # csPenitusOculatusBattlemage (Aggressive Heavy-Armor Spellsword)
+    outfit: "__formData|Skyrim.esm|0x1034EF"      # WEBattlemageOutfit (Heavy Armored Warmage Set)
+    skills:
+      destruction: 5
+      oneHanded: 4
+      heavyArmor: 4
+      alteration: 3
+      restoration: 3
+      enchanting: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FD0" # Firebolt (Apprentice Fire Projectile)
+      - "__formData|Skyrim.esm|0x02B96C" # Ice Spike (Apprentice Frost Projectile)
+      - "__formData|Skyrim.esm|0x02DD29" # Lightning Bolt (Apprentice Shock Projectile)
+      - "__formData|Skyrim.esm|0x01C789" # Fireball (Adept Fire AoE Explosion)
+      - "__formData|Skyrim.esm|0x045F9D" # Chain Lightning (Adept Shock Jumping Bolt)
+      - "__formData|Skyrim.esm|0x03AE9F" # Flame Cloak (Adept Fire Cloak Aura)
+      - "__formData|Skyrim.esm|0x03AEA3" # Lightning Cloak (Adept Shock Cloak Aura)
+      - "__formData|Skyrim.esm|0x051B16" # Ironflesh (Adept Alteration Armor)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0F2CA8" # DestructionNovice00 (Req: Destruction 0)
+      - "__formData|Skyrim.esm|0x0C44BF" # DestructionApprentice25 (Req: Destruction 25)
+      - "__formData|Skyrim.esm|0x0C44C0" # DestructionAdept50 (Req: Destruction 50)
+      - "__formData|Skyrim.esm|0x0C44C1" # DestructionExpert75 (Req: Destruction 75)
+      - "__formData|Skyrim.esm|0x0581E7" # AugmentedFlames (Req: Destruction 30 — +25% Fire Damage)
+      - "__formData|Skyrim.esm|0x10FCF8" # AugmentedFlames60 (Req: Destruction 60 — +50% Fire Damage)
+      - "__formData|Skyrim.esm|0x058200" # AugmentedShock (Req: Destruction 30 — +25% Shock Damage)
+      - "__formData|Skyrim.esm|0x10FCFA" # AugmentedShock60 (Req: Destruction 60 — +50% Shock Damage)
+      - "__formData|Skyrim.esm|0x0C44B7" # AlterationApprentice25 (Req: Alteration 25)
+      - "__formData|Skyrim.esm|0x0C44B8" # AlterationAdept50 (Req: Alteration 50)
+      - "__formData|Skyrim.esm|0x053128" # MagicResistance30 (Req: Alteration 30 — +10% Magic Resistance)
+      - "__formData|Skyrim.esm|0x053129" # MagicResistance50 (Req: Alteration 50 — +20% Magic Resistance)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079362" # Juggernaut60 (Req: Heavy Armor 60 — +80% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x058F6D" # Conditioning (Req: Heavy Armor 70 — Heavy Armor Weighs Nothing)
+    items:
+      - { form: "__formData|Skyrim.esm|0x0BE1FE", count: 1 } # EnchElvenSwordFire04 (Elven Sword of Scorching)
+
+  # ----------------------------------------------------------------------------
+  # 15. Guild Wardenscout — Fighters Guild
+  # ----------------------------------------------------------------------------
+  - id: ranger
+    name: Guild Wardenscout
+    location: Fighters Guild
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Fighters Guild.webp"
+    description: "Seasoned on long-range frontier contracts and wilderness expeditions with the Fighters Guild, wardenscouts are trained to survive, track, and outmaneuver any quarry in Tamriel. Outfitted in gilded Elven light armor with a masterwork Elven bow and matching blade, they combine long-distance marksmanship, woodland stealth, field alchemy, and self-healing to control skirmishes from afar."
+    costMultiplier: 1.70
+    skillType: ranger
+    hmsWeights: { health: 0.40, magicka: 0.10, stamina: 0.50 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x048362" # CompanionsFaction
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01CEF6" # C06 ("Glory of the Dead")
+    npcClass: "__formData|Skyrim.esm|0x013181"    # CombatRanger (Guild Wardenscout)
+    combatStyle: "__formData|Skyrim.esm|0x10D970" # csCWMissionScouts (Tactical Ranged Archer & Sword Skirmisher)
+    outfit: "__formData|Skyrim.esm|0x057A23"      # ArmorElvenNoHelmetOutfit (Elven Light Armor Set)
+    skills:
+      archery: 5
+      lightArmor: 4
+      oneHanded: 4
+      sneak: 3
+      restoration: 2
+      alchemy: 1
+    spells:
+      - "__formData|Skyrim.esm|0x012FCC" # Healing (Novice Self-Heal)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x079354" # Overdraw80 (Req: Archery 80 — +100% Bow Damage)
+      - "__formData|Skyrim.esm|0x058F62" # PowerShot (Req: Archery 50 — Arrows Stagger 50% of the Time)
+      - "__formData|Skyrim.esm|0x058F63" # Ranger (Req: Archery 60 — Move Faster with Drawn Bow)
+      - "__formData|Skyrim.esm|0x105F19" # QuickShot (Req: Archery 70 — Draw Bow 30% Faster)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+    items:
+      - { form: "__formData|Skyrim.esm|0x01399D", count: 1 }   # Elven Bow
+      - { form: "__formData|Skyrim.esm|0x01397F", count: 100 } # Steel Arrows (x100)
+      - { form: "__formData|Skyrim.esm|0x0139A1", count: 1 }   # Elven Sword
+
+  # ----------------------------------------------------------------------------
+  # 16. Meridian Dawnbringer — Shrine of Meridia (Daedric Covenant)
+  # ----------------------------------------------------------------------------
+  - id: dawnbringer
+    name: Meridian Dawnbringer
+    location: Shrine of Meridia
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Shrine of Meridia.webp"
+    description: "Consecrated atop Mount Kilkreath beneath the blinding radiance of the Lady of Infinite Energies, initiates are forged into living vessels of Meridia's wrath against all things undead and profane. Resplendent in Elven Gilded armor with an Elven Shield and a blazing solar-enchanted blade, they purge necromancers and vampires alike with Sun Fire, Vampire's Bane, Fireballs, and sacred Circles of Protection."
+    costMultiplier: 2.75
+    skillType: warrior
+    hmsWeights: { health: 0.45, magicka: 0.40, stamina: 0.15 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: championMeridia
+      label: Champion of Meridia
+      quest: "__formData|Skyrim.esm|0x04E4E1" # DA09 ("The Break of Dawn")
+    affiliation:
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x04E4E1" # DA09 ("The Break of Dawn" — Champion of Meridia)
+    npcClass: "__formData|Skyrim.esm|0x10BFEF"    # Vigilant1hMeleeClass (Meridian Dawnbringer)
+    combatStyle: "__formData|Skyrim.esm|0x107812" # csSpellsword (Radiant Solar Paladin + Sword & Shield)
+    outfit: "__formData|Skyrim.esm|0x057A2F"      # ArmorElvenGildedNoHelmetOutfit (Elven Gilded Armor Set)
+    skills:
+      oneHanded: 5
+      restoration: 5
+      destruction: 4
+      block: 4
+      lightArmor: 4
+      alteration: 2
+    spells:
+      - "__formData|Skyrim.esm|0x02F3B8"    # Fast Healing (Apprentice Self-Heal)
+      - "__formData|Skyrim.esm|0x0B62EF"    # Close Wounds (Adept Self-Heal)
+      - "__formData|Skyrim.esm|0x012FD2"    # Heal Other (Adept Ally Heal)
+      - "__formData|Skyrim.esm|0x05DD60"    # Repel Undead (Expert AoE Turn Undead)
+      - "__formData|Skyrim.esm|0x05312D"    # Circle of Protection (Expert Sanctuary Circle)
+      - "__formData|Skyrim.esm|0x01C789"    # Fireball (Adept Fire AoE Explosion)
+      - "__formData|Skyrim.esm|0x03AE9F"    # Flame Cloak (Adept Fire Cloak Aura)
+      - "__formData|Dawnguard.esm|0x003F52" # Sun Fire (Apprentice Solar Fire vs Undead)
+      - "__formData|Dawnguard.esm|0x0038B6" # Vampire's Bane (Adept Solar Explosion vs Undead)
+      - "__formData|Dawnguard.esm|0x0038B5" # Stendarr's Aura (Adept Solar Cloak Aura)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x0F2CAA" # RestorationNovice00 (Req: Restoration 0)
+      - "__formData|Skyrim.esm|0x0C44C7" # RestorationApprentice25 (Req: Restoration 25)
+      - "__formData|Skyrim.esm|0x0C44C8" # RestorationAdept50 (Req: Restoration 50)
+      - "__formData|Skyrim.esm|0x0C44C9" # RestorationExpert75 (Req: Restoration 75)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581F5" # Recovery50 (Req: Restoration 60 — +50% Magicka Regen)
+      - "__formData|Skyrim.esm|0x0581E4" # Necromage (Req: Restoration 70 — Spells More Effective vs Undead)
+      - "__formData|Skyrim.esm|0x0A3F64" # AvoidDeath (Req: Restoration 90 — Auto-Heals 250 HP Below 10% HP)
+      - "__formData|Skyrim.esm|0x0C44BF" # DestructionApprentice25 (Req: Destruction 25)
+      - "__formData|Skyrim.esm|0x0C44C0" # DestructionAdept50 (Req: Destruction 50)
+      - "__formData|Skyrim.esm|0x0581E7" # AugmentedFlames (Req: Destruction 30 — +25% Fire Damage)
+      - "__formData|Skyrim.esm|0x10FCF8" # AugmentedFlames60 (Req: Destruction 60 — +50% Fire Damage)
+      - "__formData|Skyrim.esm|0x058F69" # ElementalProtection (Req: Block 50 — 50% Elemental Reduction While Blocking)
+    items:
+      - { form: "__formData|Skyrim.esm|0x0BE1FF", count: 1 } # Elven Sword of Blazing (Enchanted Solar Fire Sword)
+      - { form: "__formData|Skyrim.esm|0x01391E", count: 1 } # Elven Shield
+
+  # ----------------------------------------------------------------------------
+  # 17. Boethian Shadowblade — Sacellum of Boethiah (Daedric Covenant)
+  # ----------------------------------------------------------------------------
+  - id: shadowblade
+    name: Boethian Shadowblade
+    location: Sacellum of Boethiah
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Sacellum of Boethiah.webp"
+    description: "Tempered in blood and treachery high in the mountains of Eastmarch at the Sacellum of Boethiah, only those who prove their ruthless will to survive emerge from the Prince of Plots' arena. Clad in midnight-black Ebony plate and Ebonyflesh wards, they stalk their prey under Muffle and Invisibility, sowing Frenzy among rivals before striking with an Ebony Bow and a life-draining Ebony Sword of the Vampire."
+    costMultiplier: 3.25
+    skillType: rogue
+    hmsWeights: { health: 0.45, magicka: 0.25, stamina: 0.30 }
+    ai:
+      morality: 0       # Any Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: championBoethiah
+      label: Champion of Boethiah
+      quest: "__formData|Skyrim.esm|0x04D8D6" # DA02 ("Boethiah's Calling")
+    affiliation:
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x04D8D6" # DA02 ("Boethiah's Calling" — Champion of Boethiah)
+    npcClass: "__formData|Skyrim.esm|0x01317C"    # CombatNightblade (Boethian Shadowblade)
+    combatStyle: "__formData|Skyrim.esm|0x08F1E6" # csMercerFreyRanged (Aggressive Stealth Duelist & Marksman)
+    outfit: "__formData|Skyrim.esm|0x057A1F"      # ArmorEbonyNoHelmetOutfit (Full Ebony Heavy Plate Armor Set)
+    skills:
+      oneHanded: 5
+      heavyArmor: 4
+      archery: 4
+      illusion: 3
+      sneak: 3
+      alchemy: 1
+    spells:
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+      - "__formData|Skyrim.esm|0x04DEEE" # Frenzy (Adept Illusion AoE Frenzy)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079362" # Juggernaut60 (Req: Heavy Armor 60 — +80% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x058F6D" # Conditioning (Req: Heavy Armor 70 — Heavy Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x0C44C3" # IllusionApprentice25 (Req: Illusion 25)
+      - "__formData|Skyrim.esm|0x0C44C4" # IllusionAdept50 (Req: Illusion 50)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Req: Illusion 40 — Illusion Works on Higher-Level People)
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (Req: Illusion 50 — All Spells Are Silent to Others)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+      - "__formData|Skyrim.esm|0x105F24" # Silence (Req: Sneak 70 — Walking and Running Do Not Affect Detection)
+    items:
+      - { form: "__formData|Skyrim.esm|0x01D4FD", count: 1 }   # EnchEbonySwordAbsorbH05 (Ebony Sword of the Vampire)
+      - { form: "__formData|Skyrim.esm|0x0139AD", count: 1 }   # EbonyBow (Ebony Bow)
+      - { form: "__formData|Skyrim.esm|0x01397F", count: 100 } # SteelArrow (Steel Arrows x100)
+
+  # ----------------------------------------------------------------------------
+  # 18. Nightingale Sentinel — Nightingale Hall (Daedric Covenant)
+  # ----------------------------------------------------------------------------
+  - id: nightingale
+    name: Nightingale Sentinel
+    location: Nightingale Hall
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Nightingale Hall.webp"
+    description: "Sworn to the Evergloam within the hidden rock-cut sanctum of Nightingale Hall, initiates walk the twilight path as guardians of Nocturnal's Triad. Mantle-bound in full midnight Nightingale armor and armed with the life-siphoning Nightingale Blade and storm-charged Nightingale Bow, they glide through darkness as unseen sentinels who command Invisibility, Muffle, and masterwork Illusion."
+    costMultiplier: 3.10
+    skillType: rogue
+    hmsWeights: { health: 0.35, magicka: 0.25, stamina: 0.40 }
+    ai:
+      morality: 0       # Any Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: championNocturnal
+      label: "Nightingale (Nocturnal)"
+      quest: "__formData|Skyrim.esm|0x021555" # TG09 ("Darkness Returns")
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x0DEED6" # TG09NightingaleNeutralFaction
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x021555" # TG09 ("Darkness Returns" — Nightingale Agent)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01B07F" # Karliah
+        - "__formData|Skyrim.esm|0x01B07D" # Brynjolf
+    npcClass: "__formData|Skyrim.esm|0x0FB0DA"    # CombatNightingale (Nightingale Sentinel)
+    combatStyle: "__formData|Skyrim.esm|0x08F1E6" # csMercerFreyRanged (Nightingale Bow & Blade Sentinel)
+    outfit: "__formData|Skyrim.esm|0x0487DC"      # NightingaleOutfit (Full Nightingale Armor Set)
+    skills:
+      archery: 5
+      oneHanded: 5
+      lightArmor: 4
+      illusion: 3
+      sneak: 3
+      lockpicking: 1
+    spells:
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+      - "__formData|Skyrim.esm|0x04DEED" # Pacify (Expert Illusion AoE Calm)
+      - "__formData|Skyrim.esm|0x04DEEE" # Frenzy (Adept Illusion AoE Frenzy)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x079354" # Overdraw80 (Req: Archery 80 — +100% Bow Damage)
+      - "__formData|Skyrim.esm|0x058F62" # PowerShot (Req: Archery 50 — Arrows Stagger 50% of the Time)
+      - "__formData|Skyrim.esm|0x058F63" # Ranger (Req: Archery 60 — Move Faster with Drawn Bow)
+      - "__formData|Skyrim.esm|0x105F19" # QuickShot (Req: Archery 70 — Draw Bow 30% Faster)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x0C44C3" # IllusionApprentice25 (Req: Illusion 25)
+      - "__formData|Skyrim.esm|0x0C44C4" # IllusionAdept50 (Req: Illusion 50)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Req: Illusion 40 — Illusion Works on Higher-Level People)
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (Req: Illusion 50 — All Spells Are Silent to Others)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+      - "__formData|Skyrim.esm|0x105F24" # Silence (Req: Sneak 70 — Walking and Running Do Not Affect Detection)
+    items:
+      - { form: "__formData|Skyrim.esm|0x0DEED7", count: 1 }   # Nightingale Blade (Absorb Health & Stamina)
+      - { form: "__formData|Skyrim.esm|0x0DEED8", count: 1 }   # Nightingale Bow (Frost & Shock Damage)
+      - { form: "__formData|Skyrim.esm|0x01397F", count: 100 } # Steel Arrows (x100)
+
+  # ----------------------------------------------------------------------------
+  # 19. Coldharbour Dreadknight — Shrine of Molag Bal (Daedric Covenant)
+  # ----------------------------------------------------------------------------
+  - id: dread_scion
+    name: Coldharbour Dreadknight
+    location: Shrine of Molag Bal
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Shrine of Molag Bal.webp"
+    description: "Anointed in dark subjugation before the rusted altar of the Lord of Domination, initiates endure the harrowing rites of Coldharbour to break the weak and command the dead. Clad in crimson-and-black vampire plate, they crush both body and spirit with a soul-siphoning Ebony Mace of Leeching, enslaving fallen foes as Dread Zombies while unleashing freezing Ice Storms and terrifying Rout magic."
+    costMultiplier: 2.90
+    skillType: warrior
+    hmsWeights: { health: 0.45, magicka: 0.40, stamina: 0.15 }
+    ai:
+      morality: 0       # Any Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: championMolagBal
+      label: Champion of Molag Bal
+      quest: "__formData|Skyrim.esm|0x022F08" # DA10 ("The House of Horrors")
+    affiliation:
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x022F08" # DA10 ("The House of Horrors" — Champion of Molag Bal)
+    npcClass: "__formData|Skyrim.esm|0x013178"    # CombatWitchblade (Coldharbour Dreadknight)
+    combatStyle: "__formData|Skyrim.esm|0x107812" # csSpellsword (Aggressive Mace + Dark Magic Deathknight)
+    outfit: "__formData|Skyrim.esm|0x02E1E9"      # VampireArmorBossOutfit (Royal/Vampire Armor Set)
+    skills:
+      oneHanded: 5
+      conjuration: 4
+      destruction: 4
+      lightArmor: 4
+      restoration: 2
+      illusion: 2
+    spells:
+      - "__formData|Skyrim.esm|0x02B96C" # Ice Spike (Apprentice Frost Projectile)
+      - "__formData|Skyrim.esm|0x045F9C" # Ice Storm (Adept Frost AoE Whirlwind)
+      - "__formData|Skyrim.esm|0x03AEA2" # Frost Cloak (Adept Frost Cloak Aura)
+      - "__formData|Skyrim.esm|0x096D94" # Revenant (Adept Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x096D95" # Dread Zombie (Expert Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x04DBA4" # Soul Trap (Apprentice Soul Binding)
+      - "__formData|Skyrim.esm|0x04DEEA" # Calm (Apprentice Illusion Pacify)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x079345" # Armsman80 (Req: One-Handed 80 — +100% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x0F2CA7" # ConjurationNovice00 (Req: Conjuration 0)
+      - "__formData|Skyrim.esm|0x0C44BB" # ConjurationApprentice25 (Req: Conjuration 25)
+      - "__formData|Skyrim.esm|0x0C44BC" # ConjurationAdept50 (Req: Conjuration 50)
+      - "__formData|Skyrim.esm|0x0C44BD" # ConjurationExpert75 (Req: Conjuration 75)
+      - "__formData|Skyrim.esm|0x0581DD" # Necromancy (Req: Conjuration 40 — Greater Duration for Reanimated Undead)
+      - "__formData|Skyrim.esm|0x0581DE" # DarkSouls (Req: Conjuration 70 — Reanimated Undead Have +100 Health)
+      - "__formData|Skyrim.esm|0x0F2CA8" # DestructionNovice00 (Req: Destruction 0)
+      - "__formData|Skyrim.esm|0x0C44BF" # DestructionApprentice25 (Req: Destruction 25)
+      - "__formData|Skyrim.esm|0x0C44C0" # DestructionAdept50 (Req: Destruction 50)
+      - "__formData|Skyrim.esm|0x0581EA" # AugmentedFrost (Req: Destruction 30 — +25% Frost Damage)
+      - "__formData|Skyrim.esm|0x10FCF9" # AugmentedFrost60 (Req: Destruction 60 — +50% Frost Damage)
+      - "__formData|Skyrim.esm|0x0581F4" # Recovery30 (Req: Restoration 30 — +25% Magicka Regen)
+    items:
+      - { form: "__formData|Skyrim.esm|0x01CEE2", count: 1 } # Ebony Mace of Leeching (Absorb Magicka/Health Mace)
+
+  # ----------------------------------------------------------------------------
+  # 20. Primal Pack Hunter — Frostmoon Crag (Beastblood Pack Path)
+  # ----------------------------------------------------------------------------
+  - id: pack_hunter
+    name: Primal Pack Hunter
+    location: Frostmoon Crag
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Frostmoon Crag.webp"
+    description: "Reserved exclusively for werewolf-blooded youth who inherited Hircine's gift, Majni's reclusive pack beneath the frozen peaks of Solstheim teaches young lycanthropes to master the beast within in harmony with the wild. Clad in rugged hunter furs and armed with a carved Nordic bow and war axe, they stalk prey across the wilds alongside spectral wolf familiars and bolster allies with pack howls."
+    costMultiplier: 2.45
+    skillType: ranger
+    requiresBeastblood: true
+    hmsWeights: { health: 0.40, magicka: 0.20, stamina: 0.40 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 3  # Brave
+    requirements:
+      key: frostmoonPack
+      label: "Beastblood or Champion of Hircine"
+      faction: "__formData|Skyrim.esm|0x091822" # PlayerWerewolfFaction
+      quest: "__formData|Skyrim.esm|0x02A49A"   # DA05 ("Ill Met By Moonlight")
+    affiliation:
+      memberFactions:
+        - "__formData|Dragonborn.esm|0x01DC61" # DLC2dunFrostmoonWerewolvesFaction
+        - "__formData|Skyrim.esm|0x091822"     # PlayerWerewolfFaction
+        - "__formData|Skyrim.esm|0x043594"     # WerewolfFaction
+      memberWerewolf: true
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x02A49A"     # DA05 ("Ill Met By Moonlight" — Champion of Hircine)
+      leaderNpcs:
+        - "__formData|Dragonborn.esm|0x01DC67" # Majni (Alpha of Frostmoon Pack)
+    npcClass: "__formData|Skyrim.esm|0x01317D"    # CombatScout (Primal Pack Hunter)
+    combatStyle: "__formData|Skyrim.esm|0x03BE1D" # csHumanMissile (Skirmisher Bow & Axe Hunter)
+    outfit: "__formData|Dragonborn.esm|0x01DC66"  # DLC2dunFrostmoonOutfitMajni (Frostmoon Pack Hunter Furs)
+    skills:
+      archery: 5
+      lightArmor: 4
+      oneHanded: 4
+      sneak: 3
+      illusion: 3
+      conjuration: 2
+    spells:
+      - "__formData|Skyrim.esm|0x0640B6" # Conjure Familiar (Novice Spectral Wolf)
+      - "__formData|Skyrim.esm|0x04DEE8" # Courage (Novice Illusion Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEEC" # Rally (Adept Illusion AoE Pack Courage Buff)
+      - "__formData|Skyrim.esm|0x02F3B8" # Fast Healing (Apprentice Self-Heal)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABED" # Overdraw00 (Req: Archery 0 — +20% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934A" # Overdraw20 (Req: Archery 20 — +40% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934B" # Overdraw40 (Req: Archery 40 — +60% Bow Damage)
+      - "__formData|Skyrim.esm|0x07934D" # Overdraw60 (Req: Archery 60 — +80% Bow Damage)
+      - "__formData|Skyrim.esm|0x079354" # Overdraw80 (Req: Archery 80 — +100% Bow Damage)
+      - "__formData|Skyrim.esm|0x058F62" # PowerShot (Req: Archery 50 — Arrows Stagger 50% of the Time)
+      - "__formData|Skyrim.esm|0x058F63" # Ranger (Req: Archery 60 — Move Faster with Drawn Bow)
+      - "__formData|Skyrim.esm|0x105F19" # QuickShot (Req: Archery 70 — Draw Bow 30% Faster)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x0BE123" # AgileDefender00 (Req: Light Armor 0 — +20% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079376" # AgileDefender20 (Req: Light Armor 20 — +40% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079389" # AgileDefender40 (Req: Light Armor 40 — +60% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x079391" # AgileDefender60 (Req: Light Armor 60 — +80% Light Armor Rating)
+      - "__formData|Skyrim.esm|0x051B1C" # Unhindered (Req: Light Armor 50 — Light Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (Req: Light Armor 60 — +50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x0F2CA9" # IllusionNovice00 (Req: Illusion 0)
+      - "__formData|Skyrim.esm|0x0C44C4" # IllusionAdept50 (Req: Illusion 50)
+      - "__formData|Skyrim.esm|0x0581E1" # Animage (Req: Illusion 20 — Illusion Works on Higher-Level Animals)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Req: Illusion 40 — Illusion Works on Higher-Level People)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (Req: Sneak 30 — 50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Req: Sneak 40 — Never Trigger Pressure Plates)
+    items:
+      - { form: "__formData|Dragonborn.esm|0x026232", count: 1 }   # Nordic Bow
+      - { form: "__formData|Dragonborn.esm|0x01CDB2", count: 1 }   # Nordic War Axe
+      - { form: "__formData|Dragonborn.esm|0x02623B", count: 100 } # Nordic Arrows (x100)
+
+  # ----------------------------------------------------------------------------
+  # 21. Primal Pack Berserker — The Underforge (Beastblood Circle Path)
+  # ----------------------------------------------------------------------------
+  - id: pack_berserker
+    name: Primal Pack Berserker
+    location: The Underforge
+    image: "Data/SKSE/Plugins/MARAS/childTraining/images/Under Forge.webp"
+    description: "Closed to mortals and open only to offspring born with the Beastblood, the secret stone sanctum beneath the Skyforge is where the Companions' Inner Circle trains young werewolves to harness the unbridled fury of the Wolf Spirit. Clad in Skyforge Wolf Armor and wielding a razor-edged Skyforge Steel Battleaxe, they charge fearlessly into the fray with terrifying howls, spectral packmates, and the untamed power of the Beast Form."
+    costMultiplier: 2.35
+    skillType: warrior
+    requiresBeastblood: true
+    hmsWeights: { health: 0.55, magicka: 0.15, stamina: 0.30 }
+    ai:
+      morality: 3       # No Crime
+      minConfidence: 4  # Foolhardy (Never retreats)
+    requirements:
+      key: companionsCircle
+      label: "The Circle (Underforge) or Beastblood"
+      faction: "__formData|Skyrim.esm|0x0FF234" # CompanionsCircle
+      quest: "__formData|Skyrim.esm|0x01CEF4"   # C03 ("The Silver Hand")
+      questStage: 100
+    affiliation:
+      memberFactions:
+        - "__formData|Skyrim.esm|0x0FF234" # CompanionsCircle
+      memberQuests:
+        - "__formData|Skyrim.esm|0x01CEF4" # C03 ("The Silver Hand")
+      leaderQuests:
+        - "__formData|Skyrim.esm|0x01CEF6" # C06 ("Glory of the Dead" — Harbinger)
+      leaderNpcs:
+        - "__formData|Skyrim.esm|0x01A68E" # Kodlak Whitemane
+    npcClass: "__formData|Skyrim.esm|0x01CE16"    # CombatBarbarian (Primal Pack Berserker)
+    combatStyle: "__formData|Skyrim.esm|0x03DECF" # csHumanBoss2H (Aggressive Two-Handed Berserker)
+    outfit: "__formData|Skyrim.esm|0x0B3E8D"      # ArmorCompanionsOutfitNoHelmet (Companions Wolf Armor Set)
+    skills:
+      twoHanded: 5
+      heavyArmor: 5
+      oneHanded: 4
+      block: 3
+      illusion: 3
+      conjuration: 2
+    spells:
+      - "__formData|Skyrim.esm|0x0640B6" # Conjure Familiar (Novice Spectral Wolf)
+      - "__formData|Skyrim.esm|0x04DEE8" # Courage (Novice Illusion Ally Buff)
+      - "__formData|Skyrim.esm|0x04DEEC" # Rally (Adept Illusion AoE Pack Courage Buff)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE8" # Barbarian00 (Req: Two-Handed 0 — +20% 2H Damage)
+      - "__formData|Skyrim.esm|0x079346" # Barbarian20 (Req: Two-Handed 20 — +40% 2H Damage)
+      - "__formData|Skyrim.esm|0x079347" # Barbarian40 (Req: Two-Handed 40 — +60% 2H Damage)
+      - "__formData|Skyrim.esm|0x079348" # Barbarian60 (Req: Two-Handed 60 — +80% 2H Damage)
+      - "__formData|Skyrim.esm|0x079349" # Barbarian80 (Req: Two-Handed 80 — +100% 2H Damage)
+      - "__formData|Skyrim.esm|0x052D52" # DevastatingBlow (Req: Two-Handed 50 — +25% Standing Power Attack)
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (Req: One-Handed 0 — +20% 1H Damage)
+      - "__formData|Skyrim.esm|0x079343" # Armsman20 (Req: One-Handed 20 — +40% 1H Damage)
+      - "__formData|Skyrim.esm|0x079342" # Armsman40 (Req: One-Handed 40 — +60% 1H Damage)
+      - "__formData|Skyrim.esm|0x079344" # Armsman60 (Req: One-Handed 60 — +80% 1H Damage)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (Req: One-Handed 50 — +25% One-Handed Power Attack)
+      - "__formData|Skyrim.esm|0x0BCD2A" # Juggernaut00 (Req: Heavy Armor 0 — +20% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x07935E" # Juggernaut20 (Req: Heavy Armor 20 — +40% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079361" # Juggernaut40 (Req: Heavy Armor 40 — +60% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079362" # Juggernaut60 (Req: Heavy Armor 60 — +80% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x079374" # Juggernaut80 (Req: Heavy Armor 80 — +100% Heavy Armor Rating)
+      - "__formData|Skyrim.esm|0x058F6C" # TowerOfStrength (Req: Heavy Armor 50 — 50% Less Stagger)
+      - "__formData|Skyrim.esm|0x058F6D" # Conditioning (Req: Heavy Armor 70 — Heavy Armor Weighs Nothing)
+      - "__formData|Skyrim.esm|0x0F2CA9" # IllusionNovice00 (Req: Illusion 0)
+      - "__formData|Skyrim.esm|0x0C44C4" # IllusionAdept50 (Req: Illusion 50)
+      - "__formData|Skyrim.esm|0x0581E1" # Animage (Req: Illusion 20 — Illusion Works on Higher-Level Animals)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Req: Illusion 40 — Illusion Works on Higher-Level People)
+    items:
+      - { form: "__formData|Skyrim.esm|0x09F25F", count: 1 } # Skyforge Steel Battleaxe
+      - { form: "__formData|Skyrim.esm|0x09F260", count: 1 } # Skyforge Steel War Axe
+
+
+# ==============================================================================
+# Passive Daedric Champion Lineage Blessings
+# ==============================================================================
+# When the Player is a biological parent or custodial guardian and has completed
+# one or more Daedric Prince quests below, the graduating adult child inherits
+# ONE deterministic Daedric Patron Blessing on top of their class training.
+# ==============================================================================
+daedricBlessings:
+  - id: meridia
+    name: "Meridia (Dawn's Radiance)"
+    quest: "__formData|Skyrim.esm|0x04E4E1" # DA09 ("The Break of Dawn")
+    hmsBonus: { health: 0, magicka: 0, stamina: 0 }
+    skills:
+      restoration: 10
+      oneHanded: 10
+    spells:
+      - "__formData|Skyrim.esm|0x05DD60"    # Repel Undead (Expert AoE Turn Undead)
+      - "__formData|Skyrim.esm|0x0B62EF"    # Close Wounds (Adept Self-Heal)
+      - "__formData|Dawnguard.esm|0x003F52" # Sun Fire (Apprentice Solar Fire vs Undead)
+    perks:
+      - "__formData|Skyrim.esm|0x0581E4" # Necromage (All Spells Are More Effective Against Undead)
+      - "__formData|Skyrim.esm|0x0A3F64" # AvoidDeath (Automatically Heals 250 HP Once Per Day Below 10% HP)
+
+  - id: azura
+    name: "Azura (Twilight Foresight)"
+    quest: "__formData|Skyrim.esm|0x028AD6" # DA01 ("The Black Star")
+    hmsBonus: { health: 0, magicka: 50, stamina: 0 }
+    skills:
+      enchanting: 10
+      alteration: 10
+    spells:
+      - "__formData|Skyrim.esm|0x05AD5E" # Ebonyflesh (Expert Alteration Armor)
+      - "__formData|Skyrim.esm|0x0211F0" # Greater Ward (Adept High-Strength Magic Ward)
+      - "__formData|Skyrim.esm|0x04DBA4" # Soul Trap (Apprentice Soul Binding)
+    perks:
+      - "__formData|Skyrim.esm|0x053129" # MagicResistance50 (+20% Magic Resistance)
+      - "__formData|Skyrim.esm|0x068BCC" # WardAbsorb (Wards Recharge Magicka When Hit by Spells)
+
+  - id: boethiah
+    name: "Boethiah (Cloak of Shadows)"
+    quest: "__formData|Skyrim.esm|0x04D8D6" # DA02 ("Boethiah's Calling")
+    hmsBonus: { health: 0, magicka: 0, stamina: 0 }
+    skills:
+      sneak: 10
+      oneHanded: 10
+    spells:
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+    perks:
+      - "__formData|Skyrim.esm|0x0BABE4" # Armsman00 (+20% One-Handed Damage)
+      - "__formData|Skyrim.esm|0x105F24" # Silence (Walking and Running Do Not Affect Detection)
+
+  - id: nocturnal
+    name: "Nocturnal (Shadowscale Luck)"
+    quest: "__formData|Skyrim.esm|0x021555" # TG09 ("Darkness Returns")
+    hmsBonus: { health: 0, magicka: 0, stamina: 0 }
+    skills:
+      sneak: 10
+      archery: 10
+      lockpicking: 10
+    spells:
+      - "__formData|Skyrim.esm|0x08F3EB" # Muffle (Apprentice Silent Movement)
+      - "__formData|Skyrim.esm|0x027EB6" # Invisibility (Expert Shadow Stealth)
+    perks:
+      - "__formData|Skyrim.esm|0x05820C" # LightFoot (Never Trigger Pressure Plates)
+      - "__formData|Skyrim.esm|0x058213" # MuffledMovement (50% Reduced Armor Noise)
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (All Spells Are Silent to Others)
+
+  - id: molag_bal
+    name: "Molag Bal (Vampiric Dominance)"
+    quest: "__formData|Skyrim.esm|0x022F08" # DA10 ("The House of Horrors")
+    hmsBonus: { health: 0, magicka: 0, stamina: 50 }
+    skills:
+      conjuration: 10
+      oneHanded: 10
+    spells:
+      - "__formData|Skyrim.esm|0x04DBA4" # Soul Trap (Apprentice Soul Binding)
+      - "__formData|Skyrim.esm|0x096D94" # Revenant (Adept Corpse Reanimation)
+      - "__formData|Skyrim.esm|0x03AEA2" # Frost Cloak (Adept Frost Cloak Aura)
+    perks:
+      - "__formData|Skyrim.esm|0x0581DE" # DarkSouls (Reanimated Undead Have +100 Health)
+      - "__formData|Skyrim.esm|0x03AF81" # SavageStrike (+25% Standing Power Attack Damage)
+
+  - id: mehrunes_dagon
+    name: "Mehrunes Dagon (Razor's Wrath)"
+    quest: "__formData|Skyrim.esm|0x0240B8" # DA07 ("Pieces of the Past")
+    hmsBonus: { health: 0, magicka: 0, stamina: 0 }
+    skills:
+      destruction: 15
+    spells:
+      - "__formData|Skyrim.esm|0x01C789" # Fireball (Adept Fire AoE Explosion)
+      - "__formData|Skyrim.esm|0x03AE9F" # Flame Cloak (Adept Fire Cloak Aura)
+      - "__formData|Skyrim.esm|0x035D7F" # Wall of Flames (Expert Fire Hazard)
+    perks:
+      - "__formData|Skyrim.esm|0x0581E7" # AugmentedFlames (+25% Fire Spell Damage)
+      - "__formData|Skyrim.esm|0x10FCF8" # AugmentedFlames60 (+50% Fire Spell Damage)
+
+  - id: sanguine
+    name: "Sanguine (Reveler's Summons)"
+    quest: "__formData|Skyrim.esm|0x01BB9B" # DA14 ("A Night to Remember")
+    hmsBonus: { health: 0, magicka: 0, stamina: 0 }
+    skills:
+      conjuration: 10
+      illusion: 10
+    spells:
+      - "__formData|Skyrim.esm|0x10DDEC" # Conjure Dremora Lord (Expert Daedra Summon)
+      - "__formData|Skyrim.esm|0x04DEEE" # Frenzy (Adept Illusion AoE Frenzy)
+    perks:
+      - "__formData|Skyrim.esm|0x0D5F1C" # TwinSouls (Can Have Two Atronachs or Reanimated Zombies)
+      - "__formData|Skyrim.esm|0x0581E2" # KindredMage (Illusion Spells Work on Higher-Level People)
+
+  - id: hermaeus_mora
+    name: "Hermaeus Mora (Apocrypha's Insight)"
+    quest: "__formData|Skyrim.esm|0x02D512" # DA04 ("Discerning the Transmundane")
+    hmsBonus: { health: 0, magicka: 50, stamina: 0 }
+    skills:
+      conjuration: 10
+      destruction: 10
+      alteration: 10
+    spells:
+      - "__formData|Skyrim.esm|0x0204C5" # Conjure Storm Atronach (Expert Daedra Summon)
+      - "__formData|Skyrim.esm|0x045F9D" # Chain Lightning (Adept Shock Jumping Bolt)
+      - "__formData|Skyrim.esm|0x05AD5E" # Ebonyflesh (Expert Alteration Armor)
+    perks:
+      - "__formData|Skyrim.esm|0x05312A" # MagicResistance70 (+30% Magic Resistance)
+      - "__formData|Skyrim.esm|0x0CB419" # Atromancy (Double Duration for Conjured Atronachs)
+
+  - id: hircine
+    name: "Hircine (Hunter's Blood)"
+    quest: "__formData|Skyrim.esm|0x02A49A" # DA05 ("Ill Met By Moonlight")
+    hmsBonus: { health: 0, magicka: 0, stamina: 50 }
+    skills:
+      archery: 10
+      lightArmor: 10
+    spells:
+      - "__formData|Skyrim.esm|0x0640B6" # Conjure Familiar (Novice Spectral Wolf)
+    perks:
+      - "__formData|Skyrim.esm|0x105F22" # WindWalker (+50% Stamina Regen in Light Armor)
+      - "__formData|Skyrim.esm|0x058F63" # Ranger (Able to Move Faster with a Drawn Bow)
+
+  - id: malacath
+    name: "Malacath (Blood-Kin Might)"
+    quest: "__formData|Skyrim.esm|0x03B681" # DA06 ("The Cursed Tribe")
+    hmsBonus: { health: 50, magicka: 0, stamina: 0 }
+    skills:
+      twoHanded: 15
+      heavyArmor: 10
+    spells: []
+    perks:
+      - "__formData|Skyrim.esm|0x052D52" # DevastatingBlow (+25% Standing Power Attack Damage)
+      - "__formData|Skyrim.esm|0x058F6C" # TowerOfStrength (50% Less Stagger in Heavy Armor)
+
+  - id: mephala
+    name: "Mephala (Whispering Web)"
+    quest: "__formData|Skyrim.esm|0x04A37B" # DA08 ("The Whispering Door")
+    hmsBonus: { health: 0, magicka: 0, stamina: 0 }
+    skills:
+      twoHanded: 10
+      illusion: 10
+      sneak: 10
+    spells:
+      - "__formData|Skyrim.esm|0x04DEED" # Pacify (Expert Illusion AoE Calm)
+      - "__formData|Skyrim.esm|0x04DEEE" # Frenzy (Adept Illusion AoE Frenzy)
+    perks:
+      - "__formData|Skyrim.esm|0x0581FD" # QuietCasting (All Spells Are Silent to Others)
+      - "__formData|Skyrim.esm|0x059B76" # MasterOfTheMind (Illusion Spells Work on Undead, Daedra & Automatons)
+
+  - id: peryite
+    name: "Peryite (Spellbreaker's Ward)"
+    quest: "__formData|Skyrim.esm|0x08998D" # DA13 ("The Only Cure")
+    hmsBonus: { health: 50, magicka: 0, stamina: 0 }
+    skills:
+      block: 15
+      restoration: 10
+    spells:
+      - "__formData|Skyrim.esm|0x0211F0" # Greater Ward (Adept High-Strength Magic Ward)
+    perks:
+      - "__formData|Skyrim.esm|0x058F69" # ElementalProtection (Blocking Reduces Fire/Frost/Shock by 50%)
+      - "__formData|Skyrim.esm|0x058F68" # DeflectArrows (Arrows Hit the Shield for No Damage)

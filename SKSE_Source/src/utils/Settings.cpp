@@ -14,7 +14,7 @@ namespace MARAS {
 
     namespace {
         constexpr uint8_t kSettingsVersionMarker = 0xFF;
-        constexpr uint32_t kSettingsSubVersion = 2;
+        constexpr uint32_t kSettingsSubVersion = 3;
 
         const std::unordered_map<std::string, uint32_t> kKeyNameToDxCode = {
             {"F1", 0x3B}, {"F2", 0x3C}, {"F3", 0x3D}, {"F4", 0x3E},
@@ -188,6 +188,9 @@ namespace MARAS {
             visit("multSuggestOpenNeglectMin", &Settings::multSuggestOpenNeglectMin, false);
             visit("skyrimnetUseLLMMemories", &Settings::skyrimnetUseLLMMemories, false);
             visit("skyrimnetUseDecisions", &Settings::skyrimnetUseDecisions, false);
+            visit("childTrainingDurationDays", &Settings::childTrainingDurationDays, false);
+            visit("childTrainingCost", &Settings::childTrainingCost, false);
+            visit("childTrainingRequireFaction", &Settings::childTrainingRequireFaction, false);
         }
     }
 
@@ -514,6 +517,10 @@ namespace MARAS {
                 return false;
             }
 
+            if (subVersion < 3) {
+                childTrainingRequireFaction = true;
+            }
+
             if (logLevel < 0 || logLevel > 5) {
                 logLevel = defaultLogLevel;
             }
@@ -677,7 +684,8 @@ namespace MARAS {
                 {"playerpartnercheatingusellm", &Settings::playerPartnerCheatingUseLLM},
                 {"playerpartnercheatingconfirmresults", &Settings::playerPartnerCheatingConfirmResults},
                 {"playerpartneragencyenableforcegreets", &Settings::playerPartnerAgencyEnableForceGreets},
-                {"playerpartneragencyenablehomearrivalevents", &Settings::playerPartnerAgencyEnableHomeArrivalEvents}
+                {"playerpartneragencyenablehomearrivalevents", &Settings::playerPartnerAgencyEnableHomeArrivalEvents},
+                {"childtrainingrequirefaction", &Settings::childTrainingRequireFaction}
             };
             return kMap;
         }
@@ -707,7 +715,9 @@ namespace MARAS {
                 {"paternitybiostepupchance", &Settings::paternityBioStepUpChance},
                 {"playerpartnercheatingmaxrollcap", &Settings::playerPartnerCheatingMaxRollCap},
                 {"playerpartnercheatingmaxsecretlovers", &Settings::playerPartnerCheatingMaxSecretLovers},
-                {"lonelinessthresholddays", &Settings::lonelinessThresholdDays}
+                {"lonelinessthresholddays", &Settings::lonelinessThresholdDays},
+                {"childtrainingdurationdays", &Settings::childTrainingDurationDays},
+                {"childtrainingcost", &Settings::childTrainingCost}
             };
             return kMap;
         }
@@ -883,6 +893,11 @@ namespace MARAS {
 
         const auto& map = GetIntSettingMap();
         if (auto it = map.find(lowerKey); it != map.end()) {
+            if (lowerKey == "childtrainingdurationdays") {
+                value = std::clamp(value, 1, 120);
+            } else if (lowerKey == "childtrainingcost") {
+                value = std::clamp(value, 0, 10000);
+            }
             std::unique_lock lock(settingsMutex_);
             this->*(it->second) = value;
             return true;

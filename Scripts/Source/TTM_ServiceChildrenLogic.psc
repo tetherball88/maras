@@ -1276,7 +1276,119 @@ Function ReenableAdoptableChildren()
 EndFunction
 
 ;/
-  SpawnSyntheticChild: Spawns a physical child actor for a synthetic young child record (Stage 2)
+  Helper: Resolves the child's genetic Race strictly from biological parents.
+/;
+Race Function ResolveChildRaceFromLineage(Actor bioMother, Actor bioFather)
+    if (bioMother != None)
+        return bioMother.GetRace()
+    elseif (bioFather != None)
+        return bioFather.GetRace()
+    endif
+    return None
+EndFunction
+
+;/
+  Helper: Chooses the best actor anchor to PlaceAtMe the newly spawned child/adult actor.
+/;
+Actor Function GetChildSpawnAnchor(Actor guardianA, Actor guardianB, Actor bioMother, Actor player)
+    if (guardianA != None && guardianA != player)
+        return guardianA
+    elseif (guardianB != None && guardianB != player)
+        return guardianB
+    elseif (bioMother != None && bioMother != player)
+        return bioMother
+    endif
+    return player
+EndFunction
+
+;/
+  Helper: Determines whether a synthetic child belongs to the player's household (via player parentage, guardianship, or marriage to a parent/guardian).
+/;
+bool Function IsLineagePlayerChild(Actor guardianA, Actor guardianB, Actor bioMother, Actor bioFather, Actor player)
+    if (guardianA != None || guardianB != None)
+        if (guardianA == player || guardianB == player)
+            return true
+        elseif ((guardianA != None && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != None && MARAS.IsNPCStatus(guardianB, "married")))
+            return true
+        endif
+    elseif (player == bioMother || player == bioFather)
+        return true
+    endif
+    if (guardianA == None && guardianB == None && ((bioMother != None && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != None && MARAS.IsNPCStatus(bioFather, "married"))))
+        return true
+    endif
+    return false
+EndFunction
+
+;/
+  Helper: Picks a random valid ActorBase from a single Beeing Female StorageUtil FormList holder
+  (mirrors FWAddOnManager.PickRandomActorBase in Beeing-Female-NG).
+/;
+ActorBase Function PickRandomBFActorBase(Form holder, string listKey)
+    int c = StorageUtil.FormListCount(holder, listKey)
+    if (c <= 0)
+        return None
+    endif
+    ActorBase b = StorageUtil.FormListGet(holder, listKey, Utility.RandomInt(0, c - 1)) as ActorBase
+    if (b != None)
+        return b
+    endif
+    int i = 0
+    while (i < c)
+        b = StorageUtil.FormListGet(holder, listKey, i) as ActorBase
+        if (b != None)
+            return b
+        endif
+        i += 1
+    endWhile
+    return None
+EndFunction
+
+;/
+  Helper: Resolves an ActorBase from Beeing Female's 3-tier AddOn hierarchy:
+  ParentActor (mother/father) -> ParentRace (childRace) -> Global (none, "FW.AddOn.Global_*"),
+  checking the "...Player" list first for player-lineage children before falling back to the main list
+  (mirrors FWAddOnManager.GetAdultActor / GetBabyActorNew in Beeing-Female-NG).
+/;
+ActorBase Function ResolveBFActorBaseFromList(Actor bioMother, Actor bioFather, Race childRace, string listName)
+    ActorBase b = None
+    if (bioMother != None)
+        b = PickRandomBFActorBase(bioMother, "FW.AddOn." + listName)
+        if (b != None)
+            return b
+        endif
+    endif
+    if (bioFather != None)
+        b = PickRandomBFActorBase(bioFather, "FW.AddOn." + listName)
+        if (b != None)
+            return b
+        endif
+    endif
+    if (childRace != None)
+        b = PickRandomBFActorBase(childRace, "FW.AddOn." + listName)
+        if (b != None)
+            return b
+        endif
+    endif
+    return PickRandomBFActorBase(None, "FW.AddOn.Global_" + listName)
+EndFunction
+
+ActorBase Function ResolveBFActorBase(Actor bioMother, Actor bioFather, Race childRace, string listName, bool isPlayerLineage)
+    if (listName == "")
+        return None
+    endif
+    ActorBase b = None
+    if (isPlayerLineage)
+        b = ResolveBFActorBaseFromList(bioMother, bioFather, childRace, listName + "Player")
+        if (b != None)
+            return b
+        endif
+    endif
+    return ResolveBFActorBaseFromList(bioMother, bioFather, childRace, listName)
+EndFunction
+
+;/
+  SpawnSyntheticChild: Spawns a physical young child actor (Stage 2)
   using PlaceAtMe with persistent flag = true. Re-keys synthetic FormID to physical actor reference.
 /;
 Function SpawnSyntheticChild(int syntheticID)
@@ -1287,11 +1399,11 @@ Function SpawnSyntheticChild(int syntheticID)
 
     int stage = MARAS.GetChildStage(syntheticID)
     if (stage != 2)
-        TTM_Debug.warn("TTM_ServiceChildrenLogic: SpawnSyntheticChild: Child " + syntheticID + " is not in stage 2 (stage=" + stage + "). Only young children can be spawned.")
+        TTM_Debug.warn("TTM_ServiceChildrenLogic: SpawnSyntheticChild: Child " + syntheticID + " is not in stage 2 (stage=" + stage + "). Use SpawnAdultChild for stage 4.")
         return
     endif
 
-    TTM_Debug.info("TTM_ServiceChildrenLogic: SpawnSyntheticChild: Spawning child " + syntheticID + ".")
+    TTM_Debug.info("TTM_ServiceChildrenLogic: SpawnSyntheticChild: Spawning young child " + syntheticID + ".")
 
     string childName = MARAS.GetChildName(syntheticID)
     int gender = MARAS.GetChildGender(syntheticID)
@@ -1305,119 +1417,92 @@ Function SpawnSyntheticChild(int syntheticID)
     Actor bioFather = MARAS.GetBioFather(syntheticID)
     Actor guardianA = MARAS.GetGuardianA(syntheticID)
     Actor guardianB = MARAS.GetGuardianB(syntheticID)
-
-    Race childRace = None
-    if (bioMother != None)
-        childRace = bioMother.GetRace()
-    elseif (bioFather != None)
-        childRace = bioFather.GetRace()
-    elseif (guardianA != None)
-        childRace = guardianA.GetRace()
-    elseif (guardianB != None)
-        childRace = guardianB.GetRace()
-    else
-        childRace = player.GetRace()
-    endif
+    Race childRace = ResolveChildRaceFromLineage(bioMother, bioFather)
 
     ActorBase childBase = None
+    bool usedBFBase = false
 
-    ; 1. Try to resolve child base from Fertility Mode Reloaded (FMR) if loaded
+    ; 1. Resolve young child base from Fertility Mode Reloaded (FMR) if loaded
     if (Game.GetModByName("Fertility Mode.esm") != 255)
         Quest storageQuest = Game.GetFormFromFile(0xd62, "Fertility Mode.esm") as Quest
         if (storageQuest != None)
             _JSW_BB_Storage fmrStorage = storageQuest as _JSW_BB_Storage
             _JSW_BB_Utility fmrUtility = storageQuest as _JSW_BB_Utility
             if (fmrStorage != None && fmrUtility != None && fmrStorage.Children.Length > 0)
-                int raceIdx = fmrUtility.GetRaceIndex(childRace)
-                if (raceIdx >= 0 && raceIdx < 10)
-                    int baseIdx = 2 * raceIdx + gender
-                    if (baseIdx >= 0 && baseIdx < fmrStorage.Children.Length)
-                        childBase = fmrStorage.Children[baseIdx]
-                        TTM_Debug.debug("TTM_ServiceChildrenLogic: Resolved childBase for child " + syntheticID + ", gender " + gender + ", race " + raceIdx + ", from FMR: " + childBase)
-                    endif
+                int raceIdx = -1
+                if (childRace != None)
+                    raceIdx = fmrUtility.GetRaceIndex(childRace)
+                endif
+                if (raceIdx < 0 || raceIdx >= 10)
+                    raceIdx = MARAS.GetChildSavedRaceIndex(syntheticID)
+                endif
+                if (raceIdx < 0 || raceIdx >= 10)
+                    raceIdx = 6 ; Nord fallback
+                endif
+                int baseIdx = 2 * raceIdx + gender
+                if (baseIdx >= 0 && baseIdx < fmrStorage.Children.Length)
+                    childBase = fmrStorage.Children[baseIdx]
+                    TTM_Debug.debug("TTM_ServiceChildrenLogic: Resolved young childBase for child " + syntheticID + ", gender " + gender + ", race " + raceIdx + ", from FMR: " + childBase)
                 endif
             endif
         endif
     endif
 
-    ; 2. Resolve the child base from Beeing Female's per-race baby actor lists (filled by its AddOn system)
-    if (childBase == None && Game.GetModByName("BeeingFemale.esm") != 255 && childRace != None)
-        string babyKey = "FW.AddOn.BabyActor_Female"
+    ; 2. Resolve young child base from Beeing Female's AddOn BabyActor hierarchy + built-in fallback
+    if (childBase == None && Game.GetModByName("BeeingFemale.esm") != 255)
+        bool isPlayerLineage = (player == bioMother || player == bioFather)
+        string babyListName = "BabyActor_Female"
         if (gender == 0)
-            babyKey = "FW.AddOn.BabyActor_Male"
+            babyListName = "BabyActor_Male"
         endif
-        if (player == bioMother || player == bioFather)
-            childBase = StorageUtil.FormListGet(childRace, babyKey + "Player", 0) as ActorBase
-        endif
+        childBase = ResolveBFActorBase(bioMother, bioFather, childRace, babyListName, isPlayerLineage)
         if (childBase == None)
-            childBase = StorageUtil.FormListGet(childRace, babyKey, 0) as ActorBase
+            ; Fallback to BeeingFemale.esm's built-in young child ActorBases (mirrors FWBabyItemList.ResolveConfiguredFallbackChildBase)
+            if (isPlayerLineage)
+                if (gender == 0)
+                    childBase = Game.GetFormFromFile(0x02AB16, "BeeingFemale.esm") as ActorBase
+                else
+                    childBase = Game.GetFormFromFile(0x02AB17, "BeeingFemale.esm") as ActorBase
+                endif
+            endif
+            if (childBase == None)
+                if (gender == 0)
+                    childBase = Game.GetFormFromFile(0x001D98, "BeeingFemale.esm") as ActorBase
+                else
+                    childBase = Game.GetFormFromFile(0x001D99, "BeeingFemale.esm") as ActorBase
+                endif
+            endif
         endif
         if (childBase != None)
-            TTM_Debug.debug("TTM_ServiceChildrenLogic: Resolved childBase for child " + syntheticID + ", gender " + gender + ", from Beeing Female: " + childBase)
+            usedBFBase = true
+            TTM_Debug.debug("TTM_ServiceChildrenLogic: Resolved young childBase for child " + syntheticID + ", gender " + gender + ", from Beeing Female: " + childBase)
         endif
     endif
 
-    ; Without a supported fertility mod there are no synthetic children to spawn, so there is no fallback base.
-
     if (childBase == None)
-        TTM_Debug.err("TTM_ServiceChildrenLogic: Failed to resolve childBase for child " + syntheticID)
+        TTM_Debug.err("TTM_ServiceChildrenLogic: Failed to resolve young childBase for child " + syntheticID)
         return
     endif
 
-    ; Spawn child actor using PlaceAtMe with persistent flag = true
-    Actor spawnAnchor = player
-    if (guardianA != None && guardianA != player)
-        spawnAnchor = guardianA
-    elseif (guardianB != None && guardianB != player)
-        spawnAnchor = guardianB
-    elseif (bioMother != None && bioMother != player)
-        spawnAnchor = bioMother
-    endif
+    Actor spawnAnchor = GetChildSpawnAnchor(guardianA, guardianB, bioMother, player)
     Actor spawnedChild = spawnAnchor.PlaceAtMe(childBase, 1, true) as Actor
     if (spawnedChild == None)
-        TTM_Debug.err("TTM_ServiceChildrenLogic: PlaceAtMe failed to spawn child for " + syntheticID)
+        TTM_Debug.err("TTM_ServiceChildrenLogic: PlaceAtMe failed to spawn young child for " + syntheticID)
         return
     endif
 
-    TTM_Debug.debug("TTM_ServiceChildrenLogic: child name to set: " + childName)
+    if (usedBFBase)
+        TTM_ServiceFertilityBF.TakeOverChild(spawnedChild)
+        StorageUtil.SetFloatValue(spawnedChild, "FW.Child.DOB", Utility.GetCurrentGameTime())
+        StorageUtil.SetIntValue(spawnedChild, "FW.AddOn.StartGrowing", 1)
+    endif
+
     if (childName != "")
         spawnedChild.SetDisplayName(childName, true)
     endif
 
-    Actor donor = none
-    ; Match hair color to mother/father if available
-    if(bioMother != none && bioFather != none)
-        if(Utility.RandomInt(0,1) == 1)
-            donor = bioMother
-        else
-            donor = bioFather
-        endif
-    elseif (bioMother != None)
-        donor = bioMother
-    elseif (bioFather != None)
-        donor = bioFather
-    endif
-
-    if(donor != none)
-        spawnedChild.GetActorBase().SetHairColor(donor.GetActorBase().GetHairColor())
-    endif
-
-    ; Ingest / Adopt spawned child into MARAS
-    bool isPlayerChild = false
-    if (guardianA != None || guardianB != None)
-        if (guardianA == player || guardianB == player)
-            isPlayerChild = true
-        elseif ((guardianA != None && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != None && MARAS.IsNPCStatus(guardianB, "married")))
-            isPlayerChild = true
-        endif
-    elseif (player == bioMother || player == bioFather)
-        isPlayerChild = true
-    endif
-    if (guardianA == None && guardianB == None && !isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
-        isPlayerChild = true
-    endif
-
-    TTM_Debug.debug("TTM_ServiceChildrenLogic: isPlayerChild: " + isPlayerChild)
+    bool isPlayerChild = IsLineagePlayerChild(guardianA, guardianB, bioMother, bioFather, player)
+    TTM_Debug.debug("TTM_ServiceChildrenLogic: SpawnSyntheticChild isPlayerChild: " + isPlayerChild)
 
     if (isPlayerChild)
         Actor coSpouse = None
@@ -1445,7 +1530,157 @@ Function SpawnSyntheticChild(int syntheticID)
     spawnedChild.EvaluatePackage()
 
     Debug.Notification(spawnedChild.GetDisplayName() + " has arrived in Skyrim.")
-    TTM_Debug.info("TTM_ServiceChildrenLogic: Successfully spawned child actor " + spawnedChild.GetDisplayName() + " (FormID " + spawnedChild.GetFormID() + ") from synthetic ID " + syntheticID)
+    TTM_Debug.info("TTM_ServiceChildrenLogic: Successfully spawned young child actor " + spawnedChild.GetDisplayName() + " (FormID " + spawnedChild.GetFormID() + ") from synthetic ID " + syntheticID)
+EndFunction
+
+;/
+  SpawnAdultChild: Spawns a physical adult child actor (Stage 4) using trained class/race templates
+  and registers them as an independent traveling adventurer available for hire.
+/;
+Function SpawnAdultChild(int syntheticID)
+    if (syntheticID == 0)
+        TTM_Debug.warn("TTM_ServiceChildrenLogic: SpawnAdultChild called with 0 ID.")
+        return
+    endif
+
+    int stage = MARAS.GetChildStage(syntheticID)
+    if (stage != 4)
+        TTM_Debug.warn("TTM_ServiceChildrenLogic: SpawnAdultChild: Child " + syntheticID + " is not in stage 4 (stage=" + stage + ").")
+        return
+    endif
+
+    TTM_Debug.info("TTM_ServiceChildrenLogic: SpawnAdultChild: Spawning adult child " + syntheticID + ".")
+
+    string childName = MARAS.GetChildName(syntheticID)
+    int gender = MARAS.GetChildGender(syntheticID)
+    if (gender != 0 && gender != 1)
+        gender = Utility.RandomInt(0, 1)
+        MARAS.SetChildGender(syntheticID, gender)
+    endif
+
+    Actor player = TTM_Data.GetPlayer()
+    Actor bioMother = MARAS.GetBioMother(syntheticID)
+    Actor bioFather = MARAS.GetBioFather(syntheticID)
+    Actor guardianA = MARAS.GetGuardianA(syntheticID)
+    Actor guardianB = MARAS.GetGuardianB(syntheticID)
+    Race childRace = ResolveChildRaceFromLineage(bioMother, bioFather)
+
+    ActorBase adultBase = None
+    bool usedBFBase = false
+    ActorBase fmrBase = None
+    ActorBase bfBase = None
+
+    ; 1. Resolve trained adult child base from Fertility Mode Reloaded (FMR) if loaded
+    if (Game.GetModByName("Fertility Mode.esm") != 255)
+        Quest storageQuest = Game.GetFormFromFile(0xd62, "Fertility Mode.esm") as Quest
+        if (storageQuest != None)
+            _JSW_BB_Storage fmrStorage = storageQuest as _JSW_BB_Storage
+            _JSW_BB_Utility fmrUtility = storageQuest as _JSW_BB_Utility
+            if (fmrStorage != None && fmrUtility != None && fmrStorage.AdultChildren.Length > 0)
+                int raceIdx = -1
+                if (childRace != None)
+                    raceIdx = fmrUtility.GetRaceIndex(childRace)
+                endif
+                if (raceIdx < 0 || raceIdx >= 10)
+                    raceIdx = MARAS.GetChildSavedRaceIndex(syntheticID)
+                endif
+                if (raceIdx < 0 || raceIdx >= 10)
+                    raceIdx = 6 ; Nord fallback
+                endif
+                int trainClass = MARAS.GetChildTrainingClass(syntheticID)
+                int fmrSlot = Utility.RandomInt(0, 10)
+                int adultIdx = (fmrSlot * 20) + (raceIdx * 2) + gender
+                if (adultIdx >= 0 && adultIdx < fmrStorage.AdultChildren.Length)
+                    fmrBase = fmrStorage.AdultChildren[adultIdx]
+                    TTM_Debug.debug("TTM_ServiceChildrenLogic: Resolved fmrBase for child " + syntheticID + ", class " + trainClass + " (fmrSlot " + fmrSlot + "), gender " + gender + ", race " + raceIdx + ", from FMR: " + fmrBase)
+                endif
+            endif
+        endif
+    endif
+
+    ; 2. Resolve adult child base from Beeing Female's AddOn AdultActor hierarchy
+    int bfVariantCount = 0
+    if (Game.GetModByName("BeeingFemale.esm") != 255)
+        string adultListName = "AdultActor_Female"
+        if (gender == 0)
+            adultListName = "AdultActor_Male"
+        endif
+        bfBase = ResolveBFActorBase(bioMother, bioFather, childRace, adultListName, (player == bioMother || player == bioFather))
+        if (bfBase != None && childRace != None)
+            bfVariantCount = StorageUtil.FormListCount(childRace, "FW.AddOn." + adultListName)
+            if (bfVariantCount < 1)
+                bfVariantCount = 1
+            endif
+        endif
+    endif
+
+    if (fmrBase != None && bfBase != None)
+        ; Pool all 11 FMR adult face slots (weight 11) with Beeing Female variants (weight bfVariantCount) for maximum face diversity
+        if (Utility.RandomInt(1, bfVariantCount + 11) <= 11)
+            adultBase = fmrBase
+        else
+            adultBase = bfBase
+            usedBFBase = true
+        endif
+    elseif (fmrBase != None)
+        adultBase = fmrBase
+    elseif (bfBase != None)
+        adultBase = bfBase
+        usedBFBase = true
+    endif
+
+    if (adultBase == None)
+        TTM_Debug.err("TTM_ServiceChildrenLogic: Failed to resolve adultBase for child " + syntheticID)
+        return
+    endif
+
+    Actor spawnAnchor = GetChildSpawnAnchor(guardianA, guardianB, bioMother, player)
+    Actor spawnedAdult = spawnAnchor.PlaceAtMe(adultBase, 1, true) as Actor
+    if (spawnedAdult == None)
+        TTM_Debug.err("TTM_ServiceChildrenLogic: PlaceAtMe failed to spawn adult child for " + syntheticID)
+        return
+    endif
+
+    if (usedBFBase)
+        TTM_ServiceFertilityBF.TakeOverChild(spawnedAdult)
+    endif
+
+    if (childName != "")
+        spawnedAdult.SetDisplayName(childName, true)
+    endif
+
+    bool isPlayerChild = IsLineagePlayerChild(guardianA, guardianB, bioMother, bioFather, player)
+    TTM_Debug.debug("TTM_ServiceChildrenLogic: SpawnAdultChild isPlayerChild: " + isPlayerChild)
+
+    if (isPlayerChild)
+        Actor coSpouse = None
+        if (guardianA != None && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
+            coSpouse = guardianA
+        elseif (guardianB != None && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
+            coSpouse = guardianB
+        elseif (bioMother != None && bioMother != player && MARAS.IsNPCStatus(bioMother, "married"))
+            coSpouse = bioMother
+        elseif (bioFather != None && bioFather != player && MARAS.IsNPCStatus(bioFather, "married"))
+            coSpouse = bioFather
+        endif
+        MARAS.RegisterChildActor(spawnedAdult, player, coSpouse, None, bioMother, bioFather, syntheticID, 4)
+    else
+        Actor gA = guardianA
+        Actor gB = guardianB
+        if (gA == None && gB == None)
+            gA = bioMother
+            gB = MARAS.GetMotherPartner(syntheticID)
+            if (gB == None)
+                gB = bioFather
+            endif
+        endif
+        MARAS.RegisterChildActor(spawnedAdult, gA, gB, None, bioMother, bioFather, syntheticID, 4)
+    endif
+
+    spawnedAdult.EvaluatePackage()
+
+    Debug.Notification(spawnedAdult.GetDisplayName() + " has arrived in Skyrim.")
+    TTM_Debug.info("TTM_ServiceChildrenLogic: Successfully spawned adult child actor " + spawnedAdult.GetDisplayName() + " (FormID " + spawnedAdult.GetFormID() + ") from synthetic ID " + syntheticID)
 EndFunction
 
 

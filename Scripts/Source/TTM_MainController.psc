@@ -365,7 +365,12 @@ Event OnSpawnSyntheticChild(string eventName, string strArg, float afChildId, Fo
     int childID = afChildId as int
     TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
     if (childrenLogicQst)
-        childrenLogicQst.SpawnSyntheticChild(childID)
+        int stage = MARAS.GetChildStage(childID)
+        if (stage == 4)
+            childrenLogicQst.SpawnAdultChild(childID)
+        else
+            childrenLogicQst.SpawnSyntheticChild(childID)
+        endif
     endif
 EndEvent
 
@@ -535,6 +540,20 @@ Event OnChildEvent(string eventName, string strArg, float numArg, Form sender)
     elseif(eventType == "guardians_changed")
         if (TTM_Data.GetHasSkyrimNet())
             TTM_ServiceSkyrimNet.RegisterChildParentsChanged(child, guardianA, guardianB, reason)
+        endif
+    elseif(eventType == "sent_to_training")
+        int childID = MARAS.GetJsonInt(strArg, "childId")
+        string childName = MARAS.GetJsonString(strArg, "childName")
+        TTM_ServiceAffection.ApplyChildMilestoneForParents(childID, "training")
+        if (TTM_Data.GetHasSkyrimNet())
+            TTM_ServiceSkyrimNet.RegisterChildSentToTraining(childID, childName, reason)
+        endif
+    elseif(eventType == "became_adult")
+        int childID = MARAS.GetJsonInt(strArg, "childId")
+        string childName = MARAS.GetJsonString(strArg, "childName")
+        TTM_ServiceAffection.ApplyChildMilestoneForParents(childID, "adult")
+        if (TTM_Data.GetHasSkyrimNet())
+            TTM_ServiceSkyrimNet.RegisterChildBecameAdult(childID, childName)
         endif
     endif
 EndEvent

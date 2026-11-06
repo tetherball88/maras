@@ -31,6 +31,7 @@ namespace MARAS {
         // Polling logic
         void CheckTeammateChanges();
         void CheckDayChanged();
+        void CheckPlayerLevelChanged();
         void SanitizePlayerFactions();
 
         // Get current in-game day
@@ -49,6 +50,7 @@ namespace MARAS {
         // State tracking
         std::unordered_set<FormID> previousTeammates_;
         float previousGameDay_ = -1.0f;
+        std::uint16_t previousPlayerLevel_ = 0;
 
         // Intervals (in milliseconds)
         static constexpr std::chrono::milliseconds kTeammateCheckInterval{15000};  // 15 seconds

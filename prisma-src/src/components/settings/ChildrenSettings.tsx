@@ -2,15 +2,58 @@ import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
+import { SliderInput } from '../shared/SliderInput'
 import { SectionCard } from '../shared/SectionCard'
-import { Baby } from 'lucide-react'
+import { Baby, GraduationCap } from 'lucide-react'
 
 export const ChildrenSettings: React.FC = () => {
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
+  const trainingDays = settings.childTrainingDurationDays ?? 14
+  const trainingCost = settings.childTrainingCost ?? 2000
 
   return (
     <div className="space-y-[1rem]">
+      <SectionCard title="Child Training & Adulthood" icon={GraduationCap}>
+        <SettingRow
+          label="Training Duration (Days)"
+          description={`Number of in-game days required for a child in Stage 3 (Training) to graduate to Stage 4 (Adult) (${trainingDays} day${trainingDays === 1 ? '' : 's'}). You can also complete training early from the child's profile.`}
+        >
+          <SliderInput
+            value={trainingDays}
+            min={1}
+            max={120}
+            step={1}
+            unit="d"
+            onChange={(val) => updateSetting('childTrainingDurationDays', Math.round(val))}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="Training Tuition Cost (Gold)"
+          description={`Gold required to send a player child away for adolescent training (${trainingCost} gold). Set to 0 for free training.`}
+        >
+          <SliderInput
+            value={trainingCost}
+            min={0}
+            max={10000}
+            step={100}
+            unit="g"
+            onChange={(val) => updateSetting('childTrainingCost', Math.round(val))}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="Require Faction Membership for Guild Training"
+          description="When enabled, sending a player child to guild, temple, or Daedric covenant training requires the Player to meet that location's membership or patronage criteria."
+        >
+          <ToggleSwitch
+            checked={settings.childTrainingRequireFaction ?? true}
+            onChange={(val) => updateSetting('childTrainingRequireFaction', val)}
+          />
+        </SettingRow>
+      </SectionCard>
+
       <SectionCard title="Children & Household Pet Settings" icon={Baby}>
         <SettingRow
           label="Global Ban Critters"

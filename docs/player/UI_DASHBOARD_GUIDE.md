@@ -101,7 +101,7 @@ Clicking on **any NPC's name or card** anywhere in the Dashboard opens their ful
 - 🧭 **Teleport Player To**: Instantly fast-travel yourself right to that NPC's exact spot in the world!
 - 🙋 **Teleport NPC To Player**: Summon a lost spouse, follower, or child right to your feet!
 - 💘 **Matchmaking**: Open a dedicated matchmaking pop-up specifically for that NPC.
-- 👶 **Spawn Child** *(for grown biological children)*: Turns an abstract biological child record into a real, physical child actor walking around your home!
+- 👶 **Spawn Child / Spawn Adult** *(for biological children at Stage 2 or Stage 4)*: Turns an unspawned young child record into a real child actor living in your home, or spawns a graduated Stage 4 adult child as an independent traveling adventurer who roams Skyrim's inns and visits family homes while available for hire as a follower!
 - ✨ **Evaluate Secret** *(for children with Paternity Secrets + SkyrimNet)*: Ask the SkyrimNet AI to evaluate whether a hidden paternity secret gets discovered!
 
 ### 🛠️ What You Can Customize Inside an NPC's Profile

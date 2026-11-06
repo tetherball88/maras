@@ -4,6 +4,7 @@
 #include "RE/P/PackageLocation.h"
 #include "RE/T/TESDataHandler.h"
 #include "RE/T/TESPackage.h"
+#include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
@@ -31,6 +32,11 @@ namespace MARAS {
         // Initialize/reset state to current values to prevent false change events
         previousTeammates_ = GetCurrentTeammates();
         previousGameDay_ = GetCurrentGameDay();
+        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+            previousPlayerLevel_ = player->GetLevel();
+        } else {
+            previousPlayerLevel_ = 0;
+        }
 
         SanitizePlayerFactions();
 
@@ -56,6 +62,7 @@ namespace MARAS {
         if (!initialized_) return;
 
         previousTeammates_.clear();
+        previousPlayerLevel_ = 0;
         initialized_ = false;
         MARAS_LOG_INFO("PollingService shutdown");
     }
@@ -70,6 +77,9 @@ namespace MARAS {
 
         auto now = std::chrono::steady_clock::now();
 
+        // Check if Player leveled up (handles LevelUpMenu close, Experience mod, or console)
+        CheckPlayerLevelChanged();
+
         // Check teammates and sanitize player factions every 15 seconds
         if (now - lastTeammateCheck_ >= kTeammateCheckInterval) {
             CheckTeammateChanges();
@@ -83,11 +93,13 @@ namespace MARAS {
             lastDayCheck_ = now;
         }
 
-        // Check child order expirations every 5 seconds
+        // Check child order expirations, child training progress, and adult child travel arrival every 5 seconds
         if (now - lastChildOrderCheck_ >= kChildOrderCheckInterval) {
             const float currentDay = GetCurrentGameDay();
             if (currentDay >= 0.0f) {
                 PlayerChildrenService::GetSingleton().Tick(currentDay);
+                NPCRelationshipManager::GetSingleton().CheckChildrenTrainingProgress(currentDay);
+                AdultChildTravelService::GetSingleton().Tick(currentDay);
             }
             lastChildOrderCheck_ = now;
         }
@@ -155,8 +167,35 @@ namespace MARAS {
             // Check auto-marriage for engaged NPC couples after 5 days
             NPCRelationshipManager::GetSingleton().CheckAutoMarriageForEngagedNPCs(currentDay);
 
+            // Check if any children in training have completed their training duration
+            NPCRelationshipManager::GetSingleton().CheckChildrenTrainingProgress(currentDay);
+
+            // Rotate travel destinations for independent Stage 4 adult children
+            AdultChildTravelService::GetSingleton().OnDayChanged(currentDay);
+
             SendDayChangeEvent(currentDay);
             previousGameDay_ = currentDay;
+        }
+    }
+
+    void PollingService::CheckPlayerLevelChanged() {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            return;
+        }
+        const std::uint16_t currentLevel = player->GetLevel();
+        if (currentLevel == 0) {
+            return;
+        }
+        if (previousPlayerLevel_ == 0) {
+            previousPlayerLevel_ = currentLevel;
+            return;
+        }
+        if (currentLevel != previousPlayerLevel_) {
+            MARAS_LOG_INFO("Player level changed: {} -> {} — scaling active adult children",
+                           previousPlayerLevel_, currentLevel);
+            previousPlayerLevel_ = currentLevel;
+            NPCRelationshipManager::GetSingleton().ReassertAllChildVisualsOnLoad();
         }
     }
 

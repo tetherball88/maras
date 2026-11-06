@@ -61,7 +61,7 @@ flowchart TD
 
 ### Related Architecture Documents
 - [SKYRIMNET_AND_AI_INTEGRATION.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/SKYRIMNET_AND_AI_INTEGRATION.md) — Deep dive into `SkyrimNetIntegration`, C++ decorators, `MatchmakingService`, `BanterCoordinatorService`, `IntimateThreadService` (OStim), and the `tetherball88.maras` bundle.
-- [HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md) — Deep dive into `SpouseHierarchyManager`, `PlayerHouseService`, `HomeCellService`, `SpouseAssetsService`, `SpouseBuffService`, and `PlayerChildrenService`.
+- [HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md) — Deep dive into `SpouseHierarchyManager`, `PlayerHouseService`, `HomeCellService`, `SpouseAssetsService`, `SpouseBuffService`, `PlayerChildrenService`, and `AdultChildTravelService`.
 - [API_AND_PRISMA_BRIDGE_REFERENCE.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/API_AND_PRISMA_BRIDGE_REFERENCE.md) — Complete reference for `MARAS_PublicAPI.h`, `MARAS.psc` native functions/events, and the Prisma UI JSON bridge.
 - [RELATIONSHIP_DYNAMICS_GUIDE.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/RELATIONSHIP_DYNAMICS_GUIDE.md) — Guide to the unified pair-keyed relationship engine (`NPCRelationshipManager`), cheating/affair states, and paternity secrets.
 - [FERTILITY_MODE_RELOADED_INTEGRATION.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/FERTILITY_MODE_RELOADED_INTEGRATION.md) — Integration architecture for Fertility Mode Reloaded (FMR).
@@ -79,6 +79,7 @@ flowchart TD
   - [HomeCellService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/HomeCellService.md) — Heuristic detection of an NPC's original pre-marriage home cell and bed/persistence markers.
   - [SpouseAssetsService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SpouseAssetsService.md) — Social-class store income calculation and home-share gold payouts.
   - [PlayerChildrenService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PlayerChildrenService.md) — 6-slot household child management, timed `Variable06` orders/games, `Variable07` forcegreets, and pet/critter adoption.
+  - [AdultChildTravelService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/AdultChildTravelService.md) — Autonomous travel and inn/family-visit rotation across Skyrim for independent Stage 4 (`Adult`) offspring.
   - [NameService.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/NameService.md) — Lore-friendly race-specific child naming and species-aware critter naming.
 - **AI, Autonomous World & Scene Coordination**:
   - [SkyrimNetIntegration.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetIntegration.md) — Dynamic `SkyrimNet.dll` binding, 21+ prompt decorators, async LLM evaluation pipelines, and memory/event dispatch.

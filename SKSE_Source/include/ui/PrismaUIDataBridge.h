@@ -68,6 +68,8 @@ namespace MARAS {
         void ProcessRemoveChild(const nlohmann::json& payload);
         void ProcessUpdateChild(const nlohmann::json& payload);
         void ProcessSpawnChild(const nlohmann::json& payload);
+        void ProcessSendChildToTraining(const nlohmann::json& payload);
+        void ProcessCompleteChildTraining(const nlohmann::json& payload);
         void ProcessRelocateFamilyUnit(const nlohmann::json& payload);
         void ProcessSetPaternitySecretEdges(const nlohmann::json& payload);
         void ProcessEvaluateChildSecret(const nlohmann::json& payload);

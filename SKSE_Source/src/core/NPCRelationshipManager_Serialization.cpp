@@ -1,5 +1,6 @@
 #include "core/NPCRelationshipManager.h"
 
+#include "core/AdultChildProgression.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/Serialization.h"
@@ -13,6 +14,7 @@ namespace MARAS {
 
     // Save/Load support
     void NPCRelationshipManager::Clear() {
+        AdultChildProgression::GetSingleton().RevertRuntimeBases();
         allRegistered.clear();
         baseToRefIDMap.clear();
         npcProfiles.clear();
@@ -232,6 +234,22 @@ namespace MARAS {
                 MARAS_LOG_ERROR("Failed to write presumedFatherID for child {:08X}", cID);
                 return false;
             }
+
+            // Version 6+ training lifecycle & bio carry-over fields
+            if (!serialization->WriteRecordData(entry.trainingClassIndex) ||
+                !serialization->WriteRecordData(entry.trainingStartGameDay)) {
+                MARAS_LOG_ERROR("Failed to write training lifecycle fields for child {:08X}", cID);
+                return false;
+            }
+            uint32_t bioLen = static_cast<uint32_t>(entry.savedBioTemplateName.size());
+            if (!serialization->WriteRecordData(bioLen)) return false;
+            if (bioLen > 0) {
+                if (!serialization->WriteRecordData(entry.savedBioTemplateName.data(), bioLen)) return false;
+            }
+            if (!serialization->WriteRecordData(entry.savedRaceIndex)) {
+                MARAS_LOG_ERROR("Failed to write savedRaceIndex for child {:08X}", cID);
+                return false;
+            }
         }
 
         // Save Tier 2 Partner Agency Extension Block ('AGN1' = 0x41474E31)
@@ -295,6 +313,80 @@ namespace MARAS {
                 !serialization->WriteRecordData(entry.paternitySecret.isPregnancySecretForPartner)) {
                 MARAS_LOG_ERROR("Failed to write pregnancy secret state for child {:08X}", cID);
                 return false;
+            }
+        }
+
+        // Save Child Visual Genetics & RPG Extension Block ('CHD1' = 0x43484431)
+        constexpr std::uint32_t kChildVisualRpgExtMagic = 0x43484431;
+        if (!serialization->WriteRecordData(kChildVisualRpgExtMagic)) {
+            MARAS_LOG_ERROR("Failed to write child visual/RPG extension magic");
+            return false;
+        }
+        std::uint32_t chdExtCount = static_cast<std::uint32_t>(childrenByID.size());
+        if (!serialization->WriteRecordData(chdExtCount)) {
+            MARAS_LOG_ERROR("Failed to write child visual/RPG extension count");
+            return false;
+        }
+        for (const auto& [cID, entry] : childrenByID) {
+            if (!serialization->WriteRecordData(entry.childID) ||
+                !serialization->WriteRecordData(entry.hairColorFormID) ||
+                !serialization->WriteRecordData(entry.eyesPartFormID) ||
+                !serialization->WriteRecordData(entry.hairPartFormID) ||
+                !serialization->WriteRecordData(entry.facialHairPartFormID) ||
+                !serialization->WriteRecordData(entry.heightScale) ||
+                !serialization->WriteRecordData(entry.rpgApplied)) {
+                MARAS_LOG_ERROR("Failed to write child visual/RPG state for child {:08X}", cID);
+                return false;
+            }
+        }
+
+        // Save Child Lycanthropy / Beastblood Extension Block ('LYC1' = 0x4C594331)
+        constexpr std::uint32_t kChildBeastbloodExtMagic = 0x4C594331;
+        if (!serialization->WriteRecordData(kChildBeastbloodExtMagic)) {
+            MARAS_LOG_ERROR("Failed to write child beastblood extension magic");
+            return false;
+        }
+        std::uint32_t lycExtCount = static_cast<std::uint32_t>(childrenByID.size());
+        if (!serialization->WriteRecordData(lycExtCount)) {
+            MARAS_LOG_ERROR("Failed to write child beastblood extension count");
+            return false;
+        }
+        for (const auto& [cID, entry] : childrenByID) {
+            if (!serialization->WriteRecordData(entry.childID) ||
+                !serialization->WriteRecordData(entry.hasBeastblood) ||
+                !serialization->WriteRecordData(entry.beastbloodEvaluated)) {
+                MARAS_LOG_ERROR("Failed to write child beastblood state for child {:08X}", cID);
+                return false;
+            }
+        }
+
+        // Save Child Lineage Snapshot & Level Scaling Extension Block ('CHD2' = 0x43484432)
+        constexpr std::uint32_t kChildLineageSnapshotExtMagic = 0x43484432;
+        if (!serialization->WriteRecordData(kChildLineageSnapshotExtMagic)) {
+            MARAS_LOG_ERROR("Failed to write child lineage snapshot extension magic");
+            return false;
+        }
+        std::uint32_t chd2ExtCount = static_cast<std::uint32_t>(childrenByID.size());
+        if (!serialization->WriteRecordData(chd2ExtCount)) {
+            MARAS_LOG_ERROR("Failed to write child lineage snapshot extension count");
+            return false;
+        }
+        for (const auto& [cID, entry] : childrenByID) {
+            if (!serialization->WriteRecordData(entry.childID) ||
+                !serialization->WriteRecordData(entry.bioLineageEvaluated) ||
+                !serialization->WriteRecordData(entry.guardianLineageEvaluated) ||
+                !serialization->WriteRecordData(entry.bioSkillBonuses.data(),
+                                                static_cast<std::uint32_t>(entry.bioSkillBonuses.size())) ||
+                !serialization->WriteRecordData(entry.guardianSkillBonuses.data(),
+                                                static_cast<std::uint32_t>(entry.guardianSkillBonuses.size())) ||
+                !serialization->WriteRecordData(entry.lastAppliedLevel)) {
+                MARAS_LOG_ERROR("Failed to write child lineage snapshot state for child {:08X}", cID);
+                return false;
+            }
+            std::uint32_t blessingLen = static_cast<std::uint32_t>(entry.daedricBlessingId.size());
+            if (!serialization->WriteRecordData(blessingLen)) return false;
+            if (blessingLen > 0) {
+                if (!serialization->WriteRecordData(entry.daedricBlessingId.data(), blessingLen)) return false;
             }
         }
 
@@ -448,6 +540,7 @@ namespace MARAS {
         } else {
             // Version 4+ Unified Format
             const bool hasPresumedFather = (version >= 5);
+            const bool hasTrainingLifecycle = (version >= 6);
             constexpr std::uint32_t kMaxChildStringLen = 512;
 
             std::uint32_t profileCount = 0;
@@ -737,6 +830,28 @@ namespace MARAS {
                         if (!readValue(oldPresumedFather)) break;
                     }
 
+                    int32_t trainClassIdx = -1;
+                    float trainStartDay = 0.0f;
+                    std::string savedBioTpl;
+                    uint8_t savedRaceIdx = 255;
+                    if (hasTrainingLifecycle) {
+                        if (!readValue(trainClassIdx) ||
+                            !readValue(trainStartDay)) break;
+                        uint32_t bioLen = 0;
+                        if (!readValue(bioLen) || bioLen > kMaxChildStringLen || !hasRemainingBytes(bioLen)) {
+                            MARAS_LOG_ERROR("Invalid or out-of-bounds child savedBioTemplateName length {} during load", bioLen);
+                            break;
+                        }
+                        if (bioLen > 0) {
+                            savedBioTpl.resize(bioLen);
+                            if (!readBuffer(savedBioTpl.data(), bioLen)) {
+                                MARAS_LOG_ERROR("Failed to read child savedBioTemplateName of length {}", bioLen);
+                                break;
+                            }
+                        }
+                        if (!readValue(savedRaceIdx)) break;
+                    }
+
                     bool validChild = false;
                     if (oldChild == kPlayerFormID) {
                         newChild = kPlayerFormID;
@@ -769,7 +884,9 @@ namespace MARAS {
                         }
 
                         childrenByID.emplace(newChild, ChildRegistryEntry(newChild, guardianA, guardianB, childName, ts, isAdopted, bioMother, bioFather,
-                                                                          isBioChild, concTs, birthTs, pSec, stage, trainingLoc, childGender, newPresumedFather));
+                                                                          isBioChild, concTs, birthTs, pSec, stage, trainingLoc, childGender, newPresumedFather,
+                                                                          trainClassIdx, trainStartDay, savedBioTpl, savedRaceIdx));
+                        allRegistered.erase(newChild);
                         SkyrimNetProfileService::GetSingleton().MarkActorStageUpdated(newChild, stage);
                     }
                 }
@@ -907,6 +1024,167 @@ namespace MARAS {
                                     }
                                 }
                             }
+
+                            // Optional Child Visual Genetics & RPG Extension Block ('CHD1' = 0x43484431)
+                            constexpr std::uint32_t kChildVisualRpgExtMagic = 0x43484431;
+                            if (hasRemainingBytes(sizeof(std::uint32_t))) {
+                                std::uint32_t chdMagic = 0;
+                                if (readValue(chdMagic) && chdMagic == kChildVisualRpgExtMagic) {
+                                    std::uint32_t chdExtCount = 0;
+                                    if (readValue(chdExtCount)) {
+                                        for (std::uint32_t cIdx = 0; cIdx < chdExtCount; ++cIdx) {
+                                            RE::FormID oldChild = 0, newChild = 0;
+                                            RE::FormID oldHairColor = 0, newHairColor = 0;
+                                            RE::FormID oldEyes = 0, newEyes = 0;
+                                            RE::FormID oldHair = 0, newHair = 0;
+                                            RE::FormID oldBeard = 0, newBeard = 0;
+                                            float heightScale = 1.0f;
+                                            bool rpgApplied = false;
+
+                                            if (!readValue(oldChild) || !readValue(oldHairColor) ||
+                                                !readValue(oldEyes) || !readValue(oldHair) ||
+                                                !readValue(oldBeard) || !readValue(heightScale) ||
+                                                !readValue(rpgApplied)) {
+                                                break;
+                                            }
+
+                                            bool validChild = false;
+                                            if (oldChild == kPlayerFormID) {
+                                                newChild = kPlayerFormID;
+                                                validChild = true;
+                                            } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                                newChild = oldChild;
+                                                validChild = true;
+                                            } else {
+                                                validChild = serialization->ResolveFormID(oldChild, newChild);
+                                            }
+
+                                            if (validChild) {
+                                                auto itChild = childrenByID.find(newChild);
+                                                if (itChild != childrenByID.end()) {
+                                                    if (oldHairColor != 0 && serialization->ResolveFormID(oldHairColor, newHairColor)) {
+                                                        itChild->second.hairColorFormID = newHairColor;
+                                                    }
+                                                    if (oldEyes != 0 && serialization->ResolveFormID(oldEyes, newEyes)) {
+                                                        itChild->second.eyesPartFormID = newEyes;
+                                                    }
+                                                    if (oldHair != 0 && serialization->ResolveFormID(oldHair, newHair)) {
+                                                        itChild->second.hairPartFormID = newHair;
+                                                    }
+                                                    if (oldBeard != 0 && serialization->ResolveFormID(oldBeard, newBeard)) {
+                                                        itChild->second.facialHairPartFormID = newBeard;
+                                                    }
+                                                    itChild->second.heightScale =
+                                                        (heightScale > 0.5f && heightScale < 1.5f) ? heightScale : 1.0f;
+                                                    itChild->second.rpgApplied = rpgApplied;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Optional Child Lycanthropy / Beastblood Extension Block ('LYC1' = 0x4C594331)
+                                    constexpr std::uint32_t kChildBeastbloodExtMagic = 0x4C594331;
+                                    if (hasRemainingBytes(sizeof(std::uint32_t))) {
+                                        std::uint32_t lycMagic = 0;
+                                        if (readValue(lycMagic) && lycMagic == kChildBeastbloodExtMagic) {
+                                            std::uint32_t lycExtCount = 0;
+                                            if (readValue(lycExtCount)) {
+                                                for (std::uint32_t lIdx = 0; lIdx < lycExtCount; ++lIdx) {
+                                                    RE::FormID oldChild = 0, newChild = 0;
+                                                    bool hasBeastblood = false;
+                                                    bool beastbloodEvaluated = false;
+
+                                                    if (!readValue(oldChild) || !readValue(hasBeastblood) || !readValue(beastbloodEvaluated)) {
+                                                        break;
+                                                    }
+
+                                                    bool validChild = false;
+                                                    if (oldChild == kPlayerFormID) {
+                                                        newChild = kPlayerFormID;
+                                                        validChild = true;
+                                                    } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                                        newChild = oldChild;
+                                                        validChild = true;
+                                                    } else {
+                                                        validChild = serialization->ResolveFormID(oldChild, newChild);
+                                                    }
+
+                                                    if (validChild) {
+                                                        auto itChild = childrenByID.find(newChild);
+                                                        if (itChild != childrenByID.end()) {
+                                                            itChild->second.hasBeastblood = hasBeastblood;
+                                                            itChild->second.beastbloodEvaluated = beastbloodEvaluated;
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Optional Child Lineage Snapshot & Level Scaling Extension Block ('CHD2' = 0x43484432)
+                                            constexpr std::uint32_t kChildLineageSnapshotExtMagic = 0x43484432;
+                                            if (hasRemainingBytes(sizeof(std::uint32_t))) {
+                                                std::uint32_t chd2Magic = 0;
+                                                if (readValue(chd2Magic) && chd2Magic == kChildLineageSnapshotExtMagic) {
+                                                    std::uint32_t chd2ExtCount = 0;
+                                                    if (readValue(chd2ExtCount)) {
+                                                        for (std::uint32_t c2Idx = 0; c2Idx < chd2ExtCount; ++c2Idx) {
+                                                            RE::FormID oldChild = 0, newChild = 0;
+                                                            bool bioLineageEvaluated = false;
+                                                            bool guardianLineageEvaluated = false;
+                                                            std::array<std::uint8_t, 18> bioSkillBonuses{};
+                                                            std::array<std::uint8_t, 18> guardianSkillBonuses{};
+                                                            std::uint16_t lastAppliedLevel = 0;
+                                                            std::uint32_t blessingLen = 0;
+                                                            std::string daedricBlessingId;
+
+                                                            if (!readValue(oldChild) ||
+                                                                !readValue(bioLineageEvaluated) ||
+                                                                !readValue(guardianLineageEvaluated) ||
+                                                                !readBuffer(bioSkillBonuses.data(),
+                                                                            static_cast<std::uint32_t>(bioSkillBonuses.size())) ||
+                                                                !readBuffer(guardianSkillBonuses.data(),
+                                                                            static_cast<std::uint32_t>(guardianSkillBonuses.size())) ||
+                                                                !readValue(lastAppliedLevel) ||
+                                                                !readValue(blessingLen) ||
+                                                                blessingLen > 256) {
+                                                                break;
+                                                            }
+                                                            if (blessingLen > 0) {
+                                                                daedricBlessingId.resize(blessingLen);
+                                                                if (!readBuffer(daedricBlessingId.data(), blessingLen)) {
+                                                                    break;
+                                                                }
+                                                            }
+
+                                                            bool validChild = false;
+                                                            if (oldChild == kPlayerFormID) {
+                                                                newChild = kPlayerFormID;
+                                                                validChild = true;
+                                                            } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                                                newChild = oldChild;
+                                                                validChild = true;
+                                                            } else {
+                                                                validChild = serialization->ResolveFormID(oldChild, newChild);
+                                                            }
+
+                                                            if (validChild) {
+                                                                auto itChild = childrenByID.find(newChild);
+                                                                if (itChild != childrenByID.end()) {
+                                                                    itChild->second.bioLineageEvaluated = bioLineageEvaluated;
+                                                                    itChild->second.guardianLineageEvaluated = guardianLineageEvaluated;
+                                                                    itChild->second.bioSkillBonuses = bioSkillBonuses;
+                                                                    itChild->second.guardianSkillBonuses = guardianSkillBonuses;
+                                                                    itChild->second.lastAppliedLevel = lastAppliedLevel;
+                                                                    itChild->second.daedricBlessingId = std::move(daedricBlessingId);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -915,12 +1193,23 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Successfully loaded {} profiles, {} relationship pairs, {} pending entries, {} pending children, and {} registered children",
                        npcProfiles.size(), relationshipPairs.size(), pendingRelationshipsByBaseID.size(), pendingChildrenByBaseID.size(), childrenByID.size());
-        for (const auto& [cID, entry] : childrenByID) {
+        for (auto& [cID, entry] : childrenByID) {
             if (entry.guardianAID != 0) EnsureRegistered(entry.guardianAID);
             if (entry.guardianBID != 0) EnsureRegistered(entry.guardianBID);
             if (entry.bioMotherID != 0) EnsureRegistered(entry.bioMotherID);
             if (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) EnsureRegistered(entry.bioFatherID);
             if (entry.presumedFatherID != 0) EnsureRegistered(entry.presumedFatherID);
+            if (!entry.beastbloodEvaluated) {
+                EvaluateChildBeastbloodInheritance(entry);
+            }
+            if (entry.stage != ChildStage::Unborn && !entry.bioLineageEvaluated) {
+                AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, entry);
+            }
+            if (entry.stage == ChildStage::Adult && !entry.guardianLineageEvaluated) {
+                AdultChildProgression::GetSingleton().EvaluateChildGuardianLineageAtGraduation(*this, entry);
+            }
+            // Force runtime SetBaseActorValue sync on first 3D load after loading a save
+            entry.lastAppliedLevel = 0;
         }
         RecalculateAndUpdateGlobals();
         UpdateAllCanFormNonCheatingMainFactions();
@@ -1252,6 +1541,43 @@ namespace MARAS {
             };
             if (!entry.trainingLocation.empty()) {
                 cObj["trainingLocation"] = entry.trainingLocation;
+            }
+            if (entry.trainingClassIndex >= 0) {
+                cObj["trainingClassIndex"] = entry.trainingClassIndex;
+                cObj["trainingClassName"] = std::string(GetTrainingClassName(entry.trainingClassIndex));
+            }
+            if (entry.trainingStartGameDay > 0.0f) {
+                cObj["trainingStartGameDay"] = entry.trainingStartGameDay;
+            }
+            if (!entry.savedBioTemplateName.empty()) {
+                cObj["savedBioTemplateName"] = entry.savedBioTemplateName;
+            }
+            if (entry.savedRaceIndex <= 9) {
+                cObj["savedRaceIndex"] = entry.savedRaceIndex;
+            }
+            if (entry.hairColorFormID != 0) {
+                cObj["hairColorFormId"] = std::format("{:08X}", entry.hairColorFormID);
+            }
+            if (entry.eyesPartFormID != 0) {
+                cObj["eyesPartFormId"] = std::format("{:08X}", entry.eyesPartFormID);
+            }
+            if (entry.hairPartFormID != 0) {
+                cObj["hairPartFormId"] = std::format("{:08X}", entry.hairPartFormID);
+            }
+            if (entry.facialHairPartFormID != 0) {
+                cObj["facialHairPartFormId"] = std::format("{:08X}", entry.facialHairPartFormID);
+            }
+            cObj["heightScale"] = entry.heightScale;
+            cObj["rpgApplied"] = entry.rpgApplied;
+            cObj["hasBeastblood"] = entry.hasBeastblood;
+            cObj["beastbloodEvaluated"] = entry.beastbloodEvaluated;
+            cObj["bioLineageEvaluated"] = entry.bioLineageEvaluated;
+            cObj["guardianLineageEvaluated"] = entry.guardianLineageEvaluated;
+            if (!entry.daedricBlessingId.empty()) {
+                cObj["daedricBlessingId"] = entry.daedricBlessingId;
+            }
+            if (entry.lastAppliedLevel > 0) {
+                cObj["lastAppliedLevel"] = entry.lastAppliedLevel;
             }
             auto* regActor = HasPhysicalActor(childID)
                 ? NPCIndex::GetSingleton().GetActorFromFormId(childID)

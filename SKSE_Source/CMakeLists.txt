@@ -52,6 +52,12 @@ include("${COMMONLIB_SRC_DIR}/cmake/CommonLibSSE.cmake")
 # Setup your SKSE plugin as an SKSE plugin!
 # find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+if(TARGET yaml-cpp::yaml-cpp)
+    set(YAML_CPP_TARGET yaml-cpp::yaml-cpp)
+else()
+    set(YAML_CPP_TARGET yaml-cpp)
+endif()
 
 # Collect all source files
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
@@ -67,6 +73,7 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is require
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
     nlohmann_json::nlohmann_json
+    ${YAML_CPP_TARGET}
     ${CommonLibName}::${CommonLibName}
 )
 

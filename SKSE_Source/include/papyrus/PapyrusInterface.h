@@ -247,6 +247,8 @@ namespace MARAS::PapyrusInterface {
     int32_t GetChildStage(RE::StaticFunctionTag*, int32_t childID);
     bool SetChildTrainingLocation(RE::StaticFunctionTag*, int32_t childID, std::string location);
     std::string GetChildTrainingLocation(RE::StaticFunctionTag*, int32_t childID);
+    int32_t GetChildTrainingClass(RE::StaticFunctionTag*, int32_t childID);
+    int32_t GetChildSavedRaceIndex(RE::StaticFunctionTag*, int32_t childID);
     bool SetChildGender(RE::StaticFunctionTag*, int32_t childID, int32_t gender);
     int32_t GetChildGender(RE::StaticFunctionTag*, int32_t childID);
     bool SetChildGuardian(RE::StaticFunctionTag*, int32_t childID, int32_t slot, RE::Actor* guardian);

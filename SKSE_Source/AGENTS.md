@@ -13,7 +13,11 @@ These rules apply to all C++ headers and source files in `SKSE_Source/` (`MARAS.
 ## 1. Namespace, Logging & CommonLibSSE Conventions
 
 - **Namespace**: Enclose all declarations and implementations in `namespace MARAS { ... }`.
-- **Logging**: Always use `MARAS_LOG_INFO(...)`, `MARAS_LOG_DEBUG(...)`, `MARAS_LOG_WARN(...)`, or `MARAS_LOG_ERROR(...)` macros (`core/Logging.h`). Never use `std::cout` or raw `spdlog::info`.
+- **Logging**: Always use `MARAS_LOG_TRACE(...)`, `MARAS_LOG_DEBUG(...)`, `MARAS_LOG_INFO(...)`, `MARAS_LOG_WARN(...)`, or `MARAS_LOG_ERROR(...)` macros (`include/utils/Common.h`). Never use `std::cout` or raw `spdlog::info`.
+  - Use `MARAS_LOG_ERROR` and fail fast when critical config fields or required forms are missing (never silently guess fallbacks by string/name).
+  - Use `MARAS_LOG_INFO` only for high-level state transitions (one summary line per transition with `{:08X}` FormIDs, names, and key outcomes).
+  - Use `MARAS_LOG_DEBUG` for intermediate resolution steps (e.g., `ActorBase` / `TESClass` / `TESCombatStyle` / `BGSOutfit` resolution, `kLoad3D` visual/gear enforcement, formula inputs) so issues are diagnosable without flooding `INFO`.
+  - Use `MARAS_LOG_TRACE` for per-item or high-frequency loops.
 - **NPCIndex Scope & Usage vs. `RE::TESForm::GetAllForms()`**:
   - `NPCIndex` maps Base FormIDs (`RE::TESNPC`) to Placed Reference FormIDs (`RE::Actor` / `RE::TESObjectREFR`), supports name search (`FindByName`, `SearchBySubstring`, `GetRefID`, `GetBaseID`), and provides pre-indexed bulk iteration (`GetAllEntries()`).
   - For a **single known actor** (`RE::Actor*`), always use standard CommonLibSSE methods directly (e.g., `actor->IsChild()`, `actor->IsDead()`, `actor->IsDisabled()`, `actor->IsInCombat()`, `actor->IsPlayerTeammate()`). **Never** query `NPCIndex` to check properties of a single loaded `RE::Actor*`.

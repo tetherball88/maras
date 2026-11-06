@@ -7842,6 +7842,44 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     childCustodyPrioritizeBioParent: true,
     globalBanCritter: false,
     globalBanPet: false,
+    childTrainingDurationDays: 14,
+    childTrainingCost: 2e3,
+    childTrainingRequireFaction: true,
+    playerTrainingFactions: {
+      playerGold: 12500,
+      inThievesGuild: true,
+      inDarkBrotherhood: false,
+      inBlades: true,
+      inDawnguard: true,
+      championMeridia: true,
+      championBoethiah: false,
+      championNocturnal: true,
+      championMolagBal: false
+    },
+    trainingCatalog: [
+      { index: 0, id: "mage", className: "Arcane Evoker", location: "College of Winterhold", image: "Data/SKSE/Plugins/MARAS/childTraining/images/College of Winterhold.webp", description: "Apprenticed beneath the windswept spires of the College of Winterhold, initiates spend their days immersed in the ancient tomes of the Arcanaeum and rigorous elemental trials in the Hall of the Elements. Under the tutelage of senior wizards, they master tri-elemental Destruction—hurling Fireballs, Ice Storms, and Chain Lightning—while weaving Ironflesh armor, Steadfast Wards, and protective elemental cloaks to survive the deadliest arcane duels.", costMultiplier: 1.95, effectiveCost: 3900, requirementMet: true },
+      { index: 1, id: "warrior", className: "Shield-Brother Vanguard", location: "Jorrvaskr", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Jorrvaskr.webp", description: "Raised in the proud martial tradition of Ysgramor's Companions, young aspirants train in the courtyard behind Jorrvaskr and feast beneath its overturned longship roof in Whiterun. Tempered by daily sparring with the Circle, shield-wall drills, and hours at Eorlund Gray-Mane's forge, graduates return home clad in heavy Wolf armor, bearing a balanced Skyforge Steel blade, an iron-rimmed shield, and an unshakeable code of frontline honor.", costMultiplier: 1.5, effectiveCost: 3e3, requirementMet: true },
+      { index: 2, id: "thief", className: "Shadowfoot Infiltrator", location: "The Cistern", image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Cistern - Thieves Guild.webp", description: "Inducted into the subterranean vaults of the Ratway Cistern beneath Riften, recruits learn the unwritten rules of shadows, coin, and leverage from the Thieves Guild's veteran larcenists. Trained to move unseen across rooftops, pick masterwork tumblers, lift purses without a whisper, and loose ambush volleys from the dark, they graduate in supple Guild leather armor armed with a silent dagger and hunting bow.", costMultiplier: 1.15, effectiveCost: 2300, requirementMet: true, factionKey: "inThievesGuild", factionLabel: "Thieves Guild" },
+      { index: 3, id: "assassin", className: "Dark Brotherhood Silencer", location: "The Sanctuary", image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Sanctuary - Dark Brotherhood.webp", description: "Steeped in the dread Five Tenets of Sithis and the Night Mother within a hidden Dark Brotherhood Sanctuary, initiates undergo merciless conditioning in the art of the unseen kill. They learn to brew virulent alchemical toxins, cloak their footsteps in Muffle and Invisibility magic, and strike from the shadows with lethal precision, emerging in blood-black Shrouded armor as cold, unflinching executioners.", costMultiplier: 1.45, effectiveCost: 2900, requirementMet: false, factionKey: "inDarkBrotherhood", factionLabel: "Dark Brotherhood" },
+      { index: 4, id: "bard", className: "Spellsword Skald", location: "The Bards College", image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Bards College.webp", description: "Educated in the candlelit halls of Solitude's Bards College, young skalds study ancient Nordic verse, courtly rhetoric, and the subtle art of swaying both jarls and battlefields. Combining silver-tongued Speechcraft with dueling steel, they weave Illusion enchantments—inspiring allies with Rally and Courage or sowing chaos with Fury and Pacify—while sustaining companions with Restoration healing and Oakflesh wards.", costMultiplier: 1.3, effectiveCost: 2600, requirementMet: true },
+      { index: 5, id: "stormcloak", className: "Stormcloak Shock-Trooper", location: "Palace of the Kings", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Palace of the Kings - Stormcloak.webp", description: "Hardened on the frozen flagstones of Windhelm's Palace of the Kings, recruits endure brutal Eastmarch conditioning alongside Ulfric Stormcloak's veteran Huscarls. Emphasizing raw Nordic ferocity and mobility over heavy plate, they master the crushing momentum of two-handed battleaxes, bone-jarring shield bashes, and winter survival, returning home in Stormcloak furs ready to cleave through any frontline.", costMultiplier: 1, effectiveCost: 2e3, requirementMet: true },
+      { index: 6, id: "legionnaire", className: "Imperial Praetorian", location: "Castle Dour", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Castle Dour - Legionnaire.webp", description: "Drilled beneath the banners of the Red Diamond inside Solitude's Castle Dour, cadets are forged in the time-tested martial doctrine of the Imperial Legion. Through relentless formation marches, discipline under fire, and tactical versatility, they learn to soften enemy ranks with disciplined Imperial bow volleys before locking heavy shields and advancing with gladius-style Imperial steel.", costMultiplier: 1.1, effectiveCost: 2200, requirementMet: true },
+      { index: 7, id: "dragon_slayer", className: "Akaviri Dragonguard", location: "Sky Haven Temple", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Sky Haven Temple.webp", description: "Trained high above the Karth River within the ancient halls of Sky Haven Temple, initiates study the lost dragon-hunting treatises carved by the Akaviri Dragonguard and preserved by the Blades. Outfitted in ceremonial Akaviri heavy plate with a razor-sharp Blades katana and shield, they master parrying monstrous strikes and channeling Close Wounds Restoration magic to endure the fury of dragons.", costMultiplier: 2.2, effectiveCost: 4400, requirementMet: true, factionKey: "inBlades", factionLabel: "The Blades" },
+      { index: 8, id: "dawnguard", className: "Dawnguard Inquisitor", location: "Fort Dawnguard", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Fort Dawnguard.webp", description: "Sequestered within the fortified stone walls of Fort Dawnguard in Dayspring Canyon, recruits are drilled by veteran vampire hunters to stalk the creatures of the night. They master the mechanical punch of the Dawnguard crossbow, close-quarters war axe combat, and sacred solar Restoration—searing the undead with Sun Fire, Vampire's Bane, and the blazing mantle of Stendarr's Aura.", costMultiplier: 1.8, effectiveCost: 3600, requirementMet: true, factionKey: "inDawnguard", factionLabel: "The Dawnguard" },
+      { index: 9, id: "necromancer", className: "Whispers Necromancer", location: "College of Whispers", image: "Data/SKSE/Plugins/MARAS/childTraining/images/College of Whispers.webp", description: "Sent south to the politically sanctioned halls of Cyrodiil's College of Whispers, acolytes delve into the forbidden intersections of Conjuration, soul-binding, and necromantic servitude. Unburdened by common taboos, they learn to trap souls, command risen Revenants and Dread Zombies with a necromantic staff, and freeze the living in their tracks with biting Ice Storms and Frost Cloaks.", costMultiplier: 2.1, effectiveCost: 4200, requirementMet: true },
+      { index: 10, id: "vigilant", className: "Paladin of Stendarr", location: "Stendarr's Beacon", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Stendarr's Beacon.webp", description: "Sworn to the unyielding tenets of the God of Mercy and Righteous Rule at Stendarr's Beacon in the mountains of the Pale, novitiates are tempered into zealous witchhunters. Clad in heavy gauntlets and consecrated robes, they wade into battle with a steel mace in one hand and a Steadfast Ward in the other, fortifying their flesh with Alteration magic while banishing Daedra, witches, and the undead.", costMultiplier: 1.35, effectiveCost: 2700, requirementMet: true },
+      { index: 11, id: "healer", className: "Cleric of Kynareth", location: "Temple of Kynareth", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Temple of Kynareth.webp", description: "Apprenticed beneath the boughs of the sacred Gildergreen in Whiterun's Temple of Kynareth, acolytes dedicate themselves to the preservation of life, herbalism, and restorative grace. Shunning bloodshed for sanctuary, they master Grand Healing, Greater Wards, Ironflesh protection, and holy Circles of Protection, wielding a Staff of Grand Healing and rallying cries to keep their companions standing through the direst peril.", costMultiplier: 1.85, effectiveCost: 3700, requirementMet: true },
+      { index: 12, id: "conjurer", className: "Telvanni Spellwright", location: "House Telvanni", image: "Data/SKSE/Plugins/MARAS/childTraining/images/House Telvanni.webp", description: "Trained in the mushroom-tower citadels of Great House Telvanni in Morrowind, apprentices are steeped in ruthlessly pragmatic Dunmeri wizardry where arcane mastery is the only law. They learn to tear open the barriers of Oblivion—binding Flame, Frost, and Storm Atronachs to their will—while manifesting mystic Bound Bows and Swords and hurling crackling bolts of Shock magic.", costMultiplier: 2.25, effectiveCost: 4500, requirementMet: true },
+      { index: 13, id: "illusionist", className: "Julianos Mindweaver", location: "School of Julianos", image: "Data/SKSE/Plugins/MARAS/childTraining/images/School of Julianos.webp", description: "Tutored in logic, perception, and cognitive arcana by the monastic scholars of the School of Julianos in Cyrodiil, initiates learn that the deadliest battlefield is the mortal mind. Equipped with Master Robes of Illusion, a Staff of Frenzy, and an Elven dagger, they bend enemies to madness, terror, or docile calm with Rout, Frenzy, and Pacify before vanishing into total Invisibility.", costMultiplier: 2.4, effectiveCost: 4800, requirementMet: true },
+      { index: 14, id: "battlemage", className: "Synod Warmage", location: "The Synod Conclave", image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Synod Conclave.webp", description: "Commissioned into the Imperial Synod Conclave in the heart of Cyrodiil, cadets undergo the rigorous martial-arcane synthesis once favored by the old Imperial Battlemages. Encased in heavy warmage plate and Ironflesh wards, they charge into the fray with an enchanted Elven Sword of Scorching in one hand and devastating barrages of Fireball, Chain Lightning, and elemental cloaks in the other.", costMultiplier: 2.5, effectiveCost: 5e3, requirementMet: true },
+      { index: 15, id: "ranger", className: "Guild Wardenscout", location: "Fighters Guild", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Fighters Guild.webp", description: "Seasoned on long-range frontier contracts and wilderness expeditions with the Fighters Guild, wardenscouts are trained to survive, track, and outmaneuver any quarry in Tamriel. Outfitted in gilded Elven light armor with a masterwork Elven bow and matching blade, they combine long-distance marksmanship, woodland stealth, field alchemy, and self-healing to control skirmishes from afar.", costMultiplier: 1.7, effectiveCost: 3400, requirementMet: true },
+      { index: 16, id: "dawnbringer", className: "Meridian Dawnbringer", location: "Shrine of Meridia", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Shrine of Meridia.webp", description: "Consecrated atop Mount Kilkreath beneath the blinding radiance of the Lady of Infinite Energies, initiates are forged into living vessels of Meridia's wrath against all things undead and profane. Resplendent in Elven Gilded armor with an Elven Shield and a blazing solar-enchanted blade, they purge necromancers and vampires alike with Sun Fire, Vampire's Bane, Fireballs, and sacred Circles of Protection.", costMultiplier: 2.75, effectiveCost: 5500, requirementMet: true, factionKey: "championMeridia", factionLabel: "Champion of Meridia" },
+      { index: 17, id: "shadowblade", className: "Boethian Shadowblade", location: "Sacellum of Boethiah", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Sacellum of Boethiah.webp", description: "Tempered in blood and treachery high in the mountains of Eastmarch at the Sacellum of Boethiah, only those who prove their ruthless will to survive emerge from the Prince of Plots' arena. Clad in midnight-black Ebony plate and Ebonyflesh wards, they stalk their prey under Muffle and Invisibility, sowing Frenzy among rivals before striking with an Ebony Bow and a life-draining Ebony Sword of the Vampire.", costMultiplier: 3.25, effectiveCost: 6500, requirementMet: false, factionKey: "championBoethiah", factionLabel: "Champion of Boethiah" },
+      { index: 18, id: "nightingale", className: "Nightingale Sentinel", location: "Nightingale Hall", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Nightingale Hall.webp", description: "Sworn to the Evergloam within the hidden rock-cut sanctum of Nightingale Hall, initiates walk the twilight path as guardians of Nocturnal's Triad. Mantle-bound in full midnight Nightingale armor and armed with the life-siphoning Nightingale Blade and storm-charged Nightingale Bow, they glide through darkness as unseen sentinels who command Invisibility, Muffle, and masterwork Illusion.", costMultiplier: 3.1, effectiveCost: 6200, requirementMet: true, factionKey: "championNocturnal", factionLabel: "Nightingale (Nocturnal)" },
+      { index: 19, id: "dread_scion", className: "Coldharbour Dreadknight", location: "Shrine of Molag Bal", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Shrine of Molag Bal.webp", description: "Anointed in dark subjugation before the rusted altar of the Lord of Domination, initiates endure the harrowing rites of Coldharbour to break the weak and command the dead. Clad in crimson-and-black vampire plate, they crush both body and spirit with a soul-siphoning Ebony Mace of Leeching, enslaving fallen foes as Dread Zombies while unleashing freezing Ice Storms and terrifying Rout magic.", costMultiplier: 2.9, effectiveCost: 5800, requirementMet: false, factionKey: "championMolagBal", factionLabel: "Champion of Molag Bal" },
+      { index: 20, id: "pack_hunter", className: "Primal Pack Hunter", location: "Frostmoon Crag", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Frostmoon Crag.webp", description: "Reserved exclusively for werewolf-blooded youth who inherited Hircine's gift, Majni's reclusive pack beneath the frozen peaks of Solstheim teaches young lycanthropes to master the beast within in harmony with the wild. Clad in rugged hunter furs and armed with a carved Nordic bow and war axe, they stalk prey across the wilds alongside spectral wolf familiars and bolster allies with pack howls.", costMultiplier: 2.45, effectiveCost: 4900, requirementMet: true, factionKey: "frostmoonPack", factionLabel: "Beastblood or Champion of Hircine", requiresBeastblood: true },
+      { index: 21, id: "pack_berserker", className: "Primal Pack Berserker", location: "The Underforge", image: "Data/SKSE/Plugins/MARAS/childTraining/images/Under Forge.webp", description: "Closed to mortals and open only to offspring born with the Beastblood, the secret stone sanctum beneath the Skyforge is where the Companions' Inner Circle trains young werewolves to harness the unbridled fury of the Wolf Spirit. Clad in Skyforge Wolf Armor and wielding a razor-edged Skyforge Steel Battleaxe, they charge fearlessly into the fray with terrifying howls, spectral packmates, and the untamed power of the Beast Form.", costMultiplier: 2.35, effectiveCost: 4700, requirementMet: true, factionKey: "companionsCircle", factionLabel: "The Circle (Underforge) or Beastblood", requiresBeastblood: true }
+    ],
     skyrimnetActionRadius: 3e3,
     skyrimnetUseLLMMemories: true,
     skyrimnetUseDecisions: true,
@@ -10758,6 +10796,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           isEphemeral: item.isEphemeral ?? (existing == null ? void 0 : existing.isEphemeral),
           hasRefID: item.hasRefID ?? (existing == null ? void 0 : existing.hasRefID),
           trainingLocation: item.trainingLocation ?? (existing == null ? void 0 : existing.trainingLocation),
+          trainingClassIndex: item.trainingClassIndex ?? (existing == null ? void 0 : existing.trainingClassIndex),
+          trainingClassName: item.trainingClassName ?? (existing == null ? void 0 : existing.trainingClassName),
+          trainingStartGameDay: item.trainingStartGameDay ?? (existing == null ? void 0 : existing.trainingStartGameDay),
           critterBanned: (existing == null ? void 0 : existing.critterBanned) ?? item.critterBanned,
           petBanned: (existing == null ? void 0 : existing.petBanned) ?? item.petBanned,
           currentCritter: item.currentCritter !== void 0 ? item.currentCritter : existing == null ? void 0 : existing.currentCritter,
@@ -10804,6 +10845,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             isEphemeral: detail.isEphemeral,
             hasRefID: detail.hasRefID,
             trainingLocation: detail.trainingLocation,
+            trainingClassIndex: detail.trainingClassIndex,
+            trainingClassName: detail.trainingClassName,
+            trainingStartGameDay: detail.trainingStartGameDay,
             critterBanned: detail.critterBanned,
             petBanned: detail.petBanned,
             currentCritter: detail.currentCritter,
@@ -15881,6 +15925,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }
     },
     handleChildPromoted: (oldId, newId) => {
+      const isSyntheticTarget = newId.toUpperCase().startsWith("FF7");
       set((state) => {
         const newChildren = new Map(state.rawChildren);
         const oldChild = newChildren.get(oldId);
@@ -15889,8 +15934,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           newChildren.set(newId, {
             ...oldChild,
             childId: newId,
-            hasRefID: true,
-            isEphemeral: false
+            hasRefID: !isSyntheticTarget,
+            isEphemeral: isSyntheticTarget
           });
         }
         const newProfiles = new Map(state.npcProfiles);
@@ -15900,8 +15945,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           newProfiles.set(newId, {
             ...oldProf,
             formId: newId,
-            hasRefID: true,
-            isEphemeral: false
+            hasRefID: !isSyntheticTarget,
+            isEphemeral: isSyntheticTarget
           });
         }
         return {
@@ -15915,11 +15960,116 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           npcProfiles: newProfiles,
           npcDetailId: state.npcDetailId === oldId ? newId : state.npcDetailId,
           selectedNpcId: state.selectedNpcId === oldId ? newId : state.selectedNpcId,
-          statusMsg: `Child spawned successfully.`
+          statusMsg: isSyntheticTarget ? `Child sent to training.` : `Child spawned successfully.`
         };
       });
       sendMarasAction("fetchNPCDetail", { formId: newId });
       sendMarasAction("fetchOverview");
+    },
+    sendChildToTraining: (childId, trainingClassIndex) => {
+      sendMarasAction("sendChildToTraining", { childId, trainingClassIndex });
+      set({ statusMsg: `Sending child (${childId}) to training...` });
+      if (typeof window !== "undefined" && !window.marasAction) {
+        const TRAINING_INFO = [
+          { className: "Mage", location: "College of Winterhold" },
+          { className: "Warrior", location: "Jorrvaskr" },
+          { className: "Thief", location: "The Cistern" },
+          { className: "Assassin", location: "The Sanctuary" },
+          { className: "Bard", location: "The Bards College" },
+          { className: "Stormcloak", location: "Palace of the Kings" },
+          { className: "Legionnaire", location: "Castle Dour" },
+          { className: "Dragon Slayer", location: "Sky Haven Temple" },
+          { className: "Dawnguard", location: "Fort Dawnguard" },
+          { className: "Necromancer", location: "College of Whispers" },
+          { className: "Vigilant", location: "Stendarr's Beacon" }
+        ];
+        const info = TRAINING_INFO[trainingClassIndex] || TRAINING_INFO[1];
+        setTimeout(() => {
+          set((state) => {
+            const newChildren = new Map(state.rawChildren);
+            const child = newChildren.get(childId);
+            const newProfiles = new Map(state.npcProfiles);
+            const profile = newProfiles.get(childId);
+            if (child) {
+              newChildren.set(childId, {
+                ...child,
+                stage: "training",
+                hasRefID: false,
+                isEphemeral: true,
+                trainingClassIndex,
+                trainingClassName: info.className,
+                trainingLocation: info.location,
+                trainingStartGameDay: state.currentGameDay
+              });
+            }
+            if (profile) {
+              newProfiles.set(childId, {
+                ...profile,
+                stage: "training",
+                hasRefID: false,
+                isEphemeral: true,
+                trainingClassIndex,
+                trainingClassName: info.className,
+                trainingLocation: info.location,
+                trainingStartGameDay: state.currentGameDay
+              });
+            }
+            return {
+              ...computeVisibleSecretsState(
+                state.rawRelationships,
+                newChildren,
+                state.rawCheatingRecords,
+                Boolean(state.settings.revealSecretsInUI),
+                newProfiles
+              ),
+              npcProfiles: newProfiles,
+              statusMsg: `Child (${childId}) sent to ${info.location} to train as a ${info.className}!`
+            };
+          });
+        }, 200);
+      }
+    },
+    completeChildTraining: (childId) => {
+      sendMarasAction("completeChildTraining", { childId });
+      set({ statusMsg: `Completing training for child (${childId})...` });
+      if (typeof window !== "undefined" && !window.marasAction) {
+        setTimeout(() => {
+          set((state) => {
+            const newChildren = new Map(state.rawChildren);
+            const child = newChildren.get(childId);
+            const newProfiles = new Map(state.npcProfiles);
+            const profile = newProfiles.get(childId);
+            if (child) {
+              newChildren.set(childId, {
+                ...child,
+                stage: "adult",
+                hasRefID: false,
+                isEphemeral: true
+              });
+            }
+            if (profile) {
+              newProfiles.set(childId, {
+                ...profile,
+                isChild: false,
+                stage: "adult",
+                hasRefID: false,
+                isEphemeral: true
+              });
+            }
+            return {
+              ...computeVisibleSecretsState(
+                state.rawRelationships,
+                newChildren,
+                state.rawCheatingRecords,
+                Boolean(state.settings.revealSecretsInUI),
+                newProfiles
+              ),
+              npcProfiles: newProfiles,
+              statusMsg: `Child (${childId}) has completed training and is ready to be spawned as an adult!`
+            };
+          });
+        }, 200);
+      }
     },
     evaluateChildSecret: (childId) => {
       sendMarasAction("evaluateChildSecret", { childId });
@@ -17256,6 +17406,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   const Clock = createLucideIcon("Clock", [
     ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
     ["polyline", { points: "12 6 12 12 16 14", key: "68esgv" }]
+  ]);
+  /**
+   * @license lucide-react v0.460.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */
+  const Coins = createLucideIcon("Coins", [
+    ["circle", { cx: "8", cy: "8", r: "6", key: "3yglwk" }],
+    ["path", { d: "M18.09 10.37A6 6 0 1 1 10.34 18", key: "t5s6rm" }],
+    ["path", { d: "M7 6h1v4", key: "1obek4" }],
+    ["path", { d: "m16.71 13.88.7.71-2.82 2.82", key: "1rbuyh" }]
   ]);
   /**
    * @license lucide-react v0.460.0 - ISC
@@ -31235,89 +31397,145 @@ Defaulting to \`null\`.`;
   const ChildrenSettings = () => {
     const settings = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[1rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Children & Household Pet Settings", icon: Baby, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Global Ban Critters",
-          description: "Globally disable kid critter adoption events (foxes, hares, mudcrabs) for all children.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: !!settings.globalBanCritter,
-              onChange: (val) => updateSetting("globalBanCritter", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Global Ban Pets",
-          description: "Globally disable household pet adoption events (dogs) for all children.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: !!settings.globalBanPet,
-              onChange: (val) => updateSetting("globalBanPet", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Prioritize Biological Parent",
-          description: "When divorcing, if only one partner is the biological parent, award custody to them (overrides gender and player rules).",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToggleSwitch,
-            {
-              checked: settings.childCustodyPrioritizeBioParent !== false,
-              onChange: (val) => updateSetting("childCustodyPrioritizeBioParent", val)
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Gender Custody Policy",
-          description: "Determines which parent retains child custody upon divorce when biological rules do not decide.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "select",
-            {
-              value: settings.childCustodyGenderPolicy ?? 0,
-              onChange: (e) => updateSetting("childCustodyGenderPolicy", parseInt(e.target.value, 10)),
-              className: "bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: "Stay with Mother (Default)" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "Stay with Father" })
-              ]
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
-        {
-          label: "Player Custody Override",
-          description: "Overrides gender custody in divorces involving the Player.",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "select",
-            {
-              value: settings.childCustodyPlayerPolicy ?? 0,
-              onChange: (e) => updateSetting("childCustodyPlayerPolicy", parseInt(e.target.value, 10)),
-              className: "bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: "Use Gender Custody (Default)" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "Always with Player" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 2, children: "Never with Player" })
-              ]
-            }
-          )
-        }
-      )
-    ] }) });
+    const trainingDays = settings.childTrainingDurationDays ?? 14;
+    const trainingCost = settings.childTrainingCost ?? 2e3;
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Child Training & Adulthood", icon: GraduationCap, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Training Duration (Days)",
+            description: `Number of in-game days required for a child in Stage 3 (Training) to graduate to Stage 4 (Adult) (${trainingDays} day${trainingDays === 1 ? "" : "s"}). You can also complete training early from the child's profile.`,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SliderInput,
+              {
+                value: trainingDays,
+                min: 1,
+                max: 120,
+                step: 1,
+                unit: "d",
+                onChange: (val) => updateSetting("childTrainingDurationDays", Math.round(val))
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Training Tuition Cost (Gold)",
+            description: `Gold required to send a player child away for adolescent training (${trainingCost} gold). Set to 0 for free training.`,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SliderInput,
+              {
+                value: trainingCost,
+                min: 0,
+                max: 1e4,
+                step: 100,
+                unit: "g",
+                onChange: (val) => updateSetting("childTrainingCost", Math.round(val))
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Require Faction Membership for Guild Training",
+            description: "When enabled, sending a player child to guild, temple, or Daedric covenant training requires the Player to meet that location's membership or patronage criteria.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: settings.childTrainingRequireFaction ?? true,
+                onChange: (val) => updateSetting("childTrainingRequireFaction", val)
+              }
+            )
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Children & Household Pet Settings", icon: Baby, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Global Ban Critters",
+            description: "Globally disable kid critter adoption events (foxes, hares, mudcrabs) for all children.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: !!settings.globalBanCritter,
+                onChange: (val) => updateSetting("globalBanCritter", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Global Ban Pets",
+            description: "Globally disable household pet adoption events (dogs) for all children.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: !!settings.globalBanPet,
+                onChange: (val) => updateSetting("globalBanPet", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Prioritize Biological Parent",
+            description: "When divorcing, if only one partner is the biological parent, award custody to them (overrides gender and player rules).",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToggleSwitch,
+              {
+                checked: settings.childCustodyPrioritizeBioParent !== false,
+                onChange: (val) => updateSetting("childCustodyPrioritizeBioParent", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Gender Custody Policy",
+            description: "Determines which parent retains child custody upon divorce when biological rules do not decide.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "select",
+              {
+                value: settings.childCustodyGenderPolicy ?? 0,
+                onChange: (e) => updateSetting("childCustodyGenderPolicy", parseInt(e.target.value, 10)),
+                className: "bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: "Stay with Mother (Default)" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "Stay with Father" })
+                ]
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: "Player Custody Override",
+            description: "Overrides gender custody in divorces involving the Player.",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "select",
+              {
+                value: settings.childCustodyPlayerPolicy ?? 0,
+                onChange: (e) => updateSetting("childCustodyPlayerPolicy", parseInt(e.target.value, 10)),
+                className: "bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: "Use Gender Custody (Default)" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "Always with Player" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 2, children: "Never with Player" })
+                ]
+              }
+            )
+          }
+        )
+      ] })
+    ] });
   };
   const FertilitySettings = () => {
     const settings = useMarasStore((s) => s.settings);
@@ -33431,6 +33649,323 @@ Defaulting to \`null\`.`;
       }
     ) });
   };
+  const ChildTrainingModal = ({
+    isOpen,
+    onClose,
+    onSelectTraining,
+    childName,
+    hasRefID,
+    hasBeastblood = false,
+    trainingDiscounts,
+    isPlayerChild,
+    durationDays,
+    baseCost,
+    playerGold,
+    requireFaction,
+    trainingCatalog,
+    isEntryUnlocked
+  }) => {
+    const [searchQuery, setSearchQuery] = reactExports.useState("");
+    const [failedImages, setFailedImages] = reactExports.useState({});
+    const filteredCatalog = reactExports.useMemo(() => {
+      const q2 = searchQuery.trim().toLowerCase();
+      const matching = !q2 ? trainingCatalog : trainingCatalog.filter(
+        (item) => item.className.toLowerCase().includes(q2) || item.location.toLowerCase().includes(q2) || item.description && item.description.toLowerCase().includes(q2) || item.factionLabel && item.factionLabel.toLowerCase().includes(q2)
+      );
+      const decorated = matching.map((item) => {
+        const baseTuition = isPlayerChild ? item.effectiveCost !== void 0 ? item.effectiveCost : Math.max(0, Math.round(baseCost * item.costMultiplier)) : 0;
+        const discountInfo = trainingDiscounts == null ? void 0 : trainingDiscounts[String(item.index)];
+        const discountPercent = discountInfo && discountInfo.percent > 0 ? Math.min(100, discountInfo.percent) : 0;
+        const cost = isPlayerChild && discountPercent > 0 ? Math.max(0, Math.round(baseTuition * (1 - discountPercent / 100))) : baseTuition;
+        const canAfford = !isPlayerChild || cost <= 0 || playerGold >= cost;
+        const unlocked = isEntryUnlocked(item);
+        const isBeastbloodBlocked = Boolean(item.requiresBeastblood && !hasBeastblood);
+        const isFactionBlocked = Boolean(
+          requireFaction && (item.factionLabel || item.factionKey || item.requirementMet === false) && !unlocked
+        );
+        const isRequirementBlocked = isBeastbloodBlocked || isFactionBlocked;
+        const canSend = canAfford && !isRequirementBlocked;
+        return {
+          item,
+          baseTuition,
+          cost,
+          discountPercent,
+          discountReason: discountInfo == null ? void 0 : discountInfo.reason,
+          canAfford,
+          unlocked,
+          isBeastbloodBlocked,
+          isFactionBlocked,
+          isRequirementBlocked,
+          canSend
+        };
+      });
+      decorated.sort((a, b) => {
+        if (a.canSend !== b.canSend) {
+          return a.canSend ? -1 : 1;
+        }
+        return a.item.index - b.item.index;
+      });
+      return decorated;
+    }, [
+      trainingCatalog,
+      searchQuery,
+      isPlayerChild,
+      baseCost,
+      playerGold,
+      isEntryUnlocked,
+      hasBeastblood,
+      trainingDiscounts,
+      requireFaction
+    ]);
+    if (!isOpen) return null;
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: "fixed inset-0 z-modal flex items-center justify-center bg-black/80 p-[1.25rem]",
+        onClick: onClose,
+        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "bg-panel border border-border-accent/50 rounded-xl shadow-2xl max-w-[54rem] w-full max-h-[85vh] flex flex-col overflow-hidden text-foreground-primary font-ui",
+            onClick: (e) => e.stopPropagation(),
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[1rem] border-b border-border-divider flex items-center justify-between gap-[1rem] bg-panel-raised", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.5rem] rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/35", children: /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1.375rem] h-[1.375rem]" }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-sm font-bold text-accent-bright", children: [
+                      "Send ",
+                      childName,
+                      " to Adolescent Training"
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.6875rem] text-foreground-muted", children: [
+                      "Choose an organization, academy, or Daedric covenant (",
+                      durationDays,
+                      " day training curriculum)"
+                    ] })
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
+                  isPlayerChild && baseCost > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] px-[0.625rem] py-[0.3125rem] rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Coins, { className: "w-[1em] h-[1em] text-amber-400" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                      "Your Gold: ",
+                      playerGold.toLocaleString()
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      onClick: onClose,
+                      className: "p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer",
+                      title: "Close",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[1.25rem] h-[1.25rem]" })
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-[1rem] py-[0.625rem] bg-panel-inset/60 border-b border-border-divider flex items-center justify-between gap-[0.75rem]", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex-1 max-w-[22rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[0.875rem] h-[0.875rem] text-foreground-muted absolute left-[0.625rem] top-1/2 -translate-y-1/2 pointer-events-none" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "input",
+                    {
+                      type: "text",
+                      value: searchQuery,
+                      onChange: (e) => setSearchQuery(e.target.value),
+                      placeholder: "Search training location, class, or patron...",
+                      className: "w-full pl-[2rem] pr-[0.75rem] py-[0.3125rem] bg-panel border border-border-subtle rounded text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
+                    }
+                  )
+                ] }),
+                hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-muted", children: [
+                  "Despawns young child actor & unlocks adult adventurer after ",
+                  durationDays,
+                  " day(s)"
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] overflow-y-auto space-y-[0.625rem] flex-1", children: filteredCatalog.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[2rem] text-center text-xs text-foreground-muted", children: [
+                "No training locations match “",
+                searchQuery,
+                "”."
+              ] }) : filteredCatalog.map(
+                ({
+                  item,
+                  baseTuition,
+                  cost,
+                  discountPercent,
+                  discountReason,
+                  canAfford,
+                  unlocked,
+                  isBeastbloodBlocked,
+                  isFactionBlocked,
+                  isRequirementBlocked,
+                  canSend
+                }) => {
+                  const showImage = Boolean(item.image && !failedImages[item.index]);
+                  const isDaedric = Boolean(item.factionKey && item.factionKey.startsWith("champion"));
+                  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      className: `flex items-stretch gap-[0.875rem] p-[0.75rem] rounded-lg border transition-opacity ${canSend ? "bg-panel-raised/90 border-border-subtle hover:border-purple-500/45" : "bg-panel-inset/30 border-border-subtle/35 opacity-45"}`,
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            className: `w-[9rem] h-[5rem] rounded-md overflow-hidden border border-border-subtle bg-panel-inset flex-shrink-0 relative flex items-center justify-center ${canSend ? "" : "opacity-60"}`,
+                            children: showImage ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "img",
+                              {
+                                src: item.image,
+                                alt: `${item.className} — ${item.location}`,
+                                className: "w-full h-full object-cover",
+                                onError: () => setFailedImages((prev) => ({ ...prev, [item.index]: true }))
+                              }
+                            ) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full h-full flex flex-col items-center justify-center p-[0.375rem] text-center bg-gradient-to-br from-purple-950/40 via-panel-inset to-amber-950/30", children: [
+                              isDaedric ? /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[1.25rem] h-[1.25rem] text-amber-400/70 mb-[0.25rem]" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1.25rem] h-[1.25rem] text-purple-400/70 mb-[0.25rem]" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-semibold text-foreground-secondary leading-tight line-clamp-2", children: item.location })
+                            ] })
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0 flex flex-col justify-between", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center flex-wrap gap-[0.5rem]", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "span",
+                                {
+                                  className: `text-xs font-bold ${canSend ? "text-accent-bright" : "text-foreground-muted"}`,
+                                  children: item.className
+                                }
+                              ),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.6875rem] font-semibold bg-purple-500/20 text-purple-200 border border-purple-500/35", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(MapPin, { className: "w-[0.85em] h-[0.85em]" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.location })
+                              ] }),
+                              item.requiresBeastblood && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                "span",
+                                {
+                                  className: `inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold border ${hasBeastblood ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : "bg-rose-500/20 text-rose-300 border-rose-500/40"}`,
+                                  children: [
+                                    hasBeastblood ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-[0.85em] h-[0.85em]" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Lock, { className: "w-[0.85em] h-[0.85em]" }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "🐺 Requires Beastblood" })
+                                  ]
+                                }
+                              ),
+                              item.factionLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                "span",
+                                {
+                                  className: `inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold border ${unlocked ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : isFactionBlocked ? "bg-rose-500/20 text-rose-300 border-rose-500/40" : "bg-amber-500/15 text-amber-300 border-amber-500/30"}`,
+                                  children: [
+                                    unlocked ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-[0.85em] h-[0.85em]" }) : isFactionBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsx(Lock, { className: "w-[0.85em] h-[0.85em]" }) : null,
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.factionLabel })
+                                  ]
+                                }
+                              ),
+                              discountPercent > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-500/40", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                                "-",
+                                discountPercent,
+                                "% ",
+                                discountReason || "Parent Affiliation"
+                              ] }) })
+                            ] }),
+                            item.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-secondary mt-[0.25rem] leading-relaxed", children: item.description })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] mt-[0.375rem] text-[0.625rem] text-foreground-muted", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.25rem]", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(MapPin, { className: "w-[0.875em] h-[0.875em] text-purple-400" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.location })
+                            ] }),
+                            isBeastbloodBlocked && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-rose-300 font-medium", children: [
+                              "Requires ",
+                              childName,
+                              " to carry Hircine's Beastblood (inherited from a werewolf parent)"
+                            ] }),
+                            !isBeastbloodBlocked && isFactionBlocked && item.factionLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-rose-300 font-medium", children: [
+                              "Requires Player membership/patronage: ",
+                              item.factionLabel
+                            ] }),
+                            !canAfford && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-rose-300 font-medium", children: [
+                              "Insufficient gold (",
+                              playerGold,
+                              " / ",
+                              cost,
+                              "g)"
+                            ] })
+                          ] })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-end justify-between flex-shrink-0 pl-[0.5rem] border-l border-border-divider/60 min-w-[9.5rem]", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right", children: isPlayerChild && baseCost > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                className: `inline-flex items-center gap-[0.25rem] text-xs font-bold ${canAfford ? "text-amber-300" : "text-rose-300"}`,
+                                children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(Coins, { className: "w-[0.95em] h-[0.95em]" }),
+                                  discountPercent > 0 && baseTuition !== cost && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "line-through text-foreground-muted font-normal text-[0.6875rem] mr-[0.125rem]", children: baseTuition.toLocaleString() }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                                    cost.toLocaleString(),
+                                    " Gold"
+                                  ] })
+                                ]
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.625rem] text-foreground-muted", children: [
+                              "Tuition (",
+                              Number(item.costMultiplier.toFixed(2)),
+                              "x rate",
+                              discountPercent > 0 ? ` · -${discountPercent}%` : "",
+                              ")"
+                            ] })
+                          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-emerald-300 font-semibold", children: "No Tuition Cost" }) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              onClick: () => {
+                                if (!canSend) return;
+                                onSelectTraining(item.index);
+                                onClose();
+                              },
+                              disabled: !canSend,
+                              className: `w-full justify-center text-xs font-semibold px-[0.75rem] py-[0.4375rem] rounded border transition-colors flex items-center gap-[0.375rem] ${canSend ? "text-purple-100 bg-purple-600/30 hover:bg-purple-600/50 border-purple-400/50 cursor-pointer" : "opacity-50 cursor-not-allowed bg-panel-inset text-foreground-muted border-border-subtle"}`,
+                              children: isRequirementBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(Lock, { className: "w-[0.95em] h-[0.95em]" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Locked" })
+                              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.95em] h-[0.95em] text-purple-300" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Send to Training" })
+                              ] })
+                            }
+                          )
+                        ] })
+                      ]
+                    },
+                    item.index
+                  );
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-[1rem] py-[0.75rem] bg-panel-raised border-t border-border-divider flex items-center justify-between text-xs", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-muted", children: [
+                  "Showing ",
+                  filteredCatalog.length,
+                  " of ",
+                  trainingCatalog.length,
+                  " training locations"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    onClick: onClose,
+                    className: "px-[0.875rem] py-[0.375rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-foreground-secondary text-xs font-semibold transition-colors cursor-pointer",
+                    children: "Cancel"
+                  }
+                )
+              ] })
+            ]
+          }
+        )
+      }
+    );
+  };
   const ChildProfileResidenceSection = ({
     npcId,
     displayName,
@@ -33444,12 +33979,18 @@ Defaulting to \`null\`.`;
     const children = useMarasStore((s) => s.children);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
     const playerHomes = useMarasStore((s) => s.playerHomes);
+    const settings = useMarasStore((s) => s.settings);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit);
+    const spawnChild = useMarasStore((s) => s.spawnChild);
+    const sendChildToTraining = useMarasStore((s) => s.sendChildToTraining);
+    const completeChildTraining = useMarasStore((s) => s.completeChildTraining);
+    const [isTrainingModalOpen, setIsTrainingModalOpen] = reactExports.useState(false);
     const npc = npcProfiles.get(npcId);
     const childRecord = children.get(npcId);
     const stage = (childRecord == null ? void 0 : childRecord.stage) || (npc == null ? void 0 : npc.stage) || "child";
     const hasRefID = (childRecord == null ? void 0 : childRecord.hasRefID) ?? (npc == null ? void 0 : npc.hasRefID) ?? !npcId.startsWith("FF7");
+    const hasBeastblood = Boolean((childRecord == null ? void 0 : childRecord.hasBeastblood) || (npc == null ? void 0 : npc.hasBeastblood));
     const isFemale = resolveIsFemale(childRecord, npc);
     const { sonOrDaughter } = getChildGenderNouns(isFemale);
     const isPlayerParent = childRecord && (areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) || areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID));
@@ -33543,12 +34084,16 @@ Defaulting to \`null\`.`;
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
                       "In Training (",
                       sonOrDaughter,
-                      ") ",
-                      (childRecord == null ? void 0 : childRecord.trainingLocation) ? `(${childRecord.trainingLocation})` : ""
+                      ")",
+                      (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? ` — ${(childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)}` : "",
+                      (childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation) ? ` (${(childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation)})` : ""
                     ] })
                   ] }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: hasRefID ? `Adult Follower (${sonOrDaughter})` : `Adult ${sonOrDaughter} (Unsummoned)` })
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                      hasRefID ? `Adult ${sonOrDaughter}` : `Adult ${sonOrDaughter} (Ready to Spawn)`,
+                      (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? ` — ${(childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)}` : ""
+                    ] })
                   ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
                     "🧸 ",
                     sonOrDaughter,
@@ -33556,6 +34101,14 @@ Defaulting to \`null\`.`;
                   ] }) }) : !childRecord ? "Eligible for Adoption" : childRecord.isAdopted !== false ? `Adopted ${sonOrDaughter}` : `Biological ${sonOrDaughter}`,
                   stage === "unborn" ? (childRecord == null ? void 0 : childRecord.conceptionTimestamp) != null && childRecord.conceptionTimestamp > 0 ? ` (Conceived ${formatGameDay(childRecord.conceptionTimestamp, currentGameDay)})` : "" : (childRecord == null ? void 0 : childRecord.timestamp) != null && childRecord.timestamp > 0 ? ` (${formatGameDay(childRecord.timestamp, currentGameDay)})` : ""
                 ]
+              }
+            ),
+            hasBeastblood && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "inline-flex items-center gap-[0.25rem] ml-[0.375rem] px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-bold bg-amber-600/20 text-amber-200 border border-amber-500/40",
+                title: "Carries Hircine's Beastblood (inherited from a werewolf biological parent)",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "🐺 Beastblood" })
               }
             )
           ] }),
@@ -33576,32 +34129,101 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-cyan-200", children: "Swaddled Newborn Infant" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-cyan-200/80 mt-[0.0625rem]", children: "This infant is currently carried and swaddled in maternal care. A physical household bed and sandbox assignment will become available once the child grows into a small child." })
           ] })
-        ] }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-purple-500/10 border border-purple-500/30 rounded flex items-center gap-[0.625rem] text-purple-300", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-purple-400" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-purple-200", children: "Undergoing Apprenticeship / Training" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]", children: [
-              "Currently stationed away at ",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "text-purple-100", children: (childRecord == null ? void 0 : childRecord.trainingLocation) || "Skyrim Academy" }),
-              ". Household assignment is paused until training concludes."
+        ] }) : stage === "training" ? (() => {
+          const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14);
+          const startDay = (childRecord == null ? void 0 : childRecord.trainingStartGameDay) ?? (npc == null ? void 0 : npc.trainingStartGameDay) ?? currentGameDay;
+          const elapsedDays = Math.max(0, currentGameDay - startDay);
+          const progressPct = Math.min(100, Math.round(elapsedDays / durationDays * 100));
+          const remainingDays = Math.max(0, Math.ceil(durationDays - elapsedDays));
+          const trainClass = (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) || "Warrior";
+          const trainLoc = (childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation) || "Skyrim Academy";
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-purple-500/10 border border-purple-500/30 rounded space-y-[0.5rem] text-purple-300", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-[0.5rem]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-purple-400" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-purple-200", children: [
+                    "Training as ",
+                    trainClass,
+                    " at ",
+                    trainLoc
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]", children: remainingDays > 0 ? `${remainingDays} day(s) remaining (${Math.floor(elapsedDays)} / ${durationDays} days)` : `Training duration completed (${durationDays} days)` })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  onClick: () => completeChildTraining(npcId),
+                  className: "text-xs font-semibold text-purple-100 bg-purple-600/30 hover:bg-purple-600/45 border border-purple-400/50 px-[0.625rem] py-[0.3125rem] rounded transition-colors flex items-center gap-[0.3125rem] cursor-pointer flex-shrink-0",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-[0.95em] h-[0.95em] text-purple-300" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Complete Training Early" })
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-[0.375rem] bg-panel-inset rounded-full overflow-hidden border border-purple-500/20", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "h-full bg-purple-500 transition-transform origin-left",
+                style: { transform: `scaleX(${progressPct / 100})` }
+              }
+            ) })
+          ] });
+        })() : stage === "adult" && !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center justify-between gap-[0.75rem] text-amber-300", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.625rem]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-amber-200", children: [
+                "Training Complete — Ready to Spawn Adult ",
+                (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? `(${(childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)})` : ""
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "This offspring has completed their training and reached adulthood. Spawn their adult actor to send them out into Skyrim as an independent traveling adventurer available for hire." })
             ] })
-          ] })
-        ] }) : stage === "adult" && !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-[0.625rem] text-amber-300", children: [
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => spawnChild(npcId),
+              className: "text-xs font-semibold text-amber-100 bg-amber-600/30 hover:bg-amber-600/45 border border-amber-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1em] h-[1em] text-amber-300" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Adult" })
+              ]
+            }
+          )
+        ] }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-[0.625rem] text-amber-300", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-amber-200", children: "Adult Follower Awaiting Summon" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "This offspring has completed their training and reached adulthood. Summon them via follower dialogue or the MCM to bring their physical 3D actor into the world." })
-          ] })
-        ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-[0.625rem] text-amber-300", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-amber-200", children: [
-              "Unspawned ",
-              sonOrDaughter,
-              " Dependent"
+              "Independent Traveling Adventurer — ",
+              (npc == null ? void 0 : npc.currentHome) || "Traveling Skyrim"
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "This child is registered in the family record. Once adopted or spawned as an active Hearthfire kid, an in-game residence can be designated." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "Travels independently between Skyrim's inns, cities, and family homes, and is available to be hired as a follower." })
           ] })
+        ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between gap-[0.75rem] text-emerald-300", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.625rem]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-emerald-400" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-emerald-200", children: [
+                "Unspawned Young ",
+                sonOrDaughter
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-emerald-200/80 mt-[0.0625rem]", children: "Spawn this young child into the world to assign a household bed and AI sandbox, or send them directly to adolescent training below." })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => spawnChild(npcId),
+              className: "text-xs font-semibold text-emerald-100 bg-emerald-600/30 hover:bg-emerald-600/45 border border-emerald-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(UserPlus, { className: "w-[1em] h-[1em] text-emerald-300" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Child" })
+              ]
+            }
+          )
         ] }) : isPlayerChildResolved && hasSpouseCoParent ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Assigned Residence" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-medium text-accent-bright flex items-center gap-[0.25rem]", children: [
@@ -33633,7 +34255,78 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || ((childRecord == null ? void 0 : childRecord.guardianAId) && childRecord.guardianAId !== "00000000" ? ((_c = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _c.currentHome) || ((_d = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _d.originalHome) : void 0) || "Following Custodial Parent" })
           ] })
-        ] }) })
+        ] }) }),
+        stage === "child" && childRecord && (() => {
+          const trainingCatalog = settings.trainingCatalog ?? [];
+          const requireFaction = (settings.childTrainingRequireFaction ?? true) && isPlayerChildResolved;
+          const playerFactions = settings.playerTrainingFactions;
+          const baseCost = isPlayerChildResolved ? Math.max(0, settings.childTrainingCost ?? 2e3) : 0;
+          const playerGold = (playerFactions == null ? void 0 : playerFactions.playerGold) ?? 999999;
+          const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14);
+          const isEntryUnlocked = (t2) => {
+            if (t2.requirementMet !== void 0) {
+              return Boolean(t2.requirementMet);
+            }
+            if (t2.factionKey && playerFactions) {
+              return Boolean(playerFactions[t2.factionKey]);
+            }
+            return true;
+          };
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.625rem] border-t border-border-divider space-y-[0.5rem]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.75rem]", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold text-foreground-primary flex items-center gap-[0.375rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1em] h-[1em] text-purple-400" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adolescent Training & Class Path" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.6875rem] text-foreground-muted mt-[0.125rem]", children: [
+                  "Enroll ",
+                  displayName,
+                  " in one of ",
+                  trainingCatalog.length,
+                  " academies, guilds, or Daedric covenants (",
+                  durationDays,
+                  " day curriculum)."
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  onClick: () => setIsTrainingModalOpen(true),
+                  className: "text-xs font-semibold px-[0.875rem] py-[0.4375rem] rounded border transition-colors flex items-center gap-[0.375rem] flex-shrink-0 text-purple-100 bg-purple-600/25 hover:bg-purple-600/40 border-purple-500/45 cursor-pointer",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.95em] h-[0.95em] text-purple-300" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: hasRefID ? "Despawn Child & Send to Training" : "Send to Training" })
+                  ]
+                }
+              )
+            ] }),
+            hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.625rem] text-foreground-muted", children: [
+              "Sending a spawned child to training will despawn their young child actor, preserve their SkyrimNet childhood biography, and allow you to spawn their adult actor after ",
+              durationDays,
+              " day(s)."
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ChildTrainingModal,
+              {
+                isOpen: isTrainingModalOpen,
+                onClose: () => setIsTrainingModalOpen(false),
+                onSelectTraining: (classIdx) => sendChildToTraining(npcId, classIdx),
+                childName: displayName,
+                hasRefID,
+                hasBeastblood,
+                trainingDiscounts: childRecord == null ? void 0 : childRecord.trainingDiscounts,
+                isPlayerChild: isPlayerChildResolved,
+                durationDays,
+                baseCost,
+                playerGold,
+                requireFaction,
+                trainingCatalog,
+                isEntryUnlocked
+              }
+            )
+          ] });
+        })()
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         ChildRelocationModal,
@@ -34475,6 +35168,7 @@ Defaulting to \`null\`.`;
     const hasSecret = Boolean(
       childRecord && (childRecord.isSecret || childRecord.isSecretForPartner || childRecord.isSecretForBioFather)
     );
+    const hasBeastblood = Boolean((childRecord == null ? void 0 : childRecord.hasBeastblood) || (npc == null ? void 0 : npc.hasBeastblood));
     const isEvaluatingSecret = Boolean(
       childRecord && evaluatingChildId && areSameFormId(evaluatingChildId, childRecord.childId)
     );
@@ -34568,7 +35262,8 @@ Defaulting to \`null\`.`;
               ] }),
               isChild && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded text-[0.6875rem] font-bold", children: "🤰 Expecting / Unborn" }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded text-[0.6875rem] font-bold", children: "🍼 Newborn Infant" }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[0.6875rem] font-bold", children: "🎓 In Training" }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: "⚔️ Adult Offspring" }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[0.6875rem] font-bold", children: "🧸 Child (Unspawned)" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: "Child" })
+                stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded text-[0.6875rem] font-bold", children: "🤰 Expecting / Unborn" }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded text-[0.6875rem] font-bold", children: "🍼 Newborn Infant" }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[0.6875rem] font-bold", children: "🎓 In Training" }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: "⚔️ Adult Offspring" }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[0.6875rem] font-bold", children: "🧸 Child (Unspawned)" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: "Child" }),
+                hasBeastblood && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Carries Hircine's Beastblood (Lycanthropy)", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-600/20 text-amber-200 border border-amber-500/40 rounded text-[0.6875rem] font-bold", children: "🐺 Beastblood" }) })
               ] }),
               npc && !isPlayer && !isChild && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
@@ -34610,6 +35305,17 @@ Defaulting to \`null\`.`;
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(UserPlus, { className: "w-[1em] h-[1em] text-emerald-400" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Child" })
+              ]
+            }
+          ) }),
+          isChild && !hasRefID && stage === "adult" && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Spawn physical adult child actor into the world (PlaceAtMe persistent) and carry over childhood SkyrimNet bio", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => spawnChild(npcId),
+              className: "text-xs font-semibold text-amber-200 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1em] h-[1em] text-amber-400" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Adult" })
               ]
             }
           ) }),

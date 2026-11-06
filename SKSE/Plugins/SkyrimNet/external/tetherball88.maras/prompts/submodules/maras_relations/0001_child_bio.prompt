@@ -155,5 +155,12 @@
         {% if existsIn(parents, "critter") %}
             {{npcName}} keeps a captured pet {{parents.critter.type}} named {{parents.critter.name}}.
         {% endif %}
+        {% if existsIn(parents, "has_beastblood") and parents.has_beastblood and render_mode != "dialogue_target" %}
+            {% if existsIn(parents, "stage") and parents.stage == "adult" %}
+                {{npcName}} carries Hircine's Beastblood (lycanthropy), possessing heightened lupine senses, disease immunity, and the ability to take Beast Form.
+            {% else %}
+                {{npcName}} carries inherited Beastblood in their veins, giving them unusually sharp senses, tireless stamina, and immunity to illness.
+            {% endif %}
+        {% endif %}
     {% endif %}
 {% endif %}

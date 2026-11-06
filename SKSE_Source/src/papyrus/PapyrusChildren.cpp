@@ -554,6 +554,16 @@ namespace MARAS::PapyrusInterface {
         return NPCRelationshipManager::GetSingleton().GetChildTrainingLocation(static_cast<RE::FormID>(childID));
     }
 
+    int32_t GetChildTrainingClass(RE::StaticFunctionTag*, int32_t childID) {
+        std::lock_guard lock(GetPapyrusMutex());
+        return NPCRelationshipManager::GetSingleton().GetChildTrainingClass(static_cast<RE::FormID>(childID));
+    }
+
+    int32_t GetChildSavedRaceIndex(RE::StaticFunctionTag*, int32_t childID) {
+        std::lock_guard lock(GetPapyrusMutex());
+        return NPCRelationshipManager::GetSingleton().GetChildSavedRaceIndex(static_cast<RE::FormID>(childID));
+    }
+
     bool SetChildGender(RE::StaticFunctionTag*, int32_t childID, int32_t gender) {
         if (gender < 0 || gender > 2) {
             MARAS_LOG_WARN("SetChildGender: out-of-range gender {} (expected 0..2)", gender);
