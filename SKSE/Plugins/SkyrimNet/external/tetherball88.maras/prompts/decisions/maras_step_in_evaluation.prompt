@@ -52,6 +52,7 @@ Determine whether {{ bioFatherName }} steps in to claim his biological child, ma
 [ end state ]
 
 [ question bio_father_steps_in noul ]
+Does {{ bioFatherName }} step forward to claim his biological child and marry {{ motherName }} to raise the child together as a family, with {{ motherName }} accepting?
 [ criteria ]
 true: {{ bioFatherName }} steps forward to claim his biological child and marries {{ motherName }} to raise the child together as a family, and {{ motherName }} accepts
 false: {{ bioFatherName }} remains uninvolved, refuses commitment, or {{ motherName }} does not marry him

@@ -63,6 +63,7 @@ Evaluate each character's profile, personality, long-term memories, existing com
 
 {% if action == "breakup" %}
 [ question wants_breakup_a noul ]
+Does {{ actorAName }} want to end their relationship with {{ actorBName }} and transition to {{ targetStatus }}?
 [ criteria ]
 true: {{ actorAName }} wants to end their relationship with {{ actorBName }} and transition to {{ targetStatus }} based on their personality, relationship dynamic, and memories
 false: {{ actorAName }} wants to stay together with {{ actorBName }} and does not wish to break up or divorce
@@ -70,6 +71,7 @@ false: {{ actorAName }} wants to stay together with {{ actorBName }} and does no
 [ end question ]
 
 [ question wants_breakup_b noul ]
+Does {{ actorBName }} want to end their relationship with {{ actorAName }} and transition to {{ targetStatus }}?
 [ criteria ]
 true: {{ actorBName }} wants to end their relationship with {{ actorAName }} and transition to {{ targetStatus }} based on their personality, relationship dynamic, and memories
 false: {{ actorBName }} wants to stay together with {{ actorAName }} and does not wish to break up or divorce
@@ -77,6 +79,15 @@ false: {{ actorBName }} wants to stay together with {{ actorAName }} and does no
 [ end question ]
 {% else %}
 [ question willing_a noul ]
+{% if action == "open" %}
+Is {{ actorAName }} willing to open their relationship with {{ actorBName }} to allow consensual outside lovers?
+{% else if action == "close" %}
+Is {{ actorAName }} willing to close their relationship with {{ actorBName }} and commit to exclusivity?
+{% else if isCheating %}
+Is {{ actorAName }} willing to enter a {{ targetStatus }} relationship with {{ actorBName }} despite the infidelity involved?
+{% else %}
+Is {{ actorAName }} willing and compatible to enter or advance to a {{ targetStatus }} relationship with {{ actorBName }}?
+{% endif %}
 [ criteria ]
 {% if action == "open" %}
 true: {{ actorAName }} willingly agrees with {{ actorBName }} to open their relationship to allow consensual outside lovers
@@ -95,6 +106,15 @@ false: {{ actorAName }} is unwilling or incompatible to enter or advance to a {{
 [ end question ]
 
 [ question willing_b noul ]
+{% if action == "open" %}
+Is {{ actorBName }} willing to open their relationship with {{ actorAName }} to allow consensual outside lovers?
+{% else if action == "close" %}
+Is {{ actorBName }} willing to close their relationship with {{ actorAName }} and commit to exclusivity?
+{% else if isCheating %}
+Is {{ actorBName }} willing to enter a {{ targetStatus }} relationship with {{ actorAName }} despite the infidelity involved?
+{% else %}
+Is {{ actorBName }} willing and compatible to enter or advance to a {{ targetStatus }} relationship with {{ actorAName }}?
+{% endif %}
 [ criteria ]
 {% if action == "open" %}
 true: {{ actorBName }} willingly agrees with {{ actorAName }} to open their relationship to allow consensual outside lovers

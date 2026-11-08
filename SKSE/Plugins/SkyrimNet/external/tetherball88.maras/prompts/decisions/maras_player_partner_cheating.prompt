@@ -98,6 +98,7 @@ Base your decision on {{ partnerName }}'s biography, personality, long-term memo
 
 {% if exists("evalMode") and evalMode == "breakup_affair" %}
 [ question will_breakup noul ]
+Does {{ partnerName }} decide to end their secret {{ affairStage }} affair with {{ sideLoverName }}?
 [ criteria ]
 true: {{ partnerName }} decides to end their secret {{ affairStage }} affair with {{ sideLoverName }}
 false: {{ partnerName }} continues their secret {{ affairStage }} affair with {{ sideLoverName }}
@@ -106,6 +107,7 @@ false: {{ partnerName }} continues their secret {{ affairStage }} affair with {{
 
 {% if canConfess %}
 [ question will_confess noul ]
+Does {{ partnerName }} decide to confess or admit the secret affair to {{ playerName }} when {{ playerName }} next returns home?
 [ criteria ]
 true: {{ partnerName }} decides to confess or admit the secret affair to {{ playerName }} when {{ playerName }} next returns home
 false: {{ partnerName }} decides to keep the affair secret from {{ playerName }} and not confess
@@ -114,6 +116,7 @@ false: {{ partnerName }} decides to keep the affair secret from {{ playerName }}
 {% endif %}
 {% else if exists("evalMode") and evalMode == "breakup_open_lover" %}
 [ question will_breakup noul ]
+Does {{ partnerName }} decide to amicably end their open-relationship fling with {{ sideLoverName }}?
 [ criteria ]
 true: {{ partnerName }} decides to amicably end their open-relationship fling with {{ sideLoverName }}
 false: {{ partnerName }} continues their open-relationship fling with {{ sideLoverName }}
@@ -121,6 +124,7 @@ false: {{ partnerName }} continues their open-relationship fling with {{ sideLov
 [ end question ]
 {% else if exists("evalMode") and evalMode == "suggest_open" %}
 [ question will_suggest noul ]
+Does {{ partnerName }} decide to approach {{ playerName }} when they next return home to propose opening their relationship to allow consensual outside lovers?
 [ criteria ]
 true: {{ partnerName }} decides to approach {{ playerName }} when they next return home to propose opening their relationship to allow consensual outside lovers
 false: {{ partnerName }} stays quiet for now and does not ask {{ playerName }} to open their relationship
@@ -128,6 +132,7 @@ false: {{ partnerName }} stays quiet for now and does not ask {{ playerName }} t
 [ end question ]
 {% else if exists("evalMode") and evalMode == "suggest_close" %}
 [ question will_suggest noul ]
+Does {{ partnerName }} decide to approach {{ playerName }} when they next return home to ask to close their relationship and become exclusive again?
 [ criteria ]
 true: {{ partnerName }} decides to approach {{ playerName }} when they next return home to ask to close their relationship and become exclusive again
 false: {{ partnerName }} remains content with their open relationship arrangement and does not ask to close it
@@ -135,6 +140,11 @@ false: {{ partnerName }} remains content with their open relationship arrangemen
 [ end question ]
 {% else %}
 [ question decision choice ]
+{% if isOpenRelationship %}
+Which candidate, if any, does {{ partnerName }} choose to pursue as a consensual side lover right now?
+{% else %}
+Which candidate, if any, does {{ partnerName }} choose to start a secret affair with right now?
+{% endif %}
 [ criteria ]
 {% if isOpenRelationship %}
 none: {{ partnerName }} declines to pursue any side lover right now

@@ -52,6 +52,7 @@ Evaluate the character profiles, personality traits, memories, and recent events
 [ end state ]
 
 [ question outcome choice ]
+What is the outcome of this paternity secret evaluation for {{ childName }}?
 [ criteria ]
 remains_secret: The paternity secret remains hidden for now and no one learns anything new
 {% if isSecretForPresumedFather %}
@@ -70,6 +71,7 @@ mother_confessed_both: {{ motherName }} confesses or admits the truth to both {{
 
 {% if isSecretForPresumedFather %}
 [ question partner_reaction choice ]
+How does {{ presumedFatherName }} react toward {{ motherName }} if he learns that {{ childName }} is not biologically his?
 [ criteria ]
 none: If {{ presumedFatherName }} learns the truth, he stays with {{ motherName }} without ending their relationship
 {% if maritalStatus == "married" or maritalStatus == "Married" %}

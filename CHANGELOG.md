@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.1.alpha - 2026-11-12
+
+### Fixed
+- **SkyrimNet Decisions Prompts (`prompts/decisions/*.prompt`)**: Added missing question prompt lines inside `[ question ... ]` blocks across all four SkyrimNet Decisions evaluation templates (`maras_matchmaking_verify`, `maras_paternity_evaluation`, `maras_player_partner_cheating`, and `maras_step_in_evaluation`) so SkyrimNet's Jev parser properly parses and evaluates every decision block.
+
 ## 2.5.0.alpha - 2026-11-06
 
 ### Added

@@ -76,13 +76,13 @@ Structured classification evaluations are handled by `SkyrimNetDecisions` ([Skyr
 
 1. **Paternity Secret Evaluation (`EvaluatePaternitySecret` / `SkyrimNetDecisions::EvaluatePaternity`)**:
    - Triggered at birth or from the Prisma UI (`decisions/maras_paternity_evaluation` or fallback `maras_evaluations/maras_paternity_evaluation`), passing mother, presumed father, and biological father profiles plus any racial phenotype mismatch description (`GetVisualDiscrepancyDescription`).
-   - Evaluates `[DECISION: mother_confesses]`, `[DECISION: partner_reaction]`, `[DECISION: presumed_discovers]`, and `[DECISION: bio_father_learns]` and maps them to five canonical outcomes on the main thread:
+   - Evaluates `[ question outcome choice ]` and `[ question partner_reaction choice ]` and maps them to five canonical outcomes on the main thread:
      - `mother_confessed_presumed` / `presumed_father_learnt`: Resolves the secret for the deceived partner and applies `partner_reaction` (`divorce` or `breakup` -> `ExDating`).
      - `mother_confessed_bio` / `bio_father_learnt`: Resolves the secret for the biological father.
      - `mother_confessed_both`: Resolves both edges simultaneously and applies `partner_reaction`.
    - Fires the `maras_paternity_secret_resolved` SKSE ModCallbackEvent and refreshes the Prisma UI.
 2. **Biological Father Step-In Evaluation (`NPCRelationshipManager::EvaluateBioFatherStepIn` / `SkyrimNetDecisions::EvaluateStepIn`)**:
-   - Evaluates `decisions/maras_step_in_evaluation` (`[DECISION: step_in]`) when a deceived husband divorces a mother over a paternity scandal to determine whether the biological father steps in (`married`, `dating`, or `lover`).
+   - Evaluates `decisions/maras_step_in_evaluation` (`[ question bio_father_steps_in noul ]`) when a deceived husband divorces a mother over a paternity scandal to determine whether the biological father steps in (`married`, `dating`, or `lover`).
 3. **Player-Partner Agency Evaluation (`MatchmakingService::TryScheduledPlayerPartnerInfidelity` / `SkyrimNetDecisions::EvaluatePartnerAgency`)**:
    - Evaluates `decisions/maras_player_partner_cheating` across all 5 `evalMode`s (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`). In `candidate_select` mode, dynamically builds `c_1`..`c_N` choice keys for each shortlisted candidate plus `none` (stay faithful).
 4. **Matchmaking Verification (`MatchmakingService::RetryVerificationTasks` / `SkyrimNetDecisions::EvaluateMatchmakingVerify`)**:
