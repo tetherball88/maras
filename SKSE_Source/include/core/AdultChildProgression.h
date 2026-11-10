@@ -151,6 +151,7 @@ namespace MARAS {
                                               ChildRegistryEntry& entry);
         RE::TESNPC* GetOriginalAdultBase(RE::FormID childActorID) const;
         void RevertRuntimeBases();
+        void Revert();
 
         // Lineage skill snapshot evaluation (Stage 1 Birth & Stage 4 Graduation)
         void EvaluateChildBioLineageAtBirth(NPCRelationshipManager& mgr, ChildRegistryEntry& entry);

@@ -306,7 +306,7 @@ namespace MARAS {
         return true;
     }
 
-    bool SpouseHierarchyManager::Load(SKSE::SerializationInterface* serialization) {
+    bool SpouseHierarchyManager::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
         if (!serialization) return false;
 
         std::uint32_t slotCount = 0;

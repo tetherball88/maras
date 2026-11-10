@@ -29,7 +29,7 @@ namespace MARAS {
 
         // Serialization
         bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization);
+        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = Serialization::kDataVersion);
         void Revert();
 
         // Data dump
@@ -58,6 +58,7 @@ namespace MARAS {
 
     private:
         AffectionService();
+        void ResetDefaultMinMax();
 
         // Helper methods
         static RE::Actor* ValidateActor(FormID formID, const char* context);

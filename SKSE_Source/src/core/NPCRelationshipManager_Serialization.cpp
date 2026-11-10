@@ -15,8 +15,8 @@ namespace MARAS {
     // Save/Load support
     void NPCRelationshipManager::Clear() {
         AdultChildProgression::GetSingleton().RevertRuntimeBases();
+        ClearPendingMarriageAdoptions();
         allRegistered.clear();
-        baseToRefIDMap.clear();
         npcProfiles.clear();
         relationshipPairs.clear();
         actorPairIndex_.clear();
@@ -24,7 +24,7 @@ namespace MARAS {
         pendingChildrenByBaseID.clear();
         childrenByID.clear();
         pendingPartnerIntents_.clear();
-        nextSyntheticChildID_ = 0xFF700001;
+        nextSyntheticChildID_ = kSyntheticChildIDMin + 1;
 
         MARAS_LOG_INFO("Cleared all NPC relationship data");
     }
@@ -248,6 +248,17 @@ namespace MARAS {
             }
             if (!serialization->WriteRecordData(entry.savedRaceIndex)) {
                 MARAS_LOG_ERROR("Failed to write savedRaceIndex for child {:08X}", cID);
+                return false;
+            }
+
+            // Version 7+ paternity secret bioFatherName & bioFatherRaceID
+            uint32_t bioFatherNameLen = static_cast<uint32_t>(entry.paternitySecret.bioFatherName.size());
+            if (!serialization->WriteRecordData(bioFatherNameLen)) return false;
+            if (bioFatherNameLen > 0) {
+                if (!serialization->WriteRecordData(entry.paternitySecret.bioFatherName.data(), bioFatherNameLen)) return false;
+            }
+            if (!serialization->WriteRecordData(entry.paternitySecret.bioFatherRaceID)) {
+                MARAS_LOG_ERROR("Failed to write paternity bioFatherRaceID for child {:08X}", cID);
                 return false;
             }
         }
@@ -541,6 +552,7 @@ namespace MARAS {
             // Version 4+ Unified Format
             const bool hasPresumedFather = (version >= 5);
             const bool hasTrainingLifecycle = (version >= 6);
+            const bool hasPaternityBioFatherMeta = (version >= 7);
             constexpr std::uint32_t kMaxChildStringLen = 512;
 
             std::uint32_t profileCount = 0;
@@ -852,15 +864,47 @@ namespace MARAS {
                         if (!readValue(savedRaceIdx)) break;
                     }
 
+                    if (hasPaternityBioFatherMeta) {
+                        uint32_t bioFatherNameLen = 0;
+                        if (!readValue(bioFatherNameLen) || bioFatherNameLen > kMaxChildStringLen || !hasRemainingBytes(bioFatherNameLen)) {
+                            MARAS_LOG_ERROR("Invalid or out-of-bounds child paternity bioFatherName length {} during load", bioFatherNameLen);
+                            break;
+                        }
+                        if (bioFatherNameLen > 0) {
+                            pSec.bioFatherName.resize(bioFatherNameLen);
+                            if (!readBuffer(pSec.bioFatherName.data(), bioFatherNameLen)) {
+                                MARAS_LOG_ERROR("Failed to read child paternity bioFatherName of length {}", bioFatherNameLen);
+                                break;
+                            }
+                        }
+                        RE::FormID oldBioFatherRaceID = 0;
+                        if (!readValue(oldBioFatherRaceID)) break;
+                        if (oldBioFatherRaceID != 0) {
+                            RE::FormID resolvedRaceID = 0;
+                            if (serialization->ResolveFormID(oldBioFatherRaceID, resolvedRaceID)) {
+                                pSec.bioFatherRaceID = resolvedRaceID;
+                            } else {
+                                MARAS_LOG_WARN("Failed to resolve paternity bioFatherRaceID {:08X} for child {:08X}",
+                                               oldBioFatherRaceID, oldChild);
+                            }
+                        }
+                    }
+
                     bool validChild = false;
                     if (oldChild == kPlayerFormID) {
                         newChild = kPlayerFormID;
                         validChild = true;
-                    } else if ((oldChild & 0xFF000000) == 0xFF000000) {
-                        // Synthetic newborn ID preserves its ID across save/load
+                    } else if (IsSyntheticChildID(oldChild)) {
+                        // Synthetic newborn/training ID (0xFF700000..0xFF7FFFFF) preserves its ID across save/load
                         newChild = oldChild;
                         validChild = true;
-                        nextSyntheticChildID_ = std::max(nextSyntheticChildID_, oldChild + 1);
+                        if (oldChild < kSyntheticChildIDMax) {
+                            nextSyntheticChildID_ = std::max(nextSyntheticChildID_, oldChild + 1);
+                        }
+                    } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                        // Dynamic runtime actor FormID (0xFFxxxxxx outside synthetic range) preserves its ID without advancing nextSyntheticChildID_
+                        newChild = oldChild;
+                        validChild = true;
                     } else {
                         validChild = serialization->ResolveFormID(oldChild, newChild);
                     }
@@ -882,11 +926,26 @@ namespace MARAS {
                              (bioFather != 0 && MatchesActor(newPresumedFather, bioFather)))) {
                             newPresumedFather = 0;
                         }
+                        if (!hasPaternityBioFatherMeta && (pSec.isSecret || pSec.discovered) &&
+                            bioFather != 0 && bioFather != kUnknownFatherFormID) {
+                            if (pSec.bioFatherName.empty()) {
+                                pSec.bioFatherName = ActorSvc::GetName(bioFather);
+                            }
+                            if (pSec.bioFatherRaceID == 0) {
+                                if (auto* r = ActorSvc::GetRace(bioFather)) {
+                                    pSec.bioFatherRaceID = r->GetFormID();
+                                }
+                            }
+                        }
 
                         childrenByID.emplace(newChild, ChildRegistryEntry(newChild, guardianA, guardianB, childName, ts, isAdopted, bioMother, bioFather,
                                                                           isBioChild, concTs, birthTs, pSec, stage, trainingLoc, childGender, newPresumedFather,
                                                                           trainClassIdx, trainStartDay, savedBioTpl, savedRaceIdx));
-                        allRegistered.erase(newChild);
+                        if (stage != ChildStage::Adult) {
+                            allRegistered.erase(newChild);
+                        } else if (npcProfiles.contains(newChild)) {
+                            allRegistered.insert(newChild);
+                        }
                         SkyrimNetProfileService::GetSingleton().MarkActorStageUpdated(newChild, stage);
                     }
                 }
@@ -1193,6 +1252,10 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Successfully loaded {} profiles, {} relationship pairs, {} pending entries, {} pending children, and {} registered children",
                        npcProfiles.size(), relationshipPairs.size(), pendingRelationshipsByBaseID.size(), pendingChildrenByBaseID.size(), childrenByID.size());
+        return true;
+    }
+
+    void NPCRelationshipManager::FinalizeLoad() {
         for (auto& [cID, entry] : childrenByID) {
             if (entry.guardianAID != 0) EnsureRegistered(entry.guardianAID);
             if (entry.guardianBID != 0) EnsureRegistered(entry.guardianBID);
@@ -1215,7 +1278,6 @@ namespace MARAS {
         UpdateAllCanFormNonCheatingMainFactions();
         SyncAllMarriedCouplesChildCustody();
         ReevaluateAllNonPlayerChildrenPackages();
-        return true;
     }
 
     void NPCRelationshipManager::Revert() {

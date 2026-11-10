@@ -308,9 +308,6 @@ namespace MARAS {
         // Master set - all registered NPCs
         std::unordered_set<RE::FormID> allRegistered;
 
-        // Base NPC pointer to FormID map for persistent reference resolution
-        mutable std::unordered_map<RE::TESNPC*, RE::FormID> baseToRefIDMap;
-
         // Pending deferred relationships for unspawned NPCs (keyed by Base FormID)
         std::unordered_map<RE::FormID, std::vector<PendingRelationshipData>> pendingRelationshipsByBaseID;
 
@@ -320,8 +317,14 @@ namespace MARAS {
         // Primary child-centric registry (keyed by child FormID)
         std::unordered_map<RE::FormID, ChildRegistryEntry> childrenByID;
 
-        // Counter for generating unique synthetic child FormIDs for newborns
+        // Counter for generating unique synthetic child FormIDs for newborns (0xFF700001..0xFF7FFFFF)
         uint32_t nextSyntheticChildID_{ 0xFF700001 };
+
+        // Allocates a synthetic child FormID bounded strictly within [kSyntheticChildIDMin + 1, kSyntheticChildIDMax]
+        RE::FormID AllocateSyntheticChildID();
+
+        // Clears any pending marriage-adoption Papyrus callback tracking on Revert/Clear
+        static void ClearPendingMarriageAdoptions();
 
         // NPC attribute profiles
         std::unordered_map<RE::FormID, NPCProfileData> npcProfiles;
@@ -717,6 +720,7 @@ namespace MARAS {
         // SKSE serialization support
         bool Save(SKSE::SerializationInterface* serialization) const;
         bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version, std::uint32_t length = 0);
+        void FinalizeLoad();
         void Revert();
 
         // Data dump

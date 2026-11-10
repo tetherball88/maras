@@ -16,7 +16,7 @@ flowchart TD
     end
 
     subgraph SKSE["Layer 1: SKSE C++ Plugin (MARAS.dll — SKSE_Source/)"]
-        Core["Core Registries & Hooks\nFormCache | NPCIndex | DeceasedRegistry\nFactionService | PackageOverrideService\nPollingService | Serialization ('MARS' v4)"]
+        Core["Core Registries & Hooks\nFormCache | NPCIndex | DeceasedRegistry\nFactionService | PackageOverrideService\nPollingService | Serialization ('MARS' v7)"]
         RelEngine["Relationship & Household Engine\nNPCRelationshipManager | AffectionService\nSpouseHierarchyManager | SpouseBuffService\nPlayerHouseService | HomeCellService\nSpouseAssetsService | PlayerChildrenService"]
         AIEngine["AI & Background Coordinators\nSkyrimNetIntegration | MatchmakingService\nBanterCoordinatorService | IntimateThreadService\nQuestEventManager | MarriageDifficulty | NameService"]
         UIBridge["Native UI & Web Bridge\nPrismaUIManager | PrismaUIDataBridge\nPrismaModalManager | ConfirmationModal"]
@@ -109,12 +109,12 @@ sequenceDiagram
     participant SKSE as SKSE64 Loader
     participant Plugin as MARAS.dll (plugin.cpp)
     participant Engine as Skyrim Engine / DataHandler
-    participant CoSave as SKSE Co-Save ('MARS' v4)
+    participant CoSave as SKSE Co-Save ('MARS' v7)
     participant UI as PrismaUI.dll / SkyrimNet.dll
 
     SKSE->>Plugin: SKSEPluginLoad()
     Plugin->>SKSE: Register Papyrus Bindings (MARAS::PapyrusInterface::RegisterPapyrusFunctions)
-    Plugin->>SKSE: Register Serialization ('MARS', Version 4, Save/Load/Revert)
+    Plugin->>SKSE: Register Serialization ('MARS', Version 7, Save/Load/Revert)
     Plugin->>SKSE: Register Messaging Listener
 
     SKSE->>Plugin: kPostLoad
@@ -133,7 +133,7 @@ sequenceDiagram
     alt Loading Existing Save
         SKSE->>Plugin: kPreLoadGame
         Plugin->>Plugin: Reset runtime transient caches
-        CoSave->>Plugin: OnGameLoaded() (Read 15 chunk types in deterministic order)
+        CoSave->>Plugin: LoadCallback() (Phase 1: Read 12 chunk types | Phase 2: Post-chunk cross-service finalization)
         SKSE->>Plugin: kPostLoadGame
         Plugin->>Plugin: Rebuild NPCIndex, Resolve Pending Deferred NPCs, Reapply Buffs & Factions
     else Starting New Game
@@ -234,30 +234,33 @@ Because Creation Kit dialogue branches, AI packages, and Story Manager nodes eva
 
 ---
 
-## 5. SKSE Co-Save Binary Serialization (`'MARS'` v4)
+## 5. SKSE Co-Save Binary Serialization (`'MARS'` v7)
 
-All persistent runtime state is stored in the SKSE co-save under plugin UID `'MARS'` (`0x4D415253`) with `kDataVersion = 4` (`SKSE_Source/include/core/Serialization.h` & `src/core/Serialization.cpp`).
+All persistent runtime state is stored in the SKSE co-save under plugin UID `'MARS'` (`0x4D415253`) with `kDataVersion = 7` (`SKSE_Source/include/core/Serialization.h` & `src/core/Serialization.cpp`).
 
-### 5.1 Deterministic Chunk Save/Load Table
+### 5.1 Deterministic Chunk Save/Load Table & Two-Phase Load Finalization
 
-During `SaveCallback`, 11 top-level record chunks are written sequentially. During `LoadCallback`, chunks are dispatched by their 4-byte FourCC type code:
+During `SaveCallback`, 12 top-level record chunks are written sequentially. During `LoadCallback`, loading executes in two phases:
+- **Phase 1 (Pure Chunk Deserialization)**: Chunks are dispatched by their 4-byte FourCC type code to populate each service's internal state without cross-service queries that assume chunk order.
+- **Phase 2 (Post-Chunk Cross-Service Finalization)**: Once all 12 chunks have loaded, `LoadCallback` runs `NPCRelationshipManager::FinalizeLoad()` (syncing `SpouseBuffService`, `SpouseHierarchyManager`, `AffectionService`, `PlayerHouseService`, `SpouseAssetsService`, `PackageOverrideService`, `FactionService::UpdateCanFormNonCheatingMainFactions`, and `PlayerChildrenService::RebuildParentChildCaches`), `SpouseHierarchyManager::FillGaps(0, false)`, and `PackageOverrideService::RebuildFromTenants()`.
 
 | Order | FourCC | Record Constant | Owning Service | Persisted Data Summary |
 | :---: | :---: | :--- | :--- | :--- |
-| 1 | `'NPCR'` | `kNPCRelationshipData` | `NPCRelationshipManager` | Unified relationship & lineage stream containing: (1) tracked NPC profiles (`NPCProfileData`), (2) pair-keyed `NPCRelationshipData` entries (status, originalStatus, open-relationship flag, inline `StatusChangeRecord` history, and `CheatingRecord` list), (3) pending deferred relationship queue (`pendingRelationshipsByBaseID`), (4) pending deferred child queue (`pendingChildrenByBaseID`), and (5) global child-centric registry (`ChildRegistryEntry`: real or synthetic `0xFF700000+` `childID`, `bioMotherID`, `bioFatherID`, `guardianAID`, `guardianBID`, `isAdopted`, `PaternitySecret`, stage, and child name). |
+| 1 | `'NPCR'` | `kNPCRelationshipData` | `NPCRelationshipManager` | Unified relationship & lineage stream containing: (1) tracked NPC profiles (`NPCProfileData`), (2) pair-keyed `NPCRelationshipData` entries (status, originalStatus, open-relationship flag, inline `StatusChangeRecord` history, and `CheatingRecord` list), (3) pending deferred relationship queue (`pendingRelationshipsByBaseID`), (4) pending deferred child queue (`pendingChildrenByBaseID`), and (5) global child-centric registry (`ChildRegistryEntry`: real or synthetic `0xFF700001..0xFF7FFFFF` `childID`, `bioMotherID`, `bioFatherID`, `guardianAID`, `guardianBID`, `isAdopted`, `PaternitySecret` including `bioFatherName` & `bioFatherRaceID` in v7+, stage, training state, and child name). |
 | 2 | `'SPHR'` | `kSpouseHierarchyData` | `SpouseHierarchyManager` | Ordered list of ranked spouses (`Lead`, `Second`, `Third`, `Fourth+`). |
-| 3 | `'AFCT'` | `kAffectionData` | `AffectionService` | Per-NPC affection score (`0..100`), tier, daily accumulators, decay timestamps, and estranged countdown timers. |
+| 3 | `'AFCT'` | `kAffectionData` | `AffectionService` | Per-NPC affection score (`0..100`), tier, daily accumulators (`dailyAffection_` in v7+), decay timestamps, and estranged countdown timers. |
 | 4 | `'PHOU'` | `kPlayerHouseData` | `PlayerHouseService` | Registered player houses, custom house cells/markers, tenant lists, stay-at-home flags, and capacity overrides. |
-| 5 | `'SPAS'` | `kSpouseAssetsData` | `SpouseAssetsService` | Accumulated spouse store gold (`homeShare`) and last-payout game day timestamps. |
+| 5 | `'SPAS'` | `kSpouseAssetsData` | `SpouseAssetsService` | Shared spouse home cells, original `kPublicArea` flags, sharing spouse sets, and pre-share bed ownership (`originalBedOwners_` in v7+). |
 | 6 | `'PLCH'` | `kPlayerChildrenData` | `PlayerChildrenService` | Household child slots (`0..5`), active house/bed markers, assigned pet/critter FormIDs, allowance/gift cooldowns, and active `Variable06`/`Variable07` state. |
 | 7 | `'CFSN'` | `kChildFactionSnapshotData` | `PlayerChildrenService` | Saved pre-adoption/original faction snapshots for children to support clean restoration on unadopt/removal. |
 | 8 | `'MKMK'` | `kMatchmakingData` | `MatchmakingService` | Matchmaking history, scheduled run timestamps, cooldowns, and pending LLM verification queues. |
-| 9 | `'DCSD'` | `kDeceasedRegistryData` | `DeceasedRegistry` | Deceased NPC FormIDs, `gameDayDied`, and `killedByPlayer` flags. |
+| 9 | `'DCSD'` | `kDeceasedRegistryData` | `DeceasedRegistry` | Historical snapshots of deceased partners/children, `gameDayDied`, and `killedByPlayer` flags. |
 | 10 | `'BNTR'` | `kBanterData` | `BanterCoordinatorService` | Couple banter cooldowns, last-scene timestamps, and recent pair history. |
-| 11 | `'CNFG'` | `kPluginSettingsData` | `Settings` | All user-configured dashboard settings (overrides `.ini` defaults per save). |
+| 11 | `'ACTR'` | `kAdultChildTravelData` | `AdultChildTravelService` | Autonomous travel schedules, current/home/destination locations, and departure/return timestamps for Stage 4 (`Adult`) offspring. |
+| 12 | `'CNFG'` | `kPluginSettingsData` | `Settings` | All user-configured per-save dashboard settings. |
 
 ### 5.2 FormID Resolution & Save-Game Compatibility Rules
-- Every persisted `RE::FormID` is passed through `a_intfc->ResolveFormID(oldID, newID)` during `OnGameLoaded` so load-order changes do not corrupt references.
-- **Synthetic Child FormIDs** (`0xFF700000`–`0xFF7FFFFF`, tested via `NPCRelationshipManager::IsSyntheticChildId`) bypass `ResolveFormID` because they represent pre-spawned/abstract biological children managed internally until linked to a physical `RE::Actor` (`ReplaceChildId`).
-- Chunk version headers are checked independently inside each service's `Load()` method so older co-save versions (`v1`–`v3`) migrate cleanly to `v4` without data loss.
+- Every persisted `RE::FormID` is passed through `a_intfc->ResolveFormID(oldID, newID)` during `LoadCallback` so load-order changes do not corrupt references.
+- **Synthetic Child FormIDs** (`0xFF700001`–`0xFF7FFFFF`, tested via `NPCRelationshipManager::IsSyntheticChildID` and allocated via `AllocateSyntheticChildID`) bypass `ResolveFormID` because they represent pre-spawned/abstract biological children (`Unborn`, `Infant`, `InTraining`) until linked to a physical `RE::Actor` (`ReplaceChildID`). Real dynamically spawned `0xFF` child/adult actors (`>= 0xFF800000` or `< 0xFF700000`) are distinct from synthetic IDs and never advance `nextSyntheticChildID_`.
+- Chunk version (`a_version`) is passed to each service's `Load()` method so older co-save versions (`v1`–`v6`) migrate cleanly to `v7` without data loss.
 

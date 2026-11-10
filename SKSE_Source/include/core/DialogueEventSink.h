@@ -19,6 +19,9 @@ namespace MARAS {
         // Attempts to resolve a deferred dialogue speaker if waitingForSpeaker_ is active.
         bool TryResolveDeferredSpeaker();
 
+        // Resets deferred speaker wait state across save/load/new-game transitions.
+        void Revert();
+
     private:
         DialogueEventSink() = default;
         DialogueEventSink(const DialogueEventSink&) = delete;

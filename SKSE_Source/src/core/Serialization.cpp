@@ -1,10 +1,12 @@
 #include "core/Serialization.h"
 
+#include "core/AdultChildProgression.h"
 #include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
 #include "core/BanterCoordinatorService.h"
-#include "core/DeceasedRegistry.h"
 #include "core/ChildrenFleeService.h"
+#include "core/DeceasedRegistry.h"
+#include "core/DialogueEventSink.h"
 #include "core/IntimateThreadService.h"
 #include "core/MatchmakingService.h"
 #include "core/NPCRelationshipManager.h"
@@ -105,6 +107,11 @@ namespace MARAS::Serialization {
         std::uint32_t version = 0;
         std::uint32_t length = 0;
 
+        bool npcrLoaded = false;
+        bool sphrLoaded = false;
+        bool phouLoaded = false;
+
+        // Phase 1: Deserialize each service's independent co-save record
         while (serialization->GetNextRecordInfo(type, version, length)) {
             if (version < 1 || version > kDataVersion) {
                 MARAS_LOG_ERROR("Unsupported co-save record version {} for record type 0x{:08X} (expected 1-{})",
@@ -116,82 +123,97 @@ namespace MARAS::Serialization {
                 if (!manager.Load(serialization, version, length)) {
                     MARAS_LOG_ERROR("Failed to load NPC relationship data");
                 } else {
+                    npcrLoaded = true;
                     MARAS_LOG_INFO("Successfully loaded NPC relationship data (version {})", version);
                 }
             } else if (type == kSpouseHierarchyData) {
-                if (!SpouseHierarchyManager::GetSingleton().Load(serialization)) {
+                if (!SpouseHierarchyManager::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load spouse hierarchy data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded spouse hierarchy data");
+                    sphrLoaded = true;
+                    MARAS_LOG_INFO("Successfully loaded spouse hierarchy data (version {})", version);
                 }
             } else if (type == kAffectionData) {
-                if (!AffectionService::GetSingleton().Load(serialization)) {
+                if (!AffectionService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load affection data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded affection data");
+                    MARAS_LOG_INFO("Successfully loaded affection data (version {})", version);
                 }
             } else if (type == kPlayerHouseData) {
                 if (!PlayerHouseService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load player house data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded player house data");
+                    phouLoaded = true;
+                    MARAS_LOG_INFO("Successfully loaded player house data (version {})", version);
                 }
             } else if (type == kSpouseAssetsData) {
-                if (!SpouseAssetsService::GetSingleton().Load(serialization)) {
+                if (!SpouseAssetsService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load spouse assets data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded spouse assets data");
+                    MARAS_LOG_INFO("Successfully loaded spouse assets data (version {})", version);
                 }
             } else if (type == kPlayerChildrenData) {
-                if (!PlayerChildrenService::GetSingleton().Load(serialization)) {
+                if (!PlayerChildrenService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load player children data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded player children data");
+                    MARAS_LOG_INFO("Successfully loaded player children data (version {})", version);
                 }
             } else if (type == kChildFactionSnapshotData) {
-                if (!PlayerChildrenService::GetSingleton().LoadFactionSnapshots(serialization)) {
+                if (!PlayerChildrenService::GetSingleton().LoadFactionSnapshots(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load child faction snapshot data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded child faction snapshot data");
+                    MARAS_LOG_INFO("Successfully loaded child faction snapshot data (version {})", version);
                 }
             } else if (type == kMatchmakingData) {
                 if (!MatchmakingService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load matchmaking data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded matchmaking data");
+                    MARAS_LOG_INFO("Successfully loaded matchmaking data (version {})", version);
                 }
             } else if (type == kDeceasedRegistryData) {
                 if (!DeceasedRegistry::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load deceased registry data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded deceased registry data");
+                    MARAS_LOG_INFO("Successfully loaded deceased registry data (version {})", version);
                 }
             } else if (type == kBanterData) {
                 if (!BanterCoordinatorService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load banter coordinator data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded banter coordinator data");
+                    MARAS_LOG_INFO("Successfully loaded banter coordinator data (version {})", version);
                 }
             } else if (type == kAdultChildTravelData) {
                 if (!AdultChildTravelService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load adult child travel data");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded adult child travel data");
+                    MARAS_LOG_INFO("Successfully loaded adult child travel data (version {})", version);
                 }
             } else if (type == kPluginSettingsData) {
-                if (!Settings::GetSingleton().LoadGameSettings(serialization)) {
+                if (!Settings::GetSingleton().LoadGameSettings(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load plugin settings");
                 } else {
-                    MARAS_LOG_INFO("Successfully loaded plugin settings");
+                    MARAS_LOG_INFO("Successfully loaded plugin settings (version {})", version);
                 }
             } else {
                 MARAS_LOG_WARN("Skipping unrecognized co-save record type 0x{:08X} (version {}, length {})",
                                type, version, length);
             }
         }
+
+        // Phase 2: Post-chunk cross-service finalization (runs only after all co-save chunks are populated)
+        if (npcrLoaded) {
+            manager.FinalizeLoad();
+        }
+        if (sphrLoaded || npcrLoaded) {
+            SpouseHierarchyManager::GetSingleton().FillGaps(0, false);
+        }
+        if (phouLoaded || npcrLoaded) {
+            PackageOverrideService::GetSingleton().RebuildFromTenants();
+        }
     }
 
     void RevertCallback(SKSE::SerializationInterface*) {
+        AdultChildProgression::GetSingleton().Revert();
         NPCRelationshipManager::GetSingleton().Revert();
         SpouseHierarchyManager::GetSingleton().Revert();
         AffectionService::GetSingleton().Revert();
@@ -208,9 +230,12 @@ namespace MARAS::Serialization {
         ChildrenFleeService::GetSingleton().Reset();
         SkyrimNetMemoryService::GetSingleton().Revert();
         SkyrimNetProfileService::GetSingleton().Revert();
+        if (auto* dialogueSink = DialogueEventSink::GetSingleton()) {
+            dialogueSink->Revert();
+        }
         ConfirmationModal::GetSingleton().Revert();
         PrismaModalManager::GetSingleton().Revert();
-        PrismaUIManager::GetSingleton().ResetNewGameDeferral();
+        PrismaUIManager::GetSingleton().Revert();
         PrismaUIDataBridge::GetSingleton().Revert();
 
         MARAS_LOG_INFO("Reverted MARAS co-save runtime state");

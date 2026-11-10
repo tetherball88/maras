@@ -2069,6 +2069,12 @@ namespace MARAS {
             // 10. Deceased Registry
             root["deceasedRegistry"] = DeceasedRegistry::GetSingleton().DumpJson();
 
+            // 11. Banter Coordinator Service
+            root["banterCoordinator"] = BanterCoordinatorService::GetSingleton().DumpJson();
+
+            // 12. Adult Child Travel Service
+            root["adultChildTravel"] = AdultChildTravelService::GetSingleton().DumpJson();
+
             std::filesystem::path dumpsDir = "Data/SKSE/Plugins/MARAS/dumps";
             std::error_code ec;
             std::filesystem::create_directories(dumpsDir, ec);

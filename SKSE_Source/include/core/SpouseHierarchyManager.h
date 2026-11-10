@@ -33,8 +33,11 @@ namespace MARAS {
 
         // Serialization
         bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization);
+        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
         void Revert();
+
+        // Helper to fill gaps using the global married list
+        void FillGaps(RE::FormID excludeFormID = 0, bool sendEvents = true);
 
         // Data dump
         nlohmann::json DumpJson() const;
@@ -44,9 +47,6 @@ namespace MARAS {
 
         // Top three ranks; 0 means empty
         std::array<RE::FormID, 3> ranks_;
-
-        // Helper to fill gaps using the global married list
-        void FillGaps(RE::FormID excludeFormID = 0, bool sendEvents = true);
     };
 
 }  // namespace MARAS
