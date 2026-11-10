@@ -875,6 +875,7 @@ namespace MARAS {
         const std::filesystem::path& configPath,
         const std::filesystem::path& extensionFolder)
     {
+        ClearCachedCatalogForms();
         catalog_.clear();
         daedricBlessings_.clear();
 
@@ -1513,8 +1514,7 @@ namespace MARAS {
         clonedAdultBases_.clear();
     }
 
-    void AdultChildProgression::Revert() {
-        RevertRuntimeBases();
+    void AdultChildProgression::ClearCachedCatalogForms() {
         for (auto& spec : catalog_) {
             if (spec.cachedRuntimeClass) {
                 spec.cachedRuntimeClass->fullName = RE::BSFixedString();
@@ -1524,6 +1524,11 @@ namespace MARAS {
             spec.cachedCombatStyle = nullptr;
             spec.cachedOutfit = nullptr;
         }
+    }
+
+    void AdultChildProgression::Revert() {
+        RevertRuntimeBases();
+        ClearCachedCatalogForms();
     }
 
     const AdultChildProgression::DaedricBlessingRuntimeSpec* AdultChildProgression::FindDaedricBlessingById(

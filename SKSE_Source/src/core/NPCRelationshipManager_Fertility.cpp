@@ -260,18 +260,22 @@ namespace MARAS {
                             if (!*processNext) {
                                 return;
                             }
-                            if (!modalResp.aborted && (modalResp.buttonIndex == 0 || modalResp.buttonId == "retry")) {
-                                spdlog::info("[SkyrimNet] Player chose to retry bio-father step-in LLM evaluation for {:08X} & {:08X}",
-                                             cand.bioFatherID, motherID);
+                            if (modalResp.aborted) {
+                                *processNext = nullptr;
+                                return;
+                            }
+                            if (modalResp.buttonIndex == 0 || modalResp.buttonId == "retry") {
+                                MARAS_LOG_INFO("[SkyrimNet] Player chose to retry bio-father step-in LLM evaluation for {:08X} & {:08X}",
+                                               cand.bioFatherID, motherID);
                                 (*processNext)(index);
                                 return;
                             }
-                            if (!modalResp.aborted && (modalResp.buttonIndex == 1 || modalResp.buttonId == "dice_roll")) {
+                            if (modalResp.buttonIndex == 1 || modalResp.buttonId == "dice_roll") {
                                 float roll = Utils::RandomFloat(0.0f, 100.0f);
                                 float chance = static_cast<float>(Settings::GetSingleton().paternityBioStepUpChance);
                                 bool fallbackStepIn = (roll < chance);
-                                spdlog::info("[SkyrimNet] Player chose dice-roll fallback for bio-father step-in ({:08X} & {:08X}): {:.1f}% < {:.1f}% -> {}",
-                                             cand.bioFatherID, motherID, roll, chance, fallbackStepIn);
+                                MARAS_LOG_INFO("[SkyrimNet] Player chose dice-roll fallback for bio-father step-in ({:08X} & {:08X}): {:.1f}% < {:.1f}% -> {}",
+                                               cand.bioFatherID, motherID, roll, chance, fallbackStepIn);
                                 if (fallbackStepIn) {
                                     ApplyBioFatherStepIn(motherID, cand.bioFatherID);
                                     *processNext = nullptr;
@@ -280,8 +284,8 @@ namespace MARAS {
                                 }
                                 return;
                             }
-                            spdlog::info("[SkyrimNet] Player skipped bio-father step-in evaluation for {:08X} & {:08X}",
-                                         cand.bioFatherID, motherID);
+                            MARAS_LOG_INFO("[SkyrimNet] Player skipped bio-father step-in evaluation for {:08X} & {:08X}",
+                                           cand.bioFatherID, motherID);
                             (*processNext)(index + 1);
                         });
                 });
