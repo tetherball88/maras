@@ -67,6 +67,9 @@ namespace MARAS {
         bool Save(SKSE::SerializationInterface* serialization) const;
         bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
 
+        // Data dump
+        nlohmann::json DumpJson() const;
+
     private:
         AdultChildTravelService() = default;
         ~AdultChildTravelService() = default;

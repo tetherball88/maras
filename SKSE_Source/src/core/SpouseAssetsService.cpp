@@ -222,6 +222,8 @@ namespace MARAS {
             return false;
         }
 
+        std::vector<RE::FormID> skippedDeadSpouses;
+
         for (std::uint32_t i = 0; i < cellCount; ++i) {
             RE::FormID savedCell = 0;
             if (!serialization->ReadRecordData(savedCell)) return false;
@@ -277,6 +279,9 @@ namespace MARAS {
                     auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(resolvedSid);
                     if (!actor || actor->IsDead()) {
                         MARAS_LOG_INFO("SpouseAssetsService::Load - skipping dead/invalid actor {:08X}", resolvedSid);
+                        if (actor) {
+                            skippedDeadSpouses.push_back(resolvedSid);
+                        }
                         continue;
                     }
                     data.sharingSpouses.insert(resolvedSid);
@@ -292,27 +297,32 @@ namespace MARAS {
             }
         }
 
-        // Version 7+: Load original bed owners before re-applying furniture sharing
+        // Version 7+: Load original bed owners before restoring dead spouse beds or re-applying furniture sharing
         if (version >= 7) {
             std::uint32_t bedOwnerCount = 0;
-            if (serialization->ReadRecordData(bedOwnerCount)) {
-                if (bedOwnerCount > kMaxRecords) {
-                    MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt bedOwnerCount {}", bedOwnerCount);
+            if (!serialization->ReadRecordData(bedOwnerCount)) {
+                return false;
+            }
+            if (bedOwnerCount > kMaxRecords) {
+                MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt bedOwnerCount {}", bedOwnerCount);
+                return false;
+            }
+            for (std::uint32_t i = 0; i < bedOwnerCount; ++i) {
+                RE::FormID savedBedID = 0, savedOwnerID = 0;
+                if (!serialization->ReadRecordData(savedBedID) || !serialization->ReadRecordData(savedOwnerID)) {
                     return false;
                 }
-                for (std::uint32_t i = 0; i < bedOwnerCount; ++i) {
-                    RE::FormID savedBedID = 0, savedOwnerID = 0;
-                    if (!serialization->ReadRecordData(savedBedID) || !serialization->ReadRecordData(savedOwnerID)) {
-                        break;
-                    }
-                    RE::FormID resolvedBedID = 0, resolvedOwnerID = 0;
-                    if (savedBedID != 0 && serialization->ResolveFormID(savedBedID, resolvedBedID)) {
-                        if (savedOwnerID != 0 && serialization->ResolveFormID(savedOwnerID, resolvedOwnerID)) {
-                            originalBedOwners_[resolvedBedID] = resolvedOwnerID;
-                        }
+                RE::FormID resolvedBedID = 0, resolvedOwnerID = 0;
+                if (savedBedID != 0 && serialization->ResolveFormID(savedBedID, resolvedBedID)) {
+                    if (savedOwnerID != 0 && serialization->ResolveFormID(savedOwnerID, resolvedOwnerID)) {
+                        originalBedOwners_[resolvedBedID] = resolvedOwnerID;
                     }
                 }
             }
+        }
+
+        for (RE::FormID deadSpouseId : skippedDeadSpouses) {
+            StopShareFurniture(deadSpouseId);
         }
 
         for (auto& [cellId, data] : sharedHomes_) {

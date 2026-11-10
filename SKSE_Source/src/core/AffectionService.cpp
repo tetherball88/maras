@@ -314,53 +314,54 @@ namespace MARAS {
         // Version 7+: Load daily affection accumulation records
         if (version >= 7) {
             std::uint32_t dailyActorCount = 0;
-            if (serialization->ReadRecordData(dailyActorCount)) {
-                if (dailyActorCount > kMaxRecords) {
-                    MARAS_LOG_ERROR("AffectionService::Load - corrupt dailyActorCount {}", dailyActorCount);
+            if (!serialization->ReadRecordData(dailyActorCount)) {
+                return false;
+            }
+            if (dailyActorCount > kMaxRecords) {
+                MARAS_LOG_ERROR("AffectionService::Load - corrupt dailyActorCount {}", dailyActorCount);
+                return false;
+            }
+            for (std::uint32_t i = 0; i < dailyActorCount; ++i) {
+                RE::FormID oldFormID = 0, newFormID = 0;
+                std::uint32_t typeCount = 0;
+                if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(typeCount)) {
+                    MARAS_LOG_ERROR("AffectionService::Load - failed to read daily affection actor header {}", i);
                     return false;
                 }
-                for (std::uint32_t i = 0; i < dailyActorCount; ++i) {
-                    RE::FormID oldFormID = 0, newFormID = 0;
-                    std::uint32_t typeCount = 0;
-                    if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(typeCount)) {
-                        MARAS_LOG_WARN("AffectionService::Load - failed to read daily affection actor header {}", i);
-                        break;
-                    }
-                    if (typeCount > kMaxTypesPerActor) {
-                        MARAS_LOG_ERROR("AffectionService::Load - corrupt daily affection typeCount {}", typeCount);
+                if (typeCount > kMaxTypesPerActor) {
+                    MARAS_LOG_ERROR("AffectionService::Load - corrupt daily affection typeCount {}", typeCount);
+                    return false;
+                }
+
+                bool validActor = false;
+                if (serialization->ResolveFormID(oldFormID, newFormID)) {
+                    auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
+                    validActor = (actor != nullptr && !actor->IsDead());
+                }
+
+                for (std::uint32_t t = 0; t < typeCount; ++t) {
+                    std::uint32_t len = 0;
+                    if (!serialization->ReadRecordData(len) || len > kMaxTypeNameLen) {
+                        MARAS_LOG_ERROR("AffectionService::Load - invalid daily affection type length {}", len);
                         return false;
                     }
-
-                    bool validActor = false;
-                    if (serialization->ResolveFormID(oldFormID, newFormID)) {
-                        auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-                        validActor = (actor != nullptr && !actor->IsDead());
+                    std::string typeName;
+                    if (len > 0) {
+                        typeName.resize(len);
+                        if (!serialization->ReadRecordData(typeName.data(), len)) {
+                            return false;
+                        }
                     }
-
-                    for (std::uint32_t t = 0; t < typeCount; ++t) {
-                        std::uint32_t len = 0;
-                        if (!serialization->ReadRecordData(len) || len > kMaxTypeNameLen) {
-                            MARAS_LOG_ERROR("AffectionService::Load - invalid daily affection type length {}", len);
-                            return false;
-                        }
-                        std::string typeName;
-                        if (len > 0) {
-                            typeName.resize(len);
-                            if (!serialization->ReadRecordData(typeName.data(), len)) {
-                                return false;
-                            }
-                        }
-                        float amount = 0.0f;
-                        if (!serialization->ReadRecordData(amount)) {
-                            return false;
-                        }
-                        if (validActor && !typeName.empty() && !std::isnan(amount) && !std::isinf(amount)) {
-                            dailyAffection_[newFormID][NormalizeType(typeName)] = amount;
-                        }
+                    float amount = 0.0f;
+                    if (!serialization->ReadRecordData(amount)) {
+                        return false;
+                    }
+                    if (validActor && !typeName.empty() && !std::isnan(amount) && !std::isinf(amount)) {
+                        dailyAffection_[newFormID][NormalizeType(typeName)] = amount;
                     }
                 }
-                MARAS_LOG_INFO("Loaded {} daily affection actor records", dailyAffection_.size());
             }
+            MARAS_LOG_INFO("Loaded {} daily affection actor records", dailyAffection_.size());
         }
 
         return true;

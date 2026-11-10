@@ -174,6 +174,7 @@ namespace MARAS {
         bool LoadConfigFile(const std::filesystem::path& filePath, bool isExtensionFile);
         void ParseTrainingLocationObject(const nlohmann::json& obj, bool isExtensionFile);
         void ParseDaedricBlessingObject(const nlohmann::json& obj);
+        void ClearCachedCatalogForms();
         bool EvaluateTrainingRequirements(const TrainingClassRuntimeSpec& spec, std::string* outReason = nullptr) const;
         void ApplyAdultChildPerks(RE::Actor* actor, const ChildRegistryEntry& entry);
 

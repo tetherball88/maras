@@ -344,9 +344,6 @@ namespace MARAS {
             }
         }
 
-        // Fill any gaps left by skipped dead actors and sync faction ranks without firing runtime mod events
-        FillGaps(0, false);
-
         MARAS_LOG_INFO("Loaded spouse hierarchy");
         return true;
     }

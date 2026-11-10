@@ -626,4 +626,29 @@ namespace MARAS {
         return true;
     }
 
+    nlohmann::json AdultChildTravelService::DumpJson() const {
+        std::shared_lock lock(m_mutex);
+
+        nlohmann::json j = nlohmann::json::object();
+        j["indexedInnCount"] = m_innDestinations.size();
+
+        nlohmann::json activeArray = nlohmann::json::array();
+        for (const auto& [childID, state] : m_activeDestinations) {
+            nlohmann::json entry = nlohmann::json::object();
+            entry["childFormId"] = std::format("{:08X}", childID);
+            entry["childName"] = ActorSvc::GetName(childID);
+            entry["targetMarkerFormId"] = std::format("{:08X}", state.targetMarkerID);
+            entry["targetLocationFormId"] = std::format("{:08X}", state.targetLocationID);
+            entry["targetCellFormId"] = std::format("{:08X}", state.targetCellID);
+            entry["destinationName"] = state.destinationName;
+            entry["assignedGameDay"] = state.assignedGameDay;
+            entry["arrivedGameDay"] = state.arrivedGameDay;
+            entry["stayDurationDays"] = state.stayDurationDays;
+            entry["isFamilyVisit"] = state.isFamilyVisit;
+            activeArray.push_back(std::move(entry));
+        }
+        j["activeDestinations"] = std::move(activeArray);
+        return j;
+    }
+
 }  // namespace MARAS

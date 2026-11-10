@@ -553,6 +553,29 @@ namespace MARAS {
         MARAS_LOG_INFO("BanterCoordinator::Revert: Reverted to clean state");
     }
 
+    nlohmann::json BanterCoordinatorService::DumpJson() const {
+        const float effectiveCooldownHours = GetCooldownHours();
+        std::shared_lock lock(m_mutex);
+
+        nlohmann::json j = nlohmann::json::object();
+        j["cooldownHours"] = effectiveCooldownHours;
+        j["savedCooldownHours"] = m_cooldownHours;
+        j["lastSceneDay"] = m_lastSceneDay;
+
+        nlohmann::json cooldownsArray = nlohmann::json::array();
+        for (const auto& [key, lastDay] : m_coupleCooldowns) {
+            nlohmann::json entry = nlohmann::json::object();
+            entry["actorAFormId"] = std::format("{:08X}", key.actorA);
+            entry["actorAName"] = ActorSvc::GetName(key.actorA);
+            entry["actorBFormId"] = std::format("{:08X}", key.actorB);
+            entry["actorBName"] = ActorSvc::GetName(key.actorB);
+            entry["lastSceneDay"] = lastDay;
+            cooldownsArray.push_back(std::move(entry));
+        }
+        j["coupleCooldowns"] = std::move(cooldownsArray);
+        return j;
+    }
+
     bool BanterCoordinatorService::IsLocationAllowedForScenes(RE::BGSLocation* location) const {
         const auto& s = Settings::GetSingleton();
         if (!s.enableScenes || !location) {

@@ -943,7 +943,7 @@ namespace MARAS {
                                                                           trainClassIdx, trainStartDay, savedBioTpl, savedRaceIdx));
                         if (stage != ChildStage::Adult) {
                             allRegistered.erase(newChild);
-                        } else if (npcProfiles.contains(newChild)) {
+                        } else if (!IsSyntheticChildID(newChild) && npcProfiles.contains(newChild)) {
                             allRegistered.insert(newChild);
                         }
                         SkyrimNetProfileService::GetSingleton().MarkActorStageUpdated(newChild, stage);

@@ -78,6 +78,9 @@ namespace MARAS {
         bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
         void Revert();
 
+        // Data dump
+        nlohmann::json DumpJson() const;
+
     private:
         BanterCoordinatorService() = default;
         ~BanterCoordinatorService() = default;

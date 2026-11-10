@@ -672,7 +672,7 @@ namespace MARAS {
                 }
             }
 
-            if (rec.baseFormID == 0 && rec.refFormID != 0) {
+            if (oldBaseID == 0 && rec.baseFormID == 0 && rec.refFormID != 0) {
                 rec.baseFormID = rec.refFormID;
             }
             if (rec.baseFormID == 0) {
