@@ -541,15 +541,27 @@ namespace MARAS {
         recordsByBaseID_.clear();
         refToBaseMap_.clear();
 
+        constexpr std::uint32_t kMaxRecords = 100000;
+        constexpr std::uint32_t kMaxPartnerCount = 10000;
+        constexpr std::uint32_t kMaxStringLen = 4096;
+
         std::uint32_t count = 0;
         if (!serialization->ReadRecordData(count)) {
             MARAS_LOG_ERROR("DeceasedRegistry::Load: Failed to read record count");
+            return false;
+        }
+        if (count > kMaxRecords) {
+            MARAS_LOG_ERROR("DeceasedRegistry::Load: Corrupt record count {}", count);
             return false;
         }
 
         auto readString = [serialization](std::string& outStr) -> bool {
             std::uint32_t len = 0;
             if (!serialization->ReadRecordData(len)) return false;
+            if (len > kMaxStringLen) {
+                MARAS_LOG_ERROR("DeceasedRegistry::Load: Corrupt string length {}", len);
+                return false;
+            }
             if (len > 0) {
                 outStr.resize(len);
                 if (!serialization->ReadRecordData(outStr.data(), len)) return false;
@@ -559,14 +571,20 @@ namespace MARAS {
             return true;
         };
 
-        auto resolveOrKeep = [serialization](RE::FormID oldID) -> RE::FormID {
+        auto resolveFormOrSpecial = [serialization](RE::FormID oldID) -> RE::FormID {
             if (oldID == 0 || oldID == kPlayerFormID || oldID == kPlayerBaseID ||
                 oldID == kUnknownFatherFormID || IsSyntheticChildID(oldID)) {
                 return oldID;
             }
+            if ((oldID & 0xFF000000) == 0xFF000000) {
+                return oldID;
+            }
             RE::FormID newID = 0;
-            if (serialization->ResolveFormID(oldID, newID)) return newID;
-            return oldID;
+            if (serialization->ResolveFormID(oldID, newID)) {
+                return newID;
+            }
+            MARAS_LOG_WARN("DeceasedRegistry::Load: Failed to resolve FormID {:08X}; dropping stale reference", oldID);
+            return 0;
         };
 
         for (std::uint32_t i = 0; i < count; ++i) {
@@ -585,10 +603,10 @@ namespace MARAS {
                 return false;
             }
 
-            rec.baseFormID = resolveOrKeep(oldBaseID);
-            rec.refFormID = resolveOrKeep(oldRefID);
-            rec.killerBaseID = resolveOrKeep(rec.killerBaseID);
-            rec.killerRefID = resolveOrKeep(rec.killerRefID);
+            rec.baseFormID = resolveFormOrSpecial(oldBaseID);
+            rec.refFormID = resolveFormOrSpecial(oldRefID);
+            rec.killerBaseID = resolveFormOrSpecial(rec.killerBaseID);
+            rec.killerRefID = resolveFormOrSpecial(rec.killerRefID);
 
             if (!rec.isChild) {
                 std::uint8_t sc = 0, st = 0, tp = 0;
@@ -603,6 +621,10 @@ namespace MARAS {
 
                 std::uint32_t partnerCount = 0;
                 if (!serialization->ReadRecordData(partnerCount)) return false;
+                if (partnerCount > kMaxPartnerCount) {
+                    MARAS_LOG_ERROR("DeceasedRegistry::Load: Corrupt partnerCount {} for record {}", partnerCount, i);
+                    return false;
+                }
 
                 for (std::uint32_t pIdx = 0; pIdx < partnerCount; ++pIdx) {
                     DeceasedPartnerSnapshot p;
@@ -614,10 +636,12 @@ namespace MARAS {
                         !serialization->ReadRecordData(p.isPlayer)) {
                         return false;
                     }
-                    p.partnerBaseID = resolveOrKeep(p.partnerBaseID);
-                    p.partnerRefID = resolveOrKeep(p.partnerRefID);
+                    p.partnerBaseID = resolveFormOrSpecial(p.partnerBaseID);
+                    p.partnerRefID = resolveFormOrSpecial(p.partnerRefID);
                     p.statusAtDeath = static_cast<RelationshipStatus>(relSt);
-                    rec.partnersAtDeath.push_back(p);
+                    if (p.partnerBaseID != 0 || p.partnerRefID != 0 || p.isPlayer) {
+                        rec.partnersAtDeath.push_back(p);
+                    }
                 }
             } else {
                 bool hasChildInfo = false;
@@ -637,15 +661,24 @@ namespace MARAS {
                         !serialization->ReadRecordData(ci.houseFormID)) {
                         return false;
                     }
-                    ci.guardianABaseID = resolveOrKeep(ci.guardianABaseID);
-                    ci.guardianARefID = resolveOrKeep(ci.guardianARefID);
-                    ci.guardianBBaseID = resolveOrKeep(ci.guardianBBaseID);
-                    ci.guardianBRefID = resolveOrKeep(ci.guardianBRefID);
-                    ci.bioMotherBaseID = resolveOrKeep(ci.bioMotherBaseID);
-                    ci.bioFatherBaseID = resolveOrKeep(ci.bioFatherBaseID);
-                    ci.houseFormID = resolveOrKeep(ci.houseFormID);
+                    ci.guardianABaseID = resolveFormOrSpecial(ci.guardianABaseID);
+                    ci.guardianARefID = resolveFormOrSpecial(ci.guardianARefID);
+                    ci.guardianBBaseID = resolveFormOrSpecial(ci.guardianBBaseID);
+                    ci.guardianBRefID = resolveFormOrSpecial(ci.guardianBRefID);
+                    ci.bioMotherBaseID = resolveFormOrSpecial(ci.bioMotherBaseID);
+                    ci.bioFatherBaseID = resolveFormOrSpecial(ci.bioFatherBaseID);
+                    ci.houseFormID = resolveFormOrSpecial(ci.houseFormID);
                     rec.childInfo = ci;
                 }
+            }
+
+            if (rec.baseFormID == 0 && rec.refFormID != 0) {
+                rec.baseFormID = rec.refFormID;
+            }
+            if (rec.baseFormID == 0) {
+                MARAS_LOG_WARN("DeceasedRegistry::Load: Skipping unresolvable deceased record '{}' (oldBase={:08X}, oldRef={:08X})",
+                               rec.name, oldBaseID, oldRefID);
+                continue;
             }
 
             recordsByBaseID_[rec.baseFormID] = rec;

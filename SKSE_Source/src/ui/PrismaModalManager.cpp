@@ -661,6 +661,24 @@ namespace MARAS {
 
         if (!remaining.empty()) {
             MARAS_LOG_INFO("PrismaModalManager::Revert: clearing {} pending modal(s)", remaining.size());
+            auto& uiMgr = PrismaUIManager::GetSingleton();
+            if (uiMgr.IsDomReady()) {
+                uiMgr.InteropCall("clearMARASModal", "");
+                uiMgr.SyncViewVisibilityAndFocus();
+            }
+            for (auto& item : remaining) {
+                if (item.callback) {
+                    try {
+                        ModalResponse abortedResp;
+                        abortedResp.modalId = item.request.id;
+                        abortedResp.aborted = true;
+                        item.callback(abortedResp);
+                    } catch (const std::exception& e) {
+                        MARAS_LOG_ERROR("PrismaModalManager::Revert: exception in aborted modal callback '{}': {}",
+                                        item.request.id, e.what());
+                    }
+                }
+            }
         }
     }
 

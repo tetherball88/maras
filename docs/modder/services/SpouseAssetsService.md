@@ -39,7 +39,9 @@ When a spouse stops sharing their home with the player (such as after a divorce)
 
 ## 3. Co-Save Persistence & Post-Mortem Cleanup on Load
 
-- Persists all shared home cells, their recorded original `kPublicArea` flags, and the set of spouses sharing each cell in the SKSE co-save.
+- Persists all shared home cells, their recorded original `kPublicArea` flags, the set of spouses sharing each cell, and the pre-share bed ownership map (`originalBedOwners_`, `'MARS'` v7+) in the `'SPAS'` SKSE co-save chunk.
+- **Pre-Share Bed Owner Preservation Across Save/Load**:
+  - Restoring `originalBedOwners_` before re-applying `ShareFurniture` during co-save load ensures that beds already set to `PlayerFaction` in the savegame retain their true pre-marriage `TESForm` owner (`TESNPC` or `TESFaction`) for future divorce/revocation restoration.
 - **Dead Spouse Cleanup on Load**:
   - When loading a save, the service validates each sharing spouse in every shared home cell. Any spouse who is now dead or unresolved is automatically pruned from the cell's `sharingSpouses` set.
   - If all sharing spouses for a cell have died, the service automatically restores the cell's original private/trespassing state (`SetPublic(false)`) during load and discards the entry.

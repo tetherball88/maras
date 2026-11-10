@@ -5144,8 +5144,8 @@ namespace MARAS {
         uint32_t count = 0;
         if (serialization->ReadRecordData(count)) {
             if (count > kMaxCooldownEntries) {
-                MARAS_LOG_WARN("MatchmakingService::Load - clamping unreasonable cooldown count {} to {}", count, kMaxCooldownEntries);
-                count = kMaxCooldownEntries;
+                MARAS_LOG_ERROR("MatchmakingService::Load - corrupt cooldown count {}", count);
+                return false;
             }
             for (uint32_t i = 0; i < count; ++i) {
                 RE::FormID savedID = 0;
@@ -5161,23 +5161,22 @@ namespace MARAS {
             }
             float savedPartnerCheatDay = -1.0f;
             if (serialization->ReadRecordData(savedPartnerCheatDay)) {
-                if (true) {
-                    lastPlayerPartnerCheatingDay_ = savedPartnerCheatDay;
-                    uint32_t locCoolCount = 0;
-                    if (serialization->ReadRecordData(locCoolCount)) {
-                        if (locCoolCount > kMaxCooldownEntries) {
-                            locCoolCount = kMaxCooldownEntries;
+                lastPlayerPartnerCheatingDay_ = savedPartnerCheatDay;
+                uint32_t locCoolCount = 0;
+                if (serialization->ReadRecordData(locCoolCount)) {
+                    if (locCoolCount > kMaxCooldownEntries) {
+                        MARAS_LOG_ERROR("MatchmakingService::Load - corrupt locCoolCount {}", locCoolCount);
+                        return false;
+                    }
+                    for (uint32_t i = 0; i < locCoolCount; ++i) {
+                        RE::FormID savedLocID = 0;
+                        float locDay = 0.0f;
+                        if (!serialization->ReadRecordData(savedLocID) || !serialization->ReadRecordData(locDay)) {
+                            break;
                         }
-                        for (uint32_t i = 0; i < locCoolCount; ++i) {
-                            RE::FormID savedLocID = 0;
-                            float locDay = 0.0f;
-                            if (!serialization->ReadRecordData(savedLocID) || !serialization->ReadRecordData(locDay)) {
-                                break;
-                            }
-                            RE::FormID resolvedLocID = 0;
-                            if (savedLocID != 0 && serialization->ResolveFormID(savedLocID, resolvedLocID)) {
-                                lastHomeArrivalEventDayByLoc_[resolvedLocID] = locDay;
-                            }
+                        RE::FormID resolvedLocID = 0;
+                        if (savedLocID != 0 && serialization->ResolveFormID(savedLocID, resolvedLocID)) {
+                            lastHomeArrivalEventDayByLoc_[resolvedLocID] = locDay;
                         }
                     }
                 }

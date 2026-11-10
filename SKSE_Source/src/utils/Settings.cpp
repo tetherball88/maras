@@ -400,7 +400,7 @@ namespace MARAS {
         return true;
     }
 
-    bool Settings::LoadGameSettings(SKSE::SerializationInterface* serialization) {
+    bool Settings::LoadGameSettings(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
         if (!serialization) return false;
 
         int32_t loadedLogLevel = defaultLogLevel;

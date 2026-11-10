@@ -223,6 +223,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
+                        MARAS::AdultChildProgression::GetSingleton().Revert();
                         MARAS::NPCIndex::GetSingleton().ClearLoadedActors();
                         MARAS::PrismaModalManager::GetSingleton().Revert();
                         MARAS::PrismaUIManager::GetSingleton().Destroy();

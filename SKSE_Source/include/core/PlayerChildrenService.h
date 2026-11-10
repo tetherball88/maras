@@ -133,7 +133,7 @@ namespace MARAS {
 
         // Serialization (decision 17 — own independent co-save record)
         [[nodiscard]] bool Save(SKSE::SerializationInterface* serialization) const;
-        [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization);
+        [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
         void Revert();
 
         // Data dump
@@ -150,7 +150,7 @@ namespace MARAS {
 
         // Faction snapshot serialization
         [[nodiscard]] bool SaveFactionSnapshots(SKSE::SerializationInterface* serialization) const;
-        [[nodiscard]] bool LoadFactionSnapshots(SKSE::SerializationInterface* serialization);
+        [[nodiscard]] bool LoadFactionSnapshots(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
         void RevertFactionSnapshots();
 
     private:

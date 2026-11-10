@@ -259,7 +259,7 @@ namespace MARAS {
 
         // SKSE cosave serialization
         bool SaveGameSettings(SKSE::SerializationInterface* serialization) const;
-        bool LoadGameSettings(SKSE::SerializationInterface* serialization);
+        bool LoadGameSettings(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
         void RevertGameSettings();
 
         // Data dump

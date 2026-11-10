@@ -667,8 +667,6 @@ namespace MARAS {
         }
 
         MARAS_LOG_INFO("Loaded {} player houses (from {} saved entries)", houses_.size(), houseCount);
-
-        PackageOverrideService::GetSingleton().RebuildFromTenants();
         return true;
     }
 

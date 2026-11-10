@@ -195,11 +195,21 @@ namespace MARAS {
                 if (!serialization->WriteRecordData(s)) return false;
         }
 
-        MARAS_LOG_INFO("SpouseAssetsService: saved {} shared homes", cellCount);
+        // Version 7+: Save original bed owners map so pre-share furniture ownership survives save/load
+        std::uint32_t bedOwnerCount = static_cast<std::uint32_t>(originalBedOwners_.size());
+        if (!serialization->WriteRecordData(bedOwnerCount)) return false;
+        for (const auto& [bedID, ownerID] : originalBedOwners_) {
+            if (!serialization->WriteRecordData(bedID) || !serialization->WriteRecordData(ownerID)) {
+                return false;
+            }
+        }
+
+        MARAS_LOG_INFO("SpouseAssetsService: saved {} shared homes and {} original bed owners",
+                       cellCount, bedOwnerCount);
         return true;
     }
 
-    bool SpouseAssetsService::Load(SKSE::SerializationInterface* serialization) {
+    bool SpouseAssetsService::Load(SKSE::SerializationInterface* serialization, std::uint32_t version) {
         if (!serialization) return false;
         Revert();
 
@@ -273,21 +283,47 @@ namespace MARAS {
                 }
             }
 
-            // Only store and re-apply if there are still valid sharing spouses
+            // Store valid shared home or restore original public state if all spouses died
             if (!data.sharingSpouses.empty()) {
                 data.sharedWithPlayer = true;
-                ApplyCellSharedPublicState(cellId, data);
-                for (auto spouseId : data.sharingSpouses) {
-                    ShareFurniture(spouseId);
-                }
                 sharedHomes_.emplace(cellId, std::move(data));
             } else {
-                // Restore original public state if all spouses were dead
                 RestoreCellOriginalPublicState(cellId, data);
             }
         }
 
-        MARAS_LOG_INFO("SpouseAssetsService: loaded {} shared homes", sharedHomes_.size());
+        // Version 7+: Load original bed owners before re-applying furniture sharing
+        if (version >= 7) {
+            std::uint32_t bedOwnerCount = 0;
+            if (serialization->ReadRecordData(bedOwnerCount)) {
+                if (bedOwnerCount > kMaxRecords) {
+                    MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt bedOwnerCount {}", bedOwnerCount);
+                    return false;
+                }
+                for (std::uint32_t i = 0; i < bedOwnerCount; ++i) {
+                    RE::FormID savedBedID = 0, savedOwnerID = 0;
+                    if (!serialization->ReadRecordData(savedBedID) || !serialization->ReadRecordData(savedOwnerID)) {
+                        break;
+                    }
+                    RE::FormID resolvedBedID = 0, resolvedOwnerID = 0;
+                    if (savedBedID != 0 && serialization->ResolveFormID(savedBedID, resolvedBedID)) {
+                        if (savedOwnerID != 0 && serialization->ResolveFormID(savedOwnerID, resolvedOwnerID)) {
+                            originalBedOwners_[resolvedBedID] = resolvedOwnerID;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (auto& [cellId, data] : sharedHomes_) {
+            ApplyCellSharedPublicState(cellId, data);
+            for (auto spouseId : data.sharingSpouses) {
+                ShareFurniture(spouseId);
+            }
+        }
+
+        MARAS_LOG_INFO("SpouseAssetsService: loaded {} shared homes and {} original bed owners",
+                       sharedHomes_.size(), originalBedOwners_.size());
         return true;
     }
 

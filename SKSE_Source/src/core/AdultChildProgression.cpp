@@ -692,10 +692,18 @@ namespace MARAS {
 
         if (obj.contains("npcClass")) {
             target->classKeys = ParseStringOrArrayKeys(obj, "npcClass");
-            target->cachedRuntimeClass = nullptr;
+            if (target->cachedRuntimeClass) {
+                target->cachedRuntimeClass->fullName = RE::BSFixedString();
+                RE::free(target->cachedRuntimeClass);
+                target->cachedRuntimeClass = nullptr;
+            }
         } else if (obj.contains("class")) {
             target->classKeys = ParseStringOrArrayKeys(obj, "class");
-            target->cachedRuntimeClass = nullptr;
+            if (target->cachedRuntimeClass) {
+                target->cachedRuntimeClass->fullName = RE::BSFixedString();
+                RE::free(target->cachedRuntimeClass);
+                target->cachedRuntimeClass = nullptr;
+            }
         }
         if (obj.contains("combatStyle")) {
             target->combatStyleKeys = ParseStringOrArrayKeys(obj, "combatStyle");
@@ -1360,10 +1368,10 @@ namespace MARAS {
             return baseClass;
         }
         std::memcpy(runtimeClass, baseClass, sizeof(RE::TESClass));
-        if (!spec.className.empty()) {
-            std::memset(&runtimeClass->fullName, 0, sizeof(RE::BSFixedString));
-            runtimeClass->fullName = RE::BSFixedString(spec.className.c_str());
-        }
+        const char* origClassName = baseClass->GetName();
+        std::memset(&runtimeClass->fullName, 0, sizeof(RE::BSFixedString));
+        runtimeClass->fullName = RE::BSFixedString(
+            !spec.className.empty() ? spec.className.c_str() : (origClassName ? origClassName : ""));
         runtimeClass->data.attributeWeights.health =
             static_cast<std::uint8_t>(std::clamp(std::lround(spec.hmsWeights[0] * 10.0f), 0l, 100l));
         runtimeClass->data.attributeWeights.magicka =
@@ -1498,10 +1506,24 @@ namespace MARAS {
                 RE::free(cloneBase->headRelatedData);
                 cloneBase->headRelatedData = nullptr;
             }
+            cloneBase->fullName = RE::BSFixedString();
             RE::free(cloneBase);
         }
         originalAdultBases_.clear();
         clonedAdultBases_.clear();
+    }
+
+    void AdultChildProgression::Revert() {
+        RevertRuntimeBases();
+        for (auto& spec : catalog_) {
+            if (spec.cachedRuntimeClass) {
+                spec.cachedRuntimeClass->fullName = RE::BSFixedString();
+                RE::free(spec.cachedRuntimeClass);
+                spec.cachedRuntimeClass = nullptr;
+            }
+            spec.cachedCombatStyle = nullptr;
+            spec.cachedOutfit = nullptr;
+        }
     }
 
     const AdultChildProgression::DaedricBlessingRuntimeSpec* AdultChildProgression::FindDaedricBlessingById(
@@ -1667,10 +1689,10 @@ namespace MARAS {
             cloneNpc->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kAutoCalcStats);
             cloneNpc->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kPCLevelMult);
 
-            if (!entry.name.empty()) {
-                std::memset(&cloneNpc->fullName, 0, sizeof(RE::BSFixedString));
-                cloneNpc->fullName = RE::BSFixedString(entry.name.c_str());
-            }
+            const char* origNpcName = origNpc->GetName();
+            std::memset(&cloneNpc->fullName, 0, sizeof(RE::BSFixedString));
+            cloneNpc->fullName = RE::BSFixedString(
+                !entry.name.empty() ? entry.name.c_str() : (origNpcName ? origNpcName : ""));
 
             clonedAdultBases_[childID] = cloneNpc;
         }

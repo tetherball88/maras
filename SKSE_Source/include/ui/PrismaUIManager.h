@@ -22,6 +22,7 @@ namespace MARAS {
         void Hide();
         void Toggle();
         void Destroy();
+        void Revert();
         void StartListeningInput();
         void StopListeningInput();
 

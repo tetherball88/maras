@@ -10,6 +10,10 @@ namespace MARAS {
         return &singleton;
     }
 
+    void DialogueEventSink::Revert() {
+        waitingForSpeaker_.store(false, std::memory_order_release);
+    }
+
     bool DialogueEventSink::TryResolveDeferredSpeaker() {
         if (!waitingForSpeaker_.load(std::memory_order_acquire)) {
             return false;

@@ -19,6 +19,22 @@ namespace MARAS {
         m_pendingNewGameRelationshipScan = false;
     }
 
+    void PrismaUIManager::Revert() {
+        ResetNewGameDeferral();
+        m_dashboardOpen = false;
+        m_dashboardPaused = false;
+        m_modalFocusLocked = false;
+        m_postUnfocusCallbacks.clear();
+
+        if (IsViewValid()) {
+            if (m_domReady) {
+                InteropCall("clearMARASModal", "");
+                InteropCall("closeMARASView", "");
+            }
+            SyncViewVisibilityAndFocus();
+        }
+    }
+
     bool PrismaUIManager::IsBlockingNativeMenuOpen() const {
         auto* ui = RE::UI::GetSingleton();
         if (!ui) {

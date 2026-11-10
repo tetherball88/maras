@@ -21,6 +21,26 @@
 
 namespace MARAS {
 
+    RE::FormID NPCRelationshipManager::AllocateSyntheticChildID() {
+        if (nextSyntheticChildID_ <= kSyntheticChildIDMin || nextSyntheticChildID_ > kSyntheticChildIDMax) {
+            nextSyntheticChildID_ = kSyntheticChildIDMin + 1;
+        }
+        constexpr uint32_t kPoolSize = (kSyntheticChildIDMax - kSyntheticChildIDMin);
+        for (uint32_t probe = 0; probe < kPoolSize; ++probe) {
+            RE::FormID candidate = nextSyntheticChildID_;
+            if (nextSyntheticChildID_ < kSyntheticChildIDMax) {
+                ++nextSyntheticChildID_;
+            } else {
+                nextSyntheticChildID_ = kSyntheticChildIDMin + 1;
+            }
+            if (!childrenByID.contains(candidate)) {
+                return candidate;
+            }
+        }
+        MARAS_LOG_ERROR("[Fertility] Synthetic child FormID pool (0xFF700001..0xFF7FFFFF) exhausted!");
+        return kSyntheticChildIDMax;
+    }
+
     bool NPCRelationshipManager::ApplyBioFatherStepIn(RE::FormID motherID, RE::FormID bioFatherID) {
         if (motherID == 0 || bioFatherID == 0) return false;
 
@@ -554,7 +574,7 @@ namespace MARAS {
             bioFatherID = (presumedFatherID != 0) ? presumedFatherID : kUnknownFatherFormID;
         }
 
-        RE::FormID childID = nextSyntheticChildID_++;
+        RE::FormID childID = AllocateSyntheticChildID();
 
         std::string motherName = ActorSvc::GetName(motherID);
         std::string childName = (motherName.empty() ? "Mother" : motherName) + "'s Unborn Child #" + std::to_string(existingCount + 1);
@@ -1404,7 +1424,7 @@ namespace MARAS {
 
         RE::FormID childID = syntheticChildID;
         if (childID == 0) {
-            childID = nextSyntheticChildID_++;
+            childID = AllocateSyntheticChildID();
         }
 
         float cTime = conceptionTime;
@@ -2071,7 +2091,7 @@ namespace MARAS {
                 childActor->SetDelete(true);
             }
 
-            targetChildID = nextSyntheticChildID_++;
+            targetChildID = AllocateSyntheticChildID();
             entry.childID = targetChildID;
 
             childrenByID.erase(childID);

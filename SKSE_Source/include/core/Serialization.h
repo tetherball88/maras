@@ -17,9 +17,13 @@ namespace MARAS {
         // Version 5: Added presumedFatherID to ChildRegistryEntry in NPCRelationshipData.
         // Version 6: Added trainingClassIndex, trainingStartGameDay, savedBioTemplateName, and savedRaceIndex
         //            to ChildRegistryEntry in NPCRelationshipData.
-        constexpr std::uint32_t kDataVersion = 6;
+        // Version 7: Added PaternitySecret::bioFatherName and bioFatherRaceID to ChildRegistryEntry in
+        //            NPCRelationshipData ('NPCR'), dailyAffection_ per-type daily cap tracking to
+        //            AffectionService ('AFCT'), originalBedOwners_ furniture ownership map to
+        //            SpouseAssetsService ('SPAS'), and two-phase post-chunk cross-service finalization.
+        constexpr std::uint32_t kDataVersion = 7;
 
-        // Top-level SKSE co-save record types (11 records).
+        // Top-level SKSE co-save record types (12 records).
         // Note: Status history, pending deferred relationships, pending deferred children, and the
         // child-centric registry are serialized inline within kNPCRelationshipData ('NPCR').
         constexpr std::uint32_t kNPCRelationshipData = 'NPCR';

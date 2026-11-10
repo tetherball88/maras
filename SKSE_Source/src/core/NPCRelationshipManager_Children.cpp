@@ -121,6 +121,11 @@ namespace MARAS {
             return s_pendingMarriageAdoptions.contains(childID);
         }
 
+        void ClearAllPendingMarriageAdoptions() {
+            std::lock_guard<std::mutex> lock(s_pendingMarriageAdoptionsMutex);
+            s_pendingMarriageAdoptions.clear();
+        }
+
         void SyncChildHouseholdState(RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID, RE::FormID explicitHouseID = 0) {
             const bool hasPlayer = Utils::MatchesActor(guardianAID, kPlayerFormID) ||
                                    Utils::MatchesActor(guardianBID, kPlayerFormID);
@@ -189,6 +194,10 @@ namespace MARAS {
             RE::FormID m_spouseID{ 0 };
         };
     }  // namespace
+
+    void NPCRelationshipManager::ClearPendingMarriageAdoptions() {
+        ClearAllPendingMarriageAdoptions();
+    }
 
     RE::FormID NPCRelationshipManager::ResolveNonPlayerChildTarget(const ChildRegistryEntry& entry) const {
         auto isActorAlive = [](RE::FormID actorID) -> bool {

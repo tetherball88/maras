@@ -1023,7 +1023,7 @@ namespace MARAS {
         return true;
     }
 
-    bool PlayerChildrenService::Load(SKSE::SerializationInterface* serialization) {
+    bool PlayerChildrenService::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
         if (!serialization) return false;
 
         Revert();
@@ -1119,7 +1119,7 @@ namespace MARAS {
         return true;
     }
 
-    bool PlayerChildrenService::LoadFactionSnapshots(SKSE::SerializationInterface* serialization) {
+    bool PlayerChildrenService::LoadFactionSnapshots(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
         if (!serialization) return false;
 
         RevertFactionSnapshots();
