@@ -341,16 +341,6 @@ export const MatchmakingSettings: React.FC = () => {
             onChange={(val) => updateMatchmakingSettings({ npcCooldownDays: Math.round(val) })}
           />
         </SettingRow>
-
-        <SettingRow
-          label="Exclude Player's Active Main Partners"
-          description="Do not include NPCs who are currently dating, engaged to, or married to the player in scheduled world matchmaking."
-        >
-          <ToggleSwitch
-            checked={matchmakingSettings.excludePlayerActivePartners ?? false}
-            onChange={(val) => updateMatchmakingSettings({ excludePlayerActivePartners: val })}
-          />
-        </SettingRow>
       </SectionCard>
 
       {/* Section 2: Dice Roll Chances (Visible when not in LLM mode) */}

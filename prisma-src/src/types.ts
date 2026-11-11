@@ -286,7 +286,6 @@ export interface MarasSettings {
   matchmakingAllowOpenClose?: boolean
   matchmakingAllowCheating?: boolean
   matchmakingOrientation?: number
-  matchmakingExcludePlayerActivePartners?: boolean
   matchmakingConfirmResults?: boolean
   playerPartnerCheatingAgencyEnabled?: boolean
   playerPartnerOpenRelAgencyEnabled?: boolean
@@ -356,7 +355,6 @@ export interface MatchmakingSettings {
   allowOpenClose: boolean
   allowCheating: boolean
   orientation: MatchmakingOrientation
-  excludePlayerActivePartners: boolean
   useLLM?: boolean
   generateMemories?: boolean
   evaluationStep?: boolean

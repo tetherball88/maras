@@ -18,7 +18,7 @@ By intercepting changes to `PlayerMarriedFaction` (`0x000C6472`) on NPCs, M.A.R.
 
 1. **External Marriage Detection (`a_rank >= 0`)**:
    - When an external script or quest adds an NPC to `PlayerMarriedFaction` and that NPC is not yet marked as `Married` to the player in [NPCRelationshipManager](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager.cpp):
-     - Checks `CanFormRelationship(npc, Player, Married)` to verify that no hard family/incest or exclusivity block prevents the marriage.
+     - Checks `CanFormRelationship(npc, Player, Married)` to verify that no hard family/incest or exclusivity block prevents the marriage. If rejected, `Hook_AddToFaction` blocks the engine `PlayerMarriedFaction` addition as well so vanilla faction state never diverges from M.A.R.A.S state.
      - Automatically promotes the NPC to **Married** with the player in `NPCRelationshipManager` (`PromoteToMarried`), triggering full M.A.R.A.S spouse onboarding (hierarchy slot assignment, buff application, child custody sync, and faction mirroring).
      - Immediately sanitizes `PlayerMarriedFaction` off the Player character if polygamy is enabled.
 2. **External Divorce Detection (`RemoveFromFaction` or `a_rank < 0`)**:

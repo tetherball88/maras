@@ -7883,7 +7883,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     skyrimnetActionRadius: 3e3,
     skyrimnetUseLLMMemories: true,
     skyrimnetUseDecisions: true,
-    matchmakingExcludePlayerActivePartners: false,
     matchmakingConfirmResults: false,
     playerPartnerCheatingAgencyEnabled: true,
     playerPartnerOpenRelAgencyEnabled: true,
@@ -15519,7 +15518,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       allowOpenClose: mockSettings.matchmakingAllowOpenClose ?? true,
       allowCheating: mockSettings.matchmakingAllowCheating ?? true,
       orientation: mockSettings.matchmakingOrientation ?? MatchmakingOrientation.Heterosexual,
-      excludePlayerActivePartners: mockSettings.matchmakingExcludePlayerActivePartners ?? false,
       useLLM: true,
       generateMemories: true,
       evaluationStep: true,
@@ -16317,11 +16315,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         if (data.settings) {
           nextSettings = { ...state.settings, ...data.settings };
           updates.settings = nextSettings;
-          if (data.settings.matchmakingExcludePlayerActivePartners !== void 0 || data.settings.matchmakingConfirmResults !== void 0 || data.settings.playerPartnerCheatingAgencyEnabled !== void 0 || data.settings.playerPartnerOpenRelAgencyEnabled !== void 0) {
+          if (data.settings.matchmakingConfirmResults !== void 0 || data.settings.playerPartnerCheatingAgencyEnabled !== void 0 || data.settings.playerPartnerOpenRelAgencyEnabled !== void 0) {
             const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings;
             updates.matchmakingSettings = {
               ...baseMatchSettings,
-              ...data.settings.matchmakingExcludePlayerActivePartners !== void 0 ? { excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners } : {},
               ...data.settings.matchmakingConfirmResults !== void 0 ? { confirmResults: data.settings.matchmakingConfirmResults } : {},
               ...data.settings.playerPartnerCheatingAgencyEnabled !== void 0 ? { playerPartnerCheatingAgencyEnabled: data.settings.playerPartnerCheatingAgencyEnabled } : {},
               ...data.settings.playerPartnerOpenRelAgencyEnabled !== void 0 ? { playerPartnerOpenRelAgencyEnabled: data.settings.playerPartnerOpenRelAgencyEnabled } : {},
@@ -30107,20 +30104,6 @@ Defaulting to \`null\`.`;
                     step: 1,
                     unit: "d",
                     onChange: (val) => updateMatchmakingSettings({ npcCooldownDays: Math.round(val) })
-                  }
-                )
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              SettingRow,
-              {
-                label: "Exclude Player's Active Main Partners",
-                description: "Do not include NPCs who are currently dating, engaged to, or married to the player in scheduled world matchmaking.",
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  ToggleSwitch,
-                  {
-                    checked: matchmakingSettings.excludePlayerActivePartners ?? false,
-                    onChange: (val) => updateMatchmakingSettings({ excludePlayerActivePartners: val })
                   }
                 )
               }

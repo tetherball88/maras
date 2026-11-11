@@ -20,7 +20,8 @@ namespace MARAS {
         // Version 7: Added PaternitySecret::bioFatherName and bioFatherRaceID to ChildRegistryEntry in
         //            NPCRelationshipData ('NPCR'), dailyAffection_ per-type daily cap tracking to
         //            AffectionService ('AFCT'), originalBedOwners_ furniture ownership map to
-        //            SpouseAssetsService ('SPAS'), and two-phase post-chunk cross-service finalization.
+        //            SpouseAssetsService ('SPAS'), optional DeceasedChildInfo on adult records in
+        //            DeceasedRegistry ('DCSD'), and two-phase post-chunk cross-service finalization.
         constexpr std::uint32_t kDataVersion = 7;
 
         // Top-level SKSE co-save record types (12 records).

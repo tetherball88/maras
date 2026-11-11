@@ -20,6 +20,7 @@
 ### 2.1 Automatic NPC Onboarding & Archetype Assignment
 - **Internal Profile Registration vs. Player Candidate Registration**:
   - Any NPC who interacts with M.A.R.A.S systems internally (matchmaking, existing vanilla relationships, affairs, or child guardianship) is automatically registered with an internal profile (`EnsureRegistered`) without being added to `TTM_TrackedNPC` (`0x7`) or `PotentialMarriageFaction`.
+  - Actors who are dead or already archived in [DeceasedRegistry](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/DeceasedRegistry.md) are rejected by `EnsureRegistered`, preventing offline parent/partner reconciliation from resurrecting deceased NPCs into active rosters. On co-save load (`FinalizeLoad`), any registered adults or spawned children whose engine actors died prior to save finalization are automatically archived and cleaned up before family links are synced.
   - `TTM_TrackedNPC` at `Candidate` rank (`0`) and `PotentialMarriageFaction` are applied only when the Player explicitly registers an NPC as a marriage candidate (`RegisterAsCandidate`, e.g., via dialogue) or forms a player-involved relationship with them.
 - **Personality & Social Profiling**: Upon registration, the service determines three permanent traits for the NPC:
   - **Social Class** (*Outcast, Poverty, Working, Middle, Wealthy, Religious, Nobles, Rulers*)
@@ -83,13 +84,15 @@
 - **Automatic Custody Transfers**:
   - **On Marriage**: If a single parent marries (either Player + NPC or NPC + NPC), their new spouse is automatically added as the child's second custodial guardian. If the Player marries an unhoused NPC and already has a child living in a player home, the new spouse is automatically moved into that child's home.
   - **On Divorce**:
+    - For Player marriages, divorcing a spouse also evicts them from any assigned Player home (`PlayerHouseService`) and clears any pending partner agency intents.
     - Any active partner-side paternity secrets (`isSecretForPartner`) for the couple's born or unborn children are immediately resolved (`maras_paternity_secret_resolved`), while preserving `isSecretForBioFather` if the biological father is still unaware.
     - Sole custody is awarded based on a priority hierarchy:
       1. **Biological Parent Priority** (if enabled in settings and only one spouse is the genetic parent).
       2. **Player Custody Policy** (*Always With Player* or *Never With Player*, if configured).
       3. **Gender Custody Policy** (*Stay With Mother* or *Stay With Father* for opposite-sex couples, or a 50/50 coin flip for same-sex couples).
   - **On Parent Death**:
-    - If a player's spouse dies, custody of their children is automatically inherited by the **Player and the Player's highest-ranking surviving spouse**, relocating the children to that spouse's home.
+    - If a pregnant mother dies while carrying an `Unborn` pregnancy, the unborn pregnancy entry is removed rather than left orphaned on surviving guardians. When a non-mother partner or biological father dies during pregnancy, the living biological mother retains guardianship and stale presumed-father / bio-father secret flags for the deceased actor are cleared.
+    - If a player's spouse dies, custody of their born children is automatically inherited by the **Player and the Player's highest-ranking surviving spouse**, relocating the children to that spouse's home.
     - If an NPC child loses both guardians and has no surviving biological parents, dynamically spawned (`0xFF`) children are **automatically sent to Honorhall Orphanage** in Riften and added to the adoptable faction so the Player or another couple can adopt them!
 - **Dynamic NPC Child Following**: Spawned (`0xFF`) children living with NPC parents outside the player's household are dynamically linked to follow and sandbox around their living custodial parent (prioritizing their biological mother, then biological father, then adoptive guardian).
 

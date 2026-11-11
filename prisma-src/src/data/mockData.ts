@@ -709,7 +709,6 @@ export const mockSettings: MarasSettings = {
   skyrimnetActionRadius: 3000,
   skyrimnetUseLLMMemories: true,
   skyrimnetUseDecisions: true,
-  matchmakingExcludePlayerActivePartners: false,
   matchmakingConfirmResults: false,
   playerPartnerCheatingAgencyEnabled: true,
   playerPartnerOpenRelAgencyEnabled: true,

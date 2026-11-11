@@ -14,7 +14,7 @@ namespace MARAS {
 
     namespace {
         constexpr uint8_t kSettingsVersionMarker = 0xFF;
-        constexpr uint32_t kSettingsSubVersion = 3;
+        constexpr uint32_t kSettingsSubVersion = 4;
 
         const std::unordered_map<std::string, uint32_t> kKeyNameToDxCode = {
             {"F1", 0x3B}, {"F2", 0x3C}, {"F3", 0x3D}, {"F4", 0x3E},
@@ -76,7 +76,7 @@ namespace MARAS {
             visit("confirmDivorceDuringLowAffectionQuest", &Settings::confirmDivorceDuringLowAffectionQuest, true);
             visit("migratedFromStorageUtil", &Settings::migratedFromStorageUtil, true);
 
-            // Optional tail fields (72 fields, in exact v4 binary stream order)
+            // Optional tail fields (in exact binary stream order)
             visit("initialRelationshipScanDone", &Settings::initialRelationshipScanDone, false);
             visit("childCustodyGenderPolicy", &Settings::childCustodyGenderPolicy, false);
             visit("childCustodyPlayerPolicy", &Settings::childCustodyPlayerPolicy, false);
@@ -101,7 +101,6 @@ namespace MARAS {
             visit("matchmakingOrientation", &Settings::matchmakingOrientation, false);
             visit("matchmakingAllowCheating", &Settings::matchmakingAllowCheating, false);
             visit("matchmakingNpcCooldownDays", &Settings::matchmakingNpcCooldownDays, false);
-            visit("matchmakingExcludePlayerActivePartners", &Settings::matchmakingExcludePlayerActivePartners, false);
             visit("matchmakingUseLLM", &Settings::matchmakingUseLLM, false);
             visit("diceRollChanceNewDating", &Settings::diceRollChanceNewDating, false);
             visit("diceRollChanceNewEngaged", &Settings::diceRollChanceNewEngaged, false);
@@ -432,6 +431,13 @@ namespace MARAS {
 
             ForEachPersistedSetting([&](std::string_view key, auto memberPtr, bool required) {
                 if (requiredReadFailed || streamEnded) return;
+                if (subVersion < 4 && key == "matchmakingUseLLM") {
+                    uint8_t legacyExcludePlayerActivePartners = 0;
+                    if (!serialization->ReadRecordData(legacyExcludePlayerActivePartners)) {
+                        streamEnded = true;
+                        return;
+                    }
+                }
                 if (subVersion < 2 && key == "playerPartnerCheatingChanceMultiplier") {
                     int32_t legacyIntervalDays = 0;
                     if (!serialization->ReadRecordData(legacyIntervalDays)) {
@@ -531,8 +537,8 @@ namespace MARAS {
         SyncSimulateNoSkyrimNetGlobal(loadedSimNoSkyrimNet);
         LoggingService::GetSingleton().SetLogLevel(loadedLogLevel);
 
-        MARAS_LOG_INFO("Settings::LoadGameSettings - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={}, matchExcludePlayerPartners={})",
-                       loadedLogLevel, skipWedding, initialRelationshipScanDone, static_cast<int>(childCustodyGenderPolicy), static_cast<int>(childCustodyPlayerPolicy), childCustodyPrioritizeBioParent, bGlobalBanCritter, bGlobalBanPet, matchmakingEnabled, matchmakingIntervalDays, static_cast<int>(matchmakingOrientation), matchmakingAllowCheating, matchmakingExcludePlayerActivePartners);
+        MARAS_LOG_INFO("Settings::LoadGameSettings - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
+                       loadedLogLevel, skipWedding, initialRelationshipScanDone, static_cast<int>(childCustodyGenderPolicy), static_cast<int>(childCustodyPlayerPolicy), childCustodyPrioritizeBioParent, bGlobalBanCritter, bGlobalBanPet, matchmakingEnabled, matchmakingIntervalDays, static_cast<int>(matchmakingOrientation), matchmakingAllowCheating);
         MARAS_LOG_INFO("Settings::LoadGameSettings - loaded confirmation modal settings: playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={}",
                        enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
                        confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
@@ -639,7 +645,6 @@ namespace MARAS {
                 {"matchmakingallowbreakups", &Settings::matchmakingAllowBreakups},
                 {"matchmakingallowopenclose", &Settings::matchmakingAllowOpenClose},
                 {"matchmakingallowcheating", &Settings::matchmakingAllowCheating},
-                {"matchmakingexcludeplayeractivepartners", &Settings::matchmakingExcludePlayerActivePartners},
                 {"matchmakingusellm", &Settings::matchmakingUseLLM},
                 {"matchmakingevaluationstep", &Settings::matchmakingEvaluationStep},
                 {"matchmakinggeneratememories", &Settings::matchmakingGenerateMemories},

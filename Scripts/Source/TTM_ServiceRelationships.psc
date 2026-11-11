@@ -5,6 +5,9 @@ scriptname TTM_ServiceRelationships
   @param npc The NPC actor
 /;
 Function MakeNpcCandidate(Actor npc) global
+    if(!npc)
+        return
+    endif
     int playerRank = TTM_Data.GetPlayer().GetRelationshipRank(npc)
     MARAS.SetPermanentAffection(npc, 50 + (playerRank * 10))
     TTM_Messages.RegisterCandidateMsg(TTM_Utils.GetActorName(npc))
@@ -15,6 +18,9 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcDating(Actor npc) global
+    if(!npc)
+        return
+    endif
     Actor player = TTM_Data.GetPlayer()
     if(npc.GetRelationshipRank(player) < 3)
         npc.SetRelationshipRank(player, 3)
@@ -30,6 +36,9 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcLover(Actor npc) global
+    if(!npc)
+        return
+    endif
     Actor player = TTM_Data.GetPlayer()
     if(npc.GetRelationshipRank(player) < 3)
         npc.SetRelationshipRank(player, 3)
@@ -45,6 +54,9 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcEngaged(Actor npc) global
+    if(!npc)
+        return
+    endif
     bool alwaysSkipWeddings = MARAS.GetSettingBool("skipWedding")
     int answerSkipWedding = -1
     if(TTM_Data.GetPlayerHadWedding() && !alwaysSkipWeddings && StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 0)
@@ -76,6 +88,10 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcMarried(Actor npc) global
+    if(!npc)
+        TTM_ServiceBuff.Maintenance()
+        return
+    endif
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, 4)
     ;re-evaluate spouses bonuses on each spouse added
@@ -102,6 +118,10 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcDivorced(Actor npc) global
+    if(!npc)
+        TTM_ServiceBuff.Maintenance()
+        return
+    endif
     bool res = TTM_Data.GetDivorceKeyword().SendStoryEventAndWait(akRef1 = npc)
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -2)
@@ -123,6 +143,9 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcJilted(Actor npc) global
+    if(!npc)
+        return
+    endif
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -1)
     SetBrokeupTime(npc)
@@ -137,6 +160,9 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcExDating(Actor npc) global
+    if(!npc)
+        return
+    endif
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -1)
     if(npc.IsInFaction(TTM_Data.GetSpouseCheatingFaction()))
@@ -153,6 +179,9 @@ EndFunction
   @param npc The NPC actor
 /;
 Function MakeNpcExLover(Actor npc) global
+    if(!npc)
+        return
+    endif
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -1)
     if(npc.IsInFaction(TTM_Data.GetSpouseCheatingFaction()))
@@ -293,6 +322,9 @@ EndFunction
 ; If player somehow engaged with hostile by default NPC, we need to pacify them
 ; If player broke up with fiance/spouse, we need to remove the pacify spell
 Function PacifyFianceOrSpouse(Actor npc, bool add = true) global
+    if(!npc)
+        return
+    endif
     float aggr = npc.GetActorValue("Aggression")
     if(add)
         if(!npc.HasSpell(TTM_Data.GetPacifyFianceOrSpouseSpell()) && (aggr > 0 || aggr == -1))

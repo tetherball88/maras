@@ -94,7 +94,6 @@ namespace MARAS {
         bool matchmakingAllowOpenClose = true;
         bool matchmakingAllowCheating = true;
         MatchmakingOrientation matchmakingOrientation = MatchmakingOrientation::Heterosexual;
-        bool matchmakingExcludePlayerActivePartners = false;
 
         // Dice Roll matchmaking mode toggle (false = Dice Roll, true = LLM AI)
         // Only meaningful when SkyrimNet is available; non-SkyrimNet always uses Dice Roll
@@ -240,17 +239,32 @@ namespace MARAS {
         int32_t GetMinRelRankForDial() const;
         void SetMinRelRankForDial(int32_t value);
 
-        bool GetSimulateNoSkyrimNet() const { return simulateNoSkyrimNet; }
+        bool GetSimulateNoSkyrimNet() const {
+            std::shared_lock lock(settingsMutex_);
+            return simulateNoSkyrimNet;
+        }
         void SetSimulateNoSkyrimNet(bool value);
 
         // Global critter & pet banned config (supercedes per-child ban)
         bool bGlobalBanCritter = false;
-        bool IsGlobalCritterBanned() const { return bGlobalBanCritter; }
-        void SetGlobalCritterBanned(bool banned) { bGlobalBanCritter = banned; }
+        bool IsGlobalCritterBanned() const {
+            std::shared_lock lock(settingsMutex_);
+            return bGlobalBanCritter;
+        }
+        void SetGlobalCritterBanned(bool banned) {
+            std::unique_lock lock(settingsMutex_);
+            bGlobalBanCritter = banned;
+        }
 
         bool bGlobalBanPet = false;
-        bool IsGlobalPetBanned() const { return bGlobalBanPet; }
-        void SetGlobalPetBanned(bool banned) { bGlobalBanPet = banned; }
+        bool IsGlobalPetBanned() const {
+            std::shared_lock lock(settingsMutex_);
+            return bGlobalBanPet;
+        }
+        void SetGlobalPetBanned(bool banned) {
+            std::unique_lock lock(settingsMutex_);
+            bGlobalBanPet = banned;
+        }
 
         // Child Training & Adulthood settings (cosave persisted)
         int32_t childTrainingDurationDays = 14;        // In-game days spent in Stage 3 (Training) before graduating to Stage 4 (Adult)

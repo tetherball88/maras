@@ -79,23 +79,26 @@ namespace MARAS {
     }
 
     void NPCRelationshipManager::SendStatusChangedEvent(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus status) {
-        auto npcForm = RE::TESForm::LookupByID(npcFormID);
-        auto npcActor = npcForm ? npcForm->As<RE::Actor>() : nullptr;
+        RE::Actor* npcActor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
         if (!npcActor) {
-            MARAS_LOG_WARN("Could not find actor for FormID {:08X} to send status event", npcFormID);
-            return;
+            npcActor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
         }
+        if (!npcActor) {
+            MARAS_LOG_DEBUG("SendStatusChangedEvent: Actor {:08X} is not currently loaded; dispatching events with null sender",
+                            npcFormID);
+        }
+        RE::TESForm* senderForm = npcActor ? static_cast<RE::TESForm*>(npcActor) : nullptr;
 
         std::int32_t statusEnum = static_cast<std::int32_t>(status);
         std::string statusString(Utils::RelationshipStatusToString(status));
 
         std::transform(statusString.begin(), statusString.end(), statusString.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
         auto eventSource = SKSE::GetModCallbackEventSource();
         if (eventSource) {
             SKSE::ModCallbackEvent modEvent("maras_status_changed", statusString, static_cast<float>(statusEnum),
-                                            npcActor);
+                                            senderForm);
             eventSource->SendEvent(&modEvent);
             MARAS_LOG_INFO("Sent maras_status_changed event for NPC {:08X} (target {:08X}): status={} ({})",
                            npcFormID, targetFormID, statusEnum, statusString);
@@ -107,14 +110,24 @@ namespace MARAS {
             fullJson["acceptorName"] = ActorSvc::GetName(targetFormID);
             fullJson["status"] = statusString;
 
-            std::string fullJsonStr = fullJson.dump();
+            std::string fullJsonStr = fullJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             SKSE::ModCallbackEvent fullModEvent("maras_status_changed_full", fullJsonStr, static_cast<float>(statusEnum),
-                                                npcActor);
+                                                senderForm);
             eventSource->SendEvent(&fullModEvent);
             MARAS_LOG_INFO("Sent maras_status_changed_full event: {}", fullJsonStr);
         } else {
             MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send event");
         }
+    }
+
+    void NPCRelationshipManager::DispatchPlayerBuffMaintenance() const {
+        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        if (!vm) {
+            return;
+        }
+        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
+        vm->DispatchStaticCall("TTM_ServiceBuff", "Maintenance", RE::MakeFunctionArguments(), nullCallback);
+        MARAS_LOG_DEBUG("Dispatched TTM_ServiceBuff.Maintenance() to synchronize player marriage buffs");
     }
 
     void NPCRelationshipManager::IndexPair(const RelationshipPairKey& key) {
@@ -394,6 +407,19 @@ namespace MARAS {
         }
 
         RecalculateAndUpdateGlobals();
+        if (oldStatus != status &&
+            (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID) &&
+            (oldStatus == RelationshipStatus::Married || status == RelationshipStatus::Married)) {
+            RE::FormID partnerID = (npcFormID == kPlayerFormID) ? targetFormID : npcFormID;
+            RE::Actor* partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
+            if (!partnerActor) {
+                partnerActor = NPCIndex::GetSingleton().GetActorFromFormId(partnerID);
+            }
+            if (!sendEvent || !partnerActor ||
+                (oldStatus == RelationshipStatus::Married && status != RelationshipStatus::Divorced)) {
+                DispatchPlayerBuffMaintenance();
+            }
+        }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(npcFormID, targetFormID, static_cast<uint8_t>(status));
         return true;
     }
@@ -436,6 +462,8 @@ namespace MARAS {
             return false;
         }
 
+        const bool wasMarriedToPlayer = (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Married);
+
         std::unordered_set<RE::FormID> survivingPartners;
         auto pairKeys = GetActorPairKeys(npcFormID);
         for (const auto& key : pairKeys) {
@@ -446,6 +474,8 @@ namespace MARAS {
             UnindexPair(key);
             relationshipPairs.erase(key);
         }
+
+        CleanupActorIntentsAndThirdPartyAffairs(npcFormID, /*eraseRecords=*/true, survivingPartners);
 
         allRegistered.erase(npcFormID);
         npcProfiles.erase(npcFormID);
@@ -479,6 +509,9 @@ namespace MARAS {
         AffectionService::GetSingleton().RemoveNPCData(npcFormID);
 
         RecalculateAndUpdateGlobals();
+        if (wasMarriedToPlayer) {
+            DispatchPlayerBuffMaintenance();
+        }
         MARAS_LOG_INFO("Unregistered NPC {} ({:08X})", ActorSvc::GetName(npcFormID), npcFormID);
         return true;
     }
@@ -488,6 +521,8 @@ namespace MARAS {
             MARAS_LOG_WARN("HandleNPCDeath: NPC {:08X} is not registered", npcFormID);
             return false;
         }
+
+        const bool wasMarriedToPlayer = (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Married);
 
         // Evaluate custody of any children left behind by the deceased parent
         EvaluateChildCustodyOnDeath(npcFormID);
@@ -502,6 +537,8 @@ namespace MARAS {
             UnindexPair(key);
             relationshipPairs.erase(key);
         }
+
+        CleanupActorIntentsAndThirdPartyAffairs(npcFormID, /*eraseRecords=*/false, survivingPartners);
 
         allRegistered.erase(npcFormID);
         npcProfiles.erase(npcFormID);
@@ -535,6 +572,9 @@ namespace MARAS {
         AffectionService::GetSingleton().RemoveNPCData(npcFormID);
 
         RecalculateAndUpdateGlobals();
+        if (wasMarriedToPlayer) {
+            DispatchPlayerBuffMaintenance();
+        }
         MARAS_LOG_INFO("HandleNPCDeath: Cleaned up active state for deceased NPC {} ({:08X})",
                        ActorSvc::GetName(npcFormID), npcFormID);
         return true;
@@ -1652,9 +1692,13 @@ namespace MARAS {
                                       if (target == kPlayerFormID) {
                                           SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(id);
                                           MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(id);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(id);
+                                          ClearPartnerIntent(id);
                                       } else if (id == kPlayerFormID) {
                                           SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(target);
                                           MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(target);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(target);
+                                          ClearPartnerIntent(target);
                                       }
                                       EvaluateChildCustodyOnDivorce(id, target);
                                   },
@@ -1782,8 +1826,11 @@ namespace MARAS {
             }
         }
 
+        bool wasMarriedToPlayer = false;
         if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
             RE::FormID npcID = (actorA == kPlayerFormID) ? actorB : actorA;
+            wasMarriedToPlayer = (GetRelationshipStatus(npcID, kPlayerFormID) == RelationshipStatus::Married);
+            ClearPartnerIntent(npcID);
 
             // Reset the (npcID, Player) pair to a clean Candidate record with no history or flags
             auto& pairData = GetOrCreatePairData(npcID, kPlayerFormID);
@@ -1801,6 +1848,20 @@ namespace MARAS {
             (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
             AffectionService::GetSingleton().RemoveNPCData(npcID);
         } else {
+            // Clear any partner intents whose relatedLoverID was the removed affair partner
+            std::vector<RE::FormID> intentsToClear;
+            if (auto itA = pendingPartnerIntents_.find(actorA);
+                itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == actorB) {
+                intentsToClear.push_back(actorA);
+            }
+            if (auto itB = pendingPartnerIntents_.find(actorB);
+                itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == actorA) {
+                intentsToClear.push_back(actorB);
+            }
+            for (RE::FormID pID : intentsToClear) {
+                ClearPartnerIntent(pID);
+            }
+
             // NPC-to-NPC pair: completely erase the pair record
             RelationshipPairKey key(actorA, actorB);
             UnindexPair(key);
@@ -1869,6 +1930,9 @@ namespace MARAS {
         }
 
         RecalculateAndUpdateGlobals();
+        if (wasMarriedToPlayer) {
+            DispatchPlayerBuffMaintenance();
+        }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, static_cast<uint8_t>(RelationshipStatus::Candidate));
 
         MARAS_LOG_INFO("RemoveRelationship: Completely removed relationship record between {} ({:08X}) and {} ({:08X})",
@@ -2442,6 +2506,15 @@ namespace MARAS {
         if (IsRegistered(npcFormID)) {
             MARAS_LOG_TRACE("EnsureRegistered: {:08X} is already registered", npcFormID);
             return true;
+        }
+
+        if (DeceasedRegistry::GetSingleton().IsDeceased(npcFormID)) {
+            MARAS_LOG_DEBUG("EnsureRegistered: Skipping deceased NPC {:08X}", npcFormID);
+            return false;
+        }
+        if (auto* loadedActor = RE::TESForm::LookupByID<RE::Actor>(npcFormID); loadedActor && loadedActor->IsDead()) {
+            MARAS_LOG_DEBUG("EnsureRegistered: Skipping dead loaded actor {:08X}", npcFormID);
+            return false;
         }
 
         auto startTime = std::chrono::high_resolution_clock::now();

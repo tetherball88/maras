@@ -1,6 +1,8 @@
 #include "core/DeceasedRegistry.h"
+#include "core/AdultChildProgression.h"
 #include "core/NPCIndex.h"
 #include "core/PlayerChildrenService.h"
+#include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
@@ -13,6 +15,47 @@ namespace MARAS {
     }
 
     namespace {
+        bool IsDynamicActorRefID(RE::FormID id) noexcept {
+            return id != 0 && !IsSyntheticChildID(id) && id != kUnknownFatherFormID &&
+                   ((id & 0xFF000000) == 0xFF000000);
+        }
+
+        RE::FormID ResolveStableStorageID(RE::FormID id) {
+            if (id == 0 || id == kPlayerFormID || id == kUnknownFatherFormID || IsSyntheticChildID(id)) {
+                return id;
+            }
+            if (id == kPlayerBaseID) {
+                return kPlayerFormID;
+            }
+            // Dynamically spawned 0xFF actors (FMR/BF children, graduated Stage 4 adult children)
+            // share template TESNPC forms; their 0xFF Reference FormID is their unique identity.
+            if (IsDynamicActorRefID(id) || AdultChildProgression::GetSingleton().GetOriginalAdultBase(id) != nullptr) {
+                return id;
+            }
+            RE::FormID baseID = NPCIndex::GetSingleton().GetBaseID(id);
+            return baseID != 0 ? baseID : id;
+        }
+
+        DeceasedChildInfo BuildDeceasedChildInfo(const ChildRegistryEntry& entry, RE::FormID refID) {
+            DeceasedChildInfo cInfo;
+            cInfo.guardianARefID = entry.guardianAID;
+            cInfo.guardianABaseID = ResolveStableStorageID(entry.guardianAID);
+            cInfo.guardianAName = (entry.guardianAID == kPlayerFormID) ? "Player" : ActorSvc::GetName(entry.guardianAID);
+
+            cInfo.guardianBRefID = entry.guardianBID;
+            cInfo.guardianBBaseID = ResolveStableStorageID(entry.guardianBID);
+            cInfo.guardianBName = (entry.guardianBID == kPlayerFormID) ? "Player" : ActorSvc::GetName(entry.guardianBID);
+
+            cInfo.bioMotherBaseID = ResolveStableStorageID(entry.bioMotherID);
+            cInfo.bioFatherBaseID = ResolveStableStorageID(entry.bioFatherID);
+            cInfo.isAdopted = entry.isAdopted;
+
+            if (auto state = PlayerChildrenService::GetSingleton().GetState(refID)) {
+                cInfo.houseFormID = state->currentHouseFormID;
+            }
+            return cInfo;
+        }
+
         bool IsRomanticOrExStatus(RelationshipStatus st) {
             return st == RelationshipStatus::Married ||
                    st == RelationshipStatus::Engaged ||
@@ -64,6 +107,13 @@ namespace MARAS {
             return;
         }
 
+        if (IsDynamicActorRefID(inputFormID) ||
+            AdultChildProgression::GetSingleton().GetOriginalAdultBase(inputFormID) != nullptr) {
+            outBaseID = inputFormID;
+            outRefID = inputFormID;
+            return;
+        }
+
         outRefID = inputFormID;
         outBaseID = NPCIndex::GetSingleton().GetBaseID(inputFormID);
         if (outBaseID == 0) {
@@ -72,14 +122,20 @@ namespace MARAS {
         }
     }
 
-    bool DeceasedRegistry::RecordDeceasedAdult(RE::Actor* victim, bool killedByPlayer, RE::Actor* killer) {
+    bool DeceasedRegistry::RecordDeceasedAdult(RE::Actor* victim, bool killedByPlayer, RE::Actor* killer,
+                                               const ChildRegistryEntry* adultChildEntry) {
         if (!victim) return false;
 
         std::unique_lock lock(mutex_);
 
         RE::FormID refID = victim->GetFormID();
+        const bool isDynamicActor =
+            IsDynamicActorRefID(refID) || AdultChildProgression::GetSingleton().GetOriginalAdultBase(refID) != nullptr;
+
         RE::FormID baseID = 0;
-        if (auto* actorBase = victim->GetActorBase()) {
+        if (isDynamicActor) {
+            baseID = refID;
+        } else if (auto* actorBase = victim->GetActorBase()) {
             baseID = actorBase->GetFormID();
         } else {
             baseID = NPCIndex::GetSingleton().GetBaseID(refID);
@@ -87,20 +143,22 @@ namespace MARAS {
         if (baseID == 0) baseID = refID;
 
         auto& relMgr = NPCRelationshipManager::GetSingleton();
-        if (!relMgr.IsRegistered(refID) && (baseID == 0 || !relMgr.IsRegistered(baseID))) {
+        const bool isTrackedAdult =
+            relMgr.IsRegistered(refID) || (!isDynamicActor && baseID != 0 && relMgr.IsRegistered(baseID));
+        if (!isTrackedAdult && !adultChildEntry) {
             MARAS_LOG_DEBUG("RecordDeceasedAdult: Actor {:08X} (base {:08X}) is not registered in MARAS, skipping", refID, baseID);
             return false;
         }
 
         if (recordsByBaseID_.contains(baseID)) {
-            MARAS_LOG_WARN("RecordDeceasedAdult: Actor {:08X} (base {:08X}) already in DeceasedRegistry", refID, baseID);
+            MARAS_LOG_WARN("RecordDeceasedAdult: Actor {:08X} (key {:08X}) already in DeceasedRegistry", refID, baseID);
             return false;
         }
 
         DeceasedNPCRecord record;
         record.baseFormID = baseID;
         record.refFormID = refID;
-        record.name = victim->GetDisplayFullName();
+        record.name = (adultChildEntry && !adultChildEntry->name.empty()) ? adultChildEntry->name : victim->GetDisplayFullName();
         if (record.name.empty()) record.name = victim->GetName();
 
         if (auto* calendar = RE::Calendar::GetSingleton()) {
@@ -110,7 +168,9 @@ namespace MARAS {
         record.wasKilledByPlayer = killedByPlayer;
         if (killer) {
             record.killerRefID = killer->GetFormID();
-            if (auto* kBase = killer->GetActorBase()) {
+            if (IsDynamicActorRefID(record.killerRefID)) {
+                record.killerBaseID = record.killerRefID;
+            } else if (auto* kBase = killer->GetActorBase()) {
                 record.killerBaseID = kBase->GetFormID();
             }
             record.killerName = killer->GetDisplayFullName();
@@ -121,10 +181,12 @@ namespace MARAS {
             record.socialClass = profile->socialClass;
             record.skillType = profile->skillType;
             record.temperament = profile->temperament;
-        } else if (auto* profileBase = relMgr.GetNPCProfile(baseID)) {
-            record.socialClass = profileBase->socialClass;
-            record.skillType = profileBase->skillType;
-            record.temperament = profileBase->temperament;
+        } else if (!isDynamicActor && baseID != refID) {
+            if (auto* profileBase = relMgr.GetNPCProfile(baseID)) {
+                record.socialClass = profileBase->socialClass;
+                record.skillType = profileBase->skillType;
+                record.temperament = profileBase->temperament;
+            }
         }
 
         // Capture snapshot of all romantic and ex-partner relationships before unregistering
@@ -134,7 +196,7 @@ namespace MARAS {
             RE::FormID partnerID = 0;
             if (key.Contains(refID)) {
                 partnerID = key.GetOther(refID);
-            } else if (baseID != 0 && baseID != refID && key.Contains(baseID)) {
+            } else if (!isDynamicActor && baseID != 0 && baseID != refID && key.Contains(baseID)) {
                 partnerID = key.GetOther(baseID);
             } else {
                 continue;
@@ -157,7 +219,7 @@ namespace MARAS {
                     partnerName = player->GetName();
                 }
             } else {
-                partnerBaseID = NPCIndex::GetSingleton().GetBaseID(partnerID);
+                partnerBaseID = ResolveStableStorageID(partnerID);
                 partnerName = ActorSvc::GetName(partnerID);
             }
 
@@ -166,11 +228,15 @@ namespace MARAS {
                            partnerRefID, partnerName, static_cast<int>(status));
         }
 
+        if (adultChildEntry) {
+            record.childInfo = BuildDeceasedChildInfo(*adultChildEntry, refID);
+        }
+
         recordsByBaseID_[baseID] = record;
         refToBaseMap_[refID] = baseID;
 
-        MARAS_LOG_INFO("RecordDeceasedAdult: Archived deceased adult {:08X} ('{}', base {:08X}) with {} partner bonds",
-                       refID, record.name, baseID, record.partnersAtDeath.size());
+        MARAS_LOG_INFO("RecordDeceasedAdult: Archived deceased adult {:08X} ('{}', key {:08X}) with {} partner bonds (hasChildLineage={})",
+                       refID, record.name, baseID, record.partnersAtDeath.size(), record.childInfo.has_value());
         return true;
     }
 
@@ -180,8 +246,13 @@ namespace MARAS {
         std::unique_lock lock(mutex_);
 
         RE::FormID refID = child->GetFormID();
+        const bool isDynamicActor =
+            IsDynamicActorRefID(refID) || AdultChildProgression::GetSingleton().GetOriginalAdultBase(refID) != nullptr;
+
         RE::FormID baseID = 0;
-        if (auto* actorBase = child->GetActorBase()) {
+        if (isDynamicActor) {
+            baseID = refID;
+        } else if (auto* actorBase = child->GetActorBase()) {
             baseID = actorBase->GetFormID();
         } else {
             baseID = NPCIndex::GetSingleton().GetBaseID(refID);
@@ -189,7 +260,7 @@ namespace MARAS {
         if (baseID == 0) baseID = refID;
 
         if (recordsByBaseID_.contains(baseID)) {
-            MARAS_LOG_WARN("RecordDeceasedChild: Child {:08X} (base {:08X}) already in DeceasedRegistry", refID, baseID);
+            MARAS_LOG_WARN("RecordDeceasedChild: Child {:08X} (key {:08X}) already in DeceasedRegistry", refID, baseID);
             return false;
         }
 
@@ -206,50 +277,35 @@ namespace MARAS {
         record.wasKilledByPlayer = killedByPlayer;
         if (killer) {
             record.killerRefID = killer->GetFormID();
-            if (auto* kBase = killer->GetActorBase()) {
+            if (IsDynamicActorRefID(record.killerRefID)) {
+                record.killerBaseID = record.killerRefID;
+            } else if (auto* kBase = killer->GetActorBase()) {
                 record.killerBaseID = kBase->GetFormID();
             }
             record.killerName = killer->GetDisplayFullName();
             if (record.killerName.empty()) record.killerName = killer->GetName();
         }
 
-        DeceasedChildInfo cInfo;
-        cInfo.guardianARefID = entry.guardianAID;
-        cInfo.guardianABaseID = (entry.guardianAID == kPlayerFormID) ? kPlayerFormID : NPCIndex::GetSingleton().GetBaseID(entry.guardianAID);
-        cInfo.guardianAName = (entry.guardianAID == kPlayerFormID) ? "Player" : ActorSvc::GetName(entry.guardianAID);
-
-        cInfo.guardianBRefID = entry.guardianBID;
-        cInfo.guardianBBaseID = (entry.guardianBID == kPlayerFormID) ? kPlayerFormID : NPCIndex::GetSingleton().GetBaseID(entry.guardianBID);
-        cInfo.guardianBName = (entry.guardianBID == kPlayerFormID) ? "Player" : ActorSvc::GetName(entry.guardianBID);
-
-        auto resolveBioParentBaseID = [](RE::FormID id) -> RE::FormID {
-            if (id == 0 || id == kPlayerFormID || id == kUnknownFatherFormID) return id;
-            if (id == kPlayerBaseID) return kPlayerFormID;
-            RE::FormID bID = NPCIndex::GetSingleton().GetBaseID(id);
-            return bID != 0 ? bID : id;
-        };
-        cInfo.bioMotherBaseID = resolveBioParentBaseID(entry.bioMotherID);
-        cInfo.bioFatherBaseID = resolveBioParentBaseID(entry.bioFatherID);
-        cInfo.isAdopted = entry.isAdopted;
-
-        if (auto state = PlayerChildrenService::GetSingleton().GetState(refID)) {
-            cInfo.houseFormID = state->currentHouseFormID;
-        }
-
-        record.childInfo = cInfo;
+        record.childInfo = BuildDeceasedChildInfo(entry, refID);
         recordsByBaseID_[baseID] = record;
         refToBaseMap_[refID] = baseID;
 
-        MARAS_LOG_INFO("RecordDeceasedChild: Archived deceased child {:08X} ('{}', base {:08X})",
+        MARAS_LOG_INFO("RecordDeceasedChild: Archived deceased child {:08X} ('{}', key {:08X})",
                        refID, record.name, baseID);
         return true;
     }
 
     bool DeceasedRegistry::IsDeceased(RE::FormID formID) const {
+        if (formID == 0) return false;
         std::shared_lock lock(mutex_);
         if (recordsByBaseID_.contains(formID)) return true;
         auto it = refToBaseMap_.find(formID);
         if (it != refToBaseMap_.end()) return true;
+
+        if (IsDynamicActorRefID(formID) ||
+            AdultChildProgression::GetSingleton().GetOriginalAdultBase(formID) != nullptr) {
+            return false;
+        }
 
         RE::FormID baseID = NPCIndex::GetSingleton().GetBaseID(formID);
         return (baseID != 0 && recordsByBaseID_.contains(baseID));
@@ -389,7 +445,7 @@ namespace MARAS {
         ResolveFormIDs(parentFormID, baseID, refID);
 
         for (const auto& [dBaseID, record] : recordsByBaseID_) {
-            if (!record.isChild || !record.childInfo.has_value()) continue;
+            if (!record.childInfo.has_value()) continue;
             if (MatchesChildParentOrGuardian(record.childInfo.value(), parentFormID, baseID, refID)) {
                 result.push_back(record);
             }
@@ -403,7 +459,7 @@ namespace MARAS {
         ResolveFormIDs(parentFormID, baseID, refID);
 
         for (const auto& [dBaseID, record] : recordsByBaseID_) {
-            if (!record.isChild || !record.childInfo.has_value()) continue;
+            if (!record.childInfo.has_value()) continue;
             if (MatchesChildParentOrGuardian(record.childInfo.value(), parentFormID, baseID, refID)) {
                 return true;
             }
@@ -412,6 +468,8 @@ namespace MARAS {
     }
 
     const DeceasedNPCRecord* DeceasedRegistry::FindRecordLocked(RE::FormID formID) const {
+        if (formID == 0) return nullptr;
+
         auto it = recordsByBaseID_.find(formID);
         if (it != recordsByBaseID_.end()) return &it->second;
 
@@ -419,6 +477,11 @@ namespace MARAS {
         if (itRef != refToBaseMap_.end()) {
             auto itBase = recordsByBaseID_.find(itRef->second);
             if (itBase != recordsByBaseID_.end()) return &itBase->second;
+        }
+
+        if (IsDynamicActorRefID(formID) ||
+            AdultChildProgression::GetSingleton().GetOriginalAdultBase(formID) != nullptr) {
+            return nullptr;
         }
 
         RE::FormID baseID = NPCIndex::GetSingleton().GetBaseID(formID);
@@ -471,6 +534,23 @@ namespace MARAS {
             return true;
         };
 
+        auto writeChildInfo = [serialization, &writeString](const std::optional<DeceasedChildInfo>& optCi) -> bool {
+            bool hasChildInfo = optCi.has_value();
+            if (!serialization->WriteRecordData(hasChildInfo)) return false;
+            if (!hasChildInfo) return true;
+            const auto& ci = optCi.value();
+            return serialization->WriteRecordData(ci.guardianABaseID) &&
+                   serialization->WriteRecordData(ci.guardianARefID) &&
+                   writeString(ci.guardianAName) &&
+                   serialization->WriteRecordData(ci.guardianBBaseID) &&
+                   serialization->WriteRecordData(ci.guardianBRefID) &&
+                   writeString(ci.guardianBName) &&
+                   serialization->WriteRecordData(ci.bioMotherBaseID) &&
+                   serialization->WriteRecordData(ci.bioFatherBaseID) &&
+                   serialization->WriteRecordData(ci.isAdopted) &&
+                   serialization->WriteRecordData(ci.houseFormID);
+        };
+
         for (const auto& [baseID, rec] : recordsByBaseID_) {
             if (!serialization->WriteRecordData(rec.baseFormID) ||
                 !serialization->WriteRecordData(rec.refFormID) ||
@@ -508,24 +588,13 @@ namespace MARAS {
                         return false;
                     }
                 }
-            } else {
-                bool hasChildInfo = rec.childInfo.has_value();
-                if (!serialization->WriteRecordData(hasChildInfo)) return false;
 
-                if (hasChildInfo) {
-                    const auto& ci = rec.childInfo.value();
-                    if (!serialization->WriteRecordData(ci.guardianABaseID) ||
-                        !serialization->WriteRecordData(ci.guardianARefID) ||
-                        !writeString(ci.guardianAName) ||
-                        !serialization->WriteRecordData(ci.guardianBBaseID) ||
-                        !serialization->WriteRecordData(ci.guardianBRefID) ||
-                        !writeString(ci.guardianBName) ||
-                        !serialization->WriteRecordData(ci.bioMotherBaseID) ||
-                        !serialization->WriteRecordData(ci.bioFatherBaseID) ||
-                        !serialization->WriteRecordData(ci.isAdopted) ||
-                        !serialization->WriteRecordData(ci.houseFormID)) {
-                        return false;
-                    }
+                if (!writeChildInfo(rec.childInfo)) {
+                    return false;
+                }
+            } else {
+                if (!writeChildInfo(rec.childInfo)) {
+                    return false;
                 }
             }
         }
@@ -534,7 +603,7 @@ namespace MARAS {
         return true;
     }
 
-    bool DeceasedRegistry::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
+    bool DeceasedRegistry::Load(SKSE::SerializationInterface* serialization, std::uint32_t version) {
         if (!serialization) return false;
         std::unique_lock lock(mutex_);
 
@@ -587,6 +656,37 @@ namespace MARAS {
             return 0;
         };
 
+        auto readChildInfo = [serialization, &readString, &resolveFormOrSpecial](std::optional<DeceasedChildInfo>& outCi) -> bool {
+            bool hasChildInfo = false;
+            if (!serialization->ReadRecordData(hasChildInfo)) return false;
+            if (!hasChildInfo) return true;
+
+            DeceasedChildInfo ci;
+            if (!serialization->ReadRecordData(ci.guardianABaseID) ||
+                !serialization->ReadRecordData(ci.guardianARefID) ||
+                !readString(ci.guardianAName) ||
+                !serialization->ReadRecordData(ci.guardianBBaseID) ||
+                !serialization->ReadRecordData(ci.guardianBRefID) ||
+                !readString(ci.guardianBName) ||
+                !serialization->ReadRecordData(ci.bioMotherBaseID) ||
+                !serialization->ReadRecordData(ci.bioFatherBaseID) ||
+                !serialization->ReadRecordData(ci.isAdopted) ||
+                !serialization->ReadRecordData(ci.houseFormID)) {
+                return false;
+            }
+            ci.guardianABaseID = resolveFormOrSpecial(ci.guardianABaseID);
+            ci.guardianARefID = resolveFormOrSpecial(ci.guardianARefID);
+            ci.guardianBBaseID = resolveFormOrSpecial(ci.guardianBBaseID);
+            ci.guardianBRefID = resolveFormOrSpecial(ci.guardianBRefID);
+            ci.bioMotherBaseID = resolveFormOrSpecial(ci.bioMotherBaseID);
+            ci.bioFatherBaseID = resolveFormOrSpecial(ci.bioFatherBaseID);
+            ci.houseFormID = resolveFormOrSpecial(ci.houseFormID);
+            if (IsDynamicActorRefID(ci.guardianARefID)) ci.guardianABaseID = ci.guardianARefID;
+            if (IsDynamicActorRefID(ci.guardianBRefID)) ci.guardianBBaseID = ci.guardianBRefID;
+            outCi = ci;
+            return true;
+        };
+
         for (std::uint32_t i = 0; i < count; ++i) {
             DeceasedNPCRecord rec;
             RE::FormID oldBaseID = 0, oldRefID = 0;
@@ -607,6 +707,9 @@ namespace MARAS {
             rec.refFormID = resolveFormOrSpecial(oldRefID);
             rec.killerBaseID = resolveFormOrSpecial(rec.killerBaseID);
             rec.killerRefID = resolveFormOrSpecial(rec.killerRefID);
+            if (IsDynamicActorRefID(rec.killerRefID)) {
+                rec.killerBaseID = rec.killerRefID;
+            }
 
             if (!rec.isChild) {
                 std::uint8_t sc = 0, st = 0, tp = 0;
@@ -638,38 +741,27 @@ namespace MARAS {
                     }
                     p.partnerBaseID = resolveFormOrSpecial(p.partnerBaseID);
                     p.partnerRefID = resolveFormOrSpecial(p.partnerRefID);
+                    if (IsDynamicActorRefID(p.partnerRefID)) {
+                        p.partnerBaseID = p.partnerRefID;
+                    }
                     p.statusAtDeath = static_cast<RelationshipStatus>(relSt);
                     if (p.partnerBaseID != 0 || p.partnerRefID != 0 || p.isPlayer) {
                         rec.partnersAtDeath.push_back(p);
                     }
                 }
-            } else {
-                bool hasChildInfo = false;
-                if (!serialization->ReadRecordData(hasChildInfo)) return false;
 
-                if (hasChildInfo) {
-                    DeceasedChildInfo ci;
-                    if (!serialization->ReadRecordData(ci.guardianABaseID) ||
-                        !serialization->ReadRecordData(ci.guardianARefID) ||
-                        !readString(ci.guardianAName) ||
-                        !serialization->ReadRecordData(ci.guardianBBaseID) ||
-                        !serialization->ReadRecordData(ci.guardianBRefID) ||
-                        !readString(ci.guardianBName) ||
-                        !serialization->ReadRecordData(ci.bioMotherBaseID) ||
-                        !serialization->ReadRecordData(ci.bioFatherBaseID) ||
-                        !serialization->ReadRecordData(ci.isAdopted) ||
-                        !serialization->ReadRecordData(ci.houseFormID)) {
-                        return false;
-                    }
-                    ci.guardianABaseID = resolveFormOrSpecial(ci.guardianABaseID);
-                    ci.guardianARefID = resolveFormOrSpecial(ci.guardianARefID);
-                    ci.guardianBBaseID = resolveFormOrSpecial(ci.guardianBBaseID);
-                    ci.guardianBRefID = resolveFormOrSpecial(ci.guardianBRefID);
-                    ci.bioMotherBaseID = resolveFormOrSpecial(ci.bioMotherBaseID);
-                    ci.bioFatherBaseID = resolveFormOrSpecial(ci.bioFatherBaseID);
-                    ci.houseFormID = resolveFormOrSpecial(ci.houseFormID);
-                    rec.childInfo = ci;
+                if (version >= 7) {
+                    if (!readChildInfo(rec.childInfo)) return false;
                 }
+            } else {
+                if (!readChildInfo(rec.childInfo)) return false;
+            }
+
+            // Self-heal legacy saves where a dynamically spawned 0xFF actor was keyed under a shared template TESNPC BaseID
+            if (IsDynamicActorRefID(rec.refFormID) && !IsDynamicActorRefID(rec.baseFormID)) {
+                MARAS_LOG_INFO("DeceasedRegistry::Load: Re-keying dynamic deceased actor '{}' from shared template {:08X} to unique ref {:08X}",
+                               rec.name, rec.baseFormID, rec.refFormID);
+                rec.baseFormID = rec.refFormID;
             }
 
             if (oldBaseID == 0 && rec.baseFormID == 0 && rec.refFormID != 0) {
@@ -736,7 +828,8 @@ namespace MARAS {
                     partnersArr.push_back(pObj);
                 }
                 r["partnersAtDeath"] = partnersArr;
-            } else if (rec.childInfo.has_value()) {
+            }
+            if (rec.childInfo.has_value()) {
                 const auto& ci = rec.childInfo.value();
                 nlohmann::json cInfo;
                 cInfo["guardianA"] = {
