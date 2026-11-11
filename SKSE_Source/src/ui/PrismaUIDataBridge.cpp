@@ -15,6 +15,7 @@
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/DeceasedRegistry.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIManager.h"
@@ -222,6 +223,24 @@ namespace MARAS {
             return !sec.discovered && !sec.discoveredByPartner && sec.isPregnancySecretForPartner;
         }
 
+        RE::FormID ResolveEffectivePresumedFatherForUI(const NPCRelationshipManager& relMgr, const ChildRegistryEntry& entry) {
+            RE::FormID explicitPresumed = relMgr.GetPresumedFather(entry.childID);
+            if (explicitPresumed != 0) {
+                return explicitPresumed;
+            }
+            const auto& sec = entry.paternitySecret;
+            if (!sec.isSecretForPartner && !sec.isPregnancySecretForPartner && !sec.discoveredByPartner) {
+                return 0;
+            }
+            RE::FormID partnerID = relMgr.GetMotherPartner(entry.childID);
+            if (partnerID == 0 ||
+                relMgr.MatchesActor(partnerID, entry.bioMotherID) ||
+                (entry.bioFatherID != 0 && relMgr.MatchesActor(partnerID, entry.bioFatherID))) {
+                return 0;
+            }
+            return partnerID;
+        }
+
         ChildRegistryEntry MaskChildEntryForUI(const ChildRegistryEntry& entry, RE::FormID resolvedPresumedFatherID, bool revealSecrets) {
             if (revealSecrets) {
                 return entry;
@@ -247,6 +266,15 @@ namespace MARAS {
                 masked.presumedFatherID = 0;
             } else {
                 masked.bioFatherID = 0;
+                masked.presumedFatherID = 0;
+            }
+            if (masked.hasBeastblood) {
+                const bool visibleParentHasBeastblood =
+                    (masked.bioMotherID != 0 && NPCRelationshipManager::IsActorWerewolf(masked.bioMotherID)) ||
+                    (masked.bioFatherID != 0 && masked.bioFatherID != kUnknownFatherFormID && NPCRelationshipManager::IsActorWerewolf(masked.bioFatherID));
+                if (!visibleParentHasBeastblood) {
+                    masked.hasBeastblood = false;
+                }
             }
             masked.paternitySecret = PaternitySecret{};
             return masked;
@@ -360,7 +388,7 @@ namespace MARAS {
                     if (IsUnannouncedSecretPregnancyHiddenInUI(*entryOpt, /*revealSecrets=*/false)) {
                         continue;
                     }
-                    const RE::FormID presFatherID = relMgr.GetPresumedFather(cID);
+                    const RE::FormID presFatherID = ResolveEffectivePresumedFatherForUI(relMgr, *entryOpt);
                     const ChildRegistryEntry masked = MaskChildEntryForUI(*entryOpt, presFatherID, /*revealSecrets=*/false);
                     cObj["bioFather"] = {
                         {"formId", std::format("{:08X}", masked.bioFatherID)},
@@ -370,6 +398,7 @@ namespace MARAS {
                         {"formId", std::format("{:08X}", masked.presumedFatherID)},
                         {"name", masked.presumedFatherID == 0 ? "" : ActorSvc::GetName(masked.presumedFatherID)}
                     };
+                    cObj["hasBeastblood"] = masked.hasBeastblood;
                     cObj["paternitySecret"] = {
                         {"isSecret", false},
                         {"isSecretForBioFather", false},
@@ -392,7 +421,7 @@ namespace MARAS {
                 for (const auto& [cID, entry] : relMgr.GetAllChildren()) {
                     if (entry.stage != ChildStage::Unborn) continue;
                     if (IsUnannouncedSecretPregnancyHiddenInUI(entry, /*revealSecrets=*/false)) continue;
-                    const RE::FormID presumedFatherID = relMgr.GetMotherPartner(cID);
+                    const RE::FormID presumedFatherID = ResolveEffectivePresumedFatherForUI(relMgr, entry);
                     const ChildRegistryEntry masked = MaskChildEntryForUI(entry, presumedFatherID, /*revealSecrets=*/false);
                     nlohmann::json pObj;
                     pObj["mother"] = {
@@ -480,6 +509,7 @@ namespace MARAS {
         const SessionEpoch expectedEpoch = GetSessionEpoch();
         taskIF->AddTask([this, expectedEpoch, action = std::move(action), payload = std::move(payload)]() {
             try {
+                std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
                 if (action != "uiReady" && !IsSessionEpochCurrent(expectedEpoch)) {
                     MARAS_LOG_DEBUG("PrismaUIDataBridge: Dropping stale UI action '{}' across save boundary (expected={}, current={})",
                                     action, expectedEpoch, GetSessionEpoch());
@@ -698,7 +728,9 @@ namespace MARAS {
             if (cEntry.trainingStartGameDay >= 0.0f) {
                 profile["trainingStartGameDay"] = RoundFloat(cEntry.trainingStartGameDay);
             }
-            profile["hasBeastblood"] = cEntry.hasBeastblood;
+            const ChildRegistryEntry visibleProfileChild = MaskChildEntryForUI(
+                cEntry, ResolveEffectivePresumedFatherForUI(relMgr, cEntry), ShouldRevealSecretsInUI());
+            profile["hasBeastblood"] = visibleProfileChild.hasBeastblood;
             if (cEntry.stage == ChildStage::Unborn || cEntry.gender == 2) {
                 profile["gender"] = "unknown";
             } else {
@@ -753,7 +785,7 @@ namespace MARAS {
         if (origHomeName.empty()) {
             if (auto childOpt = relMgr.GetChildEntry(formID)) {
                 const ChildRegistryEntry cEntry = MaskChildEntryForUI(
-                    *childOpt, relMgr.GetPresumedFather(formID), ShouldRevealSecretsInUI());
+                    *childOpt, ResolveEffectivePresumedFatherForUI(relMgr, *childOpt), ShouldRevealSecretsInUI());
                 if (cEntry.guardianAID != kPlayerFormID && cEntry.guardianBID != kPlayerFormID) {
                     RE::FormID parentID = relMgr.ResolveNonPlayerChildTarget(cEntry);
                     if (parentID != 0) {
@@ -1044,7 +1076,7 @@ namespace MARAS {
             if (IsUnannouncedSecretPregnancyHiddenInUI(cEntry, revealSecrets)) {
                 continue;
             }
-            const RE::FormID presFatherID = relMgr.GetPresumedFather(cID);
+            const RE::FormID presFatherID = ResolveEffectivePresumedFatherForUI(relMgr, cEntry);
             const ChildRegistryEntry visibleChild = MaskChildEntryForUI(cEntry, presFatherID, revealSecrets);
 
             if (visibleChild.guardianAID != 0 && visibleChild.guardianAID != kPlayerFormID && addedProfiles.insert(visibleChild.guardianAID).second) {
@@ -1263,7 +1295,7 @@ namespace MARAS {
             if (IsUnannouncedSecretPregnancyHiddenInUI(cEntry, revealSecrets)) {
                 continue;
             }
-            const RE::FormID presFatherID = relMgr.GetPresumedFather(cID);
+            const RE::FormID presFatherID = ResolveEffectivePresumedFatherForUI(relMgr, cEntry);
             const ChildRegistryEntry visibleChild = MaskChildEntryForUI(cEntry, presFatherID, revealSecrets);
 
             if (visibleChild.guardianAID != 0 && visibleChild.guardianAID != kPlayerFormID && added.insert(visibleChild.guardianAID).second) {
@@ -1643,7 +1675,8 @@ namespace MARAS {
 
     nlohmann::json PrismaUIDataBridge::BuildChildJson(const ChildRegistryEntry& entry) {
         const bool revealSecrets = ShouldRevealSecretsInUI();
-        const RE::FormID resolvedPresumedFatherID = NPCRelationshipManager::GetSingleton().GetPresumedFather(entry.childID);
+        const auto& relMgr = NPCRelationshipManager::GetSingleton();
+        const RE::FormID resolvedPresumedFatherID = ResolveEffectivePresumedFatherForUI(relMgr, entry);
         const ChildRegistryEntry visibleEntry = MaskChildEntryForUI(entry, resolvedPresumedFatherID, revealSecrets);
         const RE::FormID visiblePresumedFatherID = revealSecrets ? resolvedPresumedFatherID : visibleEntry.presumedFatherID;
 
@@ -2283,9 +2316,15 @@ namespace MARAS {
             RE::FormID bioMID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "bioMotherId")));
             changed |= mgr.SetBioMother(childID, bioMID);
         }
+        const bool hasExplicitPresumedInPayload =
+            payload.contains("presumedFatherId") && !GetJsonString(payload, "presumedFatherId").empty();
         if (payload.contains("bioFatherId")) {
             RE::FormID bioFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "bioFatherId")));
             changed |= mgr.SetBioFather(childID, bioFID);
+            if (!ShouldRevealSecretsInUI() && !hasExplicitPresumedInPayload) {
+                changed |= mgr.SetPresumedFather(childID, 0);
+                changed |= mgr.SetPaternitySecretEdges(childID, false, false);
+            }
         }
         if (payload.contains("presumedFatherId")) {
             RE::FormID presFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "presumedFatherId")));
@@ -2506,7 +2545,7 @@ namespace MARAS {
             meta["dumpTimestamp"] = timeStr;
             meta["serializationVersion"] = MARAS::Serialization::kDataVersion;
             meta["hasSkyrimNet"] = IsSkyrimNetAvailable();
-            meta["simulateNoSkyrimNet"] = Settings::GetSingleton().simulateNoSkyrimNet;
+            meta["simulateNoSkyrimNet"] = Settings::GetSingleton().GetSimulateNoSkyrimNet();
             meta["secretsMasked"] = !revealSecrets;
             if (auto calendar = RE::Calendar::GetSingleton()) {
                 meta["gameDaysPassed"] = calendar->GetDaysPassed();

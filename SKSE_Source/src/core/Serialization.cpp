@@ -13,6 +13,7 @@
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
+#include "core/PollingService.h"
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/SkyrimNetProfileService.h"
@@ -128,7 +129,12 @@ namespace MARAS::Serialization {
 
         bool npcrLoaded = false;
         bool sphrLoaded = false;
+        bool afctLoaded = false;
         bool phouLoaded = false;
+        bool spasLoaded = false;
+        bool plchLoaded = false;
+        bool cfsnLoaded = false;
+        bool actrLoaded = false;
 
         // Phase 1: Deserialize each service's independent co-save record
         while (serialization->GetNextRecordInfo(type, version, length)) {
@@ -156,6 +162,7 @@ namespace MARAS::Serialization {
                 if (!AffectionService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load affection data");
                 } else {
+                    afctLoaded = true;
                     MARAS_LOG_INFO("Successfully loaded affection data (version {})", version);
                 }
             } else if (type == kPlayerHouseData) {
@@ -169,18 +176,21 @@ namespace MARAS::Serialization {
                 if (!SpouseAssetsService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load spouse assets data");
                 } else {
+                    spasLoaded = true;
                     MARAS_LOG_INFO("Successfully loaded spouse assets data (version {})", version);
                 }
             } else if (type == kPlayerChildrenData) {
                 if (!PlayerChildrenService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load player children data");
                 } else {
+                    plchLoaded = true;
                     MARAS_LOG_INFO("Successfully loaded player children data (version {})", version);
                 }
             } else if (type == kChildFactionSnapshotData) {
                 if (!PlayerChildrenService::GetSingleton().LoadFactionSnapshots(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load child faction snapshot data");
                 } else {
+                    cfsnLoaded = true;
                     MARAS_LOG_INFO("Successfully loaded child faction snapshot data (version {})", version);
                 }
             } else if (type == kMatchmakingData) {
@@ -205,6 +215,7 @@ namespace MARAS::Serialization {
                 if (!AdultChildTravelService::GetSingleton().Load(serialization, version)) {
                     MARAS_LOG_ERROR("Failed to load adult child travel data");
                 } else {
+                    actrLoaded = true;
                     MARAS_LOG_INFO("Successfully loaded adult child travel data (version {})", version);
                 }
             } else if (type == kPluginSettingsData) {
@@ -223,16 +234,33 @@ namespace MARAS::Serialization {
         if (npcrLoaded) {
             manager.FinalizeLoad();
         }
+        if (afctLoaded) {
+            AffectionService::GetSingleton().FinalizeLoad();
+        }
+        if (phouLoaded) {
+            PlayerHouseService::GetSingleton().FinalizeLoad();
+        }
+        if (plchLoaded || cfsnLoaded) {
+            PlayerChildrenService::GetSingleton().FinalizeLoad();
+        }
+        if (spasLoaded) {
+            SpouseAssetsService::GetSingleton().FinalizeLoad();
+        }
+        if (actrLoaded) {
+            AdultChildTravelService::GetSingleton().FinalizeLoad();
+        }
         if (sphrLoaded || npcrLoaded) {
             SpouseHierarchyManager::GetSingleton().FillGaps(0, false);
         }
-        if (phouLoaded || npcrLoaded) {
+        if (phouLoaded || npcrLoaded || actrLoaded) {
             PackageOverrideService::GetSingleton().RebuildFromTenants();
         }
     }
 
     void RevertCallback(SKSE::SerializationInterface*) {
         BumpSessionEpoch("Serialization::RevertCallback");
+        ResetPluginEventSinks();
+        PollingService::GetSingleton().Shutdown();
         AdultChildProgression::GetSingleton().Revert();
         NPCRelationshipManager::GetSingleton().Revert();
         SpouseHierarchyManager::GetSingleton().Revert();

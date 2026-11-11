@@ -16,6 +16,9 @@ namespace MARAS {
     [[nodiscard]] SessionEpoch GetSessionEpoch() noexcept;
     SessionEpoch BumpSessionEpoch(std::string_view reason) noexcept;
 
+    // Resets plugin-level input and actor init/3D load event sinks across save/revert boundaries.
+    void ResetPluginEventSinks() noexcept;
+
     [[nodiscard]] inline bool IsSessionEpochCurrent(SessionEpoch expectedEpoch) noexcept {
         return expectedEpoch != 0 && GetSessionEpoch() == expectedEpoch;
     }

@@ -77,7 +77,7 @@ namespace MARAS::ActorSvc {
     RE::TESNPC* GetActorBase(RE::FormID formID) {
         if (!CanLookupEngineForm(formID)) return nullptr;
 
-        if (auto* form = RE::TESForm::LookupByID(formID)) {
+        if (auto* form = RE::TESForm::LookupByID(formID); form && !form->IsDeleted()) {
             if (auto* npc = form->As<RE::TESNPC>()) {
                 return npc;
             }
@@ -87,6 +87,15 @@ namespace MARAS::ActorSvc {
             if (auto* refr = form->As<RE::TESObjectREFR>()) {
                 if (auto* baseObj = refr->GetBaseObject()) {
                     return baseObj->As<RE::TESNPC>();
+                }
+            }
+        }
+
+        if ((formID & 0xFF000000) != 0xFF000000) {
+            RE::FormID baseID = NPCIndex::GetSingleton().GetBaseID(formID);
+            if (CanLookupEngineForm(baseID) && baseID != formID) {
+                if (auto* baseForm = RE::TESForm::LookupByID<RE::TESNPC>(baseID); baseForm && !baseForm->IsDeleted()) {
+                    return baseForm;
                 }
             }
         }
@@ -268,16 +277,27 @@ namespace MARAS::ActorSvc {
             return NPCRelationshipManager::GetSingleton().GetChildEntry(formID).has_value();
         }
 
-        auto* form = RE::TESForm::LookupByID(formID);
-        if (!form) return false;
+        if (auto* form = RE::TESForm::LookupByID(formID)) {
+            if (form->IsDeleted()) return false;
 
-        if (form->GetFormType() == RE::FormType::ActorCharacter || form->GetFormType() == RE::FormType::NPC) {
-            return true;
+            if (form->GetFormType() == RE::FormType::ActorCharacter || form->GetFormType() == RE::FormType::NPC) {
+                return true;
+            }
+
+            if (auto* refr = form->As<RE::TESObjectREFR>()) {
+                if (auto* baseObj = refr->GetBaseObject()) {
+                    return !baseObj->IsDeleted() && baseObj->GetFormType() == RE::FormType::NPC;
+                }
+            }
+            return false;
         }
 
-        if (auto* refr = form->As<RE::TESObjectREFR>()) {
-            if (auto* baseObj = refr->GetBaseObject()) {
-                return baseObj->GetFormType() == RE::FormType::NPC;
+        if ((formID & 0xFF000000) != 0xFF000000) {
+            RE::FormID baseID = NPCIndex::GetSingleton().GetBaseID(formID);
+            if (CanLookupEngineForm(baseID) && baseID != formID) {
+                if (auto* baseForm = RE::TESForm::LookupByID<RE::TESNPC>(baseID)) {
+                    return !baseForm->IsDeleted();
+                }
             }
         }
 

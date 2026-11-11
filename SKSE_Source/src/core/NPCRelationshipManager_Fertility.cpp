@@ -1768,10 +1768,13 @@ namespace MARAS {
             } else if (pregnancySecretForPartner.has_value()) {
                 it->second.paternitySecret.isPregnancySecretForPartner = *pregnancySecretForPartner;
             }
+            const bool hasAnyPartnerContext = (it->second.presumedFatherID != 0 || GetMotherPartner(childID) != 0);
             it->second.paternitySecret.isSecret = secretForBioFather || secretForPartner;
             it->second.paternitySecret.discovered = !it->second.paternitySecret.isSecret;
-            it->second.paternitySecret.discoveredByPartner = !secretForPartner;
-            it->second.paternitySecret.discoveredByBioFather = !secretForBioFather;
+            it->second.paternitySecret.discoveredByPartner = !secretForPartner && hasAnyPartnerContext &&
+                                                             (wasSecretPartner || it->second.paternitySecret.discoveredByPartner);
+            it->second.paternitySecret.discoveredByBioFather = !secretForBioFather &&
+                                                               (wasSecretBio || it->second.paternitySecret.discoveredByBioFather);
             MARAS_LOG_INFO("[Fertility] Set paternity secret edges on child {:08X} (secretBio: {}, secretPartner: {}, pregSecretPartner: {})",
                            childID, secretForBioFather, secretForPartner, it->second.paternitySecret.isPregnancySecretForPartner);
 

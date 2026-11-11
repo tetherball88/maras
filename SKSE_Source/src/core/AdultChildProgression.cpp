@@ -876,6 +876,7 @@ namespace MARAS {
         const std::filesystem::path& extensionFolder)
     {
         ClearCachedCatalogForms();
+        FlushRetiredForms();
         catalog_.clear();
         daedricBlessings_.clear();
 
@@ -1489,19 +1490,43 @@ namespace MARAS {
         return nullptr;
     }
 
-    void AdultChildProgression::RevertRuntimeBases() {
-        for (const auto& [actorID, origBase] : originalAdultBases_) {
-            if (!origBase) continue;
-            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
-                actor->data.objectReference = origBase;
-            }
+    void AdultChildProgression::ReleaseRuntimeBaseForActor(RE::FormID childActorID) {
+        if (childActorID == 0) {
+            return;
         }
-        for (auto& [actorID, cloneBase] : clonedAdultBases_) {
+        auto origIt = originalAdultBases_.find(childActorID);
+        auto cloneIt = clonedAdultBases_.find(childActorID);
+        if (cloneIt != clonedAdultBases_.end() && cloneIt->second) {
+            RE::TESNPC* cloneBase = cloneIt->second;
+            if (origIt != originalAdultBases_.end() && origIt->second) {
+                if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childActorID)) {
+                    if (actor->data.objectReference == cloneBase) {
+                        actor->data.objectReference = origIt->second;
+                    }
+                }
+            }
+            retiredClonedBases_.push_back(cloneBase);
+        }
+        if (origIt != originalAdultBases_.end()) {
+            originalAdultBases_.erase(origIt);
+        }
+        if (cloneIt != clonedAdultBases_.end()) {
+            clonedAdultBases_.erase(cloneIt);
+        }
+    }
+
+    void AdultChildProgression::FlushRetiredForms() {
+        for (auto* cloneBase : retiredClonedBases_) {
             if (!cloneBase) continue;
             if (cloneBase->perks) {
                 RE::free(cloneBase->perks);
                 cloneBase->perks = nullptr;
                 cloneBase->perkCount = 0;
+            }
+            if (cloneBase->keywords) {
+                RE::free(cloneBase->keywords);
+                cloneBase->keywords = nullptr;
+                cloneBase->numKeywords = 0;
             }
             if (cloneBase->headRelatedData) {
                 RE::free(cloneBase->headRelatedData);
@@ -1510,6 +1535,32 @@ namespace MARAS {
             cloneBase->fullName = RE::BSFixedString();
             RE::free(cloneBase);
         }
+        retiredClonedBases_.clear();
+
+        for (auto* runtimeClass : retiredClasses_) {
+            if (!runtimeClass) continue;
+            runtimeClass->fullName = RE::BSFixedString();
+            RE::free(runtimeClass);
+        }
+        retiredClasses_.clear();
+    }
+
+    void AdultChildProgression::RevertRuntimeBases() {
+        for (const auto& [actorID, origBase] : originalAdultBases_) {
+            if (!origBase) continue;
+            auto cloneIt = clonedAdultBases_.find(actorID);
+            RE::TESNPC* cloneBase = (cloneIt != clonedAdultBases_.end()) ? cloneIt->second : nullptr;
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
+                if (!cloneBase || actor->data.objectReference == cloneBase) {
+                    actor->data.objectReference = origBase;
+                }
+            }
+        }
+        for (auto& [actorID, cloneBase] : clonedAdultBases_) {
+            if (cloneBase) {
+                retiredClonedBases_.push_back(cloneBase);
+            }
+        }
         originalAdultBases_.clear();
         clonedAdultBases_.clear();
     }
@@ -1517,8 +1568,7 @@ namespace MARAS {
     void AdultChildProgression::ClearCachedCatalogForms() {
         for (auto& spec : catalog_) {
             if (spec.cachedRuntimeClass) {
-                spec.cachedRuntimeClass->fullName = RE::BSFixedString();
-                RE::free(spec.cachedRuntimeClass);
+                retiredClasses_.push_back(spec.cachedRuntimeClass);
                 spec.cachedRuntimeClass = nullptr;
             }
             spec.cachedCombatStyle = nullptr;
@@ -1678,6 +1728,18 @@ namespace MARAS {
             } else {
                 cloneNpc->perks = nullptr;
                 cloneNpc->perkCount = 0;
+            }
+
+            if (origNpc->keywords && origNpc->numKeywords > 0) {
+                auto* newKeywords = RE::calloc<RE::BGSKeyword*>(origNpc->numKeywords);
+                if (newKeywords) {
+                    std::memcpy(newKeywords, origNpc->keywords, sizeof(RE::BGSKeyword*) * origNpc->numKeywords);
+                }
+                cloneNpc->keywords = newKeywords;
+                cloneNpc->numKeywords = newKeywords ? origNpc->numKeywords : 0;
+            } else {
+                cloneNpc->keywords = nullptr;
+                cloneNpc->numKeywords = 0;
             }
 
             auto* newHrd = RE::calloc<RE::TESNPC::HeadRelatedData>(1);

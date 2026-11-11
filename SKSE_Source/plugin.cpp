@@ -136,10 +136,12 @@ namespace {
             return &singleton;
         }
 
-        void Reset() {
+        void Reset() noexcept {
             std::lock_guard<std::mutex> lock(mutex_);
             pendingInitActors_.clear();
             pendingLoadedForms_.clear();
+            drainQueued_ = false;
+            queuedEpoch_ = MARAS::GetSessionEpoch();
         }
 
         RE::BSEventNotifyControl ProcessEvent(const RE::TESInitScriptEvent* a_event,
@@ -149,16 +151,25 @@ namespace {
                 const RE::FormID actorFormID = a_event->objectInitialized->GetFormID();
                 if (actorFormID != 0) {
                     bool shouldSchedule = false;
+                    MARAS::SessionEpoch scheduleEpoch = 0;
                     {
                         std::lock_guard<std::mutex> lock(mutex_);
+                        const MARAS::SessionEpoch curEpoch = MARAS::GetSessionEpoch();
+                        if (queuedEpoch_ != curEpoch) {
+                            pendingInitActors_.clear();
+                            pendingLoadedForms_.clear();
+                            drainQueued_ = false;
+                            queuedEpoch_ = curEpoch;
+                        }
                         pendingInitActors_.push_back(actorFormID);
                         if (!drainQueued_) {
                             drainQueued_ = true;
                             shouldSchedule = true;
+                            scheduleEpoch = curEpoch;
                         }
                     }
                     if (shouldSchedule) {
-                        ScheduleDrainOnMainThread();
+                        ScheduleDrainOnMainThread(scheduleEpoch);
                     }
                 }
             }
@@ -169,16 +180,25 @@ namespace {
                                               RE::BSTEventSource<RE::TESObjectLoadedEvent>*) override {
             if (a_event && a_event->loaded && a_event->formID != 0) {
                 bool shouldSchedule = false;
+                MARAS::SessionEpoch scheduleEpoch = 0;
                 {
                     std::lock_guard<std::mutex> lock(mutex_);
+                    const MARAS::SessionEpoch curEpoch = MARAS::GetSessionEpoch();
+                    if (queuedEpoch_ != curEpoch) {
+                        pendingInitActors_.clear();
+                        pendingLoadedForms_.clear();
+                        drainQueued_ = false;
+                        queuedEpoch_ = curEpoch;
+                    }
                     pendingLoadedForms_.push_back(a_event->formID);
                     if (!drainQueued_) {
                         drainQueued_ = true;
                         shouldSchedule = true;
+                        scheduleEpoch = curEpoch;
                     }
                 }
                 if (shouldSchedule) {
-                    ScheduleDrainOnMainThread();
+                    ScheduleDrainOnMainThread(scheduleEpoch);
                 }
             }
             return RE::BSEventNotifyControl::kContinue;
@@ -187,27 +207,36 @@ namespace {
     private:
         ActorInitLoadedEventSink() = default;
 
-        void ScheduleDrainOnMainThread() {
+        void ScheduleDrainOnMainThread(MARAS::SessionEpoch expectedEpoch) {
+            if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (queuedEpoch_ == expectedEpoch) {
+                    drainQueued_ = false;
+                }
+                return;
+            }
             const auto* taskIF = SKSE::GetTaskInterface();
             if (!taskIF) {
                 std::lock_guard<std::mutex> lock(mutex_);
-                drainQueued_ = false;
+                if (queuedEpoch_ == expectedEpoch) {
+                    drainQueued_ = false;
+                }
                 return;
             }
-            const MARAS::SessionEpoch expectedEpoch = MARAS::GetSessionEpoch();
             taskIF->AddTask([this, expectedEpoch]() {
                 std::vector<RE::FormID> initIDs;
                 std::vector<RE::FormID> loadedIDs;
                 {
                     std::lock_guard<std::mutex> lock(mutex_);
+                    if (queuedEpoch_ != expectedEpoch || !MARAS::IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
                     initIDs.swap(pendingInitActors_);
                     loadedIDs.swap(pendingLoadedForms_);
                     drainQueued_ = false;
                 }
-                if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
-                    return;
-                }
                 try {
+                    std::lock_guard papyrusLock(MARAS::PapyrusInterface::GetPapyrusMutex());
                     auto& npcIndex = MARAS::NPCIndex::GetSingleton();
                     auto& relMgr = MARAS::NPCRelationshipManager::GetSingleton();
 
@@ -240,7 +269,7 @@ namespace {
                             npcIndex.RegisterLoadedActor(actor);
                             relMgr.TryResolvePendingRelationships(actor);
                         }
-                        if (relMgr.IsChildNPC(loadedFormID)) {
+                        if (actor->Is3DLoaded() && relMgr.IsChildNPC(loadedFormID)) {
                             relMgr.ApplyChildVisualsOn3DLoad(actor);
                         }
                     }
@@ -256,6 +285,7 @@ namespace {
         std::vector<RE::FormID> pendingInitActors_;
         std::vector<RE::FormID> pendingLoadedForms_;
         bool drainQueued_{ false };
+        MARAS::SessionEpoch queuedEpoch_{ 0 };
     };
 
     std::shared_ptr<spdlog::logger> SetupLogging() {
@@ -301,6 +331,13 @@ namespace {
     }
 }
 
+namespace MARAS {
+    void ResetPluginEventSinks() noexcept {
+        UpdateEventSink::GetSingleton()->Reset();
+        ActorInitLoadedEventSink::GetSingleton()->Reset();
+    }
+}
+
 SKSEPluginLoad(const LoadInterface* skse) {
     SKSE::Init(skse);
 
@@ -341,8 +378,8 @@ SKSEPluginLoad(const LoadInterface* skse) {
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
                         MARAS::BumpSessionEpoch("MessagingInterface::kPreLoadGame");
-                        UpdateEventSink::GetSingleton()->Reset();
-                        ActorInitLoadedEventSink::GetSingleton()->Reset();
+                        MARAS::ResetPluginEventSinks();
+                        MARAS::PollingService::GetSingleton().Shutdown();
                         MARAS::AdultChildProgression::GetSingleton().Revert();
                         MARAS::NPCIndex::GetSingleton().ClearLoadedActors();
                         MARAS::PrismaModalManager::GetSingleton().Revert();
@@ -356,11 +393,6 @@ SKSEPluginLoad(const LoadInterface* skse) {
                     case SKSE::MessagingInterface::kPostLoadGame:
                     case SKSE::MessagingInterface::kNewGame: {
                         const bool isNewGame = (message->type == SKSE::MessagingInterface::kNewGame);
-                        if (isNewGame) {
-                            MARAS::BumpSessionEpoch("MessagingInterface::kNewGame");
-                            UpdateEventSink::GetSingleton()->Reset();
-                            ActorInitLoadedEventSink::GetSingleton()->Reset();
-                        }
                         MARAS_LOG_INFO("New game/Load (isNewGame={})...", isNewGame);
                         MARAS::NPCIndex::GetSingleton().RefreshIndex();
 

@@ -248,8 +248,8 @@ All persistent runtime state is stored in the SKSE co-save under plugin UID `'MA
 ### 5.1 Deterministic Chunk Save/Load Table & Two-Phase Load Finalization
 
 During `SaveCallback`, 12 top-level record chunks are written sequentially. During `LoadCallback`, loading executes in two phases:
-- **Phase 1 (Pure Chunk Deserialization)**: Chunks are dispatched by their 4-byte FourCC type code to populate each service's internal state without cross-service queries that assume chunk order.
-- **Phase 2 (Post-Chunk Cross-Service Finalization)**: Once all 12 chunks have loaded, `LoadCallback` runs `NPCRelationshipManager::FinalizeLoad()` (syncing `SpouseBuffService`, `SpouseHierarchyManager`, `AffectionService`, `PlayerHouseService`, `SpouseAssetsService`, `PackageOverrideService`, `FactionService::UpdateCanFormNonCheatingMainFactions`, and `PlayerChildrenService::RebuildParentChildCaches`), `SpouseHierarchyManager::FillGaps(0, false)`, and `PackageOverrideService::RebuildFromTenants()`.
+- **Phase 1 (Pure Chunk Deserialization)**: Chunks are dispatched by their 4-byte FourCC type code to populate each service's internal state without cross-service queries that assume chunk order or loaded-3D engine forms. Each service's `Load()` validates record counts and rolls back (`Revert()`) atomically on truncated/corrupt streams.
+- **Phase 2 (Post-Chunk Cross-Service Finalization)**: Once all 12 chunks have loaded (including `DeceasedRegistry` `'DCSD'`), `LoadCallback` runs `NPCRelationshipManager::FinalizeLoad()`, `AffectionService::FinalizeLoad()`, `PlayerHouseService::FinalizeLoad()`, `PlayerChildrenService::FinalizeLoad()`, `SpouseAssetsService::FinalizeLoad()`, `AdultChildTravelService::FinalizeLoad()`, `SpouseHierarchyManager::FillGaps(0, false)`, and `PackageOverrideService::RebuildFromTenants()` to prune deceased/orphaned actors, reconcile engine factions/ownership on loaded references, and rebuild package overrides (including traveling adult offspring).
 
 | Order | FourCC | Record Constant | Owning Service | Persisted Data Summary |
 | :---: | :---: | :--- | :--- | :--- |

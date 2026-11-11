@@ -1274,14 +1274,18 @@ namespace MARAS {
         return singleton;
     }
 
-    SkyrimNetProfileService::SkyrimNetProfileService() = default;
+    SkyrimNetProfileService::SkyrimNetProfileService()
+        : queueState_(std::make_shared<WorkerQueueState>()) {}
 
     SkyrimNetProfileService::~SkyrimNetProfileService() {
-        {
-            std::lock_guard<std::mutex> lock(queueMutex_);
-            pendingQueue_.clear();
+        if (queueState_) {
+            std::lock_guard<std::mutex> lock(queueState_->queueMutex);
+            queueState_->pendingQueue.clear();
         }
         workerThread_.request_stop();
+        if (workerThread_.joinable()) {
+            workerThread_.detach();
+        }
     }
 
     std::string SkyrimNetProfileService::GetActorBioTemplateName(RE::FormID actorFormID) const {
@@ -1292,9 +1296,9 @@ namespace MARAS {
     }
 
     void SkyrimNetProfileService::Revert() {
-        {
-            std::lock_guard<std::mutex> qLock(queueMutex_);
-            pendingQueue_.clear();
+        if (queueState_) {
+            std::lock_guard<std::mutex> qLock(queueState_->queueMutex);
+            queueState_->pendingQueue.clear();
         }
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -1321,49 +1325,61 @@ namespace MARAS {
     }
 
     void SkyrimNetProfileService::EnqueueProfileTask(std::unique_ptr<ChildProfileContextData> taskData) {
-        if (!taskData) {
+        if (!taskData || !queueState_) {
             return;
         }
         std::jthread finishedWorkerToJoin;
+        std::optional<uint64_t> evictedStageKey;
         {
-            std::lock_guard<std::mutex> lock(queueMutex_);
+            std::lock_guard<std::mutex> lock(queueState_->queueMutex);
             if (!IsSessionEpochCurrent(taskData->sessionEpoch)) {
                 return;
             }
             constexpr std::size_t kMaxPendingTasks = 32;
-            if (pendingQueue_.size() >= kMaxPendingTasks) {
-                const auto& dropped = pendingQueue_.front();
+            if (queueState_->pendingQueue.size() >= kMaxPendingTasks) {
+                const auto& dropped = queueState_->pendingQueue.front();
+                if (dropped) {
+                    evictedStageKey = MakeStageKey(dropped->childID, dropped->stage);
+                }
                 MARAS_LOG_WARN("[SkyrimNetProfile] Profile task queue full ({}); dropping oldest queued task for {:08X} ('{}')",
-                               pendingQueue_.size(),
+                               queueState_->pendingQueue.size(),
                                dropped ? dropped->childID : 0,
                                dropped ? dropped->childName : "");
-                pendingQueue_.pop_front();
+                queueState_->pendingQueue.pop_front();
             }
-            pendingQueue_.push_back(std::move(taskData));
-            if (!workerActive_) {
+            queueState_->pendingQueue.push_back(std::move(taskData));
+            if (!queueState_->workerActive) {
                 finishedWorkerToJoin = std::move(workerThread_);
-                workerActive_ = true;
-                workerThread_ = std::jthread([this](std::stop_token st) {
-                    WorkerLoop(st);
+                queueState_->workerActive = true;
+                auto state = queueState_;
+                workerThread_ = std::jthread([state = std::move(state)](std::stop_token st) mutable {
+                    WorkerLoop(std::move(state), st);
                 });
             }
+        }
+        if (evictedStageKey.has_value()) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            updatedActorStages_.erase(*evictedStageKey);
         }
         if (finishedWorkerToJoin.joinable()) {
             finishedWorkerToJoin.join();
         }
     }
 
-    void SkyrimNetProfileService::WorkerLoop(std::stop_token stopToken) {
+    void SkyrimNetProfileService::WorkerLoop(std::shared_ptr<WorkerQueueState> queueState, std::stop_token stopToken) {
+        if (!queueState) {
+            return;
+        }
         for (;;) {
             std::unique_ptr<ChildProfileContextData> taskData;
             {
-                std::lock_guard<std::mutex> lock(queueMutex_);
-                if (stopToken.stop_requested() || pendingQueue_.empty()) {
-                    workerActive_ = false;
+                std::lock_guard<std::mutex> lock(queueState->queueMutex);
+                if (stopToken.stop_requested() || queueState->pendingQueue.empty()) {
+                    queueState->workerActive = false;
                     return;
                 }
-                taskData = std::move(pendingQueue_.front());
-                pendingQueue_.pop_front();
+                taskData = std::move(queueState->pendingQueue.front());
+                queueState->pendingQueue.pop_front();
             }
             if (!taskData) {
                 continue;

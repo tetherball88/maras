@@ -30,6 +30,7 @@ namespace MARAS {
         // Serialization
         bool Save(SKSE::SerializationInterface* serialization) const;
         bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = Serialization::kDataVersion);
+        void FinalizeLoad();
         void Revert();
 
         // Data dump

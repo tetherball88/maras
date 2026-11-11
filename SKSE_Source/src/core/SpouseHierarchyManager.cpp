@@ -1,5 +1,6 @@
 #include "core/SpouseHierarchyManager.h"
 
+#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -207,6 +208,8 @@ namespace MARAS {
         // remaining married NPCs, if any.
         auto& rel = NPCRelationshipManager::GetSingleton();
         auto married = rel.GetAllMarried();
+        const auto& deceasedReg = DeceasedRegistry::GetSingleton();
+        std::unordered_set<RE::FormID> marriedSet(married.begin(), married.end());
 
         // Build candidates: existing top-ranked spouses first (preserve their relative order),
         // then other married NPCs not already present (and not explicitly excluded).
@@ -215,14 +218,14 @@ namespace MARAS {
         std::unordered_set<RE::FormID> present;
 
         for (auto id : ranks_) {
-            if (id != 0 && id != excludeFormID) {
+            if (id != 0 && id != excludeFormID && !deceasedReg.IsDeceased(id) && marriedSet.contains(id)) {
                 candidates.push_back(id);
                 present.insert(id);
             }
         }
 
         for (auto id : married) {
-            if (id != 0 && id != excludeFormID && present.find(id) == present.end()) {
+            if (id != 0 && id != excludeFormID && !deceasedReg.IsDeceased(id) && present.find(id) == present.end()) {
                 candidates.push_back(id);
                 present.insert(id);
             }
@@ -323,17 +326,19 @@ namespace MARAS {
 
         for (std::uint32_t i = 0; i < slotCount; ++i) {
             RE::FormID savedId = 0;
-            if (!serialization->ReadRecordData(savedId)) return false;
+            if (!serialization->ReadRecordData(savedId)) {
+                ranks_.fill(0);
+                return false;
+            }
             if (i >= ranks_.size()) {
                 continue;
             }
 
             // Resolve saved formIDs to current load-order IDs
             RE::FormID resolved = 0;
-            if (savedId != 0 && serialization->ResolveFormID(savedId, resolved)) {
-                // Skip dead or invalid actors
+            if (savedId != 0 && !IsSyntheticChildID(savedId) && serialization->ResolveFormID(savedId, resolved) && resolved != 0) {
                 auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(resolved);
-                if (!actor || actor->IsDead()) {
+                if ((actor && actor->IsDead()) || (!actor && !ActorSvc::IsValid(resolved))) {
                     MARAS_LOG_INFO("SpouseHierarchyManager::Load - skipping dead/invalid actor {:08X}", resolved);
                     ranks_[i] = 0;
                 } else {
@@ -349,13 +354,6 @@ namespace MARAS {
     }
 
     void SpouseHierarchyManager::Revert() {
-        // remove faction rank from any assigned spouses
-        for (auto id : ranks_) {
-            if (id != 0) {
-                ClearFactionRank(id);
-            }
-        }
-
         ranks_.fill(0);
     }
 

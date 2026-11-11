@@ -1,5 +1,6 @@
 #include "core/AffectionService.h"
 
+#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -123,8 +124,12 @@ namespace MARAS {
     }
 
     void AffectionService::SetPermanentAffection(FormID npcFormID, int amount, bool sendEvent) {
-        auto actor = ValidateActor(npcFormID, "SetPermanentAffection");
-        if (!actor) {
+        if (npcFormID == 0 || npcFormID == kPlayerFormID || IsSyntheticChildID(npcFormID)) {
+            return;
+        }
+        auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
+        if (!actor && !ActorSvc::IsValid(npcFormID)) {
+            MARAS_LOG_ERROR("SetPermanentAffection: Cannot find valid actor/base for FormID {:08X}", npcFormID);
             return;
         }
 
@@ -138,8 +143,10 @@ namespace MARAS {
         permanentAffection_[npcFormID] = clamped;
         MARAS_LOG_INFO("SetPermanentAffection: NPC {:08X} = {} (clamped from {})", npcFormID, clamped, amount);
 
-        // Update faction rank
-        UpdateAffectionFaction(actor, npcFormID, clamped);
+        // Update faction rank when loaded
+        if (actor) {
+            UpdateAffectionFaction(actor, npcFormID, clamped);
+        }
 
         // Send event if threshold changed and event sending requested
         if (sendEvent && oldThreshold != newThreshold) {
@@ -241,37 +248,44 @@ namespace MARAS {
 
         Revert();
 
+        auto failLoad = [this]() -> bool {
+            Revert();
+            return false;
+        };
+
         constexpr std::uint32_t kMaxRecords = 100000;
         constexpr std::uint32_t kMaxTypesPerActor = 256;
         constexpr std::uint32_t kMaxTypeNameLen = 512;
 
         // Load permanent affection
         std::uint32_t count = 0;
-        if (!serialization->ReadRecordData(count)) return false;
+        if (!serialization->ReadRecordData(count)) return failLoad();
         if (count > kMaxRecords) {
             MARAS_LOG_ERROR("AffectionService::Load - corrupt permanent affection count {}", count);
-            return false;
+            return failLoad();
         }
 
         for (std::uint32_t i = 0; i < count; ++i) {
             RE::FormID oldFormID = 0, newFormID = 0;
             int amount = 0;
-            if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(amount)) return false;
-            if (!serialization->ResolveFormID(oldFormID, newFormID)) {
+            if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(amount)) return failLoad();
+            if (IsSyntheticChildID(oldFormID) || !serialization->ResolveFormID(oldFormID, newFormID) || newFormID == 0) {
                 MARAS_LOG_WARN("AffectionService::Load - could not resolve FormID {:08X}, skipping", oldFormID);
                 continue;
             }
 
-            // Skip dead or invalid actors
+            // Retain unloaded actors when valid; skip dead or invalid/deleted actors
             auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-            if (!actor || actor->IsDead()) {
+            if ((actor && actor->IsDead()) || (!actor && !ActorSvc::IsValid(newFormID))) {
                 MARAS_LOG_INFO("AffectionService::Load - skipping dead/invalid actor {:08X}", newFormID);
                 continue;
             }
 
             int clamped = ClampAffection(amount);
             permanentAffection_[newFormID] = clamped;
-            UpdateAffectionFaction(actor, newFormID, clamped);
+            if (actor) {
+                UpdateAffectionFaction(actor, newFormID, clamped);
+            }
         }
 
         MARAS_LOG_INFO("Loaded {} permanent affection records", permanentAffection_.size());
@@ -284,25 +298,24 @@ namespace MARAS {
         }
         if (dayCount > kMaxRecords) {
             MARAS_LOG_ERROR("AffectionService::Load - corrupt last affection day count {}", dayCount);
-            return false;
+            return failLoad();
         }
 
         for (std::uint32_t i = 0; i < dayCount; ++i) {
             RE::FormID oldFormID = 0, newFormID = 0;
             float day = 0.0f;
             if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(day)) {
-                MARAS_LOG_WARN("Could not read last affection day record {}", i);
-                continue;
+                MARAS_LOG_ERROR("AffectionService::Load - failed to read last affection day record {}", i);
+                return failLoad();
             }
-            if (!serialization->ResolveFormID(oldFormID, newFormID)) {
+            if (IsSyntheticChildID(oldFormID) || !serialization->ResolveFormID(oldFormID, newFormID) || newFormID == 0) {
                 MARAS_LOG_WARN("AffectionService::Load - could not resolve FormID {:08X} for last affection day",
                                oldFormID);
                 continue;
             }
 
-            // Skip dead or invalid actors
             auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-            if (!actor || actor->IsDead()) {
+            if ((actor && actor->IsDead()) || (!actor && !ActorSvc::IsValid(newFormID))) {
                 continue;
             }
 
@@ -315,46 +328,46 @@ namespace MARAS {
         if (version >= 7) {
             std::uint32_t dailyActorCount = 0;
             if (!serialization->ReadRecordData(dailyActorCount)) {
-                return false;
+                return failLoad();
             }
             if (dailyActorCount > kMaxRecords) {
                 MARAS_LOG_ERROR("AffectionService::Load - corrupt dailyActorCount {}", dailyActorCount);
-                return false;
+                return failLoad();
             }
             for (std::uint32_t i = 0; i < dailyActorCount; ++i) {
                 RE::FormID oldFormID = 0, newFormID = 0;
                 std::uint32_t typeCount = 0;
                 if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(typeCount)) {
                     MARAS_LOG_ERROR("AffectionService::Load - failed to read daily affection actor header {}", i);
-                    return false;
+                    return failLoad();
                 }
                 if (typeCount > kMaxTypesPerActor) {
                     MARAS_LOG_ERROR("AffectionService::Load - corrupt daily affection typeCount {}", typeCount);
-                    return false;
+                    return failLoad();
                 }
 
                 bool validActor = false;
-                if (serialization->ResolveFormID(oldFormID, newFormID)) {
+                if (!IsSyntheticChildID(oldFormID) && serialization->ResolveFormID(oldFormID, newFormID) && newFormID != 0) {
                     auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-                    validActor = (actor != nullptr && !actor->IsDead());
+                    validActor = (actor != nullptr) ? !actor->IsDead() : ActorSvc::IsValid(newFormID);
                 }
 
                 for (std::uint32_t t = 0; t < typeCount; ++t) {
                     std::uint32_t len = 0;
                     if (!serialization->ReadRecordData(len) || len > kMaxTypeNameLen) {
                         MARAS_LOG_ERROR("AffectionService::Load - invalid daily affection type length {}", len);
-                        return false;
+                        return failLoad();
                     }
                     std::string typeName;
                     if (len > 0) {
                         typeName.resize(len);
                         if (!serialization->ReadRecordData(typeName.data(), len)) {
-                            return false;
+                            return failLoad();
                         }
                     }
                     float amount = 0.0f;
                     if (!serialization->ReadRecordData(amount)) {
-                        return false;
+                        return failLoad();
                     }
                     if (validActor && !typeName.empty() && !std::isnan(amount) && !std::isinf(amount)) {
                         dailyAffection_[newFormID][NormalizeType(typeName)] = amount;
@@ -365,6 +378,52 @@ namespace MARAS {
         }
 
         return true;
+    }
+
+    void AffectionService::FinalizeLoad() {
+        auto& deceasedReg = DeceasedRegistry::GetSingleton();
+        auto shouldPrune = [&deceasedReg](RE::FormID id) -> bool {
+            if (id == 0 || IsSyntheticChildID(id) || deceasedReg.IsDeceased(id)) {
+                return true;
+            }
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(id);
+            if (!actor) {
+                actor = NPCIndex::GetSingleton().GetActorFromFormId(id);
+            }
+            if (actor && actor->IsDead()) {
+                return true;
+            }
+            return !ActorSvc::IsValid(id);
+        };
+
+        std::size_t pruned = 0;
+        for (auto it = permanentAffection_.begin(); it != permanentAffection_.end();) {
+            if (shouldPrune(it->first)) {
+                it = permanentAffection_.erase(it);
+                ++pruned;
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = lastAffectionDay_.begin(); it != lastAffectionDay_.end();) {
+            if (shouldPrune(it->first)) {
+                it = lastAffectionDay_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = dailyAffection_.begin(); it != dailyAffection_.end();) {
+            if (shouldPrune(it->first)) {
+                it = dailyAffection_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        if (pruned > 0) {
+            MARAS_LOG_INFO("AffectionService::FinalizeLoad - pruned {} deceased/invalid permanent affection record(s)",
+                           pruned);
+        }
     }
 
     void AffectionService::Revert() {

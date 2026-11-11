@@ -1243,9 +1243,9 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
       let nextRawChildren = state.rawChildren
       if (data.children && Array.isArray(data.children)) {
-        const newMap = new Map(state.rawChildren)
+        const newMap = new Map<string, ChildRecord>()
         data.children.forEach((c) => {
-          const existing = newMap.get(c.childId)
+          const existing = state.rawChildren.get(c.childId)
           newMap.set(c.childId, existing ? { ...existing, ...c } : c)
         })
         nextRawChildren = newMap

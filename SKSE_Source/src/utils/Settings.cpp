@@ -404,6 +404,8 @@ namespace MARAS {
 
         int32_t loadedLogLevel = defaultLogLevel;
         bool loadedSimNoSkyrimNet = false;
+        std::string loadedGeneralLog;
+        std::string loadedModalLog;
 
         {
             std::unique_lock lock(settingsMutex_);
@@ -532,17 +534,25 @@ namespace MARAS {
             }
             loadedLogLevel = logLevel;
             loadedSimNoSkyrimNet = simulateNoSkyrimNet;
+            loadedGeneralLog = std::format(
+                "Settings::LoadGameSettings - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
+                loadedLogLevel, skipWedding, initialRelationshipScanDone, static_cast<int>(childCustodyGenderPolicy),
+                static_cast<int>(childCustodyPlayerPolicy), childCustodyPrioritizeBioParent, bGlobalBanCritter,
+                bGlobalBanPet, matchmakingEnabled, matchmakingIntervalDays, static_cast<int>(matchmakingOrientation),
+                matchmakingAllowCheating);
+            loadedModalLog = std::format(
+                "Settings::LoadGameSettings - loaded confirmation modal settings: playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={}",
+                enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
+                confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
+                confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship,
+                confirmCloseRelationship);
         }
 
         SyncSimulateNoSkyrimNetGlobal(loadedSimNoSkyrimNet);
         LoggingService::GetSingleton().SetLogLevel(loadedLogLevel);
 
-        MARAS_LOG_INFO("Settings::LoadGameSettings - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
-                       loadedLogLevel, skipWedding, initialRelationshipScanDone, static_cast<int>(childCustodyGenderPolicy), static_cast<int>(childCustodyPlayerPolicy), childCustodyPrioritizeBioParent, bGlobalBanCritter, bGlobalBanPet, matchmakingEnabled, matchmakingIntervalDays, static_cast<int>(matchmakingOrientation), matchmakingAllowCheating);
-        MARAS_LOG_INFO("Settings::LoadGameSettings - loaded confirmation modal settings: playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={}",
-                       enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
-                       confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
-                       confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship, confirmCloseRelationship);
+        MARAS_LOG_INFO("{}", loadedGeneralLog);
+        MARAS_LOG_INFO("{}", loadedModalLog);
 
         return true;
     }
@@ -557,20 +567,24 @@ namespace MARAS {
 
     void Settings::RevertGameSettings() {
         int32_t revertedLogLevel = defaultLogLevel;
+        std::string revertedModalLog;
         {
             std::unique_lock lock(settingsMutex_);
             RevertGameSettingsUnlocked();
             revertedLogLevel = logLevel;
+            revertedModalLog = std::format(
+                "Settings::RevertGameSettings - reverted confirmation modal settings to defaults (playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={})",
+                enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
+                confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
+                confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship,
+                confirmCloseRelationship);
         }
 
         SyncSimulateNoSkyrimNetGlobal(false);
         LoggingService::GetSingleton().SetLogLevel(revertedLogLevel);
 
         MARAS_LOG_INFO("Settings::RevertGameSettings - reverted settings to defaults (logLevel={})", revertedLogLevel);
-        MARAS_LOG_INFO("Settings::RevertGameSettings - reverted confirmation modal settings to defaults (playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={})",
-                       enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
-                       confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
-                       confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship, confirmCloseRelationship);
+        MARAS_LOG_INFO("{}", revertedModalLog);
     }
 
     nlohmann::json Settings::DumpJson() const {

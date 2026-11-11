@@ -15305,7 +15305,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   }
   function maskChildRecord(child, revealSecrets, npcProfiles) {
     var _a2;
-    const isSecretPartner = Boolean(child.isSecretForPartner ?? child.isSecret);
+    const isSecretPartner = Boolean(
+      child.isSecretForPartner || child.isPregnancySecretForPartner || !child.isSecretForBioFather && child.isSecret
+    );
     const isSecretBio = Boolean(child.isSecretForBioFather);
     if (!isSecretPartner && !isSecretBio) {
       return child;
@@ -15322,6 +15324,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         } : {},
         presumedFatherId: void 0,
         presumedFatherName: void 0,
+        hasBeastblood: false,
         isSecret: false,
         isSecretForPartner: false,
         isPregnancySecretForPartner: false,
@@ -15333,6 +15336,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       ...child,
       bioFatherId: void 0,
       bioFatherName: void 0,
+      hasBeastblood: false,
       isSecret: false,
       isSecretForPartner: false,
       isPregnancySecretForPartner: false,
@@ -15344,6 +15348,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     if (revealSecrets) return new Map(rawChildren);
     const masked = /* @__PURE__ */ new Map();
     for (const [id2, child] of rawChildren.entries()) {
+      if (child.stage === "unborn" && child.isPregnancySecretForPartner && !areSameFormId(child.bioMotherId, PLAYER_FORM_ID)) {
+        continue;
+      }
       masked.set(id2, maskChildRecord(child, false, npcProfiles));
     }
     return masked;
@@ -16286,9 +16293,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         }
         let nextRawChildren = state.rawChildren;
         if (data.children && Array.isArray(data.children)) {
-          const newMap = new Map(state.rawChildren);
+          const newMap = /* @__PURE__ */ new Map();
           data.children.forEach((c) => {
-            const existing = newMap.get(c.childId);
+            const existing = state.rawChildren.get(c.childId);
             newMap.set(c.childId, existing ? { ...existing, ...c } : c);
           });
           nextRawChildren = newMap;

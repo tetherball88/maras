@@ -257,10 +257,14 @@ namespace MARAS {
     }
 
     std::vector<RE::FormID> HomeCellService::GetNpcBeds(RE::Actor* npc) const {
-        if (!npc) return {};
+        return npc ? GetNpcBeds(npc->GetFormID()) : std::vector<RE::FormID>{};
+    }
+
+    std::vector<RE::FormID> HomeCellService::GetNpcBeds(RE::FormID actorFormID) const {
+        if (actorFormID == 0) return {};
 
         // Get the NPC's base form (TESNpc) since bed ownership is stored by base form ID
-        auto baseForm = ActorSvc::GetActorBase(npc->GetFormID());
+        auto baseForm = ActorSvc::GetActorBase(actorFormID);
         if (!baseForm) return {};
 
         auto it = bedsWithOwners_.find(baseForm->GetFormID());

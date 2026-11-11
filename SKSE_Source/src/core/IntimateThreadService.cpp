@@ -2,7 +2,9 @@
 
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -255,128 +257,135 @@ namespace MARAS {
 
         if (!found || (!threadCopy.hasCheatingPotential && !threadCopy.hasOpenRelationshipPotential)) return;
 
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        const bool enablePolygamy = Settings::GetSingleton().GetEnablePolygamy();
+        AddCurrentEpochTask(
+            "IntimateThreadService::ReportIntimateInteraction",
+            [this, key = std::move(key), idA, idB, threadCopy = std::move(threadCopy)]() {
+                std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+                auto& relMgr = NPCRelationshipManager::GetSingleton();
+                const bool enablePolygamy = Settings::GetSingleton().GetEnablePolygamy();
+                auto* actorA = RE::TESForm::LookupByID<RE::Actor>(idA);
+                auto* actorB = RE::TESForm::LookupByID<RE::Actor>(idB);
 
-        // 1. Process potential cheating
-        if (threadCopy.hasCheatingPotential) {
-            auto processCheater = [&](RE::Actor* cheaterActor, RE::Actor* partnerActor, RE::FormID cheaterID, RE::FormID partnerID) {
-                if (cheaterID == kPlayerFormID && enablePolygamy) return;
+                // 1. Process potential cheating
+                if (threadCopy.hasCheatingPotential) {
+                    auto processCheater = [&](RE::Actor* cheaterActor, RE::Actor* partnerActor, RE::FormID cheaterID, RE::FormID partnerID) {
+                        if (cheaterID == kPlayerFormID && enablePolygamy) return;
 
-                for (const auto& pc : threadCopy.potentialCheaters) {
-                    if (pc.cheaterID != cheaterID) continue;
+                        for (const auto& pc : threadCopy.potentialCheaters) {
+                            if (pc.cheaterID != cheaterID) continue;
 
-                    for (RE::FormID victimID : pc.cachedVictimIDs) {
-                        if (victimID == 0 || victimID == partnerID || victimID == cheaterID) continue;
-                        if (std::find(threadCopy.actorIDs.begin(), threadCopy.actorIDs.end(), victimID) != threadCopy.actorIDs.end()) {
-                            continue;
-                        }
-                        // Co-spouse intimacy exemption: two co-spouses of the Player being intimate is never cheating on the Player
-                        if (victimID == kPlayerFormID &&
-                            relMgr.IsPlayerActiveMainPartner(cheaterID) &&
-                            relMgr.IsPlayerActiveMainPartner(partnerID)) {
-                            continue;
-                        }
+                            for (RE::FormID victimID : pc.cachedVictimIDs) {
+                                if (victimID == 0 || victimID == partnerID || victimID == cheaterID) continue;
+                                if (std::find(threadCopy.actorIDs.begin(), threadCopy.actorIDs.end(), victimID) != threadCopy.actorIDs.end()) {
+                                    continue;
+                                }
+                                // Co-spouse intimacy exemption: two co-spouses of the Player being intimate is never cheating on the Player
+                                if (victimID == kPlayerFormID &&
+                                    relMgr.IsPlayerActiveMainPartner(cheaterID) &&
+                                    relMgr.IsPlayerActiveMainPartner(partnerID)) {
+                                    continue;
+                                }
 
-                        const auto* pairData = relMgr.GetNPCData(cheaterID, victimID);
-                        if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || pairData->isOpen) {
-                            continue;
-                        }
+                                const auto* pairData = relMgr.GetNPCData(cheaterID, victimID);
+                                if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || pairData->isOpen) {
+                                    continue;
+                                }
 
-                        auto* victimActor = RE::TESForm::LookupByID<RE::Actor>(victimID);
-                        bool isVictimPresent = CheckVictimExposure(victimActor, cheaterActor);
+                                auto* victimActor = RE::TESForm::LookupByID<RE::Actor>(victimID);
+                                bool isVictimPresent = CheckVictimExposure(victimActor, cheaterActor);
 
-                        if (isVictimPresent) {
-                            relMgr.RecordCheating(cheaterID, victimID, partnerID, /*isSecret=*/false, AffairType::Casual, AffairStatus::Ongoing);
-                            relMgr.SetCheatingDiscovered(cheaterID, partnerID, AffairDiscovery::Caught);
-                            {
-                                std::lock_guard<std::mutex> lock(mutex_);
-                                auto tIt = activeThreads_.find(key);
-                                if (tIt != activeThreads_.end()) {
-                                    tIt->second.caughtEvents.insert(CaughtEventKey{ cheaterID, victimID, partnerID });
+                                if (isVictimPresent) {
+                                    relMgr.RecordCheating(cheaterID, victimID, partnerID, /*isSecret=*/false, AffairType::Casual, AffairStatus::Ongoing);
+                                    relMgr.SetCheatingDiscovered(cheaterID, partnerID, AffairDiscovery::Caught);
+                                    {
+                                        std::lock_guard<std::mutex> lock(mutex_);
+                                        auto tIt = activeThreads_.find(key);
+                                        if (tIt != activeThreads_.end()) {
+                                            tIt->second.caughtEvents.insert(CaughtEventKey{ cheaterID, victimID, partnerID });
+                                        }
+                                    }
+                                    MARAS_LOG_INFO("ReportIntimateInteraction: Caught in the act! {:08X} with {:08X} exposed to victim {:08X}",
+                                                   cheaterID, partnerID, victimID);
+
+                                    if (victimID == kPlayerFormID) {
+                                        std::string cName = cheaterActor ? cheaterActor->GetDisplayFullName() : ActorSvc::GetName(cheaterID);
+                                        std::string pName = partnerActor ? partnerActor->GetDisplayFullName() : ActorSvc::GetName(partnerID);
+                                        std::string msg = fmt::format("You caught {} with {}!", cName, pName);
+                                        RE::SendHUDMessage::ShowHUDMessage(msg.c_str());
+                                    }
+
+                                    if (victimActor && cheaterActor && partnerActor) {
+                                        SendCheatingCaughtEvent(victimActor, cheaterActor, partnerActor, key.framework, key.threadID, /*isWalkIn=*/false);
+                                    }
+                                } else {
+                                    relMgr.RecordCheating(cheaterID, victimID, partnerID, /*isSecret=*/true, AffairType::Casual, AffairStatus::Ongoing);
+                                    MARAS_LOG_INFO("ReportIntimateInteraction: Secret affair registered: {:08X} cheated on {:08X} with {:08X}",
+                                                   cheaterID, victimID, partnerID);
                                 }
                             }
-                            MARAS_LOG_INFO("ReportIntimateInteraction: Caught in the act! {:08X} with {:08X} exposed to victim {:08X}",
-                                           cheaterID, partnerID, victimID);
-
-                            if (victimID == kPlayerFormID) {
-                                std::string cName = cheaterActor->GetDisplayFullName();
-                                std::string pName = partnerActor->GetDisplayFullName();
-                                std::string msg = fmt::format("You caught {} with {}!", cName, pName);
-                                RE::SendHUDMessage::ShowHUDMessage(msg.c_str());
-                            }
-
-                            // Send Papyrus event with victim as sender
-                            SendCheatingCaughtEvent(victimActor, cheaterActor, partnerActor, framework, threadID, /*isWalkIn=*/false);
-                        } else {
-                            relMgr.RecordCheating(cheaterID, victimID, partnerID, /*isSecret=*/true, AffairType::Casual, AffairStatus::Ongoing);
-                            MARAS_LOG_INFO("ReportIntimateInteraction: Secret affair registered: {:08X} cheated on {:08X} with {:08X}",
-                                           cheaterID, victimID, partnerID);
                         }
-                    }
+                    };
+
+                    processCheater(actorA, actorB, idA, idB);
+                    processCheater(actorB, actorA, idB, idA);
                 }
-            };
 
-            processCheater(actorA, actorB, idA, idB);
-            processCheater(actorB, actorA, idB, idA);
-        }
+                // 2. Process open relationship detection
+                if (threadCopy.hasOpenRelationshipPotential) {
+                    auto processOpenWatcher = [&](RE::Actor* partnerActor, RE::Actor* sexPartnerActor, RE::FormID partnerID, RE::FormID sexPartnerID) {
+                        for (const auto& ow : threadCopy.openRelationshipWatchers) {
+                            if (ow.actorID != partnerID) continue;
 
-        // 2. Process open relationship detection
-        if (threadCopy.hasOpenRelationshipPotential) {
-            auto processOpenWatcher = [&](RE::Actor* partnerActor, RE::Actor* sexPartnerActor, RE::FormID partnerID, RE::FormID sexPartnerID) {
-                for (const auto& ow : threadCopy.openRelationshipWatchers) {
-                    if (ow.actorID != partnerID) continue;
+                            for (RE::FormID witnessID : ow.cachedPartnerIDs) {
+                                if (witnessID == 0 || witnessID == sexPartnerID || witnessID == partnerID) continue;
+                                if (std::find(threadCopy.actorIDs.begin(), threadCopy.actorIDs.end(), witnessID) != threadCopy.actorIDs.end()) {
+                                    continue;
+                                }
+                                // Co-spouse intimacy exemption
+                                if (witnessID == kPlayerFormID &&
+                                    relMgr.IsPlayerActiveMainPartner(partnerID) &&
+                                    relMgr.IsPlayerActiveMainPartner(sexPartnerID)) {
+                                    continue;
+                                }
 
-                    for (RE::FormID witnessID : ow.cachedPartnerIDs) {
-                        if (witnessID == 0 || witnessID == sexPartnerID || witnessID == partnerID) continue;
-                        if (std::find(threadCopy.actorIDs.begin(), threadCopy.actorIDs.end(), witnessID) != threadCopy.actorIDs.end()) {
-                            continue;
-                        }
-                        // Co-spouse intimacy exemption
-                        if (witnessID == kPlayerFormID &&
-                            relMgr.IsPlayerActiveMainPartner(partnerID) &&
-                            relMgr.IsPlayerActiveMainPartner(sexPartnerID)) {
-                            continue;
-                        }
+                                const auto* pairData = relMgr.GetNPCData(partnerID, witnessID);
+                                if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || !pairData->isOpen) {
+                                    continue;
+                                }
 
-                        const auto* pairData = relMgr.GetNPCData(partnerID, witnessID);
-                        if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || !pairData->isOpen) {
-                            continue;
-                        }
+                                auto* witnessActor = RE::TESForm::LookupByID<RE::Actor>(witnessID);
+                                bool isWitnessPresent = CheckVictimExposure(witnessActor, partnerActor);
 
-                        auto* witnessActor = RE::TESForm::LookupByID<RE::Actor>(witnessID);
-                        bool isWitnessPresent = CheckVictimExposure(witnessActor, partnerActor);
+                                if (isWitnessPresent) {
+                                    CaughtEventKey witnessKey{ partnerID, witnessID, sexPartnerID };
+                                    bool alreadySent = false;
+                                    {
+                                        std::lock_guard<std::mutex> lock(mutex_);
+                                        auto tIt = activeThreads_.find(key);
+                                        if (tIt != activeThreads_.end()) {
+                                            if (tIt->second.openRelationshipWitnessEvents.contains(witnessKey)) {
+                                                alreadySent = true;
+                                            } else {
+                                                tIt->second.openRelationshipWitnessEvents.insert(witnessKey);
+                                            }
+                                        }
+                                    }
 
-                        if (isWitnessPresent) {
-                            CaughtEventKey witnessKey{ partnerID, witnessID, sexPartnerID };
-                            bool alreadySent = false;
-                            {
-                                std::lock_guard<std::mutex> lock(mutex_);
-                                auto tIt = activeThreads_.find(key);
-                                if (tIt != activeThreads_.end()) {
-                                    if (tIt->second.openRelationshipWitnessEvents.contains(witnessKey)) {
-                                        alreadySent = true;
-                                    } else {
-                                        tIt->second.openRelationshipWitnessEvents.insert(witnessKey);
+                                    if (!alreadySent && witnessActor && partnerActor && sexPartnerActor) {
+                                        MARAS_LOG_INFO("ReportIntimateInteraction: Open relationship witnessed! Partner {:08X} with {:08X} witnessed by {:08X}",
+                                                       partnerID, sexPartnerID, witnessID);
+
+                                        SendOpenRelationshipWalkInEvent(witnessActor, partnerActor, sexPartnerActor, key.framework, key.threadID, /*isWalkIn=*/false);
                                     }
                                 }
                             }
-
-                            if (!alreadySent) {
-                                MARAS_LOG_INFO("ReportIntimateInteraction: Open relationship witnessed! Partner {:08X} with {:08X} witnessed by {:08X}",
-                                               partnerID, sexPartnerID, witnessID);
-
-                                // Send Papyrus event with witness as sender
-                                SendOpenRelationshipWalkInEvent(witnessActor, partnerActor, sexPartnerActor, framework, threadID, /*isWalkIn=*/false);
-                            }
                         }
-                    }
-                }
-            };
+                    };
 
-            processOpenWatcher(actorA, actorB, idA, idB);
-            processOpenWatcher(actorB, actorA, idB, idA);
-        }
+                    processOpenWatcher(actorA, actorB, idA, idB);
+                    processOpenWatcher(actorB, actorA, idB, idA);
+                }
+            });
     }
 
     void IntimateThreadService::ClearIntimateThread(const std::string& framework, int32_t threadID) {

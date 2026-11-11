@@ -27,6 +27,10 @@
                     {% elif childRelation == "stepson" or childRelation == "son" %}
                         {% set bioRelation = "son" %}
                     {% endif %}
+                    {% set hideChildLineageInTargetMode = render_mode == "dialogue_target" and existsIn(child, "has_undiscovered_paternity_secret") and child.has_undiscovered_paternity_secret %}
+                    {% if hideChildLineageInTargetMode and (childRelation == "stepdaughter" or childRelation == "stepson") %}
+                        {% set childRelation = bioRelation %}
+                    {% endif %}
                     {% if existsIn(child, "stage") and child.stage == "unborn" %}
                         {{child.name}} is an unborn {{childRelation}} currently in gestation in the mother's womb.
                     {% elif existsIn(child, "stage") and child.stage == "infant" %}
@@ -36,7 +40,8 @@
                     {% elif existsIn(child, "stage") and child.stage == "adult" %}
                         {{child.name}} is a grown adult {{childRelation}} (who has completed their training and is now an adult follower).
                     {% endif %}
-                    {% if render_mode != "dialogue_target" and existsIn(child, "paternity_secret") and existsIn(child.paternity_secret, "mother_partner") and child.paternity_secret.mother_partner.name != "" and child.paternity_secret.mother_partner.name != "None" and child.paternity_secret.mother_partner.uuid != 0 %}
+                    {% if hideChildLineageInTargetMode %}
+                    {% elif render_mode != "dialogue_target" and existsIn(child, "paternity_secret") and existsIn(child.paternity_secret, "mother_partner") and child.paternity_secret.mother_partner.name != "" and child.paternity_secret.mother_partner.name != "None" and child.paternity_secret.mother_partner.uuid != 0 %}
                         {% set pSecret = child.paternity_secret %}
                         {% set bioFatherName = pSecret.biological_father.name %}
                         {% set partnerName = pSecret.mother_partner.name %}
@@ -104,19 +109,35 @@
         {% endfor %}
     {% endif %}
     {% if existsIn(profile, "non_custodial_children") and length(profile.non_custodial_children) > 0 %}
-        ## {{npcName}}'s children living elsewhere
+        {% set visibleNonCustodial = [] %}
         {% for child in profile.non_custodial_children %}
-            {% set ncBioRelation = "child" %}
-            {% if existsIn(child, "gender") and child.gender == "female" %}
-                {% set ncBioRelation = "daughter" %}
-            {% elif existsIn(child, "gender") and child.gender == "male" %}
-                {% set ncBioRelation = "son" %}
-            {% elif existsIn(child, "relation") and (child.relation == "stepdaughter" or child.relation == "daughter") %}
-                {% set ncBioRelation = "daughter" %}
-            {% elif existsIn(child, "relation") and (child.relation == "stepson" or child.relation == "son") %}
-                {% set ncBioRelation = "son" %}
+            {% if not (render_mode == "dialogue_target" and existsIn(child, "is_paternity_secret") and child.is_paternity_secret) %}
+                {% set visibleNonCustodial = append(visibleNonCustodial, child) %}
             {% endif %}
-            {{npcName}} has a biological {{ncBioRelation}}, {{child.name}}{% if existsIn(child, "other_bio_parent") and child.other_bio_parent.name != "" and child.other_bio_parent.name != "None" %} (other parent: {{child.other_bio_parent.name}}){% endif %}, currently living in the custody of {{child.guardians.names}}.
         {% endfor %}
+        {% if length(visibleNonCustodial) > 0 %}
+            ## {{npcName}}'s children living elsewhere
+            {% for child in visibleNonCustodial %}
+                {% set ncBioRelation = "child" %}
+                {% if existsIn(child, "gender") and child.gender == "female" %}
+                    {% set ncBioRelation = "daughter" %}
+                {% elif existsIn(child, "gender") and child.gender == "male" %}
+                    {% set ncBioRelation = "son" %}
+                {% elif existsIn(child, "relation") and (child.relation == "stepdaughter" or child.relation == "daughter") %}
+                    {% set ncBioRelation = "daughter" %}
+                {% elif existsIn(child, "relation") and (child.relation == "stepson" or child.relation == "son") %}
+                    {% set ncBioRelation = "son" %}
+                {% endif %}
+                {% set ncOtherParentName = "" %}
+                {% if render_mode == "dialogue_target" and existsIn(child, "is_other_parent_secret") and child.is_other_parent_secret %}
+                    {% if existsIn(child, "public_other_parent") and child.public_other_parent.name != "" and child.public_other_parent.name != "None" %}
+                        {% set ncOtherParentName = child.public_other_parent.name %}
+                    {% endif %}
+                {% elif existsIn(child, "other_bio_parent") and child.other_bio_parent.name != "" and child.other_bio_parent.name != "None" %}
+                    {% set ncOtherParentName = child.other_bio_parent.name %}
+                {% endif %}
+                {{npcName}} has a biological {{ncBioRelation}}, {{child.name}}{% if ncOtherParentName != "" %} (other parent: {{ncOtherParentName}}){% endif %}, currently living in the custody of {{child.guardians.names}}.
+            {% endfor %}
+        {% endif %}
     {% endif %}
 {% endif %}

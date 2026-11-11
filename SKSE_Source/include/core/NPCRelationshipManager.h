@@ -681,6 +681,7 @@ namespace MARAS {
         bool SetHomeMarker(RE::FormID npcFormID, RE::FormID markerFormID);
         std::optional<RE::FormID> GetHomeMarker(RE::FormID npcFormID) const;
         RE::TESObjectREFR* GetOrCreateHomeMarker(RE::Actor* npcActor);
+        void ClearCurrentHome(RE::FormID npcFormID);
 
         // Keyword persistence — track keywords added at runtime so they survive reloads
         bool AddTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID);

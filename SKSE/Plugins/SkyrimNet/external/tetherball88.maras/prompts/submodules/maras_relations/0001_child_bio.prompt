@@ -21,6 +21,10 @@
         {% elif myChildRelation == "stepson" or myChildRelation == "son" %}
             {% set bioRelation = "son" %}
         {% endif %}
+        {% set hideParentageSecretInTargetMode = render_mode == "dialogue_target" and existsIn(parents, "has_undiscovered_paternity_secret") and parents.has_undiscovered_paternity_secret %}
+        {% if hideParentageSecretInTargetMode and (myChildRelation == "stepdaughter" or myChildRelation == "stepson") %}
+            {% set myChildRelation = bioRelation %}
+        {% endif %}
         {% if existsIn(parents, "stage") and parents.stage == "adult" %}
             {{npcName}} is a grown adult {{myChildRelation}} (completed training{% if existsIn(parents, "training_location") %} at {{parents.training_location}}{% endif %}, now an adult follower).
         {% elif existsIn(parents, "stage") and parents.stage == "training" %}
@@ -44,16 +48,18 @@
             {% else %}
                 {{npcName}} is an adopted {{myChildRelation}}.
             {% endif %}
-            {% if existsIn(parents, "biological_parents") %}
-                Their biological parents are {{parents.biological_parents.names}}.
-            {% elif existsIn(parents, "bio_mother") and existsIn(parents, "bio_father") %}
-                Their biological mother is {{parents.bio_mother.name}} and biological father is {{parents.bio_father.name}}.
-            {% elif existsIn(parents, "bio_mother") %}
-                Their biological mother is {{parents.bio_mother.name}} (biological father unknown).
-            {% elif existsIn(parents, "bio_father") %}
-                Their biological father is {{parents.bio_father.name}} (biological mother unknown).
-            {% else %}
-                Their biological parentage is unknown (orphan).
+            {% if not hideParentageSecretInTargetMode %}
+                {% if existsIn(parents, "biological_parents") %}
+                    Their biological parents are {{parents.biological_parents.names}}.
+                {% elif existsIn(parents, "bio_mother") and existsIn(parents, "bio_father") %}
+                    Their biological mother is {{parents.bio_mother.name}} and biological father is {{parents.bio_father.name}}.
+                {% elif existsIn(parents, "bio_mother") %}
+                    Their biological mother is {{parents.bio_mother.name}} (biological father unknown).
+                {% elif existsIn(parents, "bio_father") %}
+                    Their biological father is {{parents.bio_father.name}} (biological mother unknown).
+                {% else %}
+                    Their biological parentage is unknown (orphan).
+                {% endif %}
             {% endif %}
         {% else %}
             {% if existsIn(parents, "stage") and (parents.stage == "unborn" or parents.stage == "infant") %}
@@ -64,10 +70,10 @@
                 {% elif existsIn(parents, "current_parents") %}
                     {{npcName}} is the {{myChildRelation}} of {{parents.current_parents.names}}.
                 {% endif %}
-            {% elif existsIn(parents, "paternity_secret") and existsIn(parents.paternity_secret, "is_secret_for_partner") and parents.paternity_secret.is_secret_for_partner %}
+            {% elif hideParentageSecretInTargetMode or (existsIn(parents, "paternity_secret") and existsIn(parents.paternity_secret, "is_secret_for_partner") and parents.paternity_secret.is_secret_for_partner) %}
                 {% if existsIn(parents, "mother") and existsIn(parents, "father") %}
-                    {{npcName}} is raised as the {{myChildRelation}} of {{parents.mother.name}} and {{parents.father.name}}, believing {{parents.father.name}} is their biological father.
-                {% elif existsIn(parents, "mother") and existsIn(parents.paternity_secret, "mother_partner") and parents.paternity_secret.mother_partner.name != "" and parents.paternity_secret.mother_partner.name != "None" %}
+                    {{npcName}} is raised as the {{myChildRelation}} of {{parents.mother.name}} and {{parents.father.name}}{% if not hideParentageSecretInTargetMode %}, believing {{parents.father.name}} is their biological father{% endif %}.
+                {% elif not hideParentageSecretInTargetMode and existsIn(parents, "mother") and existsIn(parents, "paternity_secret") and existsIn(parents.paternity_secret, "mother_partner") and parents.paternity_secret.mother_partner.name != "" and parents.paternity_secret.mother_partner.name != "None" %}
                     {{npcName}} is raised by {{parents.mother.name}} as a single parent, believing {{parents.paternity_secret.mother_partner.name}} is their biological father.
                 {% elif existsIn(parents, "current_parents") %}
                     {{npcName}} is raised by {{parents.current_parents.names}}.
@@ -146,7 +152,11 @@
                 {% endif %}
             {% endif %}
         {% endif %}
-        {% if existsIn(parents, "siblings") %}
+        {% if render_mode == "dialogue_target" %}
+            {% if existsIn(parents, "siblings_public") %}
+                {{npcName}} has siblings: {{parents.siblings_public.names}}.
+            {% endif %}
+        {% elif existsIn(parents, "siblings") %}
             {{npcName}} has siblings: {{parents.siblings.names}}.
         {% endif %}
         {% if existsIn(parents, "pet") %}

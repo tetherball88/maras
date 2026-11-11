@@ -1,26 +1,20 @@
 #include "core/SpouseAssetsService.h"
 
+#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/HomeCellService.h"
 #include "core/NPCIndex.h"
+#include "core/NPCRelationshipManager.h"
 #include "services/ActorService.h"
 #include "utils/Common.h"
 
 namespace MARAS {
 
     namespace {
-        // Helper to lookup an actor by formID via NPCIndex
-        inline RE::Actor* LookupActor(RE::FormID id) {
-            if (id == 0) {
-                return nullptr;
-            }
-            return NPCIndex::GetSingleton().GetActorFromFormId(id);
-        }
-
-        // Iterate all bed references registered for an NPC and apply a function
-        inline void ForEachNpcBed(RE::Actor* actor, const std::function<void(RE::TESObjectREFR*)>& fn) {
-            if (!actor) return;
-            auto beds = MARAS::HomeCellService::GetSingleton().GetNpcBeds(actor);
+        // Iterate all bed references registered for an NPC (by FormID) and apply a function
+        inline void ForEachNpcBed(RE::FormID npcFormID, const std::function<void(RE::TESObjectREFR*)>& fn) {
+            if (npcFormID == 0 || IsSyntheticChildID(npcFormID)) return;
+            auto beds = MARAS::HomeCellService::GetSingleton().GetNpcBeds(npcFormID);
             for (auto bedId : beds) {
                 if (auto form = RE::TESForm::LookupByID(bedId)) {
                     if (auto ref = form->As<RE::TESObjectREFR>()) {
@@ -82,13 +76,10 @@ namespace MARAS {
     // Note: door queries are provided by HomeCellService; this service doesn't store door lists.
 
     bool SpouseAssetsService::ShareHouseWithPlayer(RE::FormID npcFormID) {
-        if (npcFormID == 0) return false;
+        if (npcFormID == 0 || IsSyntheticChildID(npcFormID) || !ActorSvc::IsValid(npcFormID)) return false;
 
-        auto actor = LookupActor(npcFormID);
-        if (!actor) return false;
-
-        // Lookup npc home from HomeCellService
-        RE::FormID homeCell = MARAS::HomeCellService::GetSingleton().GetNpcHome(actor);
+        // Lookup npc home from HomeCellService by FormID (supports unloaded persistent spouses)
+        RE::FormID homeCell = MARAS::HomeCellService::GetSingleton().GetNpcHome(npcFormID);
         if (homeCell == 0) {
             MARAS_LOG_WARN("ShareHouseWithPlayer: NPC {:08X} has no known home", npcFormID);
             return false;
@@ -107,42 +98,37 @@ namespace MARAS {
     }
 
     bool SpouseAssetsService::StopShareHouseWithPlayer(RE::FormID npcFormID) {
-        if (npcFormID == 0) return false;
+        if (npcFormID == 0 || IsSyntheticChildID(npcFormID)) return false;
 
         bool found = false;
 
-        // Try to obtain the actor and home from HomeCellService. If we can find the home,
-        // only operate on that home entry. Otherwise fall back to scanning all shared homes.
-        auto actor = LookupActor(npcFormID);
-        if (actor) {
-            RE::FormID home = MARAS::HomeCellService::GetSingleton().GetNpcHome(actor);
-            if (home != 0) {
-                auto it = sharedHomes_.find(home);
-                if (it != sharedHomes_.end()) {
-                    auto& data = it->second;
+        // Try to obtain the home directly by FormID from HomeCellService.
+        RE::FormID home = MARAS::HomeCellService::GetSingleton().GetNpcHome(npcFormID);
+        if (home != 0) {
+            auto it = sharedHomes_.find(home);
+            if (it != sharedHomes_.end()) {
+                auto& data = it->second;
 
-                    if (data.sharingSpouses.contains(npcFormID)) {
-                        data.sharingSpouses.erase(npcFormID);
-                        StopShareFurniture(npcFormID);
-                        found = true;
-                    }
+                if (data.sharingSpouses.contains(npcFormID)) {
+                    data.sharingSpouses.erase(npcFormID);
+                    StopShareFurniture(npcFormID);
+                    found = true;
+                }
 
-                    data.sharedWithPlayer = !data.sharingSpouses.empty();
-                    // If no more spouses sharing this home, restore original public state if needed
-                    if (!data.sharedWithPlayer) {
-                        RestoreCellOriginalPublicState(home, data);
-                        sharedHomes_.erase(it);
-                    }
+                data.sharedWithPlayer = !data.sharingSpouses.empty();
+                // If no more spouses sharing this home, restore original public state if needed
+                if (!data.sharedWithPlayer) {
+                    RestoreCellOriginalPublicState(home, data);
+                    sharedHomes_.erase(it);
                 }
             }
         }
 
-        // Fallback: scan all registered homes if we couldn't resolve the actor/home above
+        // Fallback: scan all registered homes if we couldn't resolve the home above
         if (!found) {
             for (auto it = sharedHomes_.begin(); it != sharedHomes_.end();) {
                 auto& data = it->second;
                 if (data.sharingSpouses.erase(npcFormID) > 0) {
-                    // Attempt to restore furniture ownership (may no-op if actor can't be looked up)
                     StopShareFurniture(npcFormID);
                     found = true;
 
@@ -213,37 +199,40 @@ namespace MARAS {
         if (!serialization) return false;
         Revert();
 
+        auto failLoad = [this]() -> bool {
+            Revert();
+            return false;
+        };
+
         constexpr std::uint32_t kMaxRecords = 10000;
 
         std::uint32_t cellCount = 0;
-        if (!serialization->ReadRecordData(cellCount)) return false;
+        if (!serialization->ReadRecordData(cellCount)) return failLoad();
         if (cellCount > kMaxRecords) {
             MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt cellCount {}", cellCount);
-            return false;
+            return failLoad();
         }
-
-        std::vector<RE::FormID> skippedDeadSpouses;
 
         for (std::uint32_t i = 0; i < cellCount; ++i) {
             RE::FormID savedCell = 0;
-            if (!serialization->ReadRecordData(savedCell)) return false;
+            if (!serialization->ReadRecordData(savedCell)) return failLoad();
 
             // Resolve cell FormID
             RE::FormID cellId = 0;
-            if (savedCell != 0 && !serialization->ResolveFormID(savedCell, cellId)) {
+            if (savedCell == 0 || !serialization->ResolveFormID(savedCell, cellId) || cellId == 0) {
                 // Unresolvable cell; skip its data payload safely
                 std::uint8_t sharedFlag = 0;
-                if (!serialization->ReadRecordData(sharedFlag)) return false;
+                if (!serialization->ReadRecordData(sharedFlag)) return failLoad();
                 std::uint8_t recordedFlag = 0;
-                if (!serialization->ReadRecordData(recordedFlag)) return false;
+                if (!serialization->ReadRecordData(recordedFlag)) return failLoad();
                 std::uint8_t origState = 0;
-                if (!serialization->ReadRecordData(origState)) return false;
+                if (!serialization->ReadRecordData(origState)) return failLoad();
                 std::uint32_t sharingCount = 0;
-                if (!serialization->ReadRecordData(sharingCount)) return false;
-                if (sharingCount > kMaxRecords) return false;
+                if (!serialization->ReadRecordData(sharingCount)) return failLoad();
+                if (sharingCount > kMaxRecords) return failLoad();
                 for (std::uint32_t j = 0; j < sharingCount; ++j) {
                     RE::FormID discard = 0;
-                    if (!serialization->ReadRecordData(discard)) return false;
+                    if (!serialization->ReadRecordData(discard)) return failLoad();
                 }
                 continue;
             }
@@ -252,83 +241,60 @@ namespace MARAS {
 
             // shared flag
             std::uint8_t sharedFlag = 0;
-            if (!serialization->ReadRecordData(sharedFlag)) return false;
+            if (!serialization->ReadRecordData(sharedFlag)) return failLoad();
             data.sharedWithPlayer = (sharedFlag != 0);
 
             // original public recorded/state
             std::uint8_t recordedFlag = 0;
-            if (!serialization->ReadRecordData(recordedFlag)) return false;
+            if (!serialization->ReadRecordData(recordedFlag)) return failLoad();
             data.originalPublicRecorded = (recordedFlag != 0);
             std::uint8_t origState = 0;
-            if (!serialization->ReadRecordData(origState)) return false;
+            if (!serialization->ReadRecordData(origState)) return failLoad();
             data.originalPublicState = (origState != 0);
 
-            // sharing spouses
+            // sharing spouses (defer dead/unmarried reconciliation to FinalizeLoad after all chunks load)
             std::uint32_t sharingCount = 0;
-            if (!serialization->ReadRecordData(sharingCount)) return false;
+            if (!serialization->ReadRecordData(sharingCount)) return failLoad();
             if (sharingCount > kMaxRecords) {
                 MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt sharingCount {}", sharingCount);
-                return false;
+                return failLoad();
             }
             for (std::uint32_t j = 0; j < sharingCount; ++j) {
                 RE::FormID savedSid = 0;
-                if (!serialization->ReadRecordData(savedSid)) return false;
+                if (!serialization->ReadRecordData(savedSid)) return failLoad();
                 RE::FormID resolvedSid = 0;
-                if (savedSid != 0 && serialization->ResolveFormID(savedSid, resolvedSid)) {
-                    // Skip dead or invalid actors
-                    auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(resolvedSid);
-                    if (!actor || actor->IsDead()) {
-                        MARAS_LOG_INFO("SpouseAssetsService::Load - skipping dead/invalid actor {:08X}", resolvedSid);
-                        if (actor) {
-                            skippedDeadSpouses.push_back(resolvedSid);
-                        }
-                        continue;
-                    }
+                if (savedSid != 0 && !IsSyntheticChildID(savedSid) &&
+                    serialization->ResolveFormID(savedSid, resolvedSid) && resolvedSid != 0) {
                     data.sharingSpouses.insert(resolvedSid);
                 }
             }
 
-            // Store valid shared home or restore original public state if all spouses died
-            if (!data.sharingSpouses.empty()) {
-                data.sharedWithPlayer = true;
-                sharedHomes_.emplace(cellId, std::move(data));
-            } else {
-                RestoreCellOriginalPublicState(cellId, data);
-            }
+            sharedHomes_.emplace(cellId, std::move(data));
         }
 
-        // Version 7+: Load original bed owners before restoring dead spouse beds or re-applying furniture sharing
+        // Version 7+: Load original bed owners before FinalizeLoad restores or re-applies furniture sharing
         if (version >= 7) {
             std::uint32_t bedOwnerCount = 0;
             if (!serialization->ReadRecordData(bedOwnerCount)) {
-                return false;
+                return failLoad();
             }
             if (bedOwnerCount > kMaxRecords) {
                 MARAS_LOG_ERROR("SpouseAssetsService::Load - corrupt bedOwnerCount {}", bedOwnerCount);
-                return false;
+                return failLoad();
             }
             for (std::uint32_t i = 0; i < bedOwnerCount; ++i) {
                 RE::FormID savedBedID = 0, savedOwnerID = 0;
                 if (!serialization->ReadRecordData(savedBedID) || !serialization->ReadRecordData(savedOwnerID)) {
-                    return false;
+                    return failLoad();
                 }
                 RE::FormID resolvedBedID = 0, resolvedOwnerID = 0;
-                if (savedBedID != 0 && serialization->ResolveFormID(savedBedID, resolvedBedID)) {
-                    if (savedOwnerID != 0 && serialization->ResolveFormID(savedOwnerID, resolvedOwnerID)) {
+                if (savedBedID != 0 && serialization->ResolveFormID(savedBedID, resolvedBedID) && resolvedBedID != 0) {
+                    if (savedOwnerID == 0) {
+                        originalBedOwners_[resolvedBedID] = 0;
+                    } else if (serialization->ResolveFormID(savedOwnerID, resolvedOwnerID) && resolvedOwnerID != 0) {
                         originalBedOwners_[resolvedBedID] = resolvedOwnerID;
                     }
                 }
-            }
-        }
-
-        for (RE::FormID deadSpouseId : skippedDeadSpouses) {
-            StopShareFurniture(deadSpouseId);
-        }
-
-        for (auto& [cellId, data] : sharedHomes_) {
-            ApplyCellSharedPublicState(cellId, data);
-            for (auto spouseId : data.sharingSpouses) {
-                ShareFurniture(spouseId);
             }
         }
 
@@ -337,10 +303,53 @@ namespace MARAS {
         return true;
     }
 
+    void SpouseAssetsService::FinalizeLoad() {
+        auto& deceasedReg = DeceasedRegistry::GetSingleton();
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto& idx = NPCIndex::GetSingleton();
+
+        for (auto it = sharedHomes_.begin(); it != sharedHomes_.end();) {
+            const RE::FormID cellId = it->first;
+            auto& data = it->second;
+
+            std::vector<RE::FormID> invalidSpouses;
+            for (RE::FormID spouseId : data.sharingSpouses) {
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(spouseId);
+                if (!actor) {
+                    actor = idx.GetActorFromFormId(spouseId);
+                }
+                if (deceasedReg.IsDeceased(spouseId) ||
+                    (actor && actor->IsDead()) ||
+                    !ActorSvc::IsValid(spouseId) ||
+                    !relMgr.IsMarried(spouseId)) {
+                    invalidSpouses.push_back(spouseId);
+                }
+            }
+
+            for (RE::FormID invalidId : invalidSpouses) {
+                MARAS_LOG_INFO("SpouseAssetsService::FinalizeLoad - removing dead/unmarried spouse {:08X} from shared cell {:08X}",
+                               invalidId, cellId);
+                data.sharingSpouses.erase(invalidId);
+                StopShareFurniture(invalidId);
+            }
+
+            if (data.sharingSpouses.empty()) {
+                RestoreCellOriginalPublicState(cellId, data);
+                it = sharedHomes_.erase(it);
+                continue;
+            }
+
+            data.sharedWithPlayer = true;
+            ApplyCellSharedPublicState(cellId, data);
+            for (RE::FormID spouseId : data.sharingSpouses) {
+                ShareFurniture(spouseId);
+            }
+            ++it;
+        }
+    }
+
     void SpouseAssetsService::ShareFurniture(RE::FormID npcFormID) {
-        if (npcFormID == 0) return;
-        auto actor = LookupActor(npcFormID);
-        if (!actor) return;
+        if (npcFormID == 0 || IsSyntheticChildID(npcFormID) || !ActorSvc::IsValid(npcFormID)) return;
 
         auto playerFaction = MARAS::FormCache::GetSingleton().GetPlayerFaction();
         if (!playerFaction) {
@@ -348,14 +357,13 @@ namespace MARAS {
             return;
         }
 
-        // Record original bed owner before transferring to player faction
-        ForEachNpcBed(actor, [this, playerFaction](RE::TESObjectREFR* ref) {
+        // Record original bed owner (including 0 when unowned) before transferring to player faction
+        ForEachNpcBed(npcFormID, [this, playerFaction](RE::TESObjectREFR* ref) {
             const RE::FormID bedID = ref->GetFormID();
             if (!originalBedOwners_.contains(bedID)) {
-                if (auto* origOwner = ref->extraList.GetOwner()) {
-                    if (origOwner != playerFaction) {
-                        originalBedOwners_[bedID] = origOwner->GetFormID();
-                    }
+                auto* origOwner = ref->extraList.GetOwner();
+                if (origOwner != playerFaction) {
+                    originalBedOwners_[bedID] = origOwner ? origOwner->GetFormID() : 0;
                 }
             }
             ref->extraList.SetOwner(playerFaction);
@@ -363,37 +371,32 @@ namespace MARAS {
     }
 
     void SpouseAssetsService::StopShareFurniture(RE::FormID npcFormID) {
-        if (npcFormID == 0) return;
-
-        auto actor = LookupActor(npcFormID);
-        if (!actor) return;
+        if (npcFormID == 0 || IsSyntheticChildID(npcFormID)) return;
 
         auto actorBase = ActorSvc::GetActorBase(npcFormID);
 
-        ForEachNpcBed(actor, [this, actorBase](RE::TESObjectREFR* ref) {
+        ForEachNpcBed(npcFormID, [this, actorBase](RE::TESObjectREFR* ref) {
             const RE::FormID bedID = ref->GetFormID();
-            RE::TESForm* restoredOwner = nullptr;
             auto it = originalBedOwners_.find(bedID);
             if (it != originalBedOwners_.end()) {
-                restoredOwner = RE::TESForm::LookupByID(it->second);
+                const RE::FormID savedOwnerID = it->second;
                 originalBedOwners_.erase(it);
+                if (savedOwnerID == 0) {
+                    ref->extraList.SetOwner(nullptr);
+                    return;
+                }
+                if (auto* restoredOwner = RE::TESForm::LookupByID(savedOwnerID)) {
+                    ref->extraList.SetOwner(restoredOwner);
+                    return;
+                }
             }
-            if (!restoredOwner) {
-                restoredOwner = actorBase;
-            }
-            if (restoredOwner) {
-                ref->extraList.SetOwner(restoredOwner);
+            if (actorBase) {
+                ref->extraList.SetOwner(actorBase);
             }
         });
     }
 
     void SpouseAssetsService::Revert() {
-        for (const auto& [cellID, data] : sharedHomes_) {
-            for (auto spouseID : data.sharingSpouses) {
-                StopShareFurniture(spouseID);
-            }
-            RestoreCellOriginalPublicState(cellID, data);
-        }
         sharedHomes_.clear();
         originalBedOwners_.clear();
         MARAS_LOG_INFO("SpouseAssetsService: reverted data");

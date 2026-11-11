@@ -65,13 +65,19 @@ namespace MARAS {
                                        const std::string& updatableBlocksCSV = "");
 
     private:
+        struct WorkerQueueState {
+            std::mutex queueMutex;
+            std::deque<std::unique_ptr<ChildProfileContextData>> pendingQueue;
+            bool workerActive{ false };
+        };
+
         SkyrimNetProfileService();
         ~SkyrimNetProfileService();
         SkyrimNetProfileService(const SkyrimNetProfileService&) = delete;
         SkyrimNetProfileService& operator=(const SkyrimNetProfileService&) = delete;
 
         void EnqueueProfileTask(std::unique_ptr<ChildProfileContextData> taskData);
-        void WorkerLoop(std::stop_token stopToken);
+        static void WorkerLoop(std::shared_ptr<WorkerQueueState> queueState, std::stop_token stopToken);
 
         static uint64_t MakeStageKey(RE::FormID childID, ChildStage stage) noexcept {
             return (static_cast<uint64_t>(childID) << 8) | static_cast<uint64_t>(static_cast<uint8_t>(stage));
@@ -81,10 +87,8 @@ namespace MARAS {
         mutable std::mutex mutex_;
         std::unordered_set<uint64_t> updatedActorStages_;
 
-        mutable std::mutex queueMutex_;
-        std::deque<std::unique_ptr<ChildProfileContextData>> pendingQueue_;
+        std::shared_ptr<WorkerQueueState> queueState_;
         std::jthread workerThread_;
-        bool workerActive_{ false };
     };
 
 }  // namespace MARAS

@@ -5,6 +5,8 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/NPCIndex.h"
 #include "core/QuestEventConfigLoader.h"
+#include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "utils/EnumUtils.h"
 #include "utils/FormUtils.h"
@@ -129,12 +131,25 @@ namespace MARAS {
 
         // Handle "deceased" as a special case - archive in DeceasedRegistry and clean up active relationship state
         if (StringUtils::CaseInsensitiveEquals(statusKeyword, "deceased")) {
-            if (auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID)) {
-                DeceasedRegistry::GetSingleton().RecordDeceasedAdult(actor, false, nullptr);
-            }
-            bool success = manager.HandleNPCDeath(npcFormID);
-            if (!success) {
-                manager.EvaluateChildCustodyOnDeath(npcFormID);
+            auto childEntryOpt = manager.GetChildEntry(npcFormID);
+            auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
+            if (childEntryOpt.has_value() && childEntryOpt->stage != ChildStage::Adult) {
+                if (actor) {
+                    DeceasedRegistry::GetSingleton().RecordDeceasedChild(actor, childEntryOpt.value(), false, nullptr);
+                }
+                manager.RemoveChild(npcFormID);
+            } else {
+                if (actor) {
+                    DeceasedRegistry::GetSingleton().RecordDeceasedAdult(
+                        actor, false, nullptr, childEntryOpt ? &childEntryOpt.value() : nullptr);
+                }
+                if (childEntryOpt.has_value()) {
+                    manager.RemoveChild(npcFormID);
+                }
+                bool success = manager.HandleNPCDeath(npcFormID);
+                if (!success) {
+                    manager.EvaluateChildCustodyOnDeath(npcFormID);
+                }
             }
             MARAS_LOG_INFO("promoteToStatus: Processed deceased transition for NPC {} (0x{:08X}) via quest event ({})",
                            npcName, npcFormID, context);
@@ -427,16 +442,21 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(event->formID);
-        if (!quest) {
-            return RE::BSEventNotifyControl::kContinue;
-        }
-
-        if (event->started) {
-            manager.ExecuteQuestStartCommands(quest);
-        } else {
-            manager.ExecuteQuestStopCommands(quest);
-        }
+        const RE::FormID questFormID = event->formID;
+        const bool started = event->started;
+        AddCurrentEpochTask("QuestStartStopEventSink::ProcessEvent", [questFormID, started]() {
+            std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+            auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(questFormID);
+            if (!quest) {
+                return;
+            }
+            auto& mgr = QuestEventManager::GetSingleton();
+            if (started) {
+                mgr.ExecuteQuestStartCommands(quest);
+            } else {
+                mgr.ExecuteQuestStopCommands(quest);
+            }
+        });
 
         return RE::BSEventNotifyControl::kContinue;
     }
@@ -467,12 +487,16 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(event->formID);
-        if (!quest) {
-            return RE::BSEventNotifyControl::kContinue;
-        }
-
-        manager.ExecuteQuestStageCommands(quest, event->stage);
+        const RE::FormID questFormID = event->formID;
+        const std::uint16_t stage = event->stage;
+        AddCurrentEpochTask("QuestStageEventSink::ProcessEvent", [questFormID, stage]() {
+            std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+            auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(questFormID);
+            if (!quest) {
+                return;
+            }
+            QuestEventManager::GetSingleton().ExecuteQuestStageCommands(quest, stage);
+        });
 
         return RE::BSEventNotifyControl::kContinue;
     }
