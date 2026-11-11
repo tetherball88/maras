@@ -640,11 +640,15 @@ namespace MARAS {
                 childFollowPkgID = childPkg->GetFormID();
             }
         }
-        if (childFollowPkgID != 0) {
+        RE::FormID adultTravelPkgID = 0;
+        if (auto* travelPkg = FormCache::GetSingleton().GetAdultChildTravelSandboxPackage()) {
+            adultTravelPkgID = travelPkg->GetFormID();
+        }
+        if (childFollowPkgID != 0 || adultTravelPkgID != 0) {
             const auto& allChildren = NPCRelationshipManager::GetSingleton().GetAllChildren();
             for (const auto& [childID, entry] : allChildren) {
                 if (IsSyntheticChildID(childID)) continue;
-                if (entry.stage == ChildStage::Child) {
+                if (entry.stage == ChildStage::Child && childFollowPkgID != 0) {
                     const bool isPlayerHousehold = (entry.guardianAID == kPlayerFormID || entry.guardianBID == kPlayerFormID);
                     const bool isNonPlayerTempChild = ((childID >> 24) == 0xFF) && !isPlayerHousehold;
                     const bool isUnhousedPlayerChild = isPlayerHousehold &&
@@ -655,10 +659,10 @@ namespace MARAS {
                         RE::FormID targetRefID = NPCRelationshipManager::GetSingleton().ResolveNonPlayerChildTarget(entry);
                         NPCRelationshipManager::GetSingleton().SetChildSandboxAroundParentLinkedRef(childID, targetRefID);
                     }
-                } else if (entry.stage == ChildStage::Adult) {
-                    newRegistry[childID] = childFollowPkgID;
+                } else if (entry.stage == ChildStage::Adult && adultTravelPkgID != 0 && !newRegistry.contains(childID)) {
                     RE::FormID targetMarkerID = AdultChildTravelService::GetSingleton().GetCurrentTargetMarkerID(childID);
                     if (targetMarkerID != 0) {
+                        newRegistry[childID] = adultTravelPkgID;
                         NPCRelationshipManager::GetSingleton().SetChildSandboxAroundParentLinkedRef(childID, targetMarkerID);
                     }
                 }

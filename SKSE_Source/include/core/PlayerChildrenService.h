@@ -135,6 +135,7 @@ namespace MARAS {
         // Serialization (decision 17 — own independent co-save record)
         [[nodiscard]] bool Save(SKSE::SerializationInterface* serialization) const;
         [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
+        void FinalizeLoad();
         void Revert();
 
         // Data dump

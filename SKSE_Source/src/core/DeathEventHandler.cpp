@@ -3,6 +3,7 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerChildrenService.h"
 #include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -41,8 +42,10 @@ namespace MARAS {
         RE::FormID killerID,
         bool isPlayerKiller)
     {
+        std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+
         auto* victim = RE::TESForm::LookupByID<RE::Actor>(victimID);
-        if (!victim || victim->IsDeleted()) {
+        if (!victim || victim->IsDeleted() || !victim->IsDead()) {
             return;
         }
 
@@ -60,13 +63,15 @@ namespace MARAS {
             if (childEntryOpt->stage != ChildStage::Adult) {
                 MARAS_LOG_INFO("DeathEventHandler: Registered child {:08X} ('{}') died. Killer is player: {}",
                                victimID, victim->GetDisplayFullName(), isPlayerKiller);
-                deceasedReg.RecordDeceasedChild(victim, childEntryOpt.value(), isPlayerKiller, killer);
+                const bool newlyRecorded = deceasedReg.RecordDeceasedChild(victim, childEntryOpt.value(), isPlayerKiller, killer);
                 relMgr.RemoveChild(victimID);
 
-                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                    SKSE::ModCallbackEvent modEvent("maras_child_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                    eventSource->SendEvent(&modEvent);
-                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
+                if (newlyRecorded) {
+                    if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+                        SKSE::ModCallbackEvent modEvent("maras_child_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
+                        eventSource->SendEvent(&modEvent);
+                        MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
+                    }
                 }
 
                 return;
@@ -76,13 +81,15 @@ namespace MARAS {
             // and child lineage), clean up ChildRegistryEntry / AdultChildTravelService, and dissolve adult state.
             MARAS_LOG_INFO("DeathEventHandler: Graduated adult child {:08X} ('{}') died. Killer is player: {}",
                            victimID, victim->GetDisplayFullName(), isPlayerKiller);
-            deceasedReg.RecordDeceasedAdult(victim, isPlayerKiller, killer, &childEntryOpt.value());
+            const bool newlyRecorded = deceasedReg.RecordDeceasedAdult(victim, isPlayerKiller, killer, &childEntryOpt.value());
             relMgr.RemoveChild(victimID);
 
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                eventSource->SendEvent(&modEvent);
-                MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for graduated adult child {:08X}", victimID);
+            if (newlyRecorded) {
+                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+                    SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
+                    eventSource->SendEvent(&modEvent);
+                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for graduated adult child {:08X}", victimID);
+                }
             }
 
             if (relMgr.IsRegistered(victimID)) {
@@ -135,13 +142,15 @@ namespace MARAS {
                            registeredID, victim->GetDisplayFullName(), isPlayerKiller);
 
             // Record in DeceasedRegistry BEFORE removing active records
-            deceasedReg.RecordDeceasedAdult(victim, isPlayerKiller, killer);
+            const bool newlyRecorded = deceasedReg.RecordDeceasedAdult(victim, isPlayerKiller, killer);
 
             // Dispatch mod event to Papyrus for ANY tracked actor who died
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                eventSource->SendEvent(&modEvent);
-                MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for {:08X}", registeredID);
+            if (newlyRecorded) {
+                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+                    SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
+                    eventSource->SendEvent(&modEvent);
+                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for {:08X}", registeredID);
+                }
             }
 
             // Perform death cleanup on active relationship records

@@ -39,7 +39,7 @@ namespace MARAS {
 
     bool IsSkyrimNetAvailable()
     {
-        if (Settings::GetSingleton().simulateNoSkyrimNet) {
+        if (Settings::GetSingleton().GetSimulateNoSkyrimNet()) {
             return false;
         }
         return GetModuleHandleW(L"SkyrimNet.dll") != nullptr;
@@ -105,7 +105,7 @@ namespace {
 
     static float GetNearbyActorsRadius()
     {
-        float settingRadius = Settings::GetSingleton().skyrimnetActionRadius;
+        float settingRadius = Settings::GetSingleton().GetSkyrimNetActionRadius();
         if (settingRadius > 0.0f) {
             return settingRadius;
         }
@@ -134,9 +134,18 @@ namespace {
         auto wrappedCallback = [decName, cb = std::move(callback)](RE::Actor* actor) -> std::string {
             const uint32_t actorFormId = actor ? actor->GetFormID() : 0u;
             MARAS_LOG_TRACE("[SkyrimNet] Invoking decorator '{}' for actor formId 0x{:08X}.", decName, actorFormId);
-            std::string result = cb(actor);
-            MARAS_LOG_TRACE("[SkyrimNet] Decorator '{}' returned for actor formId 0x{:08X}: '{}'.", decName, actorFormId, result);
-            return result;
+            try {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                std::string result = cb(actor);
+                MARAS_LOG_TRACE("[SkyrimNet] Decorator '{}' returned for actor formId 0x{:08X}: '{}'.", decName, actorFormId, result);
+                return result;
+            } catch (const std::exception& e) {
+                MARAS_LOG_ERROR("[SkyrimNet] Exception in decorator '{}' for actor 0x{:08X}: {}", decName, actorFormId, e.what());
+                return "";
+            } catch (...) {
+                MARAS_LOG_ERROR("[SkyrimNet] Unknown exception in decorator '{}' for actor 0x{:08X}", decName, actorFormId);
+                return "";
+            }
         };
 
         if (fn(name, description, std::move(wrappedCallback))) {
@@ -595,6 +604,14 @@ namespace {
                        record.affairPartnerID == partnerID;
             });
         };
+        auto isSecretAffairPair = [&](RE::FormID partnerID, bool ongoingOnly) {
+            return std::ranges::any_of(cheatingRecords, [&](const CheatingRecord& record) {
+                if (record.affairStatus == AffairStatus::Allowed || !record.isSecret) return false;
+                if (ongoingOnly && record.affairStatus != AffairStatus::Ongoing) return false;
+                return (record.cheaterID == actorFormID && record.affairPartnerID == partnerID) ||
+                       (record.affairPartnerID == actorFormID && record.cheaterID == partnerID);
+            });
+        };
         auto findOpenPrimary = [&](RE::FormID excludedPartnerID) -> RE::FormID {
             for (auto partnerID : partnerIDs) {
                 if (partnerID == excludedPartnerID) continue;
@@ -625,6 +642,9 @@ namespace {
                 if (isMainTierStatus(data->status)) {
                     relationship["is_open"] = data->isOpen;
                 }
+                if (isSecretAffairPair(partnerID, /*ongoingOnly=*/true)) {
+                    relationship["is_secret_affair"] = true;
+                }
 
                 const RE::FormID openPrimaryID = findOpenPrimary(partnerID);
                 if ((actorFormID == kPlayerFormID && playerPolygamyEnabled) ||
@@ -641,6 +661,9 @@ namespace {
                 nlohmann::json relationship;
                 relationship["partner"] = MakeNpcRef(partnerID);
                 relationship["status"] = statusToKey(data->status);
+                if (isSecretAffairPair(partnerID, /*ongoingOnly=*/false)) {
+                    relationship["is_secret_affair"] = true;
+                }
                 j["past_relationships"].push_back(std::move(relationship));
             }
         }
@@ -712,7 +735,7 @@ namespace {
             const bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
             const bool hasPresumedPartner = (motherPartnerID != 0 && !isBioSameAsPartner &&
                                              (motherID == 0 || !MatchesActor(motherPartnerID, motherID)) &&
-                                             (sec.isSecretForPartner || sec.discoveredByPartner || explicitPresumedFatherID != 0));
+                                             (sec.isSecretForPartner || explicitPresumedFatherID != 0));
             if (hasPresumedPartner && MatchesActor(perspectiveActorID, motherPartnerID)) {
                 return !sec.isSecretForPartner || sec.discoveredByPartner;
             }
@@ -784,6 +807,10 @@ namespace {
             }
 
             const bool secretFromPartnerActive = !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
+            const bool secretFromBioFatherActive = !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather;
+            if (sec.HasActiveSecret() && (secretFromPartnerActive || secretFromBioFatherActive)) {
+                childObj["has_undiscovered_paternity_secret"] = true;
+            }
             bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
             bool canActorKnow = canActorKnowPaternitySecret(actorFormID, motherID, motherPartnerID, explicitPresumedFatherID, bioFatherID, sec);
             bool hideSecretFromActor = (!isBioSameAsPartner && sec.HasActiveSecret() && !canActorKnow);
@@ -902,7 +929,10 @@ namespace {
                 petObj["type"] = CleanAnimalRaceName(ActorSvc::GetRaceName(petID));
                 childObj["pet"] = petObj;
             }
-            childObj["has_beastblood"] = childEntry.hasBeastblood;
+            const bool visibleBioParentHasBeastblood =
+                (childBioMotherID != 0 && NPCRelationshipManager::IsActorWerewolf(childBioMotherID)) ||
+                (effectiveBioFatherID != 0 && effectiveBioFatherID != kUnknownFatherFormID && NPCRelationshipManager::IsActorWerewolf(effectiveBioFatherID));
+            childObj["has_beastblood"] = childEntry.hasBeastblood && (!hideSecretFromActor || visibleBioParentHasBeastblood);
 
             return childObj;
         };
@@ -930,18 +960,27 @@ namespace {
                     childNamesByOtherParent[otherPID].push_back((*cObjOpt)["name"].get<std::string>());
                 }
             } else {
+                const auto& sec = childEntry.paternitySecret;
+                RE::FormID explicitPresumedFatherID = mgr.GetPresumedFather(childID);
                 RE::FormID motherPartnerID = mgr.GetMotherPartner(childID);
+                RE::FormID motherID = mgr.GetBioMother(childID);
+                if (motherPartnerID != 0 && motherID != 0 && explicitPresumedFatherID == 0 && !sec.isSecretForPartner &&
+                    !mgr.IsGuardian(childID, motherPartnerID) && isPastStatus(mgr.GetRelationshipStatus(motherID, motherPartnerID))) {
+                    motherPartnerID = 0;
+                }
+                RE::FormID effectivePresumedFatherID = explicitPresumedFatherID != 0 ? explicitPresumedFatherID : motherPartnerID;
+
+                const bool secretForPartnerActive = sec.HasActiveSecret() && !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
+                const bool secretForBioFatherActive = sec.HasActiveSecret() && !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather;
+
                 bool isBioParent = MatchesActor(childEntry.bioMotherID, actorFormID) || MatchesActor(childEntry.bioFatherID, actorFormID);
-                bool isSecretPresumedFather = !isBioParent && motherPartnerID != 0 &&
-                                              MatchesActor(motherPartnerID, actorFormID) &&
-                                              childEntry.paternitySecret.isSecretForPartner;
+                bool isSecretPresumedFather = !isBioParent && effectivePresumedFatherID != 0 &&
+                                              MatchesActor(effectivePresumedFatherID, actorFormID) &&
+                                              secretForPartnerActive;
                 if (isBioParent || isSecretPresumedFather) {
-                    const auto& sec = childEntry.paternitySecret;
                     bool isHiddenSecret = false;
-                    if (isBioParent && MatchesActor(childEntry.bioFatherID, actorFormID)) {
-                        if (sec.HasActiveSecret() && !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather) {
-                            isHiddenSecret = true;
-                        }
+                    if (isBioParent && MatchesActor(childEntry.bioFatherID, actorFormID) && secretForBioFatherActive) {
+                        isHiddenSecret = true;
                     }
                     if (!isHiddenSecret) {
                         nlohmann::json ncObj;
@@ -973,8 +1012,14 @@ namespace {
                         if (otherBioID != 0 && otherBioID != kUnknownFatherFormID) {
                             ncObj["other_bio_parent"] = MakeNpcRef(otherBioID);
                         }
-                        if (isSecretPresumedFather) {
-                            ncObj["is_presumed_father"] = true;
+                        if (MatchesActor(childEntry.bioFatherID, actorFormID) && (secretForPartnerActive || secretForBioFatherActive)) {
+                            ncObj["is_paternity_secret"] = true;
+                        }
+                        if (MatchesActor(childEntry.bioMotherID, actorFormID) && (secretForPartnerActive || secretForBioFatherActive)) {
+                            ncObj["is_other_parent_secret"] = true;
+                            if (secretForPartnerActive && effectivePresumedFatherID != 0) {
+                                ncObj["public_other_parent"] = MakeNpcRef(effectivePresumedFatherID);
+                            }
                         }
                         nonCustodialChildren.push_back(std::move(ncObj));
                     }
@@ -1003,7 +1048,6 @@ namespace {
             nlohmann::json parentage;
             parentage["is_adopted"] = asChild.isAdopted;
             parentage["is_biological"] = asChild.isBiologicalChild;
-            parentage["has_beastblood"] = asChild.hasBeastblood;
 
             const auto& sec = asChild.paternitySecret;
             RE::FormID asChildMotherID = mgr.GetBioMother(actorFormID);
@@ -1024,9 +1068,17 @@ namespace {
             bool isSingleMotherSecretFromBioFather = (!hasPresumedFather && asChildBioFatherID != 0 && sec.isSecret && sec.isSecretForBioFather && !sec.discoveredByBioFather && !sec.discovered);
 
             const bool secretFromPartnerActive = !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
+            const bool secretFromBioFatherActive = !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather;
+            const bool hasUndiscoveredSecretOnChild = sec.HasActiveSecret() && (secretFromPartnerActive || secretFromBioFatherActive);
+            if (hasUndiscoveredSecretOnChild) {
+                parentage["has_undiscovered_paternity_secret"] = true;
+            }
             bool canChildKnow = canActorKnowPaternitySecret(actorFormID, asChildMotherID, presFatherID, explicitPresumedFatherID, asChildBioFatherID, sec);
             bool hideSecretFromChild = (!isBioSameAsPresumed && sec.HasActiveSecret() && !canChildKnow);
             RE::FormID effectiveChildBioFatherID = hideSecretFromChild
+                ? ((secretFromPartnerActive && hasPresumedFather) ? presFatherID : 0)
+                : asChildBioFatherID;
+            RE::FormID publicChildBioFatherID = (!isBioSameAsPresumed && hasUndiscoveredSecretOnChild)
                 ? ((secretFromPartnerActive && hasPresumedFather) ? presFatherID : 0)
                 : asChildBioFatherID;
 
@@ -1044,6 +1096,10 @@ namespace {
             }
 
             RE::FormID asChildBioMotherID = asChild.bioMotherID;
+            const bool visibleChildParentHasBeastblood =
+                (asChildBioMotherID != 0 && NPCRelationshipManager::IsActorWerewolf(asChildBioMotherID)) ||
+                (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID && NPCRelationshipManager::IsActorWerewolf(effectiveChildBioFatherID));
+            parentage["has_beastblood"] = asChild.hasBeastblood && (!hideSecretFromChild || visibleChildParentHasBeastblood);
 
             if (asChildBioMotherID != 0) {
                 parentage["bio_mother"] = MakeNpcRef(asChildBioMotherID);
@@ -1117,13 +1173,49 @@ namespace {
             parentage["gender"] = (asChildSex == 1) ? "female" : "male";
             parentage["relation"] = (asChildSex == 1) ? "daughter" : "son";
 
+            auto resolveSiblingBioFather = [&](const ChildRegistryEntry& sibEntry, bool publicOnly) -> RE::FormID {
+                const auto& sibSec = sibEntry.paternitySecret;
+                RE::FormID sibMotherID = mgr.GetBioMother(sibEntry.childID);
+                RE::FormID sibBioFatherID = mgr.GetBioFather(sibEntry.childID);
+                RE::FormID sibExplicitPresumed = mgr.GetPresumedFather(sibEntry.childID);
+                RE::FormID sibPresFather = sibExplicitPresumed != 0 ? sibExplicitPresumed : mgr.GetMotherPartner(sibEntry.childID);
+                if (sibPresFather != 0 && sibMotherID != 0 && sibExplicitPresumed == 0 && !sibSec.isSecretForPartner &&
+                    !mgr.IsGuardian(sibEntry.childID, sibPresFather) && isPastStatus(mgr.GetRelationshipStatus(sibMotherID, sibPresFather))) {
+                    sibPresFather = 0;
+                }
+                const bool sibBioSameAsPresumed = (sibPresFather != 0 && sibBioFatherID != 0 && MatchesActor(sibBioFatherID, sibPresFather));
+                const bool sibHasPresumed = (sibPresFather != 0 && !sibBioSameAsPresumed && (sibMotherID == 0 || !MatchesActor(sibPresFather, sibMotherID)));
+                const bool sibSecretPartnerActive = !sibSec.discovered && sibSec.isSecretForPartner && !sibSec.discoveredByPartner;
+                const bool sibSecretBioActive = !sibSec.discovered && sibSec.isSecretForBioFather && !sibSec.discoveredByBioFather;
+                if (publicOnly) {
+                    const bool sibHasUndiscovered = sibSec.HasActiveSecret() && (sibSecretPartnerActive || sibSecretBioActive);
+                    if (!sibBioSameAsPresumed && sibHasUndiscovered) {
+                        return (sibSecretPartnerActive && sibHasPresumed) ? sibPresFather : 0;
+                    }
+                    return sibBioFatherID;
+                }
+                const bool actorCanKnowSib = canActorKnowPaternitySecret(actorFormID, sibMotherID, sibPresFather, sibExplicitPresumed, sibBioFatherID, sibSec);
+                if (!sibBioSameAsPresumed && sibSec.HasActiveSecret() && !actorCanKnowSib) {
+                    return (sibSecretPartnerActive && sibHasPresumed) ? sibPresFather : 0;
+                }
+                return sibBioFatherID;
+            };
+
+            auto isVisibleChildOfParent = [&](const ChildRegistryEntry& sibEntry, RE::FormID parentID, bool publicOnly) -> bool {
+                if (parentID == 0 || parentID == kUnknownFatherFormID) return false;
+                if (sibEntry.HasGuardian(parentID) || MatchesActor(sibEntry.bioMotherID, parentID)) return true;
+                RE::FormID visibleFatherID = resolveSiblingBioFather(sibEntry, publicOnly);
+                return visibleFatherID != 0 && visibleFatherID != kUnknownFatherFormID && MatchesActor(visibleFatherID, parentID);
+            };
+
             std::vector<RE::FormID> siblingIDs;
             auto addSiblings = [&](RE::FormID parentID) {
-                if (parentID == 0) return;
+                if (parentID == 0 || parentID == kUnknownFatherFormID) return;
                 for (auto sibID : mgr.GetChildrenOfActor(parentID)) {
                     if (sibID != actorFormID && std::find(siblingIDs.begin(), siblingIDs.end(), sibID) == siblingIDs.end()) {
                         auto sibOpt = mgr.GetChildEntry(sibID);
-                        if (sibOpt && sibOpt->stage == ChildStage::Unborn) continue;
+                        if (!sibOpt || sibOpt->stage == ChildStage::Unborn) continue;
+                        if (!isVisibleChildOfParent(*sibOpt, parentID, /*publicOnly=*/false)) continue;
                         siblingIDs.push_back(sibID);
                     }
                 }
@@ -1134,6 +1226,26 @@ namespace {
             addSiblings(effectiveChildBioFatherID);
             if (!siblingIDs.empty()) {
                 parentage["siblings"] = MakeNpcListRef(siblingIDs);
+            }
+
+            std::vector<RE::FormID> publicSiblingIDs;
+            auto addPublicSiblings = [&](RE::FormID parentID) {
+                if (parentID == 0 || parentID == kUnknownFatherFormID) return;
+                for (auto sibID : mgr.GetChildrenOfActor(parentID)) {
+                    if (sibID != actorFormID && std::find(publicSiblingIDs.begin(), publicSiblingIDs.end(), sibID) == publicSiblingIDs.end()) {
+                        auto sibOpt = mgr.GetChildEntry(sibID);
+                        if (!sibOpt || sibOpt->stage == ChildStage::Unborn) continue;
+                        if (!isVisibleChildOfParent(*sibOpt, parentID, /*publicOnly=*/true)) continue;
+                        publicSiblingIDs.push_back(sibID);
+                    }
+                }
+            };
+            addPublicSiblings(asChild.guardianAID);
+            addPublicSiblings(asChild.guardianBID);
+            addPublicSiblings(asChildBioMotherID);
+            addPublicSiblings(publicChildBioFatherID);
+            if (!publicSiblingIDs.empty()) {
+                parentage["siblings_public"] = MakeNpcListRef(publicSiblingIDs);
             }
 
             RE::FormID critterID = childSvc.GetCritter(actorFormID);
@@ -2131,19 +2243,23 @@ void RegisterSkyrimNetDecorators()
             RE::FormID bioFatherID = m.GetBioFather(cID);
             if (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID)) continue;
 
+            bool isUnannouncedPlayerPregnancy = false;
             if (entry.stage == ChildStage::Unborn) {
-                // Never leak an unannounced / non-showing pregnancy into an unaware partner's or biological father's action candidates,
-                // regardless of whether the mother is an NPC or the female Player.
-                if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isPregnancySecretForPartner) {
-                    continue;
-                }
-                if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather) {
-                    const float currentDay = RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f;
-                    const bool playerPregnancyHidden = entry.paternitySecret.isPregnancySecretForPartner ||
-                                                       (motherPartnerID == 0 && entry.conceptionTimestamp > 0.0f && (currentDay - entry.conceptionTimestamp) < 3.0f);
-                    if (motherID != kPlayerFormID || playerPregnancyHidden) {
+                if (motherID != kPlayerFormID) {
+                    // Never leak an unannounced / non-showing NPC pregnancy into an unaware partner's or biological father's action candidates.
+                    if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isPregnancySecretForPartner) {
                         continue;
                     }
+                    if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather) {
+                        continue;
+                    }
+                } else {
+                    if (!motherNear) {
+                        continue;
+                    }
+                    const float currentDay = RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f;
+                    isUnannouncedPlayerPregnancy = entry.paternitySecret.isPregnancySecretForPartner ||
+                                                   (motherPartnerID == 0 && entry.conceptionTimestamp > 0.0f && (currentDay - entry.conceptionTimestamp) < 3.0f);
                 }
                 if (!seenUnbornCandidates.insert({ motherID, bioFatherID }).second) {
                     continue;
@@ -2153,17 +2269,20 @@ void RegisterSkyrimNetDecorators()
             std::string motherName = (motherID != 0) ? GetCandidateDisplayName(motherID) : "Unknown Mother";
             // IMPORTANT: Never include the secret biological father's name in childDesc for an unaware father!
             std::string childDesc = (entry.stage == ChildStage::Unborn) ? "unborn pregnancy" : ((entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name);
+            const std::string unannouncedTag = isUnannouncedPlayerPregnancy
+                ? "; UNANNOUNCED — you DO NOT know she is pregnant unless she explicitly reveals/confesses it in dialogue right now"
+                : "";
 
             if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isSecretForPartner) {
                 if (!res.empty()) res += ", ";
-                res += childDesc + " (child with " + motherName + (entry.stage == ChildStage::Unborn ? "; partner / presumed father" : "; presumed father");
+                res += childDesc + " (child with " + motherName + (entry.stage == ChildStage::Unborn ? "; partner / presumed father" : "; presumed father") + unannouncedTag;
                 if (entry.stage != ChildStage::Unborn && entry.paternitySecret.hasPhenotypeMismatch) {
                     res += ", noticeable physical difference";
                 }
                 res += ")";
             } else if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather) {
                 if (!res.empty()) res += ", ";
-                res += childDesc + " (child with " + motherName + "; biological father)";
+                res += childDesc + " (child with " + motherName + "; biological father" + unannouncedTag + ")";
             }
         }
         return res;
@@ -2776,7 +2895,7 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
             return false;
         }
 
-        float radius = Settings::GetSingleton().skyrimnetActionRadius;
+        float radius = Settings::GetSingleton().GetSkyrimNetActionRadius();
         if (radius <= 0.0f) {
             radius = 2000.0f;
         }

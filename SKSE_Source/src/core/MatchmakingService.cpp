@@ -2760,6 +2760,7 @@ namespace MARAS {
         MARAS_LOG_INFO("[Matchmaking:RunLLMScheduledMatchmaking] Triggering scheduled AI matchmaking at game day {:.2f} (last run: {:.2f}, interval: {} days)",
                        currentGameDay, lastMatchmakingDay_, settings.matchmakingIntervalDays);
 
+        const float prevMatchmakingDay = lastMatchmakingDay_;
         lastMatchmakingDay_ = currentGameDay;
 
         nlohmann::json ctx = BuildScheduledContext(currentGameDay);
@@ -2767,7 +2768,7 @@ namespace MARAS {
         std::string promptName = "maras_evaluations/maras_matchmaking_scheduled";
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
-        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, expectedEpoch, currentGameDay](const char* response, int success) {
+        const bool dispatched = SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, expectedEpoch, currentGameDay](const char* response, int success) {
             if (!IsSessionEpochCurrent(expectedEpoch)) {
                 return;
             }
@@ -2815,6 +2816,10 @@ namespace MARAS {
                     ProcessScheduledResults(respStr, true);
                 });
         });
+        if (!dispatched) {
+            MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] SendCustomPromptToLLM returned false; restoring lastMatchmakingDay_ to {:.2f}", prevMatchmakingDay);
+            lastMatchmakingDay_ = prevMatchmakingDay;
+        }
     }
 
     std::vector<DiceRollActionSlot> MatchmakingService::RollActionSlots(int maxSlots) {
@@ -4683,13 +4688,26 @@ namespace MARAS {
                         matchSource = std::format("NPCProfile.originalHome 0x{:08X}", prof->originalHome.value());
                     } else if (prof->homeMarker.has_value() && prof->homeMarker.value() != 0) {
                         if (auto* markerRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(prof->homeMarker.value())) {
-                            if (auto* mCell = markerRef->GetParentCell(); mCell && matchesOriginalHomeForm(mCell->GetFormID())) {
-                                residesHere = true;
-                                matchSource = std::format("NPCProfile.homeMarker 0x{:08X} (cell 0x{:08X})", prof->homeMarker.value(), mCell->GetFormID());
-                            } else if (auto* mLoc = markerRef->GetCurrentLocation(); mLoc && !IsSettlementLevelKeyword(mLoc) &&
-                                       isLocationOrParentMatch(cellLoc, mLoc->GetFormID())) {
-                                residesHere = true;
-                                matchSource = std::format("NPCProfile.homeMarker 0x{:08X} (loc 0x{:08X})", prof->homeMarker.value(), mLoc->GetFormID());
+                            const auto playerHouses = houseSvc.GetAllPlayerHouses();
+                            auto isRegisteredPlayerHouse = [&playerHouses, &isLocationOrParentMatch](RE::FormID candidateCellID, RE::BGSLocation* candidateLoc) {
+                                for (RE::FormID phID : playerHouses) {
+                                    if (phID != 0 && (phID == candidateCellID || (candidateLoc && isLocationOrParentMatch(candidateLoc, phID)))) {
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            };
+                            auto* mCell = markerRef->GetParentCell();
+                            auto* mLoc = markerRef->GetCurrentLocation();
+                            if (!isRegisteredPlayerHouse(mCell ? mCell->GetFormID() : 0, mLoc)) {
+                                if (mCell && matchesOriginalHomeForm(mCell->GetFormID())) {
+                                    residesHere = true;
+                                    matchSource = std::format("NPCProfile.homeMarker 0x{:08X} (cell 0x{:08X})", prof->homeMarker.value(), mCell->GetFormID());
+                                } else if (mLoc && !IsSettlementLevelKeyword(mLoc) &&
+                                           isLocationOrParentMatch(cellLoc, mLoc->GetFormID())) {
+                                    residesHere = true;
+                                    matchSource = std::format("NPCProfile.homeMarker 0x{:08X} (loc 0x{:08X})", prof->homeMarker.value(), mLoc->GetFormID());
+                                }
                             }
                         }
                     }
@@ -5186,7 +5204,7 @@ namespace MARAS {
         Revert();
         if (!serialization->ReadRecordData(lastMatchmakingDay_)) {
             MARAS_LOG_WARN("MatchmakingService::Load - failed to read lastMatchmakingDay_, resetting");
-            lastMatchmakingDay_ = -1.0f;
+            Revert();
             return false;
         }
 
@@ -5195,14 +5213,16 @@ namespace MARAS {
         if (serialization->ReadRecordData(count)) {
             if (count > kMaxCooldownEntries) {
                 MARAS_LOG_ERROR("MatchmakingService::Load - corrupt cooldown count {}", count);
+                Revert();
                 return false;
             }
             for (uint32_t i = 0; i < count; ++i) {
                 RE::FormID savedID = 0;
                 float day = 0.0f;
                 if (!serialization->ReadRecordData(savedID) || !serialization->ReadRecordData(day)) {
-                    MARAS_LOG_WARN("MatchmakingService::Load - failed to read cooldown entry {}", i);
-                    break;
+                    MARAS_LOG_ERROR("MatchmakingService::Load - truncated cooldown entry {}/{}; reverting partial state", i, count);
+                    Revert();
+                    return false;
                 }
                 RE::FormID resolvedID = 0;
                 if (savedID != 0 && !IsSyntheticChildID(savedID) && serialization->ResolveFormID(savedID, resolvedID)) {
@@ -5216,13 +5236,16 @@ namespace MARAS {
                 if (serialization->ReadRecordData(locCoolCount)) {
                     if (locCoolCount > kMaxCooldownEntries) {
                         MARAS_LOG_ERROR("MatchmakingService::Load - corrupt locCoolCount {}", locCoolCount);
+                        Revert();
                         return false;
                     }
                     for (uint32_t i = 0; i < locCoolCount; ++i) {
                         RE::FormID savedLocID = 0;
                         float locDay = 0.0f;
                         if (!serialization->ReadRecordData(savedLocID) || !serialization->ReadRecordData(locDay)) {
-                            break;
+                            MARAS_LOG_ERROR("MatchmakingService::Load - truncated locCool entry {}/{}; reverting partial state", i, locCoolCount);
+                            Revert();
+                            return false;
                         }
                         RE::FormID resolvedLocID = 0;
                         if (savedLocID != 0 && serialization->ResolveFormID(savedLocID, resolvedLocID)) {

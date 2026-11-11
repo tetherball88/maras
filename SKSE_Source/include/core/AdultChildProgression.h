@@ -150,6 +150,8 @@ namespace MARAS {
         RE::TESNPC* EnsurePerActorRuntimeBase(NPCRelationshipManager& mgr, RE::Actor* actor,
                                               ChildRegistryEntry& entry);
         RE::TESNPC* GetOriginalAdultBase(RE::FormID childActorID) const;
+        void ReleaseRuntimeBaseForActor(RE::FormID childActorID);
+        void FlushRetiredForms();
         void RevertRuntimeBases();
         void Revert();
 
@@ -182,6 +184,8 @@ namespace MARAS {
         std::vector<DaedricBlessingRuntimeSpec> daedricBlessings_;
         std::unordered_map<RE::FormID, RE::TESNPC*> originalAdultBases_;
         std::unordered_map<RE::FormID, RE::TESNPC*> clonedAdultBases_;
+        std::vector<RE::TESNPC*> retiredClonedBases_;
+        std::vector<RE::TESClass*> retiredClasses_;
     };
 
 }  // namespace MARAS

@@ -407,17 +407,59 @@ namespace MARAS {
         }
 
         RecalculateAndUpdateGlobals();
-        if (oldStatus != status &&
-            (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID) &&
-            (oldStatus == RelationshipStatus::Married || status == RelationshipStatus::Married)) {
+        if (oldStatus != status && (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID)) {
             RE::FormID partnerID = (npcFormID == kPlayerFormID) ? targetFormID : npcFormID;
             RE::Actor* partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
             if (!partnerActor) {
                 partnerActor = NPCIndex::GetSingleton().GetActorFromFormId(partnerID);
             }
-            if (!sendEvent || !partnerActor ||
-                (oldStatus == RelationshipStatus::Married && status != RelationshipStatus::Divorced)) {
-                DispatchPlayerBuffMaintenance();
+
+            // When Papyrus MakeNpc* will not run (either sendEvent == false or partnerActor is unloaded),
+            // synchronize permanent affection in C++ so unloaded promotions/breakups never retain stale affection.
+            if (partnerID != 0 && partnerID != kPlayerFormID && (!sendEvent || !partnerActor)) {
+                auto& affSvc = AffectionService::GetSingleton();
+                switch (status) {
+                    case RelationshipStatus::Married:
+                    case RelationshipStatus::Engaged:
+                        affSvc.SetPermanentAffection(partnerID, 100, /*sendEvent=*/false);
+                        break;
+                    case RelationshipStatus::Dating:
+                        if (affSvc.GetPermanentAffection(partnerID) < 80) {
+                            affSvc.SetPermanentAffection(partnerID, 80, /*sendEvent=*/false);
+                        }
+                        break;
+                    case RelationshipStatus::Lover:
+                        if (affSvc.GetPermanentAffection(partnerID) < 70) {
+                            affSvc.SetPermanentAffection(partnerID, 70, /*sendEvent=*/false);
+                        }
+                        break;
+                    case RelationshipStatus::Divorced:
+                    case RelationshipStatus::Jilted:
+                    case RelationshipStatus::ExDating:
+                    case RelationshipStatus::ExLover:
+                        affSvc.SetPermanentAffection(partnerID, 0, /*sendEvent=*/false);
+                        break;
+                    case RelationshipStatus::Candidate:
+                        if (oldStatus != RelationshipStatus::Unknown) {
+                            affSvc.SetPermanentAffection(partnerID, 50, /*sendEvent=*/false);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            if (oldStatus == RelationshipStatus::Married || status == RelationshipStatus::Married) {
+                const bool papyrusHandlesBuffSync =
+                    sendEvent &&
+                    ((partnerActor != nullptr &&
+                      (status == RelationshipStatus::Married || status == RelationshipStatus::Divorced)) ||
+                     (partnerActor == nullptr &&
+                      (status == RelationshipStatus::Married || status == RelationshipStatus::Divorced ||
+                       status == RelationshipStatus::Candidate)));
+                if (!papyrusHandlesBuffSync) {
+                    DispatchPlayerBuffMaintenance();
+                }
             }
         }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(npcFormID, targetFormID, static_cast<uint8_t>(status));
@@ -696,9 +738,19 @@ namespace MARAS {
                 }
 
                 auto [bioMother, bioFather] = resolveBioParents(pARef, pBRef, pending.isAdopted);
-                RegisterChildActor(refID, pARef, pBRef, 0, bioMother, bioFather, 0, static_cast<uint8_t>(ChildStage::Child), pending.isAdopted, /*sendEvent=*/false);
+                RE::FormID gA = pARef;
+                RE::FormID gB = pBRef;
+                if (!awaitingOtherParent && ((gA != 0 && gB == 0) || (gA == 0 && gB != 0))) {
+                    const RE::FormID soleG = (gA != 0) ? gA : gB;
+                    const RE::FormID spouseID = GetPrimaryPartner(soleG);
+                    if (spouseID != 0 && IsMarried(soleG, spouseID)) {
+                        gA = soleG;
+                        gB = spouseID;
+                    }
+                }
+                RegisterChildActor(refID, gA, gB, 0, bioMother, bioFather, 0, static_cast<uint8_t>(ChildStage::Child), pending.isAdopted, /*sendEvent=*/false);
                 MARAS_LOG_INFO("TryResolvePendingChildren: Resolved pending child {:08X} for guardians {:08X} / {:08X} (bioM: {:08X}, bioF: {:08X}, adopted: {})",
-                               refID, pARef, pBRef, bioMother, bioFather, pending.isAdopted);
+                               refID, gA, gB, bioMother, bioFather, pending.isAdopted);
             } else {
                 pendingChildrenByBaseID[baseID] = pending;
             }
@@ -734,9 +786,19 @@ namespace MARAS {
                 }
 
                 auto [bioMother, bioFather] = resolveBioParents(pending.parentARefID, pending.parentBRefID, pending.isAdopted);
-                RegisterChildActor(cRef, pending.parentARefID, pending.parentBRefID, 0, bioMother, bioFather, 0, static_cast<uint8_t>(ChildStage::Child), pending.isAdopted, /*sendEvent=*/false);
+                RE::FormID gA = pending.parentARefID;
+                RE::FormID gB = pending.parentBRefID;
+                if (!awaitingOtherParent && ((gA != 0 && gB == 0) || (gA == 0 && gB != 0))) {
+                    const RE::FormID soleG = (gA != 0) ? gA : gB;
+                    const RE::FormID spouseID = GetPrimaryPartner(soleG);
+                    if (spouseID != 0 && IsMarried(soleG, spouseID)) {
+                        gA = soleG;
+                        gB = spouseID;
+                    }
+                }
+                RegisterChildActor(cRef, gA, gB, 0, bioMother, bioFather, 0, static_cast<uint8_t>(ChildStage::Child), pending.isAdopted, /*sendEvent=*/false);
                 MARAS_LOG_INFO("TryResolvePendingChildren: Resolved pending child {:08X} on parent load (guardians {:08X} / {:08X}, bioM: {:08X}, bioF: {:08X}, adopted: {})",
-                               cRef, pending.parentARefID, pending.parentBRefID, bioMother, bioFather, pending.isAdopted);
+                               cRef, gA, gB, bioMother, bioFather, pending.isAdopted);
             } else {
                 pendingChildrenByBaseID[cBaseID] = pending;
             }
@@ -1689,16 +1751,21 @@ namespace MARAS {
     bool NPCRelationshipManager::PromoteToDivorced(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
         return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Divorced,
                                   [this](RE::FormID id, RE::FormID target) {
-                                      if (target == kPlayerFormID) {
-                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(id);
-                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(id);
-                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(id);
-                                          ClearPartnerIntent(id);
-                                      } else if (id == kPlayerFormID) {
-                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(target);
-                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(target);
-                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(target);
-                                          ClearPartnerIntent(target);
+                                      if (target == kPlayerFormID || id == kPlayerFormID) {
+                                          RE::FormID npcID = (target == kPlayerFormID) ? id : target;
+                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
+                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+                                          ClearPartnerIntent(npcID);
+                                      } else {
+                                          if (auto itA = pendingPartnerIntents_.find(id);
+                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                              ClearPartnerIntent(id);
+                                          }
+                                          if (auto itB = pendingPartnerIntents_.find(target);
+                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                              ClearPartnerIntent(target);
+                                          }
                                       }
                                       EvaluateChildCustodyOnDivorce(id, target);
                                   },
@@ -1708,6 +1775,22 @@ namespace MARAS {
     bool NPCRelationshipManager::PromoteToJilted(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
         return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Jilted,
                                   [this](RE::FormID id, RE::FormID target) {
+                                      if (target == kPlayerFormID || id == kPlayerFormID) {
+                                          RE::FormID npcID = (target == kPlayerFormID) ? id : target;
+                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
+                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+                                          ClearPartnerIntent(npcID);
+                                      } else {
+                                          if (auto itA = pendingPartnerIntents_.find(id);
+                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                              ClearPartnerIntent(id);
+                                          }
+                                          if (auto itB = pendingPartnerIntents_.find(target);
+                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                              ClearPartnerIntent(target);
+                                          }
+                                      }
                                       EvaluateChildCustodyOnDivorce(id, target);
                                   },
                                   sendEvent);
@@ -1734,17 +1817,77 @@ namespace MARAS {
     bool NPCRelationshipManager::PromoteToExDating(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
         return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::ExDating,
                                   [this](RE::FormID id, RE::FormID target) {
+                                      if (target == kPlayerFormID || id == kPlayerFormID) {
+                                          RE::FormID npcID = (target == kPlayerFormID) ? id : target;
+                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
+                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+                                          ClearPartnerIntent(npcID);
+                                      } else {
+                                          if (auto itA = pendingPartnerIntents_.find(id);
+                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                              ClearPartnerIntent(id);
+                                          }
+                                          if (auto itB = pendingPartnerIntents_.find(target);
+                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                              ClearPartnerIntent(target);
+                                          }
+                                      }
                                       EvaluateChildCustodyOnDivorce(id, target);
                                   },
                                   sendEvent);
     }
 
     bool NPCRelationshipManager::PromoteToExLover(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
-        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::ExLover, nullptr, sendEvent);
+        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::ExLover,
+                                  [this](RE::FormID id, RE::FormID target) {
+                                      if (target == kPlayerFormID || id == kPlayerFormID) {
+                                          RE::FormID npcID = (target == kPlayerFormID) ? id : target;
+                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
+                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+                                          ClearPartnerIntent(npcID);
+                                      } else {
+                                          if (auto itA = pendingPartnerIntents_.find(id);
+                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                              ClearPartnerIntent(id);
+                                          }
+                                          if (auto itB = pendingPartnerIntents_.find(target);
+                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                              ClearPartnerIntent(target);
+                                          }
+                                      }
+                                      EvaluateChildCustodyOnDivorce(id, target);
+                                  },
+                                  sendEvent);
     }
 
     bool NPCRelationshipManager::DemoteToCandidate(RE::FormID npcFormID, RE::FormID targetFormID, bool sendEvent) {
-        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Candidate, nullptr, sendEvent);
+        const RelationshipStatus oldStatus = GetRelationshipStatus(npcFormID, targetFormID);
+        if (!IsActivePartnerStatus(oldStatus)) {
+            return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Candidate, nullptr, sendEvent);
+        }
+        return ChangeStatusCommon(npcFormID, targetFormID, RelationshipStatus::Candidate,
+                                  [this](RE::FormID id, RE::FormID target) {
+                                      if (target == kPlayerFormID || id == kPlayerFormID) {
+                                          RE::FormID npcID = (target == kPlayerFormID) ? id : target;
+                                          SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
+                                          MARAS::SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
+                                          (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+                                          ClearPartnerIntent(npcID);
+                                      } else {
+                                          if (auto itA = pendingPartnerIntents_.find(id);
+                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                              ClearPartnerIntent(id);
+                                          }
+                                          if (auto itB = pendingPartnerIntents_.find(target);
+                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                              ClearPartnerIntent(target);
+                                          }
+                                      }
+                                      EvaluateChildCustodyOnDivorce(id, target);
+                                  },
+                                  sendEvent);
     }
 
     bool NPCRelationshipManager::RemoveRelationship(RE::FormID actorA, RE::FormID actorB) {
@@ -2120,6 +2263,20 @@ namespace MARAS {
     std::optional<RE::FormID> NPCRelationshipManager::GetHomeMarker(RE::FormID npcFormID) const {
         auto profile = GetNPCProfile(npcFormID);
         return profile ? profile->homeMarker : std::nullopt;
+    }
+
+    void NPCRelationshipManager::ClearCurrentHome(RE::FormID npcFormID) {
+        if (npcFormID == 0) {
+            return;
+        }
+        if (auto it = npcProfiles.find(npcFormID); it != npcProfiles.end()) {
+            it->second.currentHome.reset();
+        }
+        if (!IsSyntheticChildID(npcFormID)) {
+            if (auto* homeSandboxKeyword = FormCache::GetSingleton().GetHomeSandboxKeyword()) {
+                Utils::RemoveLinkedRef(npcFormID, homeSandboxKeyword);
+            }
+        }
     }
 
     RE::TESObjectREFR* NPCRelationshipManager::GetOrCreateHomeMarker(RE::Actor* npcActor) {

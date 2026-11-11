@@ -324,7 +324,11 @@ export function maskChildRecord(
 ): ChildRecord {
   if (revealSecrets) return child
 
-  const isSecretPartner = Boolean(child.isSecretForPartner ?? child.isSecret)
+  const isSecretPartner = Boolean(
+    child.isSecretForPartner ||
+      child.isPregnancySecretForPartner ||
+      (!child.isSecretForBioFather && child.isSecret),
+  )
   const isSecretBio = Boolean(child.isSecretForBioFather)
   if (!isSecretPartner && !isSecretBio) {
     return child
@@ -346,6 +350,7 @@ export function maskChildRecord(
         : {}),
       presumedFatherId: undefined,
       presumedFatherName: undefined,
+      hasBeastblood: false,
       isSecret: false,
       isSecretForPartner: false,
       isPregnancySecretForPartner: false,
@@ -359,6 +364,7 @@ export function maskChildRecord(
     ...child,
     bioFatherId: undefined,
     bioFatherName: undefined,
+    hasBeastblood: false,
     isSecret: false,
     isSecretForPartner: false,
     isPregnancySecretForPartner: false,
@@ -375,6 +381,13 @@ export function maskChildrenMap(
   if (revealSecrets) return new Map(rawChildren)
   const masked = new Map<string, ChildRecord>()
   for (const [id, child] of rawChildren.entries()) {
+    if (
+      child.stage === 'unborn' &&
+      child.isPregnancySecretForPartner &&
+      !areSameFormId(child.bioMotherId, PLAYER_FORM_ID)
+    ) {
+      continue
+    }
     masked.set(id, maskChildRecord(child, false, npcProfiles))
   }
   return masked

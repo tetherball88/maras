@@ -2,6 +2,7 @@
 
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
+#include "papyrus/PapyrusInterface.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/Settings.h"
@@ -249,6 +250,7 @@ namespace MARAS {
 
             // If an NPC is receiving PlayerMarriedFaction
             if (!isPlayer && isMarriedFaction) {
+                std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
                 auto& relMgr = NPCRelationshipManager::GetSingleton();
                 const auto currentStatus = relMgr.GetRelationshipStatus(a_actor->GetFormID(), kPlayerFormID);
 
@@ -319,6 +321,7 @@ namespace MARAS {
             const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
 
             if (!isPlayer && isMarriedFaction) {
+                std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
                 auto& relMgr = NPCRelationshipManager::GetSingleton();
                 if (relMgr.GetRelationshipStatus(a_actor->GetFormID(), kPlayerFormID) == RelationshipStatus::Married) {
                     MARAS_LOG_INFO("FactionService: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction removal",

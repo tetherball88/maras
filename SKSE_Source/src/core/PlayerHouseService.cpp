@@ -1,5 +1,6 @@
 #include "core/PlayerHouseService.h"
 
+#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -371,6 +372,7 @@ namespace MARAS {
         if (!isChild) {
             SetHousedFaction(tenantFormID, false);
             RemoveMerchantFactionsFromTenant(tenantFormID);
+            NPCRelationshipManager::GetSingleton().ClearCurrentHome(tenantFormID);
         } else {
             PlayerChildrenService::GetSingleton().ClearChildHouseAssignment(tenantFormID);
         }
@@ -571,37 +573,39 @@ namespace MARAS {
 
         Revert();
 
+        auto failLoad = [this]() -> bool {
+            Revert();
+            return false;
+        };
+
         constexpr std::uint32_t kMaxHouses = 1000;
         constexpr std::uint32_t kMaxTenants = 10000;
 
         std::uint32_t houseCount = 0;
-        if (!serialization->ReadRecordData(houseCount)) return false;
+        if (!serialization->ReadRecordData(houseCount)) return failLoad();
         if (houseCount > kMaxHouses) {
             MARAS_LOG_ERROR("PlayerHouseService::Load - corrupt houseCount {}", houseCount);
-            return false;
+            return failLoad();
         }
-
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        auto& idx = NPCIndex::GetSingleton();
 
         houses_.reserve(houseCount);
         for (std::uint32_t i = 0; i < houseCount; ++i) {
             RE::FormID savedHouse = 0;
-            if (!serialization->ReadRecordData(savedHouse)) return false;
+            if (!serialization->ReadRecordData(savedHouse)) return failLoad();
 
             RE::FormID savedMarker = 0;
-            if (!serialization->ReadRecordData(savedMarker)) return false;
+            if (!serialization->ReadRecordData(savedMarker)) return failLoad();
 
             bool moveDone = false;
             if (version >= 4) {
-                if (!serialization->ReadRecordData(moveDone)) return false;
+                if (!serialization->ReadRecordData(moveDone)) return failLoad();
             }
 
             std::uint32_t tenantCount = 0;
-            if (!serialization->ReadRecordData(tenantCount)) return false;
+            if (!serialization->ReadRecordData(tenantCount)) return failLoad();
             if (tenantCount > kMaxTenants) {
                 MARAS_LOG_ERROR("PlayerHouseService::Load - corrupt tenantCount {}", tenantCount);
-                return false;
+                return failLoad();
             }
 
             struct LoadedTenant {
@@ -613,10 +617,10 @@ namespace MARAS {
 
             for (std::uint32_t j = 0; j < tenantCount; ++j) {
                 RE::FormID savedTid = 0;
-                if (!serialization->ReadRecordData(savedTid)) return false;
+                if (!serialization->ReadRecordData(savedTid)) return failLoad();
                 bool stayAtHome = true;
                 if (version >= 4) {
-                    if (!serialization->ReadRecordData(stayAtHome)) return false;
+                    if (!serialization->ReadRecordData(stayAtHome)) return failLoad();
                 }
                 loadedTenants.push_back({savedTid, stayAtHome});
             }
@@ -638,26 +642,25 @@ namespace MARAS {
             for (const auto& lt : loadedTenants) {
                 if (lt.savedID == 0) continue;
                 if (IsSyntheticChildID(lt.savedID)) {
-                    if (relMgr.GetChildEntry(lt.savedID).has_value()) {
+                    if (std::find(house.tenants.begin(), house.tenants.end(), lt.savedID) == house.tenants.end()) {
                         house.tenants.push_back(lt.savedID);
-                        tenants_[lt.savedID] = Tenant{houseID, lt.stayAtHome};
                     }
+                    tenants_[lt.savedID] = Tenant{houseID, true};
                     continue;
                 }
                 RE::FormID resolvedTid = 0;
-                if (serialization->ResolveFormID(lt.savedID, resolvedTid) && resolvedTid != 0) {
-                    auto* actor = idx.GetActorFromFormId(resolvedTid);
-                    if (!actor || actor->IsDead()) {
-                        MARAS_LOG_INFO("PlayerHouseService::Load - skipping dead/invalid tenant {:08X}", resolvedTid);
-                        continue;
+                bool resolved = false;
+                if ((lt.savedID & 0xFF000000) == 0xFF000000) {
+                    resolvedTid = lt.savedID;
+                    resolved = true;
+                } else {
+                    resolved = serialization->ResolveFormID(lt.savedID, resolvedTid) && resolvedTid != 0;
+                }
+                if (resolved && resolvedTid != 0 && resolvedTid != kPlayerFormID) {
+                    if (std::find(house.tenants.begin(), house.tenants.end(), resolvedTid) == house.tenants.end()) {
+                        house.tenants.push_back(resolvedTid);
                     }
-                    house.tenants.push_back(resolvedTid);
                     tenants_[resolvedTid] = Tenant{houseID, lt.stayAtHome};
-
-                    if (!relMgr.IsChildNPC(resolvedTid)) {
-                        SetHousedFaction(resolvedTid, true);
-                        AddMerchantFactionsToTenant(resolvedTid);
-                    }
                 }
             }
 
@@ -670,6 +673,77 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Loaded {} player houses (from {} saved entries)", houses_.size(), houseCount);
         return true;
+    }
+
+    void PlayerHouseService::FinalizeLoad() {
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto& deceasedReg = DeceasedRegistry::GetSingleton();
+        auto& idx = NPCIndex::GetSingleton();
+
+        std::size_t prunedCount = 0;
+        for (auto& house : houses_) {
+            std::vector<RE::FormID> survivingTenants;
+            survivingTenants.reserve(house.tenants.size());
+
+            for (RE::FormID tID : house.tenants) {
+                if (tID == 0 || tID == kPlayerFormID) {
+                    tenants_.erase(tID);
+                    ++prunedCount;
+                    continue;
+                }
+
+                if (IsSyntheticChildID(tID)) {
+                    if (!relMgr.GetChildEntry(tID).has_value()) {
+                        MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - pruning unresolved synthetic child {:08X} from house {:08X}",
+                                       tID, house.id);
+                        tenants_.erase(tID);
+                        ++prunedCount;
+                        continue;
+                    }
+                    tenants_[tID] = Tenant{house.id, true};
+                    survivingTenants.push_back(tID);
+                    continue;
+                }
+
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(tID);
+                if (!actor) {
+                    actor = idx.GetActorFromFormId(tID);
+                }
+                if (deceasedReg.IsDeceased(tID) || (actor && actor->IsDead()) || !ActorSvc::IsValid(tID)) {
+                    MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - pruning dead/invalid tenant {:08X} from house {:08X}",
+                                   tID, house.id);
+                    tenants_.erase(tID);
+                    ++prunedCount;
+                    continue;
+                }
+
+                if (relMgr.IsChildNPC(tID)) {
+                    tenants_[tID].stayAtHome = true;
+                } else if (actor) {
+                    SetHousedFaction(tID, true);
+                    AddMerchantFactionsToTenant(tID);
+                }
+                survivingTenants.push_back(tID);
+            }
+
+            house.tenants = std::move(survivingTenants);
+        }
+
+        // Prune any orphaned map entries not belonging to a valid house vector
+        for (auto it = tenants_.begin(); it != tenants_.end();) {
+            const auto* house = FindHouse(it->second.house);
+            if (!house || std::find(house->tenants.begin(), house->tenants.end(), it->first) == house->tenants.end()) {
+                it = tenants_.erase(it);
+                ++prunedCount;
+            } else {
+                ++it;
+            }
+        }
+
+        if (prunedCount > 0) {
+            MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - pruned {} stale tenant record(s); {} active tenant(s) remain",
+                           prunedCount, tenants_.size());
+        }
     }
 
     void PlayerHouseService::Revert() {

@@ -15,6 +15,7 @@
 #include "core/MatchmakingService.h"
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
+#include "papyrus/PapyrusInterface.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/Settings.h"
@@ -60,12 +61,14 @@ namespace MARAS {
     }
 
     void PollingService::Shutdown() {
-        if (!initialized_) return;
-
+        const bool wasInitialized = initialized_;
         previousTeammates_.clear();
         previousPlayerLevel_ = 0;
+        previousGameDay_ = -1.0f;
         initialized_ = false;
-        MARAS_LOG_INFO("PollingService shutdown");
+        if (wasInitialized) {
+            MARAS_LOG_INFO("PollingService shutdown");
+        }
     }
 
     void PollingService::Update() {
@@ -75,6 +78,8 @@ namespace MARAS {
             MARAS_LOG_TRACE("Game is paused; skipping PollingService update");
             return;
         }
+
+        std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
 
         auto now = std::chrono::steady_clock::now();
 

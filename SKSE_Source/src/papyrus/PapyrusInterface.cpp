@@ -313,6 +313,7 @@ namespace MARAS::PapyrusInterface {
         }
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
+        std::lock_guard lock(GetPapyrusMutex());
         auto& houseSvc = PlayerHouseService::GetSingleton();
         auto houses = houseSvc.GetAllPlayerHouses();
         if (houses.empty()) {
@@ -436,6 +437,7 @@ namespace MARAS::PapyrusInterface {
         }
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
+        std::lock_guard lock(GetPapyrusMutex());
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         auto& houseSvc = PlayerHouseService::GetSingleton();
         auto spouses = relMgr.GetAllMarried();
@@ -563,6 +565,7 @@ namespace MARAS::PapyrusInterface {
         }
 
         const RE::FormID targetID = target->GetFormID();
+        std::lock_guard lock(GetPapyrusMutex());
         std::string targetName = ActorSvc::GetName(targetID);
         if (targetName.empty()) {
             targetName = fmt::format("NPC ({:08X})", targetID);
@@ -636,12 +639,13 @@ namespace MARAS::PapyrusInterface {
         }
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
+        std::lock_guard lock(GetPapyrusMutex());
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         std::vector<RE::FormID> migratedChildIDs;
         std::vector<ModalChecklistItem> items;
 
         for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
-            const bool isTempRef = ((cID >> 24) == 0xFF);
+            const bool isTempRef = ((cID >> 24) == 0xFF) && !IsSyntheticChildID(cID);
             const bool involvesPlayer = (cEntry.guardianAID == kPlayerFormID ||
                                          cEntry.guardianBID == kPlayerFormID ||
                                          cEntry.bioMotherID == kPlayerFormID ||
@@ -784,6 +788,7 @@ namespace MARAS::PapyrusInterface {
                 if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
+                std::lock_guard lock(GetPapyrusMutex());
                 const bool discardAll = (!resp.aborted && (resp.buttonIndex == 1 || resp.buttonId == "discard_all"));
                 auto& mgr = NPCRelationshipManager::GetSingleton();
                 int32_t keptCount = 0;
@@ -861,30 +866,37 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     bool RegisterIntimateThread(RE::StaticFunctionTag*, RE::BSFixedString framework, int32_t threadID, std::vector<RE::Actor*> actors) {
+        std::lock_guard lock(GetPapyrusMutex());
         return IntimateThreadService::GetSingleton().RegisterIntimateThread(framework.c_str(), threadID, actors);
     }
 
     void ReportIntimateInteraction(RE::StaticFunctionTag*, RE::BSFixedString framework, int32_t threadID, RE::Actor* actorA, RE::Actor* actorB) {
+        std::lock_guard lock(GetPapyrusMutex());
         IntimateThreadService::GetSingleton().ReportIntimateInteraction(framework.c_str(), threadID, actorA, actorB);
     }
 
     void ClearIntimateThread(RE::StaticFunctionTag*, RE::BSFixedString framework, int32_t threadID) {
+        std::lock_guard lock(GetPapyrusMutex());
         IntimateThreadService::GetSingleton().ClearIntimateThread(framework.c_str(), threadID);
     }
 
     void FleeChildrenFromPlayerCell(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         ChildrenFleeService::GetSingleton().FleeFromPlayerCell();
     }
 
     void StopChildrenFleeing(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         ChildrenFleeService::GetSingleton().StopFleeing();
     }
 
     std::vector<RE::Actor*> FindBanterCoupleCandidates(RE::StaticFunctionTag*, float afScanRadius) {
+        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().FindBanterCoupleCandidates(afScanRadius);
     }
 
     bool IsBanterPartnerPresent(RE::StaticFunctionTag*, RE::Actor* akPartner, float afScanRadius) {
+        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().IsBanterPartnerPresent(akPartner, afScanRadius);
     }
 

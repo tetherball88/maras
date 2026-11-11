@@ -545,8 +545,13 @@ namespace MARAS {
             return false;
         }
 
+        constexpr std::uint32_t kMaxEntries = 4096;
         std::uint32_t count = 0;
         if (!serialization->ReadRecordData(&count, sizeof(count))) {
+            return false;
+        }
+        if (count > kMaxEntries) {
+            MARAS_LOG_ERROR("AdultChildTravelService::Load: corrupt count {} exceeds max {}", count, kMaxEntries);
             return false;
         }
 
@@ -624,6 +629,37 @@ namespace MARAS {
         MARAS_LOG_INFO("AdultChildTravelService: Loaded {} active adult child travel destination(s)",
                        m_activeDestinations.size());
         return true;
+    }
+
+    void AdultChildTravelService::FinalizeLoad() {
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto& deceasedReg = DeceasedRegistry::GetSingleton();
+
+        std::vector<RE::FormID> staleIDs;
+        {
+            std::shared_lock lock(m_mutex);
+            for (const auto& [childID, state] : m_activeDestinations) {
+                auto entryOpt = relMgr.GetChildEntry(childID);
+                bool validAdult = entryOpt.has_value() && entryOpt->stage == ChildStage::Adult &&
+                                  !IsSyntheticChildID(childID) && !deceasedReg.IsDeceased(childID);
+                if (validAdult && ((childID & 0xFF000000) == 0xFF000000)) {
+                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
+                    if (!actor || actor->IsDeleted() || actor->IsDead()) {
+                        validAdult = false;
+                    }
+                }
+                if (!validAdult) {
+                    staleIDs.push_back(childID);
+                }
+            }
+        }
+        if (!staleIDs.empty()) {
+            std::unique_lock lock(m_mutex);
+            for (RE::FormID id : staleIDs) {
+                m_activeDestinations.erase(id);
+                MARAS_LOG_INFO("AdultChildTravelService::FinalizeLoad: Pruned stale adult child travel entry {:08X}", id);
+            }
+        }
     }
 
     nlohmann::json AdultChildTravelService::DumpJson() const {

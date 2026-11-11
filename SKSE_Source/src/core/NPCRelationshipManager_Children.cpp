@@ -510,6 +510,9 @@ namespace MARAS {
                 childrenByID.erase(synthIt);
                 if (synthFormID != childID) {
                     // The old ID may be a physical actor (e.g. a Beeing Female child replaced by its adult); release its household state
+                    if (!IsSyntheticChildID(synthFormID)) {
+                        AdultChildProgression::GetSingleton().ReleaseRuntimeBaseForActor(synthFormID);
+                    }
                     PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(synthFormID);
                     RemoveChildSandboxAroundParentLinkedRef(synthFormID);
                     PackageOverrideService::GetSingleton().UnregisterActor(synthFormID);
@@ -653,6 +656,7 @@ namespace MARAS {
             RemoveChildSandboxAroundParentLinkedRef(childID);
             PackageOverrideService::GetSingleton().UnregisterActor(childID);
             AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
+            AdultChildProgression::GetSingleton().ReleaseRuntimeBaseForActor(childID);
         }
         PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
         bool removed = childrenByID.erase(childID) > 0;

@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "core/AffectionService.h"
+#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -1036,7 +1037,9 @@ namespace MARAS {
     bool PlayerChildrenService::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
         if (!serialization) return false;
 
-        Revert();
+        // Clear only PLCH state — never call Revert() here, or loading PLCH after CFSN wipes factionSnapshots_!
+        children_.clear();
+        childChestIntroduced_ = false;
 
         // Load global state
         if (!serialization->ReadRecordData(childChestIntroduced_)) return false;
@@ -1048,8 +1051,6 @@ namespace MARAS {
             MARAS_LOG_ERROR("PlayerChildrenService::Load - corrupt count {}", count);
             return false;
         }
-
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
 
         for (std::uint32_t i = 0; i < count; ++i) {
             ChildHouseholdState state;
@@ -1071,15 +1072,20 @@ namespace MARAS {
                 !serialization->ReadRecordData(state.playedScene1) ||
                 !serialization->ReadRecordData(state.playedScene2) ||
                 !serialization->ReadRecordData(state.lastInteractionTimestamp)) {
+                children_.clear();
+                childChestIntroduced_ = false;
                 return false;
             }
 
             bool validCID = false;
             if (IsSyntheticChildID(oldCID)) {
                 state.childID = oldCID;
-                validCID = relMgr.GetChildEntry(oldCID).has_value();
+                validCID = true;
             } else if (oldCID == kPlayerFormID) {
                 state.childID = kPlayerFormID;
+                validCID = true;
+            } else if ((oldCID & 0xFF000000) == 0xFF000000) {
+                state.childID = oldCID;
                 validCID = true;
             } else {
                 validCID = serialization->ResolveFormID(oldCID, state.childID);
@@ -1096,6 +1102,57 @@ namespace MARAS {
 
         MARAS_LOG_INFO("Loaded PlayerChildrenService state for {} children (chestIntroduced: {})", children_.size(), childChestIntroduced_);
         return true;
+    }
+
+    void PlayerChildrenService::FinalizeLoad() {
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto& deceasedReg = DeceasedRegistry::GetSingleton();
+
+        auto shouldPruneChild = [&](RE::FormID cID) -> bool {
+            if (cID == 0 || cID == kPlayerFormID) return true;
+            if (IsSyntheticChildID(cID)) {
+                auto entryOpt = relMgr.GetChildEntry(cID);
+                return !entryOpt.has_value() || entryOpt->stage == ChildStage::Adult;
+            }
+            if (deceasedReg.IsDeceased(cID)) {
+                return true;
+            }
+            if ((cID & 0xFF000000) == 0xFF000000) {
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(cID);
+                if (!actor || actor->IsDeleted() || actor->IsDead()) {
+                    return true;
+                }
+            } else if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(cID); actor && actor->IsDead()) {
+                return true;
+            }
+            if (auto entryOpt = relMgr.GetChildEntry(cID); entryOpt.has_value() && entryOpt->stage == ChildStage::Adult) {
+                return true;
+            }
+            return false;
+        };
+
+        std::vector<RE::FormID> staleChildren;
+        for (const auto& [cID, state] : children_) {
+            if (shouldPruneChild(cID)) {
+                staleChildren.push_back(cID);
+            }
+        }
+        for (RE::FormID cID : staleChildren) {
+            children_.erase(cID);
+            MARAS_LOG_INFO("PlayerChildrenService::FinalizeLoad: Pruned stale child entry {:08X}", cID);
+        }
+
+        std::vector<RE::FormID> staleSnapshots;
+        for (const auto& [cID, snap] : factionSnapshots_) {
+            if (deceasedReg.IsDeceased(cID) ||
+                (((cID & 0xFF000000) == 0xFF000000) && !IsSyntheticChildID(cID) &&
+                 (!RE::TESForm::LookupByID<RE::Actor>(cID) || RE::TESForm::LookupByID<RE::Actor>(cID)->IsDeleted()))) {
+                staleSnapshots.push_back(cID);
+            }
+        }
+        for (RE::FormID cID : staleSnapshots) {
+            factionSnapshots_.erase(cID);
+        }
     }
 
     void PlayerChildrenService::Revert() {

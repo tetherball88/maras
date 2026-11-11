@@ -66,6 +66,7 @@ namespace MARAS {
         // Co-save serialization ('ACTR')
         bool Save(SKSE::SerializationInterface* serialization) const;
         bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
+        void FinalizeLoad();
 
         // Data dump
         nlohmann::json DumpJson() const;

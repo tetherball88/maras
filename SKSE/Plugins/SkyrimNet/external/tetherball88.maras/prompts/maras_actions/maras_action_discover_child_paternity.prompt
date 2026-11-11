@@ -10,5 +10,8 @@ USE WHEN {{speakingNpc.name}} learns, discovers, or finds out the truth about a 
 {% if contains(discoverCandidates, "biological father") %}
 - As the biological father: {{speakingNpc.name}} realizes or confirms that he IS the true biological father of the child (or unborn baby).
 {% endif %}
+{% if contains(discoverCandidates, "UNANNOUNCED") %}
+- IMPORTANT: For any candidate marked UNANNOUNCED, {{speakingNpc.name}} has ZERO prior knowledge that the mother is pregnant. NEVER reference, hint at, or trigger this action for an UNANNOUNCED pregnancy unless the mother explicitly confesses or reveals the pregnancy and paternity truth during the current conversation.
+{% endif %}
 - Specify the exact child name (or unborn child description) and mother when multiple children exist.
 NEVER use when {{speakingNpc.name}} has not learned or uncovered new truth regarding a child's paternity.

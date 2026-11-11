@@ -4,6 +4,7 @@
 #include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
+#include "core/PlayerHouseService.h"
 #include "core/Serialization.h"
 #include "core/SkyrimNetProfileService.h"
 #include "services/ActorService.h"
@@ -444,16 +445,23 @@ namespace MARAS {
             return true;
         };
 
+        const auto failLoad = [&](std::string_view where) -> bool {
+            MARAS_LOG_ERROR("NPCRelationshipManager::Load: stream error while reading {} (version={}, bytesRead={}, length={}) — clearing partial state",
+                            where, version, bytesRead, length);
+            Clear();
+            return false;
+        };
+        constexpr std::uint32_t kMaxSerializedEntries = 100000;
+
         std::uint32_t magic = 0;
         if (!readValue(magic) || magic != Serialization::kMagicNumber) {
-            MARAS_LOG_ERROR("Invalid magic number during load");
-            return false;
+            return failLoad("magic header");
         }
 
         if (version < 4) {
             // Version 1-3 Legacy Migration
             std::uint32_t npcCount = 0;
-            if (!readValue(npcCount)) return false;
+            if (!readValue(npcCount) || npcCount > kMaxSerializedEntries) return failLoad("legacy npcCount");
 
             MARAS_LOG_INFO("Migrating legacy {} NPC records (version {}) to version 4 pairs", npcCount, version);
 
@@ -461,53 +469,53 @@ namespace MARAS {
 
             for (std::uint32_t i = 0; i < npcCount; ++i) {
                 RE::FormID oldFormID = 0, newFormID = 0;
-                if (!readValue(oldFormID)) return false;
+                if (!readValue(oldFormID)) return failLoad("legacy npc FormID");
                 bool formIDValid = serialization->ResolveFormID(oldFormID, newFormID);
 
                 NPCProfileData profile;
                 std::uint8_t enumValue = 0;
 
-                if (!readValue(enumValue)) return false;
+                if (!readValue(enumValue)) return failLoad("legacy socialClass");
                 profile.socialClass = static_cast<SocialClass>(enumValue);
 
-                if (!readValue(enumValue)) return false;
+                if (!readValue(enumValue)) return failLoad("legacy skillType");
                 profile.skillType = static_cast<SkillType>(enumValue);
 
-                if (!readValue(enumValue)) return false;
+                if (!readValue(enumValue)) return failLoad("legacy temperament");
                 profile.temperament = static_cast<Temperament>(enumValue);
 
                 std::uint8_t statusValue = 0;
-                if (!readValue(statusValue)) return false;
+                if (!readValue(statusValue)) return failLoad("legacy statusValue");
 
                 bool hasOriginalHome = false;
-                if (!readValue(hasOriginalHome)) return false;
+                if (!readValue(hasOriginalHome)) return failLoad("legacy hasOriginalHome");
                 if (hasOriginalHome) {
                     RE::FormID oldHome = 0, resolvedHome = 0;
-                    if (!readValue(oldHome)) return false;
+                    if (!readValue(oldHome)) return failLoad("legacy originalHome");
                     if (oldHome != 0 && serialization->ResolveFormID(oldHome, resolvedHome)) {
                         profile.originalHome = resolvedHome;
                     }
                 }
 
                 bool hasCurrentHome = false;
-                if (!readValue(hasCurrentHome)) return false;
+                if (!readValue(hasCurrentHome)) return failLoad("legacy hasCurrentHome");
                 if (hasCurrentHome) {
                     RE::FormID oldHome = 0, resolvedHome = 0;
-                    if (!readValue(oldHome)) return false;
+                    if (!readValue(oldHome)) return failLoad("legacy currentHome");
                     if (oldHome != 0 && serialization->ResolveFormID(oldHome, resolvedHome)) {
                         profile.currentHome = resolvedHome;
                     }
                 }
 
                 uint32_t engDate = 0, marrDate = 0;
-                if (!readValue(engDate) || !readValue(marrDate)) return false;
+                if (!readValue(engDate) || !readValue(marrDate)) return failLoad("legacy dates");
 
                 if (version >= 2) {
                     bool hasHomeMarker = false;
-                    if (!readValue(hasHomeMarker)) return false;
+                    if (!readValue(hasHomeMarker)) return failLoad("legacy hasHomeMarker");
                     if (hasHomeMarker) {
                         RE::FormID oldMarker = 0, resolvedMarker = 0;
-                        if (!readValue(oldMarker)) return false;
+                        if (!readValue(oldMarker)) return failLoad("legacy homeMarker");
                         if (oldMarker != 0 && serialization->ResolveFormID(oldMarker, resolvedMarker)) {
                             profile.homeMarker = resolvedMarker;
                         }
@@ -516,10 +524,10 @@ namespace MARAS {
 
                 if (version >= 3) {
                     std::uint32_t kwCount = 0;
-                    if (!readValue(kwCount)) return false;
+                    if (!readValue(kwCount) || kwCount > kMaxSerializedEntries) return failLoad("legacy kwCount");
                     for (std::uint32_t k = 0; k < kwCount; ++k) {
                         RE::FormID oldKw = 0, resolvedKw = 0;
-                        if (!readValue(oldKw)) return false;
+                        if (!readValue(oldKw)) return failLoad("legacy keyword");
                         if (oldKw != 0 && serialization->ResolveFormID(oldKw, resolvedKw)) {
                             profile.addedKeywords.insert(resolvedKw);
                         }
@@ -557,51 +565,51 @@ namespace MARAS {
             constexpr std::uint32_t kMaxChildStringLen = 512;
 
             std::uint32_t profileCount = 0;
-            if (!readValue(profileCount)) return false;
+            if (!readValue(profileCount) || profileCount > kMaxSerializedEntries) return failLoad("profileCount");
 
             for (std::uint32_t i = 0; i < profileCount; ++i) {
                 RE::FormID oldFormID = 0, newFormID = 0;
-                if (!readValue(oldFormID)) return false;
+                if (!readValue(oldFormID)) return failLoad("profile.formID");
                 bool valid = serialization->ResolveFormID(oldFormID, newFormID);
 
                 NPCProfileData profile;
                 std::uint8_t enumValue = 0;
-                if (!readValue(enumValue)) return false;
+                if (!readValue(enumValue)) return failLoad("profile.socialClass");
                 profile.socialClass = static_cast<SocialClass>(enumValue);
-                if (!readValue(enumValue)) return false;
+                if (!readValue(enumValue)) return failLoad("profile.skillType");
                 profile.skillType = static_cast<SkillType>(enumValue);
-                if (!readValue(enumValue)) return false;
+                if (!readValue(enumValue)) return failLoad("profile.temperament");
                 profile.temperament = static_cast<Temperament>(enumValue);
 
                 bool hasOrigHome = false;
-                if (!readValue(hasOrigHome)) return false;
+                if (!readValue(hasOrigHome)) return failLoad("profile.hasOrigHome");
                 if (hasOrigHome) {
                     RE::FormID oldH = 0, newH = 0;
-                    if (!readValue(oldH)) return false;
+                    if (!readValue(oldH)) return failLoad("profile.originalHome");
                     if (oldH != 0 && serialization->ResolveFormID(oldH, newH)) profile.originalHome = newH;
                 }
 
                 bool hasCurrHome = false;
-                if (!readValue(hasCurrHome)) return false;
+                if (!readValue(hasCurrHome)) return failLoad("profile.hasCurrHome");
                 if (hasCurrHome) {
                     RE::FormID oldH = 0, newH = 0;
-                    if (!readValue(oldH)) return false;
+                    if (!readValue(oldH)) return failLoad("profile.currentHome");
                     if (oldH != 0 && serialization->ResolveFormID(oldH, newH)) profile.currentHome = newH;
                 }
 
                 bool hasMarker = false;
-                if (!readValue(hasMarker)) return false;
+                if (!readValue(hasMarker)) return failLoad("profile.hasMarker");
                 if (hasMarker) {
                     RE::FormID oldM = 0, newM = 0;
-                    if (!readValue(oldM)) return false;
+                    if (!readValue(oldM)) return failLoad("profile.homeMarker");
                     if (oldM != 0 && serialization->ResolveFormID(oldM, newM)) profile.homeMarker = newM;
                 }
 
                 std::uint32_t kwCount = 0;
-                if (!readValue(kwCount)) return false;
+                if (!readValue(kwCount) || kwCount > kMaxSerializedEntries) return failLoad("profile.kwCount");
                 for (std::uint32_t k = 0; k < kwCount; ++k) {
                     RE::FormID oldKw = 0, newKw = 0;
-                    if (!readValue(oldKw)) return false;
+                    if (!readValue(oldKw)) return failLoad("profile.keyword");
                     if (oldKw != 0 && serialization->ResolveFormID(oldKw, newKw)) profile.addedKeywords.insert(newKw);
                 }
 
@@ -616,11 +624,11 @@ namespace MARAS {
             }
 
             std::uint32_t pairCount = 0;
-            if (!readValue(pairCount)) return false;
+            if (!readValue(pairCount) || pairCount > kMaxSerializedEntries) return failLoad("pairCount");
 
             for (std::uint32_t i = 0; i < pairCount; ++i) {
                 RE::FormID oldA = 0, newA = 0, oldB = 0, newB = 0;
-                if (!readValue(oldA) || !readValue(oldB)) return false;
+                if (!readValue(oldA) || !readValue(oldB)) return failLoad("pair actors");
                 bool validA = (oldA == kPlayerFormID) ? (newA = kPlayerFormID, true) : serialization->ResolveFormID(oldA, newA);
                 bool validB = (oldB == kPlayerFormID) ? (newB = kPlayerFormID, true) : serialization->ResolveFormID(oldB, newB);
 
@@ -629,14 +637,14 @@ namespace MARAS {
                 bool isOpenVal = false;
                 if (!readValue(stVal) ||
                     !readValue(origStVal) ||
-                    !readValue(isOpenVal)) return false;
+                    !readValue(isOpenVal)) return failLoad("pair status fields");
 
                 NPCRelationshipData data(newA, newB, static_cast<RelationshipStatus>(stVal));
                 data.originalStatus = static_cast<RelationshipStatus>(origStVal);
                 data.isOpen = isOpenVal;
 
                 std::uint32_t historyCount = 0;
-                if (!readValue(historyCount)) return false;
+                if (!readValue(historyCount) || historyCount > kMaxSerializedEntries) return failLoad("pair.historyCount");
                 for (std::uint32_t h = 0; h < historyCount; ++h) {
                     std::uint8_t fromVal = 0, toVal = 0;
                     float ts = 0.0f;
@@ -644,7 +652,7 @@ namespace MARAS {
                     if (!readValue(fromVal) ||
                         !readValue(toVal) ||
                         !readValue(ts) ||
-                        !readValue(oldInit)) break;
+                        !readValue(oldInit)) return failLoad("pair.statusHistory entry");
 
                     bool validInit = (oldInit == kPlayerFormID) ? (newInit = kPlayerFormID, true) : serialization->ResolveFormID(oldInit, newInit);
                     if (validInit) {
@@ -657,7 +665,7 @@ namespace MARAS {
                 }
 
                 std::uint32_t cheatCount = 0;
-                if (!readValue(cheatCount)) return false;
+                if (!readValue(cheatCount) || cheatCount > kMaxSerializedEntries) return failLoad("pair.cheatCount");
                 for (std::uint32_t c = 0; c < cheatCount; ++c) {
                     RE::FormID oldCheater = 0, newCheater = 0;
                     RE::FormID oldVictim = 0, newVictim = 0;
@@ -674,7 +682,7 @@ namespace MARAS {
                         !readValue(isSecret) ||
                         !readValue(rawType) ||
                         !readValue(rawStatus)) {
-                        break;
+                        return failLoad("pair.cheatingRecords entry");
                     }
 
                     bool resCheater = (oldCheater == kPlayerFormID) ? (newCheater = kPlayerFormID, true) : serialization->ResolveFormID(oldCheater, newCheater);
@@ -692,15 +700,16 @@ namespace MARAS {
                 }
             }
 
-            std::uint32_t pendingMapCount = 0;
-            if (readValue(pendingMapCount)) {
+            if (version >= 5 || length == 0 || bytesRead < length) {
+                std::uint32_t pendingMapCount = 0;
+                if (!readValue(pendingMapCount) || pendingMapCount > kMaxSerializedEntries) return failLoad("pendingMapCount");
                 for (std::uint32_t pIdx = 0; pIdx < pendingMapCount; ++pIdx) {
                     RE::FormID oldBaseID = 0, newBaseID = 0;
-                    if (!readValue(oldBaseID)) break;
+                    if (!readValue(oldBaseID)) return failLoad("pending.baseID");
                     bool validBase = (oldBaseID == kPlayerFormID) ? (newBaseID = kPlayerFormID, true) : serialization->ResolveFormID(oldBaseID, newBaseID);
 
                     std::uint32_t listCount = 0;
-                    if (!readValue(listCount)) break;
+                    if (!readValue(listCount) || listCount > kMaxSerializedEntries) return failLoad("pending.listCount");
 
                     for (std::uint32_t j = 0; j < listCount; ++j) {
                         RE::FormID oldPBase = 0, newPBase = 0;
@@ -710,7 +719,7 @@ namespace MARAS {
                         if (!readValue(oldPBase) ||
                             !readValue(oldPRef) ||
                             !readValue(targetSt) ||
-                            !readValue(origSt)) break;
+                            !readValue(origSt)) return failLoad("pending relationship entry");
 
                         bool validPBase = (oldPBase == kPlayerFormID) ? (newPBase = kPlayerFormID, true) : serialization->ResolveFormID(oldPBase, newPBase);
                         bool validPRef = (oldPRef == 0) ? (newPRef = 0, true) : ((oldPRef == kPlayerFormID) ? (newPRef = kPlayerFormID, true) : serialization->ResolveFormID(oldPRef, newPRef));
@@ -722,8 +731,9 @@ namespace MARAS {
                 }
             }
 
-            std::uint32_t pendingChildMapCount = 0;
-            if (readValue(pendingChildMapCount)) {
+            if (version >= 5 || length == 0 || bytesRead < length) {
+                std::uint32_t pendingChildMapCount = 0;
+                if (!readValue(pendingChildMapCount) || pendingChildMapCount > kMaxSerializedEntries) return failLoad("pendingChildMapCount");
                 for (std::uint32_t cIdx = 0; cIdx < pendingChildMapCount; ++cIdx) {
                     RE::FormID oldCBase = 0, newCBase = 0;
                     RE::FormID oldCRef = 0, newCRef = 0;
@@ -739,7 +749,7 @@ namespace MARAS {
                         !readValue(oldPARef) ||
                         !readValue(oldPBBase) ||
                         !readValue(oldPBRef) ||
-                        !readValue(isAdopted)) break;
+                        !readValue(isAdopted)) return failLoad("pending child entry");
 
                     bool validCBase = (oldCBase == kPlayerFormID) ? (newCBase = kPlayerFormID, true) : serialization->ResolveFormID(oldCBase, newCBase);
                     bool validCRef = (oldCRef == 0) ? (newCRef = 0, true) : ((oldCRef == kPlayerFormID) ? (newCRef = kPlayerFormID, true) : serialization->ResolveFormID(oldCRef, newCRef));
@@ -754,8 +764,9 @@ namespace MARAS {
                 }
             }
 
-            std::uint32_t childRegCount = 0;
-            if (readValue(childRegCount)) {
+            if (version >= 5 || length == 0 || bytesRead < length) {
+                std::uint32_t childRegCount = 0;
+                if (!readValue(childRegCount) || childRegCount > kMaxSerializedEntries) return failLoad("childRegCount");
                 for (std::uint32_t cIdx = 0; cIdx < childRegCount; ++cIdx) {
                     RE::FormID oldChild = 0, newChild = 0;
                     RE::FormID oldPA = 0, newPA = 0;
@@ -771,19 +782,17 @@ namespace MARAS {
                         !readValue(ts) ||
                         !readValue(isAdopted) ||
                         !readValue(oldBioA) ||
-                        !readValue(oldBioB)) break;
+                        !readValue(oldBioB)) return failLoad("childReg header");
 
                     uint32_t nameLen = 0;
                     if (!readValue(nameLen) || nameLen > kMaxChildStringLen || !hasRemainingBytes(nameLen)) {
-                        MARAS_LOG_ERROR("Invalid or out-of-bounds child name length {} during load", nameLen);
-                        break;
+                        return failLoad("childReg.nameLen");
                     }
                     std::string childName;
                     if (nameLen > 0) {
                         childName.resize(nameLen);
                         if (!readBuffer(childName.data(), nameLen)) {
-                            MARAS_LOG_ERROR("Failed to read child name of length {}", nameLen);
-                            break;
+                            return failLoad("childReg.name");
                         }
                     }
 
@@ -800,25 +809,23 @@ namespace MARAS {
                         !readValue(disc) ||
                         !readValue(byPartner) ||
                         !readValue(mismatch) ||
-                        !readValue(lastCheck)) break;
+                        !readValue(lastCheck)) return failLoad("childReg fertility fields");
 
                     PaternitySecret pSec(isSec, disc, byPartner, mismatch, lastCheck);
 
                     uint8_t uStage = 0;
-                    if (!readValue(uStage)) break;
+                    if (!readValue(uStage)) return failLoad("childReg.stage");
                     ChildStage stage = static_cast<ChildStage>(uStage);
 
                     uint32_t locLen = 0;
                     if (!readValue(locLen) || locLen > kMaxChildStringLen || !hasRemainingBytes(locLen)) {
-                        MARAS_LOG_ERROR("Invalid or out-of-bounds child training location length {} during load", locLen);
-                        break;
+                        return failLoad("childReg.trainingLocationLen");
                     }
                     std::string trainingLoc;
                     if (locLen > 0) {
                         trainingLoc.resize(locLen);
                         if (!readBuffer(trainingLoc.data(), locLen)) {
-                            MARAS_LOG_ERROR("Failed to read child training location of length {}", locLen);
-                            break;
+                            return failLoad("childReg.trainingLocation");
                         }
                     }
 
@@ -830,17 +837,17 @@ namespace MARAS {
                     bool secBio = false, secPartner = false, byBio = false;
                     if (!readValue(secBio) ||
                         !readValue(secPartner) ||
-                        !readValue(byBio)) break;
+                        !readValue(byBio)) return failLoad("childReg secrecy edges");
                     pSec.isSecretForBioFather = secBio;
                     pSec.isSecretForPartner = secPartner;
                     pSec.discoveredByBioFather = byBio;
 
                     uint8_t childGender = 0;
-                    if (!readValue(childGender)) break;
+                    if (!readValue(childGender)) return failLoad("childReg.gender");
 
                     RE::FormID oldPresumedFather = 0, newPresumedFather = 0;
                     if (hasPresumedFather) {
-                        if (!readValue(oldPresumedFather)) break;
+                        if (!readValue(oldPresumedFather)) return failLoad("childReg.presumedFather");
                     }
 
                     int32_t trainClassIdx = -1;
@@ -849,37 +856,33 @@ namespace MARAS {
                     uint8_t savedRaceIdx = 255;
                     if (hasTrainingLifecycle) {
                         if (!readValue(trainClassIdx) ||
-                            !readValue(trainStartDay)) break;
+                            !readValue(trainStartDay)) return failLoad("childReg training header");
                         uint32_t bioLen = 0;
                         if (!readValue(bioLen) || bioLen > kMaxChildStringLen || !hasRemainingBytes(bioLen)) {
-                            MARAS_LOG_ERROR("Invalid or out-of-bounds child savedBioTemplateName length {} during load", bioLen);
-                            break;
+                            return failLoad("childReg.savedBioTemplateNameLen");
                         }
                         if (bioLen > 0) {
                             savedBioTpl.resize(bioLen);
                             if (!readBuffer(savedBioTpl.data(), bioLen)) {
-                                MARAS_LOG_ERROR("Failed to read child savedBioTemplateName of length {}", bioLen);
-                                break;
+                                return failLoad("childReg.savedBioTemplateName");
                             }
                         }
-                        if (!readValue(savedRaceIdx)) break;
+                        if (!readValue(savedRaceIdx)) return failLoad("childReg.savedRaceIdx");
                     }
 
                     if (hasPaternityBioFatherMeta) {
                         uint32_t bioFatherNameLen = 0;
                         if (!readValue(bioFatherNameLen) || bioFatherNameLen > kMaxChildStringLen || !hasRemainingBytes(bioFatherNameLen)) {
-                            MARAS_LOG_ERROR("Invalid or out-of-bounds child paternity bioFatherName length {} during load", bioFatherNameLen);
-                            break;
+                            return failLoad("childReg.bioFatherNameLen");
                         }
                         if (bioFatherNameLen > 0) {
                             pSec.bioFatherName.resize(bioFatherNameLen);
                             if (!readBuffer(pSec.bioFatherName.data(), bioFatherNameLen)) {
-                                MARAS_LOG_ERROR("Failed to read child paternity bioFatherName of length {}", bioFatherNameLen);
-                                break;
+                                return failLoad("childReg.bioFatherName");
                             }
                         }
                         RE::FormID oldBioFatherRaceID = 0;
-                        if (!readValue(oldBioFatherRaceID)) break;
+                        if (!readValue(oldBioFatherRaceID)) return failLoad("childReg.bioFatherRaceID");
                         if (oldBioFatherRaceID != 0) {
                             RE::FormID resolvedRaceID = 0;
                             if (serialization->ResolveFormID(oldBioFatherRaceID, resolvedRaceID)) {
@@ -974,51 +977,51 @@ namespace MARAS {
             }
 
             // Consume legacy dev pregnancy count if trailing bytes exist in record
-            if (hasRemainingBytes(sizeof(std::uint32_t))) {
-                std::uint32_t pregCount = 0;
-                readValue(pregCount);
+            std::uint32_t pregCount = 0;
+            if (hasRemainingBytes(sizeof(std::uint32_t)) && readValue(pregCount)) {
                 constexpr std::uint32_t kAgencyExtMagic = 0x41474E31;
                 std::uint32_t extMagic = pregCount;
                 if (extMagic != kAgencyExtMagic && hasRemainingBytes(sizeof(std::uint32_t))) {
-                    readValue(extMagic);
+                    if (!readValue(extMagic) && length > 0) return failLoad("AGN1 extMagic");
                 }
                 if (extMagic == kAgencyExtMagic) {
                     std::uint32_t stageRecCount = 0;
-                    if (readValue(stageRecCount)) {
-                        for (std::uint32_t sIdx = 0; sIdx < stageRecCount; ++sIdx) {
-                            RE::FormID oldA = 0, newA = 0, oldB = 0, newB = 0;
-                            RE::FormID oldCheater = 0, newCheater = 0;
-                            RE::FormID oldVictim = 0, newVictim = 0;
-                            RE::FormID oldAffair = 0, newAffair = 0;
-                            std::uint8_t rawStage = static_cast<std::uint8_t>(AffairStage::Physical);
-                            float stStartDay = 0.0f;
+                    if (!readValue(stageRecCount) || stageRecCount > kMaxSerializedEntries) {
+                        return failLoad("AGN1 stageRecCount");
+                    }
+                    for (std::uint32_t sIdx = 0; sIdx < stageRecCount; ++sIdx) {
+                        RE::FormID oldA = 0, newA = 0, oldB = 0, newB = 0;
+                        RE::FormID oldCheater = 0, newCheater = 0;
+                        RE::FormID oldVictim = 0, newVictim = 0;
+                        RE::FormID oldAffair = 0, newAffair = 0;
+                        std::uint8_t rawStage = static_cast<std::uint8_t>(AffairStage::Physical);
+                        float stStartDay = 0.0f;
 
-                            if (!readValue(oldA) || !readValue(oldB) ||
-                                !readValue(oldCheater) || !readValue(oldVictim) || !readValue(oldAffair) ||
-                                !readValue(rawStage) || !readValue(stStartDay)) {
-                                break;
-                            }
+                        if (!readValue(oldA) || !readValue(oldB) ||
+                            !readValue(oldCheater) || !readValue(oldVictim) || !readValue(oldAffair) ||
+                            !readValue(rawStage) || !readValue(stStartDay)) {
+                            return failLoad("AGN1 affairStage record");
+                        }
 
-                            bool validA = (oldA == kPlayerFormID) ? (newA = kPlayerFormID, true) : serialization->ResolveFormID(oldA, newA);
-                            bool validB = (oldB == kPlayerFormID) ? (newB = kPlayerFormID, true) : serialization->ResolveFormID(oldB, newB);
-                            bool resCheater = (oldCheater == kPlayerFormID) ? (newCheater = kPlayerFormID, true) : serialization->ResolveFormID(oldCheater, newCheater);
-                            bool resVictim = (oldVictim == kPlayerFormID) ? (newVictim = kPlayerFormID, true) : serialization->ResolveFormID(oldVictim, newVictim);
-                            bool resAffair = (oldAffair == kPlayerFormID) ? (newAffair = kPlayerFormID, true) : serialization->ResolveFormID(oldAffair, newAffair);
+                        bool validA = (oldA == kPlayerFormID) ? (newA = kPlayerFormID, true) : serialization->ResolveFormID(oldA, newA);
+                        bool validB = (oldB == kPlayerFormID) ? (newB = kPlayerFormID, true) : serialization->ResolveFormID(oldB, newB);
+                        bool resCheater = (oldCheater == kPlayerFormID) ? (newCheater = kPlayerFormID, true) : serialization->ResolveFormID(oldCheater, newCheater);
+                        bool resVictim = (oldVictim == kPlayerFormID) ? (newVictim = kPlayerFormID, true) : serialization->ResolveFormID(oldVictim, newVictim);
+                        bool resAffair = (oldAffair == kPlayerFormID) ? (newAffair = kPlayerFormID, true) : serialization->ResolveFormID(oldAffair, newAffair);
 
-                            if (validA && validB && resCheater && resVictim && resAffair) {
-                                RelationshipPairKey pKey(newA, newB);
-                                auto itPair = relationshipPairs.find(pKey);
-                                if (itPair != relationshipPairs.end()) {
-                                    for (auto& rec : itPair->second.cheatingRecords) {
-                                        if (rec.cheaterID == newCheater && rec.victimID == newVictim && rec.affairPartnerID == newAffair) {
-                                            if (newVictim == kPlayerFormID && rawStage < static_cast<std::uint8_t>(AffairStage::_Count)) {
-                                                rec.affairStage = static_cast<AffairStage>(rawStage);
-                                            } else {
-                                                rec.affairStage = AffairStage::Physical;
-                                            }
-                                            rec.stageStartDay = stStartDay;
-                                            break;
+                        if (validA && validB && resCheater && resVictim && resAffair) {
+                            RelationshipPairKey pKey(newA, newB);
+                            auto itPair = relationshipPairs.find(pKey);
+                            if (itPair != relationshipPairs.end()) {
+                                for (auto& rec : itPair->second.cheatingRecords) {
+                                    if (rec.cheaterID == newCheater && rec.victimID == newVictim && rec.affairPartnerID == newAffair) {
+                                        if (newVictim == kPlayerFormID && rawStage < static_cast<std::uint8_t>(AffairStage::_Count)) {
+                                            rec.affairStage = static_cast<AffairStage>(rawStage);
+                                        } else {
+                                            rec.affairStage = AffairStage::Physical;
                                         }
+                                        rec.stageStartDay = stStartDay;
+                                        break;
                                     }
                                 }
                             }
@@ -1026,27 +1029,28 @@ namespace MARAS {
                     }
 
                     std::uint32_t intentCount = 0;
-                    if (readValue(intentCount)) {
-                        for (std::uint32_t iIdx = 0; iIdx < intentCount; ++iIdx) {
-                            RE::FormID oldPartner = 0, newPartner = 0;
-                            std::uint8_t rawIntent = 0;
-                            float createdDay = -1.0f;
-                            RE::FormID oldLover = 0, newLover = 0;
+                    if (!readValue(intentCount) || intentCount > kMaxSerializedEntries) {
+                        return failLoad("AGN1 intentCount");
+                    }
+                    for (std::uint32_t iIdx = 0; iIdx < intentCount; ++iIdx) {
+                        RE::FormID oldPartner = 0, newPartner = 0;
+                        std::uint8_t rawIntent = 0;
+                        float createdDay = -1.0f;
+                        RE::FormID oldLover = 0, newLover = 0;
 
-                            if (!readValue(oldPartner) || !readValue(rawIntent) ||
-                                !readValue(createdDay) || !readValue(oldLover)) {
-                                break;
-                            }
+                        if (!readValue(oldPartner) || !readValue(rawIntent) ||
+                            !readValue(createdDay) || !readValue(oldLover)) {
+                            return failLoad("AGN1 intent record");
+                        }
 
-                            bool validPartner = (oldPartner == kPlayerFormID) ? (newPartner = kPlayerFormID, true) : serialization->ResolveFormID(oldPartner, newPartner);
-                            if (oldLover != 0) {
-                                (oldLover == kPlayerFormID) ? (newLover = kPlayerFormID, true) : serialization->ResolveFormID(oldLover, newLover);
-                            }
-                            if (validPartner && newPartner != 0 &&
-                                rawIntent > 0 && rawIntent < static_cast<std::uint8_t>(PartnerIntentType::_Count)) {
-                                pendingPartnerIntents_[newPartner] = PendingPartnerIntent(
-                                    static_cast<PartnerIntentType>(rawIntent), createdDay, newLover);
-                            }
+                        bool validPartner = (oldPartner == kPlayerFormID) ? (newPartner = kPlayerFormID, true) : serialization->ResolveFormID(oldPartner, newPartner);
+                        if (oldLover != 0) {
+                            (oldLover == kPlayerFormID) ? (newLover = kPlayerFormID, true) : serialization->ResolveFormID(oldLover, newLover);
+                        }
+                        if (validPartner && newPartner != 0 &&
+                            rawIntent > 0 && rawIntent < static_cast<std::uint8_t>(PartnerIntentType::_Count)) {
+                            pendingPartnerIntents_[newPartner] = PendingPartnerIntent(
+                                static_cast<PartnerIntentType>(rawIntent), createdDay, newLover);
                         }
                     }
 
@@ -1054,33 +1058,35 @@ namespace MARAS {
                     constexpr std::uint32_t kPregnancySecretExtMagic = 0x50524731;
                     if (hasRemainingBytes(sizeof(std::uint32_t))) {
                         std::uint32_t prgMagic = 0;
-                        if (readValue(prgMagic) && prgMagic == kPregnancySecretExtMagic) {
+                        if (!readValue(prgMagic)) return failLoad("PRG1 magic");
+                        if (prgMagic == kPregnancySecretExtMagic) {
                             std::uint32_t pregSecretCount = 0;
-                            if (readValue(pregSecretCount)) {
-                                for (std::uint32_t pIdx = 0; pIdx < pregSecretCount; ++pIdx) {
-                                    RE::FormID oldChild = 0, newChild = 0;
-                                    bool isPregSecret = false;
-                                    if (!readValue(oldChild) || !readValue(isPregSecret)) {
-                                        break;
-                                    }
-                                    bool validChild = false;
-                                    if (oldChild == kPlayerFormID) {
-                                        newChild = kPlayerFormID;
-                                        validChild = true;
-                                    } else if ((oldChild & 0xFF000000) == 0xFF000000) {
-                                        newChild = oldChild;
-                                        validChild = true;
-                                    } else {
-                                        validChild = serialization->ResolveFormID(oldChild, newChild);
-                                    }
-                                    if (validChild) {
-                                        auto itChild = childrenByID.find(newChild);
-                                        if (itChild != childrenByID.end()) {
-                                            itChild->second.paternitySecret.isPregnancySecretForPartner =
-                                                (itChild->second.stage == ChildStage::Unborn && itChild->second.paternitySecret.isSecretForPartner)
-                                                    ? isPregSecret
-                                                    : false;
-                                        }
+                            if (!readValue(pregSecretCount) || pregSecretCount > kMaxSerializedEntries) {
+                                return failLoad("PRG1 pregSecretCount");
+                            }
+                            for (std::uint32_t pIdx = 0; pIdx < pregSecretCount; ++pIdx) {
+                                RE::FormID oldChild = 0, newChild = 0;
+                                bool isPregSecret = false;
+                                if (!readValue(oldChild) || !readValue(isPregSecret)) {
+                                    return failLoad("PRG1 entry");
+                                }
+                                bool validChild = false;
+                                if (oldChild == kPlayerFormID) {
+                                    newChild = kPlayerFormID;
+                                    validChild = true;
+                                } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                    newChild = oldChild;
+                                    validChild = true;
+                                } else {
+                                    validChild = serialization->ResolveFormID(oldChild, newChild);
+                                }
+                                if (validChild) {
+                                    auto itChild = childrenByID.find(newChild);
+                                    if (itChild != childrenByID.end()) {
+                                        itChild->second.paternitySecret.isPregnancySecretForPartner =
+                                            (itChild->second.stage == ChildStage::Unborn && itChild->second.paternitySecret.isSecretForPartner)
+                                                ? isPregSecret
+                                                : false;
                                     }
                                 }
                             }
@@ -1089,55 +1095,57 @@ namespace MARAS {
                             constexpr std::uint32_t kChildVisualRpgExtMagic = 0x43484431;
                             if (hasRemainingBytes(sizeof(std::uint32_t))) {
                                 std::uint32_t chdMagic = 0;
-                                if (readValue(chdMagic) && chdMagic == kChildVisualRpgExtMagic) {
+                                if (!readValue(chdMagic)) return failLoad("CHD1 magic");
+                                if (chdMagic == kChildVisualRpgExtMagic) {
                                     std::uint32_t chdExtCount = 0;
-                                    if (readValue(chdExtCount)) {
-                                        for (std::uint32_t cIdx = 0; cIdx < chdExtCount; ++cIdx) {
-                                            RE::FormID oldChild = 0, newChild = 0;
-                                            RE::FormID oldHairColor = 0, newHairColor = 0;
-                                            RE::FormID oldEyes = 0, newEyes = 0;
-                                            RE::FormID oldHair = 0, newHair = 0;
-                                            RE::FormID oldBeard = 0, newBeard = 0;
-                                            float heightScale = 1.0f;
-                                            bool rpgApplied = false;
+                                    if (!readValue(chdExtCount) || chdExtCount > kMaxSerializedEntries) {
+                                        return failLoad("CHD1 chdExtCount");
+                                    }
+                                    for (std::uint32_t cIdx = 0; cIdx < chdExtCount; ++cIdx) {
+                                        RE::FormID oldChild = 0, newChild = 0;
+                                        RE::FormID oldHairColor = 0, newHairColor = 0;
+                                        RE::FormID oldEyes = 0, newEyes = 0;
+                                        RE::FormID oldHair = 0, newHair = 0;
+                                        RE::FormID oldBeard = 0, newBeard = 0;
+                                        float heightScale = 1.0f;
+                                        bool rpgApplied = false;
 
-                                            if (!readValue(oldChild) || !readValue(oldHairColor) ||
-                                                !readValue(oldEyes) || !readValue(oldHair) ||
-                                                !readValue(oldBeard) || !readValue(heightScale) ||
-                                                !readValue(rpgApplied)) {
-                                                break;
-                                            }
+                                        if (!readValue(oldChild) || !readValue(oldHairColor) ||
+                                            !readValue(oldEyes) || !readValue(oldHair) ||
+                                            !readValue(oldBeard) || !readValue(heightScale) ||
+                                            !readValue(rpgApplied)) {
+                                            return failLoad("CHD1 entry");
+                                        }
 
-                                            bool validChild = false;
-                                            if (oldChild == kPlayerFormID) {
-                                                newChild = kPlayerFormID;
-                                                validChild = true;
-                                            } else if ((oldChild & 0xFF000000) == 0xFF000000) {
-                                                newChild = oldChild;
-                                                validChild = true;
-                                            } else {
-                                                validChild = serialization->ResolveFormID(oldChild, newChild);
-                                            }
+                                        bool validChild = false;
+                                        if (oldChild == kPlayerFormID) {
+                                            newChild = kPlayerFormID;
+                                            validChild = true;
+                                        } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                            newChild = oldChild;
+                                            validChild = true;
+                                        } else {
+                                            validChild = serialization->ResolveFormID(oldChild, newChild);
+                                        }
 
-                                            if (validChild) {
-                                                auto itChild = childrenByID.find(newChild);
-                                                if (itChild != childrenByID.end()) {
-                                                    if (oldHairColor != 0 && serialization->ResolveFormID(oldHairColor, newHairColor)) {
-                                                        itChild->second.hairColorFormID = newHairColor;
-                                                    }
-                                                    if (oldEyes != 0 && serialization->ResolveFormID(oldEyes, newEyes)) {
-                                                        itChild->second.eyesPartFormID = newEyes;
-                                                    }
-                                                    if (oldHair != 0 && serialization->ResolveFormID(oldHair, newHair)) {
-                                                        itChild->second.hairPartFormID = newHair;
-                                                    }
-                                                    if (oldBeard != 0 && serialization->ResolveFormID(oldBeard, newBeard)) {
-                                                        itChild->second.facialHairPartFormID = newBeard;
-                                                    }
-                                                    itChild->second.heightScale =
-                                                        (heightScale > 0.5f && heightScale < 1.5f) ? heightScale : 1.0f;
-                                                    itChild->second.rpgApplied = rpgApplied;
+                                        if (validChild) {
+                                            auto itChild = childrenByID.find(newChild);
+                                            if (itChild != childrenByID.end()) {
+                                                if (oldHairColor != 0 && serialization->ResolveFormID(oldHairColor, newHairColor)) {
+                                                    itChild->second.hairColorFormID = newHairColor;
                                                 }
+                                                if (oldEyes != 0 && serialization->ResolveFormID(oldEyes, newEyes)) {
+                                                    itChild->second.eyesPartFormID = newEyes;
+                                                }
+                                                if (oldHair != 0 && serialization->ResolveFormID(oldHair, newHair)) {
+                                                    itChild->second.hairPartFormID = newHair;
+                                                }
+                                                if (oldBeard != 0 && serialization->ResolveFormID(oldBeard, newBeard)) {
+                                                    itChild->second.facialHairPartFormID = newBeard;
+                                                }
+                                                itChild->second.heightScale =
+                                                    (heightScale > 0.5f && heightScale < 1.5f) ? heightScale : 1.0f;
+                                                itChild->second.rpgApplied = rpgApplied;
                                             }
                                         }
                                     }
@@ -1146,35 +1154,37 @@ namespace MARAS {
                                     constexpr std::uint32_t kChildBeastbloodExtMagic = 0x4C594331;
                                     if (hasRemainingBytes(sizeof(std::uint32_t))) {
                                         std::uint32_t lycMagic = 0;
-                                        if (readValue(lycMagic) && lycMagic == kChildBeastbloodExtMagic) {
+                                        if (!readValue(lycMagic)) return failLoad("LYC1 magic");
+                                        if (lycMagic == kChildBeastbloodExtMagic) {
                                             std::uint32_t lycExtCount = 0;
-                                            if (readValue(lycExtCount)) {
-                                                for (std::uint32_t lIdx = 0; lIdx < lycExtCount; ++lIdx) {
-                                                    RE::FormID oldChild = 0, newChild = 0;
-                                                    bool hasBeastblood = false;
-                                                    bool beastbloodEvaluated = false;
+                                            if (!readValue(lycExtCount) || lycExtCount > kMaxSerializedEntries) {
+                                                return failLoad("LYC1 lycExtCount");
+                                            }
+                                            for (std::uint32_t lIdx = 0; lIdx < lycExtCount; ++lIdx) {
+                                                RE::FormID oldChild = 0, newChild = 0;
+                                                bool hasBeastblood = false;
+                                                bool beastbloodEvaluated = false;
 
-                                                    if (!readValue(oldChild) || !readValue(hasBeastblood) || !readValue(beastbloodEvaluated)) {
-                                                        break;
-                                                    }
+                                                if (!readValue(oldChild) || !readValue(hasBeastblood) || !readValue(beastbloodEvaluated)) {
+                                                    return failLoad("LYC1 entry");
+                                                }
 
-                                                    bool validChild = false;
-                                                    if (oldChild == kPlayerFormID) {
-                                                        newChild = kPlayerFormID;
-                                                        validChild = true;
-                                                    } else if ((oldChild & 0xFF000000) == 0xFF000000) {
-                                                        newChild = oldChild;
-                                                        validChild = true;
-                                                    } else {
-                                                        validChild = serialization->ResolveFormID(oldChild, newChild);
-                                                    }
+                                                bool validChild = false;
+                                                if (oldChild == kPlayerFormID) {
+                                                    newChild = kPlayerFormID;
+                                                    validChild = true;
+                                                } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                                    newChild = oldChild;
+                                                    validChild = true;
+                                                } else {
+                                                    validChild = serialization->ResolveFormID(oldChild, newChild);
+                                                }
 
-                                                    if (validChild) {
-                                                        auto itChild = childrenByID.find(newChild);
-                                                        if (itChild != childrenByID.end()) {
-                                                            itChild->second.hasBeastblood = hasBeastblood;
-                                                            itChild->second.beastbloodEvaluated = beastbloodEvaluated;
-                                                        }
+                                                if (validChild) {
+                                                    auto itChild = childrenByID.find(newChild);
+                                                    if (itChild != childrenByID.end()) {
+                                                        itChild->second.hasBeastblood = hasBeastblood;
+                                                        itChild->second.beastbloodEvaluated = beastbloodEvaluated;
                                                     }
                                                 }
                                             }
@@ -1183,59 +1193,62 @@ namespace MARAS {
                                             constexpr std::uint32_t kChildLineageSnapshotExtMagic = 0x43484432;
                                             if (hasRemainingBytes(sizeof(std::uint32_t))) {
                                                 std::uint32_t chd2Magic = 0;
-                                                if (readValue(chd2Magic) && chd2Magic == kChildLineageSnapshotExtMagic) {
+                                                if (!readValue(chd2Magic)) return failLoad("CHD2 magic");
+                                                if (chd2Magic == kChildLineageSnapshotExtMagic) {
                                                     std::uint32_t chd2ExtCount = 0;
-                                                    if (readValue(chd2ExtCount)) {
-                                                        for (std::uint32_t c2Idx = 0; c2Idx < chd2ExtCount; ++c2Idx) {
-                                                            RE::FormID oldChild = 0, newChild = 0;
-                                                            bool bioLineageEvaluated = false;
-                                                            bool guardianLineageEvaluated = false;
-                                                            std::array<std::uint8_t, 18> bioSkillBonuses{};
-                                                            std::array<std::uint8_t, 18> guardianSkillBonuses{};
-                                                            std::uint16_t lastAppliedLevel = 0;
-                                                            std::uint32_t blessingLen = 0;
-                                                            std::string daedricBlessingId;
+                                                    if (!readValue(chd2ExtCount) || chd2ExtCount > kMaxSerializedEntries) {
+                                                        return failLoad("CHD2 chd2ExtCount");
+                                                    }
+                                                    for (std::uint32_t c2Idx = 0; c2Idx < chd2ExtCount; ++c2Idx) {
+                                                        RE::FormID oldChild = 0, newChild = 0;
+                                                        bool bioLineageEvaluated = false;
+                                                        bool guardianLineageEvaluated = false;
+                                                        std::array<std::uint8_t, 18> bioSkillBonuses{};
+                                                        std::array<std::uint8_t, 18> guardianSkillBonuses{};
+                                                        std::uint16_t lastAppliedLevel = 0;
+                                                        std::uint32_t blessingLen = 0;
+                                                        std::string daedricBlessingId;
 
-                                                            if (!readValue(oldChild) ||
-                                                                !readValue(bioLineageEvaluated) ||
-                                                                !readValue(guardianLineageEvaluated) ||
-                                                                !readBuffer(bioSkillBonuses.data(),
-                                                                            static_cast<std::uint32_t>(bioSkillBonuses.size())) ||
-                                                                !readBuffer(guardianSkillBonuses.data(),
-                                                                            static_cast<std::uint32_t>(guardianSkillBonuses.size())) ||
-                                                                !readValue(lastAppliedLevel) ||
-                                                                !readValue(blessingLen) ||
-                                                                blessingLen > 256) {
-                                                                break;
+                                                        if (!readValue(oldChild) ||
+                                                            !readValue(bioLineageEvaluated) ||
+                                                            !readValue(guardianLineageEvaluated) ||
+                                                            !readBuffer(bioSkillBonuses.data(),
+                                                                        static_cast<std::uint32_t>(bioSkillBonuses.size())) ||
+                                                            !readBuffer(guardianSkillBonuses.data(),
+                                                                        static_cast<std::uint32_t>(guardianSkillBonuses.size())) ||
+                                                            !readValue(lastAppliedLevel) ||
+                                                            !readValue(blessingLen) ||
+                                                            blessingLen > 256 ||
+                                                            !hasRemainingBytes(blessingLen)) {
+                                                            return failLoad("CHD2 entry header");
+                                                        }
+                                                        if (blessingLen > 0) {
+                                                            daedricBlessingId.resize(blessingLen);
+                                                            if (!readBuffer(daedricBlessingId.data(), blessingLen)) {
+                                                                return failLoad("CHD2 blessingId");
                                                             }
-                                                            if (blessingLen > 0) {
-                                                                daedricBlessingId.resize(blessingLen);
-                                                                if (!readBuffer(daedricBlessingId.data(), blessingLen)) {
-                                                                    break;
-                                                                }
-                                                            }
+                                                        }
 
-                                                            bool validChild = false;
-                                                            if (oldChild == kPlayerFormID) {
-                                                                newChild = kPlayerFormID;
-                                                                validChild = true;
-                                                            } else if ((oldChild & 0xFF000000) == 0xFF000000) {
-                                                                newChild = oldChild;
-                                                                validChild = true;
-                                                            } else {
-                                                                validChild = serialization->ResolveFormID(oldChild, newChild);
-                                                            }
+                                                        bool validChild = false;
+                                                        if (oldChild == kPlayerFormID) {
+                                                            newChild = kPlayerFormID;
+                                                            validChild = true;
+                                                        } else if ((oldChild & 0xFF000000) == 0xFF000000) {
+                                                            newChild = oldChild;
+                                                            validChild = true;
+                                                        } else {
+                                                            validChild = serialization->ResolveFormID(oldChild, newChild);
+                                                        }
 
-                                                            if (validChild) {
-                                                                auto itChild = childrenByID.find(newChild);
-                                                                if (itChild != childrenByID.end()) {
-                                                                    itChild->second.bioLineageEvaluated = bioLineageEvaluated;
-                                                                    itChild->second.guardianLineageEvaluated = guardianLineageEvaluated;
-                                                                    itChild->second.bioSkillBonuses = bioSkillBonuses;
-                                                                    itChild->second.guardianSkillBonuses = guardianSkillBonuses;
-                                                                    itChild->second.lastAppliedLevel = lastAppliedLevel;
-                                                                    itChild->second.daedricBlessingId = std::move(daedricBlessingId);
-                                                                }
+                                                        if (validChild) {
+                                                            auto itChild = childrenByID.find(newChild);
+                                                            if (itChild != childrenByID.end()) {
+                                                                itChild->second.bioLineageEvaluated = bioLineageEvaluated;
+                                                                itChild->second.guardianLineageEvaluated = guardianLineageEvaluated;
+                                                                itChild->second.bioSkillBonuses = bioSkillBonuses;
+                                                                itChild->second.guardianSkillBonuses = guardianSkillBonuses;
+                                                                itChild->second.lastAppliedLevel = lastAppliedLevel;
+                                                                itChild->second.daedricBlessingId = std::move(daedricBlessingId);
                                                             }
                                                         }
                                                     }
@@ -1258,6 +1271,50 @@ namespace MARAS {
 
     void NPCRelationshipManager::FinalizeLoad() {
         auto& deceasedReg = DeceasedRegistry::GetSingleton();
+        auto& npcIdx = NPCIndex::GetSingleton();
+
+        auto resolveLoadedOrIndexedActor = [&npcIdx](RE::FormID id) -> RE::Actor* {
+            if (id == 0 || IsSyntheticChildID(id)) return nullptr;
+            if (auto* a = RE::TESForm::LookupByID<RE::Actor>(id)) {
+                return a;
+            }
+            return npcIdx.GetActorFromFormId(id);
+        };
+
+        auto isOrphanedDynamicActor = [](RE::FormID id) -> bool {
+            if ((id & 0xFF000000) != 0xFF000000 || IsSyntheticChildID(id) || id == kPlayerFormID) {
+                return false;
+            }
+            auto* form = RE::TESForm::LookupByID(id);
+            if (!form || form->IsDeleted()) {
+                return true;
+            }
+            return form->As<RE::Actor>() == nullptr;
+        };
+
+        // 0. Prune orphaned 0xFFxxxxxx dynamic runtime actors whose created reference no longer exists in the savegame
+        std::vector<RE::FormID> orphanedDynChildren;
+        for (const auto& [cID, entry] : childrenByID) {
+            if (isOrphanedDynamicActor(cID)) {
+                orphanedDynChildren.push_back(cID);
+            }
+        }
+        for (RE::FormID cID : orphanedDynChildren) {
+            MARAS_LOG_WARN("FinalizeLoad: Pruning orphaned dynamic runtime child {:08X} (missing/deleted 0xFF form)", cID);
+            RemoveChild(cID);
+        }
+
+        std::vector<RE::FormID> orphanedDynAdults;
+        for (RE::FormID npcID : allRegistered) {
+            if (isOrphanedDynamicActor(npcID)) {
+                orphanedDynAdults.push_back(npcID);
+            }
+        }
+        for (RE::FormID npcID : orphanedDynAdults) {
+            MARAS_LOG_WARN("FinalizeLoad: Pruning orphaned dynamic runtime NPC {:08X} (missing/deleted 0xFF form)", npcID);
+            (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
+            UnregisterNPC(npcID);
+        }
 
         // 1. Reconcile any registered adult NPCs who died while unloaded or were already archived in DeceasedRegistry
         std::vector<RE::FormID> deadAdults;
@@ -1265,7 +1322,7 @@ namespace MARAS {
             if (npcID == 0 || npcID == kPlayerFormID) {
                 continue;
             }
-            RE::Actor* loadedActor = RE::TESForm::LookupByID<RE::Actor>(npcID);
+            RE::Actor* loadedActor = resolveLoadedOrIndexedActor(npcID);
             if (deceasedReg.IsDeceased(npcID) || (loadedActor && loadedActor->IsDead())) {
                 deadAdults.push_back(npcID);
             }
@@ -1273,7 +1330,7 @@ namespace MARAS {
         for (RE::FormID deadID : deadAdults) {
             auto childEntryOpt = GetChildEntry(deadID);
             if (!deceasedReg.IsDeceased(deadID)) {
-                if (auto* deadActor = RE::TESForm::LookupByID<RE::Actor>(deadID)) {
+                if (auto* deadActor = resolveLoadedOrIndexedActor(deadID)) {
                     deceasedReg.RecordDeceasedAdult(deadActor, /*isPlayerKiller=*/false, nullptr,
                                                     childEntryOpt ? &childEntryOpt.value() : nullptr);
                 }
@@ -1291,14 +1348,14 @@ namespace MARAS {
             if (cID == 0 || IsSyntheticChildID(cID)) {
                 continue;
             }
-            RE::Actor* childActor = RE::TESForm::LookupByID<RE::Actor>(cID);
+            RE::Actor* childActor = resolveLoadedOrIndexedActor(cID);
             if (deceasedReg.IsDeceased(cID) || (childActor && childActor->IsDead())) {
                 deadChildren.emplace_back(cID, entry);
             }
         }
         for (const auto& [cID, entry] : deadChildren) {
             if (!deceasedReg.IsDeceased(cID)) {
-                if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(cID)) {
+                if (auto* childActor = resolveLoadedOrIndexedActor(cID)) {
                     if (entry.stage == ChildStage::Adult) {
                         deceasedReg.RecordDeceasedAdult(childActor, /*isPlayerKiller=*/false, nullptr, &entry);
                     } else {
@@ -1316,6 +1373,21 @@ namespace MARAS {
                     EvaluateChildCustodyOnDeath(cID);
                 }
             }
+        }
+
+        // 2b. Reconcile any surviving children still listing an already-deceased guardian
+        std::unordered_set<RE::FormID> deadGuardians;
+        for (const auto& [cID, entry] : childrenByID) {
+            if (entry.guardianAID != 0 && entry.guardianAID != kPlayerFormID && deceasedReg.IsDeceased(entry.guardianAID)) {
+                deadGuardians.insert(entry.guardianAID);
+            }
+            if (entry.guardianBID != 0 && entry.guardianBID != kPlayerFormID && deceasedReg.IsDeceased(entry.guardianBID)) {
+                deadGuardians.insert(entry.guardianBID);
+            }
+        }
+        for (RE::FormID deadGID : deadGuardians) {
+            MARAS_LOG_INFO("FinalizeLoad: Reconciling custody for already-deceased guardian {:08X}", deadGID);
+            EvaluateChildCustodyOnDeath(deadGID);
         }
 
         for (auto& [cID, entry] : childrenByID) {

@@ -9,38 +9,39 @@
         {% set lovers = [] %}
         {% set openRelationships = [] %}
         {% for rel in profile.current_relationships %}
-            {% if rel.status == "married" %}
-                {% set spouses = append(spouses, rel.partner.name) %}
-            {% elif rel.status == "engaged" %}
-                {% set fiancees = append(fiancees, rel.partner.name) %}
-            {% elif rel.status == "dating" %}
-                {% set datingPartners = append(datingPartners, rel.partner.name) %}
-            {% elif rel.status == "lover" %}
-                {% set lovers = append(lovers, rel.partner.name) %}
-            {% endif %}
-            {% if existsIn(rel, "is_open") and rel.is_open %}
-                {% set openRelationships = append(openRelationships, rel.partner.name) %}
+            {% if not (render_mode == "dialogue_target" and existsIn(rel, "is_secret_affair") and rel.is_secret_affair) %}
+                {% if rel.status == "married" %}
+                    {% set spouses = append(spouses, rel.partner.name) %}
+                {% elif rel.status == "engaged" %}
+                    {% set fiancees = append(fiancees, rel.partner.name) %}
+                {% elif rel.status == "dating" %}
+                    {% set datingPartners = append(datingPartners, rel.partner.name) %}
+                {% elif rel.status == "lover" %}
+                    {% set lovers = append(lovers, rel.partner.name) %}
+                {% endif %}
+                {% if existsIn(rel, "is_open") and rel.is_open %}
+                    {% set openRelationships = append(openRelationships, rel.partner.name) %}
+                {% endif %}
             {% endif %}
         {% endfor %}
 
-        ## {{npcName}}'s current relationships
-        {% if length(spouses) > 0 %}
-            {{npcName}} is married to {{join(spouses, ", ")}}.
-        {% endif %}
-        {% if length(fiancees) > 0 %}
-            {{npcName}} is engaged to {{join(fiancees, ", ")}}.
-        {% endif %}
-        {% if length(datingPartners) > 0 %}
-            {{npcName}} is dating {{join(datingPartners, ", ")}}.
-        {% endif %}
-        {% if length(lovers) > 0 %}
-            {{npcName}} is lovers with {{join(lovers, ", ")}}.
-        {% endif %}
-        {% for partnerName in openRelationships %}
-            {{npcName}} and {{partnerName}} are in an open relationship.
-        {% endfor %}
-        {% if false %}
-
+        {% if length(spouses) > 0 or length(fiancees) > 0 or length(datingPartners) > 0 or length(lovers) > 0 %}
+            ## {{npcName}}'s current relationships
+            {% if length(spouses) > 0 %}
+                {{npcName}} is married to {{join(spouses, ", ")}}.
+            {% endif %}
+            {% if length(fiancees) > 0 %}
+                {{npcName}} is engaged to {{join(fiancees, ", ")}}.
+            {% endif %}
+            {% if length(datingPartners) > 0 %}
+                {{npcName}} is dating {{join(datingPartners, ", ")}}.
+            {% endif %}
+            {% if length(lovers) > 0 %}
+                {{npcName}} is lovers with {{join(lovers, ", ")}}.
+            {% endif %}
+            {% for partnerName in openRelationships %}
+                {{npcName}} and {{partnerName}} are in an open relationship.
+            {% endfor %}
         {% endif %}
     {% endif %}
 

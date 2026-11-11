@@ -8,6 +8,7 @@
 #include "core/PlayerHouseService.h"
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/EnumUtils.h"
@@ -662,22 +663,87 @@ namespace MARAS {
             }
         }
 
-        // Also automatically add knowledgeRestrictions for any target NPC who is the unaware partner
-        // of an undiscovered infidelity or paternity secret involving another participant in this episode.
+        // Also automatically add knowledgeRestrictions for any target NPC who is not privy to
+        // an undiscovered infidelity or paternity secret involving another participant in this episode.
         const auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto addUniqueRestriction = [](std::vector<std::string>& vec, std::string restr) {
+            if (std::find(vec.begin(), vec.end(), restr) == vec.end()) {
+                vec.push_back(std::move(restr));
+            }
+        };
         for (auto& ap : orderedParticipants) {
             if (!ap.generateMemory || ap.formID == 0) continue;
+            std::unordered_set<RE::FormID> checkedSecretChildren;
             for (const auto& otherP : orderedParticipants) {
                 if (otherP.formID == 0 || otherP.formID == ap.formID) continue;
                 for (const auto& rec : relMgr.GetCheatingRecordsForActor(otherP.formID)) {
-                    if (rec.cheaterID == otherP.formID && rec.victimID == ap.formID && rec.isSecret && rec.affairStatus == AffairStatus::Ongoing) {
+                    if (rec.cheaterID == otherP.formID &&
+                        ap.formID != rec.cheaterID &&
+                        ap.formID != rec.affairPartnerID &&
+                        rec.isSecret &&
+                        rec.affairStatus == AffairStatus::Ongoing) {
                         std::string affairName = rec.affairPartnerID != 0 ? ActorSvc::GetName(rec.affairPartnerID) : "a secret lover";
-                        std::string restr = std::format(
-                            "{} DOES NOT KNOW that {} is having a secret affair with {}. NEVER mention, hint at, or leak {}'s affair with {} into {}'s memory or tags.",
-                            ap.name, otherP.name, affairName, otherP.name, affairName, ap.name);
-                        if (std::find(ap.knowledgeRestrictions.begin(), ap.knowledgeRestrictions.end(), restr) ==
-                            ap.knowledgeRestrictions.end()) {
-                            ap.knowledgeRestrictions.push_back(std::move(restr));
+                        addUniqueRestriction(
+                            ap.knowledgeRestrictions,
+                            std::format(
+                                "{} DOES NOT KNOW that {} is having a secret affair with {}. NEVER mention, hint at, or leak {}'s affair with {} into {}'s memory or tags.",
+                                ap.name, otherP.name, affairName, otherP.name, affairName, ap.name));
+                    }
+                }
+                for (RE::FormID childID : relMgr.GetChildrenOfActor(otherP.formID)) {
+                    if (!checkedSecretChildren.insert(childID).second) continue;
+                    auto childOpt = relMgr.GetChildEntry(childID);
+                    if (!childOpt.has_value()) continue;
+                    const auto& cEntry = *childOpt;
+                    const auto& sec = cEntry.paternitySecret;
+                    if (!sec.HasActiveSecret() || sec.discovered) continue;
+
+                    RE::FormID motherID = relMgr.GetBioMother(childID);
+                    RE::FormID bioFatherID = relMgr.GetBioFather(childID);
+                    RE::FormID explicitPresumed = relMgr.GetPresumedFather(childID);
+                    RE::FormID partnerID = explicitPresumed != 0 ? explicitPresumed : relMgr.GetMotherPartner(childID);
+                    if (partnerID != 0 && bioFatherID != 0 && relMgr.MatchesActor(bioFatherID, partnerID)) {
+                        continue;
+                    }
+
+                    bool canKnow = false;
+                    if (motherID != 0 && relMgr.MatchesActor(ap.formID, motherID)) {
+                        canKnow = true;
+                    } else if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && relMgr.MatchesActor(ap.formID, bioFatherID)) {
+                        canKnow = !sec.isSecretForBioFather || sec.discoveredByBioFather;
+                    } else if (partnerID != 0 && (motherID == 0 || !relMgr.MatchesActor(partnerID, motherID)) &&
+                               (sec.isSecretForPartner || explicitPresumed != 0)) {
+                        canKnow = !sec.isSecretForPartner || sec.discoveredByPartner;
+                    } else {
+                        canKnow = !sec.isSecretForBioFather || sec.discoveredByBioFather;
+                    }
+
+                    if (!canKnow) {
+                        std::string motherName = motherID != 0 ? ActorSvc::GetName(motherID) : otherP.name;
+                        std::string bioName = (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID)
+                                                  ? ActorSvc::GetName(bioFatherID)
+                                                  : (!sec.bioFatherName.empty() ? sec.bioFatherName : "another man");
+                        if (cEntry.stage == ChildStage::Unborn) {
+                            if (sec.isPregnancySecretForPartner) {
+                                addUniqueRestriction(
+                                    ap.knowledgeRestrictions,
+                                    std::format(
+                                        "{} DOES NOT KNOW about {}'s unannounced pregnancy or its paternity. NEVER mention, hint at, or leak {}'s pregnancy or its biological father into {}'s memory or tags.",
+                                        ap.name, motherName, motherName, ap.name));
+                            } else {
+                                addUniqueRestriction(
+                                    ap.knowledgeRestrictions,
+                                    std::format(
+                                        "{} DOES NOT KNOW that {}'s unborn child was actually fathered by {}. NEVER mention, hint at, or leak the secret paternity into {}'s memory or tags.",
+                                        ap.name, motherName, bioName, ap.name));
+                            }
+                        } else {
+                            std::string cName = cEntry.name.empty() ? "the child" : cEntry.name;
+                            addUniqueRestriction(
+                                ap.knowledgeRestrictions,
+                                std::format(
+                                    "{} DOES NOT KNOW that {}'s true biological father is {}. NEVER mention, hint at, or leak {}'s secret paternity into {}'s memory or tags.",
+                                    ap.name, cName, bioName, cName, ap.name));
                         }
                     }
                 }
@@ -807,6 +873,7 @@ namespace MARAS {
             AddCurrentEpochTask(
                 "SkyrimNetMemoryService::IngestProgrammaticEpisode",
                 [epID, entries = std::move(entries)]() {
+                    std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
                     SkyrimNetMemoryService::GetSingleton().IngestMemories(entries);
                     MARAS_LOG_INFO("[MemoryService] Episode #{}: Ingested {} programmatic memory entry/entries into SkyrimNet",
                                    epID, entries.size());
@@ -848,6 +915,7 @@ namespace MARAS {
                      respStr = std::move(respStr),
                      targetActors = std::move(targetActors),
                      relatedActorsByTarget = std::move(relatedActorsByTarget)]() {
+                        std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
                         auto& svc = SkyrimNetMemoryService::GetSingleton();
                         auto entries = svc.ParseGeneratedMemories(respStr, targetActors, relatedActorsByTarget);
                         if (entries.empty()) {
