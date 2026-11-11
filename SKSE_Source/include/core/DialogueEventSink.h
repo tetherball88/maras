@@ -19,6 +19,10 @@ namespace MARAS {
         // Attempts to resolve a deferred dialogue speaker if waitingForSpeaker_ is active.
         bool TryResolveDeferredSpeaker();
 
+        [[nodiscard]] bool IsWaitingForSpeaker() const noexcept {
+            return waitingForSpeaker_.load(std::memory_order_acquire);
+        }
+
         // Resets deferred speaker wait state across save/load/new-game transitions.
         void Revert();
 

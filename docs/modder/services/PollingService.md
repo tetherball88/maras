@@ -15,7 +15,16 @@ When a save loads or a new game begins:
 
 ## 2. Throttled Real-Time Polling Loops
 
-Whenever `Update()` is invoked (skipped automatically while any pause menu is open), the service evaluates three independent real-time timers:
+`UpdateEventSink` (`plugin.cpp`) coalesces input ticks (every `500ms`, or immediately when `DialogueEventSink::IsWaitingForSpeaker()` is active) into at most one `SessionEpoch`-guarded SKSE main-thread task at a time. Whenever `PollingService::Update()` runs on the main game thread (skipped automatically while any pause menu is open), it evaluates independent real-time timers:
+
+### 1.5-Second Interval: Intimate Scene & Children Flee Ticks
+Every **1.5 seconds** of unpaused real time (fast atomic no-op when idle):
+- Calls `IntimateThreadService::GetSingleton().Tick(now)` to run missed-end-event verification and partner walk-in/LOS exposure checks while any OStim or SexLab thread is active.
+- Calls `ChildrenFleeService::GetSingleton().Tick(now)` to refresh fleeing children and blocked-path teleports while any cell threat or fleeing child is active.
+
+### 1-Second Interval: Episodic Memory Flush
+Every **1 second** of unpaused real time:
+- Calls `SkyrimNetMemoryService::GetSingleton().Tick(now)` to flush matured episodic memory windows.
 
 ### 15-Second Interval: Follower Detection & Player Faction Guard
 Every **15 seconds** of unpaused real time:

@@ -1,4 +1,5 @@
 #include "core/SkyrimNetDecisions.h"
+#include "core/SessionEpoch.h"
 #include "utils/Common.h"
 #include "utils/JsonService.h"
 #include "utils/Settings.h"
@@ -216,13 +217,20 @@ namespace MARAS::SkyrimNetDecisions {
     namespace {
 
         bool RunStepInChatFallback(const std::string& contextJson,
+                                   SessionEpoch expectedEpoch,
                                    std::function<void(const StepInEvalResult&)> callback) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return false;
+            }
             const std::string promptName = "maras_evaluations/maras_step_in_evaluation";
             return SendCustomPromptToLLM(
                 promptName,
                 "gamemaster_evaluation",
                 contextJson,
-                [cb = std::move(callback)](const char* response, int success) {
+                [expectedEpoch, cb = std::move(callback)](const char* response, int success) {
+                    if (!IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
                     StepInEvalResult res;
                     res.usedDecisions = false;
                     if (success && response && response[0] != '\0') {
@@ -250,18 +258,25 @@ namespace MARAS::SkyrimNetDecisions {
 
     bool EvaluateStepIn(const std::string& contextJson,
                         std::function<void(const StepInEvalResult&)> callback) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         if (!ShouldUseDecisions()) {
-            return RunStepInChatFallback(contextJson, std::move(callback));
+            return RunStepInChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
 
         bool queued = SendCustomDecisionToLLM(
             "maras_step_in_evaluation",
             contextJson,
             4,
-            [contextJson, cb = callback](const char* answer, const char* resultJson, int success) mutable {
+            [expectedEpoch, contextJson, cb = callback](const char* answer, const char* resultJson, int success) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (ShouldFallbackToChatOnFailure(resultJson ? resultJson : "", success)) {
                     MARAS_LOG_WARN("[SkyrimNetDecisions] No 'decisions' route configured in SkyrimNet for maras_step_in_evaluation; falling back to Chat LLM prompt.");
-                    if (!RunStepInChatFallback(contextJson, cb)) {
+                    if (!RunStepInChatFallback(contextJson, expectedEpoch, cb)) {
+                        if (!IsSessionEpochCurrent(expectedEpoch)) {
+                            return;
+                        }
                         StepInEvalResult failRes;
                         failRes.usedDecisions = false;
                         failRes.success = false;
@@ -304,7 +319,7 @@ namespace MARAS::SkyrimNetDecisions {
 
         if (!queued) {
             MARAS_LOG_WARN("[SkyrimNetDecisions] SendCustomDecisionToLLM failed to queue maras_step_in_evaluation; falling back to Chat LLM.");
-            return RunStepInChatFallback(contextJson, std::move(callback));
+            return RunStepInChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
         return true;
     }
@@ -328,13 +343,20 @@ namespace MARAS::SkyrimNetDecisions {
         }
 
         bool RunPaternityChatFallback(const std::string& contextJson,
+                                      SessionEpoch expectedEpoch,
                                       std::function<void(const PaternityEvalResult&)> callback) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return false;
+            }
             const std::string promptName = "maras_evaluations/maras_paternity_evaluation";
             return SendCustomPromptToLLM(
                 promptName,
                 "gamemaster_evaluation",
                 contextJson,
-                [cb = std::move(callback)](const char* response, int success) {
+                [expectedEpoch, cb = std::move(callback)](const char* response, int success) {
+                    if (!IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
                     PaternityEvalResult res;
                     res.usedDecisions = false;
                     if (success && response && response[0] != '\0') {
@@ -369,18 +391,25 @@ namespace MARAS::SkyrimNetDecisions {
     bool EvaluatePaternity(const std::string& contextJson,
                            bool isSecretForPresumedFather,
                            std::function<void(const PaternityEvalResult&)> callback) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         if (!ShouldUseDecisions()) {
-            return RunPaternityChatFallback(contextJson, std::move(callback));
+            return RunPaternityChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
 
         bool queued = SendCustomDecisionToLLM(
             "maras_paternity_evaluation",
             contextJson,
             6,
-            [contextJson, isSecretForPresumedFather, cb = callback](const char* answer, const char* resultJson, int success) mutable {
+            [expectedEpoch, contextJson, isSecretForPresumedFather, cb = callback](const char* answer, const char* resultJson, int success) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (ShouldFallbackToChatOnFailure(resultJson ? resultJson : "", success)) {
                     MARAS_LOG_WARN("[SkyrimNetDecisions] No 'decisions' route configured in SkyrimNet for maras_paternity_evaluation; falling back to Chat LLM prompt.");
-                    if (!RunPaternityChatFallback(contextJson, cb)) {
+                    if (!RunPaternityChatFallback(contextJson, expectedEpoch, cb)) {
+                        if (!IsSessionEpochCurrent(expectedEpoch)) {
+                            return;
+                        }
                         PaternityEvalResult failRes;
                         failRes.usedDecisions = false;
                         failRes.success = false;
@@ -434,7 +463,7 @@ namespace MARAS::SkyrimNetDecisions {
 
         if (!queued) {
             MARAS_LOG_WARN("[SkyrimNetDecisions] SendCustomDecisionToLLM failed to queue maras_paternity_evaluation; falling back to Chat LLM.");
-            return RunPaternityChatFallback(contextJson, std::move(callback));
+            return RunPaternityChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
         return true;
     }
@@ -445,13 +474,20 @@ namespace MARAS::SkyrimNetDecisions {
     namespace {
 
         bool RunPartnerAgencyChatFallback(const std::string& contextJson,
+                                          SessionEpoch expectedEpoch,
                                           std::function<void(const PartnerAgencyEvalResult&)> callback) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return false;
+            }
             const std::string promptName = "maras_evaluations/maras_player_partner_cheating";
             return SendCustomPromptToLLM(
                 promptName,
                 "gamemaster_evaluation",
                 contextJson,
-                [cb = std::move(callback)](const char* response, int success) {
+                [expectedEpoch, cb = std::move(callback)](const char* response, int success) {
+                    if (!IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
                     PartnerAgencyEvalResult res;
                     res.usedDecisions = false;
                     if (success && response && response[0] != '\0') {
@@ -487,19 +523,26 @@ namespace MARAS::SkyrimNetDecisions {
                                const std::string& sideLoverName,
                                const std::string& affairStage,
                                std::function<void(const PartnerAgencyEvalResult&)> callback) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         if (!ShouldUseDecisions()) {
-            return RunPartnerAgencyChatFallback(contextJson, std::move(callback));
+            return RunPartnerAgencyChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
 
         bool queued = SendCustomDecisionToLLM(
             "maras_player_partner_cheating",
             contextJson,
             10,
-            [contextJson, evalMode, canConfess, partnerName, sideLoverName, affairStage, cb = callback](
+            [expectedEpoch, contextJson, evalMode, canConfess, partnerName, sideLoverName, affairStage, cb = callback](
                 const char* answer, const char* resultJson, int success) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (ShouldFallbackToChatOnFailure(resultJson ? resultJson : "", success)) {
                     MARAS_LOG_WARN("[SkyrimNetDecisions] No 'decisions' route configured in SkyrimNet for maras_player_partner_cheating; falling back to Chat LLM prompt.");
-                    if (!RunPartnerAgencyChatFallback(contextJson, cb)) {
+                    if (!RunPartnerAgencyChatFallback(contextJson, expectedEpoch, cb)) {
+                        if (!IsSessionEpochCurrent(expectedEpoch)) {
+                            return;
+                        }
                         PartnerAgencyEvalResult failRes;
                         failRes.usedDecisions = false;
                         failRes.success = false;
@@ -625,7 +668,7 @@ namespace MARAS::SkyrimNetDecisions {
 
         if (!queued) {
             MARAS_LOG_WARN("[SkyrimNetDecisions] SendCustomDecisionToLLM failed to queue maras_player_partner_cheating; falling back to Chat LLM.");
-            return RunPartnerAgencyChatFallback(contextJson, std::move(callback));
+            return RunPartnerAgencyChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
         return true;
     }
@@ -636,13 +679,20 @@ namespace MARAS::SkyrimNetDecisions {
     namespace {
 
         bool RunMatchmakingVerifyChatFallback(const std::string& contextJson,
+                                              SessionEpoch expectedEpoch,
                                               std::function<void(const MatchmakingVerifyEvalResult&)> callback) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return false;
+            }
             const std::string promptName = "maras_evaluations/maras_matchmaking_verify";
             return SendCustomPromptToLLM(
                 promptName,
                 "gamemaster_evaluation",
                 contextJson,
-                [cb = std::move(callback)](const char* response, int success) {
+                [expectedEpoch, cb = std::move(callback)](const char* response, int success) {
+                    if (!IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
                     MatchmakingVerifyEvalResult res;
                     res.usedDecisions = false;
                     if (success && response && response[0] != '\0') {
@@ -675,19 +725,26 @@ namespace MARAS::SkyrimNetDecisions {
                                    const std::string& actorAName,
                                    const std::string& actorBName,
                                    std::function<void(const MatchmakingVerifyEvalResult&)> callback) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         if (!ShouldUseDecisions()) {
-            return RunMatchmakingVerifyChatFallback(contextJson, std::move(callback));
+            return RunMatchmakingVerifyChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
 
         bool queued = SendCustomDecisionToLLM(
             "maras_matchmaking_verify",
             contextJson,
             4,
-            [contextJson, action, targetStatus, actorAName, actorBName, cb = callback](
+            [expectedEpoch, contextJson, action, targetStatus, actorAName, actorBName, cb = callback](
                 const char* answer, const char* resultJson, int success) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (ShouldFallbackToChatOnFailure(resultJson ? resultJson : "", success)) {
                     MARAS_LOG_WARN("[SkyrimNetDecisions] No 'decisions' route configured in SkyrimNet for maras_matchmaking_verify; falling back to Chat LLM prompt.");
-                    if (!RunMatchmakingVerifyChatFallback(contextJson, cb)) {
+                    if (!RunMatchmakingVerifyChatFallback(contextJson, expectedEpoch, cb)) {
+                        if (!IsSessionEpochCurrent(expectedEpoch)) {
+                            return;
+                        }
                         MatchmakingVerifyEvalResult failRes;
                         failRes.usedDecisions = false;
                         failRes.success = false;
@@ -780,7 +837,7 @@ namespace MARAS::SkyrimNetDecisions {
 
         if (!queued) {
             MARAS_LOG_WARN("[SkyrimNetDecisions] SendCustomDecisionToLLM failed to queue maras_matchmaking_verify; falling back to Chat LLM.");
-            return RunMatchmakingVerifyChatFallback(contextJson, std::move(callback));
+            return RunMatchmakingVerifyChatFallback(contextJson, expectedEpoch, std::move(callback));
         }
         return true;
     }

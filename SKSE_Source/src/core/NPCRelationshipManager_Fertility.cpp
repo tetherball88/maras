@@ -6,6 +6,7 @@
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
@@ -65,8 +66,7 @@ namespace MARAS {
         return true;
     }
 
-    void NPCRelationshipManager::EvaluateBioFatherStepIn(RE::FormID motherID, RE::FormID formerSpouseID) {
-        if (motherID == 0 || (formerSpouseID != 0 && motherID == formerSpouseID)) return;
+    namespace {
 
         struct StepInCandidate {
             RE::FormID bioFatherID{ 0 };
@@ -74,6 +74,160 @@ namespace MARAS {
             std::string childName;
             float childAgeDays{ 0.0f };
         };
+
+        struct StepInEvalQueue {
+            RE::FormID motherID{ 0 };
+            RE::FormID formerSpouseID{ 0 };
+            std::vector<StepInCandidate> candidates;
+            SessionEpoch epoch{ 0 };
+        };
+
+        void RunStepInCandidateAtIndex(std::shared_ptr<const StepInEvalQueue> queue, size_t index) {
+            if (!queue || !IsSessionEpochCurrent(queue->epoch) || index >= queue->candidates.size()) {
+                return;
+            }
+
+            auto& mgr = NPCRelationshipManager::GetSingleton();
+            const RE::FormID motherID = queue->motherID;
+            const RE::FormID formerSpouseID = queue->formerSpouseID;
+            const auto& cand = queue->candidates[index];
+
+            if (mgr.IsMostRecentRelationshipDivorced(motherID, cand.bioFatherID) ||
+                mgr.GetPrimaryPartner(cand.bioFatherID) != 0 ||
+                !mgr.CanFormRelationship(motherID, cand.bioFatherID, RelationshipStatus::Married)) {
+                RunStepInCandidateAtIndex(std::move(queue), index + 1);
+                return;
+            }
+
+            std::string motherName = ActorSvc::GetName(motherID);
+            std::string bioFatherName = ActorSvc::GetName(cand.bioFatherID);
+
+            nlohmann::json ctx;
+            ctx["motherName"] = motherName;
+            ctx["motherRace"] = ActorSvc::GetRaceName(motherID);
+            ctx["motherUUID"] = GetActorUUID(motherID);
+
+            ctx["bioFatherName"] = bioFatherName;
+            ctx["bioFatherRace"] = ActorSvc::GetRaceName(cand.bioFatherID);
+            ctx["bioFatherUUID"] = GetActorUUID(cand.bioFatherID);
+
+            if (formerSpouseID != 0) {
+                ctx["formerSpouseName"] = ActorSvc::GetName(formerSpouseID);
+                ctx["formerSpouseRace"] = ActorSvc::GetRaceName(formerSpouseID);
+                ctx["formerSpouseUUID"] = GetActorUUID(formerSpouseID);
+            } else {
+                ctx["formerSpouseName"] = "";
+                ctx["formerSpouseRace"] = "";
+                ctx["formerSpouseUUID"] = 0;
+            }
+
+            ctx["isPregnancy"] = cand.isPregnancy;
+            ctx["childName"] = cand.childName;
+            ctx["childAgeDays"] = static_cast<int>(std::round(cand.childAgeDays));
+
+            nlohmann::json recentEventsParticipants = nlohmann::json::array();
+            uint64_t motherUUID = ctx["motherUUID"].get<uint64_t>();
+            uint64_t bioFatherUUID = ctx["bioFatherUUID"].get<uint64_t>();
+            uint64_t formerSpouseUUID = ctx["formerSpouseUUID"].get<uint64_t>();
+            if (motherUUID != 0) recentEventsParticipants.push_back(motherUUID);
+            if (bioFatherUUID != 0 && bioFatherUUID != motherUUID) recentEventsParticipants.push_back(bioFatherUUID);
+            if (formerSpouseUUID != 0 && formerSpouseUUID != motherUUID && formerSpouseUUID != bioFatherUUID) recentEventsParticipants.push_back(formerSpouseUUID);
+            ctx["recent_events_participants"] = std::move(recentEventsParticipants);
+
+            std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+
+            const bool queued = SkyrimNetDecisions::EvaluateStepIn(
+                contextJson,
+                [queue, index, motherID, motherName, bioFatherName, cand](const SkyrimNetDecisions::StepInEvalResult& res) {
+                    if (!IsSessionEpochCurrent(queue->epoch)) {
+                        return;
+                    }
+                    AddEpochTask(queue->epoch, "EvaluateBioFatherStepIn::OnResult",
+                        [queue, index, motherID, motherName, bioFatherName, cand, res]() {
+                            auto& relMgr = NPCRelationshipManager::GetSingleton();
+                            if (res.success) {
+                                MARAS_LOG_INFO("[SkyrimNet] Step-in evaluation for bio father {:08X} with mother {:08X} (usedDecisions={}): steppedIn={}, reason='{}'",
+                                               cand.bioFatherID, motherID, res.usedDecisions, res.steppedIn, res.reason);
+                                if (res.steppedIn) {
+                                    relMgr.ApplyBioFatherStepIn(motherID, cand.bioFatherID);
+                                } else {
+                                    RunStepInCandidateAtIndex(queue, index + 1);
+                                }
+                                return;
+                            }
+
+                            MARAS_LOG_WARN("[SkyrimNet] Step-in evaluation failed for {:08X} & {:08X} (usedDecisions={}, detail='{}')",
+                                           cand.bioFatherID, motherID, res.usedDecisions, res.failureDetail);
+
+                            ModalRequest req;
+                            req.title = "Bio-Father Step-In Evaluation Failed";
+                            req.subtitle = "SkyrimNet LLM Request Failed";
+                            req.message = "The SkyrimNet LLM evaluation for whether the biological father steps in to marry the mother failed. Choose how to proceed:";
+                            req.tone = ModalTone::Warning;
+                            req.size = ModalSize::Md;
+                            req.defaultCancelButtonIndex = 2;
+
+                            std::string childDesc = cand.isPregnancy ? "Unborn Child" : (cand.childName.empty() ? "Child" : cand.childName);
+                            req.controls.push_back(ModalControl::MakeInfoBox(
+                                "error_details",
+                                "Failure Details",
+                                std::format("{} & {} ({})\n{}", bioFatherName, motherName, childDesc, res.failureDetail),
+                                ModalTone::Warning));
+                            req.controls.push_back(ModalControl::MakeInfoBox(
+                                "error_guidance",
+                                GetLLMFailureGuidanceTitle(res.failureType),
+                                GetLLMFailureGuidance(res.failureType, res.usedDecisions ? "decisions" : "gamemaster_evaluation"),
+                                ModalTone::Default));
+
+                            req.buttons.push_back(ModalButton::Make("retry", "Retry LLM Request", ModalButtonVariant::Primary));
+                            req.buttons.push_back(ModalButton::Make("dice_roll", "Use Dice Roll Fallback", ModalButtonVariant::Secondary));
+                            req.buttons.push_back(ModalButton::Make("skip", "Skip Candidate", ModalButtonVariant::Ghost));
+
+                            PrismaModalManager::GetSingleton().ShowModal(
+                                std::move(req),
+                                [queue, index, motherID, cand](const ModalResponse& modalResp) {
+                                    if (!IsSessionEpochCurrent(queue->epoch) || modalResp.aborted) {
+                                        return;
+                                    }
+                                    if (modalResp.buttonIndex == 0 || modalResp.buttonId == "retry") {
+                                        MARAS_LOG_INFO("[SkyrimNet] Player chose to retry bio-father step-in LLM evaluation for {:08X} & {:08X}",
+                                                       cand.bioFatherID, motherID);
+                                        RunStepInCandidateAtIndex(queue, index);
+                                        return;
+                                    }
+                                    if (modalResp.buttonIndex == 1 || modalResp.buttonId == "dice_roll") {
+                                        float roll = Utils::RandomFloat(0.0f, 100.0f);
+                                        float chance = static_cast<float>(Settings::GetSingleton().paternityBioStepUpChance);
+                                        bool fallbackStepIn = (roll < chance);
+                                        MARAS_LOG_INFO("[SkyrimNet] Player chose dice-roll fallback for bio-father step-in ({:08X} & {:08X}): {:.1f}% < {:.1f}% -> {}",
+                                                       cand.bioFatherID, motherID, roll, chance, fallbackStepIn);
+                                        if (fallbackStepIn) {
+                                            NPCRelationshipManager::GetSingleton().ApplyBioFatherStepIn(motherID, cand.bioFatherID);
+                                        } else {
+                                            RunStepInCandidateAtIndex(queue, index + 1);
+                                        }
+                                        return;
+                                    }
+                                    MARAS_LOG_INFO("[SkyrimNet] Player skipped bio-father step-in evaluation for {:08X} & {:08X}",
+                                                   cand.bioFatherID, motherID);
+                                    RunStepInCandidateAtIndex(queue, index + 1);
+                                });
+                        });
+                });
+
+            if (!queued) {
+                MARAS_LOG_WARN("[SkyrimNet] Failed to dispatch bio-father step-in evaluation for {:08X} & {:08X}; advancing queue",
+                               cand.bioFatherID, motherID);
+                AddEpochTask(queue->epoch, "EvaluateBioFatherStepIn::AdvanceOnDispatchFailure", [queue, index]() {
+                    RunStepInCandidateAtIndex(queue, index + 1);
+                });
+            }
+        }
+
+    }  // namespace
+
+    void NPCRelationshipManager::EvaluateBioFatherStepIn(RE::FormID motherID, RE::FormID formerSpouseID) {
+        if (motherID == 0 || (formerSpouseID != 0 && motherID == formerSpouseID)) return;
 
         std::vector<StepInCandidate> candidates;
         std::unordered_set<RE::FormID> seenFathers;
@@ -154,144 +308,13 @@ namespace MARAS {
             return;
         }
 
-        // SkyrimNet LLM evaluation queue
-        auto processNext = std::make_shared<std::function<void(size_t)>>();
-        *processNext = [this, motherID, formerSpouseID, candidates, processNext](size_t index) {
-            if (index >= candidates.size()) {
-                *processNext = nullptr;
-                return;
-            }
-            const auto& cand = candidates[index];
-            if (IsMostRecentRelationshipDivorced(motherID, cand.bioFatherID) ||
-                GetPrimaryPartner(cand.bioFatherID) != 0 ||
-                !CanFormRelationship(motherID, cand.bioFatherID, RelationshipStatus::Married)) {
-                (*processNext)(index + 1);
-                return;
-            }
-
-            std::string motherName = ActorSvc::GetName(motherID);
-            std::string bioFatherName = ActorSvc::GetName(cand.bioFatherID);
-
-            nlohmann::json ctx;
-            ctx["motherName"] = motherName;
-            ctx["motherRace"] = ActorSvc::GetRaceName(motherID);
-            ctx["motherUUID"] = GetActorUUID(motherID);
-
-            ctx["bioFatherName"] = bioFatherName;
-            ctx["bioFatherRace"] = ActorSvc::GetRaceName(cand.bioFatherID);
-            ctx["bioFatherUUID"] = GetActorUUID(cand.bioFatherID);
-
-            if (formerSpouseID != 0) {
-                ctx["formerSpouseName"] = ActorSvc::GetName(formerSpouseID);
-                ctx["formerSpouseRace"] = ActorSvc::GetRaceName(formerSpouseID);
-                ctx["formerSpouseUUID"] = GetActorUUID(formerSpouseID);
-            } else {
-                ctx["formerSpouseName"] = "";
-                ctx["formerSpouseRace"] = "";
-                ctx["formerSpouseUUID"] = 0;
-            }
-
-            ctx["isPregnancy"] = cand.isPregnancy;
-            ctx["childName"] = cand.childName;
-            ctx["childAgeDays"] = static_cast<int>(std::round(cand.childAgeDays));
-
-            nlohmann::json recentEventsParticipants = nlohmann::json::array();
-            uint64_t motherUUID = ctx["motherUUID"].get<uint64_t>();
-            uint64_t bioFatherUUID = ctx["bioFatherUUID"].get<uint64_t>();
-            uint64_t formerSpouseUUID = ctx["formerSpouseUUID"].get<uint64_t>();
-            if (motherUUID != 0) recentEventsParticipants.push_back(motherUUID);
-            if (bioFatherUUID != 0 && bioFatherUUID != motherUUID) recentEventsParticipants.push_back(bioFatherUUID);
-            if (formerSpouseUUID != 0 && formerSpouseUUID != motherUUID && formerSpouseUUID != bioFatherUUID) recentEventsParticipants.push_back(formerSpouseUUID);
-            ctx["recent_events_participants"] = std::move(recentEventsParticipants);
-
-            std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-
-            SkyrimNetDecisions::EvaluateStepIn(
-                contextJson,
-                [this, motherID, motherName, bioFatherName, cand, processNext, index](const SkyrimNetDecisions::StepInEvalResult& res) {
-                    if (res.success) {
-                        bool steppedIn = res.steppedIn;
-                        spdlog::info("[SkyrimNet] Step-in evaluation for bio father {:08X} with mother {:08X} (usedDecisions={}): steppedIn={}, reason='{}'",
-                                     cand.bioFatherID, motherID, res.usedDecisions, steppedIn, res.reason);
-                        SKSE::GetTaskInterface()->AddTask([this, motherID, cand, steppedIn, processNext, index]() {
-                            if (!*processNext) {
-                                return;
-                            }
-                            if (steppedIn) {
-                                ApplyBioFatherStepIn(motherID, cand.bioFatherID);
-                                *processNext = nullptr;
-                            } else {
-                                (*processNext)(index + 1);
-                            }
-                        });
-                        return;
-                    }
-
-                    spdlog::warn("[SkyrimNet] Step-in evaluation failed for {:08X} & {:08X} (usedDecisions={}, detail='{}')",
-                                 cand.bioFatherID, motherID, res.usedDecisions, res.failureDetail);
-
-                    ModalRequest req;
-                    req.title = "Bio-Father Step-In Evaluation Failed";
-                    req.subtitle = "SkyrimNet LLM Request Failed";
-                    req.message = "The SkyrimNet LLM evaluation for whether the biological father steps in to marry the mother failed. Choose how to proceed:";
-                    req.tone = ModalTone::Warning;
-                    req.size = ModalSize::Md;
-                    req.defaultCancelButtonIndex = 2;
-
-                    std::string childDesc = cand.isPregnancy ? "Unborn Child" : (cand.childName.empty() ? "Child" : cand.childName);
-                    req.controls.push_back(ModalControl::MakeInfoBox(
-                        "error_details",
-                        "Failure Details",
-                        std::format("{} & {} ({})\n{}", bioFatherName, motherName, childDesc, res.failureDetail),
-                        ModalTone::Warning));
-                    req.controls.push_back(ModalControl::MakeInfoBox(
-                        "error_guidance",
-                        GetLLMFailureGuidanceTitle(res.failureType),
-                        GetLLMFailureGuidance(res.failureType, res.usedDecisions ? "decisions" : "gamemaster_evaluation"),
-                        ModalTone::Default));
-
-                    req.buttons.push_back(ModalButton::Make("retry", "Retry LLM Request", ModalButtonVariant::Primary));
-                    req.buttons.push_back(ModalButton::Make("dice_roll", "Use Dice Roll Fallback", ModalButtonVariant::Secondary));
-                    req.buttons.push_back(ModalButton::Make("skip", "Skip Candidate", ModalButtonVariant::Ghost));
-
-                    PrismaModalManager::GetSingleton().ShowModal(
-                        std::move(req),
-                        [this, motherID, cand, processNext, index](const ModalResponse& modalResp) {
-                            if (!*processNext) {
-                                return;
-                            }
-                            if (modalResp.aborted) {
-                                *processNext = nullptr;
-                                return;
-                            }
-                            if (modalResp.buttonIndex == 0 || modalResp.buttonId == "retry") {
-                                MARAS_LOG_INFO("[SkyrimNet] Player chose to retry bio-father step-in LLM evaluation for {:08X} & {:08X}",
-                                               cand.bioFatherID, motherID);
-                                (*processNext)(index);
-                                return;
-                            }
-                            if (modalResp.buttonIndex == 1 || modalResp.buttonId == "dice_roll") {
-                                float roll = Utils::RandomFloat(0.0f, 100.0f);
-                                float chance = static_cast<float>(Settings::GetSingleton().paternityBioStepUpChance);
-                                bool fallbackStepIn = (roll < chance);
-                                MARAS_LOG_INFO("[SkyrimNet] Player chose dice-roll fallback for bio-father step-in ({:08X} & {:08X}): {:.1f}% < {:.1f}% -> {}",
-                                               cand.bioFatherID, motherID, roll, chance, fallbackStepIn);
-                                if (fallbackStepIn) {
-                                    ApplyBioFatherStepIn(motherID, cand.bioFatherID);
-                                    *processNext = nullptr;
-                                } else {
-                                    (*processNext)(index + 1);
-                                }
-                                return;
-                            }
-                            MARAS_LOG_INFO("[SkyrimNet] Player skipped bio-father step-in evaluation for {:08X} & {:08X}",
-                                           cand.bioFatherID, motherID);
-                            (*processNext)(index + 1);
-                        });
-                });
-        };
-
-        (*processNext)(0);
+        // SkyrimNet LLM evaluation queue (cycle-free data state + SessionEpoch guard)
+        auto queue = std::make_shared<StepInEvalQueue>();
+        queue->motherID = motherID;
+        queue->formerSpouseID = formerSpouseID;
+        queue->candidates = std::move(candidates);
+        queue->epoch = GetSessionEpoch();
+        RunStepInCandidateAtIndex(std::move(queue), 0);
     }
 
     // ---------------------------------------------------------------------------
@@ -1838,7 +1861,7 @@ namespace MARAS {
                        childID, partnerReaction);
 
         // 4. Refresh Prisma UI
-        SKSE::GetTaskInterface()->AddTask([childID]() {
+        AddCurrentEpochTask("ResolvePaternitySecretFallback::RefreshUI", [childID]() {
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
             PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
         });

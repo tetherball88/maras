@@ -1,5 +1,6 @@
 #include "ui/PrismaUIManager.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/Settings.h"
@@ -142,15 +143,7 @@ namespace MARAS {
         const bool viewFocused = IsViewValid() && prismaUI->HasFocus(view);
 
         if (!focusMenuOpen && !viewFocused) {
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([cb = std::move(callback)]() {
-                    try {
-                        cb();
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("PrismaUIManager::RunAfterFocusReleased immediate callback exception: {}", e.what());
-                    }
-                });
-            }
+            AddCurrentEpochTask("PrismaUIManager::RunAfterFocusReleasedImmediate", std::move(callback));
             return;
         }
 
@@ -174,8 +167,9 @@ namespace MARAS {
         MARAS_LOG_INFO("PrismaUIManager::TryFlushPostUnfocusCallbacks: FocusMenu and Cursor Menu closed, scheduling {} callback(s)",
                        callbacks.size());
 
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([callbacks = std::move(callbacks)]() {
+        AddCurrentEpochTask(
+            "PrismaUIManager::TryFlushPostUnfocusCallbacks",
+            [callbacks = std::move(callbacks)]() {
                 for (const auto& cb : callbacks) {
                     if (!cb) continue;
                     try {
@@ -185,7 +179,6 @@ namespace MARAS {
                     }
                 }
             });
-        }
     }
 
     RE::BSEventNotifyControl PrismaUIManager::ProcessEvent(

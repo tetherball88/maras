@@ -25,6 +25,8 @@ namespace MARAS {
         DeathEventHandler(DeathEventHandler&&) = delete;
         DeathEventHandler& operator=(const DeathEventHandler&) = delete;
         DeathEventHandler& operator=(DeathEventHandler&&) = delete;
+
+        void HandleActorDeathOnMainThread(RE::FormID victimID, RE::FormID killerID, bool isPlayerKiller);
     };
 
 }  // namespace MARAS

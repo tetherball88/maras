@@ -29,5 +29,5 @@ The child **keeps fleeing** (it stays in the flee set, so it does not walk back 
 
 ## 3. Lifecycle
 
-- The service owns a small worker thread that posts a refresh task while there are threats or fleeing children; it idles otherwise.
+- Periodic refreshes are driven directly on the SKSE main game thread via `ChildrenFleeService::Tick(now)` (called every ~1.5 seconds by [PollingService](PollingService.md) while threats or fleeing children are present, and fast-path skipped via an atomic flag when idle), plus immediate `SessionEpoch`-guarded main-thread tasks (`QueueRefresh()`) whenever a threat source changes. No background worker thread is spawned.
 - Session reset (`kPreLoadGame` and co-save revert) silently clears all flee state, manual requests and the door cache. No co-save state is involved, so a manual flee request does not survive a load.

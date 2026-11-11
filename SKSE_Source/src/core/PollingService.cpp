@@ -6,11 +6,14 @@
 #include "RE/T/TESPackage.h"
 #include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
+#include "core/ChildrenFleeService.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
+#include "core/IntimateThreadService.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerChildrenService.h"
 #include "core/MatchmakingService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -42,12 +45,10 @@ namespace MARAS {
 
         // Check auto-marriage on load in case an engagement matured while away
         if (previousGameDay_ >= 0.0f) {
-            if (auto* taskInterface = SKSE::GetTaskInterface()) {
-                float day = previousGameDay_;
-                taskInterface->AddTask([day]() {
-                    NPCRelationshipManager::GetSingleton().CheckAutoMarriageForEngagedNPCs(day);
-                });
-            }
+            const float day = previousGameDay_;
+            AddCurrentEpochTask("PollingService::CheckAutoMarriageOnLoad", [day]() {
+                NPCRelationshipManager::GetSingleton().CheckAutoMarriageForEngagedNPCs(day);
+            });
         }
 
         if (!initialized_) {
@@ -79,6 +80,10 @@ namespace MARAS {
 
         // Check if Player leveled up (handles LevelUpMenu close, Experience mod, or console)
         CheckPlayerLevelChanged();
+
+        // Poll active intimate threads and child flee state (~1.5s interval when active)
+        IntimateThreadService::GetSingleton().Tick(now);
+        ChildrenFleeService::GetSingleton().Tick(now);
 
         // Check teammates and sanitize player factions every 15 seconds
         if (now - lastTeammateCheck_ >= kTeammateCheckInterval) {

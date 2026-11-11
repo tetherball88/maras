@@ -132,13 +132,14 @@ sequenceDiagram
 
     alt Loading Existing Save
         SKSE->>Plugin: kPreLoadGame
-        Plugin->>Plugin: Reset runtime transient caches
-        CoSave->>Plugin: LoadCallback() (Phase 1: Read 12 chunk types | Phase 2: Post-chunk cross-service finalization)
+        Plugin->>Plugin: BumpSessionEpoch, reset coalesced event sinks & transient caches
+        CoSave->>Plugin: RevertCallback() (BumpSessionEpoch, clear all service state)
+        CoSave->>Plugin: LoadCallback() (Phase 1: Read chunk types | Phase 2: Post-chunk cross-service finalization)
         SKSE->>Plugin: kPostLoadGame
         Plugin->>Plugin: Rebuild NPCIndex, Resolve Pending Deferred NPCs, Reapply Buffs & Factions
     else Starting New Game
         SKSE->>Plugin: kNewGame
-        Plugin->>Plugin: Initialize defaults, build NPCIndex, start PollingService
+        Plugin->>Plugin: BumpSessionEpoch, initialize defaults, build NPCIndex, start PollingService
     end
 ```
 
@@ -146,11 +147,11 @@ sequenceDiagram
 
 | Event Sink | C++ Handler (`plugin.cpp`) | Purpose |
 | :--- | :--- | :--- |
-| `RE::TESInitScriptEvent` | `InitScriptEventHandler` | Detects newly initialized actors in the world and triggers `NPCRelationshipManager::TryResolveForActor` for deferred/unloaded NPCs. |
-| `RE::TESObjectLoadedEvent` | `ObjectLoadedEventHandler` | Resolves deferred relationship/child records when an actor's 3D loads and refreshes AI package overrides. |
-| `RE::TESQuestStartStopEvent` | `QuestStartStopEventHandler` | Forwards quest start/stop events to `QuestEventManager` to evaluate JSON-defined quest triggers. |
+| `RE::TESInitScriptEvent` | `ActorInitLoadedEventSink` | Coalesces newly initialized actor `FormID`s from engine worker threads into a single `SessionEpoch`-guarded main-thread task per frame (`NPCIndex::OnActorInit` + `NPCRelationshipManager::TryResolveForActor`). |
+| `RE::TESObjectLoadedEvent` | `ActorInitLoadedEventSink` | Coalesces 3D-loaded actor `FormID`s into the per-frame main-thread drain task to resolve deferred records, enforce child visuals/gear, and refresh AI package overrides safely on the game thread. |
+| `RE::TESQuestStartStopEvent` | `QuestStartStopEventHandler` | Forwards quest start/stop events to `QuestEventManager` to evaluate JSON-defined quest triggers synchronously while quest aliases remain bound. |
 | `RE::TESQuestStageEvent` | `QuestStageEventHandler` | Forwards quest stage transitions to `QuestEventManager` and syncs vanilla `RelationshipMarriageFIN` / adoption stages. |
-| `RE::TESDeathEvent` | `DeathEventHandler` | Records actor deaths in `DeceasedRegistry`, transitions active partners to `Deceased` status, and notifies `PlayerChildrenService` if a guardian dies. |
+| `RE::TESDeathEvent` | `DeathEventHandler` | Extracts victim/killer `FormID`s by value and marshals death processing onto the main thread (`AddCurrentEpochTask`) to update `DeceasedRegistry`, relationship state, and bereaved child custody. |
 | `RE::MenuOpenCloseEvent` | `MenuEventHandler` | Tracks menu transitions (e.g., `Loading Menu`, `Dialogue Menu`, `Journal Menu`) to safely manage `PrismaUIManager` focus and modal states. |
 
 ---
@@ -185,8 +186,14 @@ Tracks all deceased MARAS-tracked NPCs along with death metadata:
 - Queried by `NPCRelationshipManager`, `PrismaUIDataBridge`, and SkyrimNet prompt decorators so bereaved partners and children retain historical relationship context after an NPC dies.
 
 ### 3.6 `PollingService` (`SKSE_Source/include/core/PollingService.h`)
-Lightweight background periodic scheduler running on the game thread via time-delta checks:
-- Drives daily affection decay/growth checks, estranged divorce countdowns, `BanterCoordinatorService` Tier 1/Tier 2 scans, and `MatchmakingService` scheduled intervals without relying on heavy Papyrus `OnUpdate` loops.
+Lightweight background periodic scheduler marshaled onto the SKSE main game thread (`UpdateEventSink` coalescing guard) via time-delta checks:
+- Drives `1500ms` ticks for `IntimateThreadService` (OStim/SexLab walk-in monitoring) and `ChildrenFleeService` (threatened-cell child flee refreshes), `1s` `SkyrimNetMemoryService` episode flushes, `5s` child order/travel/calendar checks, `15s` follower scans, daily affection decay/growth rollups, estranged divorce countdowns, and `MatchmakingService` scheduled intervals without background sleeper threads or heavy Papyrus `OnUpdate` loops.
+
+### 3.7 `SessionEpoch` & Concurrency Perimeter (`SKSE_Source/include/core/SessionEpoch.h`)
+Monotonic `std::atomic<uint64_t>` session generation counter incremented on every save transition (`Serialization::RevertCallback`, `kPreLoadGame`, and `kNewGame`):
+- **Cross-Save Isolation (`AddEpochTask` / `AddCurrentEpochTask`)**: Every deferred main-thread task, asynchronous SkyrimNet LLM/Decisions HTTP callback, `PrismaModalManager` modal entry, and latent Papyrus `ReturnLatentResult` callback stamps the originating `SessionEpoch` and silently drops execution if the player loaded another save or started a new game while the task or HTTP request was in flight.
+- **Main-Thread Engine Invariant**: Off-thread engine event sinks (`TESInitScriptEvent`, `TESObjectLoadedEvent`, `TESDeathEvent`, `BSInputDeviceManager` poll trigger) capture value `RE::FormID`s only and marshal all `RE::Actor*` / `TESNPC*` / `NPCIndex` / service mutations onto the SKSE main game thread.
+- **Zero Detached Threads**: Gameplay services run deterministically on the main thread; `SkyrimNetProfileService` isolates blocking localhost HTTP/file I/O inside a bounded, joinable `std::jthread` queue that performs zero `RE::*` or `SkyrimNet.dll` calls off-thread.
 
 ---
 

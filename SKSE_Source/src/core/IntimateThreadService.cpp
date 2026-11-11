@@ -16,15 +16,8 @@ namespace MARAS {
         return instance;
     }
 
-    IntimateThreadService::~IntimateThreadService() {
-        // During DLL_PROCESS_DETACH (static destruction), joining a std::thread while the
-        // Windows Loader Lock is held can deadlock process termination, and LoggingService
-        // may already be destroyed. Signal the worker to stop and detach safely.
-        StopWorker(/*joinThread=*/false);
-    }
-
     void IntimateThreadService::Initialize() {
-        StartWorkerIfNeeded();
+        lastPollTime_ = {};
         // Children flee from the cells where intimate scenes are running.
         ChildrenFleeService::GetSingleton().SetThreatProvider(
             [](ChildrenFleeService::ThreatMap& threats) { GetSingleton().CollectSceneThreats(threats); });
@@ -32,11 +25,12 @@ namespace MARAS {
     }
 
     void IntimateThreadService::Shutdown() {
-        StopWorker(/*joinThread=*/true);
         {
             std::lock_guard<std::mutex> lock(mutex_);
             activeThreads_.clear();
+            hasActiveThreads_.store(false, std::memory_order_release);
         }
+        lastPollTime_ = {};
         MARAS_LOG_INFO("IntimateThreadService shutdown");
     }
 
@@ -44,102 +38,21 @@ namespace MARAS {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             activeThreads_.clear();
-            RefreshWorkerMonitorStateLocked();
+            hasActiveThreads_.store(false, std::memory_order_release);
         }
+        lastPollTime_ = {};
         MARAS_LOG_INFO("IntimateThreadService: Cleared all active threads on session reset");
     }
 
-    void IntimateThreadService::StartWorkerIfNeeded() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!workerSync_ || workerSync_->stopRequested.load(std::memory_order_acquire)) {
-            if (workerThread_.joinable()) {
-                workerThread_.detach();
-            }
-            workerSync_ = std::make_shared<WorkerSync>();
-            workerSync_->hasMonitorableThreads = HasActiveThreadsToMonitorLocked();
-            workerThread_ = std::thread(&IntimateThreadService::WorkerLoop, workerSync_);
-        } else {
-            RefreshWorkerMonitorStateLocked();
+    void IntimateThreadService::Tick(std::chrono::steady_clock::time_point now) {
+        if (!hasActiveThreads_.load(std::memory_order_acquire)) {
+            return;
         }
-    }
-
-    void IntimateThreadService::StopWorker(bool joinThread) {
-        std::shared_ptr<WorkerSync> syncCopy;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            syncCopy = workerSync_;
-            workerSync_.reset();
+        if (now - lastPollTime_ < kPollInterval) {
+            return;
         }
-
-        if (syncCopy) {
-            {
-                std::lock_guard<std::mutex> syncLock(syncCopy->mutex);
-                syncCopy->stopRequested.store(true, std::memory_order_release);
-                syncCopy->hasMonitorableThreads = false;
-            }
-            syncCopy->cv.notify_all();
-        }
-
-        if (workerThread_.joinable()) {
-            if (joinThread) {
-                workerThread_.join();
-            } else {
-                workerThread_.detach();
-            }
-        }
-    }
-
-    bool IntimateThreadService::HasActiveThreadsToMonitorLocked() const {
-        // Every active thread is monitored: cheating/open-relationship detection and
-        // missed-end-event verification both rely on the poll loop.
-        return !activeThreads_.empty();
-    }
-
-    void IntimateThreadService::RefreshWorkerMonitorStateLocked() {
-        if (!workerSync_) return;
-        const bool shouldMonitor = HasActiveThreadsToMonitorLocked();
-        {
-            std::lock_guard<std::mutex> syncLock(workerSync_->mutex);
-            workerSync_->hasMonitorableThreads = shouldMonitor;
-        }
-        workerSync_->cv.notify_all();
-    }
-
-    void IntimateThreadService::WorkerLoop(std::shared_ptr<WorkerSync> sync) {
-        if (!sync) return;
-
-        std::unique_lock<std::mutex> lock(sync->mutex);
-        while (!sync->stopRequested.load(std::memory_order_acquire)) {
-            // Wait until there's at least one active thread with potential cheaters or open relationship watchers, or shutdown
-            sync->cv.wait(lock, [&sync]() {
-                return sync->stopRequested.load(std::memory_order_acquire) || sync->hasMonitorableThreads;
-            });
-
-            if (sync->stopRequested.load(std::memory_order_acquire)) break;
-
-            // Sleep for the poll interval while waiting for state changes
-            sync->cv.wait_for(lock, kPollInterval, [&sync]() {
-                return sync->stopRequested.load(std::memory_order_acquire) || !sync->hasMonitorableThreads;
-            });
-
-            if (sync->stopRequested.load(std::memory_order_acquire)) break;
-
-            if (sync->hasMonitorableThreads) {
-                // Post game-thread task for proximity & LOS evaluation
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([sync]() {
-                        if (sync->stopRequested.load(std::memory_order_acquire)) {
-                            return;
-                        }
-                        try {
-                            IntimateThreadService::GetSingleton().PollActiveThreads();
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("IntimateThreadService::PollActiveThreads exception: {}", e.what());
-                        }
-                    });
-                }
-            }
-        }
+        lastPollTime_ = now;
+        PollActiveThreads();
     }
 
     void IntimateThreadService::EvaluateParticipants(const std::vector<RE::FormID>& actorIDs,
@@ -243,8 +156,6 @@ namespace MARAS {
         bool hasOpenRelationshipPotential = false;
         EvaluateParticipants(actorIDs, evaluatedCheaters, evaluatedOpenWatchers, hasCheatingPotential, hasOpenRelationshipPotential);
 
-        StartWorkerIfNeeded();
-
         ThreadKey key{ framework, threadID };
 
         {
@@ -273,7 +184,7 @@ namespace MARAS {
                                framework, threadID, insertedIt->second.actorIDs.size(), hasCheatingPotential, hasOpenRelationshipPotential);
             }
 
-            RefreshWorkerMonitorStateLocked();
+            hasActiveThreads_.store(!activeThreads_.empty(), std::memory_order_release);
         }
 
         ChildrenFleeService::GetSingleton().QueueRefresh();
@@ -338,7 +249,7 @@ namespace MARAS {
                 it->second.hasOpenRelationshipPotential = hasOpenRelationshipPotential;
                 threadCopy = it->second;
                 found = true;
-                RefreshWorkerMonitorStateLocked();
+                hasActiveThreads_.store(!activeThreads_.empty(), std::memory_order_release);
             }
         }
 
@@ -473,7 +384,7 @@ namespace MARAS {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             activeThreads_.erase(key);
-            RefreshWorkerMonitorStateLocked();
+            hasActiveThreads_.store(!activeThreads_.empty(), std::memory_order_release);
         }
         MARAS_LOG_INFO("ClearIntimateThread: Cleared thread {} #{}", framework, threadID);
         ChildrenFleeService::GetSingleton().QueueRefresh();

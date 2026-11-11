@@ -5,6 +5,7 @@
 #include "core/LoggingService.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "services/ActorService.h"
@@ -221,7 +222,7 @@ namespace MARAS {
                 return result;
             }
 
-            WinHttpSetTimeouts(hSession, 3000, 3000, timeoutMs, timeoutMs);
+            WinHttpSetTimeouts(hSession, 1000, 1000, timeoutMs, timeoutMs);
 
             HINTERNET hConnect = WinHttpConnect(hSession, wHost.c_str(), static_cast<INTERNET_PORT>(port), 0);
             if (!hConnect) {
@@ -290,78 +291,84 @@ namespace MARAS {
             return result;
         }
 
-        struct InvolvedAdultProfileRef {
-            RE::FormID formID = 0;
-            uint64_t uuid = 0;
-            std::string bioTemplateName;
-            std::string name;
-            std::string raceName;
-            std::string roleLabel;
-            bool isGuardian = false;
-        };
+    }  // namespace
 
-        struct ChildProfileContextData {
-            RE::FormID childID = 0;
-            ChildStage stage = ChildStage::Child;
-            uint64_t actorUUID = 0;
-            std::string bioTemplateName;
-            std::string saveId;
-            std::string childName;
-            std::string raceName;
-            bool isFemale = false;
-            bool isAdopted = false;
-            bool isBiologicalChild = false;
-            bool hasBeastblood = false;
-            bool trainedInWerewolfPack = false;
+    struct InvolvedAdultProfileRef {
+        RE::FormID formID = 0;
+        uint64_t uuid = 0;
+        std::string bioTemplateName;
+        std::string name;
+        std::string raceName;
+        std::string roleLabel;
+        bool isGuardian = false;
+        std::vector<std::string> fallbackMemories;
+    };
 
-            // Biological Mother
-            RE::FormID bioMotherID = 0;
-            uint64_t bioMotherUUID = 0;
-            std::string motherName;
-            std::string motherRace;
-            bool motherIsGuardian = false;
+    struct ChildProfileContextData {
+        SessionEpoch sessionEpoch = 0;
+        RE::FormID childID = 0;
+        ChildStage stage = ChildStage::Child;
+        uint64_t actorUUID = 0;
+        std::string bioTemplateName;
+        std::string saveId;
+        std::string childName;
+        std::string raceName;
+        bool isFemale = false;
+        bool isAdopted = false;
+        bool isBiologicalChild = false;
+        bool hasBeastblood = false;
+        bool trainedInWerewolfPack = false;
 
-            // True Biological Father
-            RE::FormID bioFatherID = 0;
-            uint64_t bioFatherUUID = 0;
-            std::string bioFatherName;
-            std::string bioFatherRace;
-            bool bioFatherIsGuardian = false;
+        // Biological Mother
+        RE::FormID bioMotherID = 0;
+        uint64_t bioMotherUUID = 0;
+        std::string motherName;
+        std::string motherRace;
+        bool motherIsGuardian = false;
 
-            // Presumed Father (Mother's partner at conception/birth if distinct from bioFatherID)
-            RE::FormID presumedFatherID = 0;
-            uint64_t presumedFatherUUID = 0;
-            std::string presumedFatherName;
-            std::string presumedFatherRace;
-            bool presumedFatherIsGuardian = false;
-            std::string motherPresumedRelStatus;
+        // True Biological Father
+        RE::FormID bioFatherID = 0;
+        uint64_t bioFatherUUID = 0;
+        std::string bioFatherName;
+        std::string bioFatherRace;
+        bool bioFatherIsGuardian = false;
 
-            // Custodial Guardians
-            RE::FormID guardianAID = 0;
-            RE::FormID guardianBID = 0;
-            std::string guardianAName;
-            std::string guardianBName;
+        // Presumed Father (Mother's partner at conception/birth if distinct from bioFatherID)
+        RE::FormID presumedFatherID = 0;
+        uint64_t presumedFatherUUID = 0;
+        std::string presumedFatherName;
+        std::string presumedFatherRace;
+        bool presumedFatherIsGuardian = false;
+        std::string motherPresumedRelStatus;
 
-            // Paternity Secret & Knowledge State
-            bool hasPresumedFather = false;
-            bool hasPaternitySecret = false;
-            bool isSingleMotherSecretFromBioFather = false;
-            bool partnerKnowsPaternity = true;
-            bool bioFatherKnowsPaternity = true;
-            bool hasPhenotypeMismatch = false;
-            std::string visualDiscrepancyDescription;
+        // Custodial Guardians
+        RE::FormID guardianAID = 0;
+        RE::FormID guardianBID = 0;
+        std::string guardianAName;
+        std::string guardianBName;
 
-            // All involved adults at the moment of generating/updating the bio
-            std::vector<InvolvedAdultProfileRef> involvedAdults;
+        // Paternity Secret & Knowledge State
+        bool hasPresumedFather = false;
+        bool hasPaternitySecret = false;
+        bool isSingleMotherSecretFromBioFather = false;
+        bool partnerKnowsPaternity = true;
+        bool bioFatherKnowsPaternity = true;
+        bool hasPhenotypeMismatch = false;
+        std::string visualDiscrepancyDescription;
 
-            std::vector<std::string> siblingNames;
-            std::string homeLocationName;
-            std::string trainingLocation;
-            std::string trainingClassName;
-            std::string trainingDescription;
-            std::string savedChildhoodBioTemplateName;
-            std::string generationGuidance;
-        };
+        // All involved adults at the moment of generating/updating the bio
+        std::vector<InvolvedAdultProfileRef> involvedAdults;
+
+        std::vector<std::string> siblingNames;
+        std::string homeLocationName;
+        std::string trainingLocation;
+        std::string trainingClassName;
+        std::string trainingDescription;
+        std::string savedChildhoodBioTemplateName;
+        std::string generationGuidance;
+    };
+
+    namespace {
 
         std::string JoinNamesForProse(const std::vector<std::string>& names) {
             if (names.empty()) return "";
@@ -663,28 +670,48 @@ namespace MARAS {
                 }
             }
 
-            HMODULE hMod = GetModuleHandleW(L"SkyrimNet.dll");
-            if (hMod && adult.formID != 0) {
-                if (auto* memFn = reinterpret_cast<PublicGetMemoriesForActor_t>(GetProcAddress(hMod, "PublicGetMemoriesForActor"))) {
-                    std::string memJsonStr = memFn(adult.formID, 5, "");
-                    if (!memJsonStr.empty() && memJsonStr != "[]") {
-                        auto memArr = nlohmann::json::parse(memJsonStr, nullptr, false);
-                        if (memArr.is_array() && !memArr.empty()) {
-                            out << "#### Memories\n";
-                            for (const auto& m : memArr) {
-                                if (m.is_object()) {
-                                    std::string content = m.value("content", "");
-                                    if (!content.empty()) {
-                                        out << "- " << content << "\n";
-                                    }
-                                }
-                            }
-                        }
+            if (!adult.fallbackMemories.empty()) {
+                out << "#### Memories\n";
+                for (const auto& memLine : adult.fallbackMemories) {
+                    if (!memLine.empty()) {
+                        out << "- " << memLine << "\n";
                     }
                 }
             }
 
             return StringUtils::TrimStd(out.str());
+        }
+
+        std::vector<std::string> QueryAdultFallbackMemoriesOnGameThread(RE::FormID adultFormID) {
+            std::vector<std::string> memories;
+            if (adultFormID == 0 || adultFormID == kUnknownFatherFormID) {
+                return memories;
+            }
+            HMODULE hMod = GetModuleHandleW(L"SkyrimNet.dll");
+            if (!hMod) {
+                return memories;
+            }
+            auto* memFn = reinterpret_cast<PublicGetMemoriesForActor_t>(GetProcAddress(hMod, "PublicGetMemoriesForActor"));
+            if (!memFn) {
+                return memories;
+            }
+            std::string memJsonStr = memFn(adultFormID, 5, "");
+            if (memJsonStr.empty() || memJsonStr == "[]") {
+                return memories;
+            }
+            auto memArr = nlohmann::json::parse(memJsonStr, nullptr, false);
+            if (!memArr.is_array()) {
+                return memories;
+            }
+            for (const auto& m : memArr) {
+                if (m.is_object() && m.contains("content") && m["content"].is_string()) {
+                    std::string content = m["content"].get<std::string>();
+                    if (!content.empty()) {
+                        memories.push_back(std::move(content));
+                    }
+                }
+            }
+            return memories;
         }
 
         std::string RenderInvolvedPartiesContext(
@@ -702,7 +729,7 @@ namespace MARAS {
                         endpoint.port,
                         "/prompts?api=render-template-preview",
                         SafeJsonDump(payload),
-                        15000);
+                        5000);
                     if (resp.statusCode == 200 && !resp.body.empty()) {
                         nlohmann::json parsed = nlohmann::json::parse(resp.body, nullptr, false);
                         if (parsed.is_object() && parsed.value("success", false)) {
@@ -906,6 +933,7 @@ namespace MARAS {
                     ref.raceName = ActorSvc::GetRaceName(adultID);
                     ref.roleLabel = roleLabel;
                     ref.isGuardian = isGuardian;
+                    ref.fallbackMemories = QueryAdultFallbackMemoriesOnGameThread(adultID);
                     if (!ref.name.empty()) {
                         data.involvedAdults.push_back(std::move(ref));
                     }
@@ -1115,12 +1143,9 @@ namespace MARAS {
             return anyBlock ? StringUtils::TrimStd(out.str()) : "";
         }
 
-        void ExecuteAsyncChildProfileFlow(ChildProfileContextData taskData) {
+        void ExecuteAsyncChildProfileFlow(ChildProfileContextData& taskData, std::stop_token stopToken) {
             try {
-                auto* requestProfileUpdateFn = FindRequestProfileUpdate();
-                if (!requestProfileUpdateFn) {
-                    MARAS_LOG_WARN("[SkyrimNetProfile] PublicRequestProfileUpdate not available in SkyrimNet.dll; skipping profile update for {:08X} ('{}', stage={})",
-                                   taskData.childID, taskData.childName, static_cast<int>(taskData.stage));
+                if (stopToken.stop_requested() || !IsSessionEpochCurrent(taskData.sessionEpoch)) {
                     return;
                 }
 
@@ -1129,6 +1154,10 @@ namespace MARAS {
                 std::string childhoodCarryOver = CarryOverChildhoodBioFromDisk(taskData);
                 if (!childhoodCarryOver.empty()) {
                     taskData.generationGuidance += "\n\n" + childhoodCarryOver;
+                }
+
+                if (stopToken.stop_requested() || !IsSessionEpochCurrent(taskData.sessionEpoch)) {
+                    return;
                 }
 
                 const auto endpoint = ReadSkyrimNetWebServerConfig();
@@ -1140,14 +1169,47 @@ namespace MARAS {
                     taskData.generationGuidance += "\n\n" + renderedPartiesContext;
                 }
 
-                // 2. Request profile generation/update via SkyrimNet Public API PublicRequestProfileUpdate.
-                if (requestProfileUpdateFn(taskData.childID, taskData.generationGuidance.c_str(), kAllProfileBlocksCSV)) {
-                    MARAS_LOG_INFO("[SkyrimNetProfile] Queued profile update via PublicRequestProfileUpdate for spawned child actor {:08X} ('{}', stage={}, involvedAdults={})",
-                                   taskData.childID, taskData.childName, static_cast<int>(taskData.stage), taskData.involvedAdults.size());
-                } else {
-                    MARAS_LOG_WARN("[SkyrimNetProfile] PublicRequestProfileUpdate returned false for {:08X} ('{}', stage={})",
-                                   taskData.childID, taskData.childName, static_cast<int>(taskData.stage));
+                if (stopToken.stop_requested() || !IsSessionEpochCurrent(taskData.sessionEpoch)) {
+                    return;
                 }
+
+                // 2. Marshal PublicRequestProfileUpdate back onto the SKSE main thread with SessionEpoch validation.
+                const SessionEpoch expectedEpoch = taskData.sessionEpoch;
+                const RE::FormID childID = taskData.childID;
+                const ChildStage stage = taskData.stage;
+                const std::size_t adultCount = taskData.involvedAdults.size();
+                std::string childName = std::move(taskData.childName);
+                std::string guidance = std::move(taskData.generationGuidance);
+
+                AddEpochTask(
+                    expectedEpoch,
+                    "SkyrimNetProfileService::SubmitProfileUpdate",
+                    [childID, stage, adultCount, childName = std::move(childName), guidance = std::move(guidance)]() {
+                        if (!IsSkyrimNetAvailable() ||
+                            SkyrimNetProfileService::IsSuppressed() ||
+                            SkyrimNetMemoryService::IsSuppressed()) {
+                            return;
+                        }
+                        auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
+                        if (!actor || actor->IsDeleted()) {
+                            MARAS_LOG_WARN("[SkyrimNetProfile] Spawned child actor {:08X} ('{}', stage={}) no longer valid before profile submission; skipping",
+                                           childID, childName, static_cast<int>(stage));
+                            return;
+                        }
+                        auto* requestProfileUpdateFn = FindRequestProfileUpdate();
+                        if (!requestProfileUpdateFn) {
+                            MARAS_LOG_WARN("[SkyrimNetProfile] PublicRequestProfileUpdate not available in SkyrimNet.dll; skipping profile update for {:08X} ('{}', stage={})",
+                                           childID, childName, static_cast<int>(stage));
+                            return;
+                        }
+                        if (requestProfileUpdateFn(childID, guidance.c_str(), kAllProfileBlocksCSV)) {
+                            MARAS_LOG_INFO("[SkyrimNetProfile] Queued profile update via PublicRequestProfileUpdate for spawned child actor {:08X} ('{}', stage={}, involvedAdults={})",
+                                           childID, childName, static_cast<int>(stage), adultCount);
+                        } else {
+                            MARAS_LOG_WARN("[SkyrimNetProfile] PublicRequestProfileUpdate returned false for {:08X} ('{}', stage={})",
+                                           childID, childName, static_cast<int>(stage));
+                        }
+                    });
             } catch (const std::exception& e) {
                 MARAS_LOG_ERROR("[SkyrimNetProfile] Exception in ExecuteAsyncChildProfileFlow: {}", e.what());
             } catch (...) {
@@ -1157,6 +1219,21 @@ namespace MARAS {
 
     }  // namespace
 
+    SkyrimNetProfileService& SkyrimNetProfileService::GetSingleton() {
+        static SkyrimNetProfileService singleton;
+        return singleton;
+    }
+
+    SkyrimNetProfileService::SkyrimNetProfileService() = default;
+
+    SkyrimNetProfileService::~SkyrimNetProfileService() {
+        {
+            std::lock_guard<std::mutex> lock(queueMutex_);
+            pendingQueue_.clear();
+        }
+        workerThread_.request_stop();
+    }
+
     std::string SkyrimNetProfileService::GetActorBioTemplateName(RE::FormID actorFormID) const {
         if (!IsSkyrimNetAvailable() || actorFormID == 0 || IsSyntheticChildID(actorFormID)) {
             return "";
@@ -1165,8 +1242,14 @@ namespace MARAS {
     }
 
     void SkyrimNetProfileService::Revert() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        updatedActorStages_.clear();
+        {
+            std::lock_guard<std::mutex> qLock(queueMutex_);
+            pendingQueue_.clear();
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            updatedActorStages_.clear();
+        }
         MARAS_LOG_INFO("[SkyrimNetProfile] Reverted session profile update tracking state");
     }
 
@@ -1185,6 +1268,63 @@ namespace MARAS {
         if (childID == 0) return false;
         std::lock_guard<std::mutex> lock(mutex_);
         return updatedActorStages_.contains(MakeStageKey(childID, stage));
+    }
+
+    void SkyrimNetProfileService::EnqueueProfileTask(std::unique_ptr<ChildProfileContextData> taskData) {
+        if (!taskData) {
+            return;
+        }
+        std::jthread finishedWorkerToJoin;
+        {
+            std::lock_guard<std::mutex> lock(queueMutex_);
+            if (!IsSessionEpochCurrent(taskData->sessionEpoch)) {
+                return;
+            }
+            constexpr std::size_t kMaxPendingTasks = 32;
+            if (pendingQueue_.size() >= kMaxPendingTasks) {
+                const auto& dropped = pendingQueue_.front();
+                MARAS_LOG_WARN("[SkyrimNetProfile] Profile task queue full ({}); dropping oldest queued task for {:08X} ('{}')",
+                               pendingQueue_.size(),
+                               dropped ? dropped->childID : 0,
+                               dropped ? dropped->childName : "");
+                pendingQueue_.pop_front();
+            }
+            pendingQueue_.push_back(std::move(taskData));
+            if (!workerActive_) {
+                finishedWorkerToJoin = std::move(workerThread_);
+                workerActive_ = true;
+                workerThread_ = std::jthread([this](std::stop_token st) {
+                    WorkerLoop(st);
+                });
+            }
+        }
+        if (finishedWorkerToJoin.joinable()) {
+            finishedWorkerToJoin.join();
+        }
+    }
+
+    void SkyrimNetProfileService::WorkerLoop(std::stop_token stopToken) {
+        for (;;) {
+            std::unique_ptr<ChildProfileContextData> taskData;
+            {
+                std::lock_guard<std::mutex> lock(queueMutex_);
+                if (stopToken.stop_requested() || pendingQueue_.empty()) {
+                    workerActive_ = false;
+                    return;
+                }
+                taskData = std::move(pendingQueue_.front());
+                pendingQueue_.pop_front();
+            }
+            if (!taskData) {
+                continue;
+            }
+            if (!IsSessionEpochCurrent(taskData->sessionEpoch)) {
+                MARAS_LOG_DEBUG("[SkyrimNetProfile] Dropping queued profile task for {:08X} ('{}'): stale session epoch",
+                                taskData->childID, taskData->childName);
+                continue;
+            }
+            ExecuteAsyncChildProfileFlow(*taskData, stopToken);
+        }
     }
 
     void SkyrimNetProfileService::RequestChildProfileUpdate(RE::FormID childID, ChildStage stage) {
@@ -1208,15 +1348,9 @@ namespace MARAS {
             return;
         }
 
-        auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
-        if (!actor || actor->IsDeleted()) {
-            MARAS_LOG_WARN("[SkyrimNetProfile] Skipping profile update for {:08X}: not a valid placed RE::Actor", childID);
-            return;
-        }
-
+        const uint64_t stageKey = MakeStageKey(childID, stage);
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            const uint64_t stageKey = MakeStageKey(childID, stage);
             if (!updatedActorStages_.insert(stageKey).second) {
                 MARAS_LOG_DEBUG("[SkyrimNetProfile] Profile update already requested for actor {:08X} at stage {}; skipping",
                                 childID, static_cast<int>(stage));
@@ -1224,14 +1358,34 @@ namespace MARAS {
             }
         }
 
-        ChildProfileContextData taskData = GatherChildProfileContextOnGameThread(childID, stage, actor);
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        if (!AddEpochTask(expectedEpoch, "SkyrimNetProfileService::GatherChildProfileContext", [this, childID, stage, stageKey, expectedEpoch]() {
+                if (!IsSkyrimNetAvailable() || IsSuppressed() || SkyrimNetMemoryService::IsSuppressed()) {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    updatedActorStages_.erase(stageKey);
+                    return;
+                }
 
-        MARAS_LOG_INFO("[SkyrimNetProfile] Queuing async profile update for spawned child actor {:08X} ('{}', stage={}, uuid={:X}, bio='{}', involvedAdults={})",
-                       childID, taskData.childName, static_cast<int>(stage), taskData.actorUUID, taskData.bioTemplateName, taskData.involvedAdults.size());
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
+                if (!actor || actor->IsDeleted()) {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    updatedActorStages_.erase(stageKey);
+                    MARAS_LOG_WARN("[SkyrimNetProfile] Skipping profile update for {:08X}: not a valid placed RE::Actor", childID);
+                    return;
+                }
 
-        std::thread([data = std::move(taskData)]() mutable {
-            ExecuteAsyncChildProfileFlow(std::move(data));
-        }).detach();
+                auto taskData = std::make_unique<ChildProfileContextData>(
+                    GatherChildProfileContextOnGameThread(childID, stage, actor));
+                taskData->sessionEpoch = expectedEpoch;
+
+                MARAS_LOG_INFO("[SkyrimNetProfile] Queuing async profile update for spawned child actor {:08X} ('{}', stage={}, uuid={:X}, bio='{}', involvedAdults={})",
+                               childID, taskData->childName, static_cast<int>(stage), taskData->actorUUID, taskData->bioTemplateName, taskData->involvedAdults.size());
+
+                EnqueueProfileTask(std::move(taskData));
+            })) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            updatedActorStages_.erase(stageKey);
+        }
     }
 
     bool SkyrimNetProfileService::RequestActorProfileUpdate(

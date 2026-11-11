@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PCH.h"
+#include "core/SessionEpoch.h"
 #include "utils/Common.h"
 
 #include <deque>
@@ -225,6 +226,7 @@ namespace MARAS {
             int32_t defaultCancelButtonIndex = 1;
             ModalCallback callback;
             bool dispatchedToUI = false;
+            SessionEpoch sessionEpoch = 0;
         };
 
         void ProcessQueueOnGameThread();

@@ -13,6 +13,7 @@
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/SkyrimNetProfileService.h"
 #include "core/SpouseAssetsService.h"
@@ -23,6 +24,24 @@
 #include "ui/PrismaUIManager.h"
 #include "utils/Common.h"
 #include "utils/Settings.h"
+
+namespace MARAS {
+
+    namespace {
+        std::atomic<SessionEpoch> g_sessionEpoch{ 1 };
+    }
+
+    SessionEpoch GetSessionEpoch() noexcept {
+        return g_sessionEpoch.load(std::memory_order_acquire);
+    }
+
+    SessionEpoch BumpSessionEpoch(std::string_view reason) noexcept {
+        const SessionEpoch next = g_sessionEpoch.fetch_add(1, std::memory_order_acq_rel) + 1;
+        MARAS_LOG_INFO("[SessionEpoch] Advanced session epoch to {} (reason: {})", next, reason);
+        return next;
+    }
+
+}  // namespace MARAS
 
 namespace MARAS::Serialization {
 
@@ -213,6 +232,7 @@ namespace MARAS::Serialization {
     }
 
     void RevertCallback(SKSE::SerializationInterface*) {
+        BumpSessionEpoch("Serialization::RevertCallback");
         AdultChildProgression::GetSingleton().Revert();
         NPCRelationshipManager::GetSingleton().Revert();
         SpouseHierarchyManager::GetSingleton().Revert();

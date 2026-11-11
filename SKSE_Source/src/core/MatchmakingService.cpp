@@ -174,7 +174,7 @@ namespace MARAS {
                                       RetryFn retryFn,
                                       CancelFn cancelFn,
                                       FinishFn finishFn) {
-        if (!batch) return;
+        if (!batch || !IsSessionEpochCurrent(batch->sessionEpoch)) return;
         if (batch->pendingCount > 0) {
             batch->pendingCount--;
         }
@@ -187,10 +187,12 @@ namespace MARAS {
                     modalTitle,
                     summary.descriptions,
                     [batch, failedIndices, retryFn]() {
+                        if (!IsSessionEpochCurrent(batch->sessionEpoch)) return;
                         batch->pendingCount = failedIndices.size();
                         retryFn(batch, failedIndices);
                     },
                     [batch, failedIndices, cancelFn, finishFn]() {
+                        if (!IsSessionEpochCurrent(batch->sessionEpoch)) return;
                         MARAS_LOG_INFO("[Matchmaking] User cancelled failed task(s). Relationship changes will NOT be applied for failed pairs.");
                         cancelFn(batch, failedIndices);
                         finishFn(batch);
@@ -1130,7 +1132,424 @@ namespace MARAS {
 
         using PartnerCheatingLLMBatch = BatchBase<PartnerCheatingLLMTask>;
 
+        void FinishPartnerCheatingBatch(MatchmakingService* service,
+                                        const std::shared_ptr<PartnerCheatingLLMBatch>& batchPtr) {
+            if (!service || !batchPtr || !IsSessionEpochCurrent(batchPtr->sessionEpoch)) {
+                return;
+            }
+            std::unordered_set<RE::FormID> usedCandidates;
+            std::vector<MatchmakingResult> llmMatches;
+            for (const auto& taskItem : batchPtr->tasks) {
+                if (!taskItem.completed || taskItem.failed) {
+                    MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Skipping failed/incomplete task for '{}' (0x{:08X}, evalMode='{}')",
+                                   taskItem.partner.partnerName, taskItem.partner.partnerID, taskItem.partner.evalMode);
+                    continue;
+                }
+                auto& mgrRef = NPCRelationshipManager::GetSingleton();
+                const auto& mode = taskItem.partner.evalMode;
+                if (mode == "suggest_open" || mode == "suggest_close") {
+                    if (taskItem.willSuggest &&
+                        Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
+                        mgrRef.GetPartnerPendingIntent(taskItem.partner.partnerID).type == PartnerIntentType::None) {
+                        PartnerIntentType sType = (mode == "suggest_open")
+                                                      ? PartnerIntentType::SuggestOpen
+                                                      : PartnerIntentType::SuggestClose;
+                        mgrRef.SetPartnerPendingIntent(taskItem.partner.partnerID, sType, 0);
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved intent '{}' (reason: '{}')",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                       Utils::PartnerIntentTypeToString(sType), taskItem.reasoning);
+                    } else {
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) did NOT queue intent for mode='{}' (willSuggest={}, reason='{}')",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID, mode, taskItem.willSuggest, taskItem.reasoning);
+                    }
+                    continue;
+                }
+                if (mode == "breakup_affair") {
+                    PartnerIntentType confType = (taskItem.partner.sideAffairStage == AffairStage::Talking)
+                                                     ? PartnerIntentType::ConfessTalking
+                                                     : PartnerIntentType::ConfessPhysical;
+                    if (taskItem.willBreakup && taskItem.partner.sideLoverID != 0) {
+                        MatchmakingResult br;
+                        br.actorAFormID = taskItem.partner.partnerID;
+                        br.actorBFormID = taskItem.partner.sideLoverID;
+                        br.actorAName = taskItem.partner.partnerName;
+                        br.actorBName = taskItem.partner.sideLoverName;
+                        br.action = "breakup";
+                        br.targetStatus = "exlover";
+                        br.isCheating = false;
+                        br.memory = !taskItem.reasoning.empty()
+                                        ? taskItem.reasoning
+                                        : std::format("{} ended their secret {} affair with {}.",
+                                                      taskItem.partner.partnerName,
+                                                      Utils::AffairStageToString(taskItem.partner.sideAffairStage),
+                                                      taskItem.partner.sideLoverName);
+                        if (taskItem.willConfess && taskItem.partner.canConfess) {
+                            br.postBreakupIntent = confType;
+                        }
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved affair breakup with '{}' (0x{:08X}, willConfess={})",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                       taskItem.partner.sideLoverName, taskItem.partner.sideLoverID, taskItem.willConfess);
+                        llmMatches.push_back(std::move(br));
+                    } else if (taskItem.willConfess && taskItem.partner.canConfess &&
+                               Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
+                               mgrRef.GetPartnerPendingIntent(taskItem.partner.partnerID).type == PartnerIntentType::None) {
+                        mgrRef.SetPartnerPendingIntent(taskItem.partner.partnerID, confType, taskItem.partner.sideLoverID);
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved guilt confession intent '{}' for 0x{:08X} without breakup",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                       Utils::PartnerIntentTypeToString(confType), taskItem.partner.sideLoverID);
+                    } else {
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) declined affair breakup/confession for 0x{:08X} (willBreakup={}, willConfess={}, reason='{}')",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                       taskItem.partner.sideLoverID, taskItem.willBreakup, taskItem.willConfess, taskItem.reasoning);
+                    }
+                    continue;
+                }
+                if (mode == "breakup_open_lover") {
+                    if (taskItem.willBreakup && taskItem.partner.sideLoverID != 0) {
+                        MatchmakingResult br;
+                        br.actorAFormID = taskItem.partner.partnerID;
+                        br.actorBFormID = taskItem.partner.sideLoverID;
+                        br.actorAName = taskItem.partner.partnerName;
+                        br.actorBName = taskItem.partner.sideLoverName;
+                        br.action = "breakup";
+                        br.targetStatus = "exlover";
+                        br.isCheating = false;
+                        br.memory = !taskItem.reasoning.empty()
+                                        ? taskItem.reasoning
+                                        : std::format("{} amicably ended their open-relationship fling with {}.",
+                                                      taskItem.partner.partnerName, taskItem.partner.sideLoverName);
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved open-lover breakup with '{}' (0x{:08X})",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                       taskItem.partner.sideLoverName, taskItem.partner.sideLoverID);
+                        llmMatches.push_back(std::move(br));
+                    } else {
+                        MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) declined open-lover breakup with 0x{:08X} (reason='{}')",
+                                       taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                       taskItem.partner.sideLoverID, taskItem.reasoning);
+                    }
+                    continue;
+                }
+                if (!taskItem.willCheat || taskItem.chosenCandidateID == 0) {
+                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) did NOT form new side bond (willCheat={}, chosenCandidate='{}' [0x{:08X}], reason='{}')",
+                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                   taskItem.willCheat, taskItem.chosenCandidateName, taskItem.chosenCandidateID, taskItem.reasoning);
+                    continue;
+                }
+                if (usedCandidates.contains(taskItem.chosenCandidateID)) {
+                    MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Skipping '{}' (0x{:08X}) <-> '{}' (0x{:08X}): candidate already matched in this batch",
+                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
+                                   taskItem.chosenCandidateName, taskItem.chosenCandidateID);
+                    continue;
+                }
+                MatchmakingResult r;
+                r.actorAFormID = taskItem.partner.partnerID;
+                r.actorBFormID = taskItem.chosenCandidateID;
+                r.actorAName = taskItem.partner.partnerName;
+                r.actorBName = taskItem.chosenCandidateName;
+                r.action = "new";
+                r.targetStatus = "lover";
+                r.isCheating = !taskItem.partner.isOpenRelationshipLover;
+                r.affairStage = taskItem.partner.isOpenRelationshipLover ? AffairStage::Physical : AffairStage::Talking;
+                r.memory = taskItem.reasoning;
+                if (service->ValidateCandidate(r)) {
+                    usedCandidates.insert(taskItem.chosenCandidateID);
+                    llmMatches.push_back(std::move(r));
+                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Queued new {} bond: '{}' (0x{:08X}) <-> '{}' (0x{:08X}, stage={})",
+                                   r.isCheating ? "secret affair" : "open lover",
+                                   r.actorAName, r.actorAFormID, r.actorBName, r.actorBFormID,
+                                   Utils::AffairStageToString(r.affairStage));
+                } else {
+                    MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] ValidateCandidate rejected LLM match '{}' (0x{:08X}) <-> '{}' (0x{:08X}): {}",
+                                   r.actorAName, r.actorAFormID, r.actorBName, r.actorBFormID, r.skipReason);
+                }
+            }
+            service->FinalizeInfidelityMatches(std::move(llmMatches));
+        }
+
+        void RunPartnerCheatingTasks(MatchmakingService* service,
+                                     std::shared_ptr<PartnerCheatingLLMBatch> b,
+                                     const std::vector<size_t>& indices) {
+            if (!service || !b || indices.empty() || !IsSessionEpochCurrent(b->sessionEpoch)) {
+                return;
+            }
+            auto& relMgr = NPCRelationshipManager::GetSingleton();
+            float gameDay = service->GetCurrentGameDay();
+            std::string playerName = ActorSvc::GetName(kPlayerFormID);
+
+            for (size_t idx : indices) {
+                if (idx >= b->tasks.size()) continue;
+                auto& task = b->tasks[idx];
+                task.completed = false;
+                task.failed = false;
+                task.isInvalidJson = false;
+                task.failureReason.clear();
+                task.willCheat = false;
+                task.willBreakup = false;
+                task.willConfess = false;
+                task.willSuggest = false;
+                task.chosenCandidateID = 0;
+                task.chosenCandidateName.clear();
+                task.reasoning.clear();
+
+                const auto& tp = task.partner;
+                auto pSnap = GetActorProfileSnapshot(tp.partnerID);
+
+                std::ostringstream candStream;
+                nlohmann::json candidatesArr = nlohmann::json::array();
+                for (size_t ci = 0; ci < tp.shortlist.size(); ++ci) {
+                    const auto& c = tp.shortlist[ci];
+                    if (ci > 0) candStream << "\n";
+                    candStream << std::format("{}. {} ({} {}) - {} | Location: {} | Status: [{}]",
+                                              ci + 1, c.name, c.race, c.sex,
+                                              c.connectionTag, c.locationName, c.eligibility);
+
+                    nlohmann::json cObj;
+                    cObj["key"] = std::format("c_{}", ci + 1);
+                    cObj["criterion"] = SkyrimNetDecisions::SanitizeSingleLine(
+                        std::format("{} chooses {} ({} {}, {}, Location: {}, Status: {})",
+                                    tp.partnerName, c.name, c.race, c.sex,
+                                    c.connectionTag, c.locationName, c.eligibility));
+                    cObj["name"] = c.name;
+                    cObj["uuid"] = c.uuid;
+                    cObj["race"] = c.race;
+                    cObj["sex"] = c.sex;
+                    cObj["socialClass"] = c.socialClass;
+                    cObj["temperament"] = c.temperament;
+                    cObj["location"] = c.locationName;
+                    cObj["connectionTag"] = c.connectionTag;
+                    cObj["eligibility"] = c.eligibility;
+                    cObj["score"] = c.score;
+                    candidatesArr.push_back(std::move(cObj));
+                }
+
+                std::string hierDesc = (tp.hierarchyRank >= 0)
+                                           ? std::format("Rank {} Spouse", tp.hierarchyRank + 1)
+                                           : "Unranked / Non-Polygamous";
+                std::string relStatusLower = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(tp.statusWithPlayer));
+                std::string locStr = tp.locCtx.locationName.empty() ? "Skyrim" : tp.locCtx.locationName;
+                int daysSinceInt = static_cast<int>(std::round(tp.daysSinceInteraction));
+
+                nlohmann::json ctx;
+                ctx["gameDay"] = static_cast<int>(gameDay);
+                ctx["playerName"] = playerName;
+                ctx["partnerUUID"] = pSnap.uuid;
+                ctx["partnerName"] = tp.partnerName;
+                ctx["partnerRace"] = pSnap.race;
+                ctx["partnerSex"] = pSnap.sex;
+                ctx["partnerStatusWithPlayer"] = relStatusLower;
+                ctx["playerRelationshipStatus"] = relStatusLower;
+                ctx["partnerTemperament"] = Utils::TemperamentToString(relMgr.GetTemperament(tp.partnerID));
+                ctx["partnerSocialClass"] = Utils::SocialClassToString(relMgr.GetSocialClass(tp.partnerID));
+                ctx["partnerLocation"] = locStr;
+                ctx["partnerCurrentLocation"] = locStr;
+                ctx["partnerAffection"] = tp.affection;
+                ctx["affectionScore"] = tp.affection;
+                ctx["partnerAffectionTier"] = tp.affectionTier;
+                ctx["affectionTier"] = tp.affectionTier;
+                ctx["daysSincePlayerInteraction"] = daysSinceInt;
+                ctx["daysSinceLastVisit"] = daysSinceInt;
+                const float baseL = std::max(1.0f, Settings::GetSingleton().GetLonelinessDecayStartDays());
+                const float absenceRatio = tp.daysSinceInteraction / baseL;
+                std::string playerPresenceHint;
+                if (absenceRatio <= 0.25f) {
+                    playerPresenceHint = std::format("{} spent time with {} just now; they were together very recently.", playerName, tp.partnerName);
+                } else if (absenceRatio <= 0.85f) {
+                    playerPresenceHint = std::format("{} spent time with {} recently and has been attentive.", playerName, tp.partnerName);
+                } else if (absenceRatio <= 1.50f) {
+                    playerPresenceHint = std::format("{} left recently and has been away for a little while.", playerName);
+                } else if (absenceRatio <= 2.50f) {
+                    playerPresenceHint = std::format("{} has been gone for a while and hasn't come back to spend time with {}.", playerName, tp.partnerName);
+                } else if (absenceRatio <= 4.00f) {
+                    playerPresenceHint = std::format("{} has not returned or spoken to {} for a long time.", playerName, tp.partnerName);
+                } else if (absenceRatio <= 6.50f) {
+                    playerPresenceHint = std::format("{} left a very long time ago and has barely been present in {}'s life.", playerName, tp.partnerName);
+                } else {
+                    playerPresenceHint = std::format("It feels like forever since {} last came back or spoke to {}.", playerName, tp.partnerName);
+                }
+                ctx["playerPresenceHint"] = playerPresenceHint;
+                const float flingRatio = tp.sideLoverAgeDays / baseL;
+                ctx["sideLoverDurationHint"] = (flingRatio <= 2.0f)
+                                                   ? "started recently"
+                                                   : ((flingRatio <= 4.5f) ? "has been going on for some time" : "has been going on for a long time");
+                ctx["hierarchyRank"] = hierDesc;
+                ctx["hierarchyRankDescription"] = hierDesc;
+                ctx["sharedChildrenCount"] = tp.sharedChildrenCount;
+                ctx["playerCheatedOnPartner"] = tp.playerCheatedOnPartner;
+                ctx["playerAffairPartnerName"] = tp.playerAffairPartnerName;
+                ctx["temptationChance"] = static_cast<int>(std::round(tp.finalChance));
+                ctx["temptationDrivers"] = tp.driversSummary;
+                ctx["isOpenRelationship"] = tp.isOpenRelationshipLover;
+                ctx["evalMode"] = tp.evalMode;
+                ctx["canConfess"] = tp.canConfess;
+                if (tp.sideLoverID != 0) {
+                    auto sSnap = GetActorProfileSnapshot(tp.sideLoverID);
+                    auto sLoc = ResolveActorLocationContext(tp.sideLoverID);
+                    ctx["sideLoverUUID"] = sSnap.uuid;
+                    ctx["sideLoverName"] = tp.sideLoverName;
+                    ctx["sideLoverRace"] = sSnap.race;
+                    ctx["sideLoverSex"] = sSnap.sex;
+                    ctx["sideLoverSocialClass"] = Utils::SocialClassToString(relMgr.GetSocialClass(tp.sideLoverID));
+                    ctx["sideLoverTemperament"] = Utils::TemperamentToString(relMgr.GetTemperament(tp.sideLoverID));
+                    ctx["sideLoverLocation"] = sLoc.locationName.empty() ? "Skyrim" : sLoc.locationName;
+                    ctx["sideLoverAgeDays"] = static_cast<int>(std::round(tp.sideLoverAgeDays));
+                    ctx["affairStage"] = (tp.sideAffairStage == AffairStage::Talking) ? "talking" : "physical";
+                } else {
+                    ctx["affairStage"] = tp.isOpenRelationshipLover ? "open_lover" : "talking";
+                }
+                ctx["partnerRelationships"] = service->BuildActorDetailedRelationshipsString(tp.partnerID);
+                ctx["candidatesCount"] = tp.shortlist.size();
+                ctx["candidatesList"] = candStream.str();
+                ctx["candidates"] = std::move(candidatesArr);
+
+                nlohmann::json recentEventsParticipants = nlohmann::json::array();
+                auto appendUniqueUUID = [&](uint64_t uuid) {
+                    if (uuid == 0) return;
+                    for (const auto& existing : recentEventsParticipants) {
+                        if (existing.is_number_unsigned() && existing.get<uint64_t>() == uuid) return;
+                    }
+                    recentEventsParticipants.push_back(uuid);
+                };
+                appendUniqueUUID(pSnap.uuid);
+                appendUniqueUUID(GetActorUUID(kPlayerFormID));
+                if (tp.sideLoverID != 0 && ctx.contains("sideLoverUUID")) {
+                    appendUniqueUUID(ctx["sideLoverUUID"].get<uint64_t>());
+                } else {
+                    for (const auto& c : tp.shortlist) {
+                        appendUniqueUUID(c.uuid);
+                    }
+                }
+                ctx["recent_events_participants"] = std::move(recentEventsParticipants);
+
+                std::string contextJson = SafeJsonDump(ctx);
+                std::string affairStageStr = GetJsonString(ctx, "affairStage", "talking");
+
+                MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Requesting Stage 2 evaluation for '{}' (0x{:08X}) | evalMode='{}' | isOpen={} | candidates={} | sideLover='{}' (0x{:08X})",
+                               tp.partnerName, tp.partnerID, tp.evalMode, tp.isOpenRelationshipLover,
+                               tp.shortlist.size(), tp.sideLoverName, tp.sideLoverID);
+
+                auto completeTaskOnMainThread = [service, b, idx](const SkyrimNetDecisions::PartnerAgencyEvalResult& res) {
+                    AddEpochTask(
+                        b->sessionEpoch,
+                        "MatchmakingService::OnPartnerAgencyResult",
+                        [service, b, idx, res]() {
+                            if (idx >= b->tasks.size()) return;
+                            auto& t = b->tasks[idx];
+                            if (!res.success) {
+                                t.completed = true;
+                                t.failed = true;
+                                t.isInvalidJson = (res.failureType == LLMFailureType::InvalidJson);
+                                t.failureReason = res.failureDetail.empty() ? "LLM evaluation failed" : res.failureDetail;
+                                MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Evaluation failed for '{}' (0x{:08X}, evalMode='{}'): {}",
+                                               t.partner.partnerName, t.partner.partnerID, t.partner.evalMode, t.failureReason);
+                            } else {
+                                t.completed = true;
+                                t.failed = false;
+                                t.willCheat = res.willCheat;
+                                t.willBreakup = res.willBreakup;
+                                t.willConfess = res.willConfess;
+                                t.willSuggest = res.willSuggest;
+                                t.chosenCandidateName = res.chosenCandidateName;
+                                t.reasoning = res.reasoning;
+
+                                if (t.willCheat) {
+                                    if (res.chosenCandidateIndex >= 0 &&
+                                        static_cast<size_t>(res.chosenCandidateIndex) < t.partner.shortlist.size()) {
+                                        const auto& c = t.partner.shortlist[static_cast<size_t>(res.chosenCandidateIndex)];
+                                        t.chosenCandidateID = c.formID;
+                                        t.chosenCandidateName = c.name;
+                                        if (t.partner.isOpenRelationshipLover) {
+                                            t.reasoning = std::format("{} formed an open-relationship lover bond with {} ({}) driven by {} ({}).",
+                                                                      t.partner.partnerName, c.name, c.connectionTag,
+                                                                      t.partner.driversSummary, res.reasoning);
+                                        } else {
+                                            t.reasoning = std::format("{} began a secret talking-stage affair with {} ({}) driven by {} ({}).",
+                                                                      t.partner.partnerName, c.name, c.connectionTag,
+                                                                      t.partner.driversSummary, res.reasoning);
+                                        }
+                                    } else if (!t.chosenCandidateName.empty()) {
+                                        for (const auto& c : t.partner.shortlist) {
+                                            if (StringUtils::CaseInsensitiveEquals(c.name, t.chosenCandidateName) ||
+                                                StringUtils::Contains(c.name, t.chosenCandidateName)) {
+                                                t.chosenCandidateID = c.formID;
+                                                t.chosenCandidateName = c.name;
+                                                break;
+                                            }
+                                        }
+                                        if (t.chosenCandidateID == 0) {
+                                            if (auto entry = NPCIndex::GetSingleton().FindByName(t.chosenCandidateName, NPCFilter::AdultOnly)) {
+                                                t.chosenCandidateID = entry->refFormID != 0 ? entry->refFormID : entry->baseFormID;
+                                                t.chosenCandidateName = entry->nameDisplay;
+                                            }
+                                        }
+                                    }
+                                }
+                                MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Result for '{}' (0x{:08X}, evalMode='{}'): willCheat={}, willBreakup={}, willConfess={}, willSuggest={}, chosenCandidate='{}' (0x{:08X}), reason='{}'",
+                                               t.partner.partnerName, t.partner.partnerID, t.partner.evalMode,
+                                               t.willCheat, t.willBreakup, t.willConfess, t.willSuggest,
+                                               t.chosenCandidateName, t.chosenCandidateID, t.reasoning);
+                            }
+
+                            HandleBatchCompletion(
+                                b,
+                                "MARAS: Partner Infidelity Evaluation Failed",
+                                res.usedDecisions ? "decisions" : "gamemaster_evaluation",
+                                service,
+                                [service](auto batchPtr, const auto& retryIdxs) {
+                                    RunPartnerCheatingTasks(service, batchPtr, retryIdxs);
+                                },
+                                [](auto batchPtr, const auto& cancelIdxs) {
+                                    for (size_t ci : cancelIdxs) {
+                                        batchPtr->tasks[ci].willCheat = false;
+                                        batchPtr->tasks[ci].willBreakup = false;
+                                        batchPtr->tasks[ci].willConfess = false;
+                                        batchPtr->tasks[ci].willSuggest = false;
+                                    }
+                                },
+                                [service](auto batchPtr) {
+                                    FinishPartnerCheatingBatch(service, batchPtr);
+                                });
+                        });
+                };
+
+                bool dispatched = SkyrimNetDecisions::EvaluatePartnerAgency(
+                    contextJson,
+                    tp.evalMode,
+                    tp.canConfess,
+                    tp.partnerName,
+                    tp.sideLoverName,
+                    affairStageStr,
+                    completeTaskOnMainThread);
+                if (!dispatched) {
+                    SkyrimNetDecisions::PartnerAgencyEvalResult failRes;
+                    failRes.success = false;
+                    failRes.failureType = LLMFailureType::RequestFailed;
+                    failRes.failureDetail = "Failed to queue SkyrimNet partner agency request";
+                    completeTaskOnMainThread(failRes);
+                }
+            }
+        }
+
     }  // namespace
+
+    void MatchmakingService::FinalizeInfidelityMatches(std::vector<MatchmakingResult> matches) {
+        if (matches.empty()) {
+            MARAS_LOG_INFO("[Matchmaking:PartnerAgency] FinalizeInfidelityMatches: 0 matches to apply.");
+            return;
+        }
+        if (Settings::GetSingleton().playerPartnerCheatingConfirmResults) {
+            MARAS_LOG_INFO("[Matchmaking:PartnerAgency] playerPartnerCheatingConfirmResults is enabled. Presenting review modal for {} partner agency change(s).",
+                           matches.size());
+            ShowMatchmakingReviewModal(
+                std::move(matches),
+                true,
+                [this](std::vector<MatchmakingResult> approved) {
+                    ExecuteMemoryBatchOrApply(std::move(approved), true);
+                });
+        } else {
+            MARAS_LOG_INFO("[Matchmaking:PartnerAgency] Applying {} partner agency match(es) via ExecuteMemoryBatchOrApply.", matches.size());
+            ExecuteMemoryBatchOrApply(std::move(matches), true);
+        }
+    }
 
     void MatchmakingService::TryScheduledPlayerPartnerInfidelity(float currentGameDay) {
         const auto& settings = Settings::GetSingleton();
@@ -1205,25 +1624,6 @@ namespace MARAS {
         };
         std::vector<TemptedPlayerPartner> agencyLLMTasks;
         std::vector<MatchmakingResult> agencyBreakupMatches;
-        auto finalizeInfidelityMatches = [this](std::vector<MatchmakingResult> matches) {
-            if (matches.empty()) {
-                MARAS_LOG_INFO("[Matchmaking:PartnerAgency] finalizeInfidelityMatches: 0 matches to apply.");
-                return;
-            }
-            if (Settings::GetSingleton().playerPartnerCheatingConfirmResults) {
-                MARAS_LOG_INFO("[Matchmaking:PartnerAgency] playerPartnerCheatingConfirmResults is enabled. Presenting review modal for {} partner agency change(s).",
-                               matches.size());
-                ShowMatchmakingReviewModal(
-                    std::move(matches),
-                    true,
-                    [this](std::vector<MatchmakingResult> approved) {
-                        ExecuteMemoryBatchOrApply(std::move(approved), true);
-                    });
-            } else {
-                MARAS_LOG_INFO("[Matchmaking:PartnerAgency] Applying {} partner agency match(es) via ExecuteMemoryBatchOrApply.", matches.size());
-                ExecuteMemoryBatchOrApply(std::move(matches), true);
-            }
-        };
 
         for (RE::FormID partnerID : playerMainPartners) {
             std::string partnerName = ActorSvc::GetName(partnerID);
@@ -2008,7 +2408,7 @@ namespace MARAS {
         if (temptedPartners.empty() && agencyLLMTasks.empty()) {
             MARAS_LOG_INFO("[Matchmaking:PartnerAgency] Stage 1 complete: no new side-lover searches or LLM agency tasks queued ({} direct breakup(s) queued).",
                            agencyBreakupMatches.size());
-            finalizeInfidelityMatches(std::move(agencyBreakupMatches));
+            FinalizeInfidelityMatches(std::move(agencyBreakupMatches));
             MARAS_LOG_INFO("================================================================================");
             return;
         }
@@ -2264,7 +2664,7 @@ namespace MARAS {
 
         if (readyForResolution.empty() && agencyLLMTasks.empty()) {
             MARAS_LOG_INFO("[Matchmaking:PartnerAgency] Stage 2 complete: no valid candidates found in habitat/social reach and no LLM tasks queued.");
-            finalizeInfidelityMatches(std::move(agencyBreakupMatches));
+            FinalizeInfidelityMatches(std::move(agencyBreakupMatches));
             MARAS_LOG_INFO("================================================================================");
             return;
         }
@@ -2327,16 +2727,17 @@ namespace MARAS {
                 }
             }
             MARAS_LOG_INFO("================================================================================");
-            finalizeInfidelityMatches(std::move(diceMatches));
+            FinalizeInfidelityMatches(std::move(diceMatches));
             return;
         }
 
         // LLM Stage 2 Evaluation (maras_evaluations/maras_player_partner_cheating)
         if (!agencyBreakupMatches.empty()) {
-            finalizeInfidelityMatches(std::move(agencyBreakupMatches));
+            FinalizeInfidelityMatches(std::move(agencyBreakupMatches));
         }
         auto batch = std::make_shared<PartnerCheatingLLMBatch>();
         batch->isScheduledScan = true;
+        batch->sessionEpoch = GetSessionEpoch();
         for (auto& tp : agencyLLMTasks) {
             PartnerCheatingLLMTask t;
             t.partner = std::move(tp);
@@ -2357,387 +2758,7 @@ namespace MARAS {
         batch->pendingCount = batch->tasks.size();
         auto allIndices = MakeBatchIndices(batch->tasks.size());
 
-        auto runPartnerCheatingTasks = std::make_shared<std::function<void(std::shared_ptr<PartnerCheatingLLMBatch>, const std::vector<size_t>&)>>();
-        *runPartnerCheatingTasks = [this, runPartnerCheatingTasks, finalizeInfidelityMatches](
-                                       std::shared_ptr<PartnerCheatingLLMBatch> b,
-                                       const std::vector<size_t>& indices) {
-            if (!b || indices.empty()) return;
-            auto& relMgr = NPCRelationshipManager::GetSingleton();
-            float gameDay = GetCurrentGameDay();
-            std::string playerName = ActorSvc::GetName(kPlayerFormID);
-
-            for (size_t idx : indices) {
-                if (idx >= b->tasks.size()) continue;
-                auto& task = b->tasks[idx];
-                task.completed = false;
-                task.failed = false;
-                task.isInvalidJson = false;
-                task.failureReason.clear();
-                task.willCheat = false;
-                task.willBreakup = false;
-                task.willConfess = false;
-                task.willSuggest = false;
-                task.chosenCandidateID = 0;
-                task.chosenCandidateName.clear();
-                task.reasoning.clear();
-
-                const auto& tp = task.partner;
-                auto pSnap = GetActorProfileSnapshot(tp.partnerID);
-
-                std::ostringstream candStream;
-                nlohmann::json candidatesArr = nlohmann::json::array();
-                for (size_t ci = 0; ci < tp.shortlist.size(); ++ci) {
-                    const auto& c = tp.shortlist[ci];
-                    if (ci > 0) candStream << "\n";
-                    candStream << std::format("{}. {} ({} {}) - {} | Location: {} | Status: [{}]",
-                                              ci + 1, c.name, c.race, c.sex,
-                                              c.connectionTag, c.locationName, c.eligibility);
-
-                    nlohmann::json cObj;
-                    cObj["key"] = std::format("c_{}", ci + 1);
-                    cObj["criterion"] = SkyrimNetDecisions::SanitizeSingleLine(
-                        std::format("{} chooses {} ({} {}, {}, Location: {}, Status: {})",
-                                    tp.partnerName, c.name, c.race, c.sex,
-                                    c.connectionTag, c.locationName, c.eligibility));
-                    cObj["name"] = c.name;
-                    cObj["uuid"] = c.uuid;
-                    cObj["race"] = c.race;
-                    cObj["sex"] = c.sex;
-                    cObj["socialClass"] = c.socialClass;
-                    cObj["temperament"] = c.temperament;
-                    cObj["location"] = c.locationName;
-                    cObj["connectionTag"] = c.connectionTag;
-                    cObj["eligibility"] = c.eligibility;
-                    cObj["score"] = c.score;
-                    candidatesArr.push_back(std::move(cObj));
-                }
-
-                std::string hierDesc = (tp.hierarchyRank >= 0)
-                                           ? std::format("Rank {} Spouse", tp.hierarchyRank + 1)
-                                           : "Unranked / Non-Polygamous";
-                std::string relStatusLower = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(tp.statusWithPlayer));
-                std::string locStr = tp.locCtx.locationName.empty() ? "Skyrim" : tp.locCtx.locationName;
-                int daysSinceInt = static_cast<int>(std::round(tp.daysSinceInteraction));
-
-                nlohmann::json ctx;
-                ctx["gameDay"] = static_cast<int>(gameDay);
-                ctx["playerName"] = playerName;
-                ctx["partnerUUID"] = pSnap.uuid;
-                ctx["partnerName"] = tp.partnerName;
-                ctx["partnerRace"] = pSnap.race;
-                ctx["partnerSex"] = pSnap.sex;
-                ctx["partnerStatusWithPlayer"] = relStatusLower;
-                ctx["playerRelationshipStatus"] = relStatusLower;
-                ctx["partnerTemperament"] = Utils::TemperamentToString(relMgr.GetTemperament(tp.partnerID));
-                ctx["partnerSocialClass"] = Utils::SocialClassToString(relMgr.GetSocialClass(tp.partnerID));
-                ctx["partnerLocation"] = locStr;
-                ctx["partnerCurrentLocation"] = locStr;
-                ctx["partnerAffection"] = tp.affection;
-                ctx["affectionScore"] = tp.affection;
-                ctx["partnerAffectionTier"] = tp.affectionTier;
-                ctx["affectionTier"] = tp.affectionTier;
-                ctx["daysSincePlayerInteraction"] = daysSinceInt;
-                ctx["daysSinceLastVisit"] = daysSinceInt;
-                const float baseL = std::max(1.0f, Settings::GetSingleton().GetLonelinessDecayStartDays());
-                const float absenceRatio = tp.daysSinceInteraction / baseL;
-                std::string playerPresenceHint;
-                if (absenceRatio <= 0.25f) {
-                    playerPresenceHint = std::format("{} spent time with {} just now; they were together very recently.", playerName, tp.partnerName);
-                } else if (absenceRatio <= 0.85f) {
-                    playerPresenceHint = std::format("{} spent time with {} recently and has been attentive.", playerName, tp.partnerName);
-                } else if (absenceRatio <= 1.50f) {
-                    playerPresenceHint = std::format("{} left recently and has been away for a little while.", playerName);
-                } else if (absenceRatio <= 2.50f) {
-                    playerPresenceHint = std::format("{} has been gone for a while and hasn't come back to spend time with {}.", playerName, tp.partnerName);
-                } else if (absenceRatio <= 4.00f) {
-                    playerPresenceHint = std::format("{} has not returned or spoken to {} for a long time.", playerName, tp.partnerName);
-                } else if (absenceRatio <= 6.50f) {
-                    playerPresenceHint = std::format("{} left a very long time ago and has barely been present in {}'s life.", playerName, tp.partnerName);
-                } else {
-                    playerPresenceHint = std::format("It feels like forever since {} last came back or spoke to {}.", playerName, tp.partnerName);
-                }
-                ctx["playerPresenceHint"] = playerPresenceHint;
-                const float flingRatio = tp.sideLoverAgeDays / baseL;
-                ctx["sideLoverDurationHint"] = (flingRatio <= 2.0f)
-                                                   ? "started recently"
-                                                   : ((flingRatio <= 4.5f) ? "has been going on for some time" : "has been going on for a long time");
-                ctx["hierarchyRank"] = hierDesc;
-                ctx["hierarchyRankDescription"] = hierDesc;
-                ctx["sharedChildrenCount"] = tp.sharedChildrenCount;
-                ctx["playerCheatedOnPartner"] = tp.playerCheatedOnPartner;
-                ctx["playerAffairPartnerName"] = tp.playerAffairPartnerName;
-                ctx["temptationChance"] = static_cast<int>(std::round(tp.finalChance));
-                ctx["temptationDrivers"] = tp.driversSummary;
-                ctx["isOpenRelationship"] = tp.isOpenRelationshipLover;
-                ctx["evalMode"] = tp.evalMode;
-                ctx["canConfess"] = tp.canConfess;
-                if (tp.sideLoverID != 0) {
-                    auto sSnap = GetActorProfileSnapshot(tp.sideLoverID);
-                    auto sLoc = ResolveActorLocationContext(tp.sideLoverID);
-                    ctx["sideLoverUUID"] = sSnap.uuid;
-                    ctx["sideLoverName"] = tp.sideLoverName;
-                    ctx["sideLoverRace"] = sSnap.race;
-                    ctx["sideLoverSex"] = sSnap.sex;
-                    ctx["sideLoverSocialClass"] = Utils::SocialClassToString(relMgr.GetSocialClass(tp.sideLoverID));
-                    ctx["sideLoverTemperament"] = Utils::TemperamentToString(relMgr.GetTemperament(tp.sideLoverID));
-                    ctx["sideLoverLocation"] = sLoc.locationName.empty() ? "Skyrim" : sLoc.locationName;
-                    ctx["sideLoverAgeDays"] = static_cast<int>(std::round(tp.sideLoverAgeDays));
-                    ctx["affairStage"] = (tp.sideAffairStage == AffairStage::Talking) ? "talking" : "physical";
-                } else {
-                    ctx["affairStage"] = tp.isOpenRelationshipLover ? "open_lover" : "talking";
-                }
-                ctx["partnerRelationships"] = BuildActorDetailedRelationshipsString(tp.partnerID);
-                ctx["candidatesCount"] = tp.shortlist.size();
-                ctx["candidatesList"] = candStream.str();
-                ctx["candidates"] = std::move(candidatesArr);
-
-                nlohmann::json recentEventsParticipants = nlohmann::json::array();
-                auto appendUniqueUUID = [&](uint64_t uuid) {
-                    if (uuid == 0) return;
-                    for (const auto& existing : recentEventsParticipants) {
-                        if (existing.is_number_unsigned() && existing.get<uint64_t>() == uuid) return;
-                    }
-                    recentEventsParticipants.push_back(uuid);
-                };
-                appendUniqueUUID(pSnap.uuid);
-                appendUniqueUUID(GetActorUUID(kPlayerFormID));
-                if (tp.sideLoverID != 0 && ctx.contains("sideLoverUUID")) {
-                    appendUniqueUUID(ctx["sideLoverUUID"].get<uint64_t>());
-                } else {
-                    for (const auto& c : tp.shortlist) {
-                        appendUniqueUUID(c.uuid);
-                    }
-                }
-                ctx["recent_events_participants"] = std::move(recentEventsParticipants);
-
-                std::string contextJson = SafeJsonDump(ctx);
-                std::string affairStageStr = GetJsonString(ctx, "affairStage", "talking");
-
-                MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Requesting Stage 2 evaluation for '{}' (0x{:08X}) | evalMode='{}' | isOpen={} | candidates={} | sideLover='{}' (0x{:08X})",
-                               tp.partnerName, tp.partnerID, tp.evalMode, tp.isOpenRelationshipLover,
-                               tp.shortlist.size(), tp.sideLoverName, tp.sideLoverID);
-
-                SkyrimNetDecisions::EvaluatePartnerAgency(
-                    contextJson,
-                    tp.evalMode,
-                    tp.canConfess,
-                    tp.partnerName,
-                    tp.sideLoverName,
-                    affairStageStr,
-                    [this, b, idx, runPartnerCheatingTasks, finalizeInfidelityMatches](const SkyrimNetDecisions::PartnerAgencyEvalResult& res) {
-                        SKSE::GetTaskInterface()->AddTask([this, b, idx, res, runPartnerCheatingTasks, finalizeInfidelityMatches]() {
-                            try {
-                                if (idx >= b->tasks.size()) return;
-                                auto& t = b->tasks[idx];
-                                if (!res.success) {
-                                    t.completed = true;
-                                    t.failed = true;
-                                    t.isInvalidJson = (res.failureType == LLMFailureType::InvalidJson);
-                                    t.failureReason = res.failureDetail.empty() ? "LLM evaluation failed" : res.failureDetail;
-                                    MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Evaluation failed for '{}' (0x{:08X}, evalMode='{}'): {}",
-                                                   t.partner.partnerName, t.partner.partnerID, t.partner.evalMode, t.failureReason);
-                                } else {
-                                    t.completed = true;
-                                    t.failed = false;
-                                    t.willCheat = res.willCheat;
-                                    t.willBreakup = res.willBreakup;
-                                    t.willConfess = res.willConfess;
-                                    t.willSuggest = res.willSuggest;
-                                    t.chosenCandidateName = res.chosenCandidateName;
-                                    t.reasoning = res.reasoning;
-
-                                    if (t.willCheat) {
-                                        if (res.chosenCandidateIndex >= 0 &&
-                                            static_cast<size_t>(res.chosenCandidateIndex) < t.partner.shortlist.size()) {
-                                            const auto& c = t.partner.shortlist[static_cast<size_t>(res.chosenCandidateIndex)];
-                                            t.chosenCandidateID = c.formID;
-                                            t.chosenCandidateName = c.name;
-                                            if (t.partner.isOpenRelationshipLover) {
-                                                t.reasoning = std::format("{} formed an open-relationship lover bond with {} ({}) driven by {} ({}).",
-                                                                          t.partner.partnerName, c.name, c.connectionTag,
-                                                                          t.partner.driversSummary, res.reasoning);
-                                            } else {
-                                                t.reasoning = std::format("{} began a secret talking-stage affair with {} ({}) driven by {} ({}).",
-                                                                          t.partner.partnerName, c.name, c.connectionTag,
-                                                                          t.partner.driversSummary, res.reasoning);
-                                            }
-                                        } else if (!t.chosenCandidateName.empty()) {
-                                            for (const auto& c : t.partner.shortlist) {
-                                                if (StringUtils::CaseInsensitiveEquals(c.name, t.chosenCandidateName) ||
-                                                    StringUtils::Contains(c.name, t.chosenCandidateName)) {
-                                                    t.chosenCandidateID = c.formID;
-                                                    t.chosenCandidateName = c.name;
-                                                    break;
-                                                }
-                                            }
-                                            if (t.chosenCandidateID == 0) {
-                                                if (auto entry = NPCIndex::GetSingleton().FindByName(t.chosenCandidateName, NPCFilter::AdultOnly)) {
-                                                    t.chosenCandidateID = entry->refFormID != 0 ? entry->refFormID : entry->baseFormID;
-                                                    t.chosenCandidateName = entry->nameDisplay;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Result for '{}' (0x{:08X}, evalMode='{}'): willCheat={}, willBreakup={}, willConfess={}, willSuggest={}, chosenCandidate='{}' (0x{:08X}), reason='{}'",
-                                                   t.partner.partnerName, t.partner.partnerID, t.partner.evalMode,
-                                                   t.willCheat, t.willBreakup, t.willConfess, t.willSuggest,
-                                                   t.chosenCandidateName, t.chosenCandidateID, t.reasoning);
-                                }
-
-                                HandleBatchCompletion(
-                                    b,
-                                    "MARAS: Partner Infidelity Evaluation Failed",
-                                    res.usedDecisions ? "decisions" : "gamemaster_evaluation",
-                                    this,
-                                    [runPartnerCheatingTasks](auto batchPtr, const auto& retryIdxs) {
-                                        (*runPartnerCheatingTasks)(batchPtr, retryIdxs);
-                                    },
-                                    [](auto batchPtr, const auto& cancelIdxs) {
-                                        for (size_t ci : cancelIdxs) {
-                                            batchPtr->tasks[ci].willCheat = false;
-                                            batchPtr->tasks[ci].willBreakup = false;
-                                            batchPtr->tasks[ci].willConfess = false;
-                                            batchPtr->tasks[ci].willSuggest = false;
-                                        }
-                                    },
-                                    [this, finalizeInfidelityMatches](auto batchPtr) {
-                                        std::unordered_set<RE::FormID> usedCandidates;
-                                        std::vector<MatchmakingResult> llmMatches;
-                                        for (const auto& taskItem : batchPtr->tasks) {
-                                            if (!taskItem.completed || taskItem.failed) {
-                                                MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Skipping failed/incomplete task for '{}' (0x{:08X}, evalMode='{}')",
-                                                               taskItem.partner.partnerName, taskItem.partner.partnerID, taskItem.partner.evalMode);
-                                                continue;
-                                            }
-                                            auto& mgrRef = NPCRelationshipManager::GetSingleton();
-                                            const auto& mode = taskItem.partner.evalMode;
-                                            if (mode == "suggest_open" || mode == "suggest_close") {
-                                                if (taskItem.willSuggest &&
-                                                    Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
-                                                    mgrRef.GetPartnerPendingIntent(taskItem.partner.partnerID).type == PartnerIntentType::None) {
-                                                    PartnerIntentType sType = (mode == "suggest_open")
-                                                                                  ? PartnerIntentType::SuggestOpen
-                                                                                  : PartnerIntentType::SuggestClose;
-                                                    mgrRef.SetPartnerPendingIntent(taskItem.partner.partnerID, sType, 0);
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved intent '{}' (reason: '{}')",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                                   Utils::PartnerIntentTypeToString(sType), taskItem.reasoning);
-                                                } else {
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) did NOT queue intent for mode='{}' (willSuggest={}, reason='{}')",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID, mode, taskItem.willSuggest, taskItem.reasoning);
-                                                }
-                                                continue;
-                                            }
-                                            if (mode == "breakup_affair") {
-                                                PartnerIntentType confType = (taskItem.partner.sideAffairStage == AffairStage::Talking)
-                                                                                 ? PartnerIntentType::ConfessTalking
-                                                                                 : PartnerIntentType::ConfessPhysical;
-                                                if (taskItem.willBreakup && taskItem.partner.sideLoverID != 0) {
-                                                    MatchmakingResult br;
-                                                    br.actorAFormID = taskItem.partner.partnerID;
-                                                    br.actorBFormID = taskItem.partner.sideLoverID;
-                                                    br.actorAName = taskItem.partner.partnerName;
-                                                    br.actorBName = taskItem.partner.sideLoverName;
-                                                    br.action = "breakup";
-                                                    br.targetStatus = "exlover";
-                                                    br.isCheating = false;
-                                                    br.memory = !taskItem.reasoning.empty()
-                                                                    ? taskItem.reasoning
-                                                                    : std::format("{} ended their secret {} affair with {}.",
-                                                                                  taskItem.partner.partnerName,
-                                                                                  Utils::AffairStageToString(taskItem.partner.sideAffairStage),
-                                                                                  taskItem.partner.sideLoverName);
-                                                    if (taskItem.willConfess && taskItem.partner.canConfess) {
-                                                        br.postBreakupIntent = confType;
-                                                    }
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved affair breakup with '{}' (0x{:08X}, willConfess={})",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                                   taskItem.partner.sideLoverName, taskItem.partner.sideLoverID, taskItem.willConfess);
-                                                    llmMatches.push_back(std::move(br));
-                                                } else if (taskItem.willConfess && taskItem.partner.canConfess &&
-                                                           Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
-                                                           mgrRef.GetPartnerPendingIntent(taskItem.partner.partnerID).type == PartnerIntentType::None) {
-                                                    mgrRef.SetPartnerPendingIntent(taskItem.partner.partnerID, confType, taskItem.partner.sideLoverID);
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved guilt confession intent '{}' for 0x{:08X} without breakup",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                                   Utils::PartnerIntentTypeToString(confType), taskItem.partner.sideLoverID);
-                                                } else {
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) declined affair breakup/confession for 0x{:08X} (willBreakup={}, willConfess={}, reason='{}')",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                                   taskItem.partner.sideLoverID, taskItem.willBreakup, taskItem.willConfess, taskItem.reasoning);
-                                                }
-                                                continue;
-                                            }
-                                            if (mode == "breakup_open_lover") {
-                                                if (taskItem.willBreakup && taskItem.partner.sideLoverID != 0) {
-                                                    MatchmakingResult br;
-                                                    br.actorAFormID = taskItem.partner.partnerID;
-                                                    br.actorBFormID = taskItem.partner.sideLoverID;
-                                                    br.actorAName = taskItem.partner.partnerName;
-                                                    br.actorBName = taskItem.partner.sideLoverName;
-                                                    br.action = "breakup";
-                                                    br.targetStatus = "exlover";
-                                                    br.isCheating = false;
-                                                    br.memory = !taskItem.reasoning.empty()
-                                                                    ? taskItem.reasoning
-                                                                    : std::format("{} amicably ended their open-relationship fling with {}.",
-                                                                                  taskItem.partner.partnerName, taskItem.partner.sideLoverName);
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved open-lover breakup with '{}' (0x{:08X})",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                                   taskItem.partner.sideLoverName, taskItem.partner.sideLoverID);
-                                                    llmMatches.push_back(std::move(br));
-                                                } else {
-                                                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) declined open-lover breakup with 0x{:08X} (reason='{}')",
-                                                                   taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                                   taskItem.partner.sideLoverID, taskItem.reasoning);
-                                                }
-                                                continue;
-                                            }
-                                            if (!taskItem.willCheat || taskItem.chosenCandidateID == 0) {
-                                                MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) did NOT form new side bond (willCheat={}, chosenCandidate='{}' [0x{:08X}], reason='{}')",
-                                                               taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                               taskItem.willCheat, taskItem.chosenCandidateName, taskItem.chosenCandidateID, taskItem.reasoning);
-                                                continue;
-                                            }
-                                            if (usedCandidates.contains(taskItem.chosenCandidateID)) {
-                                                MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] Skipping '{}' (0x{:08X}) <-> '{}' (0x{:08X}): candidate already matched in this batch",
-                                                               taskItem.partner.partnerName, taskItem.partner.partnerID,
-                                                               taskItem.chosenCandidateName, taskItem.chosenCandidateID);
-                                                continue;
-                                            }
-                                            MatchmakingResult r;
-                                            r.actorAFormID = taskItem.partner.partnerID;
-                                            r.actorBFormID = taskItem.chosenCandidateID;
-                                            r.actorAName = taskItem.partner.partnerName;
-                                            r.actorBName = taskItem.chosenCandidateName;
-                                            r.action = "new";
-                                            r.targetStatus = "lover";
-                                            r.isCheating = !taskItem.partner.isOpenRelationshipLover;
-                                            r.affairStage = taskItem.partner.isOpenRelationshipLover ? AffairStage::Physical : AffairStage::Talking;
-                                            r.memory = taskItem.reasoning;
-                                            if (ValidateCandidate(r)) {
-                                                usedCandidates.insert(taskItem.chosenCandidateID);
-                                                llmMatches.push_back(std::move(r));
-                                                MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Queued new {} bond: '{}' (0x{:08X}) <-> '{}' (0x{:08X}, stage={})",
-                                                               r.isCheating ? "secret affair" : "open lover",
-                                                               r.actorAName, r.actorAFormID, r.actorBName, r.actorBFormID,
-                                                               Utils::AffairStageToString(r.affairStage));
-                                            } else {
-                                                MARAS_LOG_WARN("[Matchmaking:PartnerAgency:LLM] ValidateCandidate rejected LLM match '{}' (0x{:08X}) <-> '{}' (0x{:08X}): {}",
-                                                               r.actorAName, r.actorAFormID, r.actorBName, r.actorBFormID, r.skipReason);
-                                            }
-                                        }
-                                        finalizeInfidelityMatches(std::move(llmMatches));
-                                    });
-                            } catch (const std::exception& e) {
-                                MARAS_LOG_ERROR("[Matchmaking:PartnerAgency:LLM] Exception in callback: {}", e.what());
-                            }
-                        });
-                    });
-            }
-        };
-
-        (*runPartnerCheatingTasks)(batch, allIndices);
+        RunPartnerCheatingTasks(this, batch, allIndices);
     }
 
     void MatchmakingService::RunLLMScheduledMatchmaking(float currentGameDay) {
@@ -2751,31 +2772,40 @@ namespace MARAS {
         std::string contextJson = SafeJsonDump(ctx);
         std::string promptName = "maras_evaluations/maras_matchmaking_scheduled";
 
-        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, currentGameDay](const char* response, int success) {
-            if (!success || !response || response[0] == '\0') {
-                MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking request failed or returned empty response");
-                ShowInGameFailedLLMModal(
-                    "MARAS: Matchmaking Scan Failed",
-                    { "The scheduled matchmaking scan request failed or returned an empty response." },
-                    [this, currentGameDay]() {
-                        lastMatchmakingDay_ = -1.0f;
-                        TryScheduledMatchmaking(currentGameDay);
-                    },
-                    []() {
-                        MARAS_LOG_INFO("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking retry cancelled by player.");
-                    }
-                );
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, expectedEpoch, currentGameDay](const char* response, int success) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
                 return;
             }
-            SKSE::GetTaskInterface()->AddTask([this, respStr = std::string(response), currentGameDay]() {
-                try {
+            std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
+            AddEpochTask(
+                expectedEpoch,
+                "MatchmakingService::RunLLMScheduledMatchmakingResult",
+                [this, expectedEpoch, success, respStr = std::move(respStr), currentGameDay]() {
+                    if (!success || respStr.empty()) {
+                        MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking request failed or returned empty response");
+                        ShowInGameFailedLLMModal(
+                            "MARAS: Matchmaking Scan Failed",
+                            { "The scheduled matchmaking scan request failed or returned an empty response." },
+                            [this, expectedEpoch, currentGameDay]() {
+                                if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                lastMatchmakingDay_ = -1.0f;
+                                TryScheduledMatchmaking(currentGameDay);
+                            },
+                            []() {
+                                MARAS_LOG_INFO("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking retry cancelled by player.");
+                            }
+                        );
+                        return;
+                    }
                     nlohmann::json resp = JsonService::ParseLLMJson(respStr);
                     if (resp.is_discarded()) {
                         MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking response returned malformed/unrepairable JSON");
                         ShowInGameFailedLLMModal(
                             "MARAS: Matchmaking Scan Failed",
                             { "The scheduled matchmaking scan returned malformed or unreadable JSON data." },
-                            [this, currentGameDay]() {
+                            [this, expectedEpoch, currentGameDay]() {
+                                if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                 lastMatchmakingDay_ = -1.0f;
                                 TryScheduledMatchmaking(currentGameDay);
                             },
@@ -2789,10 +2819,7 @@ namespace MARAS {
                         return;
                     }
                     ProcessScheduledResults(respStr, true);
-                } catch (const std::exception& e) {
-                    MARAS_LOG_ERROR("[Matchmaking:RunLLMScheduledMatchmaking] Exception processing scheduled results: {}", e.what());
-                }
-            });
+                });
         });
     }
 
@@ -3278,50 +3305,65 @@ namespace MARAS {
         std::string contextJson = SafeJsonDump(ctx);
         std::string promptName = "maras_evaluations/maras_matchmaking_manual";
 
-        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, targetNpcFormID](const char* response, int success) {
-            if (!success || !response || response[0] == '\0') {
-                MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking request failed or returned empty response (success: {})", success);
-                std::string targetName = ActorSvc::GetName(targetNpcFormID);
-                ShowInGameFailedLLMModal(
-                    "MARAS: Manual Matchmaking Failed",
-                    { std::format("• Target NPC: {} — The matchmaking request failed or returned an empty response.", targetName) },
-                    [this, targetNpcFormID]() {
-                        RunManualMatchmaking(targetNpcFormID);
-                    },
-                    []() {
-                        PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
-                    }
-                );
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        bool dispatched = SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, expectedEpoch, targetNpcFormID](const char* response, int success) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
                 return;
             }
-            SKSE::GetTaskInterface()->AddTask([this, respStr = std::string(response), targetNpcFormID]() {
-                try {
-                    nlohmann::json resp = JsonService::ParseLLMJson(respStr);
-                    if (resp.is_discarded()) {
-                        MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking returned malformed/unrepairable JSON");
-                        std::string targetName = ActorSvc::GetName(targetNpcFormID);
-                        ShowInGameFailedLLMModal(
-                            "MARAS: Manual Matchmaking Failed",
-                            { std::format("• Target NPC: {} — The matchmaking scan returned malformed or unreadable JSON data.", targetName) },
-                            [this, targetNpcFormID]() {
-                                RunManualMatchmaking(targetNpcFormID);
-                            },
-                            []() {
-                                PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
-                            },
-                            false,
-                            true,
-                            "gamemaster_evaluation"
-                        );
-                        return;
+            std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
+            AddEpochTask(
+                expectedEpoch,
+                "MatchmakingService::RunManualMatchmakingResult",
+                [this, expectedEpoch, success, respStr = std::move(respStr), targetNpcFormID]() {
+                    try {
+                        if (!success || respStr.empty()) {
+                            MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking request failed or returned empty response (success: {})", success);
+                            std::string targetName = ActorSvc::GetName(targetNpcFormID);
+                            ShowInGameFailedLLMModal(
+                                "MARAS: Manual Matchmaking Failed",
+                                { std::format("• Target NPC: {} — The matchmaking request failed or returned an empty response.", targetName) },
+                                [this, expectedEpoch, targetNpcFormID]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    RunManualMatchmaking(targetNpcFormID);
+                                },
+                                [expectedEpoch]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
+                                }
+                            );
+                            return;
+                        }
+                        nlohmann::json resp = JsonService::ParseLLMJson(respStr);
+                        if (resp.is_discarded()) {
+                            MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking returned malformed/unrepairable JSON");
+                            std::string targetName = ActorSvc::GetName(targetNpcFormID);
+                            ShowInGameFailedLLMModal(
+                                "MARAS: Manual Matchmaking Failed",
+                                { std::format("• Target NPC: {} — The matchmaking scan returned malformed or unreadable JSON data.", targetName) },
+                                [this, expectedEpoch, targetNpcFormID]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    RunManualMatchmaking(targetNpcFormID);
+                                },
+                                [expectedEpoch]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
+                                },
+                                false,
+                                true,
+                                "gamemaster_evaluation"
+                            );
+                            return;
+                        }
+                        ProcessManualResults(respStr, targetNpcFormID);
+                    } catch (const std::exception& e) {
+                        MARAS_LOG_ERROR("[Matchmaking:RunManualMatchmaking] Exception processing manual results: {}", e.what());
+                        PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
                     }
-                    ProcessManualResults(respStr, targetNpcFormID);
-                } catch (const std::exception& e) {
-                    MARAS_LOG_ERROR("[Matchmaking:RunManualMatchmaking] Exception processing manual results: {}", e.what());
-                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
-                }
-            });
+                });
         });
+        if (!dispatched) {
+            PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
+        }
     }
 
     void MatchmakingService::RunGlobalMatchmaking(bool autoApply) {
@@ -3340,58 +3382,73 @@ namespace MARAS {
         std::string contextJson = SafeJsonDump(ctx);
         std::string promptName = "maras_evaluations/maras_matchmaking_scheduled";
 
-        SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, autoApply](const char* response, int success) {
-            if (!success || !response || response[0] == '\0') {
-                MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking request failed or returned empty response (success: {})", success);
-                ShowInGameFailedLLMModal(
-                    "MARAS: Global Matchmaking Scan Failed",
-                    { "The global matchmaking scan request failed or returned an empty response." },
-                    [this, autoApply]() {
-                        RunGlobalMatchmaking(autoApply);
-                    },
-                    [autoApply]() {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        bool dispatched = SendCustomPromptToLLM(promptName, "gamemaster_evaluation", contextJson, [this, expectedEpoch, autoApply](const char* response, int success) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
+            std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
+            AddEpochTask(
+                expectedEpoch,
+                "MatchmakingService::RunGlobalMatchmakingResult",
+                [this, expectedEpoch, success, respStr = std::move(respStr), autoApply]() {
+                    try {
+                        if (!success || respStr.empty()) {
+                            MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking request failed or returned empty response (success: {})", success);
+                            ShowInGameFailedLLMModal(
+                                "MARAS: Global Matchmaking Scan Failed",
+                                { "The global matchmaking scan request failed or returned an empty response." },
+                                [this, expectedEpoch, autoApply]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    RunGlobalMatchmaking(autoApply);
+                                },
+                                [expectedEpoch, autoApply]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    if (!autoApply) {
+                                        PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
+                                    }
+                                }
+                            );
+                            return;
+                        }
+                        nlohmann::json resp = JsonService::ParseLLMJson(respStr);
+                        if (resp.is_discarded()) {
+                            MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking returned malformed/unrepairable JSON");
+                            ShowInGameFailedLLMModal(
+                                "MARAS: Global Matchmaking Scan Failed",
+                                { "The global matchmaking scan returned malformed or unreadable JSON data." },
+                                [this, expectedEpoch, autoApply]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    RunGlobalMatchmaking(autoApply);
+                                },
+                                [expectedEpoch, autoApply]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    if (!autoApply) {
+                                        PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
+                                    }
+                                },
+                                false,
+                                true,
+                                "gamemaster_evaluation"
+                            );
+                            return;
+                        }
+                        if (autoApply) {
+                            ProcessScheduledResults(respStr, false);
+                        } else {
+                            ProcessGlobalManualResults(respStr);
+                        }
+                    } catch (const std::exception& e) {
+                        MARAS_LOG_ERROR("[Matchmaking:RunGlobalMatchmaking] Exception processing global results: {}", e.what());
                         if (!autoApply) {
                             PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
                         }
                     }
-                );
-                return;
-            }
-            SKSE::GetTaskInterface()->AddTask([this, respStr = std::string(response), autoApply]() {
-                try {
-                    nlohmann::json resp = JsonService::ParseLLMJson(respStr);
-                    if (resp.is_discarded()) {
-                        MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking returned malformed/unrepairable JSON");
-                        ShowInGameFailedLLMModal(
-                            "MARAS: Global Matchmaking Scan Failed",
-                            { "The global matchmaking scan returned malformed or unreadable JSON data." },
-                            [this, autoApply]() {
-                                RunGlobalMatchmaking(autoApply);
-                            },
-                            [autoApply]() {
-                                if (!autoApply) {
-                                    PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
-                                }
-                            },
-                            false,
-                            true,
-                            "gamemaster_evaluation"
-                        );
-                        return;
-                    }
-                    if (autoApply) {
-                        ProcessScheduledResults(respStr, false);
-                    } else {
-                        ProcessGlobalManualResults(respStr);
-                    }
-                } catch (const std::exception& e) {
-                    MARAS_LOG_ERROR("[Matchmaking:RunGlobalMatchmaking] Exception processing global results: {}", e.what());
-                    if (!autoApply) {
-                        PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
-                    }
-                }
-            });
+                });
         });
+        if (!dispatched && !autoApply) {
+            PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
+        }
     }
 
     std::string MatchmakingService::BuildActorDetailedRelationshipsString(RE::FormID actorFormID) {
@@ -3560,9 +3617,13 @@ namespace MARAS {
         req.buttons.push_back(ModalButton::Make("retry", "Retry Failed", ModalButtonVariant::Primary));
         req.buttons.push_back(ModalButton::Make("cancel", "Cancel", ModalButtonVariant::Secondary));
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [onRetry = std::move(onRetry), onCancel = std::move(onCancel)](const ModalResponse& resp) mutable {
+            [expectedEpoch, onRetry = std::move(onRetry), onCancel = std::move(onCancel)](const ModalResponse& resp) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (!resp.aborted && (resp.buttonIndex == 0 || resp.buttonId == "retry")) {
                     if (onRetry) onRetry();
                 } else {
@@ -3764,9 +3825,13 @@ namespace MARAS {
         req.buttons.push_back(std::move(applyBtn));
         req.buttons.push_back(ModalButton::Make("discard", "Discard All", ModalButtonVariant::Secondary));
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [candidates = std::move(candidates), onApproved = std::move(onApproved)](const ModalResponse& resp) mutable {
+            [expectedEpoch, candidates = std::move(candidates), onApproved = std::move(onApproved)](const ModalResponse& resp) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "apply")) {
                     MARAS_LOG_INFO("[Matchmaking:ShowMatchmakingReviewModal] User discarded all {} matchmaking suggestion(s).",
                                    candidates.size());
@@ -3819,6 +3884,7 @@ namespace MARAS {
 
         auto batch = std::make_shared<VerificationBatch>();
         batch->isScheduledScan = isScheduledScan;
+        batch->sessionEpoch = GetSessionEpoch();
         batch->tasks.reserve(candidates.size());
         for (auto& cand : candidates) {
             VerificationTask task;
@@ -3836,7 +3902,7 @@ namespace MARAS {
     }
 
     void MatchmakingService::RetryVerificationTasks(std::shared_ptr<VerificationBatch> batch, const std::vector<size_t>& indicesToRetry) {
-        if (!batch || indicesToRetry.empty()) {
+        if (!batch || indicesToRetry.empty() || !IsSessionEpochCurrent(batch->sessionEpoch)) {
             return;
         }
 
@@ -3858,49 +3924,57 @@ namespace MARAS {
                            idx + 1, batch->tasks.size(), task.result.actorAName, task.result.actorAFormID, task.result.actorBName, task.result.actorBFormID,
                            task.result.action, task.result.targetStatus);
 
-            SkyrimNetDecisions::EvaluateMatchmakingVerify(
+            auto completeTaskOnMainThread = [this, batch, idx](const SkyrimNetDecisions::MatchmakingVerifyEvalResult& res) {
+                AddEpochTask(
+                    batch->sessionEpoch,
+                    "MatchmakingService::OnVerifyResult",
+                    [this, batch, idx, res]() {
+                        if (idx >= batch->tasks.size()) return;
+                        auto& t = batch->tasks[idx];
+
+                        if (!res.success) {
+                            t.completed = true;
+                            t.failed = true;
+                            t.isInvalidJson = (res.failureType == LLMFailureType::InvalidJson);
+                            t.failureReason = res.failureDetail.empty() ? "LLM verification failed" : res.failureDetail;
+                            MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Verification failed for {} <-> {}: {}",
+                                           t.result.actorAName, t.result.actorBName, t.failureReason);
+                        } else {
+                            t.completed = true;
+                            t.failed = false;
+                            t.isInvalidJson = false;
+                            t.suitable = res.suitable;
+                            t.verificationReason = res.reason.empty() ? "No reason provided" : res.reason;
+                            MARAS_LOG_INFO("[Matchmaking:RetryVerificationTasks] Verification for {} <-> {}: suitable={}, reason='{}'",
+                                           t.result.actorAName, t.result.actorBName, t.suitable, t.verificationReason);
+                        }
+
+                        HandleBatchCompletion(batch, "MARAS: Verification Request Failed",
+                            res.usedDecisions ? "decisions" : "gamemaster_evaluation",
+                            this,
+                            [this](auto b, const auto& idxs) { RetryVerificationTasks(b, idxs); },
+                            [](auto b, const auto& idxs) {
+                                for (size_t fi : idxs) b->tasks[fi].suitable = false;
+                            },
+                            [this](auto b) { FinishVerificationBatch(b); }
+                        );
+                    });
+            };
+
+            bool dispatched = SkyrimNetDecisions::EvaluateMatchmakingVerify(
                 contextJson,
                 task.result.action,
                 task.result.targetStatus,
                 task.result.actorAName,
                 task.result.actorBName,
-                [this, batch, idx](const SkyrimNetDecisions::MatchmakingVerifyEvalResult& res) {
-                    SKSE::GetTaskInterface()->AddTask([this, batch, idx, res]() {
-                        try {
-                            if (idx >= batch->tasks.size()) return;
-                            auto& t = batch->tasks[idx];
-
-                            if (!res.success) {
-                                t.completed = true;
-                                t.failed = true;
-                                t.isInvalidJson = (res.failureType == LLMFailureType::InvalidJson);
-                                t.failureReason = res.failureDetail.empty() ? "LLM verification failed" : res.failureDetail;
-                                MARAS_LOG_WARN("[Matchmaking:RetryVerificationTasks] Verification failed for {} <-> {}: {}",
-                                               t.result.actorAName, t.result.actorBName, t.failureReason);
-                            } else {
-                                t.completed = true;
-                                t.failed = false;
-                                t.isInvalidJson = false;
-                                t.suitable = res.suitable;
-                                t.verificationReason = res.reason.empty() ? "No reason provided" : res.reason;
-                                MARAS_LOG_INFO("[Matchmaking:RetryVerificationTasks] Verification for {} <-> {}: suitable={}, reason='{}'",
-                                               t.result.actorAName, t.result.actorBName, t.suitable, t.verificationReason);
-                            }
-
-                            HandleBatchCompletion(batch, "MARAS: Verification Request Failed",
-                                res.usedDecisions ? "decisions" : "gamemaster_evaluation",
-                                this,
-                                [this](auto b, const auto& idxs) { RetryVerificationTasks(b, idxs); },
-                                [](auto b, const auto& idxs) {
-                                    for (size_t fi : idxs) b->tasks[fi].suitable = false;
-                                },
-                                [this](auto b) { FinishVerificationBatch(b); }
-                            );
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("[Matchmaking:RetryVerificationTasks] Exception in verification task callback: {}", e.what());
-                        }
-                    });
-                });
+                completeTaskOnMainThread);
+            if (!dispatched) {
+                SkyrimNetDecisions::MatchmakingVerifyEvalResult failRes;
+                failRes.success = false;
+                failRes.failureType = LLMFailureType::RequestFailed;
+                failRes.failureDetail = "Failed to queue SkyrimNet verification request";
+                completeTaskOnMainThread(failRes);
+            }
         }
     }
 

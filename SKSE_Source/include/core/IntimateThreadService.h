@@ -88,28 +88,18 @@ namespace MARAS {
         void ReportIntimateInteraction(const std::string& framework, int32_t threadID, RE::Actor* actorA, RE::Actor* actorB);
         void ClearIntimateThread(const std::string& framework, int32_t threadID);
 
-        // Polling loop logic (runs on game thread via SKSE TaskInterface)
+        // Game-thread periodic tick driven by PollingService::Update()
+        void Tick(std::chrono::steady_clock::time_point now);
+
+        // Polling loop logic (runs on game thread via PollingService::Update())
         void PollActiveThreads();
 
     private:
         IntimateThreadService() = default;
-        ~IntimateThreadService();
+        ~IntimateThreadService() = default;
 
         IntimateThreadService(const IntimateThreadService&) = delete;
         IntimateThreadService& operator=(const IntimateThreadService&) = delete;
-
-        struct WorkerSync {
-            std::mutex mutex;
-            std::condition_variable cv;
-            std::atomic<bool> stopRequested{ false };
-            bool hasMonitorableThreads{ false };
-        };
-
-        void StartWorkerIfNeeded();
-        void StopWorker(bool joinThread);
-        static void WorkerLoop(std::shared_ptr<WorkerSync> sync);
-        bool HasActiveThreadsToMonitorLocked() const;
-        void RefreshWorkerMonitorStateLocked();
 
         static void EvaluateParticipants(const std::vector<RE::FormID>& actorIDs,
                                          std::vector<PotentialCheater>& outCheaters,
@@ -127,8 +117,8 @@ namespace MARAS {
                                              const std::string& framework, int32_t threadID, bool isWalkIn);
 
         mutable std::mutex mutex_;
-        std::shared_ptr<WorkerSync> workerSync_;
-        std::thread workerThread_;
+        std::atomic<bool> hasActiveThreads_{ false };
+        std::chrono::steady_clock::time_point lastPollTime_{};
 
         std::unordered_map<ThreadKey, TrackedIntimateThread, ThreadKeyHash> activeThreads_;
 

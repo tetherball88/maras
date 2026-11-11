@@ -5,6 +5,7 @@
 #include "core/IntimateThreadService.h"
 #include "core/LoggingService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "services/ActorService.h"
 #include "ui/ConfirmationModal.h"
@@ -311,14 +312,17 @@ namespace MARAS::PapyrusInterface {
             return RE::BSScript::LatentStatus::kFailed;
         }
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         auto& houseSvc = PlayerHouseService::GetSingleton();
         auto houses = houseSvc.GetAllPlayerHouses();
         if (houses.empty()) {
             MARAS_LOG_WARN("PapyrusInterface: ShowChooseHomeModal called with no registered player houses");
-            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
-                vm->ReturnLatentResult<RE::BGSLocation*>(stackID, nullptr);
-            });
-            return RE::BSScript::LatentStatus::kStarted;
+            if (AddEpochTask(expectedEpoch, "PapyrusInterface::ShowChooseHomeModalEmpty", [vm, stackID]() {
+                    vm->ReturnLatentResult<RE::BGSLocation*>(stackID, nullptr);
+                })) {
+                return RE::BSScript::LatentStatus::kStarted;
+            }
+            return RE::BSScript::LatentStatus::kFailed;
         }
 
         const RE::FormID targetFormID = targetActor ? targetActor->GetFormID() : 0;
@@ -385,7 +389,10 @@ namespace MARAS::PapyrusInterface {
 
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm, stackID, targetFormID, isChild](const ModalResponse& resp) {
+            [expectedEpoch, vm, stackID, targetFormID, isChild](const ModalResponse& resp) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
                     vm->ReturnLatentResult<RE::BGSLocation*>(stackID, nullptr);
                     return;
@@ -428,14 +435,17 @@ namespace MARAS::PapyrusInterface {
             return RE::BSScript::LatentStatus::kFailed;
         }
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         auto& houseSvc = PlayerHouseService::GetSingleton();
         auto spouses = relMgr.GetAllMarried();
         if (spouses.empty()) {
-            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
-                vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
-            });
-            return RE::BSScript::LatentStatus::kStarted;
+            if (AddEpochTask(expectedEpoch, "PapyrusInterface::ShowChooseAdoptionSpouseModalEmpty", [vm, stackID]() {
+                    vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
+                })) {
+                return RE::BSScript::LatentStatus::kStarted;
+            }
+            return RE::BSScript::LatentStatus::kFailed;
         }
 
         std::vector<ModalSelectOption> spouseOptions;
@@ -469,10 +479,12 @@ namespace MARAS::PapyrusInterface {
         }
 
         if (defaultSpouseVal.empty()) {
-            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
-                vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
-            });
-            return RE::BSScript::LatentStatus::kStarted;
+            if (AddEpochTask(expectedEpoch, "PapyrusInterface::ShowChooseAdoptionSpouseModalNoneLoaded", [vm, stackID]() {
+                    vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
+                })) {
+                return RE::BSScript::LatentStatus::kStarted;
+            }
+            return RE::BSScript::LatentStatus::kFailed;
         }
 
         spouseOptions.push_back({"0", "None (Adopt as Single Parent)"});
@@ -503,7 +515,10 @@ namespace MARAS::PapyrusInterface {
 
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm, stackID](const ModalResponse& resp) {
+            [expectedEpoch, vm, stackID](const ModalResponse& resp) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
                     vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
                     return;
@@ -537,11 +552,14 @@ namespace MARAS::PapyrusInterface {
             return RE::BSScript::LatentStatus::kFailed;
         }
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         if (!target) {
-            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
-                vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(""));
-            });
-            return RE::BSScript::LatentStatus::kStarted;
+            if (AddEpochTask(expectedEpoch, "PapyrusInterface::ShowDebugStatusModalNullTarget", [vm, stackID]() {
+                    vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(""));
+                })) {
+                return RE::BSScript::LatentStatus::kStarted;
+            }
+            return RE::BSScript::LatentStatus::kFailed;
         }
 
         const RE::FormID targetID = target->GetFormID();
@@ -593,7 +611,10 @@ namespace MARAS::PapyrusInterface {
 
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm, stackID](const ModalResponse& resp) {
+            [expectedEpoch, vm, stackID](const ModalResponse& resp) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "apply")) {
                     vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(""));
                     return;
@@ -614,6 +635,7 @@ namespace MARAS::PapyrusInterface {
             return RE::BSScript::LatentStatus::kFailed;
         }
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         std::vector<RE::FormID> migratedChildIDs;
         std::vector<ModalChecklistItem> items;
@@ -726,10 +748,12 @@ namespace MARAS::PapyrusInterface {
         }
 
         if (items.empty()) {
-            SKSE::GetTaskInterface()->AddTask([vm, stackID]() {
-                vm->ReturnLatentResult<int32_t>(stackID, 0);
-            });
-            return RE::BSScript::LatentStatus::kStarted;
+            if (AddEpochTask(expectedEpoch, "PapyrusInterface::ShowChildMigrationAuditModalEmpty", [vm, stackID]() {
+                    vm->ReturnLatentResult<int32_t>(stackID, 0);
+                })) {
+                return RE::BSScript::LatentStatus::kStarted;
+            }
+            return RE::BSScript::LatentStatus::kFailed;
         }
 
         ModalRequest req;
@@ -756,7 +780,10 @@ namespace MARAS::PapyrusInterface {
 
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm, stackID, childIDs = std::move(migratedChildIDs)](const ModalResponse& resp) {
+            [expectedEpoch, vm, stackID, childIDs = std::move(migratedChildIDs)](const ModalResponse& resp) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 const bool discardAll = (!resp.aborted && (resp.buttonIndex == 1 || resp.buttonId == "discard_all"));
                 auto& mgr = NPCRelationshipManager::GetSingleton();
                 int32_t keptCount = 0;

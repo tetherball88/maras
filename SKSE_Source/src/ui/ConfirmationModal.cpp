@@ -1,6 +1,7 @@
 #include "ui/ConfirmationModal.h"
 
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -303,12 +304,12 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
     appendKeys(mainActors);
     appendKeys(secondaryActors);
 
-    auto ReturnNow = [vm, stackID](int code) -> RE::BSScript::LatentStatus {
+    const SessionEpoch expectedEpoch = GetSessionEpoch();
+    auto ReturnNow = [vm, stackID, expectedEpoch](int code) -> RE::BSScript::LatentStatus {
         MARAS_LOG_INFO("ConfirmationModal::Show - early return {}", code);
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([vm, stackID, code]() {
+        if (AddEpochTask(expectedEpoch, "ConfirmationModal::ReturnNow", [vm, stackID, code]() {
                 vm->ReturnLatentResult(stackID, code);
-            });
+            })) {
             return RE::BSScript::LatentStatus::kStarted;
         }
         return RE::BSScript::LatentStatus::kFailed;
@@ -426,11 +427,14 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
 
     PrismaModalManager::GetSingleton().ShowModal(
         std::move(req),
-        [this, vm, stackID, keys = std::move(keys), normalSec, declineSec,
+        [this, expectedEpoch, vm, stackID, keys = std::move(keys), normalSec, declineSec,
          action, actionTypeStr = std::move(actionTypeStr), originatorID, targetID,
          trackPairState, initialStatus, initialIsOpen,
          mainActorList = std::move(mainActorList), secondaryActorList = std::move(secondaryActorList),
          activity = std::move(activity), skyrimNetAvailable](const ModalResponse& resp) {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
             int result = (resp.buttonIndex >= 0) ? resp.buttonIndex : 1;
             if (resp.aborted) {
                 result = 1;
