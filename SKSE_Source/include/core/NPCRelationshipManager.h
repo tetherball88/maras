@@ -369,8 +369,13 @@ namespace MARAS {
         // Faction management helper
         void UpdateTrackedFactionRank(RE::FormID npcFormID, RelationshipStatus status);
 
-        // Event sending helper
+        // Event sending & player buff sync helpers
         void SendStatusChangedEvent(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus status);
+        void DispatchPlayerBuffMaintenance() const;
+
+        // Cleans pending partner intents and third-party affair records when an actor dies or is unregistered
+        void CleanupActorIntentsAndThirdPartyAffairs(RE::FormID actorID, bool eraseRecords,
+                                                     std::unordered_set<RE::FormID>& outAffectedActors);
 
         // Low-level faction add helper (adds a FormID actor to a faction with rank)
         bool AddToFaction(RE::FormID npcFormID, RE::TESFaction* faction, std::int8_t rank);

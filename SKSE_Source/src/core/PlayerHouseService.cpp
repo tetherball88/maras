@@ -367,10 +367,12 @@ namespace MARAS {
         // Unregister package overrides
         ApplyStayAtHome(tenantFormID, false);
 
-        // Remove factions if not a child
+        // Remove factions if not a child; otherwise clear cached child house assignment
         if (!isChild) {
             SetHousedFaction(tenantFormID, false);
             RemoveMerchantFactionsFromTenant(tenantFormID);
+        } else {
+            PlayerChildrenService::GetSingleton().ClearChildHouseAssignment(tenantFormID);
         }
 
         MARAS_LOG_DEBUG("Removed tenant {:08X} from player house {:08X}", tenantFormID, houseFormID);

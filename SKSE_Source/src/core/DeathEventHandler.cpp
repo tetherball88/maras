@@ -54,20 +54,42 @@ namespace MARAS {
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         auto& deceasedReg = DeceasedRegistry::GetSingleton();
 
-        // 1. Check if victim is a registered Child
+        // 1. Check if victim is a registered Child (young child vs. graduated Stage 4 Adult Child)
         auto childEntryOpt = relMgr.GetChildEntry(victimID);
         if (childEntryOpt.has_value()) {
-            MARAS_LOG_INFO("DeathEventHandler: Registered child {:08X} ('{}') died. Killer is player: {}",
+            if (childEntryOpt->stage != ChildStage::Adult) {
+                MARAS_LOG_INFO("DeathEventHandler: Registered child {:08X} ('{}') died. Killer is player: {}",
+                               victimID, victim->GetDisplayFullName(), isPlayerKiller);
+                deceasedReg.RecordDeceasedChild(victim, childEntryOpt.value(), isPlayerKiller, killer);
+                relMgr.RemoveChild(victimID);
+
+                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+                    SKSE::ModCallbackEvent modEvent("maras_child_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
+                    eventSource->SendEvent(&modEvent);
+                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
+                }
+
+                return;
+            }
+
+            // Graduated Stage 4 Adult Child: archive as deceased adult (preserving both adult partner bonds
+            // and child lineage), clean up ChildRegistryEntry / AdultChildTravelService, and dissolve adult state.
+            MARAS_LOG_INFO("DeathEventHandler: Graduated adult child {:08X} ('{}') died. Killer is player: {}",
                            victimID, victim->GetDisplayFullName(), isPlayerKiller);
-            deceasedReg.RecordDeceasedChild(victim, childEntryOpt.value(), isPlayerKiller, killer);
+            deceasedReg.RecordDeceasedAdult(victim, isPlayerKiller, killer, &childEntryOpt.value());
             relMgr.RemoveChild(victimID);
 
             if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                SKSE::ModCallbackEvent modEvent("maras_child_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
+                SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
                 eventSource->SendEvent(&modEvent);
-                MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
+                MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for graduated adult child {:08X}", victimID);
             }
 
+            if (relMgr.IsRegistered(victimID)) {
+                relMgr.HandleNPCDeath(victimID);
+            } else {
+                relMgr.EvaluateChildCustodyOnDeath(victimID);
+            }
             return;
         }
 
@@ -98,9 +120,12 @@ namespace MARAS {
         }
 
         // 3. Check if victim is an Adult tracked by MARAS
+        const bool isDynamicVictim = ((victimID & 0xFF000000) == 0xFF000000);
         RE::FormID victimBaseID = 0;
-        if (auto* actorBase = victim->GetActorBase()) {
-            victimBaseID = actorBase->GetFormID();
+        if (!isDynamicVictim) {
+            if (auto* actorBase = victim->GetActorBase()) {
+                victimBaseID = actorBase->GetFormID();
+            }
         }
         bool isRegistered = relMgr.IsRegistered(victimID) || (victimBaseID != 0 && relMgr.IsRegistered(victimBaseID));
 

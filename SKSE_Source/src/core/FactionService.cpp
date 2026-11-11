@@ -258,9 +258,6 @@ namespace MARAS {
                         if (!relMgr.CanFormRelationship(a_actor->GetFormID(), kPlayerFormID, RelationshipStatus::Married, &blockReason)) {
                             MARAS_LOG_WARN("FactionService: Blocked auto-promoting NPC {:08X} ({}) to Married with Player via PlayerMarriedFaction addition: {}",
                                            a_actor->GetFormID(), a_actor->GetName(), blockReason);
-                            if (_originalAddToFaction) {
-                                _originalAddToFaction(a_actor, a_faction, a_rank);
-                            }
                             return;
                         }
 

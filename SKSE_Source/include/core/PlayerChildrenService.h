@@ -50,6 +50,7 @@ namespace MARAS {
         // Low-level child house binding — sets tenant, home marker, and child sandbox packages
         bool AssignChildToHouse(RE::FormID childID, RE::FormID playerHouseFormID, bool moveChild = false);
         RE::FormID GetChildHouseFormID(RE::FormID childID) const;
+        void ClearChildHouseAssignment(RE::FormID childID);
         bool SetChildHomeMarker(RE::FormID childID, RE::FormID markerFormID);
         RE::FormID GetChildHomeMarker(RE::FormID childID) const;
         RE::TESObjectREFR* GetOrCreateChildHomeMarker(RE::Actor* childActor);

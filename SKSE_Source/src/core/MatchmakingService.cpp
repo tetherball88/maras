@@ -530,14 +530,8 @@ namespace MARAS {
             bool isPlayerPartner = mgr.IsPlayerActiveMainPartner(actorFormID) ||
                                    (entry.baseFormID != 0 && mgr.IsPlayerActiveMainPartner(entry.baseFormID));
             if (isPlayerPartner) {
-                [[maybe_unused]] bool isOpenWithPlayer = mgr.GetPairIsOpen(actorFormID, kPlayerFormID) ||
-                                        (entry.baseFormID != 0 && mgr.GetPairIsOpen(entry.baseFormID, kPlayerFormID));
-                // Closed player partners are handled exclusively by TryScheduledPlayerPartnerInfidelity;
-                // open-relationship player partners remain in generic matchmaking for consensual lovers unless matchmakingExcludePlayerActivePartners is set.
-                // All active main partners of the Player (both closed and open) are governed exclusively by Tier 2 Partner Agency.
-                if (true) {
-                    continue;
-                }
+                // Active main partners of the Player (both closed and open) are governed exclusively by Tier 2 Partner Agency.
+                continue;
             }
             if (IsNpcOnCooldown(actorFormID, currentGameDay)) {
                 continue;
@@ -3027,9 +3021,7 @@ namespace MARAS {
                 if (usedActors.find(actorA) != usedActors.end() || usedActors.find(actorB) != usedActors.end()) continue;
                 if (IsNpcOnCooldown(actorA, currentGameDay) || IsNpcOnCooldown(actorB, currentGameDay)) continue;
 
-                if (true) {
-                    if (mgr.IsPlayerActiveMainPartner(actorA) || mgr.IsPlayerActiveMainPartner(actorB)) continue;
-                }
+                if (mgr.IsPlayerActiveMainPartner(actorA) || mgr.IsPlayerActiveMainPartner(actorB)) continue;
 
                 int sexA = ActorSvc::GetSex(actorA);
                 int sexB = ActorSvc::GetSex(actorB);
@@ -3097,9 +3089,7 @@ namespace MARAS {
                 if (usedActors.find(actorA) != usedActors.end() || usedActors.find(actorB) != usedActors.end()) continue;
                 if (IsNpcOnCooldown(actorA, currentGameDay) || IsNpcOnCooldown(actorB, currentGameDay)) continue;
 
-                if (true) {
-                    if (mgr.IsPlayerActiveMainPartner(actorA) || mgr.IsPlayerActiveMainPartner(actorB)) continue;
-                }
+                if (mgr.IsPlayerActiveMainPartner(actorA) || mgr.IsPlayerActiveMainPartner(actorB)) continue;
 
                 auto [targetStr, targetEnum] = GetBreakupTarget(relData.status);
                 if (targetEnum == RelationshipStatus::Unknown) continue;
@@ -3145,9 +3135,7 @@ namespace MARAS {
                 if (usedActors.find(actorA) != usedActors.end() || usedActors.find(actorB) != usedActors.end()) continue;
                 if (IsNpcOnCooldown(actorA, currentGameDay) || IsNpcOnCooldown(actorB, currentGameDay)) continue;
 
-                if (true) {
-                    if (mgr.IsPlayerActiveMainPartner(actorA) || mgr.IsPlayerActiveMainPartner(actorB)) continue;
-                }
+                if (mgr.IsPlayerActiveMainPartner(actorA) || mgr.IsPlayerActiveMainPartner(actorB)) continue;
 
                 bool canOpen = mgr.CanOpenRelationship(actorA, actorB);
                 bool canClose = mgr.CanCloseRelationship(actorA, actorB);
@@ -3210,9 +3198,9 @@ namespace MARAS {
         MARAS_LOG_INFO("[Matchmaking:DiceRoll] Chances: Dating={}%, Engaged={}%, LoverAllowed={}%, LoverCheating={}%, Advance={}%, Breakup={}%, OpenClose={}%",
                        settings.diceRollChanceNewDating, settings.diceRollChanceNewEngaged, settings.diceRollChanceNewLoverAllowed,
                        settings.diceRollChanceNewLoverCheating, settings.diceRollChanceAdvance, settings.diceRollChanceBreakup, settings.diceRollChanceOpenClose);
-        MARAS_LOG_INFO("[Matchmaking:DiceRoll] Rules: Orientation={}, AllowCheating={}, AllowBreakups={}, AllowOpenClose={}, ExcludePlayerPartners={}",
+        MARAS_LOG_INFO("[Matchmaking:DiceRoll] Rules: Orientation={}, AllowCheating={}, AllowBreakups={}, AllowOpenClose={}",
                        static_cast<int>(settings.matchmakingOrientation), settings.matchmakingAllowCheating,
-                       settings.matchmakingAllowBreakups, settings.matchmakingAllowOpenClose, settings.matchmakingExcludePlayerActivePartners);
+                       settings.matchmakingAllowBreakups, settings.matchmakingAllowOpenClose);
 
         lastMatchmakingDay_ = currentGameDay;
 
@@ -3229,12 +3217,8 @@ namespace MARAS {
             bool isPlayerPartner = mgr.IsPlayerActiveMainPartner(actorID) ||
                                    (entry.baseFormID != 0 && mgr.IsPlayerActiveMainPartner(entry.baseFormID));
             if (isPlayerPartner) {
-                [[maybe_unused]] bool isOpenWithPlayer = mgr.GetPairIsOpen(actorID, kPlayerFormID) ||
-                                        (entry.baseFormID != 0 && mgr.GetPairIsOpen(entry.baseFormID, kPlayerFormID));
-                // All active main partners of the Player (both closed and open) are governed exclusively by Tier 2 Partner Agency.
-                if (true) {
-                    continue;
-                }
+                // Active main partners of the Player (both closed and open) are governed exclusively by Tier 2 Partner Agency.
+                continue;
             }
             if (IsNpcOnCooldown(actorID, currentGameDay)) {
                 continue;
@@ -4363,20 +4347,14 @@ namespace MARAS {
                                r.actorBName, r.actorBFormID, GetNpcCooldownRemaining(r.actorBFormID, today));
                 continue;
             }
-            [[maybe_unused]] const auto& settings = Settings::GetSingleton();
             const auto& mgr = NPCRelationshipManager::GetSingleton();
-            auto isExcludedPlayerPartner = [&](RE::FormID id) {
-                if (!mgr.IsPlayerActiveMainPartner(id)) return false;
-                return true;
-
-            };
-            if (isExcludedPlayerPartner(r.actorAFormID)) {
-                MARAS_LOG_INFO("[Matchmaking:ProcessScheduledResults] Skipping match: {} (0x{:08X}) is player's active partner (closed or excluded by settings)",
+            if (mgr.IsPlayerActiveMainPartner(r.actorAFormID)) {
+                MARAS_LOG_INFO("[Matchmaking:ProcessScheduledResults] Skipping match: {} (0x{:08X}) is player's active main partner (governed by Tier 2 Partner Agency)",
                                r.actorAName, r.actorAFormID);
                 continue;
             }
-            if (isExcludedPlayerPartner(r.actorBFormID)) {
-                MARAS_LOG_INFO("[Matchmaking:ProcessScheduledResults] Skipping match: {} (0x{:08X}) is player's active partner (closed or excluded by settings)",
+            if (mgr.IsPlayerActiveMainPartner(r.actorBFormID)) {
+                MARAS_LOG_INFO("[Matchmaking:ProcessScheduledResults] Skipping match: {} (0x{:08X}) is player's active main partner (governed by Tier 2 Partner Agency)",
                                r.actorBName, r.actorBFormID);
                 continue;
             }
@@ -5188,10 +5166,8 @@ namespace MARAS {
             }
         }
         if (!serialization->WriteRecordData(lastPlayerPartnerCheatingDay_)) {
-            if (true) {
-                MARAS_LOG_ERROR("MatchmakingService::Save - failed to write lastPlayerPartnerCheatingDay_");
-                return false;
-            }
+            MARAS_LOG_ERROR("MatchmakingService::Save - failed to write lastPlayerPartnerCheatingDay_");
+            return false;
         }
         uint32_t locCoolCount = static_cast<uint32_t>(lastHomeArrivalEventDayByLoc_.size());
         if (!serialization->WriteRecordData(locCoolCount)) {

@@ -211,7 +211,7 @@ Every few in-game days, M.A.R.A.S scans single and coupled NPCs across Skyrim an
 - **Two Matchmaking Brains (`Settings -> Matchmaking`)**:
   - 🤖 **SkyrimNet AI Matchmaker (LLM Mode)**: An AI Game Master reads NPC personalities, backgrounds, and relationship trees to propose lore-friendly pairs, verifies that the match makes sense, and **writes first-person memories for both NPCs** so they actually remember how they got together when you talk to them!
   - 🎲 **Weighted Dice-Roll Mode**: Fast, customizable background rolls that work **with or without SkyrimNet** *(and if SkyrimNet is installed, you can still use AI verification and memory generation on Dice-Roll matches!)*.
-- **Your Ground Rules**: In **Dashboard (`Alt + B`) $\rightarrow$ Settings $\rightarrow$ Matchmaking**, you can toggle **`Exclude Player's Active Partners`** (so the Matchmaker never steals your spouses/partners!), pick from **7 Sexual Orientation rules**, and set per-NPC cooldown days.
+- **Your Ground Rules**: Your own active spouses, fiancés, and dating partners are **automatically protected** from generic world matchmaking (their faithfulness is governed solely by your **Player-Partner Agency & Infidelity** settings!). In **Dashboard (`Alt + B`) $\rightarrow$ Settings $\rightarrow$ Matchmaking**, you can also pick from **7 Sexual Orientation rules** and set per-NPC cooldown days.
 
 ### 🎯 2. Playing Cupid Yourself (Manual & AI Matchmaking in the Dashboard)
 Want to pair up two specific followers, marry off your ex, or break up a couple in Whiterun? Press **`Alt + B`** and open the **Matchmaking** tab:

@@ -1,6 +1,7 @@
 #include "core/NPCRelationshipManager.h"
 
 #include "core/FormCache.h"
+#include "core/NPCIndex.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -518,6 +519,67 @@ namespace MARAS {
         }
     }
 
+    void NPCRelationshipManager::CleanupActorIntentsAndThirdPartyAffairs(
+        RE::FormID actorID,
+        bool eraseRecords,
+        std::unordered_set<RE::FormID>& outAffectedActors) {
+        if (actorID == 0) {
+            return;
+        }
+
+        std::vector<RE::FormID> intentsToClear;
+        for (const auto& [partnerID, intent] : pendingPartnerIntents_) {
+            if (partnerID == actorID || intent.relatedLoverID == actorID) {
+                intentsToClear.push_back(partnerID);
+            }
+        }
+        for (RE::FormID partnerID : intentsToClear) {
+            ClearPartnerIntent(partnerID);
+        }
+
+        for (auto& [pairKey, pairData] : relationshipPairs) {
+            auto& records = pairData.cheatingRecords;
+            if (records.empty()) {
+                continue;
+            }
+            if (eraseRecords) {
+                const auto oldSize = records.size();
+                for (const auto& rec : records) {
+                    if (rec.cheaterID == actorID || rec.victimID == actorID || rec.affairPartnerID == actorID) {
+                        if (rec.cheaterID != 0 && rec.cheaterID != actorID) outAffectedActors.insert(rec.cheaterID);
+                        if (rec.victimID != 0 && rec.victimID != actorID) outAffectedActors.insert(rec.victimID);
+                        if (rec.affairPartnerID != 0 && rec.affairPartnerID != actorID) outAffectedActors.insert(rec.affairPartnerID);
+                    }
+                }
+                records.erase(
+                    std::remove_if(records.begin(), records.end(),
+                                   [actorID](const CheatingRecord& rec) {
+                                       return rec.cheaterID == actorID ||
+                                              rec.victimID == actorID ||
+                                              rec.affairPartnerID == actorID;
+                                   }),
+                    records.end());
+                if (records.size() != oldSize) {
+                    MARAS_LOG_INFO("Cleaned {} third-party cheating record(s) involving {:08X} from pair ({:08X}, {:08X})",
+                                   oldSize - records.size(), actorID, pairKey.actorA, pairKey.actorB);
+                }
+            } else {
+                for (auto& rec : records) {
+                    if (rec.affairPartnerID == actorID || rec.cheaterID == actorID || rec.victimID == actorID) {
+                        if (rec.affairStatus == AffairStatus::Ongoing) {
+                            rec.affairStatus = AffairStatus::EndedBreakup;
+                            MARAS_LOG_INFO("Marked third-party affair EndedBreakup due to death of {:08X}: cheater {:08X} / victim {:08X} with {:08X}",
+                                           actorID, rec.cheaterID, rec.victimID, rec.affairPartnerID);
+                        }
+                        if (rec.cheaterID != 0 && rec.cheaterID != actorID) outAffectedActors.insert(rec.cheaterID);
+                        if (rec.victimID != 0 && rec.victimID != actorID) outAffectedActors.insert(rec.victimID);
+                        if (rec.affairPartnerID != 0 && rec.affairPartnerID != actorID) outAffectedActors.insert(rec.affairPartnerID);
+                    }
+                }
+            }
+        }
+    }
+
     void NPCRelationshipManager::EvaluateCheatingOnStatusChange(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus newStatus) {
         if (npcFormID == 0) return;
 
@@ -555,6 +617,7 @@ namespace MARAS {
 
         // Helper lambda to handle when relationship between cheater and affair partner ends (Breakup)
         auto handleBreakup = [this](RE::FormID actor1, RE::FormID actor2) {
+            std::vector<RE::FormID> intentsToClear;
             for (auto& [key, pairData] : relationshipPairs) {
                 for (auto& rec : pairData.cheatingRecords) {
                     if ((rec.cheaterID == actor1 && rec.affairPartnerID == actor2) ||
@@ -563,15 +626,19 @@ namespace MARAS {
                             rec.affairStatus = AffairStatus::EndedBreakup;
                             auto itIntent = pendingPartnerIntents_.find(rec.cheaterID);
                             if (itIntent != pendingPartnerIntents_.end() &&
+                                (itIntent->second.relatedLoverID == 0 || itIntent->second.relatedLoverID == rec.affairPartnerID) &&
                                 (itIntent->second.type == PartnerIntentType::ConfessTalking ||
                                  itIntent->second.type == PartnerIntentType::ConfessPhysical)) {
-                                ClearPartnerIntent(rec.cheaterID);
+                                intentsToClear.push_back(rec.cheaterID);
                             }
                             MARAS_LOG_INFO("Affair marked EndedBreakup: cheater {:08X} / victim {:08X} with {:08X}",
                                            rec.cheaterID, rec.victimID, rec.affairPartnerID);
                         }
                     }
                 }
+            }
+            for (RE::FormID cheaterID : intentsToClear) {
+                ClearPartnerIntent(cheaterID);
             }
         };
 
@@ -580,13 +647,17 @@ namespace MARAS {
             RelationshipPairKey pairKey(actor1, actor2);
             auto it = relationshipPairs.find(pairKey);
             if (it != relationshipPairs.end()) {
+                std::vector<RE::FormID> intentsToClear;
                 for (auto& rec : it->second.cheatingRecords) {
                     if (rec.affairStatus == AffairStatus::Ongoing) {
                         rec.affairStatus = AffairStatus::EndedVictimSplit;
-                        ClearPartnerIntent(rec.cheaterID);
+                        intentsToClear.push_back(rec.cheaterID);
                         MARAS_LOG_INFO("Affair marked EndedVictimSplit: cheater {:08X} / victim {:08X} with {:08X}",
                                        rec.cheaterID, rec.victimID, rec.affairPartnerID);
                     }
+                }
+                for (RE::FormID cheaterID : intentsToClear) {
+                    ClearPartnerIntent(cheaterID);
                 }
             }
         };
@@ -600,6 +671,11 @@ namespace MARAS {
         } else if (IsBreakupStatus(newStatus)) {
             handleBreakup(npcFormID, targetFormID);
             handleVictimSplit(npcFormID, targetFormID);
+            if (npcFormID == kPlayerFormID && targetFormID != 0) {
+                ClearPartnerIntent(targetFormID);
+            } else if (targetFormID == kPlayerFormID && npcFormID != 0) {
+                ClearPartnerIntent(npcFormID);
+            }
         }
 
         UpdateSpouseCheatingFaction(npcFormID);

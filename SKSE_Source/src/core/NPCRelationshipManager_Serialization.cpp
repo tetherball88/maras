@@ -1,6 +1,7 @@
 #include "core/NPCRelationshipManager.h"
 
 #include "core/AdultChildProgression.h"
+#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/Serialization.h"
@@ -1256,6 +1257,67 @@ namespace MARAS {
     }
 
     void NPCRelationshipManager::FinalizeLoad() {
+        auto& deceasedReg = DeceasedRegistry::GetSingleton();
+
+        // 1. Reconcile any registered adult NPCs who died while unloaded or were already archived in DeceasedRegistry
+        std::vector<RE::FormID> deadAdults;
+        for (RE::FormID npcID : allRegistered) {
+            if (npcID == 0 || npcID == kPlayerFormID) {
+                continue;
+            }
+            RE::Actor* loadedActor = RE::TESForm::LookupByID<RE::Actor>(npcID);
+            if (deceasedReg.IsDeceased(npcID) || (loadedActor && loadedActor->IsDead())) {
+                deadAdults.push_back(npcID);
+            }
+        }
+        for (RE::FormID deadID : deadAdults) {
+            auto childEntryOpt = GetChildEntry(deadID);
+            if (!deceasedReg.IsDeceased(deadID)) {
+                if (auto* deadActor = RE::TESForm::LookupByID<RE::Actor>(deadID)) {
+                    deceasedReg.RecordDeceasedAdult(deadActor, /*isPlayerKiller=*/false, nullptr,
+                                                    childEntryOpt ? &childEntryOpt.value() : nullptr);
+                }
+            }
+            if (childEntryOpt.has_value()) {
+                RemoveChild(deadID);
+            }
+            MARAS_LOG_INFO("FinalizeLoad: Reconciling dead-on-load registered NPC {:08X}", deadID);
+            HandleNPCDeath(deadID);
+        }
+
+        // 2. Reconcile any spawned children in childrenByID who died while unloaded or were archived in DeceasedRegistry
+        std::vector<std::pair<RE::FormID, ChildRegistryEntry>> deadChildren;
+        for (const auto& [cID, entry] : childrenByID) {
+            if (cID == 0 || IsSyntheticChildID(cID)) {
+                continue;
+            }
+            RE::Actor* childActor = RE::TESForm::LookupByID<RE::Actor>(cID);
+            if (deceasedReg.IsDeceased(cID) || (childActor && childActor->IsDead())) {
+                deadChildren.emplace_back(cID, entry);
+            }
+        }
+        for (const auto& [cID, entry] : deadChildren) {
+            if (!deceasedReg.IsDeceased(cID)) {
+                if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(cID)) {
+                    if (entry.stage == ChildStage::Adult) {
+                        deceasedReg.RecordDeceasedAdult(childActor, /*isPlayerKiller=*/false, nullptr, &entry);
+                    } else {
+                        deceasedReg.RecordDeceasedChild(childActor, entry, /*isPlayerKiller=*/false, nullptr);
+                    }
+                }
+            }
+            MARAS_LOG_INFO("FinalizeLoad: Reconciling dead-on-load child {:08X} ('{}', stage={})",
+                           cID, entry.name, static_cast<int>(entry.stage));
+            RemoveChild(cID);
+            if (entry.stage == ChildStage::Adult) {
+                if (IsRegistered(cID)) {
+                    HandleNPCDeath(cID);
+                } else {
+                    EvaluateChildCustodyOnDeath(cID);
+                }
+            }
+        }
+
         for (auto& [cID, entry] : childrenByID) {
             if (entry.guardianAID != 0) EnsureRegistered(entry.guardianAID);
             if (entry.guardianBID != 0) EnsureRegistered(entry.guardianBID);

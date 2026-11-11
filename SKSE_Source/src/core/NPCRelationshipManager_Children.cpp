@@ -1307,18 +1307,57 @@ namespace MARAS {
         }
 
         std::unordered_set<RE::FormID> widowedMothers;
+        std::vector<RE::FormID> unbornToRemove;
 
         for (auto& [cID, entry] : childrenByID) {
             if (entry.stage == ChildStage::Adult) continue;
 
-            bool isDeceasedGuardian = entry.HasGuardian(deceasedID);
-            bool isBioParent = MatchesActor(entry.bioMotherID, deceasedID) || MatchesActor(entry.bioFatherID, deceasedID);
-
-            if (!isDeceasedGuardian && !isBioParent) {
+            if (entry.stage == ChildStage::Unborn && MatchesActor(entry.bioMotherID, deceasedID)) {
+                unbornToRemove.push_back(cID);
                 continue;
             }
 
-            if (!isDeceasedGuardian && isBioParent) {
+            bool isDeceasedGuardian = entry.HasGuardian(deceasedID);
+            bool isBioParent = MatchesActor(entry.bioMotherID, deceasedID) || MatchesActor(entry.bioFatherID, deceasedID);
+            bool isPresumedFather = MatchesActor(entry.presumedFatherID, deceasedID);
+
+            if (!isDeceasedGuardian && !isBioParent && !isPresumedFather) {
+                continue;
+            }
+
+            if (entry.stage == ChildStage::Unborn) {
+                RE::FormID survivingParent = entry.GetOtherGuardian(deceasedID);
+                if (isDeceasedGuardian && survivingParent != 0 &&
+                    !Utils::MatchesActor(survivingParent, kPlayerFormID) && ActorSvc::GetSex(survivingParent) == 1) {
+                    widowedMothers.insert(survivingParent);
+                }
+                if (isPresumedFather) {
+                    entry.presumedFatherID = 0;
+                }
+                if (isDeceasedGuardian) {
+                    entry.RemoveGuardian(deceasedID);
+                }
+                if (!entry.HasAnyGuardian() && entry.bioMotherID != 0) {
+                    entry.AssignGuardians(entry.bioMotherID, 0);
+                }
+                if (entry.paternitySecret.HasActiveSecret()) {
+                    if (isDeceasedGuardian || isPresumedFather) {
+                        ResolvePaternitySecretForPartner(cID, /*discoveredByPartner=*/false, /*sendEvent=*/false);
+                    } else if (MatchesActor(entry.bioFatherID, deceasedID) && entry.paternitySecret.isSecretForBioFather) {
+                        entry.paternitySecret.isSecretForBioFather = false;
+                        if (!entry.paternitySecret.isSecretForPartner) {
+                            entry.paternitySecret.isSecret = false;
+                        }
+                    }
+                }
+                PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+                continue;
+            }
+
+            if (!isDeceasedGuardian && (isBioParent || isPresumedFather)) {
+                if (isPresumedFather) {
+                    entry.presumedFatherID = 0;
+                }
                 // If neither guardian was the deceased, but a bio-parent died and guardians are empty, re-evaluate target
                 if (!entry.HasAnyGuardian()) {
                     SyncChildHouseholdState(cID, 0, 0);
@@ -1330,15 +1369,6 @@ namespace MARAS {
 
             if (survivingParent != 0 && !Utils::MatchesActor(survivingParent, kPlayerFormID) && ActorSvc::GetSex(survivingParent) == 1) {
                 widowedMothers.insert(survivingParent);
-            }
-
-            if (entry.stage == ChildStage::Unborn) {
-                entry.RemoveGuardian(deceasedID);
-                if (entry.paternitySecret.HasActiveSecret()) {
-                    ResolvePaternitySecretForPartner(cID, /*discoveredByPartner=*/false, /*sendEvent=*/false);
-                }
-                PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
-                continue;
             }
 
             if (Utils::MatchesActor(survivingParent, kPlayerFormID)) {
@@ -1388,6 +1418,13 @@ namespace MARAS {
             }
             PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
         }
+
+        for (RE::FormID unbornID : unbornToRemove) {
+            MARAS_LOG_INFO("Death: Pregnant mother {:08X} deceased; removing unborn child record {:08X}",
+                           deceasedID, unbornID);
+            RemoveChild(unbornID);
+        }
+
         UpdateSpouseChildrenFaction(deceasedID);
 
         // Evaluate step-in only for mothers who actually lost deceasedID as a co-guardian
@@ -1442,7 +1479,6 @@ namespace MARAS {
     void NPCRelationshipManager::UpdateSpouseChildrenFaction(RE::FormID spouseID) {
         if (spouseID == 0 || Utils::MatchesActor(spouseID, kPlayerFormID)) return;
 
-        auto* spouseActor = NPCIndex::GetSingleton().GetActorFromFormId(spouseID);
         auto* faction = FormCache::GetSingleton().GetSpouseChildrenFaction();
         if (!faction) return;
 
@@ -1452,20 +1488,14 @@ namespace MARAS {
         std::int8_t rank = static_cast<std::int8_t>(childCount);
 
         if (shouldHaveFaction) {
-            if (spouseActor) {
-                spouseActor->AddToFaction(faction, rank);
-            } else {
-                Utils::AddToFaction(spouseID, faction, rank);
-            }
+            Utils::AddToFaction(spouseID, faction, rank);
             MARAS_LOG_INFO("UpdateSpouseChildrenFaction: Set TTM_SpouseChildren faction on spouse {:08X} to rank {}", spouseID, rank);
         } else {
-            if (spouseActor) {
-                if (spouseActor->IsInFaction(faction)) {
-                    spouseActor->RemoveFromFaction(faction);
-                    MARAS_LOG_INFO("UpdateSpouseChildrenFaction: Removed TTM_SpouseChildren faction from spouse {:08X} (isSpouse: {}, child count: {})", spouseID, isSpouse, childCount);
-                }
-            } else {
-                Utils::RemoveFromFaction(spouseID, faction);
+            auto* spouseActor = RE::TESForm::LookupByID<RE::Actor>(spouseID);
+            const bool wasInFaction = spouseActor && spouseActor->IsInFaction(faction);
+            Utils::RemoveFromFaction(spouseID, faction);
+            if (wasInFaction) {
+                MARAS_LOG_INFO("UpdateSpouseChildrenFaction: Removed TTM_SpouseChildren faction from spouse {:08X} (isSpouse: {}, child count: {})", spouseID, isSpouse, childCount);
             }
         }
     }

@@ -197,7 +197,7 @@ Want to pair up your favorite followers or break up a couple you can't stand? Op
 - **Per-NPC Matchmaker**: Select any NPC to generate tailored romantic suggestions specifically for them—review the proposed partners, read or edit their generated backstory memories, and click **Apply** to make it official!
 - **Global Matchmaking Scan**: Trigger a world-wide matchmaking scan on demand whenever you want fresh town gossip, and either review the proposals yourself or let them auto-apply.
 - **Your World, Your Rules**:
-  - 🛡️ **Protect Your Partners**: Keep **`Exclude Player's Active Partners`** turned on so the Matchmaker never touches your spouses, fiancés, or dating partners *(or turn it off if you want the danger of an ignored partner moving on!)*.
+  - 🛡️ **Your Partners Are Protected**: The generic NPC Matchmaker automatically leaves your active spouses, fiancés, and dating partners alone—whether a neglected or vengeful partner ever strays is controlled purely by your **Player-Partner Agency & Infidelity** settings!
   - 🌈 **Orientation Rules**: Choose which pairings the Matchmaker can create (*Any*, *Heterosexual*, *Homosexual*, *Gay*, *Lesbian*, *Heterosexual & Gay*, or *Heterosexual & Lesbian*).
   - ⏳ **Cooldowns**: Set how many in-game days an NPC must wait after a relationship change before the Matchmaker can pick them again.
 

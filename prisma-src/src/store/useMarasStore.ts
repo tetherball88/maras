@@ -371,7 +371,6 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     allowOpenClose: mockSettings.matchmakingAllowOpenClose ?? true,
     allowCheating: mockSettings.matchmakingAllowCheating ?? true,
     orientation: (mockSettings.matchmakingOrientation as MatchmakingOrientation) ?? MatchmakingOrientation.Heterosexual,
-    excludePlayerActivePartners: mockSettings.matchmakingExcludePlayerActivePartners ?? false,
     useLLM: true,
     generateMemories: true,
     evaluationStep: true,
@@ -1280,7 +1279,6 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         nextSettings = { ...state.settings, ...data.settings }
         updates.settings = nextSettings
         if (
-          data.settings.matchmakingExcludePlayerActivePartners !== undefined ||
           data.settings.matchmakingConfirmResults !== undefined ||
           data.settings.playerPartnerCheatingAgencyEnabled !== undefined ||
           data.settings.playerPartnerOpenRelAgencyEnabled !== undefined
@@ -1288,9 +1286,6 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           const baseMatchSettings = updates.matchmakingSettings ?? state.matchmakingSettings
           updates.matchmakingSettings = {
             ...baseMatchSettings,
-            ...(data.settings.matchmakingExcludePlayerActivePartners !== undefined
-              ? { excludePlayerActivePartners: data.settings.matchmakingExcludePlayerActivePartners }
-              : {}),
             ...(data.settings.matchmakingConfirmResults !== undefined
               ? { confirmResults: data.settings.matchmakingConfirmResults }
               : {}),

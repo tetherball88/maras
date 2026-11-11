@@ -50,7 +50,7 @@ namespace MARAS {
         Temperament temperament{ Temperament::Proud };
         std::vector<DeceasedPartnerSnapshot> partnersAtDeath;
 
-        // Child data (if isChild == true)
+        // Child lineage data (present for young children and graduated Stage 4 adult children)
         std::optional<DeceasedChildInfo> childInfo;
 
         DeceasedNPCRecord() = default;
@@ -61,14 +61,16 @@ namespace MARAS {
      *
      * Unlike unregistration (which is an administrative removal of a living NPC),
      * death archives a permanent historical snapshot of an NPC and their active
-     * relationships at the moment of death, indexed permanently by Base FormID.
+     * relationships at the moment of death, indexed permanently by Base FormID
+     * (or unique 0xFF Reference FormID for dynamically spawned runtime actors).
      */
     class DeceasedRegistry {
     public:
         static DeceasedRegistry& GetSingleton();
 
         // Death registration
-        bool RecordDeceasedAdult(RE::Actor* victim, bool killedByPlayer, RE::Actor* killer = nullptr);
+        bool RecordDeceasedAdult(RE::Actor* victim, bool killedByPlayer, RE::Actor* killer = nullptr,
+                                 const ChildRegistryEntry* adultChildEntry = nullptr);
         bool RecordDeceasedChild(RE::Actor* child, const ChildRegistryEntry& entry, bool killedByPlayer, RE::Actor* killer = nullptr);
 
         // Queries

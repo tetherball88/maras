@@ -297,6 +297,16 @@ namespace MARAS {
         return PlayerHouseService::GetSingleton().GetTenantHouseFormID(childID);
     }
 
+    void PlayerChildrenService::ClearChildHouseAssignment(RE::FormID childID) {
+        if (childID == 0) return;
+        auto it = children_.find(childID);
+        if (it != children_.end() && it->second.currentHouseFormID != 0) {
+            MARAS_LOG_DEBUG("ClearChildHouseAssignment: Cleared house {:08X} from child {:08X}",
+                            it->second.currentHouseFormID, childID);
+            it->second.currentHouseFormID = 0;
+        }
+    }
+
     bool PlayerChildrenService::SetChildHomeMarker(RE::FormID childID, RE::FormID markerFormID) {
         if (childID == 0) return false;
 
