@@ -718,9 +718,9 @@ namespace MARAS {
             const ChildProfileContextData& taskData,
             const WebServerEndpoint& endpoint)
         {
-            // 1. Primary path: render helpers/maras_child_bio_context via SkyrimNet's ContextEngine
-            //    through POST /prompts?api=render-template-preview so all involved adults' bios
-            //    (render_character_profile("ttm_gm", adult.uuid)) and family recent events are rendered natively.
+            // 1. Primary path: render involved adults' bios (render_character_profile("ttm_gm", adult.uuid))
+            //    and family recent events via POST /prompts?api=render-template-preview directly from
+            //    taskData.involvedAdults so ttm_npc_relationship_profile stays strictly perspective-masked.
             if (endpoint.enabled && taskData.actorUUID != 0) {
                 auto tryRenderPreview = [&](const nlohmann::json& payload) -> std::string {
                     auto resp = SendLocalHttpRequest(
@@ -742,11 +742,61 @@ namespace MARAS {
                     return "";
                 };
 
+                auto sanitizeInjaLiteral = [](std::string_view text) -> std::string {
+                    std::string out;
+                    out.reserve(text.size());
+                    for (char ch : text) {
+                        if (ch == '{') out.push_back('(');
+                        else if (ch == '}') out.push_back(')');
+                        else out.push_back(ch);
+                    }
+                    return out;
+                };
+
                 const std::string actorUUIDHex = std::format("{:X}", taskData.actorUUID);
-                std::string rendered = tryRenderPreview({
-                    {"templateName", "helpers/maras_child_bio_context"},
-                    {"actorUUID", actorUUIDHex}
-                });
+                std::ostringstream tpl;
+                bool hasAnyUuidAdult = false;
+                nlohmann::json recentEventsUUIDs = nlohmann::json::array();
+                recentEventsUUIDs.push_back(taskData.actorUUID);
+
+                for (const auto& adult : taskData.involvedAdults) {
+                    if (adult.uuid == 0) continue;
+                    if (!hasAnyUuidAdult) {
+                        tpl << "## Involved Parties — Character Profiles & Memories (Context for "
+                            << sanitizeInjaLiteral(taskData.childName)
+                            << "'s Biological Heritage & Household Upbringing)\n";
+                        hasAnyUuidAdult = true;
+                    }
+                    tpl << "### " << sanitizeInjaLiteral(adult.name)
+                        << " (" << sanitizeInjaLiteral(adult.roleLabel) << ")\n"
+                        << "{{ render_character_profile(\"ttm_gm\", " << adult.uuid << ") }}\n\n";
+
+                    const bool isUnawareSecretBioFather =
+                        (adult.formID == taskData.bioFatherID) &&
+                        !taskData.bioFatherKnowsPaternity &&
+                        !taskData.partnerKnowsPaternity &&
+                        !adult.isGuardian;
+                    if (!isUnawareSecretBioFather) {
+                        recentEventsUUIDs.push_back(adult.uuid);
+                    }
+                }
+
+                std::string rendered;
+                if (hasAnyUuidAdult) {
+                    tpl << "## Family & Household Recent Events (Chronological)\n"
+                        << "{{ render_template(\"helpers\\\\maras_actor_bio_recent_events\") }}";
+                    rendered = tryRenderPreview({
+                        {"content", tpl.str()},
+                        {"actorUUID", actorUUIDHex},
+                        {"recent_events_participants", recentEventsUUIDs}
+                    });
+                }
+                if (rendered.empty()) {
+                    rendered = tryRenderPreview({
+                        {"templateName", "helpers/maras_child_bio_context"},
+                        {"actorUUID", actorUUIDHex}
+                    });
+                }
                 if (rendered.empty()) {
                     rendered = tryRenderPreview({
                         {"content", kInlineChildBioContextTemplate},

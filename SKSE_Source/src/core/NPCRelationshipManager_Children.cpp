@@ -16,6 +16,7 @@
 #include "core/SpouseHierarchyManager.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
+#include "ui/PrismaUIManager.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/FormUtils.h"
@@ -622,14 +623,16 @@ namespace MARAS {
             SendChildEvent("guardians_changed", childID, entry.guardianAID, entry.guardianBID, guardianDiff.PrimaryRemoved(), "custody_updated");
         }
 
-        PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
-        PrismaUIDataBridge::GetSingleton().SendOverviewData();
-        PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
-        if (entry.guardianAID != 0 && !Utils::MatchesActor(entry.guardianAID, kPlayerFormID)) {
-            PrismaUIDataBridge::GetSingleton().SendNPCDetail(entry.guardianAID);
-        }
-        if (entry.guardianBID != 0 && !Utils::MatchesActor(entry.guardianBID, kPlayerFormID)) {
-            PrismaUIDataBridge::GetSingleton().SendNPCDetail(entry.guardianBID);
+        if (sendEvent && PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+            PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+            PrismaUIDataBridge::GetSingleton().SendOverviewData();
+            PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+            if (entry.guardianAID != 0 && !Utils::MatchesActor(entry.guardianAID, kPlayerFormID)) {
+                PrismaUIDataBridge::GetSingleton().SendNPCDetail(entry.guardianAID);
+            }
+            if (entry.guardianBID != 0 && !Utils::MatchesActor(entry.guardianBID, kPlayerFormID)) {
+                PrismaUIDataBridge::GetSingleton().SendNPCDetail(entry.guardianBID);
+            }
         }
         return true;
     }

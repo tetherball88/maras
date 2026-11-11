@@ -14,6 +14,7 @@
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
+#include "ui/PrismaUIManager.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
 #include "utils/JsonService.h"
@@ -1352,9 +1353,15 @@ namespace MARAS {
         if (!res.motherName.empty()) j["mother"] = res.motherName;
         if (!res.partnerName.empty()) j["partner"] = res.partnerName;
         if (!res.bioFatherJson.empty()) j["bioFather"] = res.bioFatherJson;
+        j["_marasMemory"] = {
+            {"motherId", motherID},
+            {"partnerId", partnerID},
+            {"fallbackBioId", fallbackBioID},
+            {"fallbackBioName", fallbackBioName},
+            {"childCount", childCount}
+        };
 
         MARAS_LOG_INFO("[PregnancyAnnounced] (skipTrigger={}) {}", skipTrigger, res.message);
-        SkyrimNetMemoryService::GetSingleton().RecordPregnancyDiscovered(motherID, partnerID, fallbackBioID, fallbackBioName, childCount);
         return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
     }
@@ -1404,11 +1411,14 @@ namespace MARAS {
             childrenArr.push_back(cJson);
         }
         j["children"] = childrenArr;
+        if (!maskSecrets) {
+            j["_marasMemory"] = {
+                {"motherId", motherID},
+                {"childIds", childIDs}
+            };
+        }
 
         MARAS_LOG_INFO("[ChildBirth] (maskSecrets={}, skipTrigger={}) {}", maskSecrets, skipTrigger, res.message);
-        if (!maskSecrets) {
-            SkyrimNetMemoryService::GetSingleton().RecordChildBirth(motherID, childIDs);
-        }
         return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
     }
@@ -1557,8 +1567,14 @@ namespace MARAS {
                             sibEntry.paternitySecret.isSecretForBioFather = false;
                             MARAS_LOG_INFO("[Fertility] Also fully resolved paternity secret on unborn sibling {:08X}", sibID);
                         }
+                        if (PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                            PrismaUIDataBridge::GetSingleton().OnChildUpdated(sibEntry);
+                        }
                     }
                 }
+            }
+            if (PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
             }
 
             if (sendEvent && (wasSecretPartner || wasSecretBio)) {
@@ -1618,8 +1634,14 @@ namespace MARAS {
                             }
                             MARAS_LOG_INFO("[Fertility] Also resolved paternity secret for partner on unborn sibling {:08X}", sibID);
                         }
+                        if (PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                            PrismaUIDataBridge::GetSingleton().OnChildUpdated(sibEntry);
+                        }
                     }
                 }
+            }
+            if (PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
             }
 
             if (sendEvent) {
@@ -1707,8 +1729,14 @@ namespace MARAS {
                             sibEntry.paternitySecret.isSecret = false;
                         }
                         MARAS_LOG_INFO("[Fertility] Also resolved paternity secret for bio father on unborn sibling {:08X}", sibID);
+                        if (PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                            PrismaUIDataBridge::GetSingleton().OnChildUpdated(sibEntry);
+                        }
                     }
                 }
+            }
+            if (PrismaUIManager::GetSingleton().IsDashboardOpen()) {
+                PrismaUIDataBridge::GetSingleton().OnChildUpdated(it->second);
             }
 
             if (sendEvent) {

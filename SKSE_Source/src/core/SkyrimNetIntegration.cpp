@@ -7,6 +7,7 @@
 #include "core/PlayerChildrenService.h"
 #include "core/HomeCellService.h"
 #include "core/FormCache.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -697,16 +698,28 @@ namespace {
             }
         }
 
-        auto canActorKnowPaternitySecret = [&](RE::FormID perspectiveActorID, RE::FormID motherID, RE::FormID motherPartnerID, RE::FormID bioFatherID, const PaternitySecret& sec) -> bool {
-            if (sec.discovered) return true;
+        auto canActorKnowPaternitySecret = [&](RE::FormID perspectiveActorID,
+                                               RE::FormID motherID,
+                                               RE::FormID motherPartnerID,
+                                               RE::FormID explicitPresumedFatherID,
+                                               RE::FormID bioFatherID,
+                                               const PaternitySecret& sec) -> bool {
+            if (!sec.HasActiveSecret() || sec.discovered) return true;
             if (motherID != 0 && MatchesActor(perspectiveActorID, motherID)) return true;
-            if (motherPartnerID != 0 && MatchesActor(perspectiveActorID, motherPartnerID)) {
-                return !sec.isSecretForPartner || sec.discoveredByPartner;
-            }
             if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && MatchesActor(perspectiveActorID, bioFatherID)) {
                 return !sec.isSecretForBioFather || sec.discoveredByBioFather;
             }
-            return !sec.isSecretForPartner || sec.discoveredByPartner;
+            const bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
+            const bool hasPresumedPartner = (motherPartnerID != 0 && !isBioSameAsPartner &&
+                                             (motherID == 0 || !MatchesActor(motherPartnerID, motherID)) &&
+                                             (sec.isSecretForPartner || sec.discoveredByPartner || explicitPresumedFatherID != 0));
+            if (hasPresumedPartner && MatchesActor(perspectiveActorID, motherPartnerID)) {
+                return !sec.isSecretForPartner || sec.discoveredByPartner;
+            }
+            if (hasPresumedPartner) {
+                return !sec.isSecretForPartner || sec.discoveredByPartner;
+            }
+            return !sec.isSecretForBioFather || sec.discoveredByBioFather;
         };
 
         auto buildChildObj = [&](RE::FormID childID) -> std::optional<nlohmann::json> {
@@ -761,19 +774,21 @@ namespace {
             }
 
             const auto& sec = childEntry.paternitySecret;
+            RE::FormID explicitPresumedFatherID = mgr.GetPresumedFather(childID);
             RE::FormID motherPartnerID = mgr.GetMotherPartner(childID);
             RE::FormID motherID = mgr.GetBioMother(childID);
             RE::FormID bioFatherID = mgr.GetBioFather(childID);
 
-            if (motherPartnerID != 0 && motherID != 0 && mgr.GetPresumedFather(childID) == 0 && !sec.isSecretForPartner && !mgr.IsGuardian(childID, motherPartnerID) && isPastStatus(mgr.GetRelationshipStatus(motherID, motherPartnerID))) {
+            if (motherPartnerID != 0 && motherID != 0 && explicitPresumedFatherID == 0 && !sec.isSecretForPartner && !mgr.IsGuardian(childID, motherPartnerID) && isPastStatus(mgr.GetRelationshipStatus(motherID, motherPartnerID))) {
                 motherPartnerID = 0;
             }
 
+            const bool secretFromPartnerActive = !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
             bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
-            bool canActorKnow = canActorKnowPaternitySecret(actorFormID, motherID, motherPartnerID, bioFatherID, sec);
-            bool hideSecretFromActor = (motherPartnerID != 0 && !isBioSameAsPartner && sec.HasActiveSecret() && !canActorKnow);
+            bool canActorKnow = canActorKnowPaternitySecret(actorFormID, motherID, motherPartnerID, explicitPresumedFatherID, bioFatherID, sec);
+            bool hideSecretFromActor = (!isBioSameAsPartner && sec.HasActiveSecret() && !canActorKnow);
 
-            if (motherPartnerID != 0 && !isBioSameAsPartner) {
+            if (!hideSecretFromActor && motherPartnerID != 0 && !isBioSameAsPartner) {
                 childObj["presumed_father"] = MakeNpcRef(motherPartnerID);
             }
 
@@ -811,7 +826,9 @@ namespace {
             }
 
             RE::FormID childBioMotherID = childEntry.bioMotherID;
-            RE::FormID effectiveBioFatherID = hideSecretFromActor ? motherPartnerID : childEntry.bioFatherID;
+            RE::FormID effectiveBioFatherID = hideSecretFromActor
+                ? ((secretFromPartnerActive && motherPartnerID != 0 && !isBioSameAsPartner) ? motherPartnerID : 0)
+                : childEntry.bioFatherID;
 
             std::vector<RE::FormID> bioParents;
             if (childBioMotherID != 0) bioParents.push_back(childBioMotherID);
@@ -1006,9 +1023,12 @@ namespace {
             bool bioFatherKnowsPaternity = sec.discovered || sec.discoveredByBioFather || !sec.isSecretForBioFather;
             bool isSingleMotherSecretFromBioFather = (!hasPresumedFather && asChildBioFatherID != 0 && sec.isSecret && sec.isSecretForBioFather && !sec.discoveredByBioFather && !sec.discovered);
 
-            bool canChildKnow = canActorKnowPaternitySecret(actorFormID, asChildMotherID, presFatherID, asChildBioFatherID, sec);
-            bool hideSecretFromChild = (hasPresumedFather && sec.HasActiveSecret() && !canChildKnow);
-            RE::FormID effectiveChildBioFatherID = hideSecretFromChild ? presFatherID : asChildBioFatherID;
+            const bool secretFromPartnerActive = !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
+            bool canChildKnow = canActorKnowPaternitySecret(actorFormID, asChildMotherID, presFatherID, explicitPresumedFatherID, asChildBioFatherID, sec);
+            bool hideSecretFromChild = (!isBioSameAsPresumed && sec.HasActiveSecret() && !canChildKnow);
+            RE::FormID effectiveChildBioFatherID = hideSecretFromChild
+                ? ((secretFromPartnerActive && hasPresumedFather) ? presFatherID : 0)
+                : asChildBioFatherID;
 
             if (asChildMotherID != 0 && (mgr.IsGuardian(actorFormID, asChildMotherID) || (asChild.guardianAID == 0 && asChild.guardianBID == 0))) {
                 parentage["mother"] = MakeNpcRef(asChildMotherID);
@@ -1019,7 +1039,7 @@ namespace {
                     parentage["father"] = MakeNpcRef(asChildFatherID);
                 }
             }
-            if (presFatherID != 0 && !isBioSameAsPresumed) {
+            if (!hideSecretFromChild && presFatherID != 0 && !isBioSameAsPresumed) {
                 parentage["presumed_father"] = MakeNpcRef(presFatherID);
             }
 
@@ -1200,7 +1220,8 @@ namespace {
             }
             parentage["involved_adults"] = std::move(involvedAdults);
 
-            // Unmasked involved adults & paternity state specifically for child bio generation/update
+            // Perspective-masked involved adults & paternity state on the child's own relationship profile.
+            // Never leak the secret true biological father or secret paternity labels when hideSecretFromChild is true.
             nlohmann::json bioGenAdults = nlohmann::json::array();
             std::vector<RE::FormID> seenBioGenAdultIDs;
             auto addBioGenAdult = [&](RE::FormID adultID, const std::string& roleKey, const std::string& roleLabel, bool isGuardian, std::optional<bool> knowsPaternity = std::nullopt) {
@@ -1232,49 +1253,61 @@ namespace {
                     isGuard,
                     true);
             }
-            if (asChildBioFatherID != 0 && asChildBioFatherID != kUnknownFatherFormID) {
-                bool isGuard = mgr.IsGuardian(actorFormID, asChildBioFatherID);
-                std::string bioFatherRole;
-                if (hasPaternitySecret) {
-                    if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                        bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity; Presumed Father Also Unaware)";
-                    } else if (!partnerKnowsPaternity && bioFatherKnowsPaternity) {
-                        bioFatherRole = "True Biological Father (Paternity Secret — Secretly Knows Truth; Presumed Father Unaware)";
-                    } else if (partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                        bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity; Presumed Father Knows)";
+            if (hideSecretFromChild) {
+                if (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID) {
+                    bool isGuard = mgr.IsGuardian(actorFormID, effectiveChildBioFatherID);
+                    addBioGenAdult(
+                        effectiveChildBioFatherID,
+                        "bio_father",
+                        isGuard ? "Biological Father & Household Guardian" : "Biological Father (Non-Custodial)",
+                        isGuard,
+                        true);
+                }
+            } else {
+                if (asChildBioFatherID != 0 && asChildBioFatherID != kUnknownFatherFormID) {
+                    bool isGuard = mgr.IsGuardian(actorFormID, asChildBioFatherID);
+                    std::string bioFatherRole;
+                    if (hasPaternitySecret) {
+                        if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
+                            bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity; Presumed Father Also Unaware)";
+                        } else if (!partnerKnowsPaternity && bioFatherKnowsPaternity) {
+                            bioFatherRole = "True Biological Father (Paternity Secret — Secretly Knows Truth; Presumed Father Unaware)";
+                        } else if (partnerKnowsPaternity && !bioFatherKnowsPaternity) {
+                            bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity; Presumed Father Knows)";
+                        } else {
+                            bioFatherRole = isGuard
+                                ? "True Biological Father & Household Guardian (Paternity Known to Both Fathers)"
+                                : "True Biological Father (Paternity Known to Both Fathers)";
+                        }
+                    } else if (isSingleMotherSecretFromBioFather) {
+                        bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity)";
                     } else {
-                        bioFatherRole = isGuard
-                            ? "True Biological Father & Household Guardian (Paternity Known to Both Fathers)"
-                            : "True Biological Father (Paternity Known to Both Fathers)";
+                        bioFatherRole = isGuard ? "Biological Father & Household Guardian" : "Biological Father (Non-Custodial)";
                     }
-                } else if (isSingleMotherSecretFromBioFather) {
-                    bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity)";
-                } else {
-                    bioFatherRole = isGuard ? "Biological Father & Household Guardian" : "Biological Father (Non-Custodial)";
+                    addBioGenAdult(asChildBioFatherID, "bio_father", bioFatherRole, isGuard, bioFatherKnowsPaternity);
                 }
-                addBioGenAdult(asChildBioFatherID, "bio_father", bioFatherRole, isGuard, bioFatherKnowsPaternity);
-            }
-            if (hasPresumedFather) {
-                bool isGuard = mgr.IsGuardian(actorFormID, presFatherID);
-                std::string presFatherRole;
-                if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                    presFatherRole = isGuard
-                        ? "Presumed Father & Household Guardian (Believes Child Is Biologically His; Bio Father Also Unaware)"
-                        : "Presumed Father (Believes Child Is Biologically His; Bio Father Also Unaware)";
-                } else if (!partnerKnowsPaternity && bioFatherKnowsPaternity) {
-                    presFatherRole = isGuard
-                        ? "Presumed Father & Household Guardian (Believes Child Is Biologically His; Bio Father Secretly Knows)"
-                        : "Presumed Father (Believes Child Is Biologically His; Bio Father Secretly Knows)";
-                } else if (partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                    presFatherRole = isGuard
-                        ? "Presumed Father & Household Guardian (Knows Child Was Fathered by Bio Father; Bio Father Unaware)"
-                        : "Former Presumed Father / Mother's Partner (Knows Child Was Fathered by Bio Father; Non-Custodial; Bio Father Unaware)";
-                } else {
-                    presFatherRole = isGuard
-                        ? "Presumed Father & Household Guardian / Step-Father Figure (Both Fathers Know True Paternity)"
-                        : "Former Presumed Father / Mother's Partner (Both Fathers Know True Paternity; Non-Custodial)";
+                if (hasPresumedFather) {
+                    bool isGuard = mgr.IsGuardian(actorFormID, presFatherID);
+                    std::string presFatherRole;
+                    if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
+                        presFatherRole = isGuard
+                            ? "Presumed Father & Household Guardian (Believes Child Is Biologically His; Bio Father Also Unaware)"
+                            : "Presumed Father (Believes Child Is Biologically His; Bio Father Also Unaware)";
+                    } else if (!partnerKnowsPaternity && bioFatherKnowsPaternity) {
+                        presFatherRole = isGuard
+                            ? "Presumed Father & Household Guardian (Believes Child Is Biologically His; Bio Father Secretly Knows)"
+                            : "Presumed Father (Believes Child Is Biologically His; Bio Father Secretly Knows)";
+                    } else if (partnerKnowsPaternity && !bioFatherKnowsPaternity) {
+                        presFatherRole = isGuard
+                            ? "Presumed Father & Household Guardian (Knows Child Was Fathered by Bio Father; Bio Father Unaware)"
+                            : "Former Presumed Father / Mother's Partner (Knows Child Was Fathered by Bio Father; Non-Custodial; Bio Father Unaware)";
+                    } else {
+                        presFatherRole = isGuard
+                            ? "Presumed Father & Household Guardian / Step-Father Figure (Both Fathers Know True Paternity)"
+                            : "Former Presumed Father / Mother's Partner (Both Fathers Know True Paternity; Non-Custodial)";
+                    }
+                    addBioGenAdult(presFatherID, "presumed_father", presFatherRole, isGuard, partnerKnowsPaternity);
                 }
-                addBioGenAdult(presFatherID, "presumed_father", presFatherRole, isGuard, partnerKnowsPaternity);
             }
             for (RE::FormID gID : currentGuardians) {
                 addBioGenAdult(
@@ -2099,13 +2132,18 @@ void RegisterSkyrimNetDecorators()
             if (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID)) continue;
 
             if (entry.stage == ChildStage::Unborn) {
-                // While unborn, if the mother is an NPC, she uses RevealChildSecret when she announces pregnancy or paternity.
-                // Never leak an unannounced NPC pregnancy into the unaware father's action candidates!
-                if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isPregnancySecretForPartner && motherID != kPlayerFormID) {
+                // Never leak an unannounced / non-showing pregnancy into an unaware partner's or biological father's action candidates,
+                // regardless of whether the mother is an NPC or the female Player.
+                if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isPregnancySecretForPartner) {
                     continue;
                 }
-                if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather && motherID != kPlayerFormID) {
-                    continue;
+                if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather) {
+                    const float currentDay = RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f;
+                    const bool playerPregnancyHidden = entry.paternitySecret.isPregnancySecretForPartner ||
+                                                       (motherPartnerID == 0 && entry.conceptionTimestamp > 0.0f && (currentDay - entry.conceptionTimestamp) < 3.0f);
+                    if (motherID != kPlayerFormID || playerPregnancyHidden) {
+                        continue;
+                    }
                 }
                 if (!seenUnbornCandidates.insert({ motherID, bioFatherID }).second) {
                     continue;
@@ -2821,6 +2859,64 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
             targetFormID = 0;
         }
 
+        std::string payloadToSend = content;
+        if (eventType == "ttm_event") {
+            nlohmann::json parsed = nlohmann::json::parse(content, nullptr, /*allow_exceptions=*/false);
+            if (parsed.is_object() && parsed.contains("_marasMemory")) {
+                const nlohmann::json memMeta = parsed["_marasMemory"];
+                std::string ttmType;
+                if (auto itType = parsed.find("type"); itType != parsed.end() && itType->is_string()) {
+                    ttmType = itType->get<std::string>();
+                }
+                parsed.erase("_marasMemory");
+                payloadToSend = parsed.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+
+                if (memMeta.is_object()) {
+                    auto readFormId = [&](std::string_view key) -> RE::FormID {
+                        auto it = memMeta.find(key);
+                        if (it != memMeta.end() && (it->is_number_unsigned() || it->is_number_integer())) {
+                            return static_cast<RE::FormID>(it->get<uint64_t>());
+                        }
+                        return 0;
+                    };
+
+                    if (ttmType == "ttm_pregnancy_announced") {
+                        const RE::FormID motherID = readFormId("motherId");
+                        const RE::FormID partnerID = readFormId("partnerId");
+                        const RE::FormID fallbackBioID = readFormId("fallbackBioId");
+                        std::string fallbackBioName;
+                        if (auto itName = memMeta.find("fallbackBioName"); itName != memMeta.end() && itName->is_string()) {
+                            fallbackBioName = itName->get<std::string>();
+                        }
+                        int32_t childCount = 1;
+                        if (auto itCnt = memMeta.find("childCount"); itCnt != memMeta.end() && (itCnt->is_number_integer() || itCnt->is_number_unsigned())) {
+                            childCount = itCnt->get<int32_t>();
+                        }
+                        if (motherID != 0) {
+                            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                            SkyrimNetMemoryService::GetSingleton().RecordPregnancyDiscovered(
+                                motherID, partnerID, fallbackBioID, fallbackBioName, childCount);
+                        }
+                    } else if (ttmType == "ttm_child_birth") {
+                        const RE::FormID motherID = readFormId("motherId");
+                        std::vector<RE::FormID> childIDs;
+                        if (auto itIds = memMeta.find("childIds"); itIds != memMeta.end() && itIds->is_array()) {
+                            childIDs.reserve(itIds->size());
+                            for (const auto& elem : *itIds) {
+                                if (elem.is_number_unsigned() || elem.is_number_integer()) {
+                                    childIDs.push_back(static_cast<RE::FormID>(elem.get<uint64_t>()));
+                                }
+                            }
+                        }
+                        if (motherID != 0) {
+                            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                            SkyrimNetMemoryService::GetSingleton().RecordChildBirth(motherID, childIDs);
+                        }
+                    }
+                }
+            }
+        }
+
         std::vector<uint32_t> exactAudienceIds;
         auto addUniqueValidActor = [&](RE::FormID id) {
             if (id == 0 || IsSyntheticChildID(id)) return;
@@ -2849,7 +2945,7 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
 
         bool ok = fnRegisterEvent(
             eventType.c_str(),
-            content.c_str(),
+            payloadToSend.c_str(),
             static_cast<uint32_t>(originatorFormID),
             static_cast<uint32_t>(targetFormID),
             audiencePtr,

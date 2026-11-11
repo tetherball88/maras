@@ -53,7 +53,7 @@ When an event or multi-event episode involves a hidden secret (`isSecretForPartn
 - Generates perspective-specific memories for all 3 involved parties: **Cheater**, **Betrayed Partner (Victim)**, and **Affair Partner**.
 
 ### Category 3: Pregnancy Discovery & Paternity Secret Reveals (1, 2, or 3 Participants)
-- **`RecordPregnancyDiscovered`** (hooked in `NPCRelationshipManager::BuildPregnancyAnnouncedJson`):
+- **`RecordPregnancyDiscovered`** (dispatched from `MARAS::RegisterSkyrimNetEvent` when registering a `ttm_pregnancy_announced` event built by the pure `NPCRelationshipManager::BuildPregnancyAnnouncedJson` query):
   - **Normal Pregnancy with Partner**: Generates memories for both **Mother** and **Partner** discovering they are expecting a child together.
   - **Secret Pregnancy with Non-Partner Father**: Generates a memory for **Mother** discovering she is pregnant by the biological father while in a relationship with her partner (and merges into the same 90-second episode if she immediately confesses or shares the pregnancy).
   - **Unpartnered Mother**: Generates a memory for **Mother** discovering her pregnancy (merging with any immediate bio-father step-in transition within 90 seconds).
@@ -61,7 +61,7 @@ When an event or multi-event episode involves a hidden secret (`isSecretForPartn
   - Dynamically targets 2 participants (Mother + Bio Father, or Mother + Presumed Father) when revealed to one man, or 3 participants (Mother + Presumed Father + Bio Father) when revealed to both (`mother_confessed_both` / `divorce_revealed`), and distinguishes whether an unborn pregnancy was previously unannounced to the partner (`wasPregnancySecretForPartner`) or already known and presumed to be his.
 
 ### Category 4: Child Birth (1 to 3 Adult Participants — Never the Newborn)
-- Hooked in `NPCRelationshipManager::BuildChildBirthJson`.
+- Dispatched from `MARAS::RegisterSkyrimNetEvent` when registering an unmasked `ttm_child_birth` event built by the pure `NPCRelationshipManager::BuildChildBirthJson` query.
 - Groups twins/triplets by paternity bucket so multiple babies born in the same labor produce one memory per adult participant, covering all 5 paternity knowledge combinations (no discrepancy, both fathers unaware/duped, bio father aware while presumed father duped, presumed father knowingly accepting while bio father unaware, and all 3 aware).
 - Never generates a memory for the newborn infant.
 

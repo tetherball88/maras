@@ -88,6 +88,7 @@ namespace MARAS {
 
         // Cached placed child references discovered across indexed forms
         std::unordered_set<RE::FormID> cachedChildRefIDs;
+        RE::FormID lastRequestedDetailNpcID_ = 0;
     };
 
 }  // namespace MARAS
