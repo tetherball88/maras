@@ -27,8 +27,10 @@
 #include "core/PollingService.h"
 #include "core/QuestEventHandler.h"
 #include "core/Serialization.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
+#include "core/SkyrimNetProfileService.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
 #include "papyrus/PapyrusInterface.h"
@@ -46,7 +48,7 @@ namespace MARAS {
 }
 
 namespace {
-    // Event sink driving PollingService::Update on both MenuOpenCloseEvent and throttled InputEvent frames
+    // Event sink marshaling PollingService::Update onto the SKSE main thread from MenuOpenCloseEvent and throttled InputEvent frames
     class UpdateEventSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent>,
                             public RE::BSTEventSink<RE::InputEvent*> {
     public:
@@ -55,30 +57,37 @@ namespace {
             return &singleton;
         }
 
+        void Reset() noexcept {
+            pollTaskQueued_.store(false, std::memory_order_release);
+            lastInputTick_ = {};
+        }
+
         RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent*,
                                               RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override {
-            MARAS::PollingService::GetSingleton().Update();
+            QueuePollOnMainThread();
             if (MARAS::PrismaModalManager::GetSingleton().HasActiveModal()) {
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([]() {
-                        auto& uiMgr = MARAS::PrismaUIManager::GetSingleton();
-                        if (!uiMgr.IsModalDisplayBlocked()) {
-                            MARAS::PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
-                        }
-                        uiMgr.SyncViewVisibilityAndFocus();
-                    });
-                }
+                MARAS::AddCurrentEpochTask("UpdateEventSink::ResendActiveModal", []() {
+                    auto& uiMgr = MARAS::PrismaUIManager::GetSingleton();
+                    if (!uiMgr.IsModalDisplayBlocked()) {
+                        MARAS::PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
+                    }
+                    uiMgr.SyncViewVisibilityAndFocus();
+                });
             }
             return RE::BSEventNotifyControl::kContinue;
         }
 
         RE::BSEventNotifyControl ProcessEvent(RE::InputEvent* const*,
                                               RE::BSTEventSource<RE::InputEvent*>*) override {
-            MARAS::DialogueEventSink::GetSingleton()->TryResolveDeferredSpeaker();
+            if (MARAS::DialogueEventSink::GetSingleton()->IsWaitingForSpeaker()) {
+                MARAS::AddCurrentEpochTask("UpdateEventSink::ResolveDeferredSpeaker", []() {
+                    MARAS::DialogueEventSink::GetSingleton()->TryResolveDeferredSpeaker();
+                });
+            }
             const auto now = std::chrono::steady_clock::now();
-            if (now - lastInputTick_ >= std::chrono::seconds(1)) {
+            if (now - lastInputTick_ >= std::chrono::milliseconds(500)) {
                 lastInputTick_ = now;
-                MARAS::PollingService::GetSingleton().Update();
+                QueuePollOnMainThread();
             }
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -90,7 +99,33 @@ namespace {
         UpdateEventSink& operator=(const UpdateEventSink&) = delete;
         UpdateEventSink& operator=(UpdateEventSink&&) = delete;
 
+        void QueuePollOnMainThread() {
+            if (pollTaskQueued_.exchange(true, std::memory_order_acq_rel)) {
+                return;
+            }
+            const auto* taskIF = SKSE::GetTaskInterface();
+            if (!taskIF) {
+                pollTaskQueued_.store(false, std::memory_order_release);
+                return;
+            }
+            const MARAS::SessionEpoch expectedEpoch = MARAS::GetSessionEpoch();
+            taskIF->AddTask([this, expectedEpoch]() {
+                pollTaskQueued_.store(false, std::memory_order_release);
+                if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
+                try {
+                    MARAS::PollingService::GetSingleton().Update();
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("UpdateEventSink: exception in PollingService::Update: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("UpdateEventSink: unknown exception in PollingService::Update");
+                }
+            });
+        }
+
         std::chrono::steady_clock::time_point lastInputTick_{};
+        std::atomic<bool> pollTaskQueued_{ false };
     };
 
     class ActorInitLoadedEventSink : public RE::BSTEventSink<RE::TESInitScriptEvent>,
@@ -101,12 +136,30 @@ namespace {
             return &singleton;
         }
 
+        void Reset() {
+            std::lock_guard<std::mutex> lock(mutex_);
+            pendingInitActors_.clear();
+            pendingLoadedForms_.clear();
+        }
+
         RE::BSEventNotifyControl ProcessEvent(const RE::TESInitScriptEvent* a_event,
                                               RE::BSTEventSource<RE::TESInitScriptEvent>*) override {
-            if (a_event && a_event->objectInitialized) {
-                if (auto* actor = a_event->objectInitialized->As<RE::Actor>()) {
-                    MARAS::NPCIndex::GetSingleton().RegisterLoadedActor(actor);
-                    MARAS::NPCRelationshipManager::GetSingleton().TryResolvePendingRelationships(actor);
+            if (a_event && a_event->objectInitialized &&
+                a_event->objectInitialized->GetFormType() == RE::FormType::ActorCharacter) {
+                const RE::FormID actorFormID = a_event->objectInitialized->GetFormID();
+                if (actorFormID != 0) {
+                    bool shouldSchedule = false;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        pendingInitActors_.push_back(actorFormID);
+                        if (!drainQueued_) {
+                            drainQueued_ = true;
+                            shouldSchedule = true;
+                        }
+                    }
+                    if (shouldSchedule) {
+                        ScheduleDrainOnMainThread();
+                    }
                 }
             }
             return RE::BSEventNotifyControl::kContinue;
@@ -114,24 +167,18 @@ namespace {
 
         RE::BSEventNotifyControl ProcessEvent(const RE::TESObjectLoadedEvent* a_event,
                                               RE::BSTEventSource<RE::TESObjectLoadedEvent>*) override {
-            if (a_event && a_event->loaded) {
-                const RE::FormID loadedFormID = a_event->formID;
-                if (auto* form = RE::TESForm::LookupByID(loadedFormID)) {
-                    if (auto* actor = form->As<RE::Actor>()) {
-                        MARAS::NPCIndex::GetSingleton().RegisterLoadedActor(actor);
-                        MARAS::NPCRelationshipManager::GetSingleton().TryResolvePendingRelationships(actor);
-                        if (MARAS::NPCRelationshipManager::GetSingleton().IsChildNPC(loadedFormID)) {
-                            if (const auto* taskInterface = SKSE::GetTaskInterface()) {
-                                taskInterface->AddTask([loadedFormID]() {
-                                    if (auto* f = RE::TESForm::LookupByID(loadedFormID)) {
-                                        if (auto* a = f->As<RE::Actor>()) {
-                                            MARAS::NPCRelationshipManager::GetSingleton().ApplyChildVisualsOn3DLoad(a);
-                                        }
-                                    }
-                                });
-                            }
-                        }
+            if (a_event && a_event->loaded && a_event->formID != 0) {
+                bool shouldSchedule = false;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    pendingLoadedForms_.push_back(a_event->formID);
+                    if (!drainQueued_) {
+                        drainQueued_ = true;
+                        shouldSchedule = true;
                     }
+                }
+                if (shouldSchedule) {
+                    ScheduleDrainOnMainThread();
                 }
             }
             return RE::BSEventNotifyControl::kContinue;
@@ -139,6 +186,76 @@ namespace {
 
     private:
         ActorInitLoadedEventSink() = default;
+
+        void ScheduleDrainOnMainThread() {
+            const auto* taskIF = SKSE::GetTaskInterface();
+            if (!taskIF) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                drainQueued_ = false;
+                return;
+            }
+            const MARAS::SessionEpoch expectedEpoch = MARAS::GetSessionEpoch();
+            taskIF->AddTask([this, expectedEpoch]() {
+                std::vector<RE::FormID> initIDs;
+                std::vector<RE::FormID> loadedIDs;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    initIDs.swap(pendingInitActors_);
+                    loadedIDs.swap(pendingLoadedForms_);
+                    drainQueued_ = false;
+                }
+                if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
+                try {
+                    auto& npcIndex = MARAS::NPCIndex::GetSingleton();
+                    auto& relMgr = MARAS::NPCRelationshipManager::GetSingleton();
+
+                    std::unordered_set<RE::FormID> processedInit;
+                    processedInit.reserve(initIDs.size());
+                    for (const RE::FormID actorID : initIDs) {
+                        if (actorID == 0 || !processedInit.insert(actorID).second) {
+                            continue;
+                        }
+                        auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID);
+                        if (!actor || actor->IsDeleted()) {
+                            continue;
+                        }
+                        npcIndex.RegisterLoadedActor(actor);
+                        relMgr.TryResolvePendingRelationships(actor);
+                    }
+
+                    std::unordered_set<RE::FormID> processedLoaded;
+                    processedLoaded.reserve(loadedIDs.size());
+                    for (const RE::FormID loadedFormID : loadedIDs) {
+                        if (loadedFormID == 0 || !processedLoaded.insert(loadedFormID).second) {
+                            continue;
+                        }
+                        auto* form = RE::TESForm::LookupByID(loadedFormID);
+                        auto* actor = form ? form->As<RE::Actor>() : nullptr;
+                        if (!actor || actor->IsDeleted()) {
+                            continue;
+                        }
+                        if (!processedInit.contains(loadedFormID)) {
+                            npcIndex.RegisterLoadedActor(actor);
+                            relMgr.TryResolvePendingRelationships(actor);
+                        }
+                        if (relMgr.IsChildNPC(loadedFormID)) {
+                            relMgr.ApplyChildVisualsOn3DLoad(actor);
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("ActorInitLoadedEventSink: exception draining queued events: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("ActorInitLoadedEventSink: unknown exception draining queued events");
+                }
+            });
+        }
+
+        std::mutex mutex_;
+        std::vector<RE::FormID> pendingInitActors_;
+        std::vector<RE::FormID> pendingLoadedForms_;
+        bool drainQueued_{ false };
     };
 
     std::shared_ptr<spdlog::logger> SetupLogging() {
@@ -223,6 +340,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
+                        MARAS::BumpSessionEpoch("MessagingInterface::kPreLoadGame");
+                        UpdateEventSink::GetSingleton()->Reset();
+                        ActorInitLoadedEventSink::GetSingleton()->Reset();
                         MARAS::AdultChildProgression::GetSingleton().Revert();
                         MARAS::NPCIndex::GetSingleton().ClearLoadedActors();
                         MARAS::PrismaModalManager::GetSingleton().Revert();
@@ -230,11 +350,17 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS::IntimateThreadService::GetSingleton().ClearAll();
                         MARAS::ChildrenFleeService::GetSingleton().Reset();
                         MARAS::SkyrimNetMemoryService::GetSingleton().Revert();
+                        MARAS::SkyrimNetProfileService::GetSingleton().Revert();
                         break;
 
                     case SKSE::MessagingInterface::kPostLoadGame:
                     case SKSE::MessagingInterface::kNewGame: {
                         const bool isNewGame = (message->type == SKSE::MessagingInterface::kNewGame);
+                        if (isNewGame) {
+                            MARAS::BumpSessionEpoch("MessagingInterface::kNewGame");
+                            UpdateEventSink::GetSingleton()->Reset();
+                            ActorInitLoadedEventSink::GetSingleton()->Reset();
+                        }
                         MARAS_LOG_INFO("New game/Load (isNewGame={})...", isNewGame);
                         MARAS::NPCIndex::GetSingleton().RefreshIndex();
 

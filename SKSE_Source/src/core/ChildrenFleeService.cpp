@@ -2,6 +2,7 @@
 
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "services/ActorService.h"
 #include "utils/Common.h"
 #include "utils/ProcessUtils.h"
@@ -51,18 +52,12 @@ namespace MARAS {
         return instance;
     }
 
-    ChildrenFleeService::~ChildrenFleeService() {
-        // Static destruction (loader lock held): only signal the worker to stop, never join.
-        StopWorker();
-    }
-
     void ChildrenFleeService::Initialize() {
-        StartWorker();
+        lastPollTime_ = {};
         MARAS_LOG_INFO("ChildrenFleeService initialized");
     }
 
     void ChildrenFleeService::Shutdown() {
-        StopWorker();
         Reset();
         MARAS_LOG_INFO("ChildrenFleeService shutdown");
     }
@@ -79,6 +74,7 @@ namespace MARAS {
         }
         exitDoorCache_.clear();
         monitoring_.store(false, std::memory_order_release);
+        lastPollTime_ = {};
     }
 
     void ChildrenFleeService::SetThreatProvider(ThreatProvider provider) {
@@ -87,18 +83,22 @@ namespace MARAS {
     }
 
     void ChildrenFleeService::FleeFromPlayerCell() {
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        auto* cell = player ? player->GetParentCell() : nullptr;
-        if (!cell) {
-            MARAS_LOG_WARN("ChildrenFleeService: cannot flee, player has no cell");
-            return;
-        }
-        {
-            std::lock_guard lock(sourceMutex_);
-            manualThreats_[cell->GetFormID()] = { player->GetPosition() };
-        }
-        MARAS_LOG_INFO("ChildrenFleeService: children flee from cell {:08X}", cell->GetFormID());
-        QueueRefresh();
+        monitoring_.store(true, std::memory_order_release);
+        AddCurrentEpochTask("ChildrenFleeService::FleeFromPlayerCell", []() {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            auto* cell = player ? player->GetParentCell() : nullptr;
+            if (!cell) {
+                MARAS_LOG_WARN("ChildrenFleeService: cannot flee, player has no cell");
+                return;
+            }
+            auto& self = GetSingleton();
+            {
+                std::lock_guard lock(self.sourceMutex_);
+                self.manualThreats_[cell->GetFormID()] = { player->GetPosition() };
+            }
+            MARAS_LOG_INFO("ChildrenFleeService: children flee from cell {:08X}", cell->GetFormID());
+            self.Refresh();
+        });
     }
 
     void ChildrenFleeService::StopFleeing() {
@@ -115,48 +115,22 @@ namespace MARAS {
         return fleeingChildren_.contains(actorID);
     }
 
-    // ─── Worker ──────────────────────────────────────────────────────────────────
-
-    void ChildrenFleeService::StartWorker() {
-        std::lock_guard lock(workerMutex_);
-        if (worker_ && !worker_->stopRequested.load(std::memory_order_acquire)) return;
-        worker_ = std::make_shared<Worker>();
-        std::thread(&ChildrenFleeService::WorkerLoop, worker_).detach();
-    }
-
-    void ChildrenFleeService::StopWorker() {
-        std::lock_guard lock(workerMutex_);
-        if (!worker_) return;
-        {
-            std::lock_guard workerLock(worker_->mutex);
-            worker_->stopRequested.store(true, std::memory_order_release);
-        }
-        worker_->cv.notify_all();
-        worker_.reset();
-    }
-
-    void ChildrenFleeService::WorkerLoop(std::shared_ptr<Worker> worker) {
-        std::unique_lock lock(worker->mutex);
-        while (!worker->stopRequested.load(std::memory_order_acquire)) {
-            worker->cv.wait_for(lock, kPollInterval, [&] { return worker->stopRequested.load(std::memory_order_acquire); });
-            if (worker->stopRequested.load(std::memory_order_acquire)) break;
-            if (!GetSingleton().monitoring_.load(std::memory_order_acquire)) continue;
-
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([worker]() {
-                    if (worker->stopRequested.load(std::memory_order_acquire)) return;
-                    if (auto* ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
-                    GetSingleton().Refresh();
-                });
-            }
-        }
-    }
-
     void ChildrenFleeService::QueueRefresh() {
         monitoring_.store(true, std::memory_order_release);
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([]() { GetSingleton().Refresh(); });
+        AddCurrentEpochTask("ChildrenFleeService::QueueRefresh", []() {
+            GetSingleton().Refresh();
+        });
+    }
+
+    void ChildrenFleeService::Tick(std::chrono::steady_clock::time_point now) {
+        if (!monitoring_.load(std::memory_order_acquire)) {
+            return;
         }
+        if (now - lastPollTime_ < kPollInterval) {
+            return;
+        }
+        lastPollTime_ = now;
+        Refresh();
     }
 
     // ─── Teleporting blocked children ────────────────────────────────────────────

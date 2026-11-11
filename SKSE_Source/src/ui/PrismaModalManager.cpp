@@ -404,6 +404,7 @@ namespace MARAS {
     // =========================================================================
 
     std::string PrismaModalManager::ShowModal(ModalRequest request, ModalCallback callback) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         std::string modalId;
         {
             std::lock_guard lock(m_mutex);
@@ -420,44 +421,38 @@ namespace MARAS {
             pending.defaultCancelButtonIndex = request.defaultCancelButtonIndex;
             pending.callback = std::move(callback);
             pending.dispatchedToUI = false;
+            pending.sessionEpoch = expectedEpoch;
 
             m_queue.push_back(std::move(pending));
         }
 
         MARAS_LOG_INFO("PrismaModalManager::ShowModal queued modalId='{}' title='{}'", modalId, request.title);
 
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([]() {
-                try {
-                    PrismaModalManager::GetSingleton().ProcessQueueOnGameThread();
-                } catch (const std::exception& e) {
-                    MARAS_LOG_ERROR("PrismaModalManager: Exception in ProcessQueueOnGameThread task: {}", e.what());
-                }
+        AddEpochTask(
+            expectedEpoch,
+            "PrismaModalManager::ShowModalProcessQueue",
+            []() {
+                PrismaModalManager::GetSingleton().ProcessQueueOnGameThread();
             });
-        } else {
-            MARAS_LOG_ERROR("PrismaModalManager::ShowModal: SKSE TaskInterface unavailable");
-        }
 
         return modalId;
     }
 
     std::string PrismaModalManager::ShowRawJsonModal(const std::string& modalSpecJson, ModalCallback callback) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         auto parsed = nlohmann::json::parse(modalSpecJson, nullptr, /*exceptions=*/false);
         if (!parsed.is_object()) {
             MARAS_LOG_ERROR("PrismaModalManager::ShowRawJsonModal: Invalid JSON specification");
             if (callback) {
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([cb = std::move(callback)]() {
-                        try {
-                            ModalResponse resp;
-                            resp.buttonIndex = 1;
-                            resp.aborted = true;
-                            cb(resp);
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("PrismaModalManager: Exception in aborted modal callback: {}", e.what());
-                        }
+                AddEpochTask(
+                    expectedEpoch,
+                    "PrismaModalManager::AbortInvalidRawModal",
+                    [cb = std::move(callback)]() {
+                        ModalResponse resp;
+                        resp.buttonIndex = 1;
+                        resp.aborted = true;
+                        cb(resp);
                     });
-                }
             }
             return "";
         }
@@ -482,21 +477,19 @@ namespace MARAS {
             pending.serializedPayload = std::move(parsed);
             pending.callback = std::move(callback);
             pending.dispatchedToUI = false;
+            pending.sessionEpoch = expectedEpoch;
 
             m_queue.push_back(std::move(pending));
         }
 
         MARAS_LOG_INFO("PrismaModalManager::ShowRawJsonModal queued modalId='{}'", modalId);
 
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([]() {
-                try {
-                    PrismaModalManager::GetSingleton().ProcessQueueOnGameThread();
-                } catch (const std::exception& e) {
-                    MARAS_LOG_ERROR("PrismaModalManager: Exception in ProcessQueueOnGameThread task: {}", e.what());
-                }
+        AddEpochTask(
+            expectedEpoch,
+            "PrismaModalManager::ShowRawJsonModalProcessQueue",
+            []() {
+                PrismaModalManager::GetSingleton().ProcessQueueOnGameThread();
             });
-        }
 
         return modalId;
     }
@@ -519,7 +512,7 @@ namespace MARAS {
             }
 
             for (auto& pending : abortedModals) {
-                if (pending.callback) {
+                if (pending.callback && IsSessionEpochCurrent(pending.sessionEpoch)) {
                     try {
                         ModalResponse resp;
                         resp.modalId = pending.modalId;
@@ -538,6 +531,11 @@ namespace MARAS {
         bool hasPending = false;
         {
             std::lock_guard lock(m_mutex);
+            while (!m_queue.empty() && !IsSessionEpochCurrent(m_queue.front().sessionEpoch)) {
+                MARAS_LOG_DEBUG("PrismaModalManager: Dropping stale queued modal '{}' from prior session epoch {}",
+                                m_queue.front().modalId, m_queue.front().sessionEpoch);
+                m_queue.pop_front();
+            }
             hasPending = !m_queue.empty();
         }
 
@@ -603,6 +601,7 @@ namespace MARAS {
             : nlohmann::json::object();
 
         ModalCallback callbackToInvoke;
+        SessionEpoch modalEpoch = 0;
         bool hasMoreModals = false;
 
         {
@@ -620,8 +619,12 @@ namespace MARAS {
                 return;
             }
 
+            modalEpoch = front.sessionEpoch;
             callbackToInvoke = std::move(m_queue.front().callback);
             m_queue.pop_front();
+            while (!m_queue.empty() && !IsSessionEpochCurrent(m_queue.front().sessionEpoch)) {
+                m_queue.pop_front();
+            }
             hasMoreModals = !m_queue.empty();
         }
 
@@ -637,6 +640,11 @@ namespace MARAS {
         }
 
         if (callbackToInvoke) {
+            if (!IsSessionEpochCurrent(modalEpoch)) {
+                MARAS_LOG_DEBUG("PrismaModalManager::HandleModalResponse: dropping stale callback for '{}' across save boundary (expected={}, current={})",
+                                modalId, modalEpoch, GetSessionEpoch());
+                return;
+            }
             try {
                 ModalResponse response;
                 response.modalId = modalId;

@@ -12,6 +12,7 @@
 #include "core/LoggingService.h"
 #include "core/NPCIndex.h"
 #include "core/MatchmakingService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/DeceasedRegistry.h"
 #include "services/ActorService.h"
@@ -141,8 +142,14 @@ namespace MARAS {
             return;
         }
 
-        taskIF->AddTask([this, action = std::move(action), payload = std::move(payload)]() {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        taskIF->AddTask([this, expectedEpoch, action = std::move(action), payload = std::move(payload)]() {
             try {
+                if (action != "uiReady" && !IsSessionEpochCurrent(expectedEpoch)) {
+                    MARAS_LOG_DEBUG("PrismaUIDataBridge: Dropping stale UI action '{}' across save boundary (expected={}, current={})",
+                                    action, expectedEpoch, GetSessionEpoch());
+                    return;
+                }
                 if (action == "uiReady") {
                     PrismaUIManager::GetSingleton().OnUIReady();
                 } else if (action == "modalResponse") {

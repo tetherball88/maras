@@ -6,6 +6,7 @@
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -803,17 +804,13 @@ namespace MARAS {
             }
             MARAS_LOG_INFO("[MemoryService] Built {} programmatic memory entry/entries for Episode #{} ({} event(s), LLM memories disabled)",
                            entries.size(), epID, eventCount);
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([epID, entries = std::move(entries)]() {
-                    try {
-                        SkyrimNetMemoryService::GetSingleton().IngestMemories(entries);
-                        MARAS_LOG_INFO("[MemoryService] Episode #{}: Ingested {} programmatic memory entry/entries into SkyrimNet",
-                                       epID, entries.size());
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("[MemoryService] Exception ingesting programmatic Episode #{}: {}", epID, e.what());
-                    }
+            AddCurrentEpochTask(
+                "SkyrimNetMemoryService::IngestProgrammaticEpisode",
+                [epID, entries = std::move(entries)]() {
+                    SkyrimNetMemoryService::GetSingleton().IngestMemories(entries);
+                    MARAS_LOG_INFO("[MemoryService] Episode #{}: Ingested {} programmatic memory entry/entries into SkyrimNet",
+                                   epID, entries.size());
                 });
-            }
             return;
         }
 
@@ -823,6 +820,7 @@ namespace MARAS {
 
         uint64_t epID = episode.episodeID;
         size_t eventCount = episode.events.size();
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
 
         MARAS_LOG_INFO("[MemoryService] Dispatching Episode #{} ({} event(s), {} target NPC(s)) to LLM",
                        epID, eventCount, targetActors.size());
@@ -831,34 +829,36 @@ namespace MARAS {
             promptName,
             "memory",
             contextJson,
-            [epID, targetActors = std::move(targetActors), relatedActorsByTarget = std::move(relatedActorsByTarget)](
+            [expectedEpoch, epID, targetActors = std::move(targetActors), relatedActorsByTarget = std::move(relatedActorsByTarget)](
                 const char* response, int success) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    MARAS_LOG_DEBUG("[MemoryService] Dropping stale Episode #{} LLM memory callback across save boundary (expected={}, current={})",
+                                    epID, expectedEpoch, GetSessionEpoch());
+                    return;
+                }
                 std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
                 if (!success || respStr.empty()) {
                     MARAS_LOG_WARN("[MemoryService] Episode #{} LLM memory request failed or returned empty response", epID);
                     return;
                 }
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([epID,
-                                     respStr = std::move(respStr),
-                                     targetActors = std::move(targetActors),
-                                     relatedActorsByTarget = std::move(relatedActorsByTarget)]() {
-                        try {
-                            auto& svc = SkyrimNetMemoryService::GetSingleton();
-                            auto entries = svc.ParseGeneratedMemories(respStr, targetActors, relatedActorsByTarget);
-                            if (entries.empty()) {
-                                MARAS_LOG_WARN("[MemoryService] Episode #{}: Failed to parse memories JSON from LLM response. Raw: {}",
-                                               epID, respStr);
-                                return;
-                            }
-                            svc.IngestMemories(entries);
-                            MARAS_LOG_INFO("[MemoryService] Episode #{}: Ingested {} memory entry/entries into SkyrimNet",
-                                           epID, entries.size());
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("[MemoryService] Exception processing Episode #{} callback: {}", epID, e.what());
+                AddEpochTask(
+                    expectedEpoch,
+                    "SkyrimNetMemoryService::IngestLLMEpisode",
+                    [epID,
+                     respStr = std::move(respStr),
+                     targetActors = std::move(targetActors),
+                     relatedActorsByTarget = std::move(relatedActorsByTarget)]() {
+                        auto& svc = SkyrimNetMemoryService::GetSingleton();
+                        auto entries = svc.ParseGeneratedMemories(respStr, targetActors, relatedActorsByTarget);
+                        if (entries.empty()) {
+                            MARAS_LOG_WARN("[MemoryService] Episode #{}: Failed to parse memories JSON from LLM response. Raw: {}",
+                                           epID, respStr);
+                            return;
                         }
+                        svc.IngestMemories(entries);
+                        MARAS_LOG_INFO("[MemoryService] Episode #{}: Ingested {} memory entry/entries into SkyrimNet",
+                                       epID, entries.size());
                     });
-                }
             });
     }
 
@@ -1195,71 +1195,76 @@ namespace MARAS {
             return;
         }
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         SendCustomPromptToLLM(
             promptName,
             "memory",
             contextJson,
-            [actorA, actorB, targetStatus, action, targets = std::move(targets)](const char* response, int success) mutable {
-                std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([actorA, actorB, targetStatus, action, success, respStr = std::move(respStr), targets = std::move(targets)]() {
-                        try {
-                            auto& svc = SkyrimNetMemoryService::GetSingleton();
-                            if (!success || respStr.empty()) {
-                                ShowLLMRetryModal(
-                                    "MARAS: Memory Generation Failed",
-                                    std::format("{} & {}: LLM memory generation request failed or returned an empty response.",
-                                                ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)),
-                                    LLMFailureType::RequestFailed,
-                                    [actorA, actorB, targetStatus, action]() {
-                                        SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(actorA, actorB, targetStatus, action);
-                                    },
-                                    [actorB]() {
-                                        PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
-                                    },
-                                    "memory");
-                                return;
-                            }
-
-                            std::unordered_map<RE::FormID, std::vector<RE::FormID>> relMap;
-                            relMap[actorA] = { actorB };
-                            relMap[actorB] = { actorA };
-                            auto entries = svc.ParseGeneratedMemories(respStr, targets, relMap);
-                            if (entries.empty()) {
-                                ShowLLMRetryModal(
-                                    "MARAS: Memory Generation Failed",
-                                    std::format("{} & {}: Failed to parse memories array from LLM response.",
-                                                ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)),
-                                    LLMFailureType::InvalidJson,
-                                    [actorA, actorB, targetStatus, action]() {
-                                        SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(actorA, actorB, targetStatus, action);
-                                    },
-                                    [actorB]() {
-                                        PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
-                                    },
-                                    "memory");
-                                return;
-                            }
-
-                            nlohmann::json outputArray = nlohmann::json::array();
-                            for (const auto& entry : entries) {
-                                nlohmann::json m;
-                                m["actor"] = entry.actorName;
-                                m["actorFormId"] = PrismaUIDataBridge::FormIDToString(entry.actorFormID);
-                                m["content"] = entry.content;
-                                m["location"] = entry.location;
-                                m["emotion"] = entry.emotion;
-                                m["importance_score"] = entry.importanceScore;
-                                m["type"] = entry.type;
-                                m["tags"] = entry.tags;
-                                outputArray.push_back(std::move(m));
-                            }
-                            PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, outputArray);
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("[MemoryService] Exception in PreviewRelationshipMemories callback: {}", e.what());
-                        }
-                    });
+            [expectedEpoch, actorA, actorB, targetStatus, action, targets = std::move(targets)](const char* response, int success) mutable {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
                 }
+                std::string respStr = (response && response[0] != '\0') ? std::string(response) : "";
+                AddEpochTask(
+                    expectedEpoch,
+                    "SkyrimNetMemoryService::PreviewMemoriesResult",
+                    [expectedEpoch, actorA, actorB, targetStatus, action, success, respStr = std::move(respStr), targets = std::move(targets)]() {
+                        auto& svc = SkyrimNetMemoryService::GetSingleton();
+                        if (!success || respStr.empty()) {
+                            ShowLLMRetryModal(
+                                "MARAS: Memory Generation Failed",
+                                std::format("{} & {}: LLM memory generation request failed or returned an empty response.",
+                                            ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)),
+                                LLMFailureType::RequestFailed,
+                                [expectedEpoch, actorA, actorB, targetStatus, action]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(actorA, actorB, targetStatus, action);
+                                },
+                                [expectedEpoch, actorB]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
+                                },
+                                "memory");
+                            return;
+                        }
+
+                        std::unordered_map<RE::FormID, std::vector<RE::FormID>> relMap;
+                        relMap[actorA] = { actorB };
+                        relMap[actorB] = { actorA };
+                        auto entries = svc.ParseGeneratedMemories(respStr, targets, relMap);
+                        if (entries.empty()) {
+                            ShowLLMRetryModal(
+                                "MARAS: Memory Generation Failed",
+                                std::format("{} & {}: Failed to parse memories array from LLM response.",
+                                            ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)),
+                                LLMFailureType::InvalidJson,
+                                [expectedEpoch, actorA, actorB, targetStatus, action]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(actorA, actorB, targetStatus, action);
+                                },
+                                [expectedEpoch, actorB]() {
+                                    if (!IsSessionEpochCurrent(expectedEpoch)) return;
+                                    PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
+                                },
+                                "memory");
+                            return;
+                        }
+
+                        nlohmann::json outputArray = nlohmann::json::array();
+                        for (const auto& entry : entries) {
+                            nlohmann::json m;
+                            m["actor"] = entry.actorName;
+                            m["actorFormId"] = PrismaUIDataBridge::FormIDToString(entry.actorFormID);
+                            m["content"] = entry.content;
+                            m["location"] = entry.location;
+                            m["emotion"] = entry.emotion;
+                            m["importance_score"] = entry.importanceScore;
+                            m["type"] = entry.type;
+                            m["tags"] = entry.tags;
+                            outputArray.push_back(std::move(m));
+                        }
+                        PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, outputArray);
+                    });
             });
     }
 

@@ -22,7 +22,7 @@ Before any sexual stage even begins, the service evaluates every participant aga
    - If the participant is the Player (`0x14`) and `enablePolygamy` is enabled in M.A.R.A.S settings, the player's absent partners do not classify the player as a cheater.
 4. **Potential Cheater & Victim Caching**:
    - Any remaining absent committed primary partner (`isOpen == false`) is cached as a **potential victim of infidelity** for that participant.
-- **Zero Overhead for Non-Drama Scenes**: If no participant in the thread has an absent committed partner (neither closed nor open), the background monitoring worker stays completely asleep on its condition variable (`cv_.wait`).
+- **Zero Overhead When Idle**: `hasActiveThreads_` (`std::atomic<bool>`) allows `IntimateThreadService::Tick(now)` inside [PollingService](PollingService.md) to return immediately with zero lock acquisition whenever no intimate thread is active.
 
 ---
 
@@ -48,9 +48,9 @@ Merely starting an animation thread (such as an undressing, kissing, or idle hug
 
 ---
 
-## 3. Continuous Walk-In Monitoring (Background Worker & LOS Polling)
+## 3. Continuous Walk-In Monitoring (Main-Thread `PollingService` Tick & LOS Polling)
 
-While at least one thread is active, a background worker thread wakes up on a periodic poll interval (`kPollInterval`) and dispatches a main-thread task (`PollActiveThreads`) whenever the game is unpaused. Each tick sends the missed-end-event verification (§5) and, for threads with recorded sexual activity and potential cheaters or open-relationship watchers, evaluates walk-ins:
+While at least one thread is active (`hasActiveThreads_`), `PollingService::Update()` invokes `IntimateThreadService::Tick(now)` on the SKSE main game thread every `1500ms` (`kPollInterval`) whenever the game is unpaused. Each tick runs `PollActiveThreads()`, sending the missed-end-event verification (§5) and, for threads with recorded sexual activity and potential cheaters or open-relationship watchers, evaluating walk-ins:
 
 ### How Victim / Witness Exposure Is Determined (`CheckVictimExposure`)
 A committed partner (victim or open-relationship witness) is considered to have **caught/witnessed** the scene if **all** of the following are true:

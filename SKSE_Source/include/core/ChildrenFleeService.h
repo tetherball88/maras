@@ -4,13 +4,10 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -48,12 +45,15 @@ namespace MARAS {
         // Sources call this when their threats changed; the refresh then runs on the game thread.
         void QueueRefresh();
 
+        // Game-thread periodic tick driven by PollingService::Update().
+        void Tick(std::chrono::steady_clock::time_point now);
+
         // Game-thread only: recompute which children flee and re-evaluate the ones that changed.
         void Refresh();
 
     private:
         ChildrenFleeService() = default;
-        ~ChildrenFleeService();
+        ~ChildrenFleeService() = default;
         ChildrenFleeService(const ChildrenFleeService&) = delete;
         ChildrenFleeService& operator=(const ChildrenFleeService&) = delete;
 
@@ -69,16 +69,6 @@ namespace MARAS {
             RE::NiPoint3 pos;
             RE::FormID destinationID{ 0 };
         };
-
-        struct Worker {
-            std::mutex mutex;
-            std::condition_variable cv;
-            std::atomic<bool> stopRequested{ false };
-        };
-
-        void StartWorker();
-        void StopWorker();
-        static void WorkerLoop(std::shared_ptr<Worker> worker);
 
         ThreatMap CollectThreats();
         RE::TESObjectREFR* FindExitDestination(RE::TESObjectCELL* cell, const RE::NiPoint3& from);
@@ -96,10 +86,9 @@ namespace MARAS {
         ThreatProvider threatProvider_;
         ThreatMap manualThreats_;
 
-        // The worker only posts refreshes while there is something to monitor.
+        // PollingService::Update() only refreshes while there is something to monitor.
         std::atomic<bool> monitoring_{ false };
-        std::mutex workerMutex_;
-        std::shared_ptr<Worker> worker_;
+        std::chrono::steady_clock::time_point lastPollTime_{};
 
         static constexpr std::chrono::milliseconds kPollInterval{ 1500 };
         // A child still this close to a threat after this long is considered blocked.

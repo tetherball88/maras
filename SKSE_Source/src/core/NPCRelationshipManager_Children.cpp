@@ -9,6 +9,7 @@
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/SkyrimNetProfileService.h"
@@ -163,28 +164,26 @@ namespace MARAS {
         class MarriageAdoptionCallback : public RE::BSScript::IStackCallbackFunctor {
         public:
             MarriageAdoptionCallback(RE::FormID childID, RE::FormID spouseID)
-                : m_childID(childID), m_spouseID(spouseID) {}
+                : m_childID(childID), m_spouseID(spouseID), m_epoch(GetSessionEpoch()) {}
             ~MarriageAdoptionCallback() override = default;
 
             void operator()(RE::BSScript::Variable /*a_result*/) override {
                 ClearMarriageAdoptionPending(m_childID);
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    const RE::FormID cID = m_childID;
-                    const RE::FormID spID = m_spouseID;
-                    taskIF->AddTask([cID, spID]() {
-                        auto& relMgr = NPCRelationshipManager::GetSingleton();
-                        if (!relMgr.IsMarried(kPlayerFormID, spID)) return;
-                        auto entryOpt = relMgr.GetChildEntry(cID);
-                        if (!entryOpt) return;
-                        if (!entryOpt->HasGuardian(kPlayerFormID)) {
-                            relMgr.RegisterChildActor(
-                                cID, kPlayerFormID, spID, 0,
-                                entryOpt->bioMotherID, entryOpt->bioFatherID, 0,
-                                static_cast<uint8_t>(entryOpt->stage),
-                                entryOpt->isAdopted, true);
-                        }
-                    });
-                }
+                const RE::FormID cID = m_childID;
+                const RE::FormID spID = m_spouseID;
+                AddEpochTask(m_epoch, "MarriageAdoptionCallback::CompleteAdoption", [cID, spID]() {
+                    auto& relMgr = NPCRelationshipManager::GetSingleton();
+                    if (!relMgr.IsMarried(kPlayerFormID, spID)) return;
+                    auto entryOpt = relMgr.GetChildEntry(cID);
+                    if (!entryOpt) return;
+                    if (!entryOpt->HasGuardian(kPlayerFormID)) {
+                        relMgr.RegisterChildActor(
+                            cID, kPlayerFormID, spID, 0,
+                            entryOpt->bioMotherID, entryOpt->bioFatherID, 0,
+                            static_cast<uint8_t>(entryOpt->stage),
+                            entryOpt->isAdopted, true);
+                    }
+                });
             }
 
             void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>& /*a_object*/) override {}
@@ -192,6 +191,7 @@ namespace MARAS {
         private:
             RE::FormID m_childID{ 0 };
             RE::FormID m_spouseID{ 0 };
+            SessionEpoch m_epoch{ 0 };
         };
     }  // namespace
 
@@ -243,7 +243,7 @@ namespace MARAS {
 
         // 3. Pick randomly between guardian A or B if both present & alive
         if (gA != 0 && gB != 0 && gAAlive && gBAlive) {
-            static std::mt19937 rng(std::random_device{}());
+            thread_local std::mt19937 rng(std::random_device{}());
             std::uniform_int_distribution<int> dist(0, 1);
             return (dist(rng) == 0) ? gA : gB;
         }

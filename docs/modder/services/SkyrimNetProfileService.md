@@ -41,30 +41,34 @@
 
 ```mermaid
 sequenceDiagram
-    participant Game as Main Game Thread (RegisterChildActor)
-    participant Svc as SkyrimNetProfileService
+    participant Game as Main Game Thread
+    participant Svc as SkyrimNetProfileService (std::jthread Queue)
     participant Preview as SkyrimNet ContextEngine (/prompts?api=render-template-preview)
     participant SNetAPI as SkyrimNet Public API v13+ (PublicRequestProfileUpdate)
     participant Fallback as Legacy Fallback (< v13)
 
-    Game->>Svc: RequestChildProfileUpdate(childID, stage)
-    Svc->>Svc: Validate IsSkyrimNetAvailable, !IsSyntheticChildID, stage in {Child, Adult}, deduplicate (childID, stage)
-    Svc->>Svc: Gather all involved parties (Bio Mother, Bio Father, Presumed Father, Guardians) & paternity secret permutation on game thread
-    Svc->>Preview: Render helpers/maras_child_bio_context (ttm_gm profiles + family recent events)
+    Game->>Game: RequestChildProfileUpdate(childID, stage) -> AddCurrentEpochTask
+    Game->>Game: Validate IsSkyrimNetAvailable, !IsSyntheticChildID, stage in {Child, Adult}, deduplicate (childID, stage)
+    Game->>Game: Gather involved parties, paternity secret permutation & fallback memories on main thread
+    Game->>Svc: EnqueueProfileTask(ProfileRenderTask with SessionEpoch, bounded max=32)
+    Svc->>Preview: Render helpers/maras_child_bio_context via localhost WinHTTP (1s connect / 5s recv timeout)
     Preview-->>Svc: Rendered parent/guardian profiles & family event history
-    Svc->>Svc: Append rendered context to generationGuidance
+    Svc->>Game: AddEpochTask(sessionEpoch) -> dispatch result back to main thread
     alt SkyrimNet Public API v13+ available (PublicRequestProfileUpdate != nullptr)
-        Svc->>SNetAPI: PublicRequestProfileUpdate(childID, generationGuidance, kAllProfileBlocksCSV)
+        Game->>SNetAPI: PublicRequestProfileUpdate(childID, generationGuidance, kAllProfileBlocksCSV)
         Note over SNetAPI: Generates initial 10-block profile if none exists yet,<br/>or updates all 10 blocks on SkyrimNet's internal ThreadPool
     else Older SkyrimNet (< v13) Fallback
         Svc->>Fallback: Seed per-save base bio & generate via /characters?api=generate or SkyrimNetApi.UpdateActorDynamicBio
     end
 ```
 
-1. **Involved Parties Context Rendering (`RenderInvolvedPartiesContext`)**:
-   - On the background worker thread, renders `helpers/maras_child_bio_context` via `POST /prompts?api=render-template-preview` (with an inline template fallback if the file was added before a prompt reload, and a direct disk + `PublicGetMemoriesForActor` C++ API fallback if SkyrimNet's local web server is disabled in `WebServer.yaml`).
+1. **Main-Thread Context Gathering & Bounded `std::jthread` Worker (`EnqueueProfileTask`)**:
+   - `RequestChildProfileUpdate` schedules `GatherChildProfileContextOnGameThread` via `AddCurrentEpochTask` so all `RE::Actor*`, `NPCRelationshipManager`, and `PublicGetMemoriesForActor` fallback reads execute strictly on the SKSE main game thread.
+   - A self-contained `ProfileRenderTask` (stamped with `SessionEpoch`) is pushed onto a bounded FIFO queue (`kMaxPendingTasks = 32`) processed by a single drain-and-exit joinable `std::jthread` (`WorkerLoop(std::stop_token)`). No detached threads are ever spawned, and `Revert()` clears queued work on save transitions.
+2. **Involved Parties Context Rendering (`RenderInvolvedPartiesContext`)**:
+   - On the `std::jthread` worker, renders `helpers/maras_child_bio_context` via `POST /prompts?api=render-template-preview` (`1000ms` connect / `5000ms` send-receive timeouts), with an inline template fallback if the file was added before a prompt reload, and a pure disk + pre-fetched memory fallback if SkyrimNet's local web server is disabled in `WebServer.yaml` (making zero `RE::*` or `SkyrimNet.dll` calls off-thread).
    - Appends the rendered profiles and chronological family events directly to `generationGuidance`.
-2. **Primary Path (`PublicRequestProfileUpdate` — SkyrimNet v13+)**:
-   - Passes the child's `FormID`, the enriched `generationGuidance`, and all 10 character bio blocks (`summary,interject_summary,background,personality,appearance,aspirations,relationships,occupation,skills,speech_style`) to `PublicRequestProfileUpdate`.
-3. **Legacy Fallback Path (SkyrimNet < v13)**:
-   - Seeds the 10-block per-save base `.prompt` (`BuildSeedChildBioTemplate`) and invokes `/characters?api=generate` / `SkyrimNetApi.UpdateActorDynamicBio`.
+3. **Primary Path (`PublicRequestProfileUpdate` — SkyrimNet v13+)**:
+   - Marshals the completed `generationGuidance` back onto the SKSE main game thread via `AddEpochTask` (dropping the update if `SessionEpoch` changed across a save reload) and passes the child's `FormID`, `generationGuidance`, and all 10 character bio blocks (`summary,interject_summary,background,personality,appearance,aspirations,relationships,occupation,skills,speech_style`) to `PublicRequestProfileUpdate`.
+4. **Legacy Fallback Path (SkyrimNet < v13)**:
+   - Seeds the 10-block per-save base `.prompt` (`BuildSeedChildBioTemplate`) and invokes `/characters?api=generate` / `SkyrimNetApi.UpdateActorDynamicBio` (guarded by `SessionEpoch`).

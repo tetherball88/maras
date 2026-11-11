@@ -1,4 +1,5 @@
 #include "core/SkyrimNetIntegration.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/NPCRelationshipManager.h"
@@ -2424,10 +2425,14 @@ void ShowLLMRetryModal(const std::string& evaluationType,
     req.buttons.push_back(ModalButton::Make("retry", "Retry Request", ModalButtonVariant::Primary));
     req.buttons.push_back(ModalButton::Make("ignore", "Ignore", ModalButtonVariant::Secondary));
 
+    const SessionEpoch expectedEpoch = GetSessionEpoch();
     PrismaModalManager::GetSingleton().ShowModal(
         std::move(req),
-        [onRetry = std::move(onRetry), onIgnore = std::move(onIgnore)](const ModalResponse& resp) mutable {
-            if (!resp.aborted && (resp.buttonIndex == 0 || resp.buttonId == "retry")) {
+        [expectedEpoch, onRetry = std::move(onRetry), onIgnore = std::move(onIgnore)](const ModalResponse& resp) mutable {
+            if (!IsSessionEpochCurrent(expectedEpoch) || resp.aborted) {
+                return;
+            }
+            if (resp.buttonIndex == 0 || resp.buttonId == "retry") {
                 if (onRetry) onRetry();
             } else {
                 if (onIgnore) onIgnore();
@@ -2528,6 +2533,119 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
     }
 }
 
+    namespace {
+
+        struct PaternityEvalState {
+            SessionEpoch epoch{ 0 };
+            RE::FormID childID{ 0 };
+            RE::FormID motherID{ 0 };
+            RE::FormID presumedFatherID{ 0 };
+            RE::FormID bioFatherID{ 0 };
+            std::string childName;
+            std::string motherName;
+            bool isSecretForPresumedFather{ false };
+            std::string contextJson;
+        };
+
+        bool DispatchPaternityEval(std::shared_ptr<const PaternityEvalState> state) {
+            if (!state || !IsSessionEpochCurrent(state->epoch)) {
+                return false;
+            }
+
+            return SkyrimNetDecisions::EvaluatePaternity(
+                state->contextJson,
+                state->isSecretForPresumedFather,
+                [state](const SkyrimNetDecisions::PaternityEvalResult& res) {
+                    if (!IsSessionEpochCurrent(state->epoch)) {
+                        return;
+                    }
+                    AddEpochTask(state->epoch, "EvaluatePaternitySecret::OnResult", [state, res]() {
+                        if (!res.success) {
+                            MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: evaluation failed for child {:08X} (usedDecisions={}, detail='{}').",
+                                           state->childID, res.usedDecisions, res.failureDetail);
+
+                            auto retryAction = [state]() {
+                                if (!IsSessionEpochCurrent(state->epoch)) {
+                                    return;
+                                }
+                                MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: retrying evaluation for child {:08X}.", state->childID);
+                                if (!DispatchPaternityEval(state)) {
+                                    PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                                    PrismaUIDataBridge::GetSingleton().SendNPCDetail(state->childID);
+                                }
+                            };
+
+                            auto ignoreAction = [childID = state->childID, expectedEpoch = state->epoch]() {
+                                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                                    return;
+                                }
+                                MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: player chose to ignore failed evaluation for child {:08X}.", childID);
+                                PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                                PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
+                            };
+
+                            std::string fullDescription = fmt::format(
+                                "Child: {} (Mother: {})\n{}",
+                                state->childName, state->motherName, res.failureDetail);
+
+                            ShowLLMRetryModal(
+                                "Paternity Secret Evaluation",
+                                fullDescription,
+                                res.failureType,
+                                std::move(retryAction),
+                                std::move(ignoreAction),
+                                res.usedDecisions ? "decisions" : "gamemaster_evaluation");
+                            return;
+                        }
+
+                        const std::string& outcome = res.outcome;
+                        const std::string& partnerReaction = res.partnerReaction;
+                        const std::string& summary = res.summary;
+
+                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret result for child {:08X} (usedDecisions={}): outcome='{}', reaction='{}', summary='{}'",
+                                       state->childID, res.usedDecisions, outcome, partnerReaction, summary);
+
+                        auto& mgr = NPCRelationshipManager::GetSingleton();
+                        bool wasPregSecretPartner = mgr.IsPregnancySecretForPartner(state->childID);
+
+                        // 1. Resolve state based on the specific canonical outcome
+                        if (outcome == "mother_confessed_presumed" || outcome == "presumed_father_learnt") {
+                            mgr.ResolvePaternitySecretForPartner(state->childID, outcome == "presumed_father_learnt", /*sendEvent=*/false);
+                            if (partnerReaction == "divorce" || partnerReaction == "breakup") {
+                                mgr.Breakup(state->motherID, state->presumedFatherID);
+                            }
+                        } else if (outcome == "mother_confessed_bio" || outcome == "bio_father_learnt") {
+                            mgr.ResolvePaternitySecretForBioFather(state->childID, outcome == "bio_father_learnt", /*sendEvent=*/false);
+                        } else if (outcome == "mother_confessed_both") {
+                            mgr.ResolvePaternitySecretForPartner(state->childID, false, /*sendEvent=*/false);
+                            mgr.ResolvePaternitySecretForBioFather(state->childID, false, /*sendEvent=*/false);
+                            if (partnerReaction == "divorce" || partnerReaction == "breakup") {
+                                mgr.Breakup(state->motherID, state->presumedFatherID);
+                            }
+                        }
+
+                        // 2. Dispatch SkyrimNet mod event for the exact outcome if one occurred
+                        if (outcome != "none" && outcome != "remains_secret" && !outcome.empty()) {
+                            std::string eventOutcome = (wasPregSecretPartner && (outcome == "mother_confessed_presumed" || outcome == "presumed_father_learnt" || outcome == "mother_confessed_both"))
+                                                           ? (outcome + "_unannounced")
+                                                           : outcome;
+                            if (auto* source = SKSE::GetModCallbackEventSource()) {
+                                float childIdFloat = static_cast<float>(static_cast<int32_t>(state->childID));
+                                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
+                                source->SendEvent(&modEvent);
+                            }
+                            SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(state->childID, outcome, partnerReaction, wasPregSecretPartner);
+                        }
+
+                        // 3. Notify Prisma UI
+                        PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                        PrismaUIDataBridge::GetSingleton().SendNPCDetail(state->childID);
+                    });
+                });
+        }
+
+    }  // namespace
+
     bool EvaluatePaternitySecret(RE::FormID childID) {
         if (!IsSkyrimNetAvailable()) return false;
 
@@ -2592,121 +2710,18 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
         if (bioFatherUUID != 0 && bioFatherUUID != motherUUID && bioFatherUUID != presumedFatherUUID) recentEventsParticipants.push_back(bioFatherUUID);
         ctx["recent_events_participants"] = std::move(recentEventsParticipants);
 
-        std::string childName = ctx["childName"].get<std::string>();
-        std::string motherName = ctx["motherName"].get<std::string>();
-        bool isSecretForPresumedFather = entry.paternitySecret.isSecretForPartner;
-        std::string contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        auto state = std::make_shared<PaternityEvalState>();
+        state->epoch = GetSessionEpoch();
+        state->childID = childID;
+        state->motherID = motherID;
+        state->presumedFatherID = presumedFatherID;
+        state->bioFatherID = bioFatherID;
+        state->childName = ctx["childName"].get<std::string>();
+        state->motherName = ctx["motherName"].get<std::string>();
+        state->isSecretForPresumedFather = entry.paternitySecret.isSecretForPartner;
+        state->contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
-        auto callbackHolder = std::make_shared<std::function<void(const SkyrimNetDecisions::PaternityEvalResult&)>>();
-
-        *callbackHolder = [callbackHolder, childID, motherID, presumedFatherID, bioFatherID, childName, motherName, isSecretForPresumedFather, contextJson](const SkyrimNetDecisions::PaternityEvalResult& res) {
-            try {
-                if (!res.success) {
-                    MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: evaluation failed (usedDecisions={}, detail='{}').",
-                                   res.usedDecisions, res.failureDetail);
-                    std::function<void(const SkyrimNetDecisions::PaternityEvalResult&)> savedCb = std::move(*callbackHolder);
-                    *callbackHolder = nullptr;
-
-                    auto retryAction = [callbackHolder, savedCb = std::move(savedCb), contextJson, isSecretForPresumedFather, childID]() mutable {
-                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: retrying evaluation for child {:08X}.", childID);
-                        *callbackHolder = std::move(savedCb);
-                        if (*callbackHolder) {
-                            if (!SkyrimNetDecisions::EvaluatePaternity(contextJson, isSecretForPresumedFather, *callbackHolder)) {
-                                *callbackHolder = nullptr;
-                                PrismaUIDataBridge::GetSingleton().SendOverviewData();
-                                PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
-                            }
-                        }
-                    };
-
-                    auto ignoreAction = [callbackHolder, childID]() {
-                        MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret: player chose to ignore failed evaluation for child {:08X}.", childID);
-                        *callbackHolder = nullptr;
-                        PrismaUIDataBridge::GetSingleton().SendOverviewData();
-                        PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
-                    };
-
-                    std::string fullDescription = fmt::format(
-                        "Child: {} (Mother: {})\n{}",
-                        childName, motherName, res.failureDetail);
-
-                    ShowLLMRetryModal(
-                        "Paternity Secret Evaluation",
-                        fullDescription,
-                        res.failureType,
-                        std::move(retryAction),
-                        std::move(ignoreAction),
-                        res.usedDecisions ? "decisions" : "gamemaster_evaluation");
-                    return;
-                }
-
-                *callbackHolder = nullptr;
-
-                std::string outcome = res.outcome;
-                std::string partnerReaction = res.partnerReaction;
-                std::string summary = res.summary;
-
-                MARAS_LOG_INFO("[SkyrimNet] EvaluatePaternitySecret result (usedDecisions={}): outcome='{}', reaction='{}', summary='{}'",
-                               res.usedDecisions, outcome, partnerReaction, summary);
-
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([childID, motherID, presumedFatherID, bioFatherID, outcome, partnerReaction, summary]() {
-                        try {
-                            auto& mgr = NPCRelationshipManager::GetSingleton();
-                            bool wasPregSecretPartner = mgr.IsPregnancySecretForPartner(childID);
-
-                            // 1. Resolve state based on the specific canonical outcome
-                            if (outcome == "mother_confessed_presumed" || outcome == "presumed_father_learnt") {
-                                mgr.ResolvePaternitySecretForPartner(childID, outcome == "presumed_father_learnt", /*sendEvent=*/false);
-                                if (partnerReaction == "divorce" || partnerReaction == "breakup") {
-                                    mgr.Breakup(motherID, presumedFatherID);
-                                }
-                            } else if (outcome == "mother_confessed_bio" || outcome == "bio_father_learnt") {
-                                mgr.ResolvePaternitySecretForBioFather(childID, outcome == "bio_father_learnt", /*sendEvent=*/false);
-                            } else if (outcome == "mother_confessed_both") {
-                                mgr.ResolvePaternitySecretForPartner(childID, false, /*sendEvent=*/false);
-                                mgr.ResolvePaternitySecretForBioFather(childID, false, /*sendEvent=*/false);
-                                if (partnerReaction == "divorce" || partnerReaction == "breakup") {
-                                    mgr.Breakup(motherID, presumedFatherID);
-                                }
-                            }
-
-                            // 2. Dispatch SkyrimNet mod event for the exact outcome if one occurred
-                            if (outcome != "none" && outcome != "remains_secret" && !outcome.empty()) {
-                                std::string eventOutcome = (wasPregSecretPartner && (outcome == "mother_confessed_presumed" || outcome == "presumed_father_learnt" || outcome == "mother_confessed_both"))
-                                                               ? (outcome + "_unannounced")
-                                                               : outcome;
-                                if (auto* source = SKSE::GetModCallbackEventSource()) {
-                                    float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                                    SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                                    source->SendEvent(&modEvent);
-                                }
-                                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, outcome, partnerReaction, wasPregSecretPartner);
-                            }
-
-                            // 3. Notify Prisma UI
-                            PrismaUIDataBridge::GetSingleton().SendOverviewData();
-                            PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
-                        } catch (const std::exception& e) {
-                            MARAS_LOG_ERROR("[SkyrimNet] Exception in EvaluatePaternitySecret game-thread task: {}", e.what());
-                        }
-                    });
-                }
-            } catch (const std::exception& e) {
-                MARAS_LOG_ERROR("[SkyrimNet] Exception in EvaluatePaternitySecret callback: {}", e.what());
-                *callbackHolder = nullptr;
-            } catch (...) {
-                MARAS_LOG_ERROR("[SkyrimNet] Unknown exception in EvaluatePaternitySecret callback");
-                *callbackHolder = nullptr;
-            }
-        };
-
-        bool queued = SkyrimNetDecisions::EvaluatePaternity(contextJson, isSecretForPresumedFather, *callbackHolder);
-        if (!queued) {
-            *callbackHolder = nullptr;
-            return false;
-        }
-        return true;
+        return DispatchPaternityEval(std::move(state));
     }
 
     uint64_t GetActorUUID(RE::FormID formID) {

@@ -2,6 +2,7 @@
 #include "core/DeceasedRegistry.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerChildrenService.h"
+#include "core/SessionEpoch.h"
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -15,16 +16,40 @@ namespace MARAS {
         const RE::TESDeathEvent* a_event,
         RE::BSTEventSource<RE::TESDeathEvent>*)
     {
-        if (!a_event || !a_event->dead || !a_event->actorDying) {
+        if (!a_event || !a_event->dead || !a_event->actorDying ||
+            a_event->actorDying->GetFormType() != RE::FormType::ActorCharacter) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        auto* victim = a_event->actorDying->As<RE::Actor>();
-        if (!victim) return RE::BSEventNotifyControl::kContinue;
+        const RE::FormID victimID = a_event->actorDying->GetFormID();
+        if (victimID == 0) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
 
-        auto victimID = victim->GetFormID();
-        auto* killer = a_event->actorKiller ? a_event->actorKiller->As<RE::Actor>() : nullptr;
-        bool isPlayerKiller = (killer && killer->IsPlayerRef());
+        const RE::FormID killerID = a_event->actorKiller ? a_event->actorKiller->GetFormID() : 0;
+        const bool isPlayerKiller = (killerID == kPlayerFormID);
+
+        AddCurrentEpochTask("DeathEventHandler::ProcessEvent", [this, victimID, killerID, isPlayerKiller]() {
+            HandleActorDeathOnMainThread(victimID, killerID, isPlayerKiller);
+        });
+
+        return RE::BSEventNotifyControl::kContinue;
+    }
+
+    void DeathEventHandler::HandleActorDeathOnMainThread(
+        RE::FormID victimID,
+        RE::FormID killerID,
+        bool isPlayerKiller)
+    {
+        auto* victim = RE::TESForm::LookupByID<RE::Actor>(victimID);
+        if (!victim || victim->IsDeleted()) {
+            return;
+        }
+
+        auto* killer = (killerID != 0) ? RE::TESForm::LookupByID<RE::Actor>(killerID) : nullptr;
+        if (!isPlayerKiller && killer && killer->IsPlayerRef()) {
+            isPlayerKiller = true;
+        }
 
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         auto& deceasedReg = DeceasedRegistry::GetSingleton();
@@ -43,7 +68,7 @@ namespace MARAS {
                 MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
             }
 
-            return RE::BSEventNotifyControl::kContinue;
+            return;
         }
 
         // 2. Check if victim is a Pet or Critter belonging to a child
@@ -69,7 +94,7 @@ namespace MARAS {
                 SKSE::ModCallbackEvent modEvent("maras_child_pet_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
                 eventSource->SendEvent(&modEvent);
             }
-            return RE::BSEventNotifyControl::kContinue;
+            return;
         }
 
         // 3. Check if victim is an Adult tracked by MARAS
@@ -103,8 +128,6 @@ namespace MARAS {
                 relMgr.EvaluateChildCustodyOnDeath(victimBaseID);
             }
         }
-
-        return RE::BSEventNotifyControl::kContinue;
     }
 
 }  // namespace MARAS

@@ -1,6 +1,7 @@
 #include "core/DialogueEventSink.h"
 
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "utils/Common.h"
 
 namespace MARAS {
@@ -88,11 +89,9 @@ namespace MARAS {
         if (!speakerRef) {
             MARAS_LOG_DEBUG("DialogueEventSink: speaker handle is empty, waiting for NPC to finish speaking");
             waitingForSpeaker_.store(true, std::memory_order_release);
-            if (auto* taskInterface = SKSE::GetTaskInterface()) {
-                taskInterface->AddTask([]() {
-                    DialogueEventSink::GetSingleton()->TryResolveDeferredSpeaker();
-                });
-            }
+            AddCurrentEpochTask("DialogueEventSink::ResolveDeferredSpeaker", []() {
+                DialogueEventSink::GetSingleton()->TryResolveDeferredSpeaker();
+            });
             return RE::BSEventNotifyControl::kContinue;
         }
 

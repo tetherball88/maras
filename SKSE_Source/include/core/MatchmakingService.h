@@ -2,6 +2,7 @@
 
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "utils/Common.h"
 
@@ -46,6 +47,7 @@ namespace MARAS {
         std::vector<TaskType> tasks;
         size_t pendingCount = 0;
         bool isScheduledScan = true;
+        SessionEpoch sessionEpoch = 0;
     };
 
     using VerificationBatch = BatchBase<VerificationTask>;
@@ -85,6 +87,7 @@ namespace MARAS {
 
         void StartMemoryBatch(std::vector<MatchmakingResult> verifiedMatches, bool isScheduledScan = true);
         void ExecuteMemoryBatchOrApply(std::vector<MatchmakingResult> approvedMatches, bool isScheduledScan = true);
+        void FinalizeInfidelityMatches(std::vector<MatchmakingResult> matches);
 
         void ShowMatchmakingReviewModal(std::vector<MatchmakingResult> candidates,
                                         bool isScheduledScan,
@@ -102,6 +105,7 @@ namespace MARAS {
         nlohmann::json BuildScheduledContext(float currentGameDay);
         nlohmann::json BuildManualContext(RE::FormID targetNpcFormID, float currentGameDay);
         nlohmann::json BuildVerifyContext(const MatchmakingResult& result);
+        std::string BuildActorDetailedRelationshipsString(RE::FormID actorFormID);
 
         // Response parser & validation
         std::vector<MatchmakingResult> ParseLLMResponse(const std::string& response);
@@ -141,7 +145,6 @@ namespace MARAS {
 
         std::string BuildExistingPairsString();
         std::string BuildTargetRelationshipsString(RE::FormID targetNpcFormID);
-        std::string BuildActorDetailedRelationshipsString(RE::FormID actorFormID);
 
         // Dice Roll matchmaking helpers
         std::vector<DiceRollActionSlot> RollActionSlots(int maxSlots);
