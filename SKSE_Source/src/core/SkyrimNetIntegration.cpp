@@ -54,14 +54,14 @@ namespace {
         // GetModuleHandleW only searches modules already mapped into this process.
         HMODULE hMod = GetModuleHandleW(L"SkyrimNet.dll");
         if (!hMod) {
-            spdlog::warn("[SkyrimNet] SkyrimNet.dll not found in process - integration skipped.");
+            MARAS_LOG_WARN("[SkyrimNet] SkyrimNet.dll not found in process - integration skipped.");
             return nullptr;
         }
 
         auto* fn = reinterpret_cast<PublicRegisterDecorator_t>(
             GetProcAddress(hMod, "PublicRegisterDecorator"));
         if (!fn) {
-            spdlog::warn("[SkyrimNet] PublicRegisterDecorator export not found in SkyrimNet.dll.");
+            MARAS_LOG_WARN("[SkyrimNet] PublicRegisterDecorator export not found in SkyrimNet.dll.");
             return nullptr;
         }
         return fn;
@@ -139,9 +139,9 @@ namespace {
         };
 
         if (fn(name, description, std::move(wrappedCallback))) {
-            spdlog::info("[SkyrimNet] Registered decorator '{}'", name);
+            MARAS_LOG_INFO("[SkyrimNet] Registered decorator '{}'", name);
         } else {
-            spdlog::warn("[SkyrimNet] Failed to register decorator '{}' (duplicate or invalid name?)", name);
+            MARAS_LOG_WARN("[SkyrimNet] Failed to register decorator '{}' (duplicate or invalid name?)", name);
         }
     }
 
@@ -1317,7 +1317,7 @@ namespace {
         try {
             return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         } catch (const std::exception& e) {
-            spdlog::error("[SkyrimNet] BuildRelationshipProfileJSON dump error: {}", e.what());
+            MARAS_LOG_ERROR("[SkyrimNet] BuildRelationshipProfileJSON dump error: {}", e.what());
             return "{}";
         }
     }
@@ -1397,7 +1397,7 @@ namespace {
 
 void RegisterSkyrimNetDecorators()
 {
-    spdlog::info("[SkyrimNet] RegisterSkyrimNetDecorators called.");
+    MARAS_LOG_INFO("[SkyrimNet] RegisterSkyrimNetDecorators called.");
 
     auto* fn = FindRegisterDecorator();
     if (!fn) return;
@@ -1838,10 +1838,10 @@ void RegisterSkyrimNetDecorators()
             try {
                 return BuildRelationshipProfileJSON(actor);
             } catch (const std::exception& e) {
-                spdlog::error("[SkyrimNet] Exception in ttm_npc_relationship_profile: {}", e.what());
+                MARAS_LOG_ERROR("[SkyrimNet] Exception in ttm_npc_relationship_profile: {}", e.what());
                 return "{}";
             } catch (...) {
-                spdlog::error("[SkyrimNet] Unknown exception in ttm_npc_relationship_profile");
+                MARAS_LOG_ERROR("[SkyrimNet] Unknown exception in ttm_npc_relationship_profile");
                 return "{}";
             }
         });
