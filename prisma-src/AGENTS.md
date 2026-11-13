@@ -1,180 +1,53 @@
-# AGENTS.md — Skyrim Prisma UI Dashboard
+# AGENTS.md — Skyrim Prisma UI Dashboard (`prisma-src/`)
 
-## Project Overview
+In-game Skyrim dashboard & modal UI rendered via **Prisma UI** (React 18 + Vite + Zustand + shadcn/ui + Tailwind CSS). Supplements root `AGENTS.md`.
 
-This is a **dashboard-style window/modal UI for Skyrim**, rendered in-game via **Prisma UI** (SKSE plugin embedding a web view). The UI appears as a **centered window over the game** — it is NOT a regular website and NOT a persistent HUD.
-
-**Stack:** React 18 + Vite + Zustand + shadcn/ui + Tailwind CSS
-
-**Golden rules:**
-1. The web view shares **VRAM and GPU time with the game** — stay lightweight.
-2. **Everything scales from the root font size.** All dimensions use `rem`/`em`. A user changing one variable in `variables.css` must scale the entire UI.
-
----
-
-## Critical Constraints (Read First)
-
-### 1. VRAM & GPU Budget
-The dashboard is composited into the game's frame. Every GPU layer and repaint competes with Skyrim (often running 4K texture mods) for VRAM.
-
-- **NEVER** use large raster images. Prefer **SVG, CSS gradients, borders, and Unicode glyphs** for all decoration (frames, dividers, ornaments).
-- If a raster image is unavoidable: **WebP**, sized to actual display dimensions, aggressively compressed.
-- **Forbidden:** `backdrop-filter`, large `filter: blur()`, videos, WebGL, canvas particle effects, infinite looping animations.
-- Panel translucency = `rgba()` / gradient backgrounds, **never** blur.
-- Animate **only `transform` and `opacity`**. Never animate `width`, `height`, `margin`, `box-shadow`, or `filter`.
-- Keep animations short and discrete (150–250ms open/close transitions). No animation should run while the dashboard sits idle.
-- Everything outside the dashboard window must be **fully transparent** — the root/body never paints a background. A dim overlay behind the modal, if desired, is a single semi-transparent `rgba()` element, nothing more.
-
-### 2. DOM Size & Lifecycle
-- When the dashboard is **closed, render nothing** — an empty transparent root. Unmount, don't hide (`{isOpen && <Dashboard />}`).
-- Unmount inactive tabs/pages of the dashboard rather than keeping them in the DOM with `display: none`.
-- Virtualize lists that can exceed ~50 rows (`@tanstack/react-virtual`).
-- Target: **< 1500 mounted DOM nodes**.
-
-### 3. Idle Cost
-- No polling (`setInterval`) while the dashboard is closed. Updates are event-driven from the game via the Prisma bridge.
-- Idle CPU when closed must be ~0%.
-
----
-
-## Theming & Scaling — `variables.css` (MANDATORY)
-
-All user-tweakable design tokens live in a single file: **`src/styles/variables.css`**. This file is the public contract with end users — mod users will open it and edit values by hand. Keep it **small, commented, and stable** (don't rename variables between versions).
-
-### Rules
-
-1. **Every size in the app is `rem` or `em`. `px` is forbidden** except for:
-   - `1px` hairline borders (optional — prefer `0.0625rem`)
-   - Media queries
-2. The **entire UI scales from `--ui-font-size`** set on `:root`/host element.
-   Changing it from `16px` to `20px` must proportionally scale the whole dashboard — text, spacing, the window itself, icons, everything.
-3. Component-internal sizes that should scale with *that component's* text use `em`; global/layout sizes use `rem`.
-4. Components **never hardcode** colors, font sizes, radii, or spacing — they consume CSS variables (directly or through Tailwind theme mapping).
-5. New tokens require a comment explaining what they affect, in plain language a non-developer can understand.
-
-- `html { font-size: var(--ui-font-size); }` is the ONLY place `--ui-font-size` is applied.
-- Tailwind config must map to these variables (e.g. `colors.accent: 'var(--color-accent)'`, spacing/font-size scales pointing at the tokens) so utility classes stay tweakable through `variables.css`.
-- shadcn's theme variables (`--background`, `--primary`, etc.) must be **aliased to these tokens**, not defined with independent values.
-
----
-
-## Game Communication (Prisma Bridge)
-
-- ALL game communication (SKSE/Papyrus) goes through one module: `store/prismaBridge.ts`. Components must NEVER touch `window.*` game APIs directly.
-- Data flow:
-  ```
-  Game → prisma bridge → Zustand store (`useMarasStore` / `useModalStore`) → components
-  Components → prisma bridge → Game
-  ```
-- The bridge must detect a plain browser (`npm run dev`) and fall back to **mock data**, so the dashboard and modals are fully developable without launching Skyrim.
-- Dashboard open/close (`window.openMARAS` / `window.closeMARASView`) and standalone Modal display (`window.showMARASModal` / `window.clearMARASModal`) are independent roots in `App.tsx`.
-- **Intrigue Mode (`!settings.revealSecretsInUI`) & Authoritative Snapshot Replacement**:
-  - When `receiveMARASOverview` arrives in `useMarasStore`, rebuild collection maps (`rawChildren`, `rawRelationships`, `rawCheatingRecords`) strictly from the incoming payload rather than cloning the prior map—otherwise entries omitted under Intrigue Mode (such as unannounced NPC `UNBORN_*` pregnancies or removed children) linger as stale ghosts after a live `revealSecretsInUI: true -> false` toggle.
-  - Client-side masking in `src/utils/childUtils.ts` (`maskChildrenMap`, `maskChildRecord`, `maskCheatingAndRelationships`) must maintain exact parity with C++ world-wide Intrigue Mode semantics (no Player `0x14` exemptions, omitting unannounced non-player `unborn` entries, mapping `presumedFather` $\to$ `bioFather`, and masking `hasBeastblood` and secret flags).
-
----
-
-## Standalone & Blocking Modal System (`useModalStore` & `PrismaModalHost`)
-
-M.A.R.A.S uses a standalone Prisma UI modal system (`src/store/useModalStore.ts`, `src/components/modals/PrismaModalHost.tsx`, `src/types/modal.ts`) that renders independently of `<DashboardLayout>`:
-
-1. **Independent Lifecycle**:
-   - In `App.tsx`, `<DashboardLayout>` (`useMarasStore.isOpen`) and `<PrismaModalHost>` (`useModalStore.activeModal !== null`) mount and unmount independently.
-   - Showing a modal when the dashboard is closed must **never** set `useMarasStore.isOpen = true` or mount `<DashboardLayout>`.
-2. **Mandatory Focus Lock, Keyboard Navigation & Non-Dismissibility**:
-   - Modals pause the game in C++ with PrismaUI's `FocusMenu` active (`Focus(view, pauseGame=true, disableFocusMenu=false)`) so both mouse cursor movement and keyboard input work.
-   - Modals **must NEVER** include an `X` close button, **must NEVER** close on backdrop click, and **must NEVER** close on `Escape` (`PrismaModalHost` suppresses `Escape` in capture phase unless a `<Select>` dropdown is open).
-   - `PrismaModalHost` auto-focuses the primary footer button on open and supports full keyboard navigation (`WASD`, Arrow keys, `Tab`/`Shift+Tab` to cycle controls/buttons, and `Enter`/`Space`/`E` to activate).
-   - A modal can **only** be resolved by the user activating one of its footer control buttons (`useModalStore.getState().submitModal(buttonId, buttonIndex, customValues)`), which sends `sendMarasAction('modalResponse', { modalId, buttonId, buttonIndex, values })` to C++.
-3. **Hybrid Rendering (Declarative Schema First, Custom Templates When Needed)**:
-   - **Default (`modalType: 'generic'`)**: Use the built-in declarative controls in `PrismaModalHost.tsx`:
-     - `'infobox'`: Semantic alert callout (`default`, `warning`, `danger`, `success`, `ai`).
-     - `'checkbox'`: Standalone boolean checkbox row (`<Checkbox />`).
-     - `'select'`: Labeled dropdown (`<SelectInput />`).
-     - `'text'`: Labeled text input (`<Input />`).
-     - `'checklist'`: Interactive list of items (`PrismaModalChecklistItem`) with per-row checkboxes, badges, Select All / Deselect All toggle, automatic search filter (`> 8` items), and optional inline per-row `<SelectInput />` dropdowns.
-   - **Custom Templates (`src/components/modals/modalRegistry.ts`)**: Only when a modal requires bespoke layout that cannot be expressed declaratively, register a custom component via `registerModalTemplate(modalType, Component)` accepting `CustomModalTemplateProps` (`{ modal, values, onSubmit }`).
-4. **Z-Index Layering (`variables.css`)**:
-   - Modals use `z-modal` (`--z-modal: 50`), above the dashboard window (`--z-window: 20`).
-   - Dropdowns (`z-dropdown` / `--z-dropdown: 60`) and tooltips (`z-tooltip` / `--z-tooltip: 70`) must always use their higher z-index tokens so selects and tooltips inside a modal render on top of the modal card.
-
----
-
-## Zustand Rules
-
-- One store per domain, kept small (`useMarasStore`, `useModalStore`, ...).
-- **Always use selectors** — never subscribe to the whole store:
-  ```ts
-  // ✅ Re-renders only when this value changes
-  const activeModal = useModalStore((s) => s.activeModal);
-
-  // ❌ Re-renders on any change
-  const store = useModalStore();
-  ```
-- Use `useShallow` when selecting multiple values.
-- Actions live inside stores; components contain no mutation logic.
-- Never store derived data — compute in selectors.
-
----
-
-## Component Guidelines
-
-### Reusability
-- **Build primitives once, compose everywhere.** Check existing shared components before creating new ones.
-- Every reusable component must:
-  - Accept `className`, merged via `cn()`
-  - Use `React.forwardRef` where DOM access matters
-  - Define variants with **CVA** (`class-variance-authority`), not boolean props:
-    ```tsx
-    // ✅ <Panel variant="inset" size="sm" />
-    // ❌ <Panel isInset isSmall />
-    ```
-- Prefer **composition over configuration** — children/slots instead of mega-components with 15 props.
-- shadcn primitives stay unmodified where possible; Skyrim styling comes from the theme variables and thin wrapper components.
-- Icon components take size in `em` (`1em` default) so icons scale with the text they sit next to.
-
-### Performance
-- `React.memo` for list rows and frequently re-rendered leaves.
-- `useCallback` for handlers passed to memoized children.
-- Lazy-load heavy dashboard tabs with `React.lazy` + `Suspense` so opening the window is instant.
-
-### Styling
-- Tailwind utilities backed by the CSS variables; no hardcoded hex values, no hardcoded `px` sizes in components.
-- No inline `style` except dynamic `transform`/`opacity`.
-- Max **2 font files**, `woff2` only, subset to used glyphs.
-
----
-
-## Vite / Build Rules
-
-- `base: './'` in `vite.config.ts` — output must work from local/`file://` serving.
-- `variables.css` must be emitted as a **separate, un-minified, un-hashed file** in the build output so users can edit it after install:
-  - Load it via `<link rel="stylesheet" href="./variables.css">` in `index.html` and copy it through `public/` (do NOT import it into the JS bundle).
-- No source maps in shipped builds.
-- Main chunk budget: **~250KB gzipped** — flag any PR exceeding it.
-- No heavy dependencies without discussion (no moment.js, full lodash, chart or animation libraries; prefer CSS transitions).
-
----
-
-## Do / Don't Summary
-
-| ✅ Do | ❌ Don't |
-|---|---|
-| All sizes in `rem`/`em` | `px` sizes in components |
-| Tokens from `variables.css` | Hardcoded colors/sizes |
-| SVG + CSS gradients | Raster decoration images |
-| Animate `transform`/`opacity` | Animate layout or `filter` |
-| Unmount closed dashboard/tabs | `display:none` heavy trees |
-| `rgba()` translucent panels | `backdrop-filter: blur()` |
-| Zustand selectors | Whole-store subscriptions |
-| Event-driven game updates | Polling with `setInterval` |
-| Editable `variables.css` in dist | Bundling user tokens into JS |
-
----
-
-## Commands
-
-```bash
-npm run dev        # Browser dev with mocked Prisma bridge
-npm run build      # Production build (relative paths, editable variables.css)
+```powershell
+# Browser dev (mocked Prisma bridge) / Production build (relative './', editable variables.css)
+Set-Location prisma-src; npm run dev
+Set-Location prisma-src; npm run build
 ```
+
+---
+
+## 1. VRAM, DOM & Idle Budget
+
+- **VRAM & GPU**: Shares frame budget with Skyrim. Prefer SVG, CSS gradients, borders, and Unicode glyphs; if raster is unavoidable, use small compressed WebP.
+  - **Forbidden**: `backdrop-filter`, large `filter: blur()`, videos, WebGL, canvas particles, infinite animations, root/body opaque backgrounds (outside the window must be 100% transparent; backdrop dim = single `rgba()` layer).
+  - Animate **only `transform` and `opacity`** (150–250ms discrete open/close; zero idle animations).
+- **DOM & Idle**: Unmount when closed (`{isOpen && <Dashboard />}`) and unmount inactive tabs (never `display: none`). Virtualize lists `> 50` rows (`@tanstack/react-virtual`); target `< 1500` DOM nodes. Zero `setInterval` polling while closed (~0% idle CPU).
+
+---
+
+## 2. Theming & Proportional Scaling (`src/styles/variables.css`)
+
+- `variables.css` is the user-editable public contract: keep it small, plain-English commented, and stable (never rename tokens). Emit it as an **un-minified, un-hashed file** via `public/` + `<link rel="stylesheet" href="./variables.css">` in `index.html` (never bundle into JS).
+- **No `px` in components**: Use `rem` (layout) and `em` (component-local/icons, default `1em`), except optional `1px` (`0.0625rem`) hairlines and media queries.
+- `html { font-size: var(--ui-font-size); }` is the **only** place `--ui-font-size` is applied; changing it must scale the entire UI proportionally.
+- Map Tailwind theme & shadcn CSS variables (`--background`, `--primary`, etc.) to `variables.css` tokens—no hardcoded hex colors, sizes, or inline `style` (except dynamic `transform`/`opacity`). Max 2 subsetted `woff2` fonts.
+
+---
+
+## 3. Prisma Bridge, Zustand & Intrigue Mode
+
+- **Single Bridge (`src/store/prismaBridge.ts`)**: Components never touch `window.*` game APIs directly (`Game <-> prismaBridge <-> Zustand <-> Components`), with automatic browser mock fallback when outside Skyrim.
+- **Authoritative Snapshot Replacement & Intrigue Mode (`!settings.revealSecretsInUI`)**:
+  - On `receiveMARASOverview`, rebuild `rawChildren`, `rawRelationships`, and `rawCheatingRecords` fresh from the payload (never merge/clone old maps, so hidden `UNBORN_*` or removed entries never linger after toggling `revealSecretsInUI`).
+  - Client-side masking in `src/utils/childUtils.ts` (`maskChildrenMap`, `maskChildRecord`, `maskCheatingAndRelationships`) must match C++ world-wide Intrigue Mode (no `0x14` Player exemptions; omit unannounced NPC `unborn`; map `presumedFather` $\to$ `bioFather`; mask `hasBeastblood` & secret flags).
+- **Zustand**: Small domain stores (`useMarasStore`, `useModalStore`), **always select slices** (`useModalStore((s) => s.activeModal)` or `useShallow`, never whole-store `useModalStore()`), keep mutations inside store actions, and compute derived values in selectors.
+
+---
+
+## 4. Standalone Modal System (`useModalStore` & `PrismaModalHost`)
+
+- **Independent Root**: `<DashboardLayout>` (`useMarasStore.isOpen`) and `<PrismaModalHost>` (`useModalStore.activeModal !== null`) mount independently in `App.tsx`. Opening a modal must never open `<DashboardLayout>`.
+- **Non-Dismissible & Keyboard-Accessible**: No `X` button, no backdrop-click close, no `Escape` close (suppressed in capture phase unless a `<Select>` dropdown is open). Auto-focus primary button on open; support `WASD`, Arrows, `Tab`/`Shift+Tab`, and `Enter`/`Space`/`E`. Resolve solely via `submitModal(buttonId, buttonIndex, customValues)` $\to$ `sendMarasAction('modalResponse', ...)`.
+- **Declarative First**: Default `modalType: 'generic'` controls (`'infobox'`, `'checkbox'`, `'select'`, `'text'`, `'checklist'` with badges, Select All, auto-search `> 8` rows, inline row `<SelectInput />`). Register custom components in `modalRegistry.ts` only when declarative controls cannot express the layout.
+- **Z-Index**: Window `--z-window: 20` $<$ Modal `--z-modal: 50` $<$ Dropdown `--z-dropdown: 60` $<$ Tooltip `--z-tooltip: 70`.
+
+---
+
+## 5. Components & Vite Build Budget
+
+- **Components**: Reuse primitives (`className` via `cn()`, `React.forwardRef`, variants via **CVA** rather than boolean props, composition over mega-props). Use `React.memo` on list rows, `useCallback` on handlers, and `React.lazy` + `Suspense` on heavy tabs.
+- **Vite**: `base: './'`, no source maps in prod, **~250KB gzipped** main chunk cap, no heavy libs (`moment`, full `lodash`, chart/animation libs).

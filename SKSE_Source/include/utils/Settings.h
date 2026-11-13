@@ -245,6 +245,11 @@ namespace MARAS {
         }
         void SetSimulateNoSkyrimNet(bool value);
 
+        float GetSkyrimNetActionRadius() const {
+            std::shared_lock lock(settingsMutex_);
+            return skyrimnetActionRadius;
+        }
+
         // Global critter & pet banned config (supercedes per-child ban)
         bool bGlobalBanCritter = false;
         bool IsGlobalCritterBanned() const {
