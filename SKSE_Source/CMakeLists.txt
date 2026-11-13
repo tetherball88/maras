@@ -59,6 +59,34 @@ else()
     set(YAML_CPP_TARGET yaml-cpp)
 endif()
 
+# ---------------------------------------------------- #
+#     Engine-Free Layered Modules (Phase 1+ Core)      #
+# ---------------------------------------------------- #
+
+add_library(maras_foundation STATIC
+    modules/foundation/src/Logging.cpp
+)
+target_compile_features(maras_foundation PUBLIC cxx_std_23)
+target_include_directories(maras_foundation PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/foundation/include
+)
+
+add_library(maras_state STATIC
+    modules/state/src/WorldTables.cpp
+    modules/state/src/WorldState.cpp
+    modules/state/src/CoSaveCodec.cpp
+)
+target_compile_features(maras_state PUBLIC cxx_std_23)
+target_include_directories(maras_state PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/state/include
+)
+target_link_libraries(maras_state PUBLIC maras_foundation)
+
+if(MSVC)
+    set_property(TARGET maras_foundation PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET maras_state PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # Collect all source files
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "plugin.cpp"
@@ -72,6 +100,7 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 sta
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
+    maras_state
     nlohmann_json::nlohmann_json
     ${YAML_CPP_TARGET}
     ${CommonLibName}::${CommonLibName}
@@ -131,4 +160,32 @@ if(DEFINED OUTPUT_FOLDER)
             VERBATIM
         )
     endif()
+endif()
+
+# ---------------------------------------------------- #
+#   Headless Unit Tests & Engine-Free Link Gate        #
+# ---------------------------------------------------- #
+
+option(MARAS_BUILD_TESTS "Build MARAS headless unit tests" ON)
+if(MARAS_BUILD_TESTS)
+    enable_testing()
+    add_executable(maras_tests
+        tests/main.cpp
+        tests/test_cosave_migrations.cpp
+        tests/test_custody_and_death.cpp
+        tests/test_affair_ledger.cpp
+    )
+    target_compile_features(maras_tests PRIVATE cxx_std_23)
+    target_include_directories(maras_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+    # Physical LNK2019 link gate: maras_tests links ONLY maras_state and maras_foundation
+    target_link_libraries(maras_tests PRIVATE
+        maras_state
+        maras_foundation
+    )
+    if(MSVC)
+        set_property(TARGET maras_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME maras_headless_tests COMMAND maras_tests)
 endif()

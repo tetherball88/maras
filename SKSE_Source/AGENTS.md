@@ -60,35 +60,27 @@ These rules apply to all C++ headers and source files in `SKSE_Source/` (`MARAS.
 
 ---
 
-## 5. Thread Safety, Async Tasks, Prisma UI & `PrismaModalManager`
+## 5. Concurrency, `SessionEpoch`, Runtime Clones & Prisma UI
 
-- **Game Thread Execution**: Never interact with `RE::Actor` state (`EvaluatePackage`, `MoveTo`, `AddSpell`, etc.), UI, Factions, Globals, or Papyrus VM state directly from non-game threads. Always wrap calls in `SKSE::GetTaskInterface()->AddTask(...)`.
-- **Never Capture Raw Form/Actor Pointers in Async Tasks**:
-  - **NEVER** capture raw `RE::Actor*`, `RE::TESObjectREFR*`, or `RE::TESForm*` pointers by value in `SKSE::GetTaskInterface()->AddTask` lambdas, timer callbacks, or background closures—an actor may unload or be deleted before the task runs.
-  - Always capture `RE::FormID` (or `RE::ActorHandle`) by value and re-lookup/validate the pointer inside the task body on the main thread.
-- **No Detached `std::thread`s for Gameplay or Service Logic**:
-  - **NEVER** spawn `std::thread(...).detach()` to run matchmaking, LLM evaluations, or service queries that read `RE::Actor` state or service singletons.
-  - Initiate async SkyrimNet requests from the main thread using SkyrimNet's async callback mechanism and marshal callback results back via `SKSE::GetTaskInterface()->AddTask`.
-- **No Self-Referencing `std::shared_ptr` Cycles in Async Callbacks**:
-  - Never capture a `std::shared_ptr<std::function<...>>` by value inside the lambda stored in that same `shared_ptr` without explicitly resetting it (`*holder = nullptr;`) on all completion and error paths.
-- **Prisma UI Management (`PrismaUIManager`)**:
-  - Interactions with Prisma UI are encapsulated in `PrismaUIManager`. Always check `IsAvailable()` and `IsViewValid()` before invoking JavaScript routines, and always include `hasSkyrimNet` and `simulateNoSkyrimNet` in settings payloads sent by `PrismaUIDataBridge`.
-  - Dashboard visibility (`m_dashboardOpen`) and Modal visibility (`PrismaModalManager::GetSingleton().HasActiveModal()`) are coordinated by `PrismaUIManager::SyncViewVisibilityAndFocus()`. Never call raw `prismaUI->Hide(view)` or `prismaUI->Unfocus(view)` directly when a modal may be active.
-- **Prisma UI Modals (`PrismaModalManager` — `include/ui/PrismaModalManager.h`)**:
-  - **Always use `PrismaModalManager` instead of native Skyrim `RE::MessageBoxMenu` / `RE::MessageBoxData`** when building confirmation popups, retry/cancel prompts, or interactive modal dialogs.
-  - Modals automatically pause the game and focus the view with `FocusMenu` enabled (`prismaUI->Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/false)`) independently of whether the main dashboard is open. Never pass `disableFocusMenu = true` (which disables PrismaUI's Scaleform cursor/input menu and freezes the cursor).
-  - **Building & Showing a Modal**:
-    - Construct a `ModalRequest` (`title`, `subtitle`, `message`, `tone` (`ModalTone::Default / Warning / Danger / Success / Ai`), `size` (`ModalSize::Sm / Md / Lg / Xl`), `controls`, `buttons`, `defaultCancelButtonIndex`).
-    - Add declarative interactive controls via `ModalControl` builders:
-      - `ModalControl::MakeCheckbox(id, label, defaultChecked, description)`
-      - `ModalControl::MakeSelect(id, label, options, defaultValue, description)`
-      - `ModalControl::MakeTextInput(id, label, defaultValue, placeholder, description)`
-      - `ModalControl::MakeInfoBox(id, label, description, tone)`
-      - `ModalControl::MakeChecklist(id, label, items, showSelectAllToggle, description)`: each `ModalChecklistItem` supports `id`, `label`, `subtitle`, `description`, `badgeText`/`badgeTone`, `checked`, and an optional per-row inline dropdown (`selectOptions`, `selectValue`, `selectLabel`).
-    - Add buttons via `ModalButton::Make(id, label, ModalButtonVariant::Primary / Secondary / Danger / Outline / Ghost)`. To require at least $N$ items checked in a checklist before a button is enabled, set `btn.requireChecklistId` and `btn.minCheckedCount`.
-    - Call `PrismaModalManager::GetSingleton().ShowModal(std::move(req), callback)`. The `ModalCallback` (`void(const ModalResponse&)`) always executes on the **SKSE main game thread**.
-    - Read user selections from `ModalResponse`: `resp.buttonId`, `resp.buttonIndex`, `resp.aborted`, `resp.GetBool(controlId)`, `resp.GetString(controlId)`, `resp.GetCheckedItemIds(checklistId)`, `resp.GetUncheckedItemIds(checklistId)`, `resp.IsItemChecked(checklistId, itemId)`, and `resp.GetItemSelectValue(checklistId, itemId)`.
-- **Mutex Locking**: Protect shared service state with internal mutexes (`std::shared_mutex` / `std::mutex`) when accessed concurrently by Papyrus VM worker threads, SkyrimNet prompt decorators, or UI data bridge builders. Never return raw `const char*` pointers into mutex-protected internal `std::unordered_map` strings after releasing the lock.
+- **Game Thread Execution & Pointer Capture Prohibition**:
+  - Never mutate `RE::Actor` state (`EvaluatePackage`, `MoveTo`, `AddSpell`, etc.), UI, Factions, Globals, or Papyrus VM state from non-game threads; marshal via `AddCurrentEpochTask` / `AddEpochTask` (`include/core/SessionEpoch.h`).
+  - **NEVER** capture raw `RE::Actor*`, `RE::TESObjectREFR*`, or `RE::TESForm*` pointers in async task lambdas, timers, or callbacks—capture `RE::FormID` (or `RE::ActorHandle`) by value and re-lookup/validate (`!form->IsDeleted()`, `actor->IsDead()`, `actor->Is3DLoaded()`) on the main thread.
+- **`SessionEpoch` Fencing (`include/core/SessionEpoch.h`)**:
+  - Fence all async LLM callbacks, deferred main-thread tasks, and modal queues with `SessionEpoch` (`IsSessionEpochCurrent(expectedEpoch)`) so stale tasks from a prior save never execute after `Revert` / `Load`. Reset plugin/service event-sink queues (`ResetPluginEventSinks()`) *before* bumping/adopting a new session epoch.
+- **Lock Ordering Invariant (`PapyrusInterface::GetPapyrusMutex()` First)**:
+  - `PapyrusInterface::GetPapyrusMutex()` (`std::recursive_mutex`) is the outer domain perimeter lock. Acquire it at main-thread entry points (`PollingService`, `PrismaUIDataBridge::HandleAction`, `FactionService` hooks, marshaled SKSE event sinks), Papyrus natives, and SkyrimNet decorator callbacks.
+  - Leaf mutexes (`Settings::settingsMutex_`, `AdultChildTravelService::m_mutex`, `PackageOverrideService::m_mutex`, `DeceasedRegistry::mutex_`, `SkyrimNetMemoryService::mutex_`, `PrismaModalManager::m_mutex`) must **never** acquire `GetPapyrusMutex()` while held.
+  - Read `Settings` fields accessed by off-thread callers (`GetSimulateNoSkyrimNet()`, `GetSkyrimNetActionRadius()`) through `std::shared_lock`-guarded getters, and never return raw `const char*` into mutex-guarded maps after unlock.
+- **Background Thread & Loader-Lock Safety**:
+  - **NEVER** spawn `std::thread(...).detach()` for gameplay, matchmaking, or service logic (use `PollingService` ticks + async SkyrimNet callbacks), and **NEVER** call `AddUITask` when `AddTask` suffices.
+  - **NEVER** blockingly `join()` a worker `std::thread` / `std::jthread` inside a static singleton destructor (deadlocks under Windows `LdrpLoaderLock` during `ExitProcess`); isolate queue state in `std::shared_ptr` and call `request_stop()` + `detach()` on shutdown.
+  - Never create self-referencing `std::shared_ptr` cycles in async callback holders.
+- **Runtime-Cloned Engine Forms (`AdultChildProgression`)**:
+  - When cloning `RE::TESNPC` via `RE::malloc`, deep-clone raw pointer sub-arrays (`TESNPC::keywords` via `RE::calloc<RE::BGSKeyword*>`) so keyword mutations never free shared template heap memory.
+  - Before reverting `actor->SetObjectReference(origNpc)`, verify `!actor->IsDeleted() && actor->GetObjectReference() == cloneNpc` (preventing recycled `0xFF` FormID clobbering), and retire unlinked cloned `TESNPC`/`TESClass` forms into a deferred list flushed post-load (`FlushRetiredForms()`) rather than calling `RE::free` inside `RevertCallback` before engine GC.
+- **Prisma UI & `PrismaModalManager` (`include/ui/PrismaModalManager.h`)**:
+  - Coordinate view visibility and focus exclusively through `PrismaUIManager::SyncViewVisibilityAndFocus()` (checking `IsAvailable()` / `IsViewValid()`); never call raw `Hide` or `Unfocus` while `PrismaModalManager::HasActiveModal()` is true.
+  - Always use `PrismaModalManager` (never native `RE::MessageBoxMenu`) with `Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/false)`. See [docs/modder/services/PrismaModalManager.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PrismaModalManager.md) for declarative `ModalRequest` / `ModalControl` builders.
 
 ---
 
@@ -105,25 +97,29 @@ These rules apply to all C++ headers and source files in `SKSE_Source/` (`MARAS.
 
 ---
 
-## 7. Unloaded Actors & Deferred Resolution
+## 7. Unloaded Placed NPCs, Dynamic `0xFF` Actors & Deferred Resolution
 
-- NPCs in Skyrim may not have their 3D loaded or scripts initialized (`!actor->IsInitialized()`) when a save loads or when global background matchmaking runs.
-- Never silently drop relationship or child updates when `RE::TESForm::LookupByID<RE::Actor>(formID)` is unloaded. Use `NPCRelationshipManager`'s deferred resolution queues (`pendingRelationshipsByBaseID` and `pendingChildrenByBaseID`, persisted inline in `'NPCR'`), which flush automatically on `TESInitScriptEvent` and `TESObjectLoadedEvent` (`TryResolveForActor`).
+- **Unloaded Non-`0xFF` Placed NPCs**: Non-persistent exterior/interior placed `ACHR` references can return `nullptr` from `RE::TESForm::LookupByID` while their cell is unloaded. Always use `ActorSvc::IsValid(formID)` / `ActorSvc::GetActorBase(formID)` / `HomeCellService` FormID overloads (which fall back to `NPCIndex`) so unloaded spouses, tenants, hierarchy ranks, shared homes, and affection scores are never wiped on load or status transitions.
+- **Dynamic `0xFFxxxxxx` Spawned Actors vs. Synthetic Child IDs**:
+  - Dynamically spawned `PlaceAtMe` actors (`(id >> 24) == 0xFF && !IsSyntheticChildID(id)`) exist in `TESForm::LookupByID` whenever alive in the save; if missing or `form->IsDeleted()`, prune them during `FinalizeLoad()`.
+  - In `DeceasedRegistry`, key dynamic `0xFF` actors by unique `RefID` (never shared template `BaseID`, which would mark all FMR/spawned siblings deceased when one dies).
+- **Deferred Queues**: Use `NPCRelationshipManager`'s `pendingRelationshipsByBaseID` and `pendingChildrenByBaseID` (persisted inline in `'NPCR'`) when base-ID registrations await placed-actor initialization (`TESInitScriptEvent` / `TESObjectLoadedEvent`).
 
 ---
 
-## 8. SKSE Co-Save Serialization (`'MARS'` v4), `Revert()` & FormID Resolution
+## 8. SKSE Co-Save Serialization (`'MARS'` v7), Two-Phase `FinalizeLoad` & `Revert()`
 
-All persistent state is serialized in `src/core/Serialization.cpp` under UID `'MARS'` (`kDataVersion = 4`):
+All persistent state is serialized in `src/core/Serialization.cpp` under UID `'MARS'` (`kDataVersion = 7`):
 
-1. **Backward Save Compatibility**: Existing player co-saves (`v1`–`v4`) **must** continue to load cleanly. When adding new fields to any of the 11 top-level chunk types (`NPCR`, `SPHR`, `AFCT`, `PHOU`, `SPAS`, `PLCH`, `CFSN`, `MKMK`, `DCSD`, `BNTR`, `CNFG`), bump `kDataVersion` (or the chunk's internal sub-version) and guard new `ReadRecordData` calls with version checks.
-2. **Complete `Revert()` Parity**: Every stateful container, cache, cooldown map, timer, or `static` tracking variable in any service or UI class (`NPCRelationshipManager`, `PollingService`, `ConfirmationModal`, `PrismaUIDataBridge`, `BanterCoordinatorService`, `IntimateThreadService`, etc.) **must** be cleared in `RevertCallback` so state never bleeds from Save A into Save B.
-3. **Mandatory `ResolveFormID` on All Persisted FormIDs**: Every persisted non-synthetic `RE::FormID`—including nested fields inside structs (`PairRelationshipData`, `StatusTransitionRecord`, `CheatingRecord`, `ChildRegistryEntry`, `SpouseAssetsService`, `BanterCoordinatorService`, `MatchmakingService`)—**must** pass through `a_intfc->ResolveFormID(oldID, resolvedID)` during `Load()`.
-4. **Synthetic Child FormIDs (`0xFF700000`–`0xFF7FFFFF`)**:
-   - Biological children registered before a physical `RE::Actor` exists use synthetic FormIDs (`NPCRelationshipManager::IsSyntheticChildId`).
-   - Any C++ code resolving `RE::FormID` to `RE::Actor*` or calling `a_intfc->ResolveFormID(oldID, resolvedID)` during co-save loading **must** check `IsSyntheticChildId(id)` first and never pass synthetic IDs to `TESForm::LookupByID` or SKSE form resolution.
-5. **Bounded Deserialization & `ReadRecordData` Checks**: Always check the `bool` return value of `a_intfc->ReadRecordData(...)` and enforce a sanity cap before calling `.resize(count)` on vectors or strings read from a co-save stream.
-6. **Deterministic Load Order**: Keep `NPCR` (which includes relationship pairs, deferred queues, and the child registry) loading before dependent services (`SPHR`, `AFCT`, `PHOU`, `PLCH`).
+1. **Backward Save Compatibility (`v1`–`v7`)**: Existing player co-saves **must** load without data loss across all 12 top-level chunks (`NPCR`, `SPHR`, `AFCT`, `PHOU`, `SPAS`, `PLCH`, `CFSN`, `MKMK`, `DCSD`, `BNTR`, `ACTR`, `CNFG`). Bump `kDataVersion` (or chunk sub-version) and guard new `ReadRecordData` calls with version checks when changing binary layouts.
+2. **Atomic Deserialization & Bounded Counts**: Enforce a `kMaxEntries` sanity cap before `.resize(count)` / `.reserve(count)` and check every `ReadRecordData(...)` return value. **Never** `break;` mid-loop on a truncated/corrupt stream—immediately `Revert()` the service and `return false;` so misaligned trailing bytes are never parsed into bogus state.
+3. **Two-Phase Load (`Load()` $\to$ `FinalizeLoad()`)**:
+   - **Phase 1 (`Load()`)**: Pure per-service chunk deserialization + `ResolveFormID`. Never query other services (such as `NPCRelationshipManager` or `DeceasedRegistry`) or require loaded `RE::Actor*` pointers inside `Load()`, and keep `PlayerChildrenService::Load` (`'PLCH'`) independent of `'CFSN'` (`factionSnapshots_`).
+   - **Phase 2 (`FinalizeLoad()`)**: Executed in `LoadCallback` after all 12 chunks finish loading to prune deceased/orphaned `0xFF` entries, reconcile factions/bed ownership on loaded refs, run `SpouseHierarchyManager::FillGaps`, and rebuild `PackageOverrideService` (mapping actively traveling Stage 4 `Adult` offspring to `0xDD3`, not young-child `0x376`).
+4. **Complete, Engine-Safe `Revert()` Parity**: Every stateful container, cache, cooldown map, polling timer (`PollingService::Reset()`), and `static` tracker must reset in `RevertCallback`. Service `Revert()` methods called during `RevertGlobalData` / `Load` must clear C++ containers only without mutating engine factions or ownership on partially torn-down forms.
+5. **Mandatory `ResolveFormID` & Synthetic Child Pool (`0xFF700000`–`0xFF7FFFFF`)**:
+   - Pass every persisted non-synthetic `RE::FormID` through `a_intfc->ResolveFormID(oldID, resolvedID)` (preserving explicit `0` sentinels where `0` means "unowned/none", e.g. `SpouseAssetsService::originalBedOwners_`).
+   - Check `IsSyntheticChildID(id)` (`0xFF700000`–`0xFF7FFFFF`) before `ResolveFormID` or `TESForm::LookupByID`, and **never** advance `nextSyntheticChildID_` from real `0xFF800000+` spawned actor FormIDs.
 
 ---
 

@@ -33,6 +33,7 @@
 #include "core/SkyrimNetProfileService.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
+#include "core/WorldStateBridge.h"
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -342,6 +343,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     SKSE::Init(skse);
 
     SetupLogging();
+    MARAS::WorldStateBridge::InitializeFoundationLogSink();
     MARAS_LOG_INFO("MARAS plugin loading...");
 
     // Register serialization callbacks
