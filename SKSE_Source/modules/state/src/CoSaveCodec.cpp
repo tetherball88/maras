@@ -1133,7 +1133,7 @@ namespace MARAS::State {
                     RelationshipEdgeRecord edge{};
                     edge.pair = CanonicalPairKey{ npcActor, ActorId::Player() };
                     edge.status = static_cast<RelationshipStatus>(rawStatus);
-                    edge.originalStatus = RelationshipStatus::Candidate;
+                    edge.originalStatus = RelationshipStatus::Unknown;
                     if (engDate != 0) {
                         edge.statusHistory.push_back(StatusTransitionEntry{
                             .fromStatus = RelationshipStatus::Candidate,
@@ -2941,8 +2941,8 @@ namespace MARAS::State {
         //    (Preserves unloaded placed NPCs while pruning deceased / orphaned dynamic IDs!)
         {
             std::vector<std::uint32_t> tenantsToEvict;
+            std::vector<std::uint32_t> youngChildTenantsToPinHome;
             for (const auto& [tid, assignment] : state.household->AllTenants()) {
-                (void)assignment;
                 if (tid == 0 || tid == Foundation::kPlayerRefRawId || isOrphanedDynamicRaw(tid)) {
                     tenantsToEvict.push_back(tid);
                     continue;
@@ -2951,29 +2951,50 @@ namespace MARAS::State {
                     const auto* cRec = state.lineage->FindChild(ChildId{ tid });
                     if (!cRec || cRec->stage == ChildStage::Adult) {
                         tenantsToEvict.push_back(tid);
+                    } else if (!assignment.stayAtHome) {
+                        youngChildTenantsToPinHome.push_back(tid);
                     }
                     continue;
                 }
                 const ActorId tActor{ tid };
                 if (state.deceased->IsDeceased(tActor) || !resolver.IsAliveAndValid(tActor)) {
                     tenantsToEvict.push_back(tid);
-                } else if (const auto* cRec = state.lineage->FindChild(ChildId{ tid });
-                           cRec != nullptr && cRec->stage == ChildStage::Adult) {
-                    tenantsToEvict.push_back(tid);
+                    continue;
+                }
+                if (const auto* cRec = state.lineage->FindChild(ChildId{ tid });
+                    cRec != nullptr && cRec->stage != ChildStage::Adult && !assignment.stayAtHome) {
+                    youngChildTenantsToPinHome.push_back(tid);
                 }
             }
             for (const std::uint32_t tid : tenantsToEvict) {
                 state.household.Write().EvictTenant(tid);
                 result.changed = true;
             }
+            for (const std::uint32_t tid : youngChildTenantsToPinHome) {
+                state.household.Write().SetTenantStayAtHome(tid, true);
+                result.changed = true;
+            }
 
             // Reconcile PLCH childStates <-> PHOU tenantOrder regardless of arrival order
+            // Matches PlayerChildrenService::FinalizeLoad: preserves pre-v5 physical PLCH children (cRec == nullptr)
+            // and never evicts adult/step-child PHOU tenants when pruning a stale PLCH child record.
             std::vector<ChildId> staleChildStates;
             std::vector<std::pair<ChildId, HouseId>> childHouseRepairs;
             for (const auto& [cId, cState] : state.household->AllChildStates()) {
                 const auto* cRec = state.lineage->FindChild(cId);
-                if (!cRec || cRec->stage == ChildStage::Adult || cRec->stage == ChildStage::Unborn ||
-                    !cRec->guardians.HasGuardian(ActorId::Player())) {
+                bool shouldPrune = false;
+                if (cId.IsNull() || cId.raw() == Foundation::kPlayerRefRawId) {
+                    shouldPrune = true;
+                } else if (cId.IsSynthetic()) {
+                    shouldPrune = (cRec == nullptr || cRec->stage == ChildStage::Adult);
+                } else if (isOrphanedDynamicRaw(cId.raw()) ||
+                           state.deceased->IsDeceased(cId.AsActorId()) ||
+                           !resolver.IsAliveAndValid(cId.AsActorId()) ||
+                           (cRec != nullptr && (cRec->stage == ChildStage::Adult || cRec->stage == ChildStage::Unborn))) {
+                    shouldPrune = true;
+                }
+
+                if (shouldPrune) {
                     staleChildStates.push_back(cId);
                     continue;
                 }
@@ -2989,7 +3010,6 @@ namespace MARAS::State {
                 }
             }
             for (const ChildId cId : staleChildStates) {
-                state.household.Write().EvictTenant(cId.raw());
                 state.household.Write().EraseChildState(cId);
                 result.changed = true;
             }
