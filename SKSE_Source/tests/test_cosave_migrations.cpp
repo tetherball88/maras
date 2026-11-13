@@ -452,6 +452,7 @@ namespace MARAS::Tests {
             MARAS_CHECK(state.IsMarried(ActorId::Player(), remappedSpouse));
             const auto* edge = state.relationships->FindEdge(ActorId::Player(), remappedSpouse);
             MARAS_REQUIRE(edge != nullptr);
+            MARAS_CHECK_EQ(edge->originalStatus, RelationshipStatus::Unknown);
             MARAS_REQUIRE_EQ(edge->statusHistory.size(), std::size_t{ 2 });
             MARAS_CHECK_EQ(edge->statusHistory[0].toStatus, RelationshipStatus::Engaged);
             MARAS_CHECK_EQ(edge->statusHistory[0].timestamp, 12.0f);
@@ -832,6 +833,61 @@ namespace MARAS::Tests {
         MARAS_CHECK(state.deceased.SharesAllocationWith(snap.deceased));
         MARAS_CHECK(state.cooldowns.SharesAllocationWith(snap.cooldowns));
         MARAS_CHECK(state.settings.SharesAllocationWith(snap.settings));
+    }
+
+    MARAS_TEST(CoSaveMigrations, LegacyV4PhysicalChildAndAdultChildSpouseTenantParity) {
+        MockFormIdResolver resolver{};
+        const HouseId breezehome{ 0x000165A2u };
+        const ChildId legacyV4Child{ 0x0001B141u };   // Vanilla child in PLCH + PHOU prior to v5 LineageTable
+        const ChildId gradSpouseChild{ 0xFF800555u }; // NPC couple's graduated Stage 4 Adult Child who married Player
+        const ActorId npcParentA{ 0x00030010u };
+        const ActorId npcParentB{ 0x00030020u };
+
+        WorldState src{};
+        src.household.Write().RegisterHouse(breezehome, RefId{ 0x000165B0u }, true);
+        src.household.Write().AssignTenant(legacyV4Child.raw(), breezehome, true, true);
+        src.household.Write().AssignTenant(gradSpouseChild.raw(), breezehome, /*stayAtHome=*/false, false);
+
+        if (auto* v4State = src.household.Write().FindChildStateMutable(legacyV4Child)) {
+            v4State->petId = RefId{ 0x00090011u };
+            v4State->playedScene1 = true;
+        }
+        // Also simulate a stale PLCH entry for gradSpouseChild to verify pruning PLCH does NOT evict PHOU!
+        src.household.Write().UpsertChildState(ChildHouseholdRecord{
+            .childId = gradSpouseChild,
+            .currentHouseId = breezehome,
+        });
+
+        ChildRecord gradRec{};
+        gradRec.childId = gradSpouseChild;
+        (void)gradRec.guardians.Assign(npcParentA, npcParentB);
+        gradRec.bioMother = npcParentB;
+        gradRec.bioFather = npcParentA;
+        gradRec.name = "GrownNpcChild";
+        gradRec.stage = ChildStage::Adult;
+        src.lineage.Write().UpsertChild(gradRec);
+        (void)src.PromoteToMarried(ActorId::Player(), gradSpouseChild.AsActorId(), 30.0f, ActorId::Player(), resolver);
+
+        InMemoryCoSaveWriter writer{};
+        MARAS_REQUIRE(SaveWorldState(src, writer));
+
+        WorldState loaded{};
+        InMemoryCoSaveReader reader(writer.Records());
+        const CoSaveLoadReport report = LoadWorldState(loaded, reader, resolver);
+        MARAS_REQUIRE(report.allChunksSucceeded);
+
+        // 1. Legacy v4 physical child without LineageTable entry survives in both PLCH and PHOU
+        const auto* loadedV4State = loaded.household->FindChildState(legacyV4Child);
+        MARAS_REQUIRE(loadedV4State != nullptr);
+        MARAS_CHECK_EQ(loadedV4State->currentHouseId, breezehome);
+        MARAS_CHECK_EQ(loadedV4State->petId, RefId{ 0x00090011u });
+        MARAS_CHECK(loadedV4State->playedScene1);
+        MARAS_CHECK_EQ(loaded.household->GetTenantHouse(legacyV4Child.raw()), breezehome);
+
+        // 2. Graduated Stage 4 Adult Child spouse is pruned from PLCH but NEVER evicted from PHOU
+        MARAS_CHECK(loaded.household->FindChildState(gradSpouseChild) == nullptr);
+        MARAS_CHECK_EQ(loaded.household->GetTenantHouse(gradSpouseChild.raw()), breezehome);
+        MARAS_CHECK(!loaded.household->GetTenantStayAtHome(gradSpouseChild.raw()));
     }
 
 }  // namespace MARAS::Tests
