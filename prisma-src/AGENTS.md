@@ -68,6 +68,9 @@ All user-tweakable design tokens live in a single file: **`src/styles/variables.
   ```
 - The bridge must detect a plain browser (`npm run dev`) and fall back to **mock data**, so the dashboard and modals are fully developable without launching Skyrim.
 - Dashboard open/close (`window.openMARAS` / `window.closeMARASView`) and standalone Modal display (`window.showMARASModal` / `window.clearMARASModal`) are independent roots in `App.tsx`.
+- **Intrigue Mode (`!settings.revealSecretsInUI`) & Authoritative Snapshot Replacement**:
+  - When `receiveMARASOverview` arrives in `useMarasStore`, rebuild collection maps (`rawChildren`, `rawRelationships`, `rawCheatingRecords`) strictly from the incoming payload rather than cloning the prior map—otherwise entries omitted under Intrigue Mode (such as unannounced NPC `UNBORN_*` pregnancies or removed children) linger as stale ghosts after a live `revealSecretsInUI: true -> false` toggle.
+  - Client-side masking in `src/utils/childUtils.ts` (`maskChildrenMap`, `maskChildRecord`, `maskCheatingAndRelationships`) must maintain exact parity with C++ world-wide Intrigue Mode semantics (no Player `0x14` exemptions, omitting unannounced non-player `unborn` entries, mapping `presumedFather` $\to$ `bioFather`, and masking `hasBeastblood` and secret flags).
 
 ---
 

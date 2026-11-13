@@ -56,7 +56,8 @@ These rules apply to all Papyrus scripts (`.psc`) in `Scripts/Source/`. They sup
 ## 4. Event-Driven Architecture via `TTM_MainController.psc`
 
 - Avoid creating new `RegisterForUpdate` / `OnUpdate` polling loops in Papyrus scripts. Periodic background polling belongs in C++ (`PollingService`).
-- Subscribe to SKSE `ModCallbackEvent` notifications in `TTM_MainController.psc` (`MARAS_StatusChanged`, `MARAS_AffectionChanged`, `MARAS_HierarchyChanged`, `MARAS_HouseAssigned`, `MARAS_CaughtCheating`, `MARAS_ActionDeclined`, `MARAS_ChildUpdated`) and route to the appropriate `TTM_Service*` script.
+- Subscribe to SKSE `ModCallbackEvent` notifications in `TTM_MainController.psc` (`maras_status_changed`, `maras_affection_changed`, `maras_hierarchy_changed`, `maras_house_assigned`, `maras_caught_cheating`, `maras_action_declined`, `maras_child_updated`) and route to the appropriate `TTM_Service*` script.
+- **Unloaded Actor Sender Fallback**: When an NPC's `RE::Actor*` is unloaded in C++, `SendStatusChangedEvent` dispatches `maras_status_changed` with `PlayerRef` as the `ModCallbackEvent` sender so the event is never dropped. Always resolve the partner via the passed FormID parameter (`Form` / `Int`) rather than assuming `akSender` is the NPC, and remember `OnRelationshipChangedFull` already triggers `TTM_ServiceBuff.Maintenance()` whenever `sendEvent == true`.
 
 ---
 
@@ -94,5 +95,4 @@ Household children assigned to `ChildLogic` (`0xC25`) and `ChildrenSandbox` (`0x
 
 - **MCM Deprecated**: Mod Configuration Menu (MCM) settings (`TTM_MCM_SettingsPage.psc`) are **deprecated** and retained solely for save backward compatibility. Do **NOT** add new MCM settings or UI fields; all new settings must be integrated into the Prisma UI dashboard instead.
 - **Fertility Integration**:
-  - **Fertility Mode Reloaded (FMR)** (`TTM_ServiceFertility.psc`) is the active, supported fertility integration.
   - **Fertility Mode Reloaded (FMR)** (`TTM_ServiceFertilityFMR.psc`) and **Beeing Female NG** (`TTM_ServiceFertilityBF.psc`) are both active, supported fertility integrations routed through `TTM_ServiceFertility.psc`. Keep both integrations synchronized whenever modifying pregnancy, birth, custody, or child-spawning logic.

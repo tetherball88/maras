@@ -26,8 +26,9 @@ For detailed system architecture, consult:
 ## 1. Core Cross-Layer Domain Rules
 
 ### Single Source of Truth (C++ Owns State, Factions Mirror State)
-- Relationship statuses, affection scores, hierarchy ranks, housing assignments, and child records are owned by the C++ services (`NPCRelationshipManager`, `AffectionService`, `SpouseHierarchyManager`, `PlayerHouseService`, `PlayerChildrenService`) and persisted in the `'MARS'` v4 SKSE co-save.
+- Relationship statuses, affection scores, hierarchy ranks, housing assignments, and child records are owned by the C++ services (`NPCRelationshipManager`, `AffectionService`, `SpouseHierarchyManager`, `PlayerHouseService`, `PlayerChildrenService`) and persisted in the `'MARS'` v7 SKSE co-save.
 - `TT_MARAS.esp` factions (`0x7`, `0x111`, `0x119`, `0x6C`, `0xC23`, etc.) exist as **engine mirrors** so Creation Kit dialogue conditions, AI packages, and Story Manager nodes can evaluate state natively. Never treat faction rank alone as authoritative state when C++ APIs are available.
+- **Strict Command-Query Separation (CQS)**: Query snapshots, UI bridge payloads (`SendOverviewData`, `SendNPCList`, `SendNPCDetail`), JSON/message builders (`Build*Json`, `DumpJson`), and SkyrimNet prompt decorators (`ttm_*`) **must** be strictly read-only—never mutate domain state, custody, actor registrations, or record memories as a side effect of reading or formatting data.
 
 ### Pair-Keyed Relationship Symmetry vs. Asymmetry
 - Romantic statuses (`Dating`, `Lover`, `Engaged`, `Married`, `ExDating`, `ExLover`, `Jilted`, `Divorced`) are stored on a canonical `PairKey(actorA, actorB)` where `min(A, B)` is first.
@@ -42,9 +43,12 @@ For detailed system architecture, consult:
   - **Bio Parents**: Genetic lineage only. Never conflate with guardians.
 - **Adoption (`isAdopted`)**: Represents an explicit adoption process into a household. Never infer `isAdopted` from presence, absence, or count of guardians.
 
-### Perspective-Bound Secret Masking (Infidelity & Paternity Secrets)
-- When building prompt decorators (`ttm_npc_relationship_profile`), dialogue context, or any perspective-bound payload for a specific actor (including the Player when the Player is the deceived partner or unaware bio-father), **never leak undiscovered secrets** (`isSecretForPartner`, `isSecretForBioFather`, or undiscovered `CheatingRecord`s) when that actor is not privy to the secret (`!canActorKnow`).
-- All derived lineage and role fields (such as `bio_father`, `biological_parents`, `step_parents`, `is_actor_bio_parent`, `is_actor_step_parent`) **must** reflect what the perspective actor *believes* to be true (i.e. presenting the deceived partner as the biological parent) until the secret is discovered.
+### Secret Masking Semantics (Perspective-Bound AI vs. World-Wide Intrigue Mode)
+- **SkyrimNet Prompts & AI Memories (Perspective-Bound + `dialogue_target` Public Isolation)**:
+  - **Self-Perspective (`render_mode != "dialogue_target"`)**: When building `ttm_npc_relationship_profile`, action candidate lists, or episode memory contexts (`SkyrimNetMemoryService`) for a specific actor (including the Player when deceived or unaware), **never leak undiscovered secrets** (`isSecretForPartner`, `isPregnancySecretForPartner`, `isSecretForBioFather`, secret werewolf `hasBeastblood`, or undiscovered `CheatingRecord`s) when `!canActorKnow`. All derived lineage/role fields (`bio_father`, `biological_parents`, `step_parents`, `siblings`, `is_actor_bio_parent`, `is_actor_step_parent`) must reflect what that actor *believes* to be true.
+  - **Target Bio (`render_mode == "dialogue_target"`)**: Represents **public knowledge** about the target actor when rendered into *another* speaker's prompt. Never expose active undiscovered affairs (`is_secret_affair` in current or past relationships), secret paternity (`has_undiscovered_paternity_secret`, `is_paternity_secret`, `is_other_parent_secret`), secret `siblings` (use `siblings_public`), or `has_beastblood` in `dialogue_target` mode—even when the target actor personally knows the secret.
+- **Prisma UI Dashboard & Diagnostic Dumps — Intrigue Mode (`!Settings::revealSecretsInUI`)**:
+  - Intrigue Mode enforces **uniform world-wide secret masking** across the entire Dashboard and JSON data dumps: *no* undiscovered affair, secret paternity, secret werewolf inheritance (`hasBeastblood` without a visible werewolf parent), or unannounced NPC pregnancy is magically revealed in the UI—including secrets involving the Player (`0x14`)—until discovered in-game or `revealSecretsInUI` is toggled on. Do **not** add `0x14` Player exemptions to UI masking.
 
 ### Cross-Layer Settings Synchronization
 - Whenever adding, removing, or renaming a configuration setting in `Settings.h`, you **MUST** update all persistence and bridge endpoints in the same change:

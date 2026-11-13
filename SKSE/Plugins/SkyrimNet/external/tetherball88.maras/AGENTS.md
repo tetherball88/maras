@@ -16,13 +16,22 @@ These rules apply to all files in `SKSE/Plugins/SkyrimNet/external/tetherball88.
 
 ---
 
-## 2. Prompt Templates (`prompts/`)
+## 2. Prompt Templates (`prompts/`) & `dialogue_target` Secret Isolation
 
 - **Decorator-First Data Access**:
   - Never hardcode relationship states, archetypes, or family assumptions in `.prompt` files.
-  - Always query runtime state via the C++ decorators registered in `SKSE_Source/src/core/SkyrimNetIntegration.cpp` (such as `maras_is_enabled()`, `maras_get_actor_summary(actor)`, `maras_get_all_relationships(actor)`, `maras_get_affair_secrets(actor)`, `maras_get_children_info(actor)`, `maras_get_household_context(actor)`, `maras_get_marriage_difficulty(actor)`, `maras_get_deceased_partners(actor)`).
-- **Guard with `maras_is_enabled`**:
-  - Top-level prompt submodules (`submodules/character_bio/0450_maras_character_bio.prompt`, `submodules/guidelines/0900_maras_guidelines.prompt`) must remain wrapped in `{% if maras_is_enabled() %}` so nothing is emitted if M.A.R.A.S is inactive.
+  - Always query runtime state via the C++ decorators registered in `SKSE_Source/src/core/SkyrimNetIntegration.cpp` (`ttm_is_registered(actorUUID)`, `ttm_npc_relationship_profile(actorUUID)`, `ttm_get_*_candidates(actorUUID)`, etc.).
+- **Guard Submodules with `ttm_is_registered(actorUUID)`**:
+  - Character bio and relationship submodules (`submodules/character_bio/0602_maras_relations.prompt`, `submodules/maras_relations/*.prompt`) must guard actor lookups with `{% if ttm_is_registered(actorUUID) %}` so unregistered actors emit nothing.
+- **Strict `render_mode == "dialogue_target"` Public-Knowledge Isolation**:
+  - In SkyrimNet, `render_mode != "dialogue_target"` builds `actorUUID`'s **own** private bio, whereas `render_mode == "dialogue_target"` describes `actorUUID` **to another speaker** (public knowledge only).
+  - Even when `actorUUID` personally knows an active secret (e.g., a cheating partner, affair paramour, aware biological mother, or household-aware child), `render_mode == "dialogue_target"` **MUST NEVER** leak:
+    - Secret affairs (`is_secret_affair` in `0030_partners.prompt` and `0040_ex_partners.prompt`, avoiding empty section headers when all entries are filtered).
+    - Undiscovered custodial/adopted paternity secrets (`has_undiscovered_paternity_secret`, `"stepdaughter"`/`"stepson"`, `step_parents`, or secret `bio_father` in `0020_children.prompt` and `0001_child_bio.prompt`—watch `elif` fallthroughs!).
+    - Non-custodial secret paternity (`is_paternity_secret` and `is_other_parent_secret` in `0020_children.prompt`, substituting `public_other_parent` when present).
+    - Secret half-siblings or lycanthropy (`0001_child_bio.prompt` must use `parents.siblings_public` in `dialogue_target` mode and keep `has_beastblood` gated to `render_mode != "dialogue_target"`).
+- **Unannounced Pregnancy Candidates in Action Prompts**:
+  - When an action candidate (such as `maras_action_discover_child_paternity.prompt` for a Female Player confession) carries an `UNANNOUNCED` tag, the prompt must explicitly instruct `{{speakingNpc.name}}` that they have **zero prior knowledge** of the pregnancy unless the mother explicitly confesses/reveals it in the current exchange.
 - **Relative Template Includes**:
   - Internal template `render_template(...)` or include calls resolve relative to `prompts/`.
 
