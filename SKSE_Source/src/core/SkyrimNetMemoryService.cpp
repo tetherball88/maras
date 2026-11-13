@@ -11,6 +11,7 @@
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
+#include "utils/ActorUtils.h"
 #include "utils/EnumUtils.h"
 #include "utils/JsonService.h"
 #include "utils/Settings.h"
@@ -702,16 +703,16 @@ namespace MARAS {
                     RE::FormID bioFatherID = relMgr.GetBioFather(childID);
                     RE::FormID explicitPresumed = relMgr.GetPresumedFather(childID);
                     RE::FormID partnerID = explicitPresumed != 0 ? explicitPresumed : relMgr.GetMotherPartner(childID);
-                    if (partnerID != 0 && bioFatherID != 0 && relMgr.MatchesActor(bioFatherID, partnerID)) {
+                    if (partnerID != 0 && bioFatherID != 0 && Utils::MatchesActor(bioFatherID, partnerID)) {
                         continue;
                     }
 
                     bool canKnow = false;
-                    if (motherID != 0 && relMgr.MatchesActor(ap.formID, motherID)) {
+                    if (motherID != 0 && Utils::MatchesActor(ap.formID, motherID)) {
                         canKnow = true;
-                    } else if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && relMgr.MatchesActor(ap.formID, bioFatherID)) {
+                    } else if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && Utils::MatchesActor(ap.formID, bioFatherID)) {
                         canKnow = !sec.isSecretForBioFather || sec.discoveredByBioFather;
-                    } else if (partnerID != 0 && (motherID == 0 || !relMgr.MatchesActor(partnerID, motherID)) &&
+                    } else if (partnerID != 0 && (motherID == 0 || !Utils::MatchesActor(partnerID, motherID)) &&
                                (sec.isSecretForPartner || explicitPresumed != 0)) {
                         canKnow = !sec.isSecretForPartner || sec.discoveredByPartner;
                     } else {
