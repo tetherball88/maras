@@ -19,6 +19,7 @@
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIManager.h"
+#include "utils/ActorUtils.h"
 #include "utils/FormUtils.h"
 #include "utils/EnumUtils.h"
 #include "utils/Settings.h"
@@ -234,8 +235,8 @@ namespace MARAS {
             }
             RE::FormID partnerID = relMgr.GetMotherPartner(entry.childID);
             if (partnerID == 0 ||
-                relMgr.MatchesActor(partnerID, entry.bioMotherID) ||
-                (entry.bioFatherID != 0 && relMgr.MatchesActor(partnerID, entry.bioFatherID))) {
+                Utils::MatchesActor(partnerID, entry.bioMotherID) ||
+                (entry.bioFatherID != 0 && Utils::MatchesActor(partnerID, entry.bioFatherID))) {
                 return 0;
             }
             return partnerID;
