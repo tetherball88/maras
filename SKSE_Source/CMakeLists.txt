@@ -76,6 +76,7 @@ add_library(maras_state STATIC
     modules/state/src/WorldState.cpp
     modules/state/src/WorldStore.cpp
     modules/state/src/CoSaveCodec.cpp
+    modules/state/src/SpatialActorSnapshot.cpp
 )
 target_compile_features(maras_state PUBLIC cxx_std_23)
 target_include_directories(maras_state PUBLIC
@@ -83,9 +84,20 @@ target_include_directories(maras_state PUBLIC
 )
 target_link_libraries(maras_state PUBLIC maras_foundation)
 
+add_library(maras_projection STATIC
+    modules/projection/src/PerspectiveLens.cpp
+)
+target_compile_features(maras_projection PUBLIC cxx_std_23)
+target_include_directories(maras_projection
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/projection/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/projection/src
+)
+target_link_libraries(maras_projection PUBLIC maras_state)
+
 if(MSVC)
     set_property(TARGET maras_foundation PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET maras_state PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET maras_projection PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 # Collect all source files
@@ -101,6 +113,7 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 sta
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
+    maras_projection
     maras_state
     nlohmann_json::nlohmann_json
     ${YAML_CPP_TARGET}
@@ -176,13 +189,15 @@ if(MARAS_BUILD_TESTS)
         tests/test_custody_and_death.cpp
         tests/test_affair_ledger.cpp
         tests/test_world_store.cpp
+        tests/test_perspective_lens.cpp
     )
     target_compile_features(maras_tests PRIVATE cxx_std_23)
     target_include_directories(maras_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
-    # Physical LNK2019 link gate: maras_tests links ONLY maras_state and maras_foundation
+    # Physical LNK2019 link gate: maras_tests links ONLY maras_projection, maras_state, and maras_foundation
     target_link_libraries(maras_tests PRIVATE
+        maras_projection
         maras_state
         maras_foundation
     )

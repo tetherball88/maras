@@ -29,6 +29,7 @@ namespace MARAS {
         PollingService() = default;
 
         // Polling logic
+        void PublishSpatialSnapshot();
         void CheckTeammateChanges();
         void CheckDayChanged();
         void CheckPlayerLevelChanged();
@@ -43,6 +44,7 @@ namespace MARAS {
         void SendDayChangeEvent(float newDay);
 
         // Timing
+        TimePoint lastSpatialSnapshot_{};
         TimePoint lastTeammateCheck_{};
         TimePoint lastDayCheck_{};
         TimePoint lastChildOrderCheck_{};
@@ -53,6 +55,7 @@ namespace MARAS {
         std::uint16_t previousPlayerLevel_ = 0;
 
         // Intervals (in milliseconds)
+        static constexpr std::chrono::milliseconds kSpatialSnapshotInterval{500};   // 2 Hz
         static constexpr std::chrono::milliseconds kTeammateCheckInterval{15000};  // 15 seconds
         static constexpr std::chrono::milliseconds kDayCheckInterval{5000};       // 5 seconds
         static constexpr std::chrono::milliseconds kChildOrderCheckInterval{5000};  // 5 seconds
