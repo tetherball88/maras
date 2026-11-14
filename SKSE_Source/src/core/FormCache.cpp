@@ -165,6 +165,8 @@ namespace MARAS {
         (void)GetStartDialGenderGlobal();
         (void)GetSkyrimNetInstalledGlobal();
         (void)GetMinRelRankForDialGlobal();
+        (void)GetPreferVanillaAudioGlobal();
+        (void)GetAllowAIDialGlobal();
 
         (void)GetIgnoreProposeKeyword();
         (void)GetClothingRichKeyword();
@@ -461,6 +463,12 @@ namespace MARAS {
     }
     RE::TESGlobal* FormCache::GetMinRelRankForDialGlobal() {
         return LazyLoadForm(minRelRankForDialGlobal_, 0xe4, "TTM_MCM_MinRelRankForDial global");
+    }
+    RE::TESGlobal* FormCache::GetPreferVanillaAudioGlobal() {
+        return LazyLoadForm(preferVanillaAudioGlobal_, 0x18, "TTM_MCM_PreferVanillaAudio global");
+    }
+    RE::TESGlobal* FormCache::GetAllowAIDialGlobal() {
+        return LazyLoadForm(allowAIDialGlobal_, 0x1c, "TTM_MCM_AllowAIDial global");
     }
 
     // Skyrim.esm Faction getters (cached)

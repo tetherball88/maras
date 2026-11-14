@@ -135,6 +135,8 @@ namespace MARAS {
         RE::TESGlobal* GetStartDialGenderGlobal();
         RE::TESGlobal* GetSkyrimNetInstalledGlobal();
         RE::TESGlobal* GetMinRelRankForDialGlobal();
+        RE::TESGlobal* GetPreferVanillaAudioGlobal();
+        RE::TESGlobal* GetAllowAIDialGlobal();
 
         // Special keyword getters
         RE::BGSKeyword* GetClothingRichKeyword();
@@ -295,6 +297,8 @@ namespace MARAS {
         RE::TESGlobal* startDialGenderGlobal_{nullptr};
         RE::TESGlobal* skyrimNetInstalledGlobal_{nullptr};
         RE::TESGlobal* minRelRankForDialGlobal_{nullptr};
+        RE::TESGlobal* preferVanillaAudioGlobal_{nullptr};
+        RE::TESGlobal* allowAIDialGlobal_{nullptr};
         // Keywords (cached)
         RE::BGSKeyword* ignoreProposeKeyword_{nullptr};
         RE::BGSKeyword* clothingRichKeyword_{nullptr};

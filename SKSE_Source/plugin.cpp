@@ -7,11 +7,15 @@
 #include "core/AffectionService.h"
 #include "core/BanterCoordinatorService.h"
 #include "core/BonusesService.h"
+#include "core/BuffReconciler.h"
 #include "core/DeathEventHandler.h"
 #include "core/DeceasedRegistry.h"
+#include "core/DeferredActorResolver.h"
 #include "core/DialogueEventSink.h"
+#include "core/FactionReconciler.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
+#include "core/GlobalVarReconciler.h"
 #include "core/HomeCellService.h"
 #include "core/ChildrenFleeService.h"
 #include "core/IntimateThreadService.h"
@@ -22,6 +26,7 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/NameService.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/PollingService.h"
@@ -252,6 +257,7 @@ namespace {
                         }
                         npcIndex.RegisterLoadedActor(actor);
                         relMgr.TryResolvePendingRelationships(actor);
+                        MARAS::DeferredActorResolver::GetSingleton().OnActorLoaded(actor);
                     }
 
                     std::unordered_set<RE::FormID> processedLoaded;
@@ -268,6 +274,7 @@ namespace {
                         if (!processedInit.contains(loadedFormID)) {
                             npcIndex.RegisterLoadedActor(actor);
                             relMgr.TryResolvePendingRelationships(actor);
+                            MARAS::DeferredActorResolver::GetSingleton().OnActorLoaded(actor);
                         }
                         if (actor->Is3DLoaded() && relMgr.IsChildNPC(loadedFormID)) {
                             relMgr.ApplyChildVisualsOn3DLoad(actor);
@@ -380,6 +387,9 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS_LOG_INFO("PreLoadGame...");
                         MARAS::BumpSessionEpoch("MessagingInterface::kPreLoadGame");
                         MARAS::ResetPluginEventSinks();
+                        MARAS::DeferredActorResolver::GetSingleton().Revert();
+                        MARAS::GlobalVarReconciler::GetSingleton().Revert();
+                        MARAS::BuffReconciler::GetSingleton().Revert();
                         MARAS::PollingService::GetSingleton().Shutdown();
                         MARAS::AdultChildProgression::GetSingleton().Revert();
                         MARAS::NPCIndex::GetSingleton().ClearLoadedActors();
@@ -412,9 +422,10 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS::AdultChildTravelService::GetSingleton().ReassertAllOnLoad();
                         MARAS::NPCRelationshipManager::GetSingleton().ReassertAllChildVisualsOnLoad();
 
-                        // Ensure PlayerMarriedFaction is removed if polygamy is enabled
-                        MARAS::FactionService::GetSingleton().SanitizePlayerMarriedFaction();
-                        MARAS::NPCRelationshipManager::GetSingleton().UpdateCanFormNonCheatingMainFaction(MARAS::kPlayerFormID);
+                        // Converge globals, player factions, and player buffs after load / new game
+                        MARAS::GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+                        MARAS::FactionReconciler::GetSingleton().ReconcilePlayer();
+                        MARAS::BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
 
                         // On a new game, defer modals and the initial relationship scan until character creation (RaceSex Menu) closes
                         if (isNewGame) {
@@ -436,6 +447,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                     }
 
                     case SKSE::MessagingInterface::kDataLoaded: {
+                        MARAS::DeferredActorResolver::GetSingleton().CaptureMainThread();
                         MARAS_LOG_INFO("Data loaded successfully.");
 
                         // Pre-populate cached forms once at kDataLoaded

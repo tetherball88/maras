@@ -2,12 +2,16 @@
 
 #include "core/AdultChildProgression.h"
 #include "core/AffectionService.h"
+#include "core/BuffReconciler.h"
 #include "core/DeceasedRegistry.h"
+#include "core/FactionReconciler.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
+#include "core/GlobalVarReconciler.h"
 #include "core/NPCIndex.h"
 #include "core/NPCTypeDeterminer.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/Serialization.h"
@@ -258,17 +262,8 @@ namespace MARAS {
         }
     }
 
-    void NPCRelationshipManager::UpdateTrackedFactionRank(RE::FormID npcFormID, RelationshipStatus status) {
-        auto trackedFaction = FormCache::GetSingleton().GetTrackedFaction();
-        if (!trackedFaction) {
-            return;
-        }
-
-        std::int8_t rank = static_cast<std::int8_t>(status);
-        AddToFaction(npcFormID, trackedFaction, rank);
-
-        MARAS_LOG_INFO("Set tracked faction rank {} for NPC {:08X} (status: {})", rank, npcFormID,
-                       Utils::RelationshipStatusToString(status));
+    void NPCRelationshipManager::UpdateTrackedFactionRank(RE::FormID npcFormID, [[maybe_unused]] RelationshipStatus status) {
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
     }
 
     void NPCRelationshipManager::SendStatusChangedEvent(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus status) {
@@ -314,13 +309,7 @@ namespace MARAS {
     }
 
     void NPCRelationshipManager::DispatchPlayerBuffMaintenance() const {
-        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-        if (!vm) {
-            return;
-        }
-        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
-        vm->DispatchStaticCall("TTM_ServiceBuff", "Maintenance", RE::MakeFunctionArguments(), nullCallback);
-        MARAS_LOG_DEBUG("Dispatched TTM_ServiceBuff.Maintenance() to synchronize player marriage buffs");
+        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
     }
 
     size_t NPCRelationshipManager::CountPartnersWithStatus(RE::FormID npcFormID, RelationshipStatus status) const {
@@ -335,15 +324,7 @@ namespace MARAS {
         if (partnerID == 0) return;
 
         if (partnerID == kPlayerFormID) {
-            if (GetMarriedCount(kPlayerFormID) == 0) {
-                if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-                    if (auto* marriedFaction = FormCache::GetSingleton().GetMarriedFaction()) {
-                        FactionService::InternalFactionScope scope;
-                        Utils::RemoveFromFaction(player, marriedFaction);
-                    }
-                }
-            }
-            UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+            FactionReconciler::GetSingleton().ReconcilePlayer();
             return;
         }
 
@@ -351,16 +332,7 @@ namespace MARAS {
             return;
         }
 
-        RelationshipStatus playerStatus = GetRelationshipStatus(partnerID, kPlayerFormID);
-        if (playerStatus != RelationshipStatus::Unknown) {
-            UpdateTrackedFactionRank(partnerID, playerStatus);
-            ManageFactions(partnerID, kPlayerFormID, playerStatus);
-        }
-
-        UpdateSpouseCheatingFaction(partnerID);
-        UpdateSpouseOpenRelationshipFaction(partnerID);
-        UpdateCanFormNonCheatingMainFaction(partnerID);
-        UpdateSpouseChildrenFaction(partnerID);
+        FactionReconciler::GetSingleton().ReconcileActor(partnerID);
     }
 
     bool NPCRelationshipManager::IsMainTier(RelationshipStatus status) {
@@ -546,27 +518,17 @@ namespace MARAS {
             if (oldStatus != status && IsActivePartnerStatus(status) && npcFormID != 0 && npcFormID != kPlayerFormID) {
                 AffectionService::GetSingleton().RecordAffectionInteraction(npcFormID);
             }
-            UpdateTrackedFactionRank(npcFormID, status);
-            UpdateSpouseCheatingFaction(npcFormID);
-            UpdateSpouseOpenRelationshipFaction(npcFormID);
-            UpdateCanFormNonCheatingMainFaction(npcFormID);
-            UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
-            ManageFactions(npcFormID, kPlayerFormID, status);
+            FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         } else if (npcFormID == kPlayerFormID) {
             if (oldStatus != status && IsActivePartnerStatus(status) && targetFormID != 0 && targetFormID != kPlayerFormID) {
                 AffectionService::GetSingleton().RecordAffectionInteraction(targetFormID);
             }
-            UpdateTrackedFactionRank(targetFormID, status);
-            UpdateSpouseCheatingFaction(targetFormID);
-            UpdateSpouseOpenRelationshipFaction(targetFormID);
-            UpdateCanFormNonCheatingMainFaction(targetFormID);
-            UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
-            ManageFactions(targetFormID, kPlayerFormID, status);
+            FactionReconciler::GetSingleton().ReconcileActor(targetFormID);
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         } else {
-            UpdateCanFormNonCheatingMainFaction(npcFormID);
-            UpdateCanFormNonCheatingMainFaction(targetFormID);
-            ManageFactions(npcFormID, targetFormID, status);
-            ManageFactions(targetFormID, npcFormID, status);
+            FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+            FactionReconciler::GetSingleton().ReconcileActor(targetFormID);
         }
 
         if (sendEvent) {
@@ -636,16 +598,7 @@ namespace MARAS {
             }
 
             if (oldStatus == RelationshipStatus::Married || status == RelationshipStatus::Married) {
-                const bool papyrusHandlesBuffSync =
-                    sendEvent &&
-                    ((partnerActor != nullptr &&
-                      (status == RelationshipStatus::Married || status == RelationshipStatus::Divorced)) ||
-                     (partnerActor == nullptr &&
-                      (status == RelationshipStatus::Married || status == RelationshipStatus::Divorced ||
-                       status == RelationshipStatus::Candidate)));
-                if (!papyrusHandlesBuffSync) {
-                    DispatchPlayerBuffMaintenance();
-                }
+                BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
             }
         }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(npcFormID, targetFormID, static_cast<uint8_t>(status));
@@ -812,18 +765,12 @@ namespace MARAS {
             }
         });
 
-        // Clean up engine factions on the deceased NPC
+        // Clean up MARAS factions/packages and vanilla marriage factions on the deceased NPC
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        PackageReconciler::GetSingleton().ReconcileActor(npcFormID);
         {
             FactionService::InternalFactionScope scope;
             auto& cache = FormCache::GetSingleton();
-            Utils::RemoveFromFaction(npcFormID, cache.GetTrackedFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseSocialClassFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseSkillTypeFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseTemperamentFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseCheatingFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseOpenRelationshipFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetCanFormNonCheatingMainFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseChildrenFaction());
             Utils::RemoveFromFaction(npcFormID, cache.GetMarriageAskedFaction());
             Utils::RemoveFromFaction(npcFormID, cache.GetCourtingFaction());
             Utils::RemoveFromFaction(npcFormID, cache.GetMarriedFaction());
@@ -2311,16 +2258,16 @@ namespace MARAS {
         }
 
         if (isPlayerPair) {
-            UpdateTrackedFactionRank(playerPartnerID, RelationshipStatus::Candidate);
-            ManageFactions(playerPartnerID, kPlayerFormID, RelationshipStatus::Candidate);
+            FactionReconciler::GetSingleton().ReconcileActor(playerPartnerID);
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         } else {
             for (const RE::FormID npcID : addedCandidateActors) {
                 if (npcID != 0) {
-                    UpdateTrackedFactionRank(npcID, RelationshipStatus::Candidate);
+                    FactionReconciler::GetSingleton().ReconcileActor(npcID);
                 }
             }
-            ManageFactions(actorA, actorB, RelationshipStatus::Candidate);
-            ManageFactions(actorB, actorA, RelationshipStatus::Candidate);
+            FactionReconciler::GetSingleton().ReconcileActor(actorA);
+            FactionReconciler::GetSingleton().ReconcileActor(actorB);
         }
 
         // Resolve custody of any shared children or unborn pregnancies using the Divorce Custody rules
@@ -2328,13 +2275,20 @@ namespace MARAS {
 
         for (RE::FormID id : affectedActors) {
             if (id != 0) {
-                RefreshPartnerRelationshipFactions(id);
+                if (id == kPlayerFormID) {
+                    FactionReconciler::GetSingleton().ReconcilePlayer();
+                } else {
+                    FactionReconciler::GetSingleton().ReconcileActor(id);
+                }
             }
         }
 
-        RecalculateAndUpdateGlobals();
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+        UpdateAllSpousesChildrenFaction();
+        UpdateAllSpousesCheatingAndOpenFactions();
+        FactionReconciler::GetSingleton().ReconcilePlayer();
         if (wasMarriedToPlayer) {
-            DispatchPlayerBuffMaintenance();
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
         }
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, static_cast<uint8_t>(RelationshipStatus::Candidate));
 
@@ -2834,144 +2788,29 @@ namespace MARAS {
         return true;
     }
 
-    bool NPCRelationshipManager::AddToSocialClassFaction(RE::FormID npcFormID, std::int8_t rank) {
-        auto faction = FormCache::GetSingleton().GetSpouseSocialClassFaction();
-        return AddToFaction(npcFormID, faction, rank);
+    bool NPCRelationshipManager::AddToSocialClassFaction(RE::FormID npcFormID, [[maybe_unused]] std::int8_t rank) {
+        if (npcFormID == 0) return false;
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        return true;
     }
 
-    bool NPCRelationshipManager::AddToSkillTypeFaction(RE::FormID npcFormID, std::int8_t rank) {
-        auto faction = FormCache::GetSingleton().GetSpouseSkillTypeFaction();
-        return AddToFaction(npcFormID, faction, rank);
+    bool NPCRelationshipManager::AddToSkillTypeFaction(RE::FormID npcFormID, [[maybe_unused]] std::int8_t rank) {
+        if (npcFormID == 0) return false;
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        return true;
     }
 
-    bool NPCRelationshipManager::AddToTemperamentFaction(RE::FormID npcFormID, std::int8_t rank) {
-        auto faction = FormCache::GetSingleton().GetSpouseTemperamentFaction();
-        return AddToFaction(npcFormID, faction, rank);
+    bool NPCRelationshipManager::AddToTemperamentFaction(RE::FormID npcFormID, [[maybe_unused]] std::int8_t rank) {
+        if (npcFormID == 0) return false;
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        return true;
     }
 
-    namespace {
-        void SafeAddToFaction(RE::Actor* actor, RE::TESFaction* faction) {
-            if (!actor || !faction) return;
-            MARAS_LOG_INFO("Adding faction {:08X} to actor {}({:08X})", faction->GetFormID(), actor->GetName(), actor->GetFormID());
-            Utils::AddToFaction(actor, faction, 0);
-        }
-
-        void SafeRemoveFromFaction(RE::Actor* actor, RE::TESFaction* faction) {
-            if (!actor || !faction) return;
-            MARAS_LOG_INFO("Removing faction {:08X} from actor {}({:08X})", faction->GetFormID(), actor->GetName(), actor->GetFormID());
-            Utils::RemoveFromFaction(actor, faction);
-        }
-
-        void SafeRemoveKeyword(RE::Actor* actor, RE::BGSKeyword* keyword) {
-            if (!actor || !keyword) return;
-            MARAS_LOG_INFO("Removing keyword {:08X} from actor {}({:08X})", keyword->GetFormID(), actor->GetName(), actor->GetFormID());
-            auto actorBase = ActorSvc::GetActorBase(actor->GetFormID());
-            if (actorBase && actorBase->HasKeyword(keyword)) {
-                actorBase->RemoveKeyword(keyword);
-            }
-        }
-    }  // namespace
-
-    void NPCRelationshipManager::ManageFactions(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus status) {
+    void NPCRelationshipManager::ManageFactions(RE::FormID npcFormID, RE::FormID targetFormID, [[maybe_unused]] RelationshipStatus status) {
         if (npcFormID == kPlayerFormID || npcFormID == 0) return;
-
-        auto actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
-        if (!actor) return;
-
-        FactionService::InternalFactionScope scope;
-        auto& cache = FormCache::GetSingleton();
-
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
         if (targetFormID == kPlayerFormID) {
-            switch (status) {
-                case RelationshipStatus::Candidate:
-                    SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
-                    SafeRemoveFromFaction(actor, cache.GetMarriedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    SafeAddToFaction(actor, cache.GetMarriagePotentialFaction());
-                    if (GetMarriedCount(kPlayerFormID) == 0) {
-                        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-                            SafeRemoveFromFaction(player, cache.GetMarriedFaction());
-                        }
-                    }
-                    break;
-                case RelationshipStatus::Dating:
-                case RelationshipStatus::Lover:
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    break;
-                case RelationshipStatus::Engaged:
-                    SafeAddToFaction(actor, cache.GetMarriageAskedFaction());
-                    SafeAddToFaction(actor, cache.GetCourtingFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    break;
-                case RelationshipStatus::Married:
-                    SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPotentialHirelingFaction());
-                    SafeAddToFaction(actor, cache.GetMarriedFaction());
-                    SafeAddToFaction(actor, cache.GetPlayerFaction());
-                    SafeAddToFaction(actor, cache.GetPlayerBedOwnershipFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    if (!Settings::GetSingleton().GetEnablePolygamy()) {
-                        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-                            SafeAddToFaction(player, cache.GetMarriedFaction());
-                        }
-                    }
-                    break;
-                case RelationshipStatus::Divorced:
-                    SafeRemoveFromFaction(actor, cache.GetMarriedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    if (GetMarriedCount(kPlayerFormID) == 0) {
-                        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-                            SafeRemoveFromFaction(player, cache.GetMarriedFaction());
-                        }
-                    }
-                    break;
-                case RelationshipStatus::Jilted:
-                    SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    break;
-                case RelationshipStatus::Unknown:
-                default:
-                    break;
-            }
-        } else {
-            // NPC x NPC relationship - strictly ensure player marriage factions are NOT applied!
-            switch (status) {
-                case RelationshipStatus::Married:
-                    SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
-                    SafeRemoveFromFaction(actor, cache.GetMarriedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    if (!Settings::GetSingleton().GetEnablePolygamy()) {
-                        SafeRemoveFromFaction(actor, cache.GetMarriagePotentialFaction());
-                    }
-                    break;
-                case RelationshipStatus::Divorced:
-                    SafeRemoveFromFaction(actor, cache.GetMarriedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerFaction());
-                    SafeRemoveFromFaction(actor, cache.GetPlayerBedOwnershipFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    SafeAddToFaction(actor, cache.GetMarriagePotentialFaction());
-                    break;
-                case RelationshipStatus::Engaged:
-                    SafeRemoveFromFaction(actor, cache.GetMarriageAskedFaction());
-                    SafeRemoveFromFaction(actor, cache.GetCourtingFaction());
-                    SafeRemoveKeyword(actor, cache.GetIgnoreProposeKeyword());
-                    break;
-                case RelationshipStatus::Candidate:
-                    SafeAddToFaction(actor, cache.GetMarriagePotentialFaction());
-                    break;
-                default:
-                    break;
-            }
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         }
     }
 
@@ -2983,7 +2822,10 @@ namespace MARAS {
                 prof->socialClass = static_cast<State::SocialClass>(socialClass);
             }
         });
-        AddToSocialClassFaction(npcFormID, socialClass);
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        if (IsMarried(npcFormID, kPlayerFormID)) {
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+        }
         return true;
     }
 
@@ -2995,7 +2837,10 @@ namespace MARAS {
                 prof->skillType = static_cast<State::SkillType>(skillType);
             }
         });
-        AddToSkillTypeFaction(npcFormID, skillType);
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        if (IsMarried(npcFormID, kPlayerFormID)) {
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+        }
         return true;
     }
 
@@ -3007,7 +2852,7 @@ namespace MARAS {
                 prof->temperament = static_cast<State::Temperament>(temperament);
             }
         });
-        AddToTemperamentFaction(npcFormID, temperament);
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
         return true;
     }
 
@@ -3103,30 +2948,7 @@ namespace MARAS {
         }
 
         MARAS_LOG_INFO("EnsureRegistered: registered {:08X} in WorldStore", npcFormID);
-        if (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Unknown) {
-            UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
-        }
-
-        try {
-            AddToSocialClassFaction(npcFormID, static_cast<std::int8_t>(socialClass));
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("AddToSocialClassFaction exception for {:08X}: {}", npcFormID, e.what());
-        }
-        try {
-            AddToSkillTypeFaction(npcFormID, static_cast<std::int8_t>(skillType));
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("AddToSkillTypeFaction exception for {:08X}: {}", npcFormID, e.what());
-        }
-        try {
-            AddToTemperamentFaction(npcFormID, static_cast<std::int8_t>(temperament));
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("AddToTemperamentFaction exception for {:08X}: {}", npcFormID, e.what());
-        }
-        try {
-            UpdateCanFormNonCheatingMainFaction(npcFormID);
-        } catch (const std::exception& e) {
-            MARAS_LOG_ERROR("UpdateCanFormNonCheatingMainFaction exception for {:08X}: {}", npcFormID, e.what());
-        }
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
@@ -3922,14 +3744,10 @@ namespace MARAS {
         // Here we perform the remaining engine-level and child-progression post-load steps.
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
 
-        // 1. Re-apply runtime home markers & added keywords onto loaded engine forms
+        // 1. Re-apply added keywords onto loaded engine forms (home markers & 0x6B/0x377 LinkedRefs converge via PackageReconciler)
         for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
             const RE::FormID actorId = refId.raw();
             if (actorId == 0) continue;
-
-            if (prof.legacyHomeMarker.has_value() && prof.legacyHomeMarker->raw() != 0) {
-                SetLinkedRefForHomeMarker(actorId, prof.legacyHomeMarker->raw());
-            }
 
             if (!prof.addedKeywords.empty() && actorId != kPlayerFormID) {
                 if (auto* base = ActorSvc::GetActorBase(actorId)) {
@@ -3976,11 +3794,11 @@ namespace MARAS {
             }
         }
 
-        // 3. Re-synchronize globals, cheating/open/non-cheating factions, custody & child AI packages
-        RecalculateAndUpdateGlobals();
-        UpdateAllCanFormNonCheatingMainFactions();
+        // 3. Synchronize custody, then converge globals, factions, and AI packages
         SyncAllMarriedCouplesChildCustody();
-        ReevaluateAllNonPlayerChildrenPackages();
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+        FactionReconciler::GetSingleton().ReconcileAllOnLoad();
+        PackageReconciler::GetSingleton().ReconcileWorld();
     }
 
     void NPCRelationshipManager::Revert() {
@@ -3989,24 +3807,10 @@ namespace MARAS {
     }
 
     void NPCRelationshipManager::RecalculateAndUpdateGlobals() {
-        std::int32_t loveInterests = static_cast<std::int32_t>(GetAllEngaged(kPlayerFormID).size() + GetAllMarried(kPlayerFormID).size());
-        std::int32_t spouses = static_cast<std::int32_t>(GetAllMarried(kPlayerFormID).size());
-
-        auto& cache = FormCache::GetSingleton();
-
-        if (auto globalLove = cache.GetLoveInterestsCount()) {
-            globalLove->value = static_cast<float>(loveInterests);
-            MARAS_LOG_DEBUG("Updated LoveInterestsCount global to {}", loveInterests);
-        }
-
-        if (auto globalSpouses = cache.GetSpousesCount()) {
-            globalSpouses->value = static_cast<float>(spouses);
-            MARAS_LOG_DEBUG("Updated SpousesCount global to {}", spouses);
-        }
-
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         UpdateAllSpousesChildrenFaction();
         UpdateAllSpousesCheatingAndOpenFactions();
-        UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+        FactionReconciler::GetSingleton().ReconcilePlayer();
     }
 
     void NPCRelationshipManager::LogStatistics() const {

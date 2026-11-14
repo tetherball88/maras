@@ -5,10 +5,12 @@
 #include <unordered_set>
 
 #include "core/AffectionService.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerHouseService.h"
 #include "core/WorldStateLegacyAdapters.h"
 #include "maras/state/WorldStore.h"
@@ -183,62 +185,14 @@ namespace MARAS {
             // 2. Clear external non-household factions so child strictly follows player family routines
             ClearChildExternalFactions(childID);
 
-            // 3. Ensure household child factions
-            auto& formCache = FormCache::GetSingleton();
-            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
-                // Reinstate crime faction from snapshot if available
-                RE::FormID crimeFactionId = 0;
-                {
-                    const auto snap = State::WorldStore::GetSingleton().Snapshot();
-                    const auto& snaps = snap->household->AllChildFactionSnapshots();
-                    if (auto itSnap = snaps.find(State::ChildId{ childID }); itSnap != snaps.end()) {
-                        crimeFactionId = itSnap->second.crimeFactionId.raw();
-                    }
-                }
-                if (crimeFactionId != 0) {
-                    if (auto* crimeFaction = RE::TESForm::LookupByID<RE::TESFaction>(crimeFactionId)) {
-                        Utils::SetCrimeFaction(actor, crimeFaction);
-                    }
-                }
-
-                if (auto* playerChildFaction = formCache.GetPlayerChildFaction()) {
-                    if (!actor->IsInFaction(playerChildFaction)) {
-                        Utils::AddToFaction(actor, playerChildFaction, 0);
-                        MARAS_LOG_INFO("OnChildAddedToHousehold: Added PlayerChild faction to child {:08X}", childID);
-                    }
-                }
-                if (auto* byohChildOwnedFaction = formCache.GetBYOHRelationshipAdoptionChildOwnedFaction()) {
-                    if (!actor->IsInFaction(byohChildOwnedFaction)) {
-                        Utils::AddToFaction(actor, byohChildOwnedFaction, 0);
-                        MARAS_LOG_INFO("OnChildAddedToHousehold: Added BYOHRelationshipAdoptionChildOwnedFaction to child {:08X}", childID);
-                    }
-                }
-                if (auto* byohAdoptionFaction = formCache.GetBYOHRelationshipAdoptionFaction()) {
-                    if (!actor->IsInFaction(byohAdoptionFaction)) {
-                        Utils::AddToFaction(actor, byohAdoptionFaction, 0);
-                        MARAS_LOG_INFO("OnChildAddedToHousehold: Added BYOHRelationshipAdoptionFaction to child {:08X}", childID);
-                    }
-                }
-                if (auto* playerFaction = formCache.GetPlayerFaction()) {
-                    if (!actor->IsInFaction(playerFaction)) {
-                        Utils::AddToFaction(actor, playerFaction, 0);
-                        MARAS_LOG_INFO("OnChildAddedToHousehold: Added PlayerFaction to child {:08X}", childID);
-                    }
-                }
-                if (auto* adoptableFaction = formCache.GetBYOHRelationshipAdoptableFaction()) {
-                    Utils::AddToFaction(actor, adoptableFaction, 25);
-                    MARAS_LOG_INFO("OnChildAddedToHousehold: Updated BYOHRelationshipAdoptableFaction rank to 25 for child {:08X}", childID);
-                }
-            }
-
-            // Update TTM_PlayerChildBothParents faction status
-            NPCRelationshipManager::GetSingleton().UpdateChildBothParentsFaction(childID);
+            // 3. Reconcile crime, household, and both-parents factions
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
         }
 
         if (initialHouseFormID != 0) {
             PlayerHouseService::GetSingleton().RelocateFamilyUnit(childID, initialHouseFormID, true);
         } else {
-            NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
             ApplyPackageForCurrentState(childID);
         }
 
@@ -258,26 +212,8 @@ namespace MARAS {
         }
 
         if (!IsSyntheticChildID(childID)) {
-            auto& formCache = FormCache::GetSingleton();
             if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
-                if (auto* playerChildFaction = formCache.GetPlayerChildFaction()) {
-                    Utils::RemoveFromFaction(actor, playerChildFaction);
-                }
-                if (auto* byohChildOwnedFaction = formCache.GetBYOHRelationshipAdoptionChildOwnedFaction()) {
-                    Utils::RemoveFromFaction(actor, byohChildOwnedFaction);
-                }
-                if (auto* byohAdoptionFaction = formCache.GetBYOHRelationshipAdoptionFaction()) {
-                    Utils::RemoveFromFaction(actor, byohAdoptionFaction);
-                }
-                if (auto* adoptableFaction = formCache.GetBYOHRelationshipAdoptableFaction()) {
-                    Utils::RemoveFromFaction(actor, adoptableFaction);
-                }
-                if (auto* playerFaction = formCache.GetPlayerFaction()) {
-                    Utils::RemoveFromFaction(actor, playerFaction);
-                }
-                if (auto* bothParentsFaction = formCache.GetPlayerChildBothParentsFaction()) {
-                    Utils::RemoveFromFaction(actor, bothParentsFaction);
-                }
+                FactionReconciler::GetSingleton().ClearChildHouseholdFactions(actor);
             }
 
             // Restore original snapshotted factions
@@ -287,6 +223,11 @@ namespace MARAS {
         State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
             ws.household.Write().EraseChildState(State::ChildId{ childID });
         });
+
+        if (!IsSyntheticChildID(childID)) {
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+        }
+
         MARAS_LOG_INFO("OnChildRemovedFromHousehold: Removed child {:08X} from household and restored factions", childID);
     }
 
@@ -324,7 +265,8 @@ namespace MARAS {
                 }
             }
 
-            NPCRelationshipManager::GetSingleton().UpdateNonPlayerChildPackageOverride(childID);
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
             ApplyPackageForCurrentState(childID);
         }
 
@@ -591,30 +533,10 @@ namespace MARAS {
     }
 
     namespace {
-        void SetPetOrCritterFactionsAndPackage(RE::FormID companionID, RE::FormID childID) {
+        void ReconcilePetOrCritter(RE::FormID companionID) {
             if (companionID == 0) return;
-            if (auto* faction = FormCache::GetSingleton().GetPlayerChildPetFaction()) {
-                Utils::AddToFaction(companionID, faction, 0);
-            }
-            if (auto* playerFaction = FormCache::GetSingleton().GetPlayerFaction()) {
-                Utils::AddToFaction(companionID, playerFaction, 0);
-            }
-            auto* keyword = FormCache::GetSingleton().GetHomeSandboxKeyword();
-            RE::FormID pkgID = 0;
-            if (auto* petPkg = FormCache::GetSingleton().GetPetCritterHomeSandboxPackage()) {
-                pkgID = petPkg->GetFormID();
-            }
-            Utils::AssignPackageWithLinkedRef(companionID, childID, keyword, pkgID);
-        }
-
-        void ClearPetOrCritterFactions(RE::FormID companionID) {
-            if (companionID == 0) return;
-            if (auto* faction = FormCache::GetSingleton().GetPlayerChildPetFaction()) {
-                Utils::RemoveFromFaction(companionID, faction);
-            }
-            if (auto* playerFaction = FormCache::GetSingleton().GetPlayerFaction()) {
-                Utils::RemoveFromFaction(companionID, playerFaction);
-            }
+            FactionReconciler::GetSingleton().ReconcileActor(companionID);
+            PackageReconciler::GetSingleton().ReconcileActor(companionID);
         }
 
         bool IsCompanionRetryCooldownElapsed(float storedTs) {
@@ -643,13 +565,10 @@ namespace MARAS {
         if (!found) return false;
 
         if (oldPetID != 0 && oldPetID != petActorOrBaseID) {
-            ClearPetOrCritterFactions(oldPetID);
-            if (GetChildForPetOrCritter(oldPetID) == 0) {
-                PackageOverrideService::GetSingleton().UnregisterActor(oldPetID);
-            }
+            ReconcilePetOrCritter(oldPetID);
         }
 
-        SetPetOrCritterFactionsAndPackage(petActorOrBaseID, childID);
+        ReconcilePetOrCritter(petActorOrBaseID);
 
         MARAS_LOG_INFO("AssignPet: Assigned pet {:08X} to child {:08X}", petActorOrBaseID, childID);
         return true;
@@ -678,10 +597,7 @@ namespace MARAS {
         if (!found) return false;
 
         if (oldPetID != 0) {
-            ClearPetOrCritterFactions(oldPetID);
-            if (GetChildForPetOrCritter(oldPetID) == 0) {
-                PackageOverrideService::GetSingleton().UnregisterActor(oldPetID);
-            }
+            ReconcilePetOrCritter(oldPetID);
         }
 
         MARAS_LOG_INFO("RemovePet: Removed pet from child {:08X}", childID);
@@ -786,13 +702,10 @@ namespace MARAS {
         if (!found) return false;
 
         if (oldCritterID != 0 && oldCritterID != critterFormID) {
-            ClearPetOrCritterFactions(oldCritterID);
-            if (GetChildForPetOrCritter(oldCritterID) == 0) {
-                PackageOverrideService::GetSingleton().UnregisterActor(oldCritterID);
-            }
+            ReconcilePetOrCritter(oldCritterID);
         }
 
-        SetPetOrCritterFactionsAndPackage(critterFormID, childID);
+        ReconcilePetOrCritter(critterFormID);
 
         MARAS_LOG_INFO("AssignCritter: Assigned critter {:08X} to child {:08X}", critterFormID, childID);
         return true;
@@ -821,10 +734,7 @@ namespace MARAS {
         if (!found) return false;
 
         if (oldCritterID != 0) {
-            ClearPetOrCritterFactions(oldCritterID);
-            if (GetChildForPetOrCritter(oldCritterID) == 0) {
-                PackageOverrideService::GetSingleton().UnregisterActor(oldCritterID);
-            }
+            ReconcilePetOrCritter(oldCritterID);
         }
 
         MARAS_LOG_INFO("RemoveCritter: Removed critter from child {:08X}", childID);
@@ -1249,26 +1159,30 @@ namespace MARAS {
     void PlayerChildrenService::ReassertAllOnLoad() {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto& childStates = snap->household->AllChildStates();
-        auto* keyword = FormCache::GetSingleton().GetHomeSandboxKeyword();
+        std::vector<RE::FormID> toReconcile;
+        toReconcile.reserve(childStates.size() * 3);
+
         for (const auto& [childKey, rec] : childStates) {
             const RE::FormID childID = childKey.raw();
             if (IsSyntheticChildID(childID)) continue;
 
             ApplyPackageForCurrentState(childID);
-
-            if (rec.homeMarkerId.raw() != 0) {
-                Utils::SetLinkedRef(childID, rec.homeMarkerId.raw(), keyword);
-            }
+            toReconcile.push_back(childID);
 
             if (rec.petId.raw() != 0) {
-                SetPetOrCritterFactionsAndPackage(rec.petId.raw(), childID);
+                toReconcile.push_back(rec.petId.raw());
             }
 
             if (rec.critterId.raw() != 0) {
-                SetPetOrCritterFactionsAndPackage(rec.critterId.raw(), childID);
+                toReconcile.push_back(rec.critterId.raw());
             }
         }
-        MARAS_LOG_INFO("ReassertAllOnLoad: Reasserted package/LinkedRef state for {} children", childStates.size());
+
+        if (!toReconcile.empty()) {
+            FactionReconciler::GetSingleton().ReconcileActors(toReconcile);
+        }
+        PackageReconciler::GetSingleton().ReconcileWorld();
+        MARAS_LOG_INFO("ReassertAllOnLoad: Reasserted state for {} children", childStates.size());
     }
 
     nlohmann::json PlayerChildrenService::DumpJson() const {

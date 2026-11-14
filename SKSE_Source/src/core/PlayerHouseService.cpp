@@ -1,9 +1,12 @@
 #include "core/PlayerHouseService.h"
 
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
+#include "core/GlobalVarReconciler.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerChildrenService.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
@@ -17,122 +20,29 @@ namespace MARAS {
         return instance;
     }
 
-    namespace {
-        constexpr std::int8_t kDefaultFactionRank = 0;
-    }
-
     PlayerHouseService::PlayerHouseService() = default;
 
-    void PlayerHouseService::SetHousedFaction(RE::FormID tenantFormID, bool add) {
-        auto* faction = FormCache::GetSingleton().GetSpouseHousedFaction();
-        if (!faction) return;
-
-        if (auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(tenantFormID)) {
-            if (add) {
-                MARAS::Utils::AddToFaction(actor, faction, kDefaultFactionRank);
-                MARAS_LOG_DEBUG("Added tenant {:08X} to housed faction {:08X}", tenantFormID, faction->GetFormID());
-            } else {
-                MARAS::Utils::RemoveFromFaction(actor, faction);
-                MARAS_LOG_DEBUG("Removed tenant {:08X} from housed faction {:08X}", tenantFormID, faction->GetFormID());
-            }
-        } else {
-            MARAS_LOG_WARN("SetHousedFaction: could not find Actor for tenant {:08X}", tenantFormID);
-        }
+    void PlayerHouseService::SetHousedFaction(RE::FormID tenantFormID, bool /*add*/) {
+        FactionReconciler::GetSingleton().ReconcileActor(tenantFormID);
     }
 
     void PlayerHouseService::AddMerchantFactionsToTenant(RE::FormID tenantFormID) {
-        auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(tenantFormID);
-        if (!actor) {
-            MARAS_LOG_WARN("AddMerchantFactionsToTenant: could not find Actor for tenant {:08X}", tenantFormID);
-            return;
-        }
-
-        auto& formCache = FormCache::GetSingleton();
-
-        struct MerchantMapping {
-            RE::TESFaction* skyrimFaction;
-            RE::TESFaction* housedFaction;
-            const char* name;
-        };
-
-        const std::array<MerchantMapping, 8> merchantMappings{{
-            {formCache.GetApothecaryFaction(), formCache.GetApothecaryMerchantHousedFaction(), "apothecary"},
-            {formCache.GetBlacksmithFaction(), formCache.GetBlacksmithMerchantHousedFaction(), "blacksmith"},
-            {formCache.GetFletcherFaction(), formCache.GetFletcherMerchantHousedFaction(), "fletcher"},
-            {formCache.GetHunterFaction(), formCache.GetHunterMerchantHousedFaction(), "hunter"},
-            {formCache.GetInnKeeperFaction(), formCache.GetInnkeeperMerchantHousedFaction(), "innkeeper"},
-            {formCache.GetJewelerFaction(), formCache.GetJewelerMerchantHousedFaction(), "jeweler"},
-            {formCache.GetSpellFaction(), formCache.GetSpellsMerchantHousedFaction(), "spells"},
-            {formCache.GetTailorFaction(), formCache.GetTailorMerchantHousedFaction(), "tailor"}
-        }};
-
-        auto addIfMissing = [actor](RE::TESFaction* f, const char* name) {
-            if (f && !actor->IsInFaction(f)) {
-                MARAS::Utils::AddToFaction(actor, f, kDefaultFactionRank);
-                MARAS_LOG_DEBUG("Added {} faction to tenant {:08X}", name, actor->GetFormID());
-                return true;
-            }
-            return false;
-        };
-
-        bool foundSpecific = false;
-        for (const auto& m : merchantMappings) {
-            if (m.skyrimFaction && actor->IsInFaction(m.skyrimFaction)) {
-                if (addIfMissing(m.housedFaction, m.name)) {
-                    foundSpecific = true;
-                }
-            }
-        }
-
-        if (!foundSpecific) {
-            addIfMissing(formCache.GetMerchantFaction(), "default merchant");
-            addIfMissing(formCache.GetMiscFaction(), "misc merchant");
-            addIfMissing(formCache.GetMiscMerchantHousedFaction(), "misc housed merchant");
-        }
+        FactionReconciler::GetSingleton().ReconcileActor(tenantFormID);
     }
 
     void PlayerHouseService::RemoveMerchantFactionsFromTenant(RE::FormID tenantFormID) {
-        auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(tenantFormID);
-        if (!actor) return;
-
-        auto& formCache = FormCache::GetSingleton();
-
-        const std::array<RE::TESFaction*, 11> factionsToRemove{{
-            formCache.GetApothecaryMerchantHousedFaction(),
-            formCache.GetBlacksmithMerchantHousedFaction(),
-            formCache.GetFletcherMerchantHousedFaction(),
-            formCache.GetHunterMerchantHousedFaction(),
-            formCache.GetInnkeeperMerchantHousedFaction(),
-            formCache.GetJewelerMerchantHousedFaction(),
-            formCache.GetSpellsMerchantHousedFaction(),
-            formCache.GetTailorMerchantHousedFaction(),
-            formCache.GetMerchantFaction(),
-            formCache.GetMiscFaction(),
-            formCache.GetMiscMerchantHousedFaction()
-        }};
-
-        for (auto* f : factionsToRemove) {
-            if (f && actor->IsInFaction(f)) {
-                MARAS::Utils::RemoveFromFaction(actor, f);
-            }
-        }
-        MARAS_LOG_DEBUG("Removed merchant factions from tenant {:08X}", tenantFormID);
+        FactionReconciler::GetSingleton().ReconcileActor(tenantFormID);
     }
 
-    void PlayerHouseService::ApplyStayAtHome(RE::FormID tenantFormID, bool stayAtHome) {
+    void PlayerHouseService::ApplyStayAtHome(RE::FormID tenantFormID, bool /*stayAtHome*/) {
         if (tenantFormID == 0 || IsSyntheticChildID(tenantFormID)) return;
-        if (stayAtHome) {
-            PackageOverrideService::GetSingleton().RegisterActor(tenantFormID);
-        } else {
-            PackageOverrideService::GetSingleton().UnregisterActor(tenantFormID);
-        }
+        PackageReconciler::GetSingleton().ReconcileActor(tenantFormID);
     }
 
     bool PlayerHouseService::RegisterPlayerHouseCell(RE::FormID locationFormID, RE::FormID markerFormID) {
         if (locationFormID == 0) return false;
 
         std::vector<std::uint32_t> tenantsCopy;
-        std::size_t houseCount = 0;
 
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& hh = ws.household.Write();
@@ -145,7 +55,6 @@ namespace MARAS {
             } else {
                 hh.RegisterHouse(houseId, State::RefId{ markerFormID }, false);
             }
-            houseCount = hh.AllHouses().size();
         });
 
         if (markerFormID != 0) {
@@ -161,11 +70,8 @@ namespace MARAS {
             }
         }
 
-        // Update the player houses count global
-        if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
-            global->value = static_cast<float>(houseCount);
-            MARAS_LOG_DEBUG("Player houses count global set to {}", global->value);
-        }
+        // Reconcile the player houses count global
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
 
         return true;
     }
@@ -304,10 +210,10 @@ namespace MARAS {
 
         if (sameHouseOnly) {
             if (stayChanged) {
-                ApplyStayAtHome(tenantFormID, stayAtHome);
                 if (stayAtHome && !isChild) {
                     UpdateSpouseHomeMarker(tenantFormID, playerHouseFormID);
                 }
+                ApplyStayAtHome(tenantFormID, stayAtHome);
                 MARAS_LOG_INFO("PlayerHouseService: Set tenant {:08X} stayAtHome = {}", tenantFormID, stayAtHome);
             }
             return true;
@@ -315,11 +221,8 @@ namespace MARAS {
 
         // Faction and marker management for spouses
         if (!isChild) {
-            if (!alreadyRegistered) {
-                SetHousedFaction(tenantFormID, true);
-                AddMerchantFactionsToTenant(tenantFormID);
-            }
             UpdateSpouseHomeMarker(tenantFormID, playerHouseFormID);
+            FactionReconciler::GetSingleton().ReconcileActor(tenantFormID);
         }
 
         ApplyStayAtHome(tenantFormID, stayAtHome);
@@ -359,11 +262,10 @@ namespace MARAS {
             return;
         }
 
-        ApplyStayAtHome(tenantFormID, stayAtHome);
-
         if (stayAtHome && !isChild) {
             UpdateSpouseHomeMarker(tenantFormID, houseFormID);
         }
+        ApplyStayAtHome(tenantFormID, stayAtHome);
         MARAS_LOG_INFO("PlayerHouseService: Set tenant {:08X} stayAtHome = {}", tenantFormID, stayAtHome);
     }
 
@@ -395,17 +297,16 @@ namespace MARAS {
             return false;
         }
 
-        // Unregister package overrides
-        ApplyStayAtHome(tenantFormID, false);
-
-        // Remove factions if not a child; otherwise clear cached child house assignment
+        // Remove factions / clear home assignment before reconciling
         if (!isChild) {
-            SetHousedFaction(tenantFormID, false);
-            RemoveMerchantFactionsFromTenant(tenantFormID);
             NPCRelationshipManager::GetSingleton().ClearCurrentHome(tenantFormID);
+            FactionReconciler::GetSingleton().ReconcileActor(tenantFormID);
         } else {
             PlayerChildrenService::GetSingleton().ClearChildHouseAssignment(tenantFormID);
         }
+
+        // Reconcile package overrides after home assignment & marker are cleared
+        ApplyStayAtHome(tenantFormID, false);
 
         MARAS_LOG_DEBUG("Removed tenant {:08X} from player house {:08X}", tenantFormID, houseFormID);
         return true;
@@ -589,9 +490,7 @@ namespace MARAS {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto& hh = *snap->household;
 
-        if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
-            global->value = static_cast<float>(hh.AllHouses().size());
-        }
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
 
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         auto& idx = NPCIndex::GetSingleton();
@@ -610,11 +509,10 @@ namespace MARAS {
                 actor = idx.GetActorFromFormId(tenantID);
             }
             if (actor && !actor->IsDead()) {
-                SetHousedFaction(tenantID, true);
-                AddMerchantFactionsToTenant(tenantID);
                 if (!assignment.houseId.IsNull()) {
                     UpdateSpouseHomeMarker(tenantID, assignment.houseId.raw());
                 }
+                FactionReconciler::GetSingleton().ReconcileLoadedActor(actor);
                 ++syncedCount;
             }
             ApplyStayAtHome(tenantID, assignment.stayAtHome);
@@ -625,9 +523,7 @@ namespace MARAS {
     }
 
     void PlayerHouseService::Revert() {
-        if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
-            global->value = 0.0f;
-        }
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         MARAS_LOG_INFO("Reverted player house data");
     }
 

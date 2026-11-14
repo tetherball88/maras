@@ -1,8 +1,11 @@
-# FactionService — Feature & Mechanics Guide
+# FactionService & FactionReconciler — Feature & Mechanics Guide
 
-**Implementation**: [FactionService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/FactionService.cpp)
+**Implementations**:
+- Hook & Detour Host: [FactionService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/FactionService.cpp)
+- Idempotent Faction Reconciler: [FactionReconciler.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/FactionReconciler.cpp)
+- Unloaded Actor Queue: [DeferredActorResolver.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/DeferredActorResolver.cpp)
 
-`FactionService` hooks the Creation Engine's native `Actor::AddToFaction` and `Actor::RemoveFromFaction` functions via inline x86-64 prologue detours. It enables M.A.R.A.S to automatically detect vanilla or third-party marriage/divorce events (`PlayerMarriedFaction`), enforce player polygamy by blocking vanilla single-marriage lockouts on the player character, and broadcast real-time faction change notifications to internal listeners.
+`FactionService` hooks the Creation Engine's native `Actor::AddToFaction` and `Actor::RemoveFromFaction` functions via inline x86-64 prologue detours to detect external vanilla or third-party marriage/divorce events (`PlayerMarriedFaction`), block vanilla single-marriage lockouts when polygamy is enabled, and notify internal listeners. All idempotent M.A.R.A.S faction convergence is handled by `FactionReconciler` from pure desired-state plans in `EngineSyncPlan`.
 
 ---
 
@@ -40,7 +43,16 @@ In vanilla Skyrim, the `RelationshipMarriage` quest adds the **Player character 
 
 ## 4. Re-Entrancy Prevention (`InternalFactionScope`)
 
-Because `NPCRelationshipManager` itself modifies `PlayerMarriedFaction` and M.A.R.A.S factions when promoting or demoting NPCs, `FactionService` uses a thread-local scope guard (`InternalFactionScope`):
+Because M.A.R.A.S itself modifies `PlayerMarriedFaction` and M.A.R.A.S factions when promoting or demoting NPCs, `FactionService` uses a thread-local scope guard (`InternalFactionScope`):
 - While M.A.R.A.S is performing its own internal faction synchronization, `IsInternalFactionUpdate()` returns `true`.
 - When `true`, `Hook_AddToFaction` and `Hook_RemoveFromFaction` bypass the external auto-promote/auto-demote marriage triggers (preventing infinite recursion) while still notifying registered faction listeners and forwarding the call to the original engine function.
+
+---
+
+## 5. Idempotent Reconciliation (`FactionReconciler` & `DeferredActorResolver`)
+
+`FactionReconciler` separates pure desired-state calculation from live engine mutation:
+- Evaluates desired M.A.R.A.S faction ranks and exclusions in `EngineSyncPlan` (`maras_state`) from an immutable `WorldStateSnapshot` (relationship status/tracked rank, archetypes, spouse hierarchy slot, affection tier, cheating/open flags, non-cheating main eligibility, housing & vendor merchant factions, child household & both-parents factions, pet/critter factions, werewolf inheritance, and adult-child training class).
+- Applies only the minimal delta under `InternalFactionScope` so repeated reconciliation calls are safe no-ops when the engine actor already matches.
+- Queues unloaded or temporarily missing actor `FormID`s into `DeferredActorResolver`, which automatically replays faction and package convergence once the actor initializes or loads 3D (`TESObjectLoadedEvent`).
 

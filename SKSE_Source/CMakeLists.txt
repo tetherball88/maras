@@ -77,6 +77,7 @@ add_library(maras_state STATIC
     modules/state/src/WorldStore.cpp
     modules/state/src/CoSaveCodec.cpp
     modules/state/src/SpatialActorSnapshot.cpp
+    modules/state/src/EngineSyncPlan.cpp
 )
 target_compile_features(maras_state PUBLIC cxx_std_23)
 target_include_directories(maras_state PUBLIC
@@ -190,6 +191,7 @@ if(MARAS_BUILD_TESTS)
         tests/test_affair_ledger.cpp
         tests/test_world_store.cpp
         tests/test_perspective_lens.cpp
+        tests/test_reconcilers.cpp
     )
     target_compile_features(maras_tests PRIVATE cxx_std_23)
     target_include_directories(maras_tests PRIVATE

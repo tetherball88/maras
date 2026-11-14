@@ -1,12 +1,12 @@
 # M.A.R.A.S — Package Override Configuration (`PackageOverrides.ini`)
 
-This document explains how [PackageOverrideService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageOverrideService.cpp) manages AI packages on M.A.R.A.S-registered household actors, pets/critters, and NPC-couple children, and how to configure `Data/SKSE/Plugins/PackageOverrides.ini` to coexist cleanly with follower frameworks, quest mods, and AI dialogue systems.
+This document explains how [PackageOverrideService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageOverrideService.cpp) and [PackageReconciler.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageReconciler.cpp) manage AI packages on M.A.R.A.S-registered household actors, pets/critters, traveling adult children, and NPC-couple children, and how to configure `Data/SKSE/Plugins/PackageOverrides.ini` to coexist cleanly with follower frameworks, quest mods, and AI dialogue systems.
 
 ---
 
 ## Related Documentation
 
-- [PackageOverrideService Mechanics](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PackageOverrideService.md) — Architectural deep dive into the engine hook (`RELOCATION_ID(36404, 37398) + 0x47`), registry rebuilding, and evaluation pipeline.
+- [PackageOverrideService & PackageReconciler Mechanics](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PackageOverrideService.md) — Architectural deep dive into the engine hook (`RELOCATION_ID(36404, 37398) + 0x47`), RCU snapshot publishing, deferred resolution, and evaluation pipeline.
 - [PlayerHouseService Mechanics](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PlayerHouseService.md) — How tenant housing and the per-NPC **Stay at Home** flag work.
 - [PlayerChildrenService Mechanics](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/PlayerChildrenService.md) — How household children, pets, and critters are managed.
 - [Advanced Configuration and Modding](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md) — Overview of all external configuration files in M.A.R.A.S.

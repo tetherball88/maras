@@ -18,6 +18,7 @@
 #include <random>
 #include <unordered_map>
 
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -943,6 +944,13 @@ namespace MARAS {
             }
         }
         return -1;
+    }
+
+    std::string_view AdultChildProgression::GetTrainingClassId(std::int32_t classIndex) noexcept {
+        if (!IsValidTrainingClass(classIndex)) {
+            return "";
+        }
+        return GetSingleton().catalog_[static_cast<std::size_t>(classIndex)].id;
     }
 
     std::string_view AdultChildProgression::GetTrainingClassName(std::int32_t classIndex) noexcept {
@@ -2098,11 +2106,8 @@ namespace MARAS {
                                                  : guardianFallbackSkillType;
             const Temperament childTemperament = NPCTypeDeterminer::ComputeTemperament(inheritedSocialClass, childSkillType);
 
-            // Store adult child archetype profile and sync M.A.R.A.S engine mirror factions
+            // Store adult child archetype profile (mirror factions converge after WorldStore commit)
             mgr.UpsertNPCProfile(NPCProfileData(childID, inheritedSocialClass, childSkillType, childTemperament));
-            mgr.AddToSocialClassFaction(childID, static_cast<std::int8_t>(inheritedSocialClass));
-            mgr.AddToSkillTypeFaction(childID, static_cast<std::int8_t>(childSkillType));
-            mgr.AddToTemperamentFaction(childID, static_cast<std::int8_t>(childTemperament));
 
             std::string inheritedDaedricPatron;
             const float finalHealth = childNpc ? static_cast<float>(childNpc->playerSkills.health) : 100.0f;
@@ -2146,7 +2151,7 @@ namespace MARAS {
                 }
             }
 
-            // Pillar 1: Hereditary Beastblood (Lycanthropy)
+            // Pillar 1: Hereditary Beastblood (Lycanthropy spells; pack/werewolf factions converge via FactionReconciler)
             if (entry.hasBeastblood) {
                 auto& fc = FormCache::GetSingleton();
                 if (auto* wwImmunity = fc.GetWerewolfImmunitySpell(); wwImmunity && !actor->HasSpell(wwImmunity)) {
@@ -2154,18 +2159,6 @@ namespace MARAS {
                 }
                 if (auto* wwChange = fc.GetWerewolfChangeSpell(); wwChange && !actor->HasSpell(wwChange)) {
                     actor->AddSpell(wwChange);
-                }
-                if (auto* playerWWFac = fc.GetPlayerWerewolfFaction()) {
-                    Utils::AddToFaction(actor, playerWWFac, 0);
-                }
-                if (StringUtils::CaseInsensitiveEquals(classSpec.id, "pack_berserker")) {
-                    if (auto* circleFac = fc.GetCompanionsCircleFaction()) {
-                        Utils::AddToFaction(actor, circleFac, 0);
-                    }
-                } else if (StringUtils::CaseInsensitiveEquals(classSpec.id, "pack_hunter")) {
-                    if (auto* frostmoonFac = fc.GetFrostmoonWerewolvesFaction()) {
-                        Utils::AddToFaction(actor, frostmoonFac, 0);
-                    }
                 }
             }
 
@@ -2259,6 +2252,7 @@ namespace MARAS {
         // Apply per-actor 3D visuals and runtime ExtraCombatStyle
         ApplyChildVisualsToActor(actor, entry);
         mgr.UpsertChildEntry(entry);
+        FactionReconciler::GetSingleton().ReconcileLoadedActor(actor);
     }
 
     void AdultChildProgression::ApplyChildVisualsToActor(RE::Actor* actor, ChildRegistryEntry& entry) {

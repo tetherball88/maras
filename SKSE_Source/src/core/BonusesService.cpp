@@ -1,5 +1,6 @@
 #include "core/BonusesService.h"
 
+#include "core/BuffReconciler.h"
 #include "utils/Common.h"
 #include "utils/StringUtils.h"
 
@@ -79,6 +80,7 @@ namespace MARAS {
             }
 
             MARAS_LOG_INFO("BonusesService: loaded bonuses ({} categories)", data_.size());
+            BuffReconciler::GetSingleton().InvalidateCache();
             return true;
         } catch (const std::exception& e) {
             MARAS_LOG_ERROR("BonusesService::LoadFromFile exception: {}", e.what());
@@ -86,7 +88,10 @@ namespace MARAS {
         }
     }
 
-    void BonusesService::Clear() { data_.clear(); }
+    void BonusesService::Clear() {
+        data_.clear();
+        BuffReconciler::GetSingleton().InvalidateCache();
+    }
 
     int BonusesService::GetBonusCount(const std::string& type) const {
         auto it = data_.find(StringUtils::ToLowerStd(type));

@@ -8,7 +8,7 @@
 #include <RE/P/PackageLocation.h>
 #include <RE/T/TESPackage.h>
 
-#include "core/FactionService.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/PackageOverrideService.h"
@@ -33,28 +33,10 @@ namespace MARAS::Utils {
             return false;
         }
 
-        auto* extraLinkedRef = srcRef->extraList.GetByType<RE::ExtraLinkedRef>();
-        if (!extraLinkedRef) {
-            extraLinkedRef = RE::BSExtraData::Create<RE::ExtraLinkedRef>();
-            srcRef->extraList.Add(extraLinkedRef);
+        auto* existing = srcRef->extraList.GetLinkedRef(a_keyword);
+        if (existing != tgtRef) {
+            srcRef->extraList.SetLinkedRef(tgtRef, a_keyword);
         }
-
-        for (auto& entry : extraLinkedRef->linkedRefs) {
-            if (entry.keyword == a_keyword) {
-                entry.refr = tgtRef;
-                if (a_evaluatePackage) {
-                    if (auto* actor = srcRef->As<RE::Actor>()) {
-                        actor->EvaluatePackage();
-                    }
-                }
-                return true;
-            }
-        }
-
-        RE::ExtraLinkedRef::LinkedRef linkedRef;
-        linkedRef.keyword = a_keyword;
-        linkedRef.refr = tgtRef;
-        extraLinkedRef->linkedRefs.push_back(linkedRef);
 
         if (a_evaluatePackage) {
             if (auto* actor = srcRef->As<RE::Actor>()) {
@@ -76,27 +58,18 @@ namespace MARAS::Utils {
             return false;
         }
 
-        auto* extraLinkedRef = srcRef->extraList.GetByType<RE::ExtraLinkedRef>();
-        if (!extraLinkedRef) {
+        if (!srcRef->extraList.GetLinkedRef(a_keyword)) {
             return false;
         }
 
-        bool removed = false;
-        for (auto it = extraLinkedRef->linkedRefs.begin(); it != extraLinkedRef->linkedRefs.end();) {
-            if (it->keyword == a_keyword) {
-                it = extraLinkedRef->linkedRefs.erase(it);
-                removed = true;
-            } else {
-                ++it;
-            }
-        }
+        srcRef->extraList.SetLinkedRef(nullptr, a_keyword);
 
-        if (removed && a_evaluatePackage) {
+        if (a_evaluatePackage) {
             if (auto* actor = srcRef->As<RE::Actor>()) {
                 actor->EvaluatePackage();
             }
         }
-        return removed;
+        return true;
     }
 
     // Gets the linked reference FormID for the specified keyword, or 0 if not found.
@@ -110,17 +83,8 @@ namespace MARAS::Utils {
             return 0;
         }
 
-        auto* extraLinkedRef = srcRef->extraList.GetByType<RE::ExtraLinkedRef>();
-        if (!extraLinkedRef) {
-            return 0;
-        }
-
-        for (const auto& entry : extraLinkedRef->linkedRefs) {
-            if (entry.keyword == a_keyword && entry.refr) {
-                return entry.refr->GetFormID();
-            }
-        }
-        return 0;
+        auto* linked = srcRef->extraList.GetLinkedRef(a_keyword);
+        return linked ? linked->GetFormID() : 0;
     }
 
     // High-level all-in-one helper:
@@ -157,7 +121,7 @@ namespace MARAS::Utils {
             return false;
         }
 
-        FactionService::InternalFactionScope scope;
+        FactionReconciler::InternalFactionScope scope;
 
         using func_t = void (*)(RE::Actor*, RE::TESFaction*);
         REL::Relocation<func_t> func{RELOCATION_ID(36680, 37688)};
@@ -192,7 +156,7 @@ namespace MARAS::Utils {
             return false;
         }
 
-        FactionService::InternalFactionScope scope;
+        FactionReconciler::InternalFactionScope scope;
 
         // Direct engine call to set faction rank for actor
         a_actor->AddToFaction(a_faction, a_rank);
