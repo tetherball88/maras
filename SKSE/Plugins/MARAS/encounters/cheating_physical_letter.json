@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "cheating_physical_letter",
+  "modalTone": "danger",
+  "modalSize": "md",
+  "defaultCancelButtonIndex": 0,
+  "allowLoverNameToken": false,
+  "modalTitle": "Charred Letter Found in the Embers",
+  "modalSubtitle": "Addressed to {partner} (Sender Signature Destroyed)",
+  "envelopeMessage": "You notice a piece of parchment left behind as you arrive home.",
+  "infoBoxId": "partner_note",
+  "infoBoxTitle": "Parchment Contents",
+  "buttonId": "close",
+  "buttonLabel": "Put Note Away",
+  "defaults": {
+    "premise": "\"I still feel your touch on my skin, and I've arranged a private place where we won't be interrupted.\"",
+    "clue": "\"Slip out toward {location} as soon as the house is quiet.\"",
+    "signOff": "(The bottom half of the letter has been charred black in the fire, destroying the writer's name.)"
+  },
+  "variants": {
+    "Romantic": {
+      "salutation": "\"My forbidden love {partner}, last night in my arms was still not enough...\""
+    },
+    "Humble": {
+      "salutation": "\"Dearest {partner}, please don't let guilt keep you from our bed tonight...\""
+    },
+    "Independent": {
+      "salutation": "\"{partner}, come to me again tonight—our secret stays between the two of us...\""
+    },
+    "Proud": {
+      "salutation": "\"My magnificent {partner}, no one else could ever match the passion we shared...\""
+    },
+    "Jealous": {
+      "salutation": "\"{partner}, forget your absent partner and come back to my bed tonight...\""
+    }
+  }
+}

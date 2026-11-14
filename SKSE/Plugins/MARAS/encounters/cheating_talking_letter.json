@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "cheating_talking_letter",
+  "modalTone": "warning",
+  "modalSize": "md",
+  "defaultCancelButtonIndex": 0,
+  "allowLoverNameToken": false,
+  "modalTitle": "Half-Burnt Note Near the Hearth",
+  "modalSubtitle": "Addressed to {partner} (Sender Signature Burned Away)",
+  "envelopeMessage": "You notice a piece of parchment left behind as you arrive home.",
+  "infoBoxId": "partner_note",
+  "infoBoxTitle": "Parchment Contents",
+  "buttonId": "close",
+  "buttonLabel": "Put Note Away",
+  "defaults": {
+    "premise": "\"Every stolen conversation we've shared lately has only left me wishing we didn't have to hide in the shadows.\"",
+    "clue": "\"Meet me near {location} when you can slip away cleanly.\"",
+    "signOff": "(The bottom corner of the parchment and the sender's signature have been hastily burned away in the hearth embers.)"
+  },
+  "variants": {
+    "Romantic": {
+      "salutation": "\"Dearest {partner}, I cannot stop thinking about our last quiet talk...\""
+    },
+    "Humble": {
+      "salutation": "\"Dear {partner}, I know how hesitant you have been, and I promise no one will learn of our meetings...\""
+    },
+    "Independent": {
+      "salutation": "\"{partner}, slip away from the house whenever you have a spare hour...\""
+    },
+    "Proud": {
+      "salutation": "\"To the incomparable {partner}—someone of your grace deserves far more devotion than an empty hearth...\""
+    },
+    "Jealous": {
+      "salutation": "\"{partner}, why wait at home alone while your partner wanders Skyrim? Let us talk again tonight...\""
+    }
+  }
+}

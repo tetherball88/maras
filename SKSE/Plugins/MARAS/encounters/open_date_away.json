@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "open_date_away",
+  "modalTone": "default",
+  "modalSize": "md",
+  "defaultCancelButtonIndex": 0,
+  "allowLoverNameToken": true,
+  "modalTitle": "Note from {partner}",
+  "modalSubtitle": "Open Relationship — Evening Out",
+  "envelopeMessage": "You notice a piece of parchment left behind as you arrive home.",
+  "infoBoxId": "partner_note",
+  "infoBoxTitle": "Parchment Contents",
+  "buttonId": "close",
+  "buttonLabel": "Put Note Away",
+  "defaults": {
+    "clue": "We'll be spending time around {location}. Feel free to join us if your travels bring you nearby, or I'll see you at home later tonight.",
+    "signOff": "— Yours, {partner}"
+  },
+  "variants": {
+    "Romantic": {
+      "salutation": "My dearest {player},",
+      "premise": "I was hoping to catch you before I stepped out, but my heart called me away for the evening to share a warm drink and conversation with {lover}."
+    },
+    "Humble": {
+      "salutation": "Dear {player},",
+      "premise": "I wanted to make sure you knew where I went so you wouldn't worry when you came home—{lover} invited me out for a quiet evening together."
+    },
+    "Independent": {
+      "salutation": "{player},",
+      "premise": "Since you were out on the road, I decided to spend the evening with {lover}."
+    },
+    "Proud": {
+      "salutation": "To {player},",
+      "premise": "I have stepped out to enjoy a well-deserved evening in the company of {lover}."
+    },
+    "Jealous": {
+      "salutation": "My love {player},",
+      "premise": "You have been away for so long that I finally accepted {lover}'s invitation to spend the evening together."
+    }
+  }
+}

@@ -36,6 +36,7 @@ namespace MARAS::State {
         static constexpr std::uint16_t IsWerewolf        = 1u << 12;
         static constexpr std::uint16_t IsTrackedFaction  = 1u << 13;
         static constexpr std::uint16_t IsRegisteredAdult = 1u << 14;
+        static constexpr std::uint16_t IsGhost           = 1u << 15;
     };
 
     /**
@@ -86,6 +87,7 @@ namespace MARAS::State {
         [[nodiscard]] constexpr bool IsWerewolf() const noexcept { return HasFlag(LoadedActorFlags::IsWerewolf); }
         [[nodiscard]] constexpr bool IsTrackedFaction() const noexcept { return HasFlag(LoadedActorFlags::IsTrackedFaction); }
         [[nodiscard]] constexpr bool IsRegisteredAdult() const noexcept { return HasFlag(LoadedActorFlags::IsRegisteredAdult); }
+        [[nodiscard]] constexpr bool IsGhost() const noexcept { return HasFlag(LoadedActorFlags::IsGhost); }
 
         void SetDisplayName(std::string_view raw) noexcept;
 

@@ -13,7 +13,7 @@ Copyright (c) 2025–2026 tetherball88. All Rights Reserved, except as explicitl
   repository.
 - "Author" refers to tetherball88.
 - "Public API Files" refers strictly to:
-  1. SKSE_Source/include/MARAS_PublicAPI.h
+  1. SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h
   2. Scripts/Source/MARAS.psc
 
 ================================================================================
@@ -75,7 +75,7 @@ c) Commercial Use or Paywalling:
 ================================================================================
 To allow third-party SKSE plugins and Papyrus mods to freely compile against and
 interface with M.A.R.A.S without licensing friction, the Public API Files
-(`SKSE_Source/include/MARAS_PublicAPI.h` and `Scripts/Source/MARAS.psc`) are
+(`SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h` and `Scripts/Source/MARAS.psc`) are
 licensed under the MIT License:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
