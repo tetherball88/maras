@@ -4,15 +4,18 @@
 #include "core/HomeCellService.h"
 #include "core/LoggingService.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerHouseService.h"
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
 #include "utils/JsonService.h"
-#include "utils/Settings.h"
 #include "utils/StringUtils.h"
 
 #include <charconv>
@@ -843,6 +846,13 @@ namespace MARAS {
             ChildStage stage,
             RE::Actor* actor)
         {
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+                worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+            const auto childView = Projection::PerspectiveView::ForActor(
+                worldSnap, spatialSnap, State::ActorId{ childID }, &GetEngineWerewolfStateProvider());
+
             ChildProfileContextData data;
             data.childID = childID;
             data.stage = stage;
@@ -850,9 +860,9 @@ namespace MARAS {
             data.bioTemplateName = ResolvePlacedActorBioTemplateName(childID);
             data.saveId = ResolveActiveSaveUniqueID();
 
-            data.childName = ActorSvc::GetName(childID);
-            data.isFemale = (ActorSvc::GetSex(childID) == 1);
-            data.raceName = ActorSvc::GetRaceName(childID);
+            data.childName = ResolveActorNameSafe(childID, *worldSnap, *spatialSnap);
+            data.isFemale = (ResolveActorSexSafe(childID, *worldSnap, *spatialSnap) == State::ActorSex::Female);
+            data.raceName = ResolveActorRaceSafe(childID, *worldSnap, *spatialSnap);
 
             if (actor) {
                 if (auto* race = actor->GetRace()) {
@@ -874,9 +884,8 @@ namespace MARAS {
                 }
             }
 
-            auto& mgr = NPCRelationshipManager::GetSingleton();
-            if (auto entryOpt = mgr.GetChildEntry(childID)) {
-                const auto& entry = *entryOpt;
+            if (const auto perceivedOpt = omniscientView.GetPerceivedChild(State::ChildId{ childID }); perceivedOpt.has_value()) {
+                const auto& entry = *perceivedOpt;
                 if (data.childName.empty() && !entry.name.empty()) {
                     data.childName = StringUtils::TrimStd(entry.name);
                 }
@@ -894,77 +903,76 @@ namespace MARAS {
                 }
                 data.trainedInWerewolfPack = AdultChildProgression::DoesTrainingRequireBeastblood(trainIdx);
                 data.trainingLocation = StringUtils::TrimStd(entry.trainingLocation);
-                data.trainingClassName = std::string(NPCRelationshipManager::GetTrainingClassName(trainIdx));
+                data.trainingClassName = std::string(AdultChildProgression::GetTrainingClassName(trainIdx));
                 data.trainingDescription = std::string(AdultChildProgression::GetTrainingDescription(trainIdx));
                 data.savedChildhoodBioTemplateName = StringUtils::TrimStd(entry.savedBioTemplateName);
 
-                const auto& sec = entry.paternitySecret;
-                data.bioMotherID = mgr.GetBioMother(childID);
-                data.bioFatherID = mgr.GetBioFather(childID);
-
-                RE::FormID explicitPresumedFatherID = mgr.GetPresumedFather(childID);
-                RE::FormID motherPartnerID = mgr.GetMotherPartner(childID);
-                RE::FormID presFatherID = explicitPresumedFatherID != 0 ? explicitPresumedFatherID : motherPartnerID;
-                if (presFatherID != 0 && data.bioMotherID != 0 && explicitPresumedFatherID == 0 &&
-                    !sec.isSecretForPartner && !mgr.IsGuardian(childID, presFatherID)) {
-                    auto relSt = mgr.GetRelationshipStatus(data.bioMotherID, presFatherID);
-                    if (relSt == RelationshipStatus::ExDating || relSt == RelationshipStatus::ExLover ||
-                        relSt == RelationshipStatus::Jilted || relSt == RelationshipStatus::Divorced) {
-                        presFatherID = 0;
-                    }
-                }
-
-                const bool isBioSameAsPresumed = (presFatherID != 0 && data.bioFatherID != 0 && presFatherID == data.bioFatherID);
-                data.hasPresumedFather = (presFatherID != 0 && !isBioSameAsPresumed && presFatherID != data.bioMotherID);
+                data.bioMotherID = entry.bioMother.raw();
+                data.bioFatherID = entry.perceivedBioFather.raw();
+                const RE::FormID presFatherID = entry.presumedFather.raw();
+                data.hasPresumedFather = (presFatherID != 0);
                 if (data.hasPresumedFather) {
                     data.presumedFatherID = presFatherID;
                 }
 
-                data.hasPaternitySecret = data.hasPresumedFather && (sec.isSecret || sec.discovered || explicitPresumedFatherID != 0);
-                data.partnerKnowsPaternity = !data.hasPaternitySecret || sec.discovered || sec.discoveredByPartner || !sec.isSecretForPartner;
-                data.bioFatherKnowsPaternity = sec.discovered || sec.discoveredByBioFather || !sec.isSecretForBioFather;
-                data.isSingleMotherSecretFromBioFather = (!data.hasPresumedFather && data.bioFatherID != 0 &&
-                                                          sec.isSecret && sec.isSecretForBioFather && !sec.discoveredByBioFather && !sec.discovered);
-                data.hasPhenotypeMismatch = sec.hasPhenotypeMismatch;
+                const auto* secPtr = entry.paternitySecret.has_value() ? &(*entry.paternitySecret) : nullptr;
+                const bool secIsSecret = secPtr && secPtr->isSecret;
+                const bool secDiscovered = secPtr && secPtr->discovered;
+                const bool secForPartner = secPtr && secPtr->isSecretForPartner;
+                const bool secForBioFather = secPtr && secPtr->isSecretForBioFather;
+                const bool secDiscByPartner = secPtr && secPtr->discoveredByPartner;
+                const bool secDiscByBioFather = secPtr && secPtr->discoveredByBioFather;
+
+                data.hasPaternitySecret = data.hasPresumedFather &&
+                    (secIsSecret || secDiscovered || secForPartner || secForBioFather || secDiscByPartner || secDiscByBioFather);
+                data.partnerKnowsPaternity = !data.hasPaternitySecret || secDiscovered || secDiscByPartner || !secForPartner;
+                data.bioFatherKnowsPaternity = secDiscovered || secDiscByBioFather || !secForBioFather;
+                data.isSingleMotherSecretFromBioFather =
+                    (!data.hasPresumedFather && data.bioFatherID != 0 && secForBioFather && !secDiscByBioFather && !secDiscovered);
+                data.hasPhenotypeMismatch = secPtr && secPtr->hasPhenotypeMismatch;
                 if (data.hasPhenotypeMismatch && data.bioMotherID != 0 && data.presumedFatherID != 0 && data.bioFatherID != 0) {
-                    data.visualDiscrepancyDescription = mgr.GetVisualDiscrepancyDescription(
+                    data.visualDiscrepancyDescription = NPCRelationshipManager::GetSingleton().GetVisualDiscrepancyDescription(
                         data.bioMotherID, data.presumedFatherID, data.bioFatherID);
                 }
 
                 if (data.bioMotherID != 0) {
                     data.bioMotherUUID = ResolvePlacedActorUUID(data.bioMotherID);
-                    data.motherName = ActorSvc::GetName(data.bioMotherID);
-                    data.motherRace = ActorSvc::GetRaceName(data.bioMotherID);
-                    data.motherIsGuardian = mgr.IsGuardian(childID, data.bioMotherID);
+                    data.motherName = ResolveActorNameSafe(data.bioMotherID, *worldSnap, *spatialSnap);
+                    data.motherRace = ResolveActorRaceSafe(data.bioMotherID, *worldSnap, *spatialSnap);
+                    data.motherIsGuardian = entry.guardians.HasGuardian(State::ActorId{ data.bioMotherID });
                 }
 
                 if (data.bioFatherID != 0 && data.bioFatherID != kUnknownFatherFormID) {
                     data.bioFatherUUID = ResolvePlacedActorUUID(data.bioFatherID);
-                    data.bioFatherName = ActorSvc::GetName(data.bioFatherID);
-                    data.bioFatherRace = ActorSvc::GetRaceName(data.bioFatherID);
-                    data.bioFatherIsGuardian = mgr.IsGuardian(childID, data.bioFatherID);
-                } else if (!sec.bioFatherName.empty() && sec.bioFatherName != "Unknown") {
-                    data.bioFatherName = sec.bioFatherName;
+                    data.bioFatherName = ResolveActorNameSafe(data.bioFatherID, *worldSnap, *spatialSnap);
+                    data.bioFatherRace = ResolveActorRaceSafe(data.bioFatherID, *worldSnap, *spatialSnap);
+                    data.bioFatherIsGuardian = entry.guardians.HasGuardian(State::ActorId{ data.bioFatherID });
+                } else if (!entry.perceivedBioFatherFallbackName.empty() && entry.perceivedBioFatherFallbackName != "Unknown") {
+                    data.bioFatherName = entry.perceivedBioFatherFallbackName;
                 }
 
                 if (data.hasPresumedFather && data.presumedFatherID != 0) {
                     data.presumedFatherUUID = ResolvePlacedActorUUID(data.presumedFatherID);
-                    data.presumedFatherName = ActorSvc::GetName(data.presumedFatherID);
-                    data.presumedFatherRace = ActorSvc::GetRaceName(data.presumedFatherID);
-                    data.presumedFatherIsGuardian = mgr.IsGuardian(childID, data.presumedFatherID);
+                    data.presumedFatherName = ResolveActorNameSafe(data.presumedFatherID, *worldSnap, *spatialSnap);
+                    data.presumedFatherRace = ResolveActorRaceSafe(data.presumedFatherID, *worldSnap, *spatialSnap);
+                    data.presumedFatherIsGuardian = entry.guardians.HasGuardian(State::ActorId{ data.presumedFatherID });
                     if (data.bioMotherID != 0) {
-                        data.motherPresumedRelStatus = std::string(Utils::RelationshipStatusToString(
-                            mgr.GetRelationshipStatus(data.bioMotherID, data.presumedFatherID)));
+                        const auto pairOpt = omniscientView.GetPerceivedPair(
+                            State::ActorId{ data.bioMotherID }, State::ActorId{ data.presumedFatherID });
+                        data.motherPresumedRelStatus = pairOpt.has_value()
+                            ? std::string(Utils::RelationshipStatusToString(
+                                static_cast<RelationshipStatus>(pairOpt->status)))
+                            : "Unknown";
                     }
                 }
 
-                data.guardianAID = entry.guardianAID;
-                data.guardianBID = entry.guardianBID;
-                if (entry.guardianAID != 0) {
-                    data.guardianAName = ActorSvc::GetName(entry.guardianAID);
+                data.guardianAID = entry.guardians.slotA.raw();
+                data.guardianBID = entry.guardians.slotB.raw();
+                if (data.guardianAID != 0) {
+                    data.guardianAName = ResolveActorNameSafe(data.guardianAID, *worldSnap, *spatialSnap);
                 }
-                if (entry.guardianBID != 0 && entry.guardianBID != entry.guardianAID) {
-                    data.guardianBName = ActorSvc::GetName(entry.guardianBID);
+                if (data.guardianBID != 0 && data.guardianBID != data.guardianAID) {
+                    data.guardianBName = ResolveActorNameSafe(data.guardianBID, *worldSnap, *spatialSnap);
                 }
 
                 // Populate all involved adults at the moment of generating/updating the bio
@@ -979,8 +987,8 @@ namespace MARAS {
                     ref.formID = adultID;
                     ref.uuid = ResolvePlacedActorUUID(adultID);
                     ref.bioTemplateName = ResolvePlacedActorBioTemplateName(adultID);
-                    ref.name = ActorSvc::GetName(adultID);
-                    ref.raceName = ActorSvc::GetRaceName(adultID);
+                    ref.name = ResolveActorNameSafe(adultID, *worldSnap, *spatialSnap);
+                    ref.raceName = ResolveActorRaceSafe(adultID, *worldSnap, *spatialSnap);
                     ref.roleLabel = roleLabel;
                     ref.isGuardian = isGuardian;
                     ref.fallbackMemories = QueryAdultFallbackMemoriesOnGameThread(adultID);
@@ -1052,34 +1060,14 @@ namespace MARAS {
                         true);
                 }
 
-                // Collect siblings from biological mother, known father, or guardians
-                std::unordered_set<RE::FormID> seenSiblings;
-                auto collectSiblingsFrom = [&](RE::FormID parentID) {
-                    if (parentID == 0 || parentID == kUnknownFatherFormID) return;
-                    for (RE::FormID sibID : mgr.GetChildrenOfActor(parentID)) {
-                        if (sibID == 0 || sibID == childID || !seenSiblings.insert(sibID).second) {
-                            continue;
-                        }
-                        if (auto sibEntry = mgr.GetChildEntry(sibID)) {
-                            if (sibEntry->stage == ChildStage::Unborn) {
-                                continue;
-                            }
-                            std::string sibName = !sibEntry->name.empty()
-                                ? StringUtils::TrimStd(sibEntry->name)
-                                : ActorSvc::GetName(sibID);
-                            if (!sibName.empty()) {
-                                data.siblingNames.push_back(std::move(sibName));
-                            }
-                        }
+                // Collect siblings strictly through child-perspective lens so unaware children never receive secret half-siblings
+                for (const auto& sib : childView.GetPerceivedSiblingsOf(State::ChildId{ childID }, /*forcePublicOnly=*/false)) {
+                    std::string sibName = !sib.name.empty()
+                        ? StringUtils::TrimStd(sib.name)
+                        : ResolveActorNameSafe(sib.childId.raw(), *worldSnap, *spatialSnap);
+                    if (!sibName.empty()) {
+                        data.siblingNames.push_back(std::move(sibName));
                     }
-                };
-                collectSiblingsFrom(data.bioMotherID);
-                collectSiblingsFrom(data.guardianAID);
-                collectSiblingsFrom(data.guardianBID);
-                if (data.hasPresumedFather && !data.partnerKnowsPaternity) {
-                    collectSiblingsFrom(data.presumedFatherID);
-                } else if (!data.isSingleMotherSecretFromBioFather) {
-                    collectSiblingsFrom(data.bioFatherID);
                 }
             }
 

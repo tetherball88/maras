@@ -2,8 +2,12 @@
 
 #include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
+#include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PollingService.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
@@ -121,50 +125,59 @@ namespace MARAS {
 
     std::vector<RE::Actor*> BanterCoordinatorService::GetNearbyLivingActors(float scanRadius) const {
         std::vector<RE::Actor*> result;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        if (!worldSnap || !spatialSnap || scanRadius <= 0.0f) {
+            return result;
+        }
+
         std::unordered_set<RE::FormID> seen;
+        auto& npcIndex = NPCIndex::GetSingleton();
 
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player) return result;
+        spatialSnap->ForEachNearbyCandidate(State::RefId::Player(), scanRadius, [&](const State::LoadedActorSample& sample) {
+            const RE::FormID formID = sample.refId.raw();
+            if (formID == 0 || formID == kPlayerFormID || IsSyntheticChildID(formID)) return;
+            if (seen.contains(formID)) return;
+            if (!sample.Is3DLoaded() || sample.IsDisabled() || sample.IsDeleted() || sample.IsDead()) return;
+            if (sample.IsPlayer() || sample.IsChild() || sample.IsPlayerTeammate()) return;
+            if (sample.IsInCombat() || sample.IsInScene()) return;
 
-        // 1. High process actors (nearby loaded actors)
-        if (auto* processLists = RE::ProcessLists::GetSingleton()) {
-            for (auto& handle : processLists->highActorHandles) {
-                auto actor = handle.get();
-                if (!actor) continue;
-
-                auto formID = actor->GetFormID();
-                if (formID == 0 || formID == kPlayerFormID || seen.contains(formID)) continue;
-                if (IsValidBanterActor(actor.get(), true, scanRadius)) {
-                    seen.insert(formID);
-                    result.push_back(actor.get());
+            if (worldSnap->deceased && worldSnap->deceased->IsDeceased(State::ActorId{ formID }, sample.baseId)) {
+                return;
+            }
+            if (worldSnap->relationships) {
+                const auto playerStatus = worldSnap->relationships->GetStatus(State::ActorId::Player(), State::ActorId{ formID });
+                if (State::IsMainTierStatus(playerStatus)) {
+                    return;
                 }
             }
-        }
 
-        // 2. Interior cell references (if inside an interior cell, ensure no local actor is missed)
-        if (auto* parentCell = player->GetParentCell()) {
-            if (parentCell->IsInteriorCell()) {
-                parentCell->ForEachReference([&](RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
-                    if (auto* actor = ref->As<RE::Actor>()) {
-                        auto formID = actor->GetFormID();
-                        if (formID != 0 && formID != kPlayerFormID && !seen.contains(formID)) {
-                            if (IsValidBanterActor(actor, true, scanRadius)) {
-                                seen.insert(formID);
-                                result.push_back(actor);
-                            }
-                        }
-                    }
-                    return RE::BSContainer::ForEachResult::kContinue;
-                });
+            RE::Actor* actor = npcIndex.GetActorFromFormId(formID);
+            if (!actor) {
+                actor = RE::TESForm::LookupByID<RE::Actor>(formID);
             }
-        }
+            if (!actor || actor->IsGhost()) {
+                return;
+            }
+            if (const auto* base = actor->GetActorBase(); base && base->IsGhost()) {
+                return;
+            }
+
+            seen.insert(formID);
+            result.push_back(actor);
+        });
 
         return result;
     }
 
     std::vector<RE::Actor*> BanterCoordinatorService::FindBanterCoupleCandidates(float scanRadius) {
-        const auto settingsSnap = Settings::GetSingleton().Snapshot();
-        const auto& settings = *settingsSnap;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        if (!worldSnap || !worldSnap->settings || !worldSnap->relationships || !worldSnap->cooldowns || !spatialSnap) {
+            return {};
+        }
+
+        const auto& settings = *worldSnap->settings;
         if (!settings.enableScenes) {
             MARAS_LOG_DEBUG("BanterCoordinator: Banter scenes disabled by master setting");
             return {};
@@ -177,28 +190,81 @@ namespace MARAS {
             return {};
         }
 
-        float currentDay = 0.0f;
-        if (auto* calendar = RE::Calendar::GetSingleton()) {
-            currentDay = calendar->GetDaysPassed();
+        float currentDay = spatialSnap->CurrentGameDay();
+        if (currentDay < 0.0f) {
+            if (auto* calendar = RE::Calendar::GetSingleton()) {
+                currentDay = calendar->GetDaysPassed();
+            } else {
+                currentDay = 0.0f;
+            }
         }
 
-        if (IsSceneOnCooldown(currentDay)) {
-            MARAS_LOG_DEBUG("BanterCoordinator: Banter scenes on cooldown");
-            return {};
+        const float cooldownHours = std::max(0.0f, settings.scenesCooldownHours);
+        if (cooldownHours > 0.0f) {
+            const float lastSceneDay = worldSnap->cooldowns->lastBanterSceneDay;
+            if (lastSceneDay >= 0.0f && currentDay >= lastSceneDay &&
+                (currentDay - lastSceneDay) < (cooldownHours / 24.0f)) {
+                MARAS_LOG_DEBUG("BanterCoordinator: Banter scenes on cooldown");
+                return {};
+            }
         }
 
-        auto localActors = GetNearbyLivingActors(scanRadius);
+        auto isPairOnCooldown = [&](RE::FormID idA, RE::FormID idB) -> bool {
+            const float pairHours = cooldownHours * kCoupleCooldownMultiplier;
+            if (pairHours <= 0.0f) {
+                return false;
+            }
+            const State::CanonicalPairKey key(State::ActorId{ idA }, State::ActorId{ idB });
+            const auto it = worldSnap->cooldowns->banterCoupleCooldowns.find(key);
+            if (it == worldSnap->cooldowns->banterCoupleCooldowns.end()) {
+                return false;
+            }
+            const float lastDay = it->second;
+            if (currentDay < lastDay) {
+                return false;
+            }
+            return (currentDay - lastDay) < (pairHours / 24.0f);
+        };
+
+        std::vector<RE::Actor*> localActors;
+        std::unordered_set<RE::FormID> localActorIDs;
+        auto& npcIndex = NPCIndex::GetSingleton();
+
+        spatialSnap->ForEachNearbyCandidate(State::RefId::Player(), scanRadius, [&](const State::LoadedActorSample& sample) {
+            const RE::FormID formID = sample.refId.raw();
+            if (formID == 0 || formID == kPlayerFormID || IsSyntheticChildID(formID)) return;
+            if (localActorIDs.contains(formID)) return;
+            if (!sample.Is3DLoaded() || sample.IsDisabled() || sample.IsDeleted() || sample.IsDead()) return;
+            if (sample.IsPlayer() || sample.IsChild() || sample.IsPlayerTeammate()) return;
+            if (sample.IsInCombat() || sample.IsInScene()) return;
+
+            if (worldSnap->deceased && worldSnap->deceased->IsDeceased(State::ActorId{ formID }, sample.baseId)) {
+                return;
+            }
+            const auto playerStatus = worldSnap->relationships->GetStatus(State::ActorId::Player(), State::ActorId{ formID });
+            if (State::IsMainTierStatus(playerStatus)) {
+                return;
+            }
+
+            RE::Actor* actor = npcIndex.GetActorFromFormId(formID);
+            if (!actor) {
+                actor = RE::TESForm::LookupByID<RE::Actor>(formID);
+            }
+            if (!actor || actor->IsGhost()) {
+                return;
+            }
+            if (const auto* base = actor->GetActorBase(); base && base->IsGhost()) {
+                return;
+            }
+
+            localActorIDs.insert(formID);
+            localActors.push_back(actor);
+        });
+
         if (localActors.empty()) {
             MARAS_LOG_DEBUG("BanterCoordinator: No eligible local actors found within radius {}", scanRadius);
             return {};
         }
-
-        std::unordered_set<RE::FormID> localActorIDs;
-        for (auto* actor : localActors) {
-            localActorIDs.insert(actor->GetFormID());
-        }
-
-        auto& relManager = NPCRelationshipManager::GetSingleton();
 
         // ── Tier 1: Check for couples where BOTH partners are in localActors ─────
         std::vector<std::pair<RE::Actor*, RE::Actor*>> tier1Candidates;
@@ -207,16 +273,13 @@ namespace MARAS {
             for (size_t j = i + 1; j < localActors.size(); ++j) {
                 auto* actorA = localActors[i];
                 auto* actorB = localActors[j];
-                auto idA = actorA->GetFormID();
-                auto idB = actorB->GetFormID();
+                const auto idA = actorA->GetFormID();
+                const auto idB = actorB->GetFormID();
 
-                if (relManager.IsPlayerActiveMainPartner(idA) || relManager.IsPlayerActiveMainPartner(idB)) {
-                    continue;
-                }
-
-                auto status = relManager.GetRelationshipStatus(idA, idB);
+                const auto status = static_cast<RelationshipStatus>(
+                    worldSnap->relationships->GetStatus(State::ActorId{ idA }, State::ActorId{ idB }));
                 if (IsBanterQualifyingStatus(status)) {
-                    if (!IsOnCooldown(idA, idB, currentDay)) {
+                    if (!isPairOnCooldown(idA, idB)) {
                         tier1Candidates.emplace_back(actorA, actorB);
                     } else {
                         MARAS_LOG_DEBUG("BanterCoordinator: Pair ({:08X}, {:08X}) is on cooldown", idA, idB);
@@ -227,9 +290,11 @@ namespace MARAS {
 
         if (!tier1Candidates.empty()) {
             auto [pickedA, pickedB] = SelectPrioritizedCouple(tier1Candidates);
+            const auto pickedAId = pickedA->GetFormID();
+            const auto pickedBId = pickedB->GetFormID();
             MARAS_LOG_INFO("BanterCoordinator: Tier 1 selected couple ({:08X}: '{}', {:08X}: '{}')",
-                           pickedA->GetFormID(), pickedA->GetName(),
-                           pickedB->GetFormID(), pickedB->GetName());
+                           pickedAId, ResolveActorNameSafe(pickedAId, *worldSnap, *spatialSnap),
+                           pickedBId, ResolveActorNameSafe(pickedBId, *worldSnap, *spatialSnap));
             return { pickedA, pickedB };
         }
 
@@ -238,15 +303,15 @@ namespace MARAS {
         std::unordered_set<RelationshipPairKey, RelationshipPairKeyHash> seenPairs;
 
         for (auto* localActor : localActors) {
-            auto localID = localActor->GetFormID();
-            if (relManager.IsPlayerActiveMainPartner(localID)) continue;
+            const auto localID = localActor->GetFormID();
+            const auto activeRels = worldSnap->relationships->GetActivePartners(State::ActorId{ localID });
 
-            auto activeRels = relManager.GetActiveRelationships(localID);
-
-            for (const auto& [partnerID, status] : activeRels) {
+            for (const auto& [partnerActorId, rawStatus] : activeRels) {
+                const RE::FormID partnerID = partnerActorId.raw();
                 if (partnerID == 0 || partnerID == kPlayerFormID || IsSyntheticChildID(partnerID)) continue;
-                if (relManager.IsPlayerActiveMainPartner(partnerID)) continue;
-                if (!IsBanterQualifyingStatus(status)) continue;
+                const auto playerStatus = worldSnap->relationships->GetStatus(State::ActorId::Player(), partnerActorId);
+                if (State::IsMainTierStatus(playerStatus)) continue;
+                if (!IsBanterQualifyingStatus(static_cast<RelationshipStatus>(rawStatus))) continue;
 
                 // If partner was already locally present, it was handled in Tier 1
                 if (localActorIDs.contains(partnerID)) continue;
@@ -254,16 +319,19 @@ namespace MARAS {
                 RelationshipPairKey pairKey(localID, partnerID);
                 if (seenPairs.contains(pairKey)) continue;
 
-                if (IsOnCooldown(localID, partnerID, currentDay)) {
+                if (isPairOnCooldown(localID, partnerID)) {
                     MARAS_LOG_DEBUG("BanterCoordinator: Pair ({:08X}, {:08X}) is on cooldown", localID, partnerID);
                     continue;
                 }
 
                 // Lookup absent partner reference
-                auto* partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
+                RE::Actor* partnerActor = npcIndex.GetActorFromFormId(partnerID);
+                if (!partnerActor) {
+                    partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
+                }
                 if (!partnerActor) continue;
 
-                // Validate absent partner
+                // Validate absent partner (distance/3D loaded not required)
                 if (!IsValidBanterActor(partnerActor, false /*checkDistanceAndLoaded*/)) {
                     continue;
                 }
@@ -275,9 +343,11 @@ namespace MARAS {
 
         if (!tier2Candidates.empty()) {
             auto [pickedLocal, pickedAbsent] = SelectPrioritizedCouple(tier2Candidates);
+            const auto pickedLocalId = pickedLocal->GetFormID();
+            const auto pickedAbsentId = pickedAbsent->GetFormID();
             MARAS_LOG_INFO("BanterCoordinator: Tier 2 selected couple (Local {:08X}: '{}', Absent {:08X}: '{}')",
-                           pickedLocal->GetFormID(), pickedLocal->GetName(),
-                           pickedAbsent->GetFormID(), pickedAbsent->GetName());
+                           pickedLocalId, ResolveActorNameSafe(pickedLocalId, *worldSnap, *spatialSnap),
+                           pickedAbsentId, ResolveActorNameSafe(pickedAbsentId, *worldSnap, *spatialSnap));
             return { pickedLocal, pickedAbsent };
         }
 
@@ -338,6 +408,18 @@ namespace MARAS {
 
     bool BanterCoordinatorService::IsBanterPartnerPresent(RE::Actor* partner, float scanRadius) const {
         if (!partner) return false;
+        const RE::FormID partnerID = partner->GetFormID();
+        if (partnerID == 0 || partnerID == kPlayerFormID) return false;
+
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        if (spatialSnap && spatialSnap->Sequence() != 0) {
+            const auto* sample = spatialSnap->Find(State::RefId{ partnerID });
+            if (!sample || !sample->Is3DLoaded() || sample->IsDisabled() || sample->IsDeleted() || sample->IsDead()) {
+                return false;
+            }
+            return spatialSnap->IsWithinRadius(State::RefId::Player(), State::RefId{ partnerID }, scanRadius);
+        }
+
         if (!partner->Is3DLoaded()) return false;
         if (partner->IsDisabled() || partner->IsDeleted() || partner->IsDead()) return false;
 
@@ -452,9 +534,8 @@ namespace MARAS {
         MARAS_LOG_INFO("BanterCoordinator::Revert: Reverted to clean state");
     }
 
-    nlohmann::json BanterCoordinatorService::DumpJson() const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto& cd = *snap->cooldowns;
+    nlohmann::json BanterCoordinatorService::DumpJson(const Projection::PerspectiveView& view) const {
+        const auto& cd = view.Cooldowns();
         const float effectiveCooldownHours = GetCooldownHours();
 
         nlohmann::json j = nlohmann::json::object();
@@ -464,6 +545,12 @@ namespace MARAS {
 
         nlohmann::json cooldownsArray = nlohmann::json::array();
         for (const auto& [key, lastDay] : cd.banterCoupleCooldowns) {
+            if (!view.IsOmniscient()) {
+                const auto perceived = view.GetPerceivedPair(key.first, key.second);
+                if (!perceived.has_value() || perceived->isSecretAffair) {
+                    continue;
+                }
+            }
             const RE::FormID idA = key.first.raw();
             const RE::FormID idB = key.second.raw();
             nlohmann::json entry = nlohmann::json::object();
@@ -476,6 +563,13 @@ namespace MARAS {
         }
         j["coupleCooldowns"] = std::move(cooldownsArray);
         return j;
+    }
+
+    nlohmann::json BanterCoordinatorService::DumpJson() const {
+        return DumpJson(Projection::PerspectiveView::ForDashboard(
+            State::WorldStore::GetSingleton().Snapshot(),
+            State::SpatialSnapshotStore::GetSingleton().Snapshot(),
+            &GetEngineWerewolfStateProvider()));
     }
 
     bool BanterCoordinatorService::IsLocationAllowedForScenes(RE::BGSLocation* location) const {

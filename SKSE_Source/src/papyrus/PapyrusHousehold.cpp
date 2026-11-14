@@ -25,7 +25,6 @@ namespace MARAS::PapyrusInterface {
 
     std::vector<RE::BGSLocation*> GetAllPlayerHouses(RE::StaticFunctionTag*) {
         std::vector<RE::BGSLocation*> result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = MARAS::PlayerHouseService::GetSingleton().GetAllPlayerHouses();
         result.reserve(ids.size());
         for (auto id : ids) {
@@ -37,7 +36,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::vector<std::string> GetAllPlayerHousesNames(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::PlayerHouseService::GetSingleton().GetAllPlayerHousesNames();
     }
 
@@ -81,14 +79,12 @@ namespace MARAS::PapyrusInterface {
 
     bool GetTenantStayAtHome(RE::StaticFunctionTag*, RE::Actor* spouse) {
         if (!spouse) return true;
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::PlayerHouseService::GetSingleton().GetTenantStayAtHome(spouse->GetFormID());
     }
 
     std::vector<RE::Actor*> GetPlayerHouseTenants(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse) {
         if (!playerHouse) return {};
         std::vector<RE::Actor*> result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = MARAS::PlayerHouseService::GetSingleton().GetPlayerHouseTenants(playerHouse->GetFormID());
         result.reserve(ids.size());
         for (auto id : ids) {
@@ -101,13 +97,11 @@ namespace MARAS::PapyrusInterface {
 
     RE::TESObjectREFR* GetHouseMarker(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse) {
         if (!playerHouse) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::PlayerHouseService::GetSingleton().GetHouseMarkerRef(playerHouse->GetFormID());
     }
 
     RE::BGSLocation* GetTenantHouse(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID houseId = MARAS::PlayerHouseService::GetSingleton().GetTenantHouseFormID(npc->GetFormID());
         if (houseId == 0) return nullptr;
         if (auto form = RE::TESForm::LookupByID(houseId)) {
@@ -117,7 +111,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     int CountPlayerHouses(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::PlayerHouseService::GetSingleton().CountPlayerHouses();
     }
 
@@ -129,7 +122,6 @@ namespace MARAS::PapyrusInterface {
 
     bool IsHouseInitialMoveDone(RE::StaticFunctionTag*, RE::BGSLocation* houseLoc) {
         if (!houseLoc) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerHouseService::GetSingleton().IsHouseInitialMoveDone(houseLoc->GetFormID());
     }
 
@@ -140,7 +132,6 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::TESObjectREFR*> GetCellDoors(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell) {
         if (!currentCell) return {};
         std::vector<RE::TESObjectREFR*> result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto doorIDs = MARAS::HomeCellService::GetSingleton().GetCellDoors(currentCell->GetFormID());
         result.reserve(doorIDs.size());
         for (auto id : doorIDs) {
@@ -153,7 +144,6 @@ namespace MARAS::PapyrusInterface {
 
     RE::TESObjectCELL* GetNpcOriginalHouse(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID cellId = MARAS::HomeCellService::GetSingleton().GetNpcHome(npc);
         if (cellId == 0) return nullptr;
         if (auto form = RE::TESForm::LookupByID(cellId)) {
@@ -168,7 +158,6 @@ namespace MARAS::PapyrusInterface {
             return nullptr;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID markerId = MARAS::HomeCellService::GetSingleton().GetNpcOriginalHouseCenterMarker(npc);
         MARAS_LOG_INFO("GetNpcOriginalHouseCenterMarker (Papyrus): NPC {:08X} -> Marker {:08X}", npc->GetFormID(),
                        markerId);
@@ -198,7 +187,6 @@ namespace MARAS::PapyrusInterface {
         std::vector<RE::TESObjectREFR*> result;
         if (!npc) return result;
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto bedIDs = MARAS::HomeCellService::GetSingleton().GetNpcBeds(npc);
         result.reserve(bedIDs.size());
         for (auto id : bedIDs) {
@@ -229,7 +217,6 @@ namespace MARAS::PapyrusInterface {
 
     bool IsHouseSharedWithPlayer(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell) {
         if (!currentCell) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseAssetsService::GetSingleton().IsHouseSharedWithPlayer(currentCell->GetFormID());
     }
 
@@ -239,7 +226,6 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID houseId = MARAS::HomeCellService::GetSingleton().GetNpcHome(spouse);
         if (houseId == 0) return false;
         return MARAS::SpouseAssetsService::GetSingleton().IsHouseSharedWithPlayer(houseId);

@@ -63,7 +63,7 @@ sequenceDiagram
 ```
 
 1. **Main-Thread Context Gathering & Bounded `std::jthread` Worker (`EnqueueProfileTask`)**:
-   - `RequestChildProfileUpdate` schedules `GatherChildProfileContextOnGameThread` via `AddCurrentEpochTask` so all `RE::Actor*`, `NPCRelationshipManager`, and `PublicGetMemoriesForActor` fallback reads execute strictly on the SKSE main game thread.
+   - `RequestChildProfileUpdate` schedules `GatherChildProfileContextOnGameThread` via `AddCurrentEpochTask` so all placed `RE::Actor*` location/cell/race lookups and `PublicGetMemoriesForActor` fallback reads execute strictly on the SKSE main game thread. Child metadata and true paternity lineage are read via `PerspectiveView::ForDashboard(..., revealSecretsOverride)` while sibling lists are filtered through `PerspectiveView::ForActor` over `WorldStore::Snapshot()` + `SpatialSnapshotStore::Snapshot()` so unaware children never receive secret half-siblings in their profile.
    - A self-contained `ProfileRenderTask` (stamped with `SessionEpoch`) is pushed onto a bounded FIFO queue (`kMaxPendingTasks = 32`) processed by a single drain-and-exit joinable `std::jthread` (`WorkerLoop(std::stop_token)`). No detached threads are ever spawned, and `Revert()` clears queued work on save transitions.
 2. **Involved Parties Context Rendering (`RenderInvolvedPartiesContext`)**:
    - On the `std::jthread` worker, renders `helpers/maras_child_bio_context` via `POST /prompts?api=render-template-preview` (`1000ms` connect / `5000ms` send-receive timeouts), with an inline template fallback if the file was added before a prompt reload, and a pure disk + pre-fetched memory fallback if SkyrimNet's local web server is disabled in `WebServer.yaml` (making zero `RE::*` or `SkyrimNet.dll` calls off-thread).

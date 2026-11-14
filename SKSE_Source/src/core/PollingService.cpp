@@ -418,34 +418,20 @@ namespace MARAS {
 
     std::unordered_set<PollingService::FormID> PollingService::GetCurrentTeammates() {
         std::unordered_set<FormID> teammates;
-
-        auto processLists = RE::ProcessLists::GetSingleton();
-        if (!processLists) {
-            MARAS_LOG_ERROR("ProcessLists is null");
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        if (!spatialSnap) {
             return teammates;
         }
 
-        // Get high actors (closest to player)
-        auto& highActorHandles = processLists->highActorHandles;
-
-        auto& manager = NPCRelationshipManager::GetSingleton();
-
-        for (auto& handle : highActorHandles) {
-            auto actor = handle.get();
-            if (!actor) continue;
-            if (!actor->Is3DLoaded()) continue;
-            if (actor->IsDeleted()) continue;
-
-            if (!manager.IsRegistered(actor->GetFormID())) {
-                continue;
-            }
-
-            if (Utils::IsPlayerFollower(actor.get())) {
-                teammates.insert(actor->GetFormID());
+        const auto teammateIds = spatialSnap->GetPlayerTeammates(worldSnap ? worldSnap->actors.get() : nullptr);
+        teammates.reserve(teammateIds.size());
+        for (const auto refId : teammateIds) {
+            if (!refId.IsNull()) {
+                teammates.insert(refId.raw());
             }
         }
 
-        // MARAS_LOG_DEBUG("Found {} teammates", teammates.size());
         return teammates;
     }
 

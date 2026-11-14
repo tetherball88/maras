@@ -4,9 +4,13 @@
 #include "core/SkyrimNetMemoryService.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/AffectionService.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerChildrenService.h"
 #include "core/HomeCellService.h"
 #include "core/FormCache.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
+#include "maras/state/WorldStore.h"
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -16,6 +20,11 @@
 
 
 #include <Windows.h>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <set>
+#include <unordered_set>
 
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
@@ -39,7 +48,7 @@ namespace MARAS {
 
     bool IsSkyrimNetAvailable()
     {
-        if (Settings::GetSingleton().GetSimulateNoSkyrimNet()) {
+        if (State::WorldStore::GetSingleton().Snapshot()->settings->simulateNoSkyrimNet) {
             return false;
         }
         return GetModuleHandleW(L"SkyrimNet.dll") != nullptr;
@@ -97,15 +106,9 @@ namespace {
         return uuid;
     }
 
-    static uint64_t ActorToUUID(RE::Actor* actor)
-    {
-        if (!actor) return 0;
-        return FormIDToUUID(actor->GetFormID());
-    }
-
     static float GetNearbyActorsRadius()
     {
-        float settingRadius = Settings::GetSingleton().GetSkyrimNetActionRadius();
+        const float settingRadius = State::WorldStore::GetSingleton().Snapshot()->settings->skyrimnetActionRadius;
         if (settingRadius > 0.0f) {
             return settingRadius;
         }
@@ -135,7 +138,6 @@ namespace {
             const uint32_t actorFormId = actor ? actor->GetFormID() : 0u;
             MARAS_LOG_TRACE("[SkyrimNet] Invoking decorator '{}' for actor formId 0x{:08X}.", decName, actorFormId);
             try {
-                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 std::string result = cb(actor);
                 MARAS_LOG_TRACE("[SkyrimNet] Decorator '{}' returned for actor formId 0x{:08X}: '{}'.", decName, actorFormId, result);
                 return result;
@@ -226,22 +228,32 @@ namespace {
         return result;
     }
 
-    static nlohmann::json MakeNpcRef(RE::FormID formID) {
+    static nlohmann::json MakeNpcRef(
+        RE::FormID formID,
+        const State::WorldStateSnapshot& world,
+        const State::SpatialActorSnapshot& spatial)
+    {
         nlohmann::json j;
         j["uuid"] = FormIDToUUID(formID);
-        j["name"] = ActorSvc::GetName(formID);
+        j["name"] = ResolveActorNameSafe(formID, world, spatial);
         return j;
     }
 
-    static nlohmann::json MakeNpcListRef(const std::vector<RE::FormID>& formIDs) {
+    static nlohmann::json MakeNpcListRef(
+        const std::vector<RE::FormID>& formIDs,
+        const State::WorldStateSnapshot& world,
+        const State::SpatialActorSnapshot& spatial)
+    {
         nlohmann::json j;
         std::vector<uint64_t> uuids;
         std::vector<std::string> names;
+        uuids.reserve(formIDs.size());
+        names.reserve(formIDs.size());
         for (auto fid : formIDs) {
             uuids.push_back(FormIDToUUID(fid));
-            names.push_back(ActorSvc::GetName(fid));
+            names.push_back(ResolveActorNameSafe(fid, world, spatial));
         }
-        j["uuids"] = uuids;
+        j["uuids"] = std::move(uuids);
         j["names"] = FormatNamesSummary(names);
         return j;
     }
@@ -249,344 +261,173 @@ namespace {
     static std::string BuildRelationshipProfileJSON(RE::Actor* actor) {
         if (!actor) return "{}";
         const auto actorFormID = actor->GetFormID();
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
-        const auto& childSvc = PlayerChildrenService::GetSingleton();
-        const bool playerPolygamyEnabled = Settings::GetSingleton().GetEnablePolygamy();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto selfView = Projection::PerspectiveView::ForActor(
+            worldSnap,
+            spatialSnap,
+            State::ActorId{ actorFormID },
+            &GetEngineWerewolfStateProvider());
+        const bool playerPolygamyEnabled = worldSnap->settings->enablePlayerPolygamy;
+        const float currentDay = (spatialSnap->CurrentGameDay() >= 0.0f)
+            ? spatialSnap->CurrentGameDay()
+            : (RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f);
 
-        auto statusToKey = [](RelationshipStatus status) -> std::string {
+        auto makeNpcRef = [&](RE::FormID id) -> nlohmann::json {
+            return MakeNpcRef(id, *worldSnap, *spatialSnap);
+        };
+        auto makeNpcListRef = [&](const std::vector<RE::FormID>& ids) -> nlohmann::json {
+            return MakeNpcListRef(ids, *worldSnap, *spatialSnap);
+        };
+
+        auto statusToKey = [](State::RelationshipStatus status) -> std::string {
             switch (status) {
-                case RelationshipStatus::Married:  return "married";
-                case RelationshipStatus::Engaged:  return "engaged";
-                case RelationshipStatus::Dating:   return "dating";
-                case RelationshipStatus::Lover:    return "lover";
-                case RelationshipStatus::Divorced: return "divorced";
-                case RelationshipStatus::Jilted:   return "jilted";
-                case RelationshipStatus::ExDating: return "exdating";
-                case RelationshipStatus::ExLover:  return "exlover";
+                case State::RelationshipStatus::Married:  return "married";
+                case State::RelationshipStatus::Engaged:  return "engaged";
+                case State::RelationshipStatus::Dating:   return "dating";
+                case State::RelationshipStatus::Lover:    return "lover";
+                case State::RelationshipStatus::Divorced: return "divorced";
+                case State::RelationshipStatus::Jilted:   return "jilted";
+                case State::RelationshipStatus::ExDating: return "exdating";
+                case State::RelationshipStatus::ExLover:  return "exlover";
                 default: return "";
             }
         };
-        auto isCurrentStatus = [](RelationshipStatus status) {
-            return status == RelationshipStatus::Married ||
-                   status == RelationshipStatus::Engaged ||
-                   status == RelationshipStatus::Dating ||
-                   status == RelationshipStatus::Lover;
+        auto isCurrentStatus = [](State::RelationshipStatus status) {
+            return status == State::RelationshipStatus::Married ||
+                   status == State::RelationshipStatus::Engaged ||
+                   status == State::RelationshipStatus::Dating ||
+                   status == State::RelationshipStatus::Lover;
         };
-        auto isMainTierStatus = [](RelationshipStatus status) {
-            return status == RelationshipStatus::Dating ||
-                   status == RelationshipStatus::Engaged ||
-                   status == RelationshipStatus::Married;
+        auto isMainTierStatus = [](State::RelationshipStatus status) {
+            return status == State::RelationshipStatus::Dating ||
+                   status == State::RelationshipStatus::Engaged ||
+                   status == State::RelationshipStatus::Married;
         };
-        auto isPastStatus = [](RelationshipStatus status) {
-            return status == RelationshipStatus::Divorced ||
-                   status == RelationshipStatus::Jilted ||
-                   status == RelationshipStatus::ExDating ||
-                   status == RelationshipStatus::ExLover;
+        auto isPastStatus = [](State::RelationshipStatus status) {
+            return status == State::RelationshipStatus::Divorced ||
+                   status == State::RelationshipStatus::Jilted ||
+                   status == State::RelationshipStatus::ExDating ||
+                   status == State::RelationshipStatus::ExLover;
         };
-        auto affairStatusToKey = [](AffairStatus status) -> std::string {
+        auto affairStatusToKey = [](State::AffairStatus status) -> std::string {
             switch (status) {
-                case AffairStatus::Ongoing:          return "ongoing";
-                case AffairStatus::EndedBreakup:     return "ended_breakup";
-                case AffairStatus::EndedVictimSplit: return "ended_victim_split";
-                case AffairStatus::Allowed:          return "allowed";
-                case AffairStatus::EndedConfronted:  return "ended_confronted";
+                case State::AffairStatus::Ongoing:          return "ongoing";
+                case State::AffairStatus::EndedBreakup:     return "ended_breakup";
+                case State::AffairStatus::EndedVictimSplit: return "ended_victim_split";
+                case State::AffairStatus::Allowed:          return "allowed";
+                case State::AffairStatus::EndedConfronted:  return "ended_confronted";
                 default: return "unknown";
             }
         };
 
         nlohmann::json j;
         j["schema_version"] = 2;
-        j["actor"] = MakeNpcRef(actorFormID);
+        j["actor"] = makeNpcRef(actorFormID);
         j["family"] = nlohmann::json::array();
-        const bool isPregnant = mgr.IsNPCPregnant(actorFormID);
+        const auto selfPregOpt = selfView.GetSelfPregnancy(State::ActorId{ actorFormID });
+        const bool isPregnant = selfPregOpt.has_value();
         j["is_pregnant"] = isPregnant;
-        if (isPregnant) {
-            auto unbornIDs = mgr.GetUnbornChildren(actorFormID);
-            size_t childCount = unbornIDs.size();
-
-            RE::FormID motherPartnerID = 0;
-            if (!unbornIDs.empty()) {
-                motherPartnerID = mgr.GetMotherPartner(unbornIDs.front());
-            }
-            if (motherPartnerID == 0) {
-                RE::FormID partnerID = mgr.GetPrimaryPartner(actorFormID);
-                if (partnerID != 0 && !MatchesActor(partnerID, actorFormID) && ActorSvc::GetSex(partnerID) == 0) {
-                    motherPartnerID = partnerID;
-                }
-            }
-            if (motherPartnerID != 0 && mgr.GetRelationshipStatus(actorFormID, motherPartnerID) == RelationshipStatus::Divorced) {
+        if (selfPregOpt.has_value()) {
+            const auto& selfPreg = *selfPregOpt;
+            RE::FormID motherPartnerID = selfPreg.motherPartner.raw();
+            if (motherPartnerID != 0 &&
+                (MatchesActor(motherPartnerID, actorFormID) ||
+                 ResolveActorSexSafe(motherPartnerID, *worldSnap, *spatialSnap) == State::ActorSex::Female ||
+                 worldSnap->relationships->GetStatus(State::ActorId{ actorFormID }, selfPreg.motherPartner) == State::RelationshipStatus::Divorced)) {
                 motherPartnerID = 0;
-            }
-
-            struct PregnancyFatherGroup {
-                RE::FormID bioFatherID{ 0 };
-                std::string bioFatherName;
-                int count{ 0 };
-                bool isMotherPartner{ false };
-                bool isSecret{ false };
-                bool isSecretForPartner{ false };
-                bool isSecretForBioFather{ false };
-                bool isPregnancySecretForPartner{ false };
-            };
-
-            std::vector<PregnancyFatherGroup> groups;
-
-            for (RE::FormID uID : unbornIDs) {
-                auto childOpt = mgr.GetChildEntry(uID);
-                if (!childOpt.has_value()) continue;
-
-                RE::FormID bioID = mgr.GetBioFather(uID);
-                if (bioID == 0) {
-                    bioID = childOpt->bioFatherID;
-                }
-                std::string bioName = (bioID != 0 && bioID != kUnknownFatherFormID) ? ActorSvc::GetName(bioID) : childOpt->paternitySecret.bioFatherName;
-                if (bioName.empty()) {
-                    bioName = "Unknown";
-                }
-
-                bool isBioSameAsPartner = (motherPartnerID != 0 && bioID != 0 && MatchesActor(bioID, motherPartnerID));
-                bool secPartner = isBioSameAsPartner ? false : childOpt->paternitySecret.isSecretForPartner;
-                bool secBio = isBioSameAsPartner ? false : childOpt->paternitySecret.isSecretForBioFather;
-                bool pregSecPartner = secPartner && childOpt->paternitySecret.isPregnancySecretForPartner;
-                bool isSec = isBioSameAsPartner ? false : (childOpt->paternitySecret.HasActiveSecret() && !childOpt->paternitySecret.discovered);
-                if (!isBioSameAsPartner && !childOpt->paternitySecret.discovered && !isSec && motherPartnerID != 0 && bioID != 0 && !MatchesActor(bioID, motherPartnerID)) {
-                    isSec = true;
-                    secPartner = true;
-                    secBio = true;
-                    pregSecPartner = childOpt->paternitySecret.isPregnancySecretForPartner;
-                }
-
-                auto it = std::find_if(groups.begin(), groups.end(), [&](const PregnancyFatherGroup& g) {
-                    if (bioID != 0 && bioID != kUnknownFatherFormID) return g.bioFatherID == bioID;
-                    return g.bioFatherName == bioName;
-                });
-
-                if (it != groups.end()) {
-                    it->count++;
-                    if (isSec) it->isSecret = true;
-                    if (secPartner) it->isSecretForPartner = true;
-                    if (secBio) it->isSecretForBioFather = true;
-                    if (pregSecPartner) it->isPregnancySecretForPartner = true;
-                } else {
-                    PregnancyFatherGroup grp;
-                    grp.bioFatherID = bioID;
-                    grp.bioFatherName = bioName;
-                    grp.count = 1;
-                    grp.isMotherPartner = isBioSameAsPartner;
-                    grp.isSecret = isSec;
-                    grp.isSecretForPartner = secPartner;
-                    grp.isSecretForBioFather = secBio;
-                    grp.isPregnancySecretForPartner = pregSecPartner;
-                    groups.push_back(grp);
-                }
-            }
-
-            if (groups.empty()) {
-                RE::FormID bioID = 0;
-                std::string bioName;
-                bool isSecret = false;
-                bool secPartner = false;
-                bool secBio = false;
-                bool pregSecPartner = false;
-
-                if (!unbornIDs.empty()) {
-                    bioID = mgr.GetBioFather(unbornIDs.front());
-                    if (auto childOpt = mgr.GetChildEntry(unbornIDs.front())) {
-                        if (bioID == 0) {
-                            bioID = childOpt->bioFatherID;
-                        }
-                        bioName = childOpt->paternitySecret.bioFatherName;
-                        isSecret = childOpt->paternitySecret.HasActiveSecret() && !childOpt->paternitySecret.discovered;
-                        secPartner = childOpt->paternitySecret.isSecretForPartner;
-                        secBio = childOpt->paternitySecret.isSecretForBioFather;
-                        pregSecPartner = secPartner && childOpt->paternitySecret.isPregnancySecretForPartner;
-                    }
-                }
-
-                if (bioID == 0 && motherPartnerID != 0) {
-                    bioID = motherPartnerID;
-                }
-
-                if (bioName.empty() && bioID != 0 && bioID != kUnknownFatherFormID) {
-                    bioName = ActorSvc::GetName(bioID);
-                }
-                if (bioName.empty()) {
-                    bioName = "Unknown";
-                }
-
-                bool isBioSameAsPartner = (motherPartnerID != 0 && bioID != 0 && MatchesActor(bioID, motherPartnerID));
-                if (isBioSameAsPartner) {
-                    isSecret = false;
-                    secPartner = false;
-                    secBio = false;
-                    pregSecPartner = false;
-                } else if (!isSecret && motherPartnerID != 0 && bioID != 0 && bioID != kUnknownFatherFormID) {
-                    isSecret = true;
-                    secPartner = true;
-                    secBio = true;
-                }
-
-                PregnancyFatherGroup grp;
-                grp.bioFatherID = bioID;
-                grp.bioFatherName = bioName;
-                grp.count = 1;
-                grp.isMotherPartner = isBioSameAsPartner;
-                grp.isSecret = isSecret;
-                grp.isSecretForPartner = secPartner;
-                grp.isSecretForBioFather = secBio;
-                grp.isPregnancySecretForPartner = pregSecPartner;
-                groups.push_back(grp);
-                childCount = 1;
             }
 
             nlohmann::json pregObj;
             pregObj["is_pregnant"] = true;
-            pregObj["child_count"] = static_cast<int>(childCount > 0 ? childCount : 1);
+            pregObj["child_count"] = static_cast<int>(selfPreg.totalFetusCount > 0 ? selfPreg.totalFetusCount : 1);
             if (motherPartnerID != 0) {
-                pregObj["mother_partner"] = MakeNpcRef(motherPartnerID);
+                pregObj["mother_partner"] = makeNpcRef(motherPartnerID);
             }
 
             nlohmann::json groupsArr = nlohmann::json::array();
-            bool anySecret = false;
-            bool anySecretPartner = false;
-            bool anySecretBio = false;
-            bool anyPregnancySecretPartner = false;
-
-            for (const auto& grp : groups) {
+            for (const auto& grp : selfPreg.groups) {
                 nlohmann::json gObj;
-                if (grp.bioFatherID != 0 && grp.bioFatherID != kUnknownFatherFormID) {
-                    gObj["bio_father"] = MakeNpcRef(grp.bioFatherID);
+                if (!grp.perceivedFather.IsNull() && grp.perceivedFather.raw() != kUnknownFatherFormID) {
+                    gObj["bio_father"] = makeNpcRef(grp.perceivedFather.raw());
                 } else {
                     nlohmann::json bioRef;
                     bioRef["uuid"] = 0;
-                    bioRef["name"] = grp.bioFatherName.empty() ? "Unknown" : grp.bioFatherName;
+                    bioRef["name"] = grp.fatherFallbackName.empty() ? "Unknown" : grp.fatherFallbackName;
                     gObj["bio_father"] = bioRef;
                 }
-                gObj["count"] = grp.count;
+                gObj["count"] = static_cast<int>(grp.fetusCount);
                 gObj["is_mother_partner"] = grp.isMotherPartner;
                 gObj["is_secret"] = grp.isSecret;
                 gObj["is_secret_for_partner"] = grp.isSecretForPartner;
                 gObj["is_secret_for_bio_father"] = grp.isSecretForBioFather;
                 gObj["is_pregnancy_secret_for_partner"] = grp.isPregnancySecretForPartner;
-                groupsArr.push_back(gObj);
-
-                if (grp.isSecret) anySecret = true;
-                if (grp.isSecretForPartner) anySecretPartner = true;
-                if (grp.isSecretForBioFather) anySecretBio = true;
-                if (grp.isPregnancySecretForPartner) anyPregnancySecretPartner = true;
+                groupsArr.push_back(std::move(gObj));
             }
-            pregObj["groups"] = groupsArr;
+            pregObj["groups"] = std::move(groupsArr);
 
-            if (!groups.empty()) {
-                if (groups[0].bioFatherID != 0 && groups[0].bioFatherID != kUnknownFatherFormID) {
-                    pregObj["bio_father"] = MakeNpcRef(groups[0].bioFatherID);
+            if (!selfPreg.groups.empty()) {
+                const auto& firstGrp = selfPreg.groups.front();
+                if (!firstGrp.perceivedFather.IsNull() && firstGrp.perceivedFather.raw() != kUnknownFatherFormID) {
+                    pregObj["bio_father"] = makeNpcRef(firstGrp.perceivedFather.raw());
                 } else {
                     nlohmann::json bioRef;
                     bioRef["uuid"] = 0;
-                    bioRef["name"] = groups[0].bioFatherName.empty() ? "Unknown" : groups[0].bioFatherName;
+                    bioRef["name"] = firstGrp.fatherFallbackName.empty() ? "Unknown" : firstGrp.fatherFallbackName;
                     pregObj["bio_father"] = bioRef;
                 }
-            }
-            if (!unbornIDs.empty()) {
-                pregObj["unborn_child_id"] = unbornIDs.front();
-                auto opt = mgr.GetChildEntry(unbornIDs.front());
-                if (opt.has_value()) {
-                    pregObj["unborn_child_name"] = opt->name;
-                }
-            }
-            bool hasPaternitySecret = anySecret;
-            if (!hasPaternitySecret && motherPartnerID != 0) {
-                for (const auto& grp : groups) {
-                    if (!grp.isMotherPartner && grp.bioFatherID != 0 && !MatchesActor(grp.bioFatherID, motherPartnerID)) {
-                        hasPaternitySecret = true;
-                        break;
+                if (!firstGrp.fetusIds.empty()) {
+                    const State::ChildId frontId = firstGrp.fetusIds.front();
+                    pregObj["unborn_child_id"] = frontId.raw();
+                    if (const auto perceivedUnborn = selfView.GetPerceivedChild(frontId); perceivedUnborn.has_value()) {
+                        pregObj["unborn_child_name"] = perceivedUnborn->name;
                     }
                 }
             }
-            pregObj["has_paternity_secret"] = hasPaternitySecret;
-            pregObj["is_secret"] = anySecret;
-            pregObj["is_secret_for_partner"] = anySecretPartner;
-            pregObj["is_secret_for_bio_father"] = anySecretBio;
-            pregObj["is_pregnancy_secret_for_partner"] = anyPregnancySecretPartner;
+            pregObj["has_paternity_secret"] = selfPreg.hasPaternitySecret;
+            pregObj["is_secret"] = selfPreg.anySecret;
+            pregObj["is_secret_for_partner"] = selfPreg.anySecretForPartner;
+            pregObj["is_secret_for_bio_father"] = selfPreg.anySecretForBioFather;
+            pregObj["is_pregnancy_secret_for_partner"] = selfPreg.anyPregnancySecretForPartner;
 
-            j["pregnancy"] = pregObj;
+            j["pregnancy"] = std::move(pregObj);
         }
 
         j["expecting_pregnancies"] = nlohmann::json::array();
         if (!isPregnant) {
-            std::unordered_set<RE::FormID> seenExpectingMothers;
-            for (const auto& [uID, entry] : mgr.GetAllChildren()) {
-                if (entry.stage != ChildStage::Unborn) continue;
-                RE::FormID motherID = mgr.GetBioMother(uID);
-                if (motherID == 0 || MatchesActor(motherID, actorFormID)) continue;
-
-                RE::FormID motherPartnerID = mgr.GetMotherPartner(uID);
-                RE::FormID bioFatherID = mgr.GetBioFather(uID);
-                if (bioFatherID == 0) bioFatherID = entry.bioFatherID;
-
-                bool isActorPartner = (motherPartnerID != 0 && MatchesActor(motherPartnerID, actorFormID));
-                bool isActorBioFather = (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && MatchesActor(bioFatherID, actorFormID));
-                if (!isActorPartner && !isActorBioFather) continue;
-                if (!seenExpectingMothers.insert(motherID).second) continue;
-
-                int unbornCount = static_cast<int>(mgr.GetUnbornChildren(motherID).size());
-                if (unbornCount < 1) unbornCount = 1;
-
-                bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
-
-                if (isActorPartner) {
-                    if (isBioSameAsPartner) {
-                        nlohmann::json expObj;
-                        expObj["mother"] = MakeNpcRef(motherID);
+            for (const auto& exp : selfView.GetExpectingPregnanciesFor(State::ActorId{ actorFormID })) {
+                nlohmann::json expObj;
+                expObj["mother"] = makeNpcRef(exp.mother.raw());
+                expObj["child_count"] = static_cast<int>(exp.fetusCount > 0 ? exp.fetusCount : 1);
+                switch (exp.role) {
+                    case Projection::ExpectingParentRole::PartnerBioFather:
                         expObj["role"] = "partner_bio_father";
-                        expObj["child_count"] = unbornCount;
-                        j["expecting_pregnancies"].push_back(std::move(expObj));
-                    } else if (entry.paternitySecret.isSecretForPartner && entry.paternitySecret.isPregnancySecretForPartner) {
-                        // Partner does NOT even know mother is pregnant yet — mask completely!
-                        continue;
-                    } else if (entry.paternitySecret.isSecretForPartner) {
-                        // Partner knows mother is pregnant and believes he is the father (do NOT leak bio_father!)
-                        nlohmann::json expObj;
-                        expObj["mother"] = MakeNpcRef(motherID);
+                        break;
+                    case Projection::ExpectingParentRole::PresumedFatherUnaware:
                         expObj["role"] = "presumed_father_unaware";
-                        expObj["child_count"] = unbornCount;
-                        j["expecting_pregnancies"].push_back(std::move(expObj));
-                    } else {
-                        // Partner knows both about the pregnancy and that another man is the biological father
-                        nlohmann::json expObj;
-                        expObj["mother"] = MakeNpcRef(motherID);
+                        break;
+                    case Projection::ExpectingParentRole::PartnerKnowsTruth:
                         expObj["role"] = "partner_knows_truth";
-                        expObj["child_count"] = unbornCount;
-                        if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID) {
-                            expObj["bio_father"] = MakeNpcRef(bioFatherID);
+                        if (!exp.perceivedBioFather.IsNull() && exp.perceivedBioFather.raw() != kUnknownFatherFormID) {
+                            expObj["bio_father"] = makeNpcRef(exp.perceivedBioFather.raw());
                         } else {
                             nlohmann::json bioRef;
                             bioRef["uuid"] = 0;
-                            bioRef["name"] = entry.paternitySecret.bioFatherName.empty() ? "Unknown" : entry.paternitySecret.bioFatherName;
+                            bioRef["name"] = exp.perceivedBioFatherFallbackName.empty() ? "Unknown" : exp.perceivedBioFatherFallbackName;
                             expObj["bio_father"] = bioRef;
                         }
-                        expObj["is_secret_for_bio_father"] = entry.paternitySecret.isSecretForBioFather;
-                        j["expecting_pregnancies"].push_back(std::move(expObj));
-                    }
-                } else if (isActorBioFather) {
-                    if (entry.paternitySecret.isSecretForBioFather && motherPartnerID != 0) {
-                        // Bio-father has not been told about the pregnancy/paternity — mask completely!
-                        continue;
-                    }
-                    if (entry.paternitySecret.isSecretForBioFather) {
-                        continue;
-                    }
-                    nlohmann::json expObj;
-                    expObj["mother"] = MakeNpcRef(motherID);
-                    expObj["role"] = "bio_father_knows";
-                    expObj["child_count"] = unbornCount;
-                    if (motherPartnerID != 0) {
-                        expObj["mother_partner"] = MakeNpcRef(motherPartnerID);
-                        expObj["is_pregnancy_secret_for_partner"] = entry.paternitySecret.isSecretForPartner && entry.paternitySecret.isPregnancySecretForPartner;
-                        expObj["is_secret_for_partner"] = entry.paternitySecret.isSecretForPartner;
-                    }
-                    j["expecting_pregnancies"].push_back(std::move(expObj));
+                        expObj["is_secret_for_bio_father"] = exp.isSecretForBioFather;
+                        break;
+                    case Projection::ExpectingParentRole::BioFatherKnows:
+                        expObj["role"] = "bio_father_knows";
+                        if (!exp.motherPartner.IsNull()) {
+                            expObj["mother_partner"] = makeNpcRef(exp.motherPartner.raw());
+                            expObj["is_pregnancy_secret_for_partner"] = exp.isPregnancySecretForPartner;
+                            expObj["is_secret_for_partner"] = exp.isSecretForPartner;
+                        }
+                        break;
                 }
+                j["expecting_pregnancies"].push_back(std::move(expObj));
             }
         }
         j["current_relationships"] = nlohmann::json::array();
@@ -594,53 +435,57 @@ namespace {
         j["past_relationships"] = nlohmann::json::array();
         j["infidelity"] = nlohmann::json::array();
 
-        const auto partnerIDs = mgr.GetAllPartners(actorFormID);
-        const auto cheatingRecords = mgr.GetCheatingRecordsForActor(actorFormID);
+        const State::ActorId selfActorId{ actorFormID };
+        const auto perceivedEdges = selfView.GetPerceivedRelationshipsOf(selfActorId);
+        const auto knownAffairs = selfView.GetKnownAffairsInvolving(selfActorId);
 
         auto isActorCheatingWith = [&](RE::FormID partnerID) {
-            return std::ranges::any_of(cheatingRecords, [&](const CheatingRecord& record) {
-                return record.affairStatus == AffairStatus::Ongoing &&
-                       record.cheaterID == actorFormID &&
-                       record.affairPartnerID == partnerID;
+            return std::ranges::any_of(knownAffairs, [&](const Projection::PerceivedAffair& record) {
+                return record.affairStatus == State::AffairStatus::Ongoing &&
+                       record.cheater.raw() == actorFormID &&
+                       record.paramour.raw() == partnerID;
             });
         };
         auto isSecretAffairPair = [&](RE::FormID partnerID, bool ongoingOnly) {
-            return std::ranges::any_of(cheatingRecords, [&](const CheatingRecord& record) {
-                if (record.affairStatus == AffairStatus::Allowed || !record.isSecret) return false;
-                if (ongoingOnly && record.affairStatus != AffairStatus::Ongoing) return false;
-                return (record.cheaterID == actorFormID && record.affairPartnerID == partnerID) ||
-                       (record.affairPartnerID == actorFormID && record.cheaterID == partnerID);
+            return std::ranges::any_of(knownAffairs, [&](const Projection::PerceivedAffair& record) {
+                if (record.affairStatus == State::AffairStatus::Allowed || !record.isSecret) return false;
+                if (ongoingOnly && record.affairStatus != State::AffairStatus::Ongoing) return false;
+                return (record.cheater.raw() == actorFormID && record.paramour.raw() == partnerID) ||
+                       (record.paramour.raw() == actorFormID && record.cheater.raw() == partnerID);
             });
         };
         auto findOpenPrimary = [&](RE::FormID excludedPartnerID) -> RE::FormID {
-            for (auto partnerID : partnerIDs) {
+            for (const auto& edge : perceivedEdges) {
+                const RE::FormID partnerID = edge.Other(selfActorId).raw();
                 if (partnerID == excludedPartnerID) continue;
-                const auto data = mgr.GetNPCData(actorFormID, partnerID);
-                if (data && isMainTierStatus(data->status) && data->isOpen) {
+                if (isMainTierStatus(edge.status) && edge.isOpen) {
                     return partnerID;
                 }
             }
             return 0;
         };
         auto hasOtherMainPair = [&](RE::FormID excludedPartnerID) {
-            for (auto partnerID : partnerIDs) {
+            for (const auto& edge : perceivedEdges) {
+                const RE::FormID partnerID = edge.Other(selfActorId).raw();
                 if (partnerID == excludedPartnerID) continue;
-                const auto data = mgr.GetNPCData(actorFormID, partnerID);
-                if (data && isMainTierStatus(data->status)) return true;
+                if (isMainTierStatus(edge.status)) return true;
             }
             return false;
         };
+        auto isPlayerActiveMain = [&](RE::FormID id) {
+            if (id == 0 || id == kPlayerFormID) return false;
+            const auto edge = selfView.GetPerceivedPair(State::ActorId::Player(), State::ActorId{ id });
+            return edge.has_value() && isMainTierStatus(edge->status);
+        };
 
-        for (auto partnerID : partnerIDs) {
-            const auto data = mgr.GetNPCData(actorFormID, partnerID);
-            if (!data) continue;
-
-            if (isCurrentStatus(data->status) && !isActorCheatingWith(partnerID)) {
+        for (const auto& edge : perceivedEdges) {
+            const RE::FormID partnerID = edge.Other(selfActorId).raw();
+            if (isCurrentStatus(edge.status) && !isActorCheatingWith(partnerID)) {
                 nlohmann::json relationship;
-                relationship["partner"] = MakeNpcRef(partnerID);
-                relationship["status"] = statusToKey(data->status);
-                if (isMainTierStatus(data->status)) {
-                    relationship["is_open"] = data->isOpen;
+                relationship["partner"] = makeNpcRef(partnerID);
+                relationship["status"] = statusToKey(edge.status);
+                if (isMainTierStatus(edge.status)) {
+                    relationship["is_open"] = edge.isOpen;
                 }
                 if (isSecretAffairPair(partnerID, /*ongoingOnly=*/true)) {
                     relationship["is_secret_affair"] = true;
@@ -648,19 +493,19 @@ namespace {
 
                 const RE::FormID openPrimaryID = findOpenPrimary(partnerID);
                 if ((actorFormID == kPlayerFormID && playerPolygamyEnabled) ||
-                    (mgr.IsPlayerActiveMainPartner(actorFormID) && mgr.IsPlayerActiveMainPartner(partnerID))) {
+                    (isPlayerActiveMain(actorFormID) && isPlayerActiveMain(partnerID))) {
                     relationship["permission"] = "player_polygamy";
                 } else if (openPrimaryID != 0) {
                     relationship["permission"] = "open_primary";
-                    relationship["permission_source"] = MakeNpcRef(openPrimaryID);
+                    relationship["permission_source"] = makeNpcRef(openPrimaryID);
                 } else if (!hasOtherMainPair(partnerID)) {
-                    relationship["permission"] = isMainTierStatus(data->status) ? "primary" : "unrestricted";
+                    relationship["permission"] = isMainTierStatus(edge.status) ? "primary" : "unrestricted";
                 }
                 j["current_relationships"].push_back(std::move(relationship));
-            } else if (isPastStatus(data->status)) {
+            } else if (isPastStatus(edge.status)) {
                 nlohmann::json relationship;
-                relationship["partner"] = MakeNpcRef(partnerID);
-                relationship["status"] = statusToKey(data->status);
+                relationship["partner"] = makeNpcRef(partnerID);
+                relationship["status"] = statusToKey(edge.status);
                 if (isSecretAffairPair(partnerID, /*ongoingOnly=*/false)) {
                     relationship["is_secret_affair"] = true;
                 }
@@ -668,41 +513,45 @@ namespace {
             }
         }
 
-        const auto playerRelationship = mgr.GetNPCData(actorFormID, kPlayerFormID);
+        const auto playerRelationship = selfView.GetPerceivedPair(selfActorId, State::ActorId::Player());
         if (actorFormID != kPlayerFormID && playerRelationship && isCurrentStatus(playerRelationship->status)) {
             j["player_relationship_status"] = statusToKey(playerRelationship->status);
-            const auto& affSvc = AffectionService::GetSingleton();
-            const int affScore = affSvc.GetPermanentAffection(actorFormID);
-            const float daysSince = affSvc.GetDaysSinceLastAffection(actorFormID);
+            const int affScore = selfView.Affection().GetPermanent(selfActorId);
+            const auto lastDayOpt = selfView.Affection().GetLastInteractionDay(selfActorId);
+            const int daysSinceInt = lastDayOpt.has_value()
+                ? static_cast<int>(std::floor(std::max(0.0f, currentDay - *lastDayOpt)))
+                : 999;
             std::string affTier = "estranged";
             if (affScore >= 75) affTier = "happy";
             else if (affScore >= 50) affTier = "content";
             else if (affScore >= 25) affTier = "troubled";
             j["player_affection_score"] = affScore;
             j["player_affection_tier"] = affTier;
-            j["days_since_player_interaction"] = static_cast<int>(std::floor(daysSince));
-            j["pending_intent"] = std::string(Utils::PartnerIntentTypeToString(mgr.GetPartnerPendingIntent(actorFormID).type));
+            j["days_since_player_interaction"] = daysSinceInt;
+            const auto pendingIntent = selfView.GetPerceivedPendingIntent(selfActorId);
+            j["pending_intent"] = std::string(Utils::PartnerIntentTypeToString(
+                static_cast<PartnerIntentType>(static_cast<uint8_t>(pendingIntent.type))));
         }
         if (playerRelationship && isCurrentStatus(playerRelationship->status) && playerPolygamyEnabled) {
             j["player_relationship_status"] = statusToKey(playerRelationship->status);
             struct PlayerPartner {
                 RE::FormID formID;
-                RelationshipStatus status;
+                State::RelationshipStatus status;
             };
             std::vector<PlayerPartner> playerPartners;
-            for (auto partnerID : mgr.GetAllPartners(kPlayerFormID)) {
+            for (const auto& pEdge : selfView.GetPerceivedRelationshipsOf(State::ActorId::Player())) {
+                const RE::FormID partnerID = pEdge.Other(State::ActorId::Player()).raw();
                 if (partnerID == actorFormID) continue;
-                const auto data = mgr.GetNPCData(kPlayerFormID, partnerID);
-                if (data && isCurrentStatus(data->status)) {
-                    playerPartners.push_back({ partnerID, data->status });
+                if (isCurrentStatus(pEdge.status)) {
+                    playerPartners.push_back({ partnerID, pEdge.status });
                 }
             }
-            auto statusPriority = [](RelationshipStatus status) {
+            auto statusPriority = [](State::RelationshipStatus status) {
                 switch (status) {
-                    case RelationshipStatus::Married: return 0;
-                    case RelationshipStatus::Engaged: return 1;
-                    case RelationshipStatus::Dating:  return 2;
-                    case RelationshipStatus::Lover:   return 3;
+                    case State::RelationshipStatus::Married: return 0;
+                    case State::RelationshipStatus::Engaged: return 1;
+                    case State::RelationshipStatus::Dating:  return 2;
+                    case State::RelationshipStatus::Lover:   return 3;
                     default: return 4;
                 }
             };
@@ -711,9 +560,9 @@ namespace {
             });
             for (const auto& playerPartner : playerPartners) {
                 nlohmann::json coPartner;
-                coPartner["person"] = MakeNpcRef(playerPartner.formID);
-                coPartner["role"] = playerRelationship->status == RelationshipStatus::Married &&
-                                            playerPartner.status == RelationshipStatus::Married
+                coPartner["person"] = makeNpcRef(playerPartner.formID);
+                coPartner["role"] = playerRelationship->status == State::RelationshipStatus::Married &&
+                                            playerPartner.status == State::RelationshipStatus::Married
                                         ? "co_spouse"
                                         : "co_partner";
                 coPartner["player_relationship_status"] = statusToKey(playerPartner.status);
@@ -721,189 +570,142 @@ namespace {
             }
         }
 
-        auto canActorKnowPaternitySecret = [&](RE::FormID perspectiveActorID,
-                                               RE::FormID motherID,
-                                               RE::FormID motherPartnerID,
-                                               RE::FormID explicitPresumedFatherID,
-                                               RE::FormID bioFatherID,
-                                               const PaternitySecret& sec) -> bool {
-            if (!sec.HasActiveSecret() || sec.discovered) return true;
-            if (motherID != 0 && MatchesActor(perspectiveActorID, motherID)) return true;
-            if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && MatchesActor(perspectiveActorID, bioFatherID)) {
-                return !sec.isSecretForBioFather || sec.discoveredByBioFather;
-            }
-            const bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
-            const bool hasPresumedPartner = (motherPartnerID != 0 && !isBioSameAsPartner &&
-                                             (motherID == 0 || !MatchesActor(motherPartnerID, motherID)) &&
-                                             (sec.isSecretForPartner || explicitPresumedFatherID != 0));
-            if (hasPresumedPartner && MatchesActor(perspectiveActorID, motherPartnerID)) {
-                return !sec.isSecretForPartner || sec.discoveredByPartner;
-            }
-            if (hasPresumedPartner) {
-                return !sec.isSecretForPartner || sec.discoveredByPartner;
-            }
-            return !sec.isSecretForBioFather || sec.discoveredByBioFather;
-        };
-
-        auto buildChildObj = [&](RE::FormID childID) -> std::optional<nlohmann::json> {
-            auto entryOpt = mgr.GetChildEntry(childID);
-            if (!entryOpt.has_value()) return std::nullopt;
-            const auto& childEntry = *entryOpt;
-            if (childEntry.stage == ChildStage::Unborn) return std::nullopt;
+        auto buildChildObj = [&](const Projection::PerceivedChildLineage& child) -> std::optional<nlohmann::json> {
+            if (child.stage == State::ChildStage::Unborn) return std::nullopt;
+            const RE::FormID childID = child.childId.raw();
 
             nlohmann::json childObj;
             childObj["uuid"] = FormIDToUUID(childID);
-            std::string childName = (childEntry.name.empty() || StringUtils::CaseInsensitiveEquals(childEntry.name, "Newborn")) ? "child" : childEntry.name;
+            const std::string childName =
+                (child.name.empty() || StringUtils::CaseInsensitiveEquals(child.name, "Newborn")) ? "child" : child.name;
             childObj["name"] = childName;
-            childObj["is_adopted"] = childEntry.isAdopted;
-            childObj["is_biological"] = childEntry.isBiologicalChild;
-            auto calendar = RE::Calendar::GetSingleton();
-            float currentDay = calendar ? calendar->GetDaysPassed() : 0.0f;
-            childObj["age_days"] = std::max(0.0f, currentDay - childEntry.birthTimestamp);
+            childObj["is_adopted"] = child.isAdopted;
+            childObj["is_biological"] = child.isBiologicalChild;
+            childObj["age_days"] = std::max(0.0f, currentDay - child.birthTimestamp);
 
             std::string stageStr = "child";
-            switch (childEntry.stage) {
-                case ChildStage::Unborn:   stageStr = "unborn"; break;
-                case ChildStage::Infant:   stageStr = "infant"; break;
-                case ChildStage::Child:    stageStr = "child"; break;
-                case ChildStage::Training: stageStr = "training"; break;
-                case ChildStage::Adult:    stageStr = "adult"; break;
+            switch (child.stage) {
+                case State::ChildStage::Unborn:   stageStr = "unborn"; break;
+                case State::ChildStage::Infant:   stageStr = "infant"; break;
+                case State::ChildStage::Child:    stageStr = "child"; break;
+                case State::ChildStage::Training: stageStr = "training"; break;
+                case State::ChildStage::Adult:    stageStr = "adult"; break;
             }
             childObj["stage"] = stageStr;
-            auto* actor = HasPhysicalActor(childID)
-                ? NPCIndex::GetSingleton().GetActorFromFormId(childID)
-                : nullptr;
-            bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
-            bool isEphemeral = !hasRealActor || (childEntry.stage == ChildStage::Unborn) || (childEntry.stage == ChildStage::Infant) || (childEntry.stage == ChildStage::Training);
+
+            const auto* childSample = (!IsSyntheticChildID(childID)) ? spatialSnap->Find(State::RefId{ childID }) : nullptr;
+            bool hasRealActor = false;
+            if (childSample) {
+                hasRealActor = !childSample->IsDeleted();
+            } else if (HasPhysicalActor(childID)) {
+                auto* childAct = NPCIndex::GetSingleton().GetActorFromFormId(childID);
+                hasRealActor = (childAct != nullptr && !childAct->IsDeleted());
+            }
+            const bool isEphemeral = !hasRealActor ||
+                (child.stage == State::ChildStage::Unborn) ||
+                (child.stage == State::ChildStage::Infant) ||
+                (child.stage == State::ChildStage::Training);
             childObj["has_ref_id"] = hasRealActor;
             childObj["is_ephemeral"] = isEphemeral;
-            if (!childEntry.trainingLocation.empty()) {
-                childObj["training_location"] = childEntry.trainingLocation;
+            if (!child.trainingLocation.empty()) {
+                childObj["training_location"] = child.trainingLocation;
             }
 
-            int childSex = 0;
-            if (hasRealActor && actor->GetActorBase()) {
-                childSex = (actor->GetActorBase()->GetSex() == RE::SEX::kFemale) ? 1 : 0;
-            } else {
-                childSex = childEntry.gender;
+            const State::ActorSex resolvedSex = ResolveActorSexSafe(childID, *worldSnap, *spatialSnap);
+            int childSex = child.gender;
+            if (resolvedSex == State::ActorSex::Female) {
+                childSex = 1;
+            } else if (resolvedSex == State::ActorSex::Male) {
+                childSex = 0;
             }
-            if (childEntry.stage == ChildStage::Unborn || childSex == 2) {
+            if (child.stage == State::ChildStage::Unborn || childSex == 2) {
                 childObj["gender"] = "unknown";
-                childObj["relation"] = (childEntry.stage == ChildStage::Unborn) ? "unborn child" : "child";
+                childObj["relation"] = (child.stage == State::ChildStage::Unborn) ? "unborn child" : "child";
             } else {
-                std::string childGenderStr = (childSex == 1) ? "female" : "male";
+                const std::string childGenderStr = (childSex == 1) ? "female" : "male";
                 childObj["gender"] = childGenderStr;
                 childObj["relation"] = (childSex == 1) ? "daughter" : "son";
             }
 
-            const auto& sec = childEntry.paternitySecret;
-            RE::FormID explicitPresumedFatherID = mgr.GetPresumedFather(childID);
-            RE::FormID motherPartnerID = mgr.GetMotherPartner(childID);
-            RE::FormID motherID = mgr.GetBioMother(childID);
-            RE::FormID bioFatherID = mgr.GetBioFather(childID);
-
-            if (motherPartnerID != 0 && motherID != 0 && explicitPresumedFatherID == 0 && !sec.isSecretForPartner && !mgr.IsGuardian(childID, motherPartnerID) && isPastStatus(mgr.GetRelationshipStatus(motherID, motherPartnerID))) {
-                motherPartnerID = 0;
-            }
-
-            const bool secretFromPartnerActive = !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
-            const bool secretFromBioFatherActive = !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather;
-            if (sec.HasActiveSecret() && (secretFromPartnerActive || secretFromBioFatherActive)) {
+            if (child.hasUndiscoveredPaternitySecret) {
                 childObj["has_undiscovered_paternity_secret"] = true;
             }
-            bool isBioSameAsPartner = (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID));
-            bool canActorKnow = canActorKnowPaternitySecret(actorFormID, motherID, motherPartnerID, explicitPresumedFatherID, bioFatherID, sec);
-            bool hideSecretFromActor = (!isBioSameAsPartner && sec.HasActiveSecret() && !canActorKnow);
-
-            if (!hideSecretFromActor && motherPartnerID != 0 && !isBioSameAsPartner) {
-                childObj["presumed_father"] = MakeNpcRef(motherPartnerID);
+            if (!child.presumedFather.IsNull()) {
+                childObj["presumed_father"] = makeNpcRef(child.presumedFather.raw());
             }
-
-            if (motherPartnerID != 0 && !isBioSameAsPartner && (sec.isSecret || sec.discovered) && canActorKnow) {
+            if (child.paternitySecret.has_value() &&
+                !child.paternitySecret->presumedFather.IsNull() &&
+                child.paternitySecret->presumedFather != child.perceivedBioFather &&
+                (child.paternitySecret->isSecret || child.paternitySecret->discovered ||
+                 child.paternitySecret->isSecretForPartner || child.paternitySecret->isSecretForBioFather)) {
+                const auto& sec = *child.paternitySecret;
                 nlohmann::json pSec;
-                bool secPartner = sec.isSecretForPartner;
-                pSec["is_secret"] = !sec.discovered && (secPartner || sec.isSecretForBioFather);
-                pSec["is_secret_for_partner"] = secPartner;
+                pSec["is_secret"] = sec.isSecret;
+                pSec["is_secret_for_partner"] = sec.isSecretForPartner;
                 pSec["is_secret_for_bio_father"] = sec.isSecretForBioFather;
-                pSec["mother_partner"] = MakeNpcRef(motherPartnerID);
-                pSec["presumed_father"] = MakeNpcRef(motherPartnerID);
-                pSec["presumed_father_is_guardian"] = mgr.IsGuardian(childID, motherPartnerID);
-                if (bioFatherID != 0) {
-                    pSec["biological_father"] = MakeNpcRef(bioFatherID);
-                } else if (!sec.bioFatherName.empty() && sec.bioFatherName != "Unknown") {
+                pSec["mother_partner"] = makeNpcRef(sec.motherPartner.raw());
+                pSec["presumed_father"] = makeNpcRef(sec.presumedFather.raw());
+                pSec["presumed_father_is_guardian"] = sec.presumedFatherIsGuardian;
+                if (!sec.trueBioFather.IsNull() && sec.trueBioFather.raw() != kUnknownFatherFormID) {
+                    pSec["biological_father"] = makeNpcRef(sec.trueBioFather.raw());
+                } else if (!sec.trueBioFatherFallbackName.empty() && sec.trueBioFatherFallbackName != "Unknown") {
                     nlohmann::json bioFatherRef;
                     bioFatherRef["uuid"] = 0;
-                    bioFatherRef["name"] = sec.bioFatherName;
+                    bioFatherRef["name"] = sec.trueBioFatherFallbackName;
                     pSec["biological_father"] = bioFatherRef;
                 } else {
-                    pSec["biological_father"] = MakeNpcRef(0);
+                    pSec["biological_father"] = makeNpcRef(0);
                 }
                 pSec["discovered_by_partner"] = sec.discoveredByPartner;
                 pSec["discovered_by_bio_father"] = sec.discoveredByBioFather;
                 pSec["has_phenotype_mismatch"] = sec.hasPhenotypeMismatch;
-                childObj["paternity_secret"] = pSec;
+                childObj["paternity_secret"] = std::move(pSec);
             }
 
             std::vector<RE::FormID> currentGuardians;
-            if (childEntry.guardianAID != 0) currentGuardians.push_back(childEntry.guardianAID);
-            if (childEntry.guardianBID != 0 && childEntry.guardianBID != childEntry.guardianAID) currentGuardians.push_back(childEntry.guardianBID);
-            if (!currentGuardians.empty()) {
-                childObj["guardians"] = MakeNpcListRef(currentGuardians);
-                childObj["current_parents"] = MakeNpcListRef(currentGuardians);
+            if (!child.guardians.slotA.IsNull()) currentGuardians.push_back(child.guardians.slotA.raw());
+            if (!child.guardians.slotB.IsNull() && child.guardians.slotB != child.guardians.slotA) {
+                currentGuardians.push_back(child.guardians.slotB.raw());
             }
-
-            RE::FormID childBioMotherID = childEntry.bioMotherID;
-            RE::FormID effectiveBioFatherID = hideSecretFromActor
-                ? ((secretFromPartnerActive && motherPartnerID != 0 && !isBioSameAsPartner) ? motherPartnerID : 0)
-                : childEntry.bioFatherID;
+            if (!currentGuardians.empty()) {
+                childObj["guardians"] = makeNpcListRef(currentGuardians);
+                childObj["current_parents"] = makeNpcListRef(currentGuardians);
+            }
 
             std::vector<RE::FormID> bioParents;
-            if (childBioMotherID != 0) bioParents.push_back(childBioMotherID);
-            if (effectiveBioFatherID != 0 && effectiveBioFatherID != kUnknownFatherFormID && effectiveBioFatherID != childBioMotherID) {
-                bioParents.push_back(effectiveBioFatherID);
+            bioParents.reserve(child.biologicalParents.size());
+            for (const auto bp : child.biologicalParents) {
+                bioParents.push_back(bp.raw());
             }
             if (!bioParents.empty()) {
-                childObj["biological_parents"] = MakeNpcListRef(bioParents);
-            }
+                childObj["biological_parents"] = makeNpcListRef(bioParents);
 
-            if (!bioParents.empty()) {
                 std::vector<RE::FormID> stepParents;
-                for (auto cp : currentGuardians) {
-                    bool isBio = false;
-                    for (auto bp : bioParents) {
-                        if (MatchesActor(cp, bp)) { isBio = true; break; }
-                    }
-                    if (!isBio) {
-                        stepParents.push_back(cp);
-                    }
+                stepParents.reserve(child.stepParents.size());
+                for (const auto sp : child.stepParents) {
+                    stepParents.push_back(sp.raw());
                 }
                 if (!stepParents.empty()) {
-                    childObj["step_parents"] = MakeNpcListRef(stepParents);
+                    childObj["step_parents"] = makeNpcListRef(stepParents);
                 }
 
-                if (childBioMotherID != 0) {
-                    childObj["bio_mother"] = MakeNpcRef(childBioMotherID);
+                if (!child.bioMother.IsNull()) {
+                    childObj["bio_mother"] = makeNpcRef(child.bioMother.raw());
                     childObj["biological_mother"] = childObj["bio_mother"];
                 }
-                if (effectiveBioFatherID != 0 && effectiveBioFatherID != kUnknownFatherFormID) {
-                    childObj["bio_father"] = MakeNpcRef(effectiveBioFatherID);
+                if (!child.perceivedBioFather.IsNull() && child.perceivedBioFather.raw() != kUnknownFatherFormID) {
+                    childObj["bio_father"] = makeNpcRef(child.perceivedBioFather.raw());
                     childObj["biological_father"] = childObj["bio_father"];
-                } else if (!hideSecretFromActor && !sec.bioFatherName.empty() && sec.bioFatherName != "Unknown") {
+                } else if (!child.perceivedBioFatherFallbackName.empty() && child.perceivedBioFatherFallbackName != "Unknown") {
                     nlohmann::json bioFatherRef;
                     bioFatherRef["uuid"] = 0;
-                    bioFatherRef["name"] = sec.bioFatherName;
+                    bioFatherRef["name"] = child.perceivedBioFatherFallbackName;
                     childObj["bio_father"] = bioFatherRef;
                     childObj["biological_father"] = bioFatherRef;
                 }
 
-                bool isActorStep = false;
-                for (auto sp : stepParents) {
-                    if (MatchesActor(actorFormID, sp)) { isActorStep = true; break; }
-                }
-                bool isActorBio = false;
-                for (auto bp : bioParents) {
-                    if (MatchesActor(actorFormID, bp)) { isActorBio = true; break; }
-                }
+                const bool isActorStep = child.IsActorPerceivedStepParent(selfActorId);
+                const bool isActorBio = child.IsActorPerceivedBioParent(selfActorId);
                 childObj["is_actor_step_parent"] = isActorStep;
                 childObj["is_actor_bio_parent"] = isActorBio;
 
@@ -912,380 +714,259 @@ namespace {
                 }
             }
 
-            RE::FormID critterID = childSvc.GetCritter(childID);
+            const auto* hhChild = worldSnap->household->FindChildState(child.childId);
+            const RE::FormID critterID = hhChild ? hhChild->critterId.raw() : 0;
             if (critterID != 0) {
                 nlohmann::json critterObj;
                 critterObj["uuid"] = FormIDToUUID(critterID);
-                critterObj["name"] = ActorSvc::GetName(critterID);
-                critterObj["type"] = CleanAnimalRaceName(ActorSvc::GetRaceName(critterID));
-                childObj["critter"] = critterObj;
+                critterObj["name"] = ResolveActorNameSafe(critterID, *worldSnap, *spatialSnap);
+                critterObj["type"] = CleanAnimalRaceName(ResolveActorRaceSafe(critterID, *worldSnap, *spatialSnap));
+                childObj["critter"] = std::move(critterObj);
             }
 
-            RE::FormID petID = childSvc.GetPet(childID);
+            const RE::FormID petID = hhChild ? hhChild->petId.raw() : 0;
             if (petID != 0) {
                 nlohmann::json petObj;
                 petObj["uuid"] = FormIDToUUID(petID);
-                petObj["name"] = ActorSvc::GetName(petID);
-                petObj["type"] = CleanAnimalRaceName(ActorSvc::GetRaceName(petID));
-                childObj["pet"] = petObj;
+                petObj["name"] = ResolveActorNameSafe(petID, *worldSnap, *spatialSnap);
+                petObj["type"] = CleanAnimalRaceName(ResolveActorRaceSafe(petID, *worldSnap, *spatialSnap));
+                childObj["pet"] = std::move(petObj);
             }
-            const bool visibleBioParentHasBeastblood =
-                (childBioMotherID != 0 && NPCRelationshipManager::IsActorWerewolf(childBioMotherID)) ||
-                (effectiveBioFatherID != 0 && effectiveBioFatherID != kUnknownFatherFormID && NPCRelationshipManager::IsActorWerewolf(effectiveBioFatherID));
-            childObj["has_beastblood"] = childEntry.hasBeastblood && (!hideSecretFromActor || visibleBioParentHasBeastblood);
+            childObj["has_beastblood"] = child.hasBeastblood;
 
             return childObj;
         };
 
-        auto allChildIDs = mgr.GetChildrenOfActor(actorFormID);
         std::map<RE::FormID, std::vector<nlohmann::json>> childrenByOtherParent;
         std::map<RE::FormID, std::vector<std::string>> childNamesByOtherParent;
         std::vector<RE::FormID> otherParentOrder;
+        for (const auto& child : selfView.GetCustodialChildrenOf(selfActorId)) {
+            const RE::FormID otherPID =
+                (child.guardians.slotA == selfActorId) ? child.guardians.slotB.raw() : child.guardians.slotA.raw();
+            if (auto cObjOpt = buildChildObj(child)) {
+                if (childrenByOtherParent.find(otherPID) == childrenByOtherParent.end()) {
+                    otherParentOrder.push_back(otherPID);
+                }
+                childNamesByOtherParent[otherPID].push_back((*cObjOpt)["name"].get<std::string>());
+                childrenByOtherParent[otherPID].push_back(std::move(*cObjOpt));
+            }
+        }
+
         std::vector<nlohmann::json> nonCustodialChildren;
+        for (const auto& child : selfView.GetNonCustodialChildrenOf(selfActorId)) {
+            const RE::FormID childID = child.childId.raw();
+            nlohmann::json ncObj;
+            ncObj["uuid"] = FormIDToUUID(childID);
+            const std::string childName =
+                (child.name.empty() || StringUtils::CaseInsensitiveEquals(child.name, "Newborn")) ? "child" : child.name;
+            ncObj["name"] = childName;
+            const State::ActorSex resolvedSex = ResolveActorSexSafe(childID, *worldSnap, *spatialSnap);
+            int childSex = child.gender;
+            if (resolvedSex == State::ActorSex::Female) {
+                childSex = 1;
+            } else if (resolvedSex == State::ActorSex::Male) {
+                childSex = 0;
+            }
+            ncObj["gender"] = (childSex == 1) ? "female" : "male";
+            ncObj["relation"] = (childSex == 1) ? "daughter" : "son";
 
-        for (auto childID : allChildIDs) {
-            auto entryOpt = mgr.GetChildEntry(childID);
-            if (!entryOpt.has_value()) continue;
-            const auto& childEntry = *entryOpt;
-            if (childEntry.stage == ChildStage::Unborn) continue;
+            std::vector<RE::FormID> guardians;
+            if (!child.guardians.slotA.IsNull()) guardians.push_back(child.guardians.slotA.raw());
+            if (!child.guardians.slotB.IsNull() && child.guardians.slotB != child.guardians.slotA) {
+                guardians.push_back(child.guardians.slotB.raw());
+            }
+            if (!guardians.empty()) {
+                ncObj["guardians"] = makeNpcListRef(guardians);
+            }
 
-            if (mgr.IsGuardian(childID, actorFormID)) {
-                RE::FormID otherPID = mgr.GetCoGuardian(childID, actorFormID);
-
-                if (auto cObjOpt = buildChildObj(childID)) {
-                    if (childrenByOtherParent.find(otherPID) == childrenByOtherParent.end()) {
-                        otherParentOrder.push_back(otherPID);
-                    }
-                    childrenByOtherParent[otherPID].push_back(*cObjOpt);
-                    childNamesByOtherParent[otherPID].push_back((*cObjOpt)["name"].get<std::string>());
+            const RE::FormID otherBioID = child.PerceivedOtherParent(selfActorId).raw();
+            if (otherBioID != 0 && otherBioID != kUnknownFatherFormID) {
+                ncObj["other_bio_parent"] = makeNpcRef(otherBioID);
+            }
+            if (child.hasUndiscoveredPaternitySecret && child.paternitySecret.has_value()) {
+                if (child.perceivedBioFather == selfActorId) {
+                    ncObj["is_paternity_secret"] = true;
                 }
-            } else {
-                const auto& sec = childEntry.paternitySecret;
-                RE::FormID explicitPresumedFatherID = mgr.GetPresumedFather(childID);
-                RE::FormID motherPartnerID = mgr.GetMotherPartner(childID);
-                RE::FormID motherID = mgr.GetBioMother(childID);
-                if (motherPartnerID != 0 && motherID != 0 && explicitPresumedFatherID == 0 && !sec.isSecretForPartner &&
-                    !mgr.IsGuardian(childID, motherPartnerID) && isPastStatus(mgr.GetRelationshipStatus(motherID, motherPartnerID))) {
-                    motherPartnerID = 0;
-                }
-                RE::FormID effectivePresumedFatherID = explicitPresumedFatherID != 0 ? explicitPresumedFatherID : motherPartnerID;
-
-                const bool secretForPartnerActive = sec.HasActiveSecret() && !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
-                const bool secretForBioFatherActive = sec.HasActiveSecret() && !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather;
-
-                bool isBioParent = MatchesActor(childEntry.bioMotherID, actorFormID) || MatchesActor(childEntry.bioFatherID, actorFormID);
-                bool isSecretPresumedFather = !isBioParent && effectivePresumedFatherID != 0 &&
-                                              MatchesActor(effectivePresumedFatherID, actorFormID) &&
-                                              secretForPartnerActive;
-                if (isBioParent || isSecretPresumedFather) {
-                    bool isHiddenSecret = false;
-                    if (isBioParent && MatchesActor(childEntry.bioFatherID, actorFormID) && secretForBioFatherActive) {
-                        isHiddenSecret = true;
-                    }
-                    if (!isHiddenSecret) {
-                        nlohmann::json ncObj;
-                        ncObj["uuid"] = FormIDToUUID(childID);
-                        std::string childName = (childEntry.name.empty() || StringUtils::CaseInsensitiveEquals(childEntry.name, "Newborn")) ? "child" : childEntry.name;
-                        ncObj["name"] = childName;
-                        auto* childActor = HasPhysicalActor(childID)
-                            ? NPCIndex::GetSingleton().GetActorFromFormId(childID)
-                            : nullptr;
-                        int childSex = 0;
-                        if (childActor && childActor->GetActorBase()) {
-                            childSex = (childActor->GetActorBase()->GetSex() == RE::SEX::kFemale) ? 1 : 0;
-                        } else {
-                            childSex = childEntry.gender;
-                        }
-                        ncObj["gender"] = (childSex == 1) ? "female" : "male";
-                        ncObj["relation"] = (childSex == 1) ? "daughter" : "son";
-
-                        std::vector<RE::FormID> guardians;
-                        if (childEntry.guardianAID != 0) guardians.push_back(childEntry.guardianAID);
-                        if (childEntry.guardianBID != 0 && childEntry.guardianBID != childEntry.guardianAID) guardians.push_back(childEntry.guardianBID);
-                        if (!guardians.empty()) {
-                            ncObj["guardians"] = MakeNpcListRef(guardians);
-                        }
-
-                        RE::FormID otherBioID = (isSecretPresumedFather || !MatchesActor(childEntry.bioMotherID, actorFormID))
-                                                    ? childEntry.bioMotherID
-                                                    : childEntry.bioFatherID;
-                        if (otherBioID != 0 && otherBioID != kUnknownFatherFormID) {
-                            ncObj["other_bio_parent"] = MakeNpcRef(otherBioID);
-                        }
-                        if (MatchesActor(childEntry.bioFatherID, actorFormID) && (secretForPartnerActive || secretForBioFatherActive)) {
-                            ncObj["is_paternity_secret"] = true;
-                        }
-                        if (MatchesActor(childEntry.bioMotherID, actorFormID) && (secretForPartnerActive || secretForBioFatherActive)) {
-                            ncObj["is_other_parent_secret"] = true;
-                            if (secretForPartnerActive && effectivePresumedFatherID != 0) {
-                                ncObj["public_other_parent"] = MakeNpcRef(effectivePresumedFatherID);
-                            }
-                        }
-                        nonCustodialChildren.push_back(std::move(ncObj));
+                if (child.bioMother == selfActorId) {
+                    ncObj["is_other_parent_secret"] = true;
+                    if (child.paternitySecret->isSecretForPartner && !child.presumedFather.IsNull()) {
+                        ncObj["public_other_parent"] = makeNpcRef(child.presumedFather.raw());
                     }
                 }
             }
+            nonCustodialChildren.push_back(std::move(ncObj));
         }
 
         nlohmann::json childrenGroupsArray = nlohmann::json::array();
         for (auto otherPID : otherParentOrder) {
             nlohmann::json grpObj;
             if (otherPID != 0) {
-                grpObj["other_parent"] = MakeNpcRef(otherPID);
+                grpObj["other_parent"] = makeNpcRef(otherPID);
             } else {
                 grpObj["single_parent"] = true;
             }
             grpObj["children"] = childrenByOtherParent[otherPID];
             grpObj["children_names_summary"] = FormatNamesSummary(childNamesByOtherParent[otherPID]);
-            childrenGroupsArray.push_back(grpObj);
+            childrenGroupsArray.push_back(std::move(grpObj));
         }
 
         j["family"] = std::move(childrenGroupsArray);
         j["non_custodial_children"] = std::move(nonCustodialChildren);
 
-        if (auto asChildOpt = mgr.GetChildEntry(actorFormID); asChildOpt.has_value()) {
+        if (const auto asChildOpt = selfView.GetPerceivedChild(State::ChildId{ actorFormID }); asChildOpt.has_value()) {
             const auto& asChild = *asChildOpt;
             nlohmann::json parentage;
             parentage["is_adopted"] = asChild.isAdopted;
             parentage["is_biological"] = asChild.isBiologicalChild;
 
-            const auto& sec = asChild.paternitySecret;
-            RE::FormID asChildMotherID = mgr.GetBioMother(actorFormID);
-            RE::FormID asChildFatherID = mgr.GetMotherPartner(actorFormID);
-            RE::FormID asChildBioFatherID = mgr.GetBioFather(actorFormID);
-
-            RE::FormID explicitPresumedFatherID = mgr.GetPresumedFather(actorFormID);
-            RE::FormID presFatherID = explicitPresumedFatherID != 0 ? explicitPresumedFatherID : asChildFatherID;
-            if (presFatherID != 0 && asChildMotherID != 0 && explicitPresumedFatherID == 0 && !sec.isSecretForPartner && !mgr.IsGuardian(actorFormID, presFatherID) && isPastStatus(mgr.GetRelationshipStatus(asChildMotherID, presFatherID))) {
-                presFatherID = 0;
-            }
-
-            bool isBioSameAsPresumed = (presFatherID != 0 && asChildBioFatherID != 0 && MatchesActor(asChildBioFatherID, presFatherID));
-            bool hasPresumedFather = (presFatherID != 0 && !isBioSameAsPresumed && (asChildMotherID == 0 || !MatchesActor(presFatherID, asChildMotherID)));
-            bool hasPaternitySecret = hasPresumedFather && (sec.isSecret || sec.discovered || explicitPresumedFatherID != 0);
-            bool partnerKnowsPaternity = !hasPaternitySecret || sec.discovered || sec.discoveredByPartner || !sec.isSecretForPartner;
-            bool bioFatherKnowsPaternity = sec.discovered || sec.discoveredByBioFather || !sec.isSecretForBioFather;
-            bool isSingleMotherSecretFromBioFather = (!hasPresumedFather && asChildBioFatherID != 0 && sec.isSecret && sec.isSecretForBioFather && !sec.discoveredByBioFather && !sec.discovered);
-
-            const bool secretFromPartnerActive = !sec.discovered && sec.isSecretForPartner && !sec.discoveredByPartner;
-            const bool secretFromBioFatherActive = !sec.discovered && sec.isSecretForBioFather && !sec.discoveredByBioFather;
-            const bool hasUndiscoveredSecretOnChild = sec.HasActiveSecret() && (secretFromPartnerActive || secretFromBioFatherActive);
-            if (hasUndiscoveredSecretOnChild) {
+            if (asChild.hasUndiscoveredPaternitySecret) {
                 parentage["has_undiscovered_paternity_secret"] = true;
             }
-            bool canChildKnow = canActorKnowPaternitySecret(actorFormID, asChildMotherID, presFatherID, explicitPresumedFatherID, asChildBioFatherID, sec);
-            bool hideSecretFromChild = (!isBioSameAsPresumed && sec.HasActiveSecret() && !canChildKnow);
-            RE::FormID effectiveChildBioFatherID = hideSecretFromChild
-                ? ((secretFromPartnerActive && hasPresumedFather) ? presFatherID : 0)
-                : asChildBioFatherID;
-            RE::FormID publicChildBioFatherID = (!isBioSameAsPresumed && hasUndiscoveredSecretOnChild)
-                ? ((secretFromPartnerActive && hasPresumedFather) ? presFatherID : 0)
-                : asChildBioFatherID;
 
-            if (asChildMotherID != 0 && (mgr.IsGuardian(actorFormID, asChildMotherID) || (asChild.guardianAID == 0 && asChild.guardianBID == 0))) {
-                parentage["mother"] = MakeNpcRef(asChildMotherID);
+            const RE::FormID asChildMotherID = asChild.bioMother.raw();
+            const RE::FormID asChildFatherID = asChild.motherPartner.raw();
+            const RE::FormID presFatherID = asChild.presumedFather.raw();
+            const RE::FormID effectiveChildBioFatherID = asChild.perceivedBioFather.raw();
+            const bool hasAnyGuardian = asChild.guardians.HasAnyGuardian();
+
+            if (asChildMotherID != 0 && (asChild.guardians.HasGuardian(asChild.bioMother) || !hasAnyGuardian)) {
+                parentage["mother"] = makeNpcRef(asChildMotherID);
             }
             if (asChildFatherID != 0) {
-                parentage["mother_partner"] = MakeNpcRef(asChildFatherID);
-                if (mgr.IsGuardian(actorFormID, asChildFatherID) || (asChild.guardianAID == 0 && asChild.guardianBID == 0)) {
-                    parentage["father"] = MakeNpcRef(asChildFatherID);
+                parentage["mother_partner"] = makeNpcRef(asChildFatherID);
+                if (asChild.guardians.HasGuardian(asChild.motherPartner) || !hasAnyGuardian) {
+                    parentage["father"] = makeNpcRef(asChildFatherID);
                 }
             }
-            if (!hideSecretFromChild && presFatherID != 0 && !isBioSameAsPresumed) {
-                parentage["presumed_father"] = MakeNpcRef(presFatherID);
+            if (presFatherID != 0) {
+                parentage["presumed_father"] = makeNpcRef(presFatherID);
             }
 
-            RE::FormID asChildBioMotherID = asChild.bioMotherID;
-            const bool visibleChildParentHasBeastblood =
-                (asChildBioMotherID != 0 && NPCRelationshipManager::IsActorWerewolf(asChildBioMotherID)) ||
-                (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID && NPCRelationshipManager::IsActorWerewolf(effectiveChildBioFatherID));
-            parentage["has_beastblood"] = asChild.hasBeastblood && (!hideSecretFromChild || visibleChildParentHasBeastblood);
+            parentage["has_beastblood"] = asChild.hasBeastblood;
 
-            if (asChildBioMotherID != 0) {
-                parentage["bio_mother"] = MakeNpcRef(asChildBioMotherID);
-                parentage["biological_mother"] = MakeNpcRef(asChildBioMotherID);
+            if (asChildMotherID != 0) {
+                parentage["bio_mother"] = makeNpcRef(asChildMotherID);
+                parentage["biological_mother"] = parentage["bio_mother"];
             }
             if (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID) {
-                parentage["bio_father"] = MakeNpcRef(effectiveChildBioFatherID);
-                parentage["biological_father"] = MakeNpcRef(effectiveChildBioFatherID);
-            } else if (!hideSecretFromChild && !sec.bioFatherName.empty() && sec.bioFatherName != "Unknown") {
+                parentage["bio_father"] = makeNpcRef(effectiveChildBioFatherID);
+                parentage["biological_father"] = parentage["bio_father"];
+            } else if (!asChild.perceivedBioFatherFallbackName.empty() && asChild.perceivedBioFatherFallbackName != "Unknown") {
                 nlohmann::json bioFatherRef;
                 bioFatherRef["uuid"] = 0;
-                bioFatherRef["name"] = sec.bioFatherName;
+                bioFatherRef["name"] = asChild.perceivedBioFatherFallbackName;
                 parentage["bio_father"] = bioFatherRef;
                 parentage["biological_father"] = bioFatherRef;
             }
 
             std::vector<RE::FormID> currentGuardians;
-            if (asChild.guardianAID != 0) currentGuardians.push_back(asChild.guardianAID);
-            if (asChild.guardianBID != 0 && asChild.guardianBID != asChild.guardianAID) currentGuardians.push_back(asChild.guardianBID);
+            if (!asChild.guardians.slotA.IsNull()) currentGuardians.push_back(asChild.guardians.slotA.raw());
+            if (!asChild.guardians.slotB.IsNull() && asChild.guardians.slotB != asChild.guardians.slotA) {
+                currentGuardians.push_back(asChild.guardians.slotB.raw());
+            }
             if (!currentGuardians.empty()) {
-                parentage["guardians"] = MakeNpcListRef(currentGuardians);
-                parentage["current_parents"] = MakeNpcListRef(currentGuardians);
+                parentage["guardians"] = makeNpcListRef(currentGuardians);
+                parentage["current_parents"] = makeNpcListRef(currentGuardians);
             }
 
             std::vector<RE::FormID> bioParents;
-            if (asChildBioMotherID != 0) bioParents.push_back(asChildBioMotherID);
-            if (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID && effectiveChildBioFatherID != asChildBioMotherID) {
-                bioParents.push_back(effectiveChildBioFatherID);
+            bioParents.reserve(asChild.biologicalParents.size());
+            for (const auto bp : asChild.biologicalParents) {
+                bioParents.push_back(bp.raw());
             }
             if (!bioParents.empty()) {
-                parentage["biological_parents"] = MakeNpcListRef(bioParents);
-            }
+                parentage["biological_parents"] = makeNpcListRef(bioParents);
 
-            if (!bioParents.empty()) {
                 std::vector<RE::FormID> stepParents;
-                for (auto cp : currentGuardians) {
-                    bool isBio = false;
-                    for (auto bp : bioParents) {
-                        if (MatchesActor(cp, bp)) { isBio = true; break; }
-                    }
-                    if (!isBio) {
-                        stepParents.push_back(cp);
-                    }
+                stepParents.reserve(asChild.stepParents.size());
+                for (const auto sp : asChild.stepParents) {
+                    stepParents.push_back(sp.raw());
                 }
                 if (!stepParents.empty()) {
-                    parentage["step_parents"] = MakeNpcListRef(stepParents);
+                    parentage["step_parents"] = makeNpcListRef(stepParents);
                 }
             }
+
             std::string stageStr = "child";
             switch (asChild.stage) {
-                case ChildStage::Unborn:   stageStr = "unborn"; break;
-                case ChildStage::Infant:   stageStr = "infant"; break;
-                case ChildStage::Child:    stageStr = "child"; break;
-                case ChildStage::Training: stageStr = "training"; break;
-                case ChildStage::Adult:    stageStr = "adult"; break;
+                case State::ChildStage::Unborn:   stageStr = "unborn"; break;
+                case State::ChildStage::Infant:   stageStr = "infant"; break;
+                case State::ChildStage::Child:    stageStr = "child"; break;
+                case State::ChildStage::Training: stageStr = "training"; break;
+                case State::ChildStage::Adult:    stageStr = "adult"; break;
             }
             parentage["stage"] = stageStr;
             if (!asChild.trainingLocation.empty()) {
                 parentage["training_location"] = asChild.trainingLocation;
             }
 
-            int asChildSex = 0;
-            if (HasPhysicalActor(asChild.childID)) {
-                auto* childAct = NPCIndex::GetSingleton().GetActorFromFormId(asChild.childID);
-                if (childAct && childAct->GetActorBase()) {
-                    asChildSex = (childAct->GetActorBase()->GetSex() == RE::SEX::kFemale) ? 1 : 0;
-                }
-            } else {
-                asChildSex = asChild.gender;
+            const State::ActorSex resolvedAsChildSex = ResolveActorSexSafe(actorFormID, *worldSnap, *spatialSnap);
+            int asChildSex = asChild.gender;
+            if (resolvedAsChildSex == State::ActorSex::Female) {
+                asChildSex = 1;
+            } else if (resolvedAsChildSex == State::ActorSex::Male) {
+                asChildSex = 0;
             }
             parentage["gender"] = (asChildSex == 1) ? "female" : "male";
             parentage["relation"] = (asChildSex == 1) ? "daughter" : "son";
 
-            auto resolveSiblingBioFather = [&](const ChildRegistryEntry& sibEntry, bool publicOnly) -> RE::FormID {
-                const auto& sibSec = sibEntry.paternitySecret;
-                RE::FormID sibMotherID = mgr.GetBioMother(sibEntry.childID);
-                RE::FormID sibBioFatherID = mgr.GetBioFather(sibEntry.childID);
-                RE::FormID sibExplicitPresumed = mgr.GetPresumedFather(sibEntry.childID);
-                RE::FormID sibPresFather = sibExplicitPresumed != 0 ? sibExplicitPresumed : mgr.GetMotherPartner(sibEntry.childID);
-                if (sibPresFather != 0 && sibMotherID != 0 && sibExplicitPresumed == 0 && !sibSec.isSecretForPartner &&
-                    !mgr.IsGuardian(sibEntry.childID, sibPresFather) && isPastStatus(mgr.GetRelationshipStatus(sibMotherID, sibPresFather))) {
-                    sibPresFather = 0;
-                }
-                const bool sibBioSameAsPresumed = (sibPresFather != 0 && sibBioFatherID != 0 && MatchesActor(sibBioFatherID, sibPresFather));
-                const bool sibHasPresumed = (sibPresFather != 0 && !sibBioSameAsPresumed && (sibMotherID == 0 || !MatchesActor(sibPresFather, sibMotherID)));
-                const bool sibSecretPartnerActive = !sibSec.discovered && sibSec.isSecretForPartner && !sibSec.discoveredByPartner;
-                const bool sibSecretBioActive = !sibSec.discovered && sibSec.isSecretForBioFather && !sibSec.discoveredByBioFather;
-                if (publicOnly) {
-                    const bool sibHasUndiscovered = sibSec.HasActiveSecret() && (sibSecretPartnerActive || sibSecretBioActive);
-                    if (!sibBioSameAsPresumed && sibHasUndiscovered) {
-                        return (sibSecretPartnerActive && sibHasPresumed) ? sibPresFather : 0;
-                    }
-                    return sibBioFatherID;
-                }
-                const bool actorCanKnowSib = canActorKnowPaternitySecret(actorFormID, sibMotherID, sibPresFather, sibExplicitPresumed, sibBioFatherID, sibSec);
-                if (!sibBioSameAsPresumed && sibSec.HasActiveSecret() && !actorCanKnowSib) {
-                    return (sibSecretPartnerActive && sibHasPresumed) ? sibPresFather : 0;
-                }
-                return sibBioFatherID;
-            };
-
-            auto isVisibleChildOfParent = [&](const ChildRegistryEntry& sibEntry, RE::FormID parentID, bool publicOnly) -> bool {
-                if (parentID == 0 || parentID == kUnknownFatherFormID) return false;
-                if (sibEntry.HasGuardian(parentID) || MatchesActor(sibEntry.bioMotherID, parentID)) return true;
-                RE::FormID visibleFatherID = resolveSiblingBioFather(sibEntry, publicOnly);
-                return visibleFatherID != 0 && visibleFatherID != kUnknownFatherFormID && MatchesActor(visibleFatherID, parentID);
-            };
-
             std::vector<RE::FormID> siblingIDs;
-            auto addSiblings = [&](RE::FormID parentID) {
-                if (parentID == 0 || parentID == kUnknownFatherFormID) return;
-                for (auto sibID : mgr.GetChildrenOfActor(parentID)) {
-                    if (sibID != actorFormID && std::find(siblingIDs.begin(), siblingIDs.end(), sibID) == siblingIDs.end()) {
-                        auto sibOpt = mgr.GetChildEntry(sibID);
-                        if (!sibOpt || sibOpt->stage == ChildStage::Unborn) continue;
-                        if (!isVisibleChildOfParent(*sibOpt, parentID, /*publicOnly=*/false)) continue;
-                        siblingIDs.push_back(sibID);
-                    }
-                }
-            };
-            addSiblings(asChild.guardianAID);
-            addSiblings(asChild.guardianBID);
-            addSiblings(asChildBioMotherID);
-            addSiblings(effectiveChildBioFatherID);
+            for (const auto& sib : selfView.GetPerceivedSiblingsOf(asChild.childId, /*forcePublicOnly=*/false)) {
+                siblingIDs.push_back(sib.childId.raw());
+            }
             if (!siblingIDs.empty()) {
-                parentage["siblings"] = MakeNpcListRef(siblingIDs);
+                parentage["siblings"] = makeNpcListRef(siblingIDs);
             }
 
             std::vector<RE::FormID> publicSiblingIDs;
-            auto addPublicSiblings = [&](RE::FormID parentID) {
-                if (parentID == 0 || parentID == kUnknownFatherFormID) return;
-                for (auto sibID : mgr.GetChildrenOfActor(parentID)) {
-                    if (sibID != actorFormID && std::find(publicSiblingIDs.begin(), publicSiblingIDs.end(), sibID) == publicSiblingIDs.end()) {
-                        auto sibOpt = mgr.GetChildEntry(sibID);
-                        if (!sibOpt || sibOpt->stage == ChildStage::Unborn) continue;
-                        if (!isVisibleChildOfParent(*sibOpt, parentID, /*publicOnly=*/true)) continue;
-                        publicSiblingIDs.push_back(sibID);
-                    }
-                }
-            };
-            addPublicSiblings(asChild.guardianAID);
-            addPublicSiblings(asChild.guardianBID);
-            addPublicSiblings(asChildBioMotherID);
-            addPublicSiblings(publicChildBioFatherID);
+            for (const auto& sib : selfView.GetPerceivedSiblingsOf(asChild.childId, /*forcePublicOnly=*/true)) {
+                publicSiblingIDs.push_back(sib.childId.raw());
+            }
             if (!publicSiblingIDs.empty()) {
-                parentage["siblings_public"] = MakeNpcListRef(publicSiblingIDs);
+                parentage["siblings_public"] = makeNpcListRef(publicSiblingIDs);
             }
 
-            RE::FormID critterID = childSvc.GetCritter(actorFormID);
+            const auto* hhChild = worldSnap->household->FindChildState(asChild.childId);
+            const RE::FormID critterID = hhChild ? hhChild->critterId.raw() : 0;
             if (critterID != 0) {
                 nlohmann::json critterObj;
                 critterObj["uuid"] = FormIDToUUID(critterID);
-                critterObj["name"] = ActorSvc::GetName(critterID);
-                critterObj["type"] = CleanAnimalRaceName(ActorSvc::GetRaceName(critterID));
-                parentage["critter"] = critterObj;
+                critterObj["name"] = ResolveActorNameSafe(critterID, *worldSnap, *spatialSnap);
+                critterObj["type"] = CleanAnimalRaceName(ResolveActorRaceSafe(critterID, *worldSnap, *spatialSnap));
+                parentage["critter"] = std::move(critterObj);
             }
 
-            RE::FormID petID = childSvc.GetPet(actorFormID);
+            const RE::FormID petID = hhChild ? hhChild->petId.raw() : 0;
             if (petID != 0) {
                 nlohmann::json petObj;
                 petObj["uuid"] = FormIDToUUID(petID);
-                petObj["name"] = ActorSvc::GetName(petID);
-                petObj["type"] = CleanAnimalRaceName(ActorSvc::GetRaceName(petID));
-                parentage["pet"] = petObj;
+                petObj["name"] = ResolveActorNameSafe(petID, *worldSnap, *spatialSnap);
+                petObj["type"] = CleanAnimalRaceName(ResolveActorRaceSafe(petID, *worldSnap, *spatialSnap));
+                parentage["pet"] = std::move(petObj);
             }
 
-            if (presFatherID != 0 && !isBioSameAsPresumed && (sec.isSecret || sec.discovered) && canChildKnow) {
+            if (asChild.paternitySecret.has_value() &&
+                presFatherID != 0 &&
+                (asChild.paternitySecret->isSecret || asChild.paternitySecret->discovered)) {
+                const auto& sec = *asChild.paternitySecret;
                 nlohmann::json pIntrigue;
-                bool secAssumed = sec.isSecretForPartner;
-                pIntrigue["is_secret"] = !sec.discovered && (secAssumed || sec.isSecretForBioFather);
-                pIntrigue["is_secret_for_partner"] = secAssumed;
+                pIntrigue["is_secret"] = sec.isSecret;
+                pIntrigue["is_secret_for_partner"] = sec.isSecretForPartner;
                 pIntrigue["is_secret_for_bio_father"] = sec.isSecretForBioFather;
-                pIntrigue["mother_partner"] = MakeNpcRef(presFatherID);
-                pIntrigue["presumed_father"] = MakeNpcRef(presFatherID);
-                pIntrigue["presumed_father_is_guardian"] = mgr.IsGuardian(actorFormID, presFatherID);
-                if (asChildBioFatherID != 0) {
-                    pIntrigue["biological_father"] = MakeNpcRef(asChildBioFatherID);
-                } else if (!sec.bioFatherName.empty() && sec.bioFatherName != "Unknown") {
+                pIntrigue["mother_partner"] = makeNpcRef(presFatherID);
+                pIntrigue["presumed_father"] = makeNpcRef(presFatherID);
+                pIntrigue["presumed_father_is_guardian"] = sec.presumedFatherIsGuardian;
+                if (!sec.trueBioFather.IsNull()) {
+                    pIntrigue["biological_father"] = makeNpcRef(sec.trueBioFather.raw());
+                } else if (!sec.trueBioFatherFallbackName.empty() && sec.trueBioFatherFallbackName != "Unknown") {
                     nlohmann::json bioFatherRef;
                     bioFatherRef["uuid"] = 0;
-                    bioFatherRef["name"] = sec.bioFatherName;
+                    bioFatherRef["name"] = sec.trueBioFatherFallbackName;
                     pIntrigue["biological_father"] = bioFatherRef;
                 }
                 pIntrigue["discovered_by_partner"] = sec.discoveredByPartner;
                 pIntrigue["discovered_by_bio_father"] = sec.discoveredByBioFather;
-                parentage["paternity_secret"] = pIntrigue;
+                parentage["paternity_secret"] = std::move(pIntrigue);
             }
 
             nlohmann::json involvedAdults = nlohmann::json::array();
@@ -1306,25 +987,25 @@ namespace {
                     if (MatchesActor(seen, adultID)) return;
                 }
                 seenAdultIDs.push_back(adultID);
-                nlohmann::json ref = MakeNpcRef(adultID);
+                nlohmann::json ref = makeNpcRef(adultID);
                 ref["role"] = roleLabel;
-                uint64_t adultUUID = ref.value("uuid", uint64_t{0});
+                const uint64_t adultUUID = ref.value("uuid", uint64_t{ 0 });
                 if (adultUUID != 0) {
                     appendEventUUID(adultUUID);
                 }
                 involvedAdults.push_back(std::move(ref));
             };
 
-            if (asChildBioMotherID != 0) {
-                bool isGuard = mgr.IsGuardian(actorFormID, asChildBioMotherID);
-                addInvolvedAdult(asChildBioMotherID, isGuard ? "Biological Mother & Guardian" : "Biological Mother");
+            if (asChildMotherID != 0) {
+                const bool isGuard = asChild.guardians.HasGuardian(asChild.bioMother);
+                addInvolvedAdult(asChildMotherID, isGuard ? "Biological Mother & Guardian" : "Biological Mother");
             }
             if (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID) {
-                bool isGuard = mgr.IsGuardian(actorFormID, effectiveChildBioFatherID);
+                const bool isGuard = asChild.guardians.HasGuardian(asChild.perceivedBioFather);
                 addInvolvedAdult(effectiveChildBioFatherID, isGuard ? "Father & Guardian" : "Father");
             }
-            if (!hideSecretFromChild && presFatherID != 0 && !isBioSameAsPresumed) {
-                bool isGuard = mgr.IsGuardian(actorFormID, presFatherID);
+            if (presFatherID != 0) {
+                const bool isGuard = asChild.guardians.HasGuardian(asChild.presumedFather);
                 addInvolvedAdult(presFatherID, isGuard ? "Guardian / Raising Father" : "Presumed Father");
             }
             for (RE::FormID gID : currentGuardians) {
@@ -1333,7 +1014,7 @@ namespace {
             parentage["involved_adults"] = std::move(involvedAdults);
 
             // Perspective-masked involved adults & paternity state on the child's own relationship profile.
-            // Never leak the secret true biological father or secret paternity labels when hideSecretFromChild is true.
+            // Never leak the secret true biological father or secret paternity labels when hideSecretFromViewer is true.
             nlohmann::json bioGenAdults = nlohmann::json::array();
             std::vector<RE::FormID> seenBioGenAdultIDs;
             auto addBioGenAdult = [&](RE::FormID adultID, const std::string& roleKey, const std::string& roleLabel, bool isGuardian, std::optional<bool> knowsPaternity = std::nullopt) {
@@ -1342,32 +1023,32 @@ namespace {
                     if (MatchesActor(seen, adultID)) return;
                 }
                 seenBioGenAdultIDs.push_back(adultID);
-                nlohmann::json ref = MakeNpcRef(adultID);
+                nlohmann::json ref = makeNpcRef(adultID);
                 ref["role_key"] = roleKey;
                 ref["role"] = roleLabel;
                 ref["is_guardian"] = isGuardian;
                 if (knowsPaternity.has_value()) {
                     ref["knows_paternity"] = *knowsPaternity;
                 }
-                uint64_t adultUUID = ref.value("uuid", uint64_t{0});
+                const uint64_t adultUUID = ref.value("uuid", uint64_t{ 0 });
                 if (adultUUID != 0) {
                     appendEventUUID(adultUUID);
                 }
                 bioGenAdults.push_back(std::move(ref));
             };
 
-            if (asChildBioMotherID != 0) {
-                bool isGuard = mgr.IsGuardian(actorFormID, asChildBioMotherID);
+            if (asChildMotherID != 0) {
+                const bool isGuard = asChild.guardians.HasGuardian(asChild.bioMother);
                 addBioGenAdult(
-                    asChildBioMotherID,
+                    asChildMotherID,
                     "bio_mother",
                     isGuard ? "Biological Mother & Household Guardian" : "Biological Mother (Non-Custodial)",
                     isGuard,
                     true);
             }
-            if (hideSecretFromChild) {
+            if (asChild.hideSecretFromViewer) {
                 if (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID) {
-                    bool isGuard = mgr.IsGuardian(actorFormID, effectiveChildBioFatherID);
+                    const bool isGuard = asChild.guardians.HasGuardian(asChild.perceivedBioFather);
                     addBioGenAdult(
                         effectiveChildBioFatherID,
                         "bio_father",
@@ -1376,8 +1057,24 @@ namespace {
                         true);
                 }
             } else {
-                if (asChildBioFatherID != 0 && asChildBioFatherID != kUnknownFatherFormID) {
-                    bool isGuard = mgr.IsGuardian(actorFormID, asChildBioFatherID);
+                const auto& pSecOpt = asChild.paternitySecret;
+                const bool hasPresumedFather = (presFatherID != 0);
+                const bool hasPaternitySecret = hasPresumedFather && pSecOpt.has_value() &&
+                    (pSecOpt->isSecret || pSecOpt->discovered || pSecOpt->discoveredByPartner || pSecOpt->discoveredByBioFather);
+                const bool partnerKnowsPaternity = !hasPaternitySecret ||
+                    (pSecOpt.has_value() && (pSecOpt->discovered || pSecOpt->discoveredByPartner || !pSecOpt->isSecretForPartner));
+                const bool bioFatherKnowsPaternity = !pSecOpt.has_value() ||
+                    pSecOpt->discovered || pSecOpt->discoveredByBioFather || !pSecOpt->isSecretForBioFather;
+                const bool isSingleMotherSecretFromBioFather = (!hasPresumedFather &&
+                    effectiveChildBioFatherID != 0 &&
+                    pSecOpt.has_value() &&
+                    pSecOpt->isSecret &&
+                    pSecOpt->isSecretForBioFather &&
+                    !pSecOpt->discoveredByBioFather &&
+                    !pSecOpt->discovered);
+
+                if (effectiveChildBioFatherID != 0 && effectiveChildBioFatherID != kUnknownFatherFormID) {
+                    const bool isGuard = asChild.guardians.HasGuardian(asChild.perceivedBioFather);
                     std::string bioFatherRole;
                     if (hasPaternitySecret) {
                         if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
@@ -1396,10 +1093,10 @@ namespace {
                     } else {
                         bioFatherRole = isGuard ? "Biological Father & Household Guardian" : "Biological Father (Non-Custodial)";
                     }
-                    addBioGenAdult(asChildBioFatherID, "bio_father", bioFatherRole, isGuard, bioFatherKnowsPaternity);
+                    addBioGenAdult(effectiveChildBioFatherID, "bio_father", bioFatherRole, isGuard, bioFatherKnowsPaternity);
                 }
                 if (hasPresumedFather) {
-                    bool isGuard = mgr.IsGuardian(actorFormID, presFatherID);
+                    const bool isGuard = asChild.guardians.HasGuardian(asChild.presumedFather);
                     std::string presFatherRole;
                     if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
                         presFatherRole = isGuard
@@ -1434,26 +1131,27 @@ namespace {
             j["parents"] = std::move(parentage);
         }
 
-        for (const auto& record : cheatingRecords) {
-            if (record.affairStatus == AffairStatus::Allowed) continue;
-            if (record.victimID == actorFormID && record.isSecret) continue;
+        for (const auto& record : knownAffairs) {
+            if (record.affairStatus == State::AffairStatus::Allowed) continue;
+            if (record.deceivedPartner == selfActorId && record.isSecret) continue;
 
             nlohmann::json infidelity;
-            if (record.cheaterID == actorFormID) {
+            if (record.cheater == selfActorId) {
                 infidelity["actor_role"] = "cheater";
-            } else if (record.affairPartnerID == actorFormID) {
+            } else if (record.paramour == selfActorId) {
                 infidelity["actor_role"] = "affair_partner";
             } else {
                 infidelity["actor_role"] = "victim";
             }
-            infidelity["cheater"] = MakeNpcRef(record.cheaterID);
-            infidelity["affair_partner"] = MakeNpcRef(record.affairPartnerID);
-            infidelity["victim"] = MakeNpcRef(record.victimID);
+            infidelity["cheater"] = makeNpcRef(record.cheater.raw());
+            infidelity["affair_partner"] = makeNpcRef(record.paramour.raw());
+            infidelity["victim"] = makeNpcRef(record.deceivedPartner.raw());
             infidelity["status"] = affairStatusToKey(record.affairStatus);
-            infidelity["type"] = StringUtils::ToLowerStd(Utils::AffairTypeToString(record.affairType));
-            AffairStage effectiveStage = (record.victimID == kPlayerFormID) ? record.affairStage : AffairStage::Physical;
-            infidelity["affair_stage"] = StringUtils::ToLowerStd(std::string(Utils::AffairStageToString(effectiveStage)));
-            infidelity["incident_count"] = record.count;
+            infidelity["type"] = StringUtils::ToLowerStd(Utils::AffairTypeToString(
+                static_cast<AffairType>(static_cast<uint8_t>(record.affairType))));
+            infidelity["affair_stage"] = StringUtils::ToLowerStd(std::string(Utils::AffairStageToString(
+                static_cast<AffairStage>(static_cast<uint8_t>(record.effectiveAffairStage)))));
+            infidelity["incident_count"] = record.incidentCount;
             infidelity["last_timestamp"] = record.lastTimestamp;
             infidelity["is_secret"] = record.isSecret;
             j["infidelity"].push_back(std::move(infidelity));
@@ -1467,17 +1165,14 @@ namespace {
         }
     }
 
-    static std::string GetCandidateDisplayName(RE::FormID partnerFid, RE::Actor* targetActor = nullptr) {
-        std::string name = ActorSvc::GetName(partnerFid);
+    static std::string GetCandidateDisplayName(
+        RE::FormID partnerFid,
+        const State::WorldStateSnapshot& world,
+        const State::SpatialActorSnapshot& spatial)
+    {
+        std::string name = ResolveActorNameSafe(partnerFid, world, spatial);
         if (name.empty() || name == "None") {
-            if (!targetActor) {
-                if (auto* form = RE::TESForm::LookupByID(partnerFid)) {
-                    targetActor = form->As<RE::Actor>();
-                }
-            }
-            if (targetActor && targetActor->GetDisplayFullName() && *(targetActor->GetDisplayFullName())) {
-                name = targetActor->GetDisplayFullName();
-            } else if (partnerFid == kPlayerFormID) {
+            if (partnerFid == kPlayerFormID) {
                 name = "Player";
             } else {
                 name = fmt::format("0x{:08X}", partnerFid);
@@ -1496,22 +1191,22 @@ namespace {
         const auto fid = actor->GetFormID();
         if (!soloCheck(fid)) return "";
 
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
         const float radius = GetNearbyActorsRadius();
-        const auto nearby = Utils::GetNearbyActors(actor, radius);
         std::string result;
-        for (RE::Actor* target : nearby) {
-            if (!target) continue;
-            const auto targetFid = target->GetFormID();
+        spatialSnap->ForEachNearbyCandidate(State::RefId{ fid }, radius, [&](const State::LoadedActorSample& sample) {
+            const auto targetFid = sample.refId.raw();
             if (pairCheck(fid, targetFid) && (!extraFilter || extraFilter(fid, targetFid))) {
-                std::string name = GetCandidateDisplayName(targetFid, target);
+                const std::string name = GetCandidateDisplayName(targetFid, *worldSnap, *spatialSnap);
                 if (!name.empty()) {
-                    auto* base = target->GetActorBase();
-                    const char* gender = (base && base->GetSex() == RE::SEX::kFemale) ? "Female" : "Male";
+                    const State::ActorSex sex = ResolveActorSexSafe(targetFid, *worldSnap, *spatialSnap);
+                    const char* gender = (sex == State::ActorSex::Female) ? "Female" : "Male";
                     if (!result.empty()) result += ", ";
                     result += fmt::format("{} ({})", name, gender);
                 }
             }
-        }
+        });
         return result;
     }
 
@@ -1522,14 +1217,18 @@ namespace {
     {
         if (!actor) return "";
         const auto fid = actor->GetFormID();
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
-        const auto partners = mgr.GetPartners(fid, status);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto partners = worldSnap->relationships->GetPartnersWithStatus(
+            State::ActorId{ fid },
+            static_cast<State::RelationshipStatus>(static_cast<uint8_t>(status)));
         if (partners.empty()) return "";
 
         std::string result;
-        for (auto pFid : partners) {
+        for (const auto pActorId : partners) {
+            const RE::FormID pFid = pActorId.raw();
             if (!pairCheck(fid, pFid)) continue;
-            std::string name = GetCandidateDisplayName(pFid);
+            const std::string name = GetCandidateDisplayName(pFid, *worldSnap, *spatialSnap);
             if (!name.empty() && name != "None") {
                 if (!result.empty()) result += ", ";
                 result += name;
@@ -1553,19 +1252,22 @@ void RegisterSkyrimNetDecorators()
         [](RE::Actor* actor) -> std::string {
             if (!actor) return "";
             const uint32_t actorFormId = actor->GetFormID();
-            const auto& mgr      = NPCRelationshipManager::GetSingleton();
-            const auto* player   = RE::PlayerCharacter::GetSingleton();
+            const auto worldSnap       = State::WorldStore::GetSingleton().Snapshot();
+            const auto spatialSnap     = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const auto* player         = RE::PlayerCharacter::GetSingleton();
             const std::string playerName = player ? player->GetName() : "the Dragonborn";
 
             // Helper: map MARAS status to a player-relationship phrase.
-            auto getPlayerRel = [&mgr](RE::FormID fid) -> std::string {
-                if (mgr.IsEngaged(fid))  return "became engaged to";
-                if (mgr.IsMarried(fid))  return "married";
-                if (mgr.IsJilted(fid))   return "had a brief engagement with";
-                if (mgr.IsDivorced(fid)) return "married and later divorced";
-                if (mgr.IsExDating(fid)) return "briefly dated";
-                if (mgr.IsExLover(fid))  return "were lovers with";
-                return "";
+            auto getPlayerRel = [&worldSnap](RE::FormID fid) -> std::string {
+                switch (worldSnap->relationships->GetStatus(State::ActorId{ fid }, State::ActorId::Player())) {
+                    case State::RelationshipStatus::Engaged:  return "became engaged to";
+                    case State::RelationshipStatus::Married:  return "married";
+                    case State::RelationshipStatus::Jilted:   return "had a brief engagement with";
+                    case State::RelationshipStatus::Divorced: return "married and later divorced";
+                    case State::RelationshipStatus::ExDating: return "briefly dated";
+                    case State::RelationshipStatus::ExLover:  return "were lovers with";
+                    default: return "";
+                }
             };
 
             // ---------------------------------------------------------------
@@ -1654,22 +1356,35 @@ void RegisterSkyrimNetDecorators()
 
             if (exPartner2Base) {
                 // Match the ex-partner's NPC base against live MARAS-tracked actors
-                // via exact base pointer comparison — more reliable than name matching.
+                // via snapshot base FormID comparison first, then ActorSvc::GetActorBase fallback.
+                const RE::FormID targetBaseId = exPartner2Base->GetFormID();
+                const auto adjPairs = worldSnap->relationships->GetAdjacentPairs(State::ActorId::Player());
                 RE::FormID matchedFormID = 0;
-                auto findByBase = [&](const std::vector<RE::FormID>& ids) {
-                    for (auto fid : ids) {
-                        if (matchedFormID) break;
-                        const auto* a = ActorSvc::GetActorBase(fid);
-                        if (a && a == exPartner2Base)
+                auto findByStatus = [&](State::RelationshipStatus status) {
+                    if (matchedFormID != 0) return;
+                    for (const auto& key : adjPairs) {
+                        const auto* edge = worldSnap->relationships->FindEdge(key);
+                        if (!edge || edge->status != status) continue;
+                        const RE::FormID fid = key.Other(State::ActorId::Player()).raw();
+                        if (fid == 0) continue;
+                        RE::FormID candidateBaseId = ResolveBaseFormIDSafe(fid, *spatialSnap);
+                        if (candidateBaseId == 0) {
+                            if (const auto* base = ActorSvc::GetActorBase(fid)) {
+                                candidateBaseId = base->GetFormID();
+                            }
+                        }
+                        if (candidateBaseId == targetBaseId) {
                             matchedFormID = fid;
+                            break;
+                        }
                     }
                 };
-                findByBase(mgr.GetAllMarried());
-                if (!matchedFormID) findByBase(mgr.GetAllEngaged());
-                if (!matchedFormID) findByBase(mgr.GetAllJilted());
-                if (!matchedFormID) findByBase(mgr.GetAllDivorced());
-                if (!matchedFormID) findByBase(mgr.GetAllExDating());
-                if (!matchedFormID) findByBase(mgr.GetAllExLovers());
+                findByStatus(State::RelationshipStatus::Married);
+                findByStatus(State::RelationshipStatus::Engaged);
+                findByStatus(State::RelationshipStatus::Jilted);
+                findByStatus(State::RelationshipStatus::Divorced);
+                findByStatus(State::RelationshipStatus::ExDating);
+                findByStatus(State::RelationshipStatus::ExLover);
 
                 MARAS_LOG_TRACE("[SkyrimNet] ttm_get_ex_partner: P2 partner='{}' matchedFormID=0x{:08X}.",
                     exPartner2Base->GetName(), matchedFormID);
@@ -1732,38 +1447,42 @@ void RegisterSkyrimNetDecorators()
             return "";
         }
 
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
         const float radius = GetNearbyActorsRadius();
-        const auto nearby = Utils::GetNearbyActors(actor, radius);
 
         // If the actor is currently dating someone, that specific partner is the only valid target
-        const auto datingPartners = mgr.GetPartners(fid, RelationshipStatus::Dating);
+        const auto datingPartners = worldSnap->relationships->GetPartnersWithStatus(
+            State::ActorId{ fid }, State::RelationshipStatus::Dating);
         if (!datingPartners.empty()) {
-            const auto datingPartnerFid = datingPartners[0];
-            for (RE::Actor* target : nearby) {
-                if (target && target->GetFormID() == datingPartnerFid && mgr.IsAvailableForEngaged(fid, datingPartnerFid)) {
-                    return GetCandidateDisplayName(datingPartnerFid, target);
+            const auto datingPartnerFid = datingPartners[0].raw();
+            std::string matchResult;
+            spatialSnap->ForEachNearbyCandidate(State::RefId{ fid }, radius, [&](const State::LoadedActorSample& sample) {
+                if (!matchResult.empty()) return;
+                if (sample.refId.raw() == datingPartnerFid && mgr.IsAvailableForEngaged(fid, datingPartnerFid)) {
+                    matchResult = GetCandidateDisplayName(datingPartnerFid, *worldSnap, *spatialSnap);
                 }
-            }
-            return "";
+            });
+            return matchResult;
         }
 
         // If single, find all nearby eligible candidates
         std::string result;
-        for (RE::Actor* target : nearby) {
-            if (!target) continue;
-            const auto targetFid = target->GetFormID();
-            const auto targetDating = mgr.GetPartners(targetFid, RelationshipStatus::Dating);
-            if (!targetDating.empty() && targetDating[0] != fid) {
-                continue;
+        spatialSnap->ForEachNearbyCandidate(State::RefId{ fid }, radius, [&](const State::LoadedActorSample& sample) {
+            const auto targetFid = sample.refId.raw();
+            const auto targetDating = worldSnap->relationships->GetPartnersWithStatus(
+                State::ActorId{ targetFid }, State::RelationshipStatus::Dating);
+            if (!targetDating.empty() && targetDating[0].raw() != fid) {
+                return;
             }
             if (mgr.IsAvailableForEngaged(fid, targetFid)) {
-                std::string name = GetCandidateDisplayName(targetFid, target);
+                const std::string name = GetCandidateDisplayName(targetFid, *worldSnap, *spatialSnap);
                 if (!name.empty()) {
                     if (!result.empty()) result += ", ";
                     result += name;
                 }
             }
-        }
+        });
         return result;
     };
 
@@ -1834,19 +1553,21 @@ void RegisterSkyrimNetDecorators()
         [](RE::Actor* actor) -> std::string {
             if (!actor) return "";
             const auto fid = actor->GetFormID();
-            if (fid == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            if (fid == kPlayerFormID && worldSnap->settings->enablePlayerPolygamy) {
                 return "";
             }
 
-            const auto& mgr = NPCRelationshipManager::GetSingleton();
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const State::ActorId selfActorId{ fid };
             std::string result;
-            auto appendExclusivePartners = [&](const std::vector<RE::FormID>& partners) {
-                for (auto partnerId : partners) {
-                    const auto rData = mgr.GetNPCData(fid, partnerId);
-                    if (rData && rData->isOpen) {
+            auto appendExclusivePartners = [&](State::RelationshipStatus status) {
+                for (const auto partnerActorId : worldSnap->relationships->GetPartnersWithStatus(selfActorId, status)) {
+                    const auto* edge = worldSnap->relationships->FindEdge(State::CanonicalPairKey(selfActorId, partnerActorId));
+                    if (edge && edge->isOpen) {
                         continue;
                     }
-                    std::string name = ActorSvc::GetName(partnerId);
+                    const std::string name = ResolveActorNameSafe(partnerActorId.raw(), *worldSnap, *spatialSnap);
                     if (!name.empty() && name != "None") {
                         if (!result.empty()) result += ", ";
                         result += name;
@@ -1854,9 +1575,9 @@ void RegisterSkyrimNetDecorators()
                 }
             };
 
-            appendExclusivePartners(mgr.GetPartners(fid, RelationshipStatus::Married));
-            appendExclusivePartners(mgr.GetPartners(fid, RelationshipStatus::Engaged));
-            appendExclusivePartners(mgr.GetPartners(fid, RelationshipStatus::Dating));
+            appendExclusivePartners(State::RelationshipStatus::Married);
+            appendExclusivePartners(State::RelationshipStatus::Engaged);
+            appendExclusivePartners(State::RelationshipStatus::Dating);
 
             return result;
         });
@@ -1867,19 +1588,21 @@ void RegisterSkyrimNetDecorators()
         [](RE::Actor* actor) -> std::string {
             if (!actor) return "";
             const auto fid = actor->GetFormID();
-            if (fid == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            if (fid == kPlayerFormID && worldSnap->settings->enablePlayerPolygamy) {
                 return "";
             }
 
-            const auto& mgr = NPCRelationshipManager::GetSingleton();
-            if (mgr.HasAnyOpenMainPair(fid)) {
+            const State::ActorId selfActorId{ fid };
+            if (worldSnap->relationships->HasAnyOpenMainPair(selfActorId)) {
                 return "";
             }
 
-            const auto lovers = mgr.GetPartners(fid, RelationshipStatus::Lover);
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const auto lovers = worldSnap->relationships->GetPartnersWithStatus(selfActorId, State::RelationshipStatus::Lover);
             std::string result;
-            for (auto partnerId : lovers) {
-                std::string name = ActorSvc::GetName(partnerId);
+            for (const auto partnerActorId : lovers) {
+                const std::string name = ResolveActorNameSafe(partnerActorId.raw(), *worldSnap, *spatialSnap);
                 if (!name.empty() && name != "None") {
                     if (!result.empty()) result += ", ";
                     result += name;
@@ -1894,10 +1617,11 @@ void RegisterSkyrimNetDecorators()
         [](RE::Actor* actor) -> std::string {
             if (!actor) return "";
             const auto fid = actor->GetFormID();
-            const auto& mgr = NPCRelationshipManager::GetSingleton();
-            const auto dating = mgr.GetPartners(fid, RelationshipStatus::Dating);
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const auto dating = worldSnap->relationships->GetPartnersWithStatus(State::ActorId{ fid }, State::RelationshipStatus::Dating);
             if (!dating.empty()) {
-                std::string name = ActorSvc::GetName(dating[0]);
+                const std::string name = ResolveActorNameSafe(dating[0].raw(), *worldSnap, *spatialSnap);
                 if (!name.empty() && name != "None") return name;
             }
             return "";
@@ -1909,13 +1633,15 @@ void RegisterSkyrimNetDecorators()
         [](RE::Actor* actor) -> std::string {
             if (!actor) return "";
             const auto fid = actor->GetFormID();
-            const auto& mgr = NPCRelationshipManager::GetSingleton();
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const State::ActorId selfActorId{ fid };
             std::string result;
-            auto appendOpenPartners = [&](const std::vector<RE::FormID>& partners) {
-                for (auto partnerId : partners) {
-                    const auto rData = mgr.GetNPCData(fid, partnerId);
-                    if (rData && rData->isOpen) {
-                        std::string name = ActorSvc::GetName(partnerId);
+            auto appendOpenPartners = [&](State::RelationshipStatus status) {
+                for (const auto partnerActorId : worldSnap->relationships->GetPartnersWithStatus(selfActorId, status)) {
+                    const auto* edge = worldSnap->relationships->FindEdge(State::CanonicalPairKey(selfActorId, partnerActorId));
+                    if (edge && edge->isOpen) {
+                        const std::string name = ResolveActorNameSafe(partnerActorId.raw(), *worldSnap, *spatialSnap);
                         if (!name.empty() && name != "None") {
                             if (!result.empty()) result += ", ";
                             result += name;
@@ -1924,9 +1650,9 @@ void RegisterSkyrimNetDecorators()
                 }
             };
 
-            appendOpenPartners(mgr.GetPartners(fid, RelationshipStatus::Married));
-            appendOpenPartners(mgr.GetPartners(fid, RelationshipStatus::Engaged));
-            appendOpenPartners(mgr.GetPartners(fid, RelationshipStatus::Dating));
+            appendOpenPartners(State::RelationshipStatus::Married);
+            appendOpenPartners(State::RelationshipStatus::Engaged);
+            appendOpenPartners(State::RelationshipStatus::Dating);
 
             return result;
         });
@@ -1940,31 +1666,38 @@ void RegisterSkyrimNetDecorators()
             return "false";
         }
 
-        std::string actorName = ActorSvc::GetName(fid);
-
-        if (fid == kPlayerFormID || actor->IsPlayerRef()) {
+        if (fid == kPlayerFormID) {
             return "true";
         }
 
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
-        if (mgr.IsRegistered(fid)) {
-            return "true";
-        }
-        if (auto childOpt = mgr.GetChildEntry(fid); childOpt.has_value()) {
-            return "true";
-        }
-        if (mgr.IsNPCPregnant(fid)) {
-            return "true";
-        }
-        if (!mgr.GetAllPartners(fid).empty()) {
-            return "true";
-        }
-        if (mgr.GetNPCProfile(fid).has_value()) {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const State::ActorId selfActorId{ fid };
+        const State::RefId selfRefId{ fid };
+
+        if (worldSnap->actors->IsRegisteredAdult(selfRefId) || worldSnap->actors->Find(selfRefId) != nullptr) {
             return "true";
         }
 
-        auto* trackedFaction = FormCache::GetSingleton().GetTrackedFaction();
-        if (trackedFaction && actor->IsInFaction(trackedFaction)) {
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        if (omniscientView.GetPerceivedChild(State::ChildId{ fid }).has_value()) {
+            return "true";
+        }
+        if (omniscientView.GetSelfPregnancy(selfActorId).has_value()) {
+            return "true";
+        }
+
+        for (const auto& key : worldSnap->relationships->GetAdjacentPairs(selfActorId)) {
+            const auto* edge = worldSnap->relationships->FindEdge(key);
+            if (edge &&
+                edge->status != State::RelationshipStatus::Unknown &&
+                edge->status != State::RelationshipStatus::Candidate) {
+                return "true";
+            }
+        }
+
+        if (const auto* sample = spatialSnap->Find(selfRefId); sample && sample->IsTrackedFaction()) {
             return "true";
         }
 
@@ -1996,20 +1729,19 @@ void RegisterSkyrimNetDecorators()
             nlohmann::json j;
             j["actorIds"] = nlohmann::json::array();
             if (!actor) {
-                return j.dump();
+                return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             }
 
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
             const float radius = GetNearbyActorsRadius();
-            const auto nearby = Utils::GetNearbyActors(actor, radius);
-
-            for (RE::Actor* a : nearby) {
-                uint64_t uuid = ActorToUUID(a);
+            spatialSnap->ForEachNearbyCandidate(State::RefId{ actor->GetFormID() }, radius, [&](const State::LoadedActorSample& sample) {
+                const uint64_t uuid = FormIDToUUID(sample.refId.raw());
                 if (uuid != 0) {
                     j["actorIds"].push_back(uuid);
                 }
-            }
-            std::string result = j.dump();
-            return result;
+            });
+
+            return j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         };
     };
 
@@ -2018,21 +1750,32 @@ void RegisterSkyrimNetDecorators()
         "JSON object listing all nearby valid actors (including the player, within nearbyActors.radius). Fields: actorIds (array of SkyrimNet UUIDs).",
         makeNearbyActorsDecorator());
 
-    auto getConfessAffairCandidates = [](RE::Actor* a) -> std::string {
+    auto collectNearbyIds = [](RE::FormID centerFid, const State::SpatialActorSnapshot& spatial, float radius) {
+        std::vector<RE::FormID> ids;
+        spatial.ForEachNearbyCandidate(State::RefId{ centerFid }, radius, [&](const State::LoadedActorSample& sample) {
+            ids.push_back(sample.refId.raw());
+        });
+        return ids;
+    };
+
+    auto getConfessAffairCandidates = [collectNearbyIds](RE::Actor* a) -> std::string {
         if (!a) return "";
         const auto aFid = a->GetFormID();
-        const auto& m = NPCRelationshipManager::GetSingleton();
-        const auto records = m.GetCheatingRecordsForActor(aFid);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const State::ActorId selfActorId{ aFid };
+        const auto selfView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, selfActorId, &GetEngineWerewolfStateProvider());
+        const auto records = selfView.GetKnownAffairsInvolving(selfActorId);
         if (records.empty()) return "";
 
-        const float r = GetNearbyActorsRadius();
-        const auto nearbyActors = Utils::GetNearbyActors(a, r);
-        if (nearbyActors.empty()) return "";
+        const auto nearbyIds = collectNearbyIds(aFid, *spatialSnap, GetNearbyActorsRadius());
+        if (nearbyIds.empty()) return "";
 
         auto isNear = [&](RE::FormID targetFid) -> bool {
             if (targetFid == 0) return false;
-            for (RE::Actor* target : nearbyActors) {
-                if (target && Utils::MatchesActor(targetFid, target->GetFormID())) return true;
+            for (const RE::FormID nearbyFid : nearbyIds) {
+                if (Utils::MatchesActor(targetFid, nearbyFid)) return true;
             }
             return false;
         };
@@ -2040,14 +1783,16 @@ void RegisterSkyrimNetDecorators()
         std::string res;
         std::set<std::pair<RE::FormID, RE::FormID>> seenPairs;
         for (const auto& rec : records) {
-            if (rec.cheaterID != aFid) continue;
-            if (!rec.isSecret || rec.affairStatus != AffairStatus::Ongoing) continue;
-            if (!isNear(rec.victimID)) continue;
+            if (rec.cheater != selfActorId) continue;
+            if (!rec.isSecret || rec.affairStatus != State::AffairStatus::Ongoing) continue;
+            const RE::FormID victimID = rec.deceivedPartner.raw();
+            const RE::FormID partnerID = rec.paramour.raw();
+            if (!isNear(victimID)) continue;
 
-            if (!seenPairs.insert({ rec.victimID, rec.affairPartnerID }).second) continue;
+            if (!seenPairs.insert({ victimID, partnerID }).second) continue;
 
-            std::string victimName = GetCandidateDisplayName(rec.victimID);
-            std::string partnerName = GetCandidateDisplayName(rec.affairPartnerID);
+            const std::string victimName = GetCandidateDisplayName(victimID, *worldSnap, *spatialSnap);
+            const std::string partnerName = GetCandidateDisplayName(partnerID, *worldSnap, *spatialSnap);
 
             if (!res.empty()) res += ", ";
             res += victimName + " (partner; secret affair with " + partnerName + ")";
@@ -2055,21 +1800,24 @@ void RegisterSkyrimNetDecorators()
         return res;
     };
 
-    auto getExposeAffairCandidates = [](RE::Actor* a) -> std::string {
+    auto getExposeAffairCandidates = [collectNearbyIds](RE::Actor* a) -> std::string {
         if (!a) return "";
         const auto aFid = a->GetFormID();
-        const auto& m = NPCRelationshipManager::GetSingleton();
-        const auto records = m.GetCheatingRecordsForActor(aFid);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const State::ActorId selfActorId{ aFid };
+        const auto selfView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, selfActorId, &GetEngineWerewolfStateProvider());
+        const auto records = selfView.GetKnownAffairsInvolving(selfActorId);
         if (records.empty()) return "";
 
-        const float r = GetNearbyActorsRadius();
-        const auto nearbyActors = Utils::GetNearbyActors(a, r);
-        if (nearbyActors.empty()) return "";
+        const auto nearbyIds = collectNearbyIds(aFid, *spatialSnap, GetNearbyActorsRadius());
+        if (nearbyIds.empty()) return "";
 
         auto isNear = [&](RE::FormID targetFid) -> bool {
             if (targetFid == 0) return false;
-            for (RE::Actor* target : nearbyActors) {
-                if (target && Utils::MatchesActor(targetFid, target->GetFormID())) return true;
+            for (const RE::FormID nearbyFid : nearbyIds) {
+                if (Utils::MatchesActor(targetFid, nearbyFid)) return true;
             }
             return false;
         };
@@ -2077,14 +1825,16 @@ void RegisterSkyrimNetDecorators()
         std::string res;
         std::set<std::pair<RE::FormID, RE::FormID>> seenPairs;
         for (const auto& rec : records) {
-            if (rec.affairPartnerID != aFid) continue;
-            if (!rec.isSecret || rec.affairStatus != AffairStatus::Ongoing) continue;
-            if (!isNear(rec.victimID)) continue;
+            if (rec.paramour != selfActorId) continue;
+            if (!rec.isSecret || rec.affairStatus != State::AffairStatus::Ongoing) continue;
+            const RE::FormID victimID = rec.deceivedPartner.raw();
+            const RE::FormID cheaterID = rec.cheater.raw();
+            if (!isNear(victimID)) continue;
 
-            if (!seenPairs.insert({ rec.victimID, rec.cheaterID }).second) continue;
+            if (!seenPairs.insert({ victimID, cheaterID }).second) continue;
 
-            std::string victimName = GetCandidateDisplayName(rec.victimID);
-            std::string cheaterName = GetCandidateDisplayName(rec.cheaterID);
+            const std::string victimName = GetCandidateDisplayName(victimID, *worldSnap, *spatialSnap);
+            const std::string cheaterName = GetCandidateDisplayName(cheaterID, *worldSnap, *spatialSnap);
 
             if (!res.empty()) res += ", ";
             res += victimName + " (victim; secret affair with " + cheaterName + ")";
@@ -2092,21 +1842,24 @@ void RegisterSkyrimNetDecorators()
         return res;
     };
 
-    auto getResolveAffairCandidates = [](RE::Actor* a) -> std::string {
+    auto getResolveAffairCandidates = [collectNearbyIds](RE::Actor* a) -> std::string {
         if (!a) return "";
         const auto aFid = a->GetFormID();
-        const auto& m = NPCRelationshipManager::GetSingleton();
-        const auto records = m.GetCheatingRecordsForActor(aFid);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const State::ActorId selfActorId{ aFid };
+        const auto selfView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, selfActorId, &GetEngineWerewolfStateProvider());
+        const auto records = selfView.GetKnownAffairsInvolving(selfActorId);
         if (records.empty()) return "";
 
-        const float r = GetNearbyActorsRadius();
-        const auto nearbyActors = Utils::GetNearbyActors(a, r);
-        if (nearbyActors.empty()) return "";
+        const auto nearbyIds = collectNearbyIds(aFid, *spatialSnap, GetNearbyActorsRadius());
+        if (nearbyIds.empty()) return "";
 
         auto isNear = [&](RE::FormID targetFid) -> bool {
             if (targetFid == 0) return false;
-            for (RE::Actor* target : nearbyActors) {
-                if (target && Utils::MatchesActor(targetFid, target->GetFormID())) return true;
+            for (const RE::FormID nearbyFid : nearbyIds) {
+                if (Utils::MatchesActor(targetFid, nearbyFid)) return true;
             }
             return false;
         };
@@ -2114,22 +1867,23 @@ void RegisterSkyrimNetDecorators()
         std::string res;
         std::set<std::pair<RE::FormID, RE::FormID>> seenPairs;
         for (const auto& rec : records) {
-            if (rec.isSecret || rec.affairStatus != AffairStatus::Ongoing) continue;
+            if (rec.isSecret || rec.affairStatus != State::AffairStatus::Ongoing) continue;
 
             RE::FormID otherParty = 0;
-            if (rec.cheaterID == aFid) {
-                otherParty = rec.victimID;
-            } else if (rec.victimID == aFid) {
-                otherParty = rec.cheaterID;
+            if (rec.cheater == selfActorId) {
+                otherParty = rec.deceivedPartner.raw();
+            } else if (rec.deceivedPartner == selfActorId) {
+                otherParty = rec.cheater.raw();
             } else {
                 continue;
             }
 
             if (!isNear(otherParty)) continue;
-            if (!seenPairs.insert({ otherParty, rec.affairPartnerID }).second) continue;
+            const RE::FormID partnerID = rec.paramour.raw();
+            if (!seenPairs.insert({ otherParty, partnerID }).second) continue;
 
-            std::string otherName = GetCandidateDisplayName(otherParty);
-            std::string partnerName = GetCandidateDisplayName(rec.affairPartnerID);
+            const std::string otherName = GetCandidateDisplayName(otherParty, *worldSnap, *spatialSnap);
+            const std::string partnerName = GetCandidateDisplayName(partnerID, *worldSnap, *spatialSnap);
 
             if (!res.empty()) res += ", ";
             res += otherName + " (regarding exposed affair with " + partnerName + ")";
@@ -2137,51 +1891,59 @@ void RegisterSkyrimNetDecorators()
         return res;
     };
 
-    auto getRevealChildSecretCandidates = [](RE::Actor* a) -> std::string {
+    auto getRevealChildSecretCandidates = [collectNearbyIds](RE::Actor* a) -> std::string {
         if (!a) return "";
         const auto aFid = a->GetFormID();
-        const auto& m = NPCRelationshipManager::GetSingleton();
-        const auto& allChildren = m.GetAllChildren();
-        if (allChildren.empty()) return "";
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto selfView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, State::ActorId{ aFid }, &GetEngineWerewolfStateProvider());
+        const auto visibleChildren = selfView.GetVisibleChildren();
+        if (visibleChildren.empty()) return "";
 
-        const float r = GetNearbyActorsRadius();
-        const auto nearbyActors = Utils::GetNearbyActors(a, r);
-        if (nearbyActors.empty()) return "";
+        const auto nearbyIds = collectNearbyIds(aFid, *spatialSnap, GetNearbyActorsRadius());
+        if (nearbyIds.empty()) return "";
 
         auto isNear = [&](RE::FormID targetFid) -> bool {
             if (targetFid == 0) return false;
-            for (RE::Actor* target : nearbyActors) {
-                if (target && Utils::MatchesActor(targetFid, target->GetFormID())) return true;
+            for (const RE::FormID nearbyFid : nearbyIds) {
+                if (Utils::MatchesActor(targetFid, nearbyFid)) return true;
             }
             return false;
         };
 
         std::string res;
         std::set<std::pair<RE::FormID, RE::FormID>> seenUnbornFathers;
-        for (const auto& [cID, entry] : allChildren) {
-            RE::FormID motherID = m.GetBioMother(cID);
+        for (const auto& entry : visibleChildren) {
+            const RE::FormID motherID = entry.bioMother.raw();
             if (!MatchesActor(motherID, aFid)) continue;
-            if (!entry.paternitySecret.HasActiveSecret() || entry.paternitySecret.discovered) continue;
+            if (!entry.paternitySecret.has_value()) continue;
+            const auto& sec = *entry.paternitySecret;
+            if (sec.discovered || (!sec.isSecret && !sec.isPregnancySecretForPartner)) continue;
 
-            RE::FormID motherPartnerID = m.GetMotherPartner(cID);
-            RE::FormID bioFatherID = m.GetBioFather(cID);
+            const RE::FormID motherPartnerID = entry.motherPartner.raw();
+            const RE::FormID bioFatherID = sec.trueBioFather.raw();
             if (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID)) continue;
 
-            if (entry.stage == ChildStage::Unborn) {
+            if (entry.stage == State::ChildStage::Unborn) {
                 if (!seenUnbornFathers.insert({ motherPartnerID, bioFatherID }).second) {
                     continue;
                 }
             }
 
-            bool pNear = (entry.paternitySecret.isSecretForPartner || entry.paternitySecret.isPregnancySecretForPartner) && motherPartnerID != 0 && isNear(motherPartnerID);
-            bool bNear = entry.paternitySecret.isSecretForBioFather && bioFatherID != 0 && isNear(bioFatherID);
+            const bool pNear = (sec.isSecretForPartner || sec.isPregnancySecretForPartner) &&
+                               motherPartnerID != 0 && isNear(motherPartnerID);
+            const bool bNear = sec.isSecretForBioFather && bioFatherID != 0 && isNear(bioFatherID);
 
-            std::string childDesc = (entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name;
+            std::string childDesc =
+                (entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name;
             std::string partnerRoleLabel = "presumed father of ";
-            if (entry.stage == ChildStage::Unborn) {
-                std::string bioName = !entry.paternitySecret.bioFatherName.empty() ? entry.paternitySecret.bioFatherName : ActorSvc::GetName(bioFatherID);
+            if (entry.stage == State::ChildStage::Unborn) {
+                const std::string bioName = !sec.trueBioFatherFallbackName.empty()
+                    ? sec.trueBioFatherFallbackName
+                    : ResolveActorNameSafe(bioFatherID, *worldSnap, *spatialSnap);
                 childDesc = "unborn pregnancy" + (!bioName.empty() ? " fathered by " + bioName : "");
-                if (entry.paternitySecret.isPregnancySecretForPartner) {
+                if (sec.isPregnancySecretForPartner) {
                     partnerRoleLabel = "partner unaware of pregnancy (use revealMode 'pregnancy_only' to announce pregnancy so he believes it is his, or 'true_paternity' to confess true father) for ";
                 } else {
                     partnerRoleLabel = "partner / presumed father (use revealMode 'true_paternity' to confess true father) of ";
@@ -2189,18 +1951,18 @@ void RegisterSkyrimNetDecorators()
             }
 
             if (pNear && bNear) {
-                std::string pName = GetCandidateDisplayName(motherPartnerID);
-                std::string bName = GetCandidateDisplayName(bioFatherID);
+                const std::string pName = GetCandidateDisplayName(motherPartnerID, *worldSnap, *spatialSnap);
+                const std::string bName = GetCandidateDisplayName(bioFatherID, *worldSnap, *spatialSnap);
                 if (!res.empty()) res += ", ";
                 res += pName + " (" + partnerRoleLabel + childDesc + ")";
                 res += ", " + bName + " (biological father of " + childDesc + ")";
                 res += ", or Both [" + pName + " and " + bName + "] (regarding " + childDesc + ")";
             } else if (pNear) {
-                std::string pName = GetCandidateDisplayName(motherPartnerID);
+                const std::string pName = GetCandidateDisplayName(motherPartnerID, *worldSnap, *spatialSnap);
                 if (!res.empty()) res += ", ";
                 res += pName + " (" + partnerRoleLabel + childDesc + ")";
             } else if (bNear) {
-                std::string bName = GetCandidateDisplayName(bioFatherID);
+                const std::string bName = GetCandidateDisplayName(bioFatherID, *worldSnap, *spatialSnap);
                 if (!res.empty()) res += ", ";
                 res += bName + " (biological father of " + childDesc + ")";
             }
@@ -2208,79 +1970,93 @@ void RegisterSkyrimNetDecorators()
         return res;
     };
 
-    auto getDiscoverChildPaternityCandidates = [](RE::Actor* a) -> std::string {
+    auto getDiscoverChildPaternityCandidates = [collectNearbyIds](RE::Actor* a) -> std::string {
         if (!a) return "";
         const auto aFid = a->GetFormID();
-        const auto& m = NPCRelationshipManager::GetSingleton();
-        const auto& allChildren = m.GetAllChildren();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        const auto allChildren = omniscientView.GetVisibleChildren();
         if (allChildren.empty()) return "";
 
-        const float r = GetNearbyActorsRadius();
-        const auto nearbyActors = Utils::GetNearbyActors(a, r);
-        if (nearbyActors.empty()) return "";
+        const auto nearbyIds = collectNearbyIds(aFid, *spatialSnap, GetNearbyActorsRadius());
+        if (nearbyIds.empty()) return "";
 
         auto isNear = [&](RE::FormID targetFid) -> bool {
             if (targetFid == 0) return false;
-            for (RE::Actor* target : nearbyActors) {
-                if (target && Utils::MatchesActor(targetFid, target->GetFormID())) return true;
+            for (const RE::FormID nearbyFid : nearbyIds) {
+                if (Utils::MatchesActor(targetFid, nearbyFid)) return true;
             }
             return false;
         };
 
         std::string res;
         std::set<std::pair<RE::FormID, RE::FormID>> seenUnbornCandidates;
-        for (const auto& [cID, entry] : allChildren) {
-            if (!entry.paternitySecret.HasActiveSecret() || entry.paternitySecret.discovered) continue;
+        for (const auto& entry : allChildren) {
+            if (!entry.paternitySecret.has_value()) continue;
+            const auto& sec = *entry.paternitySecret;
+            if (sec.discovered || (!sec.isSecret && !sec.isPregnancySecretForPartner)) continue;
 
-            RE::FormID motherID = m.GetBioMother(cID);
-            bool motherNear = (motherID != 0 && isNear(motherID));
-            bool childNear = (cID != 0 && isNear(cID));
+            const RE::FormID cID = entry.childId.raw();
+            const RE::FormID motherID = entry.bioMother.raw();
+            const bool motherNear = (motherID != 0 && isNear(motherID));
+            const bool childNear = (cID != 0 && !IsSyntheticChildID(cID) && isNear(cID));
 
             // Father can discover/learn the truth if either the mother OR the child is nearby
             if (!motherNear && !childNear) continue;
 
-            RE::FormID motherPartnerID = m.GetMotherPartner(cID);
-            RE::FormID bioFatherID = m.GetBioFather(cID);
+            const RE::FormID motherPartnerID = entry.motherPartner.raw();
+            const RE::FormID bioFatherID = sec.trueBioFather.raw();
             if (motherPartnerID != 0 && bioFatherID != 0 && MatchesActor(bioFatherID, motherPartnerID)) continue;
 
             bool isUnannouncedPlayerPregnancy = false;
-            if (entry.stage == ChildStage::Unborn) {
+            if (entry.stage == State::ChildStage::Unborn) {
                 if (motherID != kPlayerFormID) {
                     // Never leak an unannounced / non-showing NPC pregnancy into an unaware partner's or biological father's action candidates.
-                    if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isPregnancySecretForPartner) {
+                    if (MatchesActor(motherPartnerID, aFid) && sec.isPregnancySecretForPartner) {
                         continue;
                     }
-                    if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather) {
+                    if (MatchesActor(bioFatherID, aFid) && sec.isSecretForBioFather) {
                         continue;
                     }
                 } else {
                     if (!motherNear) {
                         continue;
                     }
-                    const float currentDay = RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f;
-                    isUnannouncedPlayerPregnancy = entry.paternitySecret.isPregnancySecretForPartner ||
-                                                   (motherPartnerID == 0 && entry.conceptionTimestamp > 0.0f && (currentDay - entry.conceptionTimestamp) < 3.0f);
+                    const float currentDay = (spatialSnap->CurrentGameDay() >= 0.0f)
+                        ? spatialSnap->CurrentGameDay()
+                        : (RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f);
+                    isUnannouncedPlayerPregnancy = sec.isPregnancySecretForPartner ||
+                        (motherPartnerID == 0 && entry.conceptionTimestamp > 0.0f &&
+                         (currentDay - entry.conceptionTimestamp) < 3.0f);
                 }
                 if (!seenUnbornCandidates.insert({ motherID, bioFatherID }).second) {
                     continue;
                 }
             }
 
-            std::string motherName = (motherID != 0) ? GetCandidateDisplayName(motherID) : "Unknown Mother";
+            const std::string motherName = (motherID != 0)
+                ? GetCandidateDisplayName(motherID, *worldSnap, *spatialSnap)
+                : "Unknown Mother";
             // IMPORTANT: Never include the secret biological father's name in childDesc for an unaware father!
-            std::string childDesc = (entry.stage == ChildStage::Unborn) ? "unborn pregnancy" : ((entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name);
+            const std::string childDesc = (entry.stage == State::ChildStage::Unborn)
+                ? "unborn pregnancy"
+                : ((entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name);
             const std::string unannouncedTag = isUnannouncedPlayerPregnancy
                 ? "; UNANNOUNCED — you DO NOT know she is pregnant unless she explicitly reveals/confesses it in dialogue right now"
                 : "";
 
-            if (MatchesActor(motherPartnerID, aFid) && entry.paternitySecret.isSecretForPartner) {
+            if (MatchesActor(motherPartnerID, aFid) && sec.isSecretForPartner) {
                 if (!res.empty()) res += ", ";
-                res += childDesc + " (child with " + motherName + (entry.stage == ChildStage::Unborn ? "; partner / presumed father" : "; presumed father") + unannouncedTag;
-                if (entry.stage != ChildStage::Unborn && entry.paternitySecret.hasPhenotypeMismatch) {
+                res += childDesc + " (child with " + motherName +
+                       (entry.stage == State::ChildStage::Unborn ? "; partner / presumed father" : "; presumed father") +
+                       unannouncedTag;
+                if (entry.stage != State::ChildStage::Unborn && sec.hasPhenotypeMismatch) {
                     res += ", noticeable physical difference";
                 }
                 res += ")";
-            } else if (MatchesActor(bioFatherID, aFid) && entry.paternitySecret.isSecretForBioFather) {
+            } else if (MatchesActor(bioFatherID, aFid) && sec.isSecretForBioFather) {
                 if (!res.empty()) res += ", ";
                 res += childDesc + " (child with " + motherName + "; biological father" + unannouncedTag + ")";
             }
@@ -2288,21 +2064,22 @@ void RegisterSkyrimNetDecorators()
         return res;
     };
 
-    auto getAvailableRelationshipActions = [=](RE::Actor* actor) -> std::string {
+    auto getAvailableRelationshipActions = [collectNearbyIds](RE::Actor* actor) -> std::string {
         if (!actor) return "";
         const uint32_t actorFormId = actor->GetFormID();
 
         const auto& mgr = NPCRelationshipManager::GetSingleton();
-        const float radius = GetNearbyActorsRadius();
-        const auto nearby = Utils::GetNearbyActors(actor, radius);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto nearbyIds = collectNearbyIds(actorFormId, *spatialSnap, GetNearbyActorsRadius());
 
         std::vector<std::string> actions;
 
         // Dating: Actor must be eligible and at least one nearby actor must be eligible to date
         if (mgr.IsAvailableForDating(actorFormId)) {
             bool hasDatingTarget = false;
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForDating(actorFormId, target->GetFormID())) {
+            for (const RE::FormID targetFid : nearbyIds) {
+                if (mgr.IsAvailableForDating(actorFormId, targetFid)) {
                     hasDatingTarget = true;
                     break;
                 }
@@ -2316,8 +2093,8 @@ void RegisterSkyrimNetDecorators()
         // Lover: Actor must be eligible and at least one actor nearby
         bool hasLoverTarget = false;
         if (mgr.IsAvailableForLover(actorFormId)) {
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForLover(actorFormId, target->GetFormID())) {
+            for (const RE::FormID targetFid : nearbyIds) {
+                if (mgr.IsAvailableForLover(actorFormId, targetFid)) {
                     hasLoverTarget = true;
                     break;
                 }
@@ -2331,18 +2108,20 @@ void RegisterSkyrimNetDecorators()
         // Engagement: Actor must be eligible and valid target nearby
         if (mgr.IsAvailableForEngaged(actorFormId)) {
             bool hasEngagedTarget = false;
-            const auto datingPartners = mgr.GetPartners(actorFormId, RelationshipStatus::Dating);
+            const auto datingPartners = worldSnap->relationships->GetPartnersWithStatus(
+                State::ActorId{ actorFormId }, State::RelationshipStatus::Dating);
             if (!datingPartners.empty()) {
-                const auto datingPartnerFid = datingPartners[0];
-                for (RE::Actor* target : nearby) {
-                    if (target && Utils::MatchesActor(target->GetFormID(), datingPartnerFid) && mgr.IsAvailableForEngaged(actorFormId, datingPartnerFid)) {
+                const auto datingPartnerFid = datingPartners[0].raw();
+                for (const RE::FormID targetFid : nearbyIds) {
+                    if (Utils::MatchesActor(targetFid, datingPartnerFid) &&
+                        mgr.IsAvailableForEngaged(actorFormId, datingPartnerFid)) {
                         hasEngagedTarget = true;
                         break;
                     }
                 }
             } else {
-                for (RE::Actor* target : nearby) {
-                    if (target && mgr.IsAvailableForEngaged(actorFormId, target->GetFormID())) {
+                for (const RE::FormID targetFid : nearbyIds) {
+                    if (mgr.IsAvailableForEngaged(actorFormId, targetFid)) {
                         hasEngagedTarget = true;
                         break;
                     }
@@ -2356,57 +2135,21 @@ void RegisterSkyrimNetDecorators()
         }
 
         if (mgr.IsAvailableForBreakupDating(actorFormId)) {
-            bool hasBreakupDatingTarget = true; // Breakups can happen without target nearby
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForBreakupDating(actorFormId, target->GetFormID())) {
-                    hasBreakupDatingTarget = true;
-                    break;
-                }
-            }
-            if (hasBreakupDatingTarget) {
-                actions.push_back("BreakupDating");
-            }
+            actions.push_back("BreakupDating");
         }
         if (mgr.IsAvailableForBreakupLover(actorFormId)) {
-            bool hasBreakupLoverTarget = true; // Breakups can happen without target nearby
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForBreakupLover(actorFormId, target->GetFormID())) {
-                    hasBreakupLoverTarget = true;
-                    break;
-                }
-            }
-            if (hasBreakupLoverTarget) {
-                actions.push_back("BreakupLover");
-            }
+            actions.push_back("BreakupLover");
         }
         if (mgr.IsAvailableForJilted(actorFormId)) {
-            bool hasJiltedTarget = true; // Calling off engagement can happen without target nearby
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForJilted(actorFormId, target->GetFormID())) {
-                    hasJiltedTarget = true;
-                    break;
-                }
-            }
-            if (hasJiltedTarget) {
-                actions.push_back("CallOffEngagement");
-            }
+            actions.push_back("CallOffEngagement");
         }
         if (mgr.IsAvailableForDivorced(actorFormId)) {
-            bool hasDivorceTarget = true; // Divorce can happen without target nearby
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForDivorced(actorFormId, target->GetFormID())) {
-                    hasDivorceTarget = true;
-                    break;
-                }
-            }
-            if (hasDivorceTarget) {
-                actions.push_back("Divorce");
-            }
+            actions.push_back("Divorce");
         }
         if (mgr.IsAvailableForOpenRelationship(actorFormId)) {
             bool hasOpenTarget = false;
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForOpenRelationship(actorFormId, target->GetFormID())) {
+            for (const RE::FormID targetFid : nearbyIds) {
+                if (mgr.IsAvailableForOpenRelationship(actorFormId, targetFid)) {
                     hasOpenTarget = true;
                     break;
                 }
@@ -2417,8 +2160,8 @@ void RegisterSkyrimNetDecorators()
         }
         if (mgr.IsAvailableForCloseRelationship(actorFormId)) {
             bool hasCloseTarget = false;
-            for (RE::Actor* target : nearby) {
-                if (target && mgr.IsAvailableForCloseRelationship(actorFormId, target->GetFormID())) {
+            for (const RE::FormID targetFid : nearbyIds) {
+                if (mgr.IsAvailableForCloseRelationship(actorFormId, targetFid)) {
                     hasCloseTarget = true;
                     break;
                 }
@@ -2427,22 +2170,6 @@ void RegisterSkyrimNetDecorators()
                 actions.push_back("CloseRelationship");
             }
         }
-
-        // if (!getRevealChildSecretCandidates(actor).empty()) {
-        //     actions.push_back("RevealChildSecret");
-        // }
-        // if (!getDiscoverChildPaternityCandidates(actor).empty()) {
-        //     actions.push_back("DiscoverChildPaternity");
-        // }
-        // if (!getConfessAffairCandidates(actor).empty()) {
-        //     actions.push_back("ConfessAffair");
-        // }
-        // if (!getExposeAffairCandidates(actor).empty()) {
-        //     actions.push_back("ExposeAffair");
-        // }
-        // if (!getResolveAffairCandidates(actor).empty()) {
-        //     actions.push_back("ResolveAffair");
-        // }
 
         if (actions.empty()) {
             return "None";
@@ -2806,57 +2533,87 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
     bool EvaluatePaternitySecret(RE::FormID childID) {
         if (!IsSkyrimNetAvailable()) return false;
 
-        auto& mgr = NPCRelationshipManager::GetSingleton();
-        auto entryOpt = mgr.GetChildEntry(childID);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        const auto entryOpt = omniscientView.GetPerceivedChild(State::ChildId{ childID });
         if (!entryOpt.has_value()) return false;
 
         const auto& entry = *entryOpt;
-        RE::FormID motherID = mgr.GetBioMother(childID);
-        RE::FormID presumedFatherID = mgr.GetMotherPartner(childID);
-        RE::FormID bioFatherID = mgr.GetBioFather(childID);
+        const RE::FormID motherID = entry.bioMother.raw();
+        const RE::FormID presumedFatherID = entry.motherPartner.raw();
+        const RE::FormID bioFatherID = entry.perceivedBioFather.raw();
 
         if (motherID == 0 || presumedFatherID == 0 || bioFatherID == 0) return false;
         if (MatchesActor(presumedFatherID, bioFatherID)) return false;
 
-        auto calendar = RE::Calendar::GetSingleton();
-        float currentDay = calendar ? calendar->GetDaysPassed() : 0.0f;
-        float childAgeDays = currentDay - entry.birthTimestamp;
-        bool isAtBirth = (childAgeDays < 0.5f);
+        const float currentDay = (spatialSnap->CurrentGameDay() >= 0.0f)
+            ? spatialSnap->CurrentGameDay()
+            : (RE::Calendar::GetSingleton() ? RE::Calendar::GetSingleton()->GetDaysPassed() : 0.0f);
+        const float childAgeDays = currentDay - entry.birthTimestamp;
+        const bool isAtBirth = (childAgeDays < 0.5f);
 
-        bool hasVisualDiscrepancy = entry.paternitySecret.hasPhenotypeMismatch;
-        std::string visualDesc = hasVisualDiscrepancy ? mgr.GetVisualDiscrepancyDescription(motherID, presumedFatherID, bioFatherID) : "";
+        const auto* secPtr = entry.paternitySecret ? &(*entry.paternitySecret) : nullptr;
+        const bool hasVisualDiscrepancy = secPtr ? secPtr->hasPhenotypeMismatch : false;
+        const std::string visualDesc = hasVisualDiscrepancy
+            ? NPCRelationshipManager::GetSingleton().GetVisualDiscrepancyDescription(motherID, presumedFatherID, bioFatherID)
+            : "";
 
-        uint64_t motherUUID = GetActorUUID(motherID);
-        uint64_t presumedFatherUUID = GetActorUUID(presumedFatherID);
-        uint64_t bioFatherUUID = GetActorUUID(bioFatherID);
+        const uint64_t motherUUID = GetActorUUID(motherID);
+        const uint64_t presumedFatherUUID = GetActorUUID(presumedFatherID);
+        const uint64_t bioFatherUUID = GetActorUUID(bioFatherID);
 
         nlohmann::json ctx;
         ctx["childName"] = (entry.name.empty() || StringUtils::CaseInsensitiveEquals(entry.name, "Newborn")) ? "child" : entry.name;
-        int childGenderVal = mgr.GetChildGender(childID);
-        std::string childGenderStr = (childGenderVal == 2) ? "unknown" : ((childGenderVal == 1) ? "female" : "male");
-        std::string childRelationStr = (childGenderVal == 2) ? "child" : ((childGenderVal == 1) ? "daughter" : "son");
+        const State::ActorSex resolvedChildSex = ResolveActorSexSafe(childID, *worldSnap, *spatialSnap);
+        int childGenderVal = entry.gender;
+        if (resolvedChildSex == State::ActorSex::Female) {
+            childGenderVal = 1;
+        } else if (resolvedChildSex == State::ActorSex::Male) {
+            childGenderVal = 0;
+        }
+        const std::string childGenderStr = (childGenderVal == 2) ? "unknown" : ((childGenderVal == 1) ? "female" : "male");
+        const std::string childRelationStr = (childGenderVal == 2) ? "child" : ((childGenderVal == 1) ? "daughter" : "son");
         ctx["gender"] = childGenderStr;
         ctx["childGender"] = childGenderStr;
         ctx["childRelation"] = childRelationStr;
         ctx["childAgeDays"] = static_cast<int>(std::round(std::max(0.0f, childAgeDays)));
         ctx["isAtBirth"] = isAtBirth;
 
-        ctx["motherName"] = ActorSvc::GetName(motherID);
-        ctx["motherRace"] = ActorSvc::GetRaceName(motherID);
+        ctx["motherName"] = ResolveActorNameSafe(motherID, *worldSnap, *spatialSnap);
+        ctx["motherRace"] = ResolveActorRaceSafe(motherID, *worldSnap, *spatialSnap);
         ctx["motherUUID"] = motherUUID;
 
-        ctx["presumedFatherName"] = ActorSvc::GetName(presumedFatherID);
-        ctx["presumedFatherRace"] = ActorSvc::GetRaceName(presumedFatherID);
+        ctx["presumedFatherName"] = ResolveActorNameSafe(presumedFatherID, *worldSnap, *spatialSnap);
+        ctx["presumedFatherRace"] = ResolveActorRaceSafe(presumedFatherID, *worldSnap, *spatialSnap);
         ctx["presumedFatherUUID"] = presumedFatherUUID;
-        ctx["maritalStatus"] = std::string(Utils::RelationshipStatusToString(mgr.GetRelationshipStatus(motherID, presumedFatherID)));
+        const auto relStatus = worldSnap->relationships->GetStatus(
+            State::ActorId{ motherID }, State::ActorId{ presumedFatherID });
+        ctx["maritalStatus"] = std::string(Utils::RelationshipStatusToString(
+            static_cast<RelationshipStatus>(static_cast<uint8_t>(relStatus))));
 
-        ctx["bioFatherName"] = ActorSvc::GetName(bioFatherID);
-        ctx["bioFatherRace"] = ActorSvc::GetRaceName(bioFatherID);
+        ctx["bioFatherName"] = ResolveActorNameSafe(bioFatherID, *worldSnap, *spatialSnap);
+        ctx["bioFatherRace"] = ResolveActorRaceSafe(bioFatherID, *worldSnap, *spatialSnap);
         ctx["bioFatherUUID"] = bioFatherUUID;
-        ctx["affairStatus"] = std::string(Utils::AffairStatusToString(mgr.GetCheatingAffairStatus(motherID, presumedFatherID, bioFatherID)));
-        ctx["isSecretForPresumedFather"] = entry.paternitySecret.isSecretForPartner;
-        ctx["isSecretForPartner"] = entry.paternitySecret.isSecretForPartner;
-        ctx["isSecretForBioFather"] = entry.paternitySecret.isSecretForBioFather;
+
+        State::AffairStatus resolvedAffairStatus = State::AffairStatus::Ongoing;
+        for (const auto& rec : omniscientView.GetKnownAffairsInvolving(State::ActorId{ motherID })) {
+            if (rec.cheater.raw() == motherID &&
+                rec.deceivedPartner.raw() == presumedFatherID &&
+                rec.paramour.raw() == bioFatherID) {
+                resolvedAffairStatus = rec.affairStatus;
+                break;
+            }
+        }
+        ctx["affairStatus"] = std::string(Utils::AffairStatusToString(
+            static_cast<AffairStatus>(static_cast<uint8_t>(resolvedAffairStatus))));
+
+        const bool secretForPartner = secPtr ? secPtr->isSecretForPartner : false;
+        const bool secretForBioFather = secPtr ? secPtr->isSecretForBioFather : false;
+        ctx["isSecretForPresumedFather"] = secretForPartner;
+        ctx["isSecretForPartner"] = secretForPartner;
+        ctx["isSecretForBioFather"] = secretForBioFather;
 
         ctx["hasVisualDiscrepancy"] = hasVisualDiscrepancy;
         ctx["visualDiscrepancyDescription"] = visualDesc;
@@ -2875,7 +2632,7 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
         state->bioFatherID = bioFatherID;
         state->childName = ctx["childName"].get<std::string>();
         state->motherName = ctx["motherName"].get<std::string>();
-        state->isSecretForPresumedFather = entry.paternitySecret.isSecretForPartner;
+        state->isSecretForPresumedFather = secretForPartner;
         state->contextJson = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
         return DispatchPaternityEval(std::move(state));
@@ -2895,7 +2652,7 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
             return false;
         }
 
-        float radius = Settings::GetSingleton().GetSkyrimNetActionRadius();
+        float radius = State::WorldStore::GetSingleton().Snapshot()->settings->skyrimnetActionRadius;
         if (radius <= 0.0f) {
             radius = 2000.0f;
         }
@@ -2937,7 +2694,12 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
 
         // If only the Player was passed as speaker/target, require at least one nearby NPC to be present
         if (speaker == player && (!target || target == player)) {
-            if (Utils::GetNearbyActors(player, radius).empty()) {
+            bool hasNearbyNpc = false;
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            spatialSnap->ForEachNearbyCandidate(State::RefId{ kPlayerFormID }, radius, [&](const State::LoadedActorSample&) {
+                hasNearbyNpc = true;
+            });
+            if (!hasNearbyNpc) {
                 return false;
             }
         }

@@ -45,7 +45,7 @@ void ConnectToMARAS() {
 
 ## 2. Papyrus Native API (`MARAS.psc`)
 
-All native functions are global methods on `Scriptname MARAS Hidden` declared in `SKSE_Source/include/papyrus/PapyrusInterface.h`, registered in `MARAS::PapyrusInterface::RegisterPapyrusFunctions` (`SKSE_Source/src/papyrus/PapyrusInterface.cpp`), and implemented across five domain translation units (`PapyrusInterface.cpp`, `PapyrusRelationship.cpp`, `PapyrusHousehold.cpp`, `PapyrusChildren.cpp`, `PapyrusSettings.cpp`) protected by `GetPapyrusMutex()`.
+All native functions are global methods on `Scriptname MARAS Hidden` declared in `SKSE_Source/include/papyrus/PapyrusInterface.h`, registered in `MARAS::PapyrusInterface::RegisterPapyrusFunctions` (`SKSE_Source/src/papyrus/PapyrusInterface.cpp`), and implemented across five domain translation units (`PapyrusInterface.cpp`, `PapyrusRelationship.cpp`, `PapyrusHousehold.cpp`, `PapyrusChildren.cpp`, `PapyrusSettings.cpp`). Both `MARAS_PublicAPI.cpp` C exports (`Section 1`) and read-only `MARAS.psc` Papyrus query natives execute lock-free against immutable `WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`, and `PerspectiveView`, while mutating Papyrus natives serialize state writes via `GetPapyrusMutex()`.
 
 ### 2.1 Functional Sections in `MARAS.psc`
 

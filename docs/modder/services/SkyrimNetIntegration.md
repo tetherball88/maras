@@ -20,7 +20,7 @@
 
 ## 2. Schema-v2 Actor-Relative Relationship Profile (`ttm_npc_relationship_profile`)
 
-The centerpiece of SkyrimNet prompt injection is `BuildRelationshipProfileJSON`, which generates an **actor-relative, knowledge-filtered** JSON profile (`schema_version: 2`) for whichever NPC is currently speaking or thinking:
+The centerpiece of SkyrimNet prompt injection is `BuildRelationshipProfileJSON`, which executes lock-free over `WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`, and `PerspectiveView` (`PerspectiveView::ForActor` for self-perspective or `PerspectiveView::ForDialogueTarget` when `render_mode == "dialogue_target"`) to generate an **actor-relative, knowledge-filtered** JSON profile (`schema_version: 2`):
 
 ### 1. Pregnancy & Superfecundation Grouping
 - If the NPC is pregnant, groups all unborn fetuses (`0xFF` synthetic records) by biological father (`PregnancyFatherGroup`), supporting **superfecundation** (multiple fetuses fathered by different men in the same pregnancy) as well as twins/triplets.
@@ -37,30 +37,31 @@ The centerpiece of SkyrimNet prompt injection is `BuildRelationshipProfileJSON`,
 ### 3. Strictly Knowledge-Filtered Children, Step-Children & Paternity Secrets
 - **Custodial Family Branches (`family`)**: Groups the NPC's custodial children by co-guardian (`other_parent` or `single_parent`), including each child's life stage (`infant`, `child`, `training`, `adult`), whether they are ephemeral (`0xFF` non-spawned actor), their training location, and their assigned pet or woodland critter.
 - **Non-Custodial Biological Children (`non_custodial_children`)**: Lists biological children raised by another household—**unless** the speaking NPC is the biological father and the mother is keeping his paternity a secret from him (`isSecretForBioFather && !discoveredByBioFather`), in which case the child is completely hidden from his prompt!
-- **Epistemic Paternity Secret Filtering**:
-  - A child's `paternity_secret` block is **only** included in an NPC's prompt if that specific NPC is allowed to know about it:
-    - The biological mother (and Player) always know.
-    - The deceived partner only sees the secret if `isSecretForPartner == false` or `discovered == true`. If the deceived step-parent still believes the child is biologically theirs, the child's `relation` is presented to them as `"son"` / `"daughter"` rather than `"stepson"` / `"stepdaughter"`.
-    - The biological father only sees the secret if `isSecretForBioFather == false` or `discovered == true`.
-- **Child's Own Perspective (`parents`)**: If the speaking actor is themselves a registered child (or grown child), populates their `parents` block with their biological parents, current guardians, step-parents, siblings (across all shared guardians and bio parents), pets/critters, and any paternity intrigue.
+- **Epistemic Paternity Secret Filtering & Public Bio Isolation (`PerspectiveView`)**:
+  - Under `PerspectiveView::ForActor`, an actor sees `paternity_secret` metadata and true biological lineage **only** when privy (with **no** blanket `0x14` Player omniscience):
+    - The biological mother always knows; the Player only sees an undiscovered secret if directly privy as biological mother, aware biological father, or aware presumed father (or once `discovered`).
+    - The deceived partner only sees the secret if `isSecretForPartner == false`, `discoveredByPartner == true`, or `discovered == true`. While deceived, `relation` and lineage reflect the child as theirs rather than `"stepson"` / `"stepdaughter"`.
+    - The biological father only sees the secret if `isSecretForBioFather == false`, `discoveredByBioFather == true`, or `discovered == true`.
+  - Under `render_mode == "dialogue_target"` (`PerspectiveView::ForDialogueTarget`), public knowledge only is emitted for another speaker's prompt—even when the target personally knows: undiscovered affairs (`is_secret_affair`), secret paternity (`has_undiscovered_paternity_secret`, `is_paternity_secret`, `is_other_parent_secret`), secret siblings (filtered via `siblings_public`), and `has_beastblood` are never exposed.
+- **Child's Own Perspective (`parents`)**: If the speaking actor is themselves a registered child (or grown child), populates their `parents` block with their perceived biological parents, current guardians, step-parents, perspective-filtered `siblings` and public `siblings_public`, pets/critters, and any visible paternity intrigue.
 
 ### 4. Epistemic Infidelity Filtering (`infidelity`)
 - Lists cheating records where the actor is the `cheater`, `affair_partner`, or `victim`.
-- **Victim Ignorance Guarantee**: If the speaking NPC is the **victim** of an affair and `record.isSecret == true`, the affair record is **completely omitted** from their JSON profile so the LLM cannot accidentally make a betrayed spouse act omniscient before discovering the affair.
+- **Victim & Dialogue-Target Ignorance Guarantee**: If the speaking NPC (including an unaware `0x14` Player) is the **victim** of an undiscovered affair (`isSecret == true`), or if rendering public `dialogue_target` context, secret affair records are **completely omitted** from the JSON profile so speakers never leak undiscovered infidelity.
 
 ---
 
 ## 3. Proximity & Eligibility Action Decorators
 
-In addition to `ttm_npc_relationship_profile` and `ttm_is_registered`, the service registers specialized decorators that dynamically compute which relationship and drama actions an NPC is currently eligible to perform with nearby actors:
+In addition to `ttm_npc_relationship_profile` and `ttm_is_registered`, the service registers specialized decorators that dynamically compute which relationship and drama actions an NPC is currently eligible to perform using the lock-free 2 Hz `SpatialActorSnapshot` cache (`ForEachNearbyCandidate`, never scanning `RE::ProcessLists::highActorHandles` on SkyrimNet worker threads):
 
 - **Vanilla Prior-Relationship Backstory (`ttm_get_ex_partner`)**:
-  - Inspects `TESNPC` relationship records (`Spouse`, `Courting`, `kLover`) from two perspectives:
+  - Inspects `TESNPC` relationship records (`Spouse`, `Courting`, `kLover`) resolved via `ResolveBaseFormIDSafe` from two perspectives:
     - **Perspective 1**: The speaking NPC left a vanilla spouse/courtship/lover to marry or date the Player.
     - **Perspective 2**: The speaking NPC was left behind when their vanilla partner entered a relationship with the Player.
   - Generates a natural-language backstory sentence explaining who left whom for the Dragonborn.
 - **Composite Available Actions List (`ttm_get_available_actions`)**:
-  - Scans actors within `GetNearbyActorsRadius()` and returns the exact list of action identifiers (`ProposeDating`, `ConsiderDatingProposal`, `ProposeLover`, `ConsiderLoverProposal`, `ProposeEngagement`, `ConsiderEngagementProposal`, `BreakupDating`, `BreakupLover`, `CallOffEngagement`, `Divorce`, `OpenRelationship`, `CloseRelationship`, `RevealChildSecret`, `DiscoverChildPaternity`, `ConfessAffair`, `ExposeAffair`, `ResolveAffair`) currently valid for the speaker.
+  - Scans `SpatialActorSnapshot` candidates within `GetNearbyActorsRadius()` and returns the exact list of action identifiers (`ProposeDating`, `ConsiderDatingProposal`, `ProposeLover`, `ConsiderLoverProposal`, `ProposeEngagement`, `ConsiderEngagementProposal`, `BreakupDating`, `BreakupLover`, `CallOffEngagement`, `Divorce`, `OpenRelationship`, `CloseRelationship`, `RevealChildSecret`, `DiscoverChildPaternity`, `ConfessAffair`, `ExposeAffair`, `ResolveAffair`) currently valid for the speaker.
 - **Per-Action Candidate Target Lists**:
   - Individual decorators (`ttm_get_propose_dating_candidates`, `ttm_get_propose_lover_candidates`, `ttm_get_propose_engagement_candidates`, `ttm_get_breakup_*`, `ttm_get_divorce_candidates`, `ttm_get_open_relationship_candidates`, `ttm_get_close_relationship_candidates`) list the exact names of valid targets so YAML action prompts can constrain LLM target selection.
   - **Consequence Warning Decorators**: `ttm_get_exclusive_main_partners` lists partners who would be betrayed if the speaker takes a new lover, and `ttm_get_lovers_becoming_ex` lists casual lovers who will automatically become ex-lovers if the speaker enters an exclusive dating/engaged relationship.

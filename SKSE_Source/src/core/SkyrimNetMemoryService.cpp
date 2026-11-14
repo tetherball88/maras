@@ -5,9 +5,13 @@
 #include "core/LoggingService.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerHouseService.h"
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
+#include "maras/state/WorldStore.h"
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -60,6 +64,10 @@ namespace MARAS {
         }
 
         int GetCurrentGameDayInt() {
+            const float snapDay = State::SpatialSnapshotStore::GetSingleton().Snapshot()->CurrentGameDay();
+            if (snapDay >= 0.0f) {
+                return static_cast<int>(snapDay);
+            }
             if (auto* calendar = RE::Calendar::GetSingleton()) {
                 return static_cast<int>(calendar->GetDaysPassed());
             }
@@ -256,8 +264,13 @@ namespace MARAS {
         if (IsSyntheticChildID(formID)) {
             return false;
         }
-        if (DeceasedRegistry::GetSingleton().IsDeceased(formID)) {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        if (worldSnap->deceased->IsDeceased(State::ActorId{ formID })) {
             return false;
+        }
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        if (const auto* sample = spatialSnap->Find(State::RefId{ formID })) {
+            return !sample->IsDead() && !sample->IsDeleted();
         }
         if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(formID)) {
             if (actor->IsDead() || actor->IsDeleted()) {
@@ -268,7 +281,8 @@ namespace MARAS {
     }
 
     std::string SkyrimNetMemoryService::ResolveBestLocation(const std::vector<RE::FormID>& actorIDs) {
-        auto tryResolveActorLocation = [](RE::FormID id) -> std::string {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        auto tryResolveActorLocation = [&worldSnap](RE::FormID id) -> std::string {
             if (id == 0 || IsSyntheticChildID(id)) return "";
             RE::Actor* actor = (id == kPlayerFormID)
                                    ? RE::PlayerCharacter::GetSingleton()
@@ -301,16 +315,17 @@ namespace MARAS {
                 std::string hName = PlayerHouseService::GetHouseName(houseID);
                 if (!hName.empty()) return hName;
             }
-            if (const auto prof = NPCRelationshipManager::GetSingleton().GetNPCProfile(id)) {
-                if (prof->currentHome.has_value() && *prof->currentHome != 0) {
-                    std::string hName = PlayerHouseService::GetHouseName(*prof->currentHome);
+            if (const auto* prof = worldSnap->actors->Find(State::RefId{ id })) {
+                if (prof->legacyCurrentHome.has_value() && !prof->legacyCurrentHome->IsNull()) {
+                    std::string hName = PlayerHouseService::GetHouseName(prof->legacyCurrentHome->raw());
                     if (!hName.empty()) return hName;
                 }
-                if (prof->originalHome.has_value() && *prof->originalHome != 0) {
-                    if (auto* loc = RE::TESForm::LookupByID<RE::BGSLocation>(*prof->originalHome)) {
+                if (prof->legacyOriginalHome.has_value() && !prof->legacyOriginalHome->IsNull()) {
+                    const RE::FormID origHomeID = prof->legacyOriginalHome->raw();
+                    if (auto* loc = RE::TESForm::LookupByID<RE::BGSLocation>(origHomeID)) {
                         if (loc->GetName() && loc->GetName()[0] != '\0') return loc->GetName();
                     }
-                    if (auto* cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(*prof->originalHome)) {
+                    if (auto* cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(origHomeID)) {
                         if (cell->GetName() && cell->GetName()[0] != '\0') return cell->GetName();
                     }
                 }
@@ -341,8 +356,12 @@ namespace MARAS {
     {
         MemoryParticipant p;
         p.formID = formID;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
         if (formID != 0 && IsSyntheticChildID(formID)) {
-            if (auto childOpt = NPCRelationshipManager::GetSingleton().GetChildEntry(formID)) {
+            const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+                worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+            if (const auto childOpt = omniscientView.GetPerceivedChild(State::ChildId{ formID })) {
                 if (!childOpt->name.empty() && !StringUtils::CaseInsensitiveEquals(childOpt->name, "Newborn")) {
                     p.name = childOpt->name;
                 } else {
@@ -353,12 +372,7 @@ namespace MARAS {
             }
             p.generateMemory = false;
         } else if (formID != 0) {
-            p.name = ActorSvc::GetName(formID);
-            if (p.name.empty()) {
-                if (auto dec = DeceasedRegistry::GetSingleton().FindRecord(formID)) {
-                    p.name = dec->name;
-                }
-            }
+            p.name = ResolveActorNameSafe(formID, *worldSnap, *spatialSnap);
             if (p.name.empty()) {
                 p.name = std::format("NPC (0x{:08X})", formID);
             }
@@ -375,34 +389,54 @@ namespace MARAS {
         if (actorFormID == 0 || IsSyntheticChildID(actorFormID)) {
             return "None";
         }
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
-        auto partners = mgr.GetAllPartners(actorFormID);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto targetView = Projection::PerspectiveView::ForDialogueTarget(
+            worldSnap, spatialSnap, &GetEngineWerewolfStateProvider());
+        const State::ActorId targetActorId{ actorFormID };
+        const auto perceivedEdges = targetView.GetPerceivedRelationshipsOf(targetActorId);
+        const auto visibleChildren = targetView.GetVisibleChildren();
 
-        bool hasOpenMainPartner = mgr.HasAnyOpenMainPair(actorFormID);
+        bool hasOpenMainPartner = false;
+        for (const auto& edge : perceivedEdges) {
+            if (State::IsMainTierStatus(edge.status) && edge.isOpen) {
+                hasOpenMainPartner = true;
+                break;
+            }
+        }
+
         std::ostringstream ss;
         bool first = true;
 
-        for (RE::FormID partnerId : partners) {
-            auto status = mgr.GetRelationshipStatus(actorFormID, partnerId);
-            if (status == RelationshipStatus::Candidate || status == RelationshipStatus::Unknown) {
+        for (const auto& edge : perceivedEdges) {
+            if (edge.status == State::RelationshipStatus::Candidate ||
+                edge.status == State::RelationshipStatus::Unknown) {
                 continue;
             }
 
-            std::string partnerName = ActorSvc::GetName(partnerId);
-            const auto pairData = mgr.GetNPCData(actorFormID, partnerId);
-            auto children = mgr.GetChildren(actorFormID, partnerId);
-            size_t childCount = children.size();
-            std::string statusStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(status));
-            bool isOpen = pairData ? pairData->isOpen : false;
+            const State::ActorId partnerActorId = edge.Other(targetActorId);
+            const RE::FormID partnerId = partnerActorId.raw();
+            const std::string partnerName = ResolveActorNameSafe(partnerId, *worldSnap, *spatialSnap);
+
+            size_t childCount = 0;
+            for (const auto& child : visibleChildren) {
+                if ((child.guardians.slotA == targetActorId && child.guardians.slotB == partnerActorId) ||
+                    (child.guardians.slotB == targetActorId && child.guardians.slotA == partnerActorId)) {
+                    ++childCount;
+                }
+            }
+
+            const auto legacyStatus = static_cast<RelationshipStatus>(static_cast<uint8_t>(edge.status));
+            const std::string statusStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(legacyStatus));
 
             if (!first) ss << "\n";
             first = false;
 
-            if (status == RelationshipStatus::Lover) {
-                std::string loverPerm = hasOpenMainPartner ? "allowed by open main relationship" : "secret affair / lover";
+            if (edge.status == State::RelationshipStatus::Lover) {
+                const std::string loverPerm = hasOpenMainPartner ? "allowed by open main relationship" : "secret affair / lover";
                 ss << std::format("- Lover with {} ({}, {} {})", partnerName, loverPerm, childCount, childCount == 1 ? "child" : "children");
-            } else if (NPCRelationshipManager::IsMainTier(status)) {
-                std::string perm = isOpen ? "open primary partner" : "exclusive primary partner";
+            } else if (State::IsMainTierStatus(edge.status)) {
+                const std::string perm = edge.isOpen ? "open primary partner" : "exclusive primary partner";
                 ss << std::format("- {} with {} ({}, {} {})", statusStr, partnerName, perm, childCount, childCount == 1 ? "child" : "children");
             } else {
                 ss << std::format("- {} with {}", statusStr, partnerName);
@@ -471,8 +505,8 @@ namespace MARAS {
             ep.episodeID = nextEpisodeID_++;
             ep.firstEventTime = now;
             ep.isMatchmaking = event.isMatchmaking;
-            const auto settingsSnap = Settings::GetSingleton().Snapshot();
-            const auto& settings = *settingsSnap;
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto& settings = *worldSnap->settings;
             const bool useLLM = ep.isMatchmaking ? settings.matchmakingGenerateMemories : settings.skyrimnetUseLLMMemories;
             const auto graceWindow = useLLM ? kEpisodeGraceWindow : kProgrammaticGraceWindow;
             ep.flushTime = now + graceWindow;
@@ -528,10 +562,10 @@ namespace MARAS {
             if (activeEpisodes_.empty()) {
                 return;
             }
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto& settings = *worldSnap->settings;
             auto it = activeEpisodes_.begin();
             while (it != activeEpisodes_.end()) {
-                const auto settingsSnap = Settings::GetSingleton().Snapshot();
-                const auto& settings = *settingsSnap;
                 const bool useLLM = it->isMatchmaking ? settings.matchmakingGenerateMemories : settings.skyrimnetUseLLMMemories;
                 const auto effectiveFlushTime = useLLM
                                                     ? it->flushTime
@@ -668,7 +702,11 @@ namespace MARAS {
 
         // Also automatically add knowledgeRestrictions for any target NPC who is not privy to
         // an undiscovered infidelity or paternity secret involving another participant in this episode.
-        const auto& relMgr = NPCRelationshipManager::GetSingleton();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        const auto allChildren = omniscientView.GetVisibleChildren();
         auto addUniqueRestriction = [](std::vector<std::string>& vec, std::string restr) {
             if (std::find(vec.begin(), vec.end(), restr) == vec.end()) {
                 vec.push_back(std::move(restr));
@@ -676,16 +714,21 @@ namespace MARAS {
         };
         for (auto& ap : orderedParticipants) {
             if (!ap.generateMemory || ap.formID == 0) continue;
+            const auto viewerView = Projection::PerspectiveView::ForActor(
+                worldSnap, spatialSnap, State::ActorId{ ap.formID }, &GetEngineWerewolfStateProvider());
             std::unordered_set<RE::FormID> checkedSecretChildren;
             for (const auto& otherP : orderedParticipants) {
                 if (otherP.formID == 0 || otherP.formID == ap.formID) continue;
-                for (const auto& rec : relMgr.GetCheatingRecordsForActor(otherP.formID)) {
-                    if (rec.cheaterID == otherP.formID &&
-                        ap.formID != rec.cheaterID &&
-                        ap.formID != rec.affairPartnerID &&
+                const State::ActorId otherActorId{ otherP.formID };
+                for (const auto& rec : omniscientView.GetKnownAffairsInvolving(otherActorId)) {
+                    if (rec.cheater == otherActorId &&
+                        ap.formID != rec.cheater.raw() &&
+                        ap.formID != rec.paramour.raw() &&
                         rec.isSecret &&
-                        rec.affairStatus == AffairStatus::Ongoing) {
-                        std::string affairName = rec.affairPartnerID != 0 ? ActorSvc::GetName(rec.affairPartnerID) : "a secret lover";
+                        rec.affairStatus == State::AffairStatus::Ongoing) {
+                        const std::string affairName = !rec.paramour.IsNull()
+                            ? ResolveActorNameSafe(rec.paramour.raw(), *worldSnap, *spatialSnap)
+                            : "a secret lover";
                         addUniqueRestriction(
                             ap.knowledgeRestrictions,
                             std::format(
@@ -693,40 +736,39 @@ namespace MARAS {
                                 ap.name, otherP.name, affairName, otherP.name, affairName, ap.name));
                     }
                 }
-                for (RE::FormID childID : relMgr.GetChildrenOfActor(otherP.formID)) {
+                for (const auto& cEntry : allChildren) {
+                    const RE::FormID childID = cEntry.childId.raw();
+                    const bool involvesOther =
+                        cEntry.guardians.HasGuardian(otherActorId) ||
+                        (!cEntry.bioMother.IsNull() && Utils::MatchesActor(cEntry.bioMother.raw(), otherP.formID)) ||
+                        (!cEntry.perceivedBioFather.IsNull() && Utils::MatchesActor(cEntry.perceivedBioFather.raw(), otherP.formID)) ||
+                        (!cEntry.presumedFather.IsNull() && Utils::MatchesActor(cEntry.presumedFather.raw(), otherP.formID));
+                    if (!involvesOther) continue;
                     if (!checkedSecretChildren.insert(childID).second) continue;
-                    auto childOpt = relMgr.GetChildEntry(childID);
-                    if (!childOpt.has_value()) continue;
-                    const auto& cEntry = *childOpt;
-                    const auto& sec = cEntry.paternitySecret;
-                    if (!sec.HasActiveSecret() || sec.discovered) continue;
+                    if (!cEntry.paternitySecret.has_value()) continue;
+                    const auto& sec = *cEntry.paternitySecret;
+                    if (sec.discovered || (!sec.isSecret && !sec.isPregnancySecretForPartner)) continue;
 
-                    RE::FormID motherID = relMgr.GetBioMother(childID);
-                    RE::FormID bioFatherID = relMgr.GetBioFather(childID);
-                    RE::FormID explicitPresumed = relMgr.GetPresumedFather(childID);
-                    RE::FormID partnerID = explicitPresumed != 0 ? explicitPresumed : relMgr.GetMotherPartner(childID);
+                    const RE::FormID motherID = cEntry.bioMother.raw();
+                    const RE::FormID bioFatherID = sec.trueBioFather.raw();
+                    const RE::FormID partnerID = !cEntry.presumedFather.IsNull()
+                        ? cEntry.presumedFather.raw()
+                        : cEntry.motherPartner.raw();
                     if (partnerID != 0 && bioFatherID != 0 && Utils::MatchesActor(bioFatherID, partnerID)) {
                         continue;
                     }
 
-                    bool canKnow = false;
-                    if (motherID != 0 && Utils::MatchesActor(ap.formID, motherID)) {
-                        canKnow = true;
-                    } else if (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID && Utils::MatchesActor(ap.formID, bioFatherID)) {
-                        canKnow = !sec.isSecretForBioFather || sec.discoveredByBioFather;
-                    } else if (partnerID != 0 && (motherID == 0 || !Utils::MatchesActor(partnerID, motherID)) &&
-                               (sec.isSecretForPartner || explicitPresumed != 0)) {
-                        canKnow = !sec.isSecretForPartner || sec.discoveredByPartner;
-                    } else {
-                        canKnow = !sec.isSecretForBioFather || sec.discoveredByBioFather;
-                    }
+                    const bool canKnow = viewerView.CanViewerKnowTrueBioFather(cEntry.childId) &&
+                        (cEntry.stage != State::ChildStage::Unborn || viewerView.CanViewerKnowPregnancy(cEntry.childId));
 
                     if (!canKnow) {
-                        std::string motherName = motherID != 0 ? ActorSvc::GetName(motherID) : otherP.name;
-                        std::string bioName = (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID)
-                                                  ? ActorSvc::GetName(bioFatherID)
-                                                  : (!sec.bioFatherName.empty() ? sec.bioFatherName : "another man");
-                        if (cEntry.stage == ChildStage::Unborn) {
+                        const std::string motherName = (motherID != 0)
+                            ? ResolveActorNameSafe(motherID, *worldSnap, *spatialSnap)
+                            : otherP.name;
+                        const std::string bioName = (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID)
+                            ? ResolveActorNameSafe(bioFatherID, *worldSnap, *spatialSnap)
+                            : (!sec.trueBioFatherFallbackName.empty() ? sec.trueBioFatherFallbackName : "another man");
+                        if (cEntry.stage == State::ChildStage::Unborn) {
                             if (sec.isPregnancySecretForPartner) {
                                 addUniqueRestriction(
                                     ap.knowledgeRestrictions,
@@ -741,7 +783,7 @@ namespace MARAS {
                                         ap.name, motherName, bioName, ap.name));
                             }
                         } else {
-                            std::string cName = cEntry.name.empty() ? "the child" : cEntry.name;
+                            const std::string cName = cEntry.name.empty() ? "the child" : cEntry.name;
                             addUniqueRestriction(
                                 ap.knowledgeRestrictions,
                                 std::format(
@@ -762,12 +804,11 @@ namespace MARAS {
             pObj["name"] = ap.name;
 
             if (ap.formID != 0 && !IsSyntheticChildID(ap.formID)) {
-                auto entry = NPCIndex::GetSingleton().FindByFormID(ap.formID);
-                int sexInt = entry ? entry->sex : ActorSvc::GetSex(ap.formID);
-                std::string race = (entry && !entry->raceName.empty()) ? entry->raceName : ActorSvc::GetRaceName(ap.formID);
+                const State::ActorSex sex = ResolveActorSexSafe(ap.formID, *worldSnap, *spatialSnap);
+                std::string race = ResolveActorRaceSafe(ap.formID, *worldSnap, *spatialSnap);
                 if (race.empty()) race = "Nord";
 
-                pObj["sex"] = (sexInt == 1) ? "female" : "male";
+                pObj["sex"] = (sex == State::ActorSex::Female) ? "female" : "male";
                 pObj["race"] = race;
                 const uint64_t actorUuid = GetActorUUID(ap.formID);
                 pObj["uuid"] = (ap.formID == kPlayerFormID) ? 0ULL : actorUuid;
@@ -1354,19 +1395,23 @@ namespace MARAS {
         if (IsSuppressed() || !IsSkyrimNetAvailable()) return;
         if (newStatus == RelationshipStatus::Candidate || newStatus == RelationshipStatus::Unknown) return;
 
-        std::string nameA = ActorSvc::GetName(initiatorID);
-        std::string nameB = ActorSvc::GetName(partnerID);
-        std::string oldStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(oldStatus));
-        std::string newStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(newStatus));
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const std::string nameA = ResolveActorNameSafe(initiatorID, *worldSnap, *spatialSnap);
+        const std::string nameB = ResolveActorNameSafe(partnerID, *worldSnap, *spatialSnap);
+        const std::string oldStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(oldStatus));
+        const std::string newStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(newStatus));
 
         MemoryEvent ev;
         ev.eventCategory = "relationship_change";
         ev.eventType = newStr;
         ev.location = ResolveBestLocation({ initiatorID, partnerID });
 
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
-        bool isBreakup = NPCRelationshipManager::IsBreakupStatus(newStatus);
-        bool isCheatingLover = (newStatus == RelationshipStatus::Lover) && mgr.IsRelationshipCheating(initiatorID, partnerID);
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        const bool isBreakup = State::IsBreakupStatus(static_cast<State::RelationshipStatus>(static_cast<uint8_t>(newStatus)));
+        const auto pairOpt = omniscientView.GetPerceivedPair(State::ActorId{ initiatorID }, State::ActorId{ partnerID });
+        const bool isCheatingLover = (newStatus == RelationshipStatus::Lover) && pairOpt.has_value() && pairOpt->isCheatingPair;
 
         if (isBreakup) {
             ev.eventHeadline = std::format("{} and {} ended their '{}' relationship and are now '{}' (initiated by {}).",
@@ -1383,11 +1428,11 @@ namespace MARAS {
                 true));
         } else if (isCheatingLover) {
             bool isTalkingStage = false;
-            for (const auto& rec : mgr.GetCheatingRecordsForActor(initiatorID)) {
-                if (((rec.cheaterID == initiatorID && rec.affairPartnerID == partnerID) ||
-                     (rec.cheaterID == partnerID && rec.affairPartnerID == initiatorID)) &&
-                    rec.affairStatus == AffairStatus::Ongoing &&
-                    rec.affairStage == AffairStage::Talking) {
+            for (const auto& rec : omniscientView.GetKnownAffairsInvolving(State::ActorId{ initiatorID })) {
+                if (((rec.cheater.raw() == initiatorID && rec.paramour.raw() == partnerID) ||
+                     (rec.cheater.raw() == partnerID && rec.paramour.raw() == initiatorID)) &&
+                    rec.affairStatus == State::AffairStatus::Ongoing &&
+                    rec.effectiveAffairStage == State::AffairStage::Talking) {
                     isTalkingStage = true;
                     break;
                 }
@@ -1440,8 +1485,10 @@ namespace MARAS {
     void SkyrimNetMemoryService::RecordOpenRelationshipToggle(RE::FormID actorA, RE::FormID actorB, bool isOpen) {
         if (IsSuppressed() || !IsSkyrimNetAvailable()) return;
 
-        std::string nameA = ActorSvc::GetName(actorA);
-        std::string nameB = ActorSvc::GetName(actorB);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const std::string nameA = ResolveActorNameSafe(actorA, *worldSnap, *spatialSnap);
+        const std::string nameB = ResolveActorNameSafe(actorB, *worldSnap, *spatialSnap);
 
         MemoryEvent ev;
         ev.eventCategory = "relationship_change";
@@ -1483,9 +1530,13 @@ namespace MARAS {
         if (IsSuppressed() || !IsSkyrimNetAvailable()) return;
         if (cheaterID == 0 || victimID == 0) return;
 
-        std::string cheaterName = ActorSvc::GetName(cheaterID);
-        std::string victimName = ActorSvc::GetName(victimID);
-        std::string affairName = affairPartnerID != 0 ? ActorSvc::GetName(affairPartnerID) : "a secret lover";
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const std::string cheaterName = ResolveActorNameSafe(cheaterID, *worldSnap, *spatialSnap);
+        const std::string victimName = ResolveActorNameSafe(victimID, *worldSnap, *spatialSnap);
+        const std::string affairName = affairPartnerID != 0
+            ? ResolveActorNameSafe(affairPartnerID, *worldSnap, *spatialSnap)
+            : "a secret lover";
 
         MemoryEvent ev;
         ev.eventCategory = "infidelity";
@@ -1605,45 +1656,50 @@ namespace MARAS {
     {
         if (IsSuppressed() || !IsSkyrimNetAvailable() || motherID == 0) return;
 
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+
         if (partnerID == 0) {
-            partnerID = mgr.GetPrimaryPartner(motherID);
+            partnerID = worldSnap->relationships->GetPrimaryPartner(State::ActorId{ motherID }).raw();
         }
 
-        std::string motherName = ActorSvc::GetName(motherID);
-        std::string partnerName = partnerID != 0 ? ActorSvc::GetName(partnerID) : "";
+        const std::string motherName = ResolveActorNameSafe(motherID, *worldSnap, *spatialSnap);
+        const std::string partnerName = partnerID != 0 ? ResolveActorNameSafe(partnerID, *worldSnap, *spatialSnap) : "";
 
-        auto unbornIDs = mgr.GetUnbornChildren(motherID);
-        if (static_cast<int32_t>(unbornIDs.size()) > childCount) {
-            childCount = static_cast<int32_t>(unbornIDs.size());
+        std::vector<Projection::PerceivedChildLineage> unbornEntries;
+        for (const auto& child : omniscientView.GetVisibleChildren()) {
+            if (child.stage == State::ChildStage::Unborn && child.bioMother.raw() == motherID) {
+                unbornEntries.push_back(child);
+            }
+        }
+        if (static_cast<int32_t>(unbornEntries.size()) > childCount) {
+            childCount = static_cast<int32_t>(unbornEntries.size());
         }
         if (childCount < 1) childCount = 1;
-        std::string countDesc = (childCount > 1) ? std::format("{} children", childCount) : "a child";
+        const std::string countDesc = (childCount > 1) ? std::format("{} children", childCount) : "a child";
 
         bool hasNonPartnerFetus = false;
         bool hasSecretPregnancyForPartner = false;
         RE::FormID primaryBioFatherID = (fallbackBioID != kUnknownFatherFormID) ? fallbackBioID : 0;
         std::string bioFatherNames;
 
-        for (RE::FormID uID : unbornIDs) {
-            auto childOpt = mgr.GetChildEntry(uID);
-            if (!childOpt.has_value()) continue;
-
-            RE::FormID bID = mgr.GetBioFather(uID);
-            if (bID == 0) bID = childOpt->bioFatherID;
+        for (const auto& childEntry : unbornEntries) {
+            const RE::FormID bID = childEntry.perceivedBioFather.raw();
             if (primaryBioFatherID == 0 && bID != 0 && bID != kUnknownFatherFormID) {
                 primaryBioFatherID = bID;
             }
 
             std::string fName = (bID != 0 && bID != kUnknownFatherFormID)
-                                    ? ActorSvc::GetName(bID)
-                                    : (!childOpt->paternitySecret.bioFatherName.empty()
-                                           ? childOpt->paternitySecret.bioFatherName
-                                           : fallbackBioName);
+                ? ResolveActorNameSafe(bID, *worldSnap, *spatialSnap)
+                : (!childEntry.perceivedBioFatherFallbackName.empty()
+                       ? childEntry.perceivedBioFatherFallbackName
+                       : fallbackBioName);
             if (fName.empty()) fName = "an unknown father";
 
-            bool isPartnerFetus = (bID != 0 && partnerID != 0 && bID == partnerID) ||
-                                  (!partnerName.empty() && fName == partnerName);
+            const bool isPartnerFetus = (bID != 0 && partnerID != 0 && bID == partnerID) ||
+                                        (!partnerName.empty() && fName == partnerName);
             if (!isPartnerFetus) {
                 hasNonPartnerFetus = true;
                 if (bioFatherNames.find(fName) == std::string::npos) {
@@ -1651,18 +1707,21 @@ namespace MARAS {
                     bioFatherNames += fName;
                 }
             }
-            if (childOpt->paternitySecret.isPregnancySecretForPartner ||
-                childOpt->paternitySecret.isSecretForPartner ||
+            if ((childEntry.paternitySecret &&
+                 (childEntry.paternitySecret->isPregnancySecretForPartner ||
+                  childEntry.paternitySecret->isSecretForPartner)) ||
                 (partnerID != 0 && !isPartnerFetus)) {
                 hasSecretPregnancyForPartner = true;
             }
         }
 
-        if (unbornIDs.empty()) {
-            std::string fName = (primaryBioFatherID != 0) ? ActorSvc::GetName(primaryBioFatherID) : fallbackBioName;
+        if (unbornEntries.empty()) {
+            std::string fName = (primaryBioFatherID != 0)
+                ? ResolveActorNameSafe(primaryBioFatherID, *worldSnap, *spatialSnap)
+                : fallbackBioName;
             if (fName.empty()) fName = !partnerName.empty() ? partnerName : "an unknown father";
-            bool isPartnerFetus = (primaryBioFatherID != 0 && partnerID != 0 && primaryBioFatherID == partnerID) ||
-                                  (!partnerName.empty() && fName == partnerName);
+            const bool isPartnerFetus = (primaryBioFatherID != 0 && partnerID != 0 && primaryBioFatherID == partnerID) ||
+                                        (!partnerName.empty() && fName == partnerName);
             if (!isPartnerFetus) {
                 hasNonPartnerFetus = true;
                 bioFatherNames = fName;
@@ -1732,32 +1791,44 @@ namespace MARAS {
     {
         if (IsSuppressed() || !IsSkyrimNetAvailable() || childID == 0) return;
 
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
-        auto childOpt = mgr.GetChildEntry(childID);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        const auto childOpt = omniscientView.GetPerceivedChild(State::ChildId{ childID });
         if (!childOpt.has_value()) return;
 
         const auto& entry = *childOpt;
-        RE::FormID motherID = mgr.GetBioMother(childID);
-        RE::FormID presumedID = mgr.GetMotherPartner(childID);
-        RE::FormID bioFatherID = mgr.GetBioFather(childID);
+        const RE::FormID motherID = entry.bioMother.raw();
+        const RE::FormID presumedID = entry.motherPartner.raw();
+        const RE::FormID bioFatherID = entry.perceivedBioFather.raw();
         if (motherID == 0) return;
 
-        std::string motherName = ActorSvc::GetName(motherID);
-        std::string presumedName = presumedID != 0 ? ActorSvc::GetName(presumedID) : "her partner";
-        std::string bioName = (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID)
-                                  ? ActorSvc::GetName(bioFatherID)
-                                  : (!entry.paternitySecret.bioFatherName.empty() ? entry.paternitySecret.bioFatherName : "another man");
-        bool isUnborn = (entry.stage == ChildStage::Unborn);
-        bool hasGivenName = !isUnborn && !entry.name.empty() && !StringUtils::CaseInsensitiveEquals(entry.name, "Newborn");
-        std::string childDesc = isUnborn ? "unborn child" : (hasGivenName ? entry.name : "child");
-        bool unannouncedPregForPartner = isUnborn && wasPregnancySecretForPartner;
+        const auto* secPtr = entry.paternitySecret ? &(*entry.paternitySecret) : nullptr;
+        const bool secretForPartner = secPtr ? secPtr->isSecretForPartner : false;
+        const bool pregSecretForPartner = secPtr ? secPtr->isPregnancySecretForPartner : false;
+        const std::string fallbackBio = (secPtr && !secPtr->trueBioFatherFallbackName.empty())
+            ? secPtr->trueBioFatherFallbackName
+            : entry.perceivedBioFatherFallbackName;
+
+        const std::string motherName = ResolveActorNameSafe(motherID, *worldSnap, *spatialSnap);
+        const std::string presumedName = presumedID != 0
+            ? ResolveActorNameSafe(presumedID, *worldSnap, *spatialSnap)
+            : "her partner";
+        const std::string bioName = (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID)
+            ? ResolveActorNameSafe(bioFatherID, *worldSnap, *spatialSnap)
+            : (!fallbackBio.empty() ? fallbackBio : "another man");
+        const bool isUnborn = (entry.stage == State::ChildStage::Unborn);
+        const bool hasGivenName = !isUnborn && !entry.name.empty() && !StringUtils::CaseInsensitiveEquals(entry.name, "Newborn");
+        const std::string childDesc = isUnborn ? "unborn child" : (hasGivenName ? entry.name : "child");
+        const bool unannouncedPregForPartner = isUnborn && wasPregnancySecretForPartner;
 
         // Sub-case A: Pregnancy shared / visibly noticed by presumed father while true paternity remains secret
         if (outcome == "mother_shared_pregnancy_presumed" || outcome == "pregnancy_visible_presumed") {
             if (presumedID == 0) return;
             bool byBelly = (outcome == "pregnancy_visible_presumed");
 
-            if (entry.paternitySecret.isSecretForPartner) {
+            if (secretForPartner) {
                 MemoryEvent ev;
                 ev.eventCategory = "paternity_reveal";
                 ev.eventType = outcome;
@@ -1803,13 +1874,13 @@ namespace MARAS {
         if (outcome == "mother_confessed_bio" || outcome == "bio_father_learnt") {
             if (bioFatherID == 0 || bioFatherID == kUnknownFatherFormID) return;
             bool confessed = (outcome == "mother_confessed_bio");
-            bool partnerUnawareOfPreg = isUnborn && entry.paternitySecret.isSecretForPartner && entry.paternitySecret.isPregnancySecretForPartner;
-            std::string partnerClause = (presumedID != 0 && entry.paternitySecret.isSecretForPartner)
+            bool partnerUnawareOfPreg = isUnborn && secretForPartner && pregSecretForPartner;
+            std::string partnerClause = (presumedID != 0 && secretForPartner)
                                             ? (partnerUnawareOfPreg
                                                    ? std::format(" while your partner {} does not even know you are pregnant yet", presumedName)
                                                    : std::format(" while your partner {} remains unaware of the truth", presumedName))
                                             : "";
-            std::string bioPartnerClause = (presumedID != 0 && entry.paternitySecret.isSecretForPartner)
+            std::string bioPartnerClause = (presumedID != 0 && secretForPartner)
                                                ? (partnerUnawareOfPreg
                                                       ? std::format(" while she is with {} (who does not even know she is pregnant yet)", presumedName)
                                                       : std::format(" while she is with {} (who does not know the truth)", presumedName))
@@ -1981,19 +2052,24 @@ namespace MARAS {
     void SkyrimNetMemoryService::RecordChildBirth(RE::FormID motherID, const std::vector<RE::FormID>& childIDs) {
         if (IsSuppressed() || !IsSkyrimNetAvailable() || motherID == 0) return;
 
-        const auto& mgr = NPCRelationshipManager::GetSingleton();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+
         std::vector<RE::FormID> targetChildIDs = childIDs;
         if (targetChildIDs.empty()) {
-            for (const auto& [cID, entry] : mgr.GetAllChildren()) {
-                if (entry.stage == ChildStage::Infant &&
-                    ( entry.bioMotherID == motherID || entry.guardianAID == motherID || entry.guardianBID == motherID)) {
-                    targetChildIDs.push_back(cID);
+            const State::ActorId motherActorId{ motherID };
+            for (const auto& entry : omniscientView.GetVisibleChildren()) {
+                if (entry.stage == State::ChildStage::Infant &&
+                    (entry.bioMother == motherActorId || entry.guardians.HasGuardian(motherActorId))) {
+                    targetChildIDs.push_back(entry.childId.raw());
                 }
             }
         }
         if (targetChildIDs.empty()) return;
 
-        std::string motherName = ActorSvc::GetName(motherID);
+        const std::string motherName = ResolveActorNameSafe(motherID, *worldSnap, *spatialSnap);
 
         struct FatherBirthBucket {
             RE::FormID bioFatherID = 0;
@@ -2005,17 +2081,20 @@ namespace MARAS {
         std::vector<FatherBirthBucket> buckets;
 
         for (RE::FormID cID : targetChildIDs) {
-            auto cOpt = mgr.GetChildEntry(cID);
+            const auto cOpt = omniscientView.GetPerceivedChild(State::ChildId{ cID });
             if (!cOpt.has_value()) continue;
 
-            RE::FormID bID = mgr.GetBioFather(cID);
-            if (bID == 0) bID = cOpt->bioFatherID;
-            RE::FormID pID = mgr.GetPresumedFather(cID);
+            const RE::FormID bID = cOpt->perceivedBioFather.raw();
+            const bool hasSecOrDiscovered = cOpt->paternitySecret.has_value() &&
+                (cOpt->paternitySecret->isSecret ||
+                 cOpt->paternitySecret->discovered ||
+                 cOpt->paternitySecret->discoveredByPartner);
+            const RE::FormID pID = hasSecOrDiscovered ? cOpt->presumedFather.raw() : 0;
 
-            bool secPartner = cOpt->paternitySecret.isSecretForPartner;
-            bool secBio = cOpt->paternitySecret.isSecretForBioFather;
-            std::string rel = (cOpt->gender == 0) ? "son" : (cOpt->gender == 1 ? "daughter" : "child");
-            bool hasGivenName = !cOpt->name.empty() && !StringUtils::CaseInsensitiveEquals(cOpt->name, "Newborn");
+            const bool secPartner = cOpt->paternitySecret ? cOpt->paternitySecret->isSecretForPartner : false;
+            const bool secBio = cOpt->paternitySecret ? cOpt->paternitySecret->isSecretForBioFather : false;
+            const std::string rel = (cOpt->gender == 0) ? "son" : (cOpt->gender == 1 ? "daughter" : "child");
+            const bool hasGivenName = !cOpt->name.empty() && !StringUtils::CaseInsensitiveEquals(cOpt->name, "Newborn");
             std::string desc = hasGivenName ? std::format("{} ({})", cOpt->name, rel) : rel;
 
             auto it = std::find_if(buckets.begin(), buckets.end(), [&](const FatherBirthBucket& b) {
@@ -2042,12 +2121,16 @@ namespace MARAS {
                 childrenList += b.childDescriptions[i];
             }
 
-            RE::FormID bioID = (b.bioFatherID != kUnknownFatherFormID) ? b.bioFatherID : 0;
-            RE::FormID presID = b.presumedFatherID;
-            std::string bioName = bioID != 0 ? ActorSvc::GetName(bioID) : "an unknown father";
-            std::string presName = presID != 0 ? ActorSvc::GetName(presID) : "";
+            const RE::FormID bioID = (b.bioFatherID != kUnknownFatherFormID) ? b.bioFatherID : 0;
+            const RE::FormID presID = b.presumedFatherID;
+            const std::string bioName = bioID != 0
+                ? ResolveActorNameSafe(bioID, *worldSnap, *spatialSnap)
+                : "an unknown father";
+            const std::string presName = presID != 0
+                ? ResolveActorNameSafe(presID, *worldSnap, *spatialSnap)
+                : "";
 
-            bool sameOrNoPresumed = (presID == 0 || presID == bioID || presID == motherID);
+            const bool sameOrNoPresumed = (presID == 0 || presID == bioID || presID == motherID);
 
             // Case 1: No paternity discrepancy (Mother + BioFather if known)
             if (sameOrNoPresumed) {
@@ -2157,26 +2240,25 @@ namespace MARAS {
     {
         if (IsSuppressed() || !IsSkyrimNetAvailable() || childID == 0) return;
 
-        auto childOpt = NPCRelationshipManager::GetSingleton().GetChildEntry(childID);
-        if (childOpt && childOpt->stage == ChildStage::Unborn) return;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto omniscientView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+        const auto childOpt = omniscientView.GetPerceivedChild(State::ChildId{ childID });
+        if (childOpt && childOpt->stage == State::ChildStage::Unborn) return;
         std::string childName = (childOpt && !childOpt->name.empty() && !StringUtils::CaseInsensitiveEquals(childOpt->name, "Newborn"))
                                     ? childOpt->name
-                                    : ActorSvc::GetName(childID);
+                                    : ResolveActorNameSafe(childID, *worldSnap, *spatialSnap);
         if (childName.empty() || StringUtils::CaseInsensitiveEquals(childName, "Newborn")) childName = "the child";
 
         // Only placed Stage 2 children (!IsSyntheticChildID && stage == Child) generate their own child memories
-        bool childCanGenerate = (!IsSyntheticChildID(childID)) &&
-                                (!childOpt.has_value() || childOpt->stage == ChildStage::Child) &&
-                                CanActorGenerateMemory(childID);
+        const bool childCanGenerate = (!IsSyntheticChildID(childID)) &&
+                                      (!childOpt.has_value() || childOpt->stage == State::ChildStage::Child) &&
+                                      CanActorGenerateMemory(childID);
 
-        std::string nameGA = guardianAID != 0 ? ActorSvc::GetName(guardianAID) : "";
-        std::string nameGB = guardianBID != 0 ? ActorSvc::GetName(guardianBID) : "";
-        std::string nameOther = otherID != 0 ? ActorSvc::GetName(otherID) : "";
-        if (nameOther.empty() && otherID != 0) {
-            if (auto dec = DeceasedRegistry::GetSingleton().FindRecord(otherID)) {
-                nameOther = dec->name;
-            }
-        }
+        const std::string nameGA = guardianAID != 0 ? ResolveActorNameSafe(guardianAID, *worldSnap, *spatialSnap) : "";
+        const std::string nameGB = guardianBID != 0 ? ResolveActorNameSafe(guardianBID, *worldSnap, *spatialSnap) : "";
+        const std::string nameOther = otherID != 0 ? ResolveActorNameSafe(otherID, *worldSnap, *spatialSnap) : "";
 
         MemoryEvent ev;
         ev.eventCategory = "child_custody";

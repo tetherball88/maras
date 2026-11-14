@@ -950,3 +950,134 @@ MARAS_TEST(PerspectiveLens, TrainingDiscountAndFamilyVisitParentHelpers) {
     MARAS_CHECK(!ContainsActor(visitOpen, husband));
     MARAS_CHECK(ContainsActor(visitOpen, trueBioFather));
 }
+
+MARAS_TEST(PerspectiveLens, P2_2_RefinementsAndUnloadedWerewolfProvider) {
+    class StubWerewolfProvider final : public IWerewolfStateProvider {
+    public:
+        ActorId unloadedWolf{};
+        bool spatialPrecedenceViolated{ false };
+
+        [[nodiscard]] std::optional<bool> IsAdultWerewolf(ActorId actor) const noexcept override {
+            if (actor == unloadedWolf) {
+                return true;
+            }
+            return std::nullopt;
+        }
+    };
+
+    const ActorId mother{ 0x00060010u };
+    const ActorId husband{ 0x00060020u };
+    const ActorId bioFather{ 0x00060030u };
+    const ActorId bystander{ 0x00060040u };
+    const ChildId resolvedEdgesChild{ 0xFF800600u };
+    const ChildId wolfAdultChild{ 0xFF800601u };
+    const ChildId turnedAdultChild{ 0xFF800602u };
+
+    WorldState ws{};
+    (void)ws.PromoteToMarried(mother, husband, 1.0f);
+
+    // 1. Secret edges individually resolved (discoveredByPartner = true, isSecretForBioFather = false, discovered = false)
+    ChildRecord c1{};
+    c1.childId = resolvedEdgesChild;
+    c1.name = "EdgeResolved";
+    c1.timestamp = 42;
+    c1.savedBioTemplateName = "ImperialTemplate";
+    c1.stage = ChildStage::Child;
+    c1.isAdopted = false;
+    c1.isBiologicalChild = true;
+    c1.guardians.Assign(mother, husband);
+    c1.bioMother = mother;
+    c1.bioFather = bioFather;
+    c1.presumedFather = husband;
+    c1.paternitySecret.isSecret = true;
+    c1.paternitySecret.isSecretForPartner = true;
+    c1.paternitySecret.discoveredByPartner = true;
+    c1.paternitySecret.isSecretForBioFather = false;
+    c1.paternitySecret.discovered = false;
+    ws.lineage.Write().UpsertChild(c1);
+
+    // 2. Stage 4 Adult child with inherited hasBeastblood = true from unloaded werewolf bioFather
+    ChildRecord c2{};
+    c2.childId = wolfAdultChild;
+    c2.name = "WolfAdult";
+    c2.timestamp = 77;
+    c2.savedBioTemplateName = "NordWolf";
+    c2.stage = ChildStage::Adult;
+    c2.isAdopted = false;
+    c2.isBiologicalChild = true;
+    c2.guardians.Assign(mother, husband);
+    c2.bioMother = mother;
+    c2.bioFather = bioFather;
+    c2.presumedFather = husband;
+    c2.hasBeastblood = true;
+    c2.paternitySecret.isSecret = true;
+    c2.paternitySecret.isSecretForPartner = true;
+    c2.paternitySecret.isSecretForBioFather = true;
+    ws.lineage.Write().UpsertChild(c2);
+
+    // 3. Stage 4 Adult child with hasBeastblood = false who later became a werewolf in-world
+    ChildRecord c3{};
+    c3.childId = turnedAdultChild;
+    c3.name = "TurnedAdult";
+    c3.stage = ChildStage::Adult;
+    c3.isAdopted = true;
+    c3.guardians.Assign(mother, husband);
+    c3.hasBeastblood = false;
+    ws.lineage.Write().UpsertChild(c3);
+
+    // Confronted affair record whose raw isSecret stayed true -> ToPerceivedAffair normalizes isSecret = false
+    (void)ws.TransitionRelationship(mother, bioFather, RelationshipStatus::Lover, 2.0f, mother);
+    MARAS_REQUIRE(ws.RecordCheatingIncident(
+        mother, husband, bioFather, /*isSecret=*/true,
+        AffairType::Lover, AffairStatus::EndedConfronted, AffairStage::Physical, 2.5f));
+
+    auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+    auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
+    spatialSnap->AddSample(MakeBasicSample(RefId{ mother.raw() }, 0, 0, 0));
+    spatialSnap->AddSample(MakeBasicSample(RefId{ husband.raw() }, 5, 0, 0));
+    spatialSnap->AddSample(MakeBasicSample(RefId{ turnedAdultChild.raw() }, 8, 0, 0, LoadedActorFlags::IsWerewolf));
+    spatialSnap->FinalizeSortAndDedupe();
+
+    StubWerewolfProvider wolfProvider{};
+    wolfProvider.unloadedWolf = bioFather;
+
+    // Child self-view sees true bioFather when all secret edges are resolved, plus timestamp & savedBioTemplateName
+    const auto vChild = PerspectiveView::ForActor(worldSnap, spatialSnap, resolvedEdgesChild.AsActorId(), &wolfProvider);
+    const auto p1 = vChild.GetPerceivedChild(resolvedEdgesChild);
+    MARAS_REQUIRE(p1.has_value());
+    MARAS_CHECK_EQ(p1->perceivedBioFather, bioFather);
+    MARAS_CHECK_EQ(p1->timestamp, 42);
+    MARAS_CHECK_EQ(p1->savedBioTemplateName, std::string("ImperialTemplate"));
+    MARAS_REQUIRE(p1->paternitySecret.has_value());
+    MARAS_CHECK(p1->paternitySecret->discoveredByPartner);
+
+    // IsActorKnownWerewolf gating for Stage 4 child with secret inherited beastblood
+    const auto vUiHidden = PerspectiveView::ForDashboard(worldSnap, spatialSnap, false, &wolfProvider);
+    const auto vUiReveal = PerspectiveView::ForDashboard(worldSnap, spatialSnap, true, &wolfProvider);
+    const auto vTarget = PerspectiveView::ForDialogueTarget(worldSnap, spatialSnap, &wolfProvider);
+    const auto vBystander = PerspectiveView::ForActor(worldSnap, spatialSnap, bystander, &wolfProvider);
+    const auto vMother = PerspectiveView::ForActor(worldSnap, spatialSnap, mother, &wolfProvider);
+    const auto vWolfChild = PerspectiveView::ForActor(worldSnap, spatialSnap, wolfAdultChild.AsActorId(), &wolfProvider);
+
+    MARAS_CHECK(!vUiHidden.IsActorKnownWerewolf(wolfAdultChild.AsActorId()));
+    MARAS_CHECK(!vTarget.IsActorKnownWerewolf(wolfAdultChild.AsActorId()));
+    MARAS_CHECK(!vBystander.IsActorKnownWerewolf(wolfAdultChild.AsActorId()));
+    MARAS_CHECK(!vWolfChild.IsActorKnownWerewolf(wolfAdultChild.AsActorId()));
+    MARAS_CHECK(vUiReveal.IsActorKnownWerewolf(wolfAdultChild.AsActorId()));
+    MARAS_CHECK(vMother.IsActorKnownWerewolf(wolfAdultChild.AsActorId()));
+
+    // Unloaded werewolf bioFather resolved via IWerewolfStateProvider when viewer can know truth
+    MARAS_CHECK(vMother.IsActorKnownWerewolf(bioFather));
+    MARAS_CHECK(!vTarget.IsActorKnownWerewolf(bioFather));
+
+    // Stage 4 adult child turned werewolf in spatial snapshot is recognized everywhere except DialogueTargetPublic
+    MARAS_CHECK(vUiHidden.IsActorKnownWerewolf(turnedAdultChild.AsActorId()));
+    MARAS_CHECK(vMother.IsActorKnownWerewolf(turnedAdultChild.AsActorId()));
+    MARAS_CHECK(!vTarget.IsActorKnownWerewolf(turnedAdultChild.AsActorId()));
+
+    // ToPerceivedAffair normalizes isSecret = false for EndedConfronted
+    const auto motherAffairs = vMother.GetKnownAffairsInvolving(mother);
+    MARAS_REQUIRE_EQ(motherAffairs.size(), std::size_t{ 1 });
+    MARAS_CHECK_EQ(motherAffairs[0].affairStatus, AffairStatus::EndedConfronted);
+    MARAS_CHECK(!motherAffairs[0].isSecret);
+}

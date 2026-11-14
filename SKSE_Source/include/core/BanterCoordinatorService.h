@@ -5,6 +5,10 @@
 
 namespace MARAS {
 
+    namespace Projection {
+        class PerspectiveView;
+    }
+
     /**
      * BanterCoordinatorService - Coordinates NPC-NPC relationship candidate pairs
      * for Skyrim CK banter scenes.
@@ -71,6 +75,7 @@ namespace MARAS {
 
         void Revert();
         nlohmann::json DumpJson() const;
+        [[nodiscard]] nlohmann::json DumpJson(const Projection::PerspectiveView& view) const;
 
     private:
         BanterCoordinatorService() = default;

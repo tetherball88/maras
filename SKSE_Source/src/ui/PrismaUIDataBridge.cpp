@@ -25,8 +25,12 @@
 #include "utils/Settings.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SpouseBuffService.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/BanterCoordinatorService.h"
 #include "core/ChildrenFleeService.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
+#include "maras/state/WorldStore.h"
 
 namespace MARAS {
 
@@ -101,364 +105,11 @@ namespace MARAS {
             return std::round(static_cast<double>(val) * factor) / factor;
         }
 
-        bool ShouldRevealSecretsInUI() {
-            return Settings::GetSingleton().Snapshot()->revealSecretsInUI;
-        }
-
-        uint64_t MakeOrderedPairKey(RE::FormID a, RE::FormID b) {
-            return (static_cast<uint64_t>(std::min(a, b)) << 32) | static_cast<uint64_t>(std::max(a, b));
-        }
-
-        bool IsSecretCheatingRecord(const CheatingRecord& c) {
-            return c.isSecret && c.affairStatus != AffairStatus::Allowed;
-        }
-
-        struct SecretAffairPairIndex {
-            std::unordered_map<uint64_t, uint32_t> secretCounts;
-            std::unordered_map<uint64_t, uint32_t> publicCounts;
-
-            static SecretAffairPairIndex Build(const NPCRelationshipManager& relMgr) {
-                SecretAffairPairIndex idx;
-                for (const auto& [pairKey, pairData] : relMgr.GetAllRelationshipPairs()) {
-                    for (const auto& c : pairData.cheatingRecords) {
-                        if (c.cheaterID == 0 || c.affairPartnerID == 0) continue;
-                        const uint64_t key = MakeOrderedPairKey(c.cheaterID, c.affairPartnerID);
-                        if (IsSecretCheatingRecord(c)) {
-                            idx.secretCounts[key]++;
-                        } else {
-                            idx.publicCounts[key]++;
-                        }
-                    }
-                }
-                return idx;
-            }
-
-            bool IsSecretAffairPair(RE::FormID a, RE::FormID b) const {
-                if (a == 0 || b == 0) return false;
-                const uint64_t key = MakeOrderedPairKey(a, b);
-                auto itSec = secretCounts.find(key);
-                if (itSec == secretCounts.end() || itSec->second == 0) return false;
-                auto itPub = publicCounts.find(key);
-                return (itPub == publicCounts.end() || itPub->second == 0);
-            }
-        };
-
-        struct MaskedRelationshipPair {
-            RelationshipStatus status = RelationshipStatus::Candidate;
-            bool isOpen = false;
-            std::vector<StatusChangeRecord> statusHistory;
-        };
-
-        std::optional<MaskedRelationshipPair> MaskRelationshipPairForUI(
-            RE::FormID actorA,
-            RE::FormID actorB,
-            RelationshipStatus rawStatus,
-            bool rawIsOpen,
-            const std::vector<StatusChangeRecord>* rawHistory,
-            bool revealSecrets,
-            const SecretAffairPairIndex& secretIndex)
-        {
-            MaskedRelationshipPair out;
-            out.status = rawStatus;
-            out.isOpen = rawIsOpen;
-            if (rawHistory) {
-                out.statusHistory = *rawHistory;
-            }
-
-            if (revealSecrets) {
-                return out;
-            }
-
-            const bool isAffairStatus =
-                rawStatus == RelationshipStatus::Lover ||
-                rawStatus == RelationshipStatus::Dating ||
-                rawStatus == RelationshipStatus::ExLover ||
-                rawStatus == RelationshipStatus::ExDating ||
-                rawStatus == RelationshipStatus::Candidate;
-
-            if (!isAffairStatus || !secretIndex.IsSecretAffairPair(actorA, actorB)) {
-                return out;
-            }
-
-            std::optional<RelationshipStatus> priorStatus;
-            if (rawHistory) {
-                for (auto it = rawHistory->rbegin(); it != rawHistory->rend(); ++it) {
-                    if (it->toStatus == RelationshipStatus::Divorced || it->toStatus == RelationshipStatus::Jilted) {
-                        priorStatus = it->toStatus;
-                        break;
-                    }
-                }
-            }
-
-            if (priorStatus.has_value()) {
-                out.status = *priorStatus;
-                out.isOpen = false;
-                out.statusHistory.clear();
-                if (rawHistory) {
-                    for (const auto& h : *rawHistory) {
-                        if (h.toStatus != RelationshipStatus::Lover && h.toStatus != RelationshipStatus::Dating) {
-                            out.statusHistory.push_back(h);
-                        }
-                    }
-                }
-                return out;
-            }
-
-            if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
-                out.status = RelationshipStatus::Candidate;
-                out.isOpen = false;
-                out.statusHistory.clear();
-                return out;
-            }
-
-            return std::nullopt;
-        }
-
-        bool IsUnannouncedSecretPregnancyHiddenInUI(const ChildRegistryEntry& entry, bool revealSecrets) {
-            if (revealSecrets) return false;
-            if (entry.stage != ChildStage::Unborn) return false;
-            if (entry.bioMotherID == kPlayerFormID) return false;
-            const auto& sec = entry.paternitySecret;
-            return !sec.discovered && !sec.discoveredByPartner && sec.isPregnancySecretForPartner;
-        }
-
-        RE::FormID ResolveEffectivePresumedFatherForUI(const NPCRelationshipManager& relMgr, const ChildRegistryEntry& entry) {
-            RE::FormID explicitPresumed = relMgr.GetPresumedFather(entry.childID);
-            if (explicitPresumed != 0) {
-                return explicitPresumed;
-            }
-            const auto& sec = entry.paternitySecret;
-            if (!sec.isSecretForPartner && !sec.isPregnancySecretForPartner && !sec.discoveredByPartner) {
-                return 0;
-            }
-            RE::FormID partnerID = relMgr.GetMotherPartner(entry.childID);
-            if (partnerID == 0 ||
-                Utils::MatchesActor(partnerID, entry.bioMotherID) ||
-                (entry.bioFatherID != 0 && Utils::MatchesActor(partnerID, entry.bioFatherID))) {
-                return 0;
-            }
-            return partnerID;
-        }
-
-        ChildRegistryEntry MaskChildEntryForUI(const ChildRegistryEntry& entry, RE::FormID resolvedPresumedFatherID, bool revealSecrets) {
-            if (revealSecrets) {
-                return entry;
-            }
-            const auto& sec = entry.paternitySecret;
-            const bool isSecretPartner = !sec.discovered &&
-                                         (sec.isSecretForPartner || sec.isPregnancySecretForPartner) &&
-                                         !sec.discoveredByPartner;
-            const bool isSecretBio = !sec.discovered &&
-                                     sec.isSecretForBioFather &&
-                                     !sec.discoveredByBioFather;
-            if (!isSecretPartner && !isSecretBio) {
-                return entry;
-            }
-
-            ChildRegistryEntry masked = entry;
-            if (isSecretPartner) {
-                if (!entry.isAdopted) {
-                    masked.bioFatherID = (resolvedPresumedFatherID != 0 && resolvedPresumedFatherID != kUnknownFatherFormID)
-                                             ? resolvedPresumedFatherID
-                                             : 0;
-                }
-                masked.presumedFatherID = 0;
-            } else {
-                masked.bioFatherID = 0;
-                masked.presumedFatherID = 0;
-            }
-            if (masked.hasBeastblood) {
-                const bool visibleParentHasBeastblood =
-                    (masked.bioMotherID != 0 && NPCRelationshipManager::IsActorWerewolf(masked.bioMotherID)) ||
-                    (masked.bioFatherID != 0 && masked.bioFatherID != kUnknownFatherFormID && NPCRelationshipManager::IsActorWerewolf(masked.bioFatherID));
-                if (!visibleParentHasBeastblood) {
-                    masked.hasBeastblood = false;
-                }
-            }
-            masked.paternitySecret = PaternitySecret{};
-            return masked;
-        }
-
-        void SanitizeRelationshipManagerDumpForUI(nlohmann::json& rmJson, const NPCRelationshipManager& relMgr) {
-            if (!rmJson.is_object()) return;
-
-            const auto secretIndex = SecretAffairPairIndex::Build(relMgr);
-
-            if (auto itPairs = rmJson.find("relationshipPairs"); itPairs != rmJson.end() && itPairs->is_array()) {
-                nlohmann::json sanitizedPairs = nlohmann::json::array();
-                for (auto& pairObj : *itPairs) {
-                    if (!pairObj.is_object()) continue;
-
-                    RE::FormID actorA = 0;
-                    RE::FormID actorB = 0;
-                    if (auto itA = pairObj.find("actorA"); itA != pairObj.end() && itA->is_object()) {
-                        actorA = PrismaUIDataBridge::StringToFormID(GetJsonString(*itA, "formId"));
-                    }
-                    if (auto itB = pairObj.find("actorB"); itB != pairObj.end() && itB->is_object()) {
-                        actorB = PrismaUIDataBridge::StringToFormID(GetJsonString(*itB, "formId"));
-                    }
-
-                    const auto rawData = (actorA != 0 && actorB != 0) ? relMgr.GetNPCData(actorA, actorB) : std::nullopt;
-                    const RelationshipStatus rawStatus = rawData ? rawData->status : RelationshipStatus::Candidate;
-                    const bool rawIsOpen = rawData ? rawData->isOpen : false;
-                    const auto* rawHistory = rawData ? &rawData->statusHistory : nullptr;
-
-                    auto maskedPairOpt = MaskRelationshipPairForUI(
-                        actorA, actorB, rawStatus, rawIsOpen, rawHistory, /*revealSecrets=*/false, secretIndex);
-                    if (!maskedPairOpt.has_value()) {
-                        continue;
-                    }
-
-                    pairObj["status"] = {
-                        {"id", static_cast<uint8_t>(maskedPairOpt->status)},
-                        {"name", Utils::RelationshipStatusToString(maskedPairOpt->status)}
-                    };
-                    pairObj["isOpen"] = maskedPairOpt->isOpen;
-
-                    if (auto itHist = pairObj.find("statusHistory"); itHist != pairObj.end() && itHist->is_array()) {
-                        if (maskedPairOpt->statusHistory.empty()) {
-                            pairObj["statusHistory"] = nlohmann::json::array();
-                        } else if (rawHistory && maskedPairOpt->statusHistory.size() != rawHistory->size()) {
-                            nlohmann::json filteredHist = nlohmann::json::array();
-                            for (const auto& hObj : *itHist) {
-                                if (!hObj.is_object()) continue;
-                                int32_t toId = -1;
-                                if (auto itTo = hObj.find("toStatus"); itTo != hObj.end() && itTo->is_object()) {
-                                    toId = GetJsonInt(*itTo, "id", -1);
-                                }
-                                if (toId == static_cast<int32_t>(RelationshipStatus::Lover) ||
-                                    toId == static_cast<int32_t>(RelationshipStatus::Dating)) {
-                                    continue;
-                                }
-                                filteredHist.push_back(hObj);
-                            }
-                            pairObj["statusHistory"] = std::move(filteredHist);
-                        }
-                    }
-
-                    if (auto itCheat = pairObj.find("cheatingRecords"); itCheat != pairObj.end() && itCheat->is_array()) {
-                        nlohmann::json visibleCheat = nlohmann::json::array();
-                        for (const auto& cObj : *itCheat) {
-                            if (!cObj.is_object()) continue;
-                            const bool isSec = GetJsonBool(cObj, "isSecret", false);
-                            int32_t statusId = -1;
-                            if (auto itSt = cObj.find("affairStatus"); itSt != cObj.end() && itSt->is_object()) {
-                                statusId = GetJsonInt(*itSt, "id", -1);
-                            }
-                            if (isSec && statusId != static_cast<int32_t>(AffairStatus::Allowed)) {
-                                continue;
-                            }
-                            visibleCheat.push_back(cObj);
-                        }
-                        pairObj["cheatingRecords"] = std::move(visibleCheat);
-                    }
-
-                    if (auto itChildren = pairObj.find("children"); itChildren != pairObj.end() && itChildren->is_array()) {
-                        nlohmann::json visiblePairChildren = nlohmann::json::array();
-                        for (const auto& cObj : *itChildren) {
-                            if (!cObj.is_object()) continue;
-                            const RE::FormID cID = PrismaUIDataBridge::StringToFormID(GetJsonString(cObj, "childId"));
-                            if (auto cOpt = relMgr.GetChildEntry(cID); cOpt && IsUnannouncedSecretPregnancyHiddenInUI(*cOpt, false)) {
-                                continue;
-                            }
-                            visiblePairChildren.push_back(cObj);
-                        }
-                        pairObj["children"] = std::move(visiblePairChildren);
-                    }
-
-                    sanitizedPairs.push_back(std::move(pairObj));
-                }
-                rmJson["relationshipPairs"] = std::move(sanitizedPairs);
-            }
-
-            if (auto itReg = rmJson.find("childrenRegistry"); itReg != rmJson.end() && itReg->is_array()) {
-                nlohmann::json sanitizedChildren = nlohmann::json::array();
-                for (auto& cObj : *itReg) {
-                    if (!cObj.is_object()) continue;
-                    RE::FormID cID = 0;
-                    if (auto itChild = cObj.find("child"); itChild != cObj.end() && itChild->is_object()) {
-                        cID = PrismaUIDataBridge::StringToFormID(GetJsonString(*itChild, "formId"));
-                    }
-                    auto entryOpt = relMgr.GetChildEntry(cID);
-                    if (!entryOpt.has_value()) {
-                        sanitizedChildren.push_back(std::move(cObj));
-                        continue;
-                    }
-                    if (IsUnannouncedSecretPregnancyHiddenInUI(*entryOpt, /*revealSecrets=*/false)) {
-                        continue;
-                    }
-                    const RE::FormID presFatherID = ResolveEffectivePresumedFatherForUI(relMgr, *entryOpt);
-                    const ChildRegistryEntry masked = MaskChildEntryForUI(*entryOpt, presFatherID, /*revealSecrets=*/false);
-                    cObj["bioFather"] = {
-                        {"formId", std::format("{:08X}", masked.bioFatherID)},
-                        {"name", masked.bioFatherID == 0 ? "" : (masked.bioFatherID == kUnknownFatherFormID ? "Unknown" : ActorSvc::GetName(masked.bioFatherID))}
-                    };
-                    cObj["presumedFather"] = {
-                        {"formId", std::format("{:08X}", masked.presumedFatherID)},
-                        {"name", masked.presumedFatherID == 0 ? "" : ActorSvc::GetName(masked.presumedFatherID)}
-                    };
-                    cObj["hasBeastblood"] = masked.hasBeastblood;
-                    cObj["paternitySecret"] = {
-                        {"isSecret", false},
-                        {"isSecretForBioFather", false},
-                        {"isSecretForPartner", false},
-                        {"discovered", entryOpt->paternitySecret.discovered},
-                        {"discoveredByPartner", entryOpt->paternitySecret.discovered ? entryOpt->paternitySecret.discoveredByPartner : false},
-                        {"discoveredByBioFather", entryOpt->paternitySecret.discovered ? entryOpt->paternitySecret.discoveredByBioFather : false},
-                        {"hasPhenotypeMismatch", entryOpt->paternitySecret.discovered ? entryOpt->paternitySecret.hasPhenotypeMismatch : false},
-                        {"lastCheckTimestamp", 0.0f},
-                        {"bioFatherName", ""},
-                        {"bioFatherRaceFormId", ""}
-                    };
-                    sanitizedChildren.push_back(std::move(cObj));
-                }
-                rmJson["childrenRegistry"] = std::move(sanitizedChildren);
-            }
-
-            if (rmJson.contains("pregnancyState")) {
-                nlohmann::json sanitizedPreg = nlohmann::json::array();
-                for (const auto& [cID, entry] : relMgr.GetAllChildren()) {
-                    if (entry.stage != ChildStage::Unborn) continue;
-                    if (IsUnannouncedSecretPregnancyHiddenInUI(entry, /*revealSecrets=*/false)) continue;
-                    const RE::FormID presumedFatherID = ResolveEffectivePresumedFatherForUI(relMgr, entry);
-                    const ChildRegistryEntry masked = MaskChildEntryForUI(entry, presumedFatherID, /*revealSecrets=*/false);
-                    nlohmann::json pObj;
-                    pObj["mother"] = {
-                        {"formId", std::format("{:08X}", entry.bioMotherID)},
-                        {"name", ActorSvc::GetName(entry.bioMotherID)}
-                    };
-                    pObj["isPregnant"] = true;
-                    pObj["conceptionTimestamp"] = entry.conceptionTimestamp;
-                    const RE::FormID visiblePresumedID = (masked.presumedFatherID != 0) ? masked.presumedFatherID : 0;
-                    pObj["presumedFather"] = {
-                        {"formId", visiblePresumedID != 0 ? std::format("{:08X}", visiblePresumedID) : ""},
-                        {"name", visiblePresumedID != 0 ? ActorSvc::GetName(visiblePresumedID) : ""}
-                    };
-                    pObj["bioFather"] = {
-                        {"formId", std::format("{:08X}", masked.bioFatherID)},
-                        {"name", (masked.bioFatherID != 0 && masked.bioFatherID != kUnknownFatherFormID) ? ActorSvc::GetName(masked.bioFatherID) : (masked.bioFatherID == kUnknownFatherFormID ? "Unknown" : "")}
-                    };
-                    sanitizedPreg.push_back(std::move(pObj));
-                }
-                rmJson["pregnancyState"] = std::move(sanitizedPreg);
-            }
-
-            if (auto itIntents = rmJson.find("pendingPartnerIntents"); itIntents != rmJson.end() && itIntents->is_array()) {
-                nlohmann::json sanitizedIntents = nlohmann::json::array();
-                for (const auto& iObj : *itIntents) {
-                    if (!iObj.is_object()) continue;
-                    int32_t intentId = -1;
-                    if (auto itInt = iObj.find("intent"); itInt != iObj.end() && itInt->is_object()) {
-                        intentId = GetJsonInt(*itInt, "id", -1);
-                    }
-                    if (intentId == static_cast<int32_t>(PartnerIntentType::ConfessTalking) ||
-                        intentId == static_cast<int32_t>(PartnerIntentType::ConfessPhysical)) {
-                        continue;
-                    }
-                    sanitizedIntents.push_back(iObj);
-                }
-                rmJson["pendingPartnerIntents"] = std::move(sanitizedIntents);
-            }
+        Projection::PerspectiveView MakeDashboardView() {
+            return Projection::PerspectiveView::ForDashboard(
+                State::WorldStore::GetSingleton().Snapshot(),
+                State::SpatialSnapshotStore::GetSingleton().Snapshot(),
+                &GetEngineWerewolfStateProvider());
         }
 
     }  // namespace
@@ -479,8 +130,7 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::Revert() {
-        cachedChildRefIDs.clear();
-        lastRequestedDetailNpcID_ = 0;
+        lastRequestedDetailNpcID_.store(0, std::memory_order_relaxed);
     }
 
     void PrismaUIDataBridge::HandleAction(const char* actionJsonStr) {
@@ -614,6 +264,10 @@ namespace MARAS {
     }
 
     nlohmann::json PrismaUIDataBridge::BuildNPCProfileJson(RE::FormID formID) {
+        return BuildNPCProfileJson(formID, MakeDashboardView());
+    }
+
+    nlohmann::json PrismaUIDataBridge::BuildNPCProfileJson(RE::FormID formID, const Projection::PerspectiveView& view) {
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         nlohmann::json profile;
         profile["formId"] = FormIDToString(formID);
@@ -634,13 +288,9 @@ namespace MARAS {
         profile["socialClass"] = static_cast<uint8_t>(relMgr.GetSocialClass(formID));
         profile["skillType"] = static_cast<uint8_t>(relMgr.GetSkillType(formID));
         profile["temperament"] = static_cast<uint8_t>(relMgr.GetTemperament(formID));
-        PartnerIntentType pendingIntentType = relMgr.GetPartnerPendingIntent(formID).type;
-        if (!ShouldRevealSecretsInUI() &&
-            (pendingIntentType == PartnerIntentType::ConfessTalking ||
-             pendingIntentType == PartnerIntentType::ConfessPhysical)) {
-            pendingIntentType = PartnerIntentType::None;
-        }
-        profile["pendingIntent"] = std::string(Utils::PartnerIntentTypeToString(pendingIntentType));
+        const auto perceivedIntent = view.GetPerceivedPendingIntent(State::ActorId{ formID });
+        profile["pendingIntent"] = std::string(Utils::PartnerIntentTypeToString(
+            static_cast<PartnerIntentType>(perceivedIntent.type)));
 
         std::string pkgName = "None";
         bool isChild = relMgr.IsChildNPC(formID);
@@ -691,26 +341,27 @@ namespace MARAS {
             }
         }
 
-        if (auto childOpt = relMgr.GetChildEntry(formID)) {
-            const auto& cEntry = *childOpt;
-            profile["isChild"] = (cEntry.stage != ChildStage::Adult);
+        const auto perceivedChild = view.GetPerceivedChild(State::ChildId{ formID });
+        if (perceivedChild.has_value()) {
+            const auto& cEntry = *perceivedChild;
+            profile["isChild"] = (cEntry.stage != State::ChildStage::Adult);
             std::string curName = GetJsonString(profile, "name");
             if (!cEntry.name.empty() && (curName.empty() || curName.rfind("NPC_", 0) == 0)) {
                 profile["name"] = cEntry.name;
             }
             std::string stageStr = "child";
             switch (cEntry.stage) {
-                case ChildStage::Unborn:   stageStr = "unborn"; break;
-                case ChildStage::Infant:   stageStr = "infant"; break;
-                case ChildStage::Child:    stageStr = "child"; break;
-                case ChildStage::Training: stageStr = "training"; break;
-                case ChildStage::Adult:    stageStr = "adult"; break;
+                case State::ChildStage::Unborn:   stageStr = "unborn"; break;
+                case State::ChildStage::Infant:   stageStr = "infant"; break;
+                case State::ChildStage::Child:    stageStr = "child"; break;
+                case State::ChildStage::Training: stageStr = "training"; break;
+                case State::ChildStage::Adult:    stageStr = "adult"; break;
             }
             profile["stage"] = stageStr;
 
             auto* actor = HasPhysicalActor(formID) ? NPCIndex::GetSingleton().GetActorFromFormId(formID) : nullptr;
             bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
-            bool isEphemeral = !hasRealActor || (cEntry.stage == ChildStage::Unborn) || (cEntry.stage == ChildStage::Infant) || (cEntry.stage == ChildStage::Training);
+            bool isEphemeral = !hasRealActor || (cEntry.stage == State::ChildStage::Unborn) || (cEntry.stage == State::ChildStage::Infant) || (cEntry.stage == State::ChildStage::Training);
             profile["hasRefID"] = hasRealActor;
             profile["isEphemeral"] = isEphemeral;
             if (!cEntry.trainingLocation.empty()) {
@@ -727,41 +378,38 @@ namespace MARAS {
             if (cEntry.trainingStartGameDay >= 0.0f) {
                 profile["trainingStartGameDay"] = RoundFloat(cEntry.trainingStartGameDay);
             }
-            const ChildRegistryEntry visibleProfileChild = MaskChildEntryForUI(
-                cEntry, ResolveEffectivePresumedFatherForUI(relMgr, cEntry), ShouldRevealSecretsInUI());
-            profile["hasBeastblood"] = visibleProfileChild.hasBeastblood;
-            if (cEntry.stage == ChildStage::Unborn || cEntry.gender == 2) {
+            profile["hasBeastblood"] = cEntry.hasBeastblood;
+            if (cEntry.stage == State::ChildStage::Unborn || cEntry.gender == 2) {
                 profile["gender"] = "unknown";
             } else {
                 profile["gender"] = (cEntry.gender == 1) ? "female" : "male";
             }
         }
 
-        // Home resolution: check tenant registration in PlayerHouseService, profile currentHome, or adult child travel destination
-        auto& houseSvc = PlayerHouseService::GetSingleton();
-        RE::FormID tenantHouseID = houseSvc.GetTenantHouseFormID(formID);
-        std::string currentHomeName = PlayerHouseService::GetHouseName(tenantHouseID);
+        // Home resolution: check tenant registration in HouseholdTable, profile currentHome, or adult child travel destination
+        const State::HouseId tenantHouseID = view.Household().GetTenantHouse(formID);
+        std::string currentHomeName = PlayerHouseService::GetHouseName(tenantHouseID.raw());
         if (currentHomeName.empty()) {
-            if (const auto npcProf = relMgr.GetNPCProfile(formID)) {
-                if (npcProf->currentHome.has_value() && npcProf->currentHome.value() != 0) {
-                    currentHomeName = PlayerHouseService::GetHouseName(npcProf->currentHome.value());
+            if (const auto* npcProf = view.Actors().Find(State::RefId{ formID })) {
+                if (npcProf->legacyCurrentHome.has_value() && !npcProf->legacyCurrentHome->IsNull()) {
+                    currentHomeName = PlayerHouseService::GetHouseName(npcProf->legacyCurrentHome->raw());
                 }
             }
         }
         if (currentHomeName.empty()) {
-            if (auto childOpt = relMgr.GetChildEntry(formID); childOpt && childOpt->stage == ChildStage::Adult && !IsSyntheticChildID(formID)) {
+            if (perceivedChild.has_value() && perceivedChild->stage == State::ChildStage::Adult && !IsSyntheticChildID(formID)) {
                 currentHomeName = AdultChildTravelService::GetSingleton().GetCurrentDestinationName(formID);
             }
         }
         if (!currentHomeName.empty()) {
             profile["currentHome"] = currentHomeName;
         }
-        profile["stayAtHome"] = houseSvc.GetTenantStayAtHome(formID);
+        profile["stayAtHome"] = view.Household().GetTenantStayAtHome(formID);
 
         std::string origHomeName = "";
-        if (const auto npcProf = relMgr.GetNPCProfile(formID)) {
-            if (npcProf->originalHome.has_value() && npcProf->originalHome.value() != 0) {
-                RE::FormID ohID = npcProf->originalHome.value();
+        if (const auto* npcProf = view.Actors().Find(State::RefId{ formID })) {
+            if (npcProf->legacyOriginalHome.has_value() && !npcProf->legacyOriginalHome->IsNull()) {
+                RE::FormID ohID = npcProf->legacyOriginalHome->raw();
                 if (auto loc = RE::TESForm::LookupByID<RE::BGSLocation>(ohID)) {
                     origHomeName = loc->GetName();
                 } else if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(ohID)) {
@@ -781,31 +429,37 @@ namespace MARAS {
                 }
             }
         }
-        if (origHomeName.empty()) {
-            if (auto childOpt = relMgr.GetChildEntry(formID)) {
-                const ChildRegistryEntry cEntry = MaskChildEntryForUI(
-                    *childOpt, ResolveEffectivePresumedFatherForUI(relMgr, *childOpt), ShouldRevealSecretsInUI());
-                if (cEntry.guardianAID != kPlayerFormID && cEntry.guardianBID != kPlayerFormID) {
-                    RE::FormID parentID = relMgr.ResolveNonPlayerChildTarget(cEntry);
-                    if (parentID != 0) {
-                        if (const auto parentProf = relMgr.GetNPCProfile(parentID)) {
-                            if (parentProf->originalHome.has_value() && parentProf->originalHome.value() != 0) {
-                                RE::FormID ohID = parentProf->originalHome.value();
-                                if (auto loc = RE::TESForm::LookupByID<RE::BGSLocation>(ohID)) {
-                                    origHomeName = loc->GetName();
-                                } else if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(ohID)) {
-                                    origHomeName = cell->GetName();
-                                }
+        if (origHomeName.empty() && perceivedChild.has_value()) {
+            const auto& cEntry = *perceivedChild;
+            if (!cEntry.guardians.slotA.IsPlayer() && !cEntry.guardians.slotB.IsPlayer()) {
+                RE::FormID parentID = 0;
+                if (!cEntry.guardians.slotA.IsNull()) {
+                    parentID = cEntry.guardians.slotA.raw();
+                } else if (!cEntry.guardians.slotB.IsNull()) {
+                    parentID = cEntry.guardians.slotB.raw();
+                } else if (!cEntry.bioMother.IsNull() && !cEntry.bioMother.IsPlayer()) {
+                    parentID = cEntry.bioMother.raw();
+                } else if (!cEntry.perceivedBioFather.IsNull() && !cEntry.perceivedBioFather.IsUnknownFather() && !cEntry.perceivedBioFather.IsPlayer()) {
+                    parentID = cEntry.perceivedBioFather.raw();
+                }
+                if (parentID != 0) {
+                    if (const auto* parentProf = view.Actors().Find(State::RefId{ parentID })) {
+                        if (parentProf->legacyOriginalHome.has_value() && !parentProf->legacyOriginalHome->IsNull()) {
+                            RE::FormID ohID = parentProf->legacyOriginalHome->raw();
+                            if (auto loc = RE::TESForm::LookupByID<RE::BGSLocation>(ohID)) {
+                                origHomeName = loc->GetName();
+                            } else if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(ohID)) {
+                                origHomeName = cell->GetName();
                             }
                         }
-                        if (origHomeName.empty()) {
-                            if (auto parentActor = RE::TESForm::LookupByID<RE::Actor>(parentID)) {
-                                RE::FormID origCellID = HomeCellService::GetSingleton().GetNpcHome(parentActor);
-                                if (origCellID != 0) {
-                                    if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(origCellID)) {
-                                        if (cell->GetName() && cell->GetName()[0] != '\0') {
-                                            origHomeName = cell->GetName();
-                                        }
+                    }
+                    if (origHomeName.empty()) {
+                        if (auto parentActor = RE::TESForm::LookupByID<RE::Actor>(parentID)) {
+                            RE::FormID origCellID = HomeCellService::GetSingleton().GetNpcHome(parentActor);
+                            if (origCellID != 0) {
+                                if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(origCellID)) {
+                                    if (cell->GetName() && cell->GetName()[0] != '\0') {
+                                        origHomeName = cell->GetName();
                                     }
                                 }
                             }
@@ -972,40 +626,120 @@ namespace MARAS {
         PrismaUIManager::GetSingleton().InteropCall("receiveMARASOverview", jsonStr.c_str());
     }
 
-    void PrismaUIDataBridge::SendOverviewData() {
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        auto& affSvc = AffectionService::GetSingleton();
-        auto& hierMgr = SpouseHierarchyManager::GetSingleton();
+    namespace {
+        template <typename BuildProfileFn>
+        nlohmann::json BuildVisibleProfilesArray(
+            const Projection::PerspectiveView& view,
+            const std::vector<Projection::PerceivedChildLineage>& visibleChildren,
+            BuildProfileFn&& buildProfile) {
+            nlohmann::json profilesArray = nlohmann::json::array();
+            std::unordered_set<RE::FormID> addedProfiles;
 
-        const bool revealSecrets = ShouldRevealSecretsInUI();
-        const auto secretIndex = SecretAffairPairIndex::Build(relMgr);
+            if (addedProfiles.insert(kPlayerFormID).second) {
+                profilesArray.push_back(buildProfile(kPlayerFormID));
+            }
+
+            for (const auto& [refId, actorProfile] : view.Actors().AllProfiles()) {
+                (void)actorProfile;
+                if (refId.raw() != 0 && addedProfiles.insert(refId.raw()).second) {
+                    profilesArray.push_back(buildProfile(refId.raw()));
+                }
+            }
+
+            auto tryAddActorProfile = [&](RE::FormID actorId) {
+                if (actorId != 0 && actorId != kPlayerFormID && actorId != kUnknownFatherFormID &&
+                    addedProfiles.insert(actorId).second) {
+                    profilesArray.push_back(buildProfile(actorId));
+                }
+            };
+
+            // Add all visible children and their visible parent/guardian figures
+            for (const auto& child : visibleChildren) {
+                tryAddActorProfile(child.guardians.slotA.raw());
+                tryAddActorProfile(child.guardians.slotB.raw());
+                tryAddActorProfile(child.bioMother.raw());
+                tryAddActorProfile(child.perceivedBioFather.raw());
+                tryAddActorProfile(child.presumedFather.raw());
+
+                const RE::FormID childId = child.childId.raw();
+                if (childId != 0 && addedProfiles.insert(childId).second) {
+                    nlohmann::json childObj = buildProfile(childId);
+                    const bool isChild = (child.stage != State::ChildStage::Adult);
+                    childObj["isChild"] = isChild;
+                    const std::string currentName = GetJsonString(childObj, "name");
+                    if ((currentName.empty() || currentName.rfind("NPC_", 0) == 0) && !child.name.empty()) {
+                        childObj["name"] = child.name;
+                    }
+                    const std::string currentRace = GetJsonString(childObj, "race");
+                    if (currentRace.empty() || currentRace == "Nord") {
+                        const RE::FormID motherID = child.bioMother.raw();
+                        const RE::FormID validPerceivedFather =
+                            (child.perceivedBioFather.raw() != 0 && child.perceivedBioFather.raw() != kUnknownFatherFormID)
+                                ? child.perceivedBioFather.raw()
+                                : 0;
+                        const RE::FormID parentFormID = motherID != 0 ? motherID : validPerceivedFather;
+                        if (parentFormID != 0) {
+                            childObj["race"] = ActorSvc::GetRaceName(parentFormID);
+                        }
+                    }
+                    if (isChild) {
+                        if (child.stage == State::ChildStage::Unborn || child.gender == 2) {
+                            childObj["gender"] = "unknown";
+                        } else {
+                            childObj["gender"] = (child.gender == 1) ? "female" : "male";
+                        }
+                    }
+                    profilesArray.push_back(std::move(childObj));
+                }
+            }
+
+            // Include remaining placed child actors from NPCIndex without scanning TESForm::GetAllForms()
+            for (const auto& entry : NPCIndex::GetSingleton().GetAllEntries(NPCFilter::ChildOnly)) {
+                const RE::FormID childID = entry.refFormID;
+                if (childID == 0 || !addedProfiles.insert(childID).second) {
+                    continue;
+                }
+                nlohmann::json childObj = buildProfile(childID);
+                childObj["isChild"] = true;
+                const int sex = (entry.sex >= 0) ? entry.sex : ActorSvc::GetSex(childID);
+                childObj["gender"] = (sex == 2) ? "unknown" : ((sex == 1) ? "female" : "male");
+                profilesArray.push_back(std::move(childObj));
+            }
+
+            // Include actors participating in visible affairs
+            for (const auto& affair : view.GetAllVisibleAffairs()) {
+                tryAddActorProfile(affair.cheater.raw());
+                tryAddActorProfile(affair.deceivedPartner.raw());
+                tryAddActorProfile(affair.paramour.raw());
+            }
+
+            return profilesArray;
+        }
+    }  // namespace
+
+    void PrismaUIDataBridge::SendOverviewData() {
+        const auto view = MakeDashboardView();
+        auto& affSvc = AffectionService::GetSingleton();
 
         nlohmann::json data;
         auto calendar = RE::Calendar::GetSingleton();
         data["currentGameDay"] = calendar ? calendar->GetCurrentGameTime() : 0.0f;
 
-        // Stat counts for Player (respecting secret-affair masking when Intrigue Mode is active)
+        // Stat counts for Player (masked uniformly via PerspectiveView::ForDashboard)
         size_t marriedCount = 0;
         size_t datingCount = 0;
         size_t loverCount = 0;
         size_t engagedCount = 0;
         size_t divorcedCount = 0;
         size_t jiltedCount = 0;
-        for (auto partnerID : relMgr.GetAllPartners(kPlayerFormID)) {
-            const auto relData = relMgr.GetNPCData(kPlayerFormID, partnerID);
-            const RelationshipStatus rawStatus = relData ? relData->status : relMgr.GetRelationshipStatus(kPlayerFormID, partnerID);
-            const bool rawIsOpen = relData ? relData->isOpen : false;
-            const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
-            auto maskedOpt = MaskRelationshipPairForUI(
-                kPlayerFormID, partnerID, rawStatus, rawIsOpen, rawHistory, revealSecrets, secretIndex);
-            if (!maskedOpt.has_value()) continue;
-            switch (maskedOpt->status) {
-                case RelationshipStatus::Married:  ++marriedCount; break;
-                case RelationshipStatus::Dating:   ++datingCount; break;
-                case RelationshipStatus::Lover:    ++loverCount; break;
-                case RelationshipStatus::Engaged:  ++engagedCount; break;
-                case RelationshipStatus::Divorced: ++divorcedCount; break;
-                case RelationshipStatus::Jilted:   ++jiltedCount; break;
+        for (const auto& edge : view.GetPerceivedRelationshipsOf(State::ActorId{ kPlayerFormID })) {
+            switch (edge.status) {
+                case State::RelationshipStatus::Married:  ++marriedCount; break;
+                case State::RelationshipStatus::Dating:   ++datingCount; break;
+                case State::RelationshipStatus::Lover:    ++loverCount; break;
+                case State::RelationshipStatus::Engaged:  ++engagedCount; break;
+                case State::RelationshipStatus::Divorced: ++divorcedCount; break;
+                case State::RelationshipStatus::Jilted:   ++jiltedCount; break;
                 default: break;
             }
         }
@@ -1019,226 +753,95 @@ namespace MARAS {
         // Hierarchy top 3
         std::vector<std::string> rankFormIDs;
         nlohmann::json rankSpouses = nlohmann::json::array();
-        for (int rank = 0; rank < 3; ++rank) {
+        for (std::size_t rank = 0; rank < State::SpouseHierarchyTable::kSlotCount; ++rank) {
             RE::FormID id = 0;
-            for (auto formID : relMgr.GetAllMarried(kPlayerFormID)) {
-                if (hierMgr.GetRank(formID) == rank) {
-                    id = formID;
-                    break;
+            const State::ActorId slotActor = view.Hierarchy().GetSpouseAtSlot(rank);
+            if (!slotActor.IsNull()) {
+                if (const auto edge = view.GetPerceivedPair(State::ActorId{ kPlayerFormID }, slotActor);
+                    edge.has_value() && edge->status == State::RelationshipStatus::Married) {
+                    id = slotActor.raw();
                 }
             }
-            std::string formStr = id != 0 ? FormIDToString(id) : "";
-            rankFormIDs.push_back(formStr);
+            rankFormIDs.push_back(id != 0 ? FormIDToString(id) : "");
 
             if (id != 0) {
-                nlohmann::json spouseObj = BuildNPCProfileJson(id);
-                spouseObj["affection"] = affSvc.GetPermanentAffection(id);
-                rankSpouses.push_back(spouseObj);
+                nlohmann::json spouseObj = BuildNPCProfileJson(id, view);
+                spouseObj["affection"] = view.Affection().GetPermanent(State::ActorId{ id });
+                rankSpouses.push_back(std::move(spouseObj));
             }
         }
         data["hierarchyRanks"] = rankFormIDs;
         data["hierarchySpouses"] = rankSpouses;
 
-        // All NPC Profiles (including Player)
-        nlohmann::json profilesArray = nlohmann::json::array();
-        std::unordered_set<RE::FormID> addedProfiles;
-
-        if (addedProfiles.insert(kPlayerFormID).second) {
-            profilesArray.push_back(BuildNPCProfileJson(kPlayerFormID));
-        }
-
-        auto allRegistered = relMgr.GetAllRegisteredNPCs();
-        for (auto formID : allRegistered) {
-            if (addedProfiles.insert(formID).second) {
-                profilesArray.push_back(BuildNPCProfileJson(formID));
-            }
-        }
-
-        cachedChildRefIDs.clear();
-
-        // Pull all indexed children directly from NPCIndex without scanning TESForm::GetAllForms()
-        for (const auto& entry : NPCIndex::GetSingleton().GetAllEntries(NPCFilter::ChildOnly)) {
-            RE::FormID childID = entry.refFormID;
-            if (childID != 0) {
-                cachedChildRefIDs.insert(childID);
-                if (addedProfiles.insert(childID).second) {
-                    nlohmann::json childObj = BuildNPCProfileJson(childID);
-                    childObj["isChild"] = true;
-                    uint8_t childGender = relMgr.GetChildGender(childID);
-                    childObj["gender"] = (childGender == 2) ? "unknown" : ((childGender == 1) ? "female" : "male");
-                    profilesArray.push_back(childObj);
-                }
-            }
-        }
-
-        // Also ensure any visible parent and child in childrenByID has an NPC profile
-        for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
-            if (IsUnannouncedSecretPregnancyHiddenInUI(cEntry, revealSecrets)) {
-                continue;
-            }
-            const RE::FormID presFatherID = ResolveEffectivePresumedFatherForUI(relMgr, cEntry);
-            const ChildRegistryEntry visibleChild = MaskChildEntryForUI(cEntry, presFatherID, revealSecrets);
-
-            if (visibleChild.guardianAID != 0 && visibleChild.guardianAID != kPlayerFormID && addedProfiles.insert(visibleChild.guardianAID).second) {
-                profilesArray.push_back(BuildNPCProfileJson(visibleChild.guardianAID));
-            }
-            if (visibleChild.guardianBID != 0 && visibleChild.guardianBID != kPlayerFormID && addedProfiles.insert(visibleChild.guardianBID).second) {
-                profilesArray.push_back(BuildNPCProfileJson(visibleChild.guardianBID));
-            }
-            if (visibleChild.bioMotherID != 0 && visibleChild.bioMotherID != kPlayerFormID && addedProfiles.insert(visibleChild.bioMotherID).second) {
-                profilesArray.push_back(BuildNPCProfileJson(visibleChild.bioMotherID));
-            }
-            if (visibleChild.bioFatherID != 0 && visibleChild.bioFatherID != kPlayerFormID && visibleChild.bioFatherID != kUnknownFatherFormID && addedProfiles.insert(visibleChild.bioFatherID).second) {
-                profilesArray.push_back(BuildNPCProfileJson(visibleChild.bioFatherID));
-            }
-            if (visibleChild.presumedFatherID != 0 && visibleChild.presumedFatherID != kPlayerFormID && addedProfiles.insert(visibleChild.presumedFatherID).second) {
-                profilesArray.push_back(BuildNPCProfileJson(visibleChild.presumedFatherID));
-            }
-            if (cID != 0) {
-                cachedChildRefIDs.insert(cID);
-            }
-            if (cID != 0 && addedProfiles.insert(cID).second) {
-                nlohmann::json childObj = BuildNPCProfileJson(cID);
-                bool isChild = (cEntry.stage != ChildStage::Adult);
-                childObj["isChild"] = isChild;
-                std::string currentName = GetJsonString(childObj, "name");
-                if ((currentName.empty() || currentName.rfind("NPC_", 0) == 0) && !cEntry.name.empty()) {
-                    childObj["name"] = cEntry.name;
-                }
-                std::string currentRace = GetJsonString(childObj, "race");
-                if (currentRace.empty() || currentRace == "Nord") {
-                    RE::FormID motherID = relMgr.GetBioMother(cID);
-                    RE::FormID parentFormID = motherID != 0 ? motherID :
-                        (visibleChild.bioFatherID != 0 && visibleChild.bioFatherID != kUnknownFatherFormID ? visibleChild.bioFatherID : 0);
-                    if (parentFormID != 0) {
-                        childObj["race"] = ActorSvc::GetRaceName(parentFormID);
-                    }
-                }
-                if (isChild) {
-                    uint8_t childGender = relMgr.GetChildGender(cID);
-                    if (cEntry.stage == ChildStage::Unborn || childGender == 2) {
-                        childObj["gender"] = "unknown";
-                    } else {
-                        childObj["gender"] = (childGender == 1) ? "female" : "male";
-                    }
-                }
-                profilesArray.push_back(childObj);
-            }
-        }
-
-        // Also ensure any actor involved in a visible cheating record has an NPC profile
-        for (const auto& [pairKey, pairData] : relMgr.GetAllRelationshipPairs()) {
-            for (const auto& c : pairData.cheatingRecords) {
-                if (!revealSecrets && IsSecretCheatingRecord(c)) {
-                    continue;
-                }
-                if (c.cheaterID != 0 && c.cheaterID != kPlayerFormID && addedProfiles.insert(c.cheaterID).second) {
-                    profilesArray.push_back(BuildNPCProfileJson(c.cheaterID));
-                }
-                if (c.victimID != 0 && c.victimID != kPlayerFormID && addedProfiles.insert(c.victimID).second) {
-                    profilesArray.push_back(BuildNPCProfileJson(c.victimID));
-                }
-                if (c.affairPartnerID != 0 && c.affairPartnerID != kPlayerFormID && addedProfiles.insert(c.affairPartnerID).second) {
-                    profilesArray.push_back(BuildNPCProfileJson(c.affairPartnerID));
-                }
-            }
-        }
-
-        data["npcProfiles"] = profilesArray;
+        const auto visibleChildren = view.GetVisibleChildren();
+        data["npcProfiles"] = BuildVisibleProfilesArray(
+            view, visibleChildren, [this, &view](RE::FormID id) { return BuildNPCProfileJson(id, view); });
 
         // All visible Children in child-centric registry
         nlohmann::json childrenArray = nlohmann::json::array();
-        for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
-            if (IsUnannouncedSecretPregnancyHiddenInUI(cEntry, revealSecrets)) {
-                continue;
-            }
-            childrenArray.push_back(BuildChildJson(cEntry));
+        for (const auto& child : visibleChildren) {
+            childrenArray.push_back(BuildChildJson(child, view));
         }
-        data["children"] = childrenArray;
+        data["children"] = std::move(childrenArray);
 
-        // All Relationship Pairs (Player + NPCxNPC, masked when Intrigue Mode is active)
+        // All visible Relationship Pairs (Player + NPCxNPC, projected via PerspectiveView)
         nlohmann::json relsArray = nlohmann::json::array();
-        std::unordered_set<uint64_t> visitedPairs;
+        for (const auto& edge : view.GetVisibleRelationshipEdges()) {
+            nlohmann::json relObj;
+            relObj["actorA"] = FormIDToString(edge.pair.first.raw());
+            relObj["actorB"] = FormIDToString(edge.pair.second.raw());
+            relObj["status"] = static_cast<uint8_t>(edge.status);
+            relObj["isOpen"] = edge.isOpen;
 
-        std::vector<RE::FormID> searchActors = allRegistered;
-        searchActors.push_back(kPlayerFormID);
-
-        for (auto actorA : searchActors) {
-            auto partners = relMgr.GetAllPartners(actorA);
-            for (auto actorB : partners) {
-                uint64_t pairKey = MakeOrderedPairKey(actorA, actorB);
-                if (visitedPairs.insert(pairKey).second) {
-                    const auto relData = relMgr.GetNPCData(actorA, actorB);
-                    const RelationshipStatus rawStatus = relData ? relData->status : relMgr.GetRelationshipStatus(actorA, actorB);
-                    const bool rawIsOpen = relData ? relData->isOpen : false;
-                    const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
-
-                    auto maskedOpt = MaskRelationshipPairForUI(
-                        actorA, actorB, rawStatus, rawIsOpen, rawHistory, revealSecrets, secretIndex);
-                    if (!maskedOpt.has_value()) {
-                        continue;
-                    }
-
-                    nlohmann::json relObj;
-                    relObj["actorA"] = FormIDToString(actorA);
-                    relObj["actorB"] = FormIDToString(actorB);
-                    relObj["status"] = static_cast<uint8_t>(maskedOpt->status);
-                    relObj["isOpen"] = maskedOpt->isOpen;
-
-                    nlohmann::json history = nlohmann::json::array();
-                    for (const auto& h : maskedOpt->statusHistory) {
-                        nlohmann::json hObj;
-                        hObj["fromStatus"] = static_cast<uint8_t>(h.fromStatus);
-                        hObj["toStatus"] = static_cast<uint8_t>(h.toStatus);
-                        if (std::isnan(h.timestamp) || h.timestamp < 0.0f) {
-                            hObj["timestamp"] = -1;
-                        } else {
-                            hObj["timestamp"] = h.timestamp;
-                        }
-                        hObj["initiatorFormId"] = FormIDToString(h.initiatorFormID);
-                        history.push_back(hObj);
-                    }
-                    relObj["statusHistory"] = history;
-                    relsArray.push_back(relObj);
+            nlohmann::json history = nlohmann::json::array();
+            for (const auto& h : edge.statusHistory) {
+                nlohmann::json hObj;
+                hObj["fromStatus"] = static_cast<uint8_t>(h.fromStatus);
+                hObj["toStatus"] = static_cast<uint8_t>(h.toStatus);
+                if (std::isnan(h.timestamp) || h.timestamp < 0.0f) {
+                    hObj["timestamp"] = -1;
+                } else {
+                    hObj["timestamp"] = h.timestamp;
                 }
+                hObj["initiatorFormId"] = FormIDToString(h.initiator.raw());
+                history.push_back(std::move(hObj));
             }
+            relObj["statusHistory"] = std::move(history);
+            relsArray.push_back(std::move(relObj));
         }
+        data["relationships"] = std::move(relsArray);
 
-        data["relationships"] = relsArray;
-
-        // Clean first-class cheating records export (filtered when Intrigue Mode is active)
+        // Clean first-class cheating records export (filtered via PerspectiveView)
         nlohmann::json cheatingArray = nlohmann::json::array();
-        for (const auto& [pairKey, pairData] : relMgr.GetAllRelationshipPairs()) {
-            for (const auto& c : pairData.cheatingRecords) {
-                if (!revealSecrets && IsSecretCheatingRecord(c)) {
-                    continue;
-                }
-                nlohmann::json cObj;
-                cObj["cheaterId"] = FormIDToString(c.cheaterID);
-                cObj["victimId"] = FormIDToString(c.victimID);
-                cObj["affairPartnerId"] = FormIDToString(c.affairPartnerID);
-                cObj["count"] = c.count;
-                cObj["lastTimestamp"] = c.lastTimestamp;
-                cObj["isSecret"] = c.isSecret;
-                cObj["affairType"] = static_cast<uint8_t>(c.affairType);
-                cObj["affairStatus"] = static_cast<uint8_t>(c.affairStatus);
-                cObj["affairStage"] = static_cast<uint8_t>((c.victimID == kPlayerFormID) ? c.affairStage : AffairStage::Physical);
-                cheatingArray.push_back(cObj);
-            }
+        for (const auto& affair : view.GetAllVisibleAffairs()) {
+            nlohmann::json cObj;
+            cObj["cheaterId"] = FormIDToString(affair.cheater.raw());
+            cObj["victimId"] = FormIDToString(affair.deceivedPartner.raw());
+            cObj["affairPartnerId"] = FormIDToString(affair.paramour.raw());
+            cObj["count"] = affair.incidentCount;
+            cObj["lastTimestamp"] = affair.lastTimestamp;
+            cObj["isSecret"] = affair.isSecret;
+            cObj["affairType"] = static_cast<uint8_t>(affair.affairType);
+            cObj["affairStatus"] = static_cast<uint8_t>(affair.affairStatus);
+            cObj["affairStage"] = static_cast<uint8_t>(
+                (affair.deceivedPartner.raw() == kPlayerFormID) ? affair.effectiveAffairStage : State::AffairStage::Physical);
+            cheatingArray.push_back(std::move(cObj));
         }
-        data["cheatingRecords"] = cheatingArray;
+        data["cheatingRecords"] = std::move(cheatingArray);
 
         // Affection Data
         nlohmann::json affArray = nlohmann::json::array();
-        for (auto formID : allRegistered) {
+        for (const auto& [refId, actorProfile] : view.Actors().AllProfiles()) {
+            (void)actorProfile;
+            if (refId.raw() == 0) continue;
             nlohmann::json affObj;
-            affObj["formId"] = FormIDToString(formID);
-            affObj["permanent"] = affSvc.GetPermanentAffection(formID);
+            affObj["formId"] = FormIDToString(refId.raw());
+            affObj["permanent"] = view.Affection().GetPermanent(State::ActorId{ refId.raw() });
             affObj["decayMultiplier"] = RoundFloat(affSvc.GetDecayMultiplier());
-            affObj["daysSinceLastInteraction"] = std::round(affSvc.GetDaysSinceLastAffection(formID));
-            affArray.push_back(affObj);
+            affObj["daysSinceLastInteraction"] = std::round(affSvc.GetDaysSinceLastAffection(refId.raw()));
+            affArray.push_back(std::move(affObj));
         }
-        data["affectionData"] = affArray;
+        data["affectionData"] = std::move(affArray);
 
         // Settings snapshot
         data["settings"] = BuildSettingsJson();
@@ -1254,10 +857,10 @@ namespace MARAS {
                 hObj["formId"] = FormIDToString(houseID);
                 hObj["name"] = houseName;
                 hObj["locationName"] = "";
-                homesArray.push_back(hObj);
+                homesArray.push_back(std::move(hObj));
             }
         }
-        data["playerHomes"] = homesArray;
+        data["playerHomes"] = std::move(homesArray);
 
         std::string jsonStr = data.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("receiveMARASOverview", jsonStr.c_str());
@@ -1270,105 +873,10 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendNPCList() {
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        const bool revealSecrets = ShouldRevealSecretsInUI();
-        nlohmann::json list = nlohmann::json::array();
-        std::unordered_set<RE::FormID> added;
-
-        if (added.insert(kPlayerFormID).second) {
-            list.push_back(BuildNPCProfileJson(kPlayerFormID));
-        }
-
-        for (auto formID : relMgr.GetAllRegisteredNPCs()) {
-            if (added.insert(formID).second) {
-                list.push_back(BuildNPCProfileJson(formID));
-            }
-        }
-        if (cachedChildRefIDs.empty()) {
-            for (const auto& entry : NPCIndex::GetSingleton().GetAllEntries(NPCFilter::ChildOnly)) {
-                if (entry.refFormID != 0) {
-                    cachedChildRefIDs.insert(entry.refFormID);
-                }
-            }
-        }
-        for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
-            if (IsUnannouncedSecretPregnancyHiddenInUI(cEntry, revealSecrets)) {
-                continue;
-            }
-            const RE::FormID presFatherID = ResolveEffectivePresumedFatherForUI(relMgr, cEntry);
-            const ChildRegistryEntry visibleChild = MaskChildEntryForUI(cEntry, presFatherID, revealSecrets);
-
-            if (visibleChild.guardianAID != 0 && visibleChild.guardianAID != kPlayerFormID && added.insert(visibleChild.guardianAID).second) {
-                list.push_back(BuildNPCProfileJson(visibleChild.guardianAID));
-            }
-            if (visibleChild.guardianBID != 0 && visibleChild.guardianBID != kPlayerFormID && added.insert(visibleChild.guardianBID).second) {
-                list.push_back(BuildNPCProfileJson(visibleChild.guardianBID));
-            }
-            if (visibleChild.bioMotherID != 0 && visibleChild.bioMotherID != kPlayerFormID && added.insert(visibleChild.bioMotherID).second) {
-                list.push_back(BuildNPCProfileJson(visibleChild.bioMotherID));
-            }
-            if (visibleChild.bioFatherID != 0 && visibleChild.bioFatherID != kPlayerFormID && visibleChild.bioFatherID != kUnknownFatherFormID && added.insert(visibleChild.bioFatherID).second) {
-                list.push_back(BuildNPCProfileJson(visibleChild.bioFatherID));
-            }
-            if (visibleChild.presumedFatherID != 0 && visibleChild.presumedFatherID != kPlayerFormID && added.insert(visibleChild.presumedFatherID).second) {
-                list.push_back(BuildNPCProfileJson(visibleChild.presumedFatherID));
-            }
-            if (cID != 0) {
-                cachedChildRefIDs.insert(cID);
-                if (added.insert(cID).second) {
-                    nlohmann::json childObj = BuildNPCProfileJson(cID);
-                    bool isChild = (cEntry.stage != ChildStage::Adult);
-                    childObj["isChild"] = isChild;
-                    std::string currentName = GetJsonString(childObj, "name");
-                    if ((currentName.empty() || currentName.rfind("NPC_", 0) == 0) && !cEntry.name.empty()) {
-                        childObj["name"] = cEntry.name;
-                    }
-                    std::string currentRace = GetJsonString(childObj, "race");
-                    if (currentRace.empty() || currentRace == "Nord") {
-                        RE::FormID motherID = relMgr.GetBioMother(cID);
-                        RE::FormID parentFormID = motherID != 0 ? motherID :
-                            (visibleChild.bioFatherID != 0 && visibleChild.bioFatherID != kUnknownFatherFormID ? visibleChild.bioFatherID : 0);
-                        if (parentFormID != 0) {
-                            childObj["race"] = ActorSvc::GetRaceName(parentFormID);
-                        }
-                    }
-                    if (isChild) {
-                        uint8_t childGender = relMgr.GetChildGender(cID);
-                        childObj["gender"] = (cEntry.stage == ChildStage::Unborn || childGender == 2) ? "unknown" : ((childGender == 1) ? "female" : "male");
-                    }
-                    list.push_back(childObj);
-                }
-            }
-        }
-        for (const auto& [pairKey, pairData] : relMgr.GetAllRelationshipPairs()) {
-            for (const auto& c : pairData.cheatingRecords) {
-                if (!revealSecrets && IsSecretCheatingRecord(c)) {
-                    continue;
-                }
-                if (c.cheaterID != 0 && c.cheaterID != kPlayerFormID && added.insert(c.cheaterID).second) {
-                    list.push_back(BuildNPCProfileJson(c.cheaterID));
-                }
-                if (c.victimID != 0 && c.victimID != kPlayerFormID && added.insert(c.victimID).second) {
-                    list.push_back(BuildNPCProfileJson(c.victimID));
-                }
-                if (c.affairPartnerID != 0 && c.affairPartnerID != kPlayerFormID && added.insert(c.affairPartnerID).second) {
-                    list.push_back(BuildNPCProfileJson(c.affairPartnerID));
-                }
-            }
-        }
-
-        for (auto childID : cachedChildRefIDs) {
-            if (childID != 0 && added.insert(childID).second) {
-                if (auto cOpt = relMgr.GetChildEntry(childID); cOpt && IsUnannouncedSecretPregnancyHiddenInUI(*cOpt, revealSecrets)) {
-                    continue;
-                }
-                nlohmann::json childObj = BuildNPCProfileJson(childID);
-                childObj["isChild"] = true;
-                uint8_t childGender = relMgr.GetChildGender(childID);
-                childObj["gender"] = (childGender == 2) ? "unknown" : ((childGender == 1) ? "female" : "male");
-                list.push_back(childObj);
-            }
-        }
+        const auto view = MakeDashboardView();
+        const auto visibleChildren = view.GetVisibleChildren();
+        nlohmann::json list = BuildVisibleProfilesArray(
+            view, visibleChildren, [this, &view](RE::FormID id) { return BuildNPCProfileJson(id, view); });
 
         std::string jsonStr = list.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("receiveNPCList", jsonStr.c_str());
@@ -1376,42 +884,35 @@ namespace MARAS {
 
     void PrismaUIDataBridge::SendNPCDetail(RE::FormID npcFormID) {
         if (npcFormID == 0) return;
-        lastRequestedDetailNpcID_ = npcFormID;
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        lastRequestedDetailNpcID_.store(npcFormID, std::memory_order_relaxed);
+        const auto view = MakeDashboardView();
         auto& affSvc = AffectionService::GetSingleton();
-        auto& hierMgr = SpouseHierarchyManager::GetSingleton();
 
-        const bool revealSecrets = ShouldRevealSecretsInUI();
-
-        nlohmann::json detail = BuildNPCProfileJson(npcFormID);
+        nlohmann::json detail = BuildNPCProfileJson(npcFormID, view);
         detail["formId"] = FormIDToString(npcFormID);
 
         std::string actorName = ActorSvc::GetName(npcFormID);
-        if (auto childOpt = relMgr.GetChildEntry(npcFormID); childOpt.has_value() && !childOpt->name.empty()) {
+        if (const auto childOpt = view.GetPerceivedChild(State::ChildId{ npcFormID });
+            childOpt.has_value() && !childOpt->name.empty()) {
             actorName = childOpt->name;
         }
         if (!actorName.empty() && actorName.rfind("NPC_", 0) != 0) {
             detail["name"] = actorName;
         }
 
-        detail["affection"]["permanent"] = affSvc.GetPermanentAffection(npcFormID);
+        detail["affection"]["permanent"] = view.Affection().GetPermanent(State::ActorId{ npcFormID });
         detail["affection"]["decayMultiplier"] = RoundFloat(affSvc.GetDecayMultiplier());
         detail["affection"]["daysSinceLastInteraction"] = std::round(affSvc.GetDaysSinceLastAffection(npcFormID));
 
-        detail["hierarchyRank"] = hierMgr.GetRank(npcFormID);
-        RelationshipStatus visibleStatus = relMgr.GetRelationshipStatus(npcFormID);
-        if (!revealSecrets && npcFormID != kPlayerFormID) {
-            const auto secretIndex = SecretAffairPairIndex::Build(relMgr);
-            const auto relData = relMgr.GetNPCData(npcFormID, kPlayerFormID);
-            const bool rawIsOpen = relData ? relData->isOpen : false;
-            const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
-            if (auto maskedOpt = MaskRelationshipPairForUI(
-                    npcFormID, kPlayerFormID, visibleStatus, rawIsOpen, rawHistory, revealSecrets, secretIndex)) {
-                visibleStatus = maskedOpt->status;
-            }
+        detail["hierarchyRank"] = view.Hierarchy().GetRank(State::ActorId{ npcFormID });
+        State::RelationshipStatus visibleStatus = State::RelationshipStatus::Unknown;
+        State::RelationshipStatus originalStatus = State::RelationshipStatus::Unknown;
+        if (const auto edge = view.GetPerceivedPair(State::ActorId{ kPlayerFormID }, State::ActorId{ npcFormID })) {
+            visibleStatus = edge->status;
+            originalStatus = edge->originalStatus;
         }
         detail["status"] = static_cast<uint8_t>(visibleStatus);
-        detail["originalStatus"] = static_cast<uint8_t>(relMgr.GetOriginalRelationshipStatus(npcFormID, kPlayerFormID));
+        detail["originalStatus"] = static_cast<uint8_t>(originalStatus);
 
         std::string jsonStr = detail.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("receiveNPCDetail", jsonStr.c_str());
@@ -1618,146 +1119,149 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnStatusChanged(RE::FormID actorA, RE::FormID actorB, uint8_t status) {
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        const bool revealSecrets = ShouldRevealSecretsInUI();
-        const auto relData = relMgr.GetNPCData(actorA, actorB);
-        uint8_t visibleStatus = status;
-        bool visibleIsOpen = relData ? relData->isOpen : false;
-
-        if (!revealSecrets) {
-            const auto secretIndex = SecretAffairPairIndex::Build(relMgr);
-            const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
-            auto maskedOpt = MaskRelationshipPairForUI(
-                actorA,
-                actorB,
-                static_cast<RelationshipStatus>(status),
-                visibleIsOpen,
-                rawHistory,
-                revealSecrets,
-                secretIndex);
-            if (!maskedOpt.has_value()) {
-                return;
-            }
-            visibleStatus = static_cast<uint8_t>(maskedOpt->status);
-            visibleIsOpen = maskedOpt->isOpen;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto view = Projection::PerspectiveView::ForDashboard(
+            worldSnap,
+            State::SpatialSnapshotStore::GetSingleton().Snapshot(),
+            &GetEngineWerewolfStateProvider());
+        const auto* rawEdge = worldSnap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+        const auto edge = view.GetPerceivedPair(State::ActorId{ actorA }, State::ActorId{ actorB });
+        if (rawEdge != nullptr && !edge.has_value()) {
+            return;
         }
+
+        const uint8_t visibleStatus = edge.has_value() ? static_cast<uint8_t>(edge->status) : status;
+        const uint8_t originalStatus = edge.has_value()
+            ? static_cast<uint8_t>(edge->originalStatus)
+            : static_cast<uint8_t>(State::RelationshipStatus::Unknown);
 
         nlohmann::json data;
         data["actorA"] = FormIDToString(actorA);
         data["actorB"] = FormIDToString(actorB);
         data["status"] = visibleStatus;
-        data["originalStatus"] = static_cast<uint8_t>(relMgr.GetOriginalRelationshipStatus(actorA, actorB));
-        if (relData || !revealSecrets) {
-            data["isOpen"] = visibleIsOpen;
+        data["originalStatus"] = originalStatus;
+        if (edge.has_value() || !view.Settings().revealSecretsInUI) {
+            data["isOpen"] = edge.has_value() ? edge->isOpen : false;
         }
         if (actorA != 0) {
-            data["actorAProfile"] = BuildNPCProfileJson(actorA);
+            data["actorAProfile"] = BuildNPCProfileJson(actorA, view);
         }
         if (actorB != 0) {
-            data["actorBProfile"] = BuildNPCProfileJson(actorB);
+            data["actorBProfile"] = BuildNPCProfileJson(actorB, view);
         }
         std::string jsonStr = data.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("onStatusChanged", jsonStr.c_str());
     }
 
     void PrismaUIDataBridge::OnHierarchyChanged() {
-        auto& hierMgr = SpouseHierarchyManager::GetSingleton();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
         nlohmann::json ranks = nlohmann::json::array();
-        ranks.push_back(FormIDToString(hierMgr.GetSpouseByRank(0)));
-        ranks.push_back(FormIDToString(hierMgr.GetSpouseByRank(1)));
-        ranks.push_back(FormIDToString(hierMgr.GetSpouseByRank(2)));
+        for (std::size_t i = 0; i < State::SpouseHierarchyTable::kSlotCount; ++i) {
+            ranks.push_back(FormIDToString(worldSnap->hierarchy->GetSpouseAtSlot(i).raw()));
+        }
         nlohmann::json payload;
         payload["ranks"] = std::move(ranks);
         std::string jsonStr = payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("onHierarchyChanged", jsonStr.c_str());
     }
 
-    nlohmann::json PrismaUIDataBridge::BuildChildJson(const ChildRegistryEntry& entry) {
-        const bool revealSecrets = ShouldRevealSecretsInUI();
-        const auto& relMgr = NPCRelationshipManager::GetSingleton();
-        const RE::FormID resolvedPresumedFatherID = ResolveEffectivePresumedFatherForUI(relMgr, entry);
-        const ChildRegistryEntry visibleEntry = MaskChildEntryForUI(entry, resolvedPresumedFatherID, revealSecrets);
-        const RE::FormID visiblePresumedFatherID = revealSecrets ? resolvedPresumedFatherID : visibleEntry.presumedFatherID;
+    nlohmann::json PrismaUIDataBridge::BuildChildJson(
+        const Projection::PerceivedChildLineage& child,
+        const Projection::PerspectiveView& view) {
+        const RE::FormID childID = child.childId.raw();
+        const RE::FormID bioFatherID =
+            (!child.perceivedBioFather.IsNull() && child.perceivedBioFather.raw() != kUnknownFatherFormID)
+                ? child.perceivedBioFather.raw()
+                : 0;
+        const RE::FormID visiblePresumedFatherID = child.presumedFather.raw();
 
         nlohmann::json cObj;
-        cObj["childId"] = FormIDToString(visibleEntry.childID);
-        std::string cName = visibleEntry.name;
+        cObj["childId"] = FormIDToString(childID);
+        std::string cName = child.name;
         if (cName.empty() || cName.rfind("NPC_", 0) == 0) {
-            cName = ActorSvc::GetName(visibleEntry.childID);
+            cName = ActorSvc::GetName(childID);
         }
         cObj["name"] = cName;
-        cObj["timestamp"] = visibleEntry.timestamp;
-        cObj["isAdopted"] = visibleEntry.isAdopted;
-        cObj["guardianAId"] = visibleEntry.guardianAID != 0 ? FormIDToString(visibleEntry.guardianAID) : "";
-        cObj["guardianBId"] = visibleEntry.guardianBID != 0 ? FormIDToString(visibleEntry.guardianBID) : "";
-        cObj["guardianAName"] = visibleEntry.guardianAID != 0 ? ActorSvc::GetName(visibleEntry.guardianAID) : "";
-        cObj["guardianBName"] = visibleEntry.guardianBID != 0 ? ActorSvc::GetName(visibleEntry.guardianBID) : "";
-        cObj["bioMotherId"] = visibleEntry.bioMotherID != 0 ? FormIDToString(visibleEntry.bioMotherID) : "";
-        cObj["bioFatherId"] = (visibleEntry.bioFatherID != 0 && visibleEntry.bioFatherID != kUnknownFatherFormID) ? FormIDToString(visibleEntry.bioFatherID) : "";
-        std::string bioMotherName = visibleEntry.bioMotherID != 0 ? ActorSvc::GetName(visibleEntry.bioMotherID) : "";
-        std::string bioFatherName = (visibleEntry.bioFatherID != 0 && visibleEntry.bioFatherID != kUnknownFatherFormID)
-                                        ? ActorSvc::GetName(visibleEntry.bioFatherID)
-                                        : "";
-        if (bioFatherName.empty() && !visibleEntry.paternitySecret.bioFatherName.empty()) {
-            bioFatherName = visibleEntry.paternitySecret.bioFatherName;
+        cObj["timestamp"] = child.timestamp;
+        cObj["isAdopted"] = child.isAdopted;
+        cObj["guardianAId"] = !child.guardians.slotA.IsNull() ? FormIDToString(child.guardians.slotA.raw()) : "";
+        cObj["guardianBId"] = !child.guardians.slotB.IsNull() ? FormIDToString(child.guardians.slotB.raw()) : "";
+        cObj["guardianAName"] = !child.guardians.slotA.IsNull() ? ActorSvc::GetName(child.guardians.slotA.raw()) : "";
+        cObj["guardianBName"] = !child.guardians.slotB.IsNull() ? ActorSvc::GetName(child.guardians.slotB.raw()) : "";
+        cObj["bioMotherId"] = !child.bioMother.IsNull() ? FormIDToString(child.bioMother.raw()) : "";
+        cObj["bioFatherId"] = bioFatherID != 0 ? FormIDToString(bioFatherID) : "";
+        std::string bioMotherName = !child.bioMother.IsNull() ? ActorSvc::GetName(child.bioMother.raw()) : "";
+        std::string bioFatherName = bioFatherID != 0 ? ActorSvc::GetName(bioFatherID) : "";
+        if (bioFatherName.empty() && !child.perceivedBioFatherFallbackName.empty()) {
+            bioFatherName = child.perceivedBioFatherFallbackName;
         }
         cObj["bioMotherName"] = bioMotherName;
         cObj["bioFatherName"] = bioFatherName;
         cObj["presumedFatherId"] = visiblePresumedFatherID != 0 ? FormIDToString(visiblePresumedFatherID) : "";
         cObj["presumedFatherName"] = visiblePresumedFatherID != 0 ? ActorSvc::GetName(visiblePresumedFatherID) : "";
-        cObj["conceptionTimestamp"] = visibleEntry.conceptionTimestamp;
-        cObj["birthTimestamp"] = visibleEntry.birthTimestamp;
+        cObj["conceptionTimestamp"] = child.conceptionTimestamp;
+        cObj["birthTimestamp"] = child.birthTimestamp;
 
         std::string stageStr = "child";
-        switch (visibleEntry.stage) {
-            case ChildStage::Unborn:   stageStr = "unborn"; break;
-            case ChildStage::Infant:   stageStr = "infant"; break;
-            case ChildStage::Child:    stageStr = "child"; break;
-            case ChildStage::Training: stageStr = "training"; break;
-            case ChildStage::Adult:    stageStr = "adult"; break;
+        switch (child.stage) {
+            case State::ChildStage::Unborn:   stageStr = "unborn"; break;
+            case State::ChildStage::Infant:   stageStr = "infant"; break;
+            case State::ChildStage::Child:    stageStr = "child"; break;
+            case State::ChildStage::Training: stageStr = "training"; break;
+            case State::ChildStage::Adult:    stageStr = "adult"; break;
         }
         cObj["stage"] = stageStr;
 
-        auto* actor = HasPhysicalActor(visibleEntry.childID)
-            ? NPCIndex::GetSingleton().GetActorFromFormId(visibleEntry.childID)
+        auto* actor = HasPhysicalActor(childID)
+            ? NPCIndex::GetSingleton().GetActorFromFormId(childID)
             : nullptr;
-        bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
-        bool isEphemeral = !hasRealActor || (visibleEntry.stage == ChildStage::Unborn) || (visibleEntry.stage == ChildStage::Infant) || (visibleEntry.stage == ChildStage::Training);
+        const bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
+        const bool isEphemeral = !hasRealActor ||
+            (child.stage == State::ChildStage::Unborn) ||
+            (child.stage == State::ChildStage::Infant) ||
+            (child.stage == State::ChildStage::Training);
 
         cObj["hasRefID"] = hasRealActor;
         cObj["isEphemeral"] = isEphemeral;
-        if (!visibleEntry.trainingLocation.empty()) {
-            cObj["trainingLocation"] = visibleEntry.trainingLocation;
+        if (!child.trainingLocation.empty()) {
+            cObj["trainingLocation"] = child.trainingLocation;
         }
-        int32_t resolvedChildTrainIdx = visibleEntry.trainingClassIndex;
-        if (!AdultChildProgression::IsValidTrainingClass(resolvedChildTrainIdx) && !visibleEntry.trainingLocation.empty()) {
-            resolvedChildTrainIdx = AdultChildProgression::FindTrainingClassByLocation(visibleEntry.trainingLocation);
+        int32_t resolvedChildTrainIdx = child.trainingClassIndex;
+        if (!AdultChildProgression::IsValidTrainingClass(resolvedChildTrainIdx) && !child.trainingLocation.empty()) {
+            resolvedChildTrainIdx = AdultChildProgression::FindTrainingClassByLocation(child.trainingLocation);
         }
         if (AdultChildProgression::IsValidTrainingClass(resolvedChildTrainIdx)) {
             cObj["trainingClassIndex"] = resolvedChildTrainIdx;
             cObj["trainingClassName"] = std::string(NPCRelationshipManager::GetTrainingClassName(resolvedChildTrainIdx));
         }
-        if (visibleEntry.trainingStartGameDay >= 0.0f) {
-            cObj["trainingStartGameDay"] = RoundFloat(visibleEntry.trainingStartGameDay);
+        if (child.trainingStartGameDay >= 0.0f) {
+            cObj["trainingStartGameDay"] = RoundFloat(child.trainingStartGameDay);
         }
-        cObj["isBiologicalChild"] = visibleEntry.isBiologicalChild;
-        cObj["hasBeastblood"] = visibleEntry.hasBeastblood;
-        cObj["trainingDiscounts"] = AdultChildProgression::GetSingleton().BuildChildTrainingDiscountsJson(visibleEntry);
-        cObj["isSecret"] = visibleEntry.paternitySecret.HasActiveSecret();
-        cObj["isSecretForBioFather"] = visibleEntry.paternitySecret.isSecretForBioFather;
-        cObj["isSecretForPartner"] = visibleEntry.paternitySecret.isSecretForPartner;
-        cObj["isPregnancySecretForPartner"] = visibleEntry.paternitySecret.isPregnancySecretForPartner;
-        cObj["hasPhenotypeMismatch"] = visibleEntry.paternitySecret.hasPhenotypeMismatch;
-        cObj["discoveredByPartner"] = visibleEntry.paternitySecret.discoveredByPartner;
-        cObj["discoveredByBioFather"] = visibleEntry.paternitySecret.discoveredByBioFather;
+        cObj["isBiologicalChild"] = child.isBiologicalChild;
+        cObj["hasBeastblood"] = child.hasBeastblood;
+        cObj["trainingDiscounts"] = AdultChildProgression::GetSingleton().BuildChildTrainingDiscountsJson(child.childId, view);
+
+        const bool hasVisibleSecretMeta = child.paternitySecret.has_value();
+        const bool isActiveSecret = hasVisibleSecretMeta &&
+            !child.paternitySecret->discovered &&
+            (child.paternitySecret->isSecretForBioFather ||
+             child.paternitySecret->isSecretForPartner ||
+             child.paternitySecret->isPregnancySecretForPartner);
+        cObj["isSecret"] = isActiveSecret;
+        cObj["isSecretForBioFather"] = hasVisibleSecretMeta && child.paternitySecret->isSecretForBioFather;
+        cObj["isSecretForPartner"] = hasVisibleSecretMeta && child.paternitySecret->isSecretForPartner;
+        cObj["isPregnancySecretForPartner"] = hasVisibleSecretMeta && child.paternitySecret->isPregnancySecretForPartner;
+        cObj["hasPhenotypeMismatch"] = hasVisibleSecretMeta && child.paternitySecret->hasPhenotypeMismatch;
+        cObj["discoveredByPartner"] = hasVisibleSecretMeta && child.paternitySecret->discoveredByPartner;
+        cObj["discoveredByBioFather"] = hasVisibleSecretMeta && child.paternitySecret->discoveredByBioFather;
 
         int childSex = 0;
         if (hasRealActor && actor->GetActorBase()) {
             childSex = (actor->GetActorBase()->GetSex() == RE::SEX::kFemale) ? 1 : 0;
         } else {
-            childSex = visibleEntry.gender;
+            childSex = child.gender;
         }
-        if (visibleEntry.stage == ChildStage::Unborn || childSex == 2) {
+        if (child.stage == State::ChildStage::Unborn || childSex == 2) {
             cObj["gender"] = "unknown";
         } else {
             cObj["gender"] = (childSex == 1) ? "female" : "male";
@@ -1766,20 +1270,17 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnChildUpdated(const ChildRegistryEntry& entry) {
-        const bool revealSecrets = ShouldRevealSecretsInUI();
-        if (IsUnannouncedSecretPregnancyHiddenInUI(entry, revealSecrets)) {
+        const auto view = MakeDashboardView();
+        const auto perceivedChild = view.GetPerceivedChild(State::ChildId{ entry.childID });
+        if (!perceivedChild.has_value()) {
             return;
         }
-        if (entry.childID != 0) {
-            cachedChildRefIDs.insert(entry.childID);
-        }
-        nlohmann::json cObj = BuildChildJson(entry);
+        nlohmann::json cObj = BuildChildJson(*perceivedChild, view);
         std::string jsonStr = cObj.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("onChildUpdated", jsonStr.c_str());
     }
 
     void PrismaUIDataBridge::OnChildRemoved(RE::FormID childID) {
-        cachedChildRefIDs.erase(childID);
         std::string formStr = FormIDToString(childID);
         nlohmann::json payload;
         payload["childId"] = formStr;
@@ -1788,10 +1289,6 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnChildPromoted(RE::FormID oldID, RE::FormID newID) {
-        cachedChildRefIDs.erase(oldID);
-        if (newID != 0) {
-            cachedChildRefIDs.insert(newID);
-        }
         nlohmann::json payload;
         payload["oldId"] = FormIDToString(oldID);
         payload["newId"] = FormIDToString(newID);
@@ -2051,8 +1548,9 @@ namespace MARAS {
         }
         if (updated && key == "revealSecretsInUI") {
             SendOverviewData();
-            if (lastRequestedDetailNpcID_ != 0) {
-                SendNPCDetail(lastRequestedDetailNpcID_);
+            const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
+            if (detailNpcId != 0) {
+                SendNPCDetail(detailNpcId);
             }
         } else {
             SendSettingsData();
@@ -2319,7 +1817,7 @@ namespace MARAS {
         if (payload.contains("bioFatherId")) {
             RE::FormID bioFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "bioFatherId")));
             changed |= mgr.SetBioFather(childID, bioFID);
-            if (!ShouldRevealSecretsInUI() && !hasExplicitPresumedInPayload) {
+            if (!Settings::GetSingleton().Snapshot()->revealSecretsInUI && !hasExplicitPresumedInPayload) {
                 changed |= mgr.SetPresumedFather(childID, 0);
                 changed |= mgr.SetPaternitySecretEdges(childID, false, false);
             }
@@ -2539,11 +2037,12 @@ namespace MARAS {
             std::string timeStr = ssTime.str();
             std::string fileTimeStr = ssFile.str();
 
-            const bool revealSecrets = ShouldRevealSecretsInUI();
+            const auto view = MakeDashboardView();
+            const bool revealSecrets = view.Settings().revealSecretsInUI;
             meta["dumpTimestamp"] = timeStr;
             meta["serializationVersion"] = MARAS::Serialization::kDataVersion;
             meta["hasSkyrimNet"] = IsSkyrimNetAvailable();
-            meta["simulateNoSkyrimNet"] = Settings::GetSingleton().GetSimulateNoSkyrimNet();
+            meta["simulateNoSkyrimNet"] = view.Settings().simulateNoSkyrimNet;
             meta["secretsMasked"] = !revealSecrets;
             if (auto calendar = RE::Calendar::GetSingleton()) {
                 meta["gameDaysPassed"] = calendar->GetDaysPassed();
@@ -2561,12 +2060,7 @@ namespace MARAS {
             root["spouseHierarchy"] = SpouseHierarchyManager::GetSingleton().DumpJson();
 
             // 4. NPC Relationship Manager (Profiles, Pairs, Children Registry, Pending)
-            auto& relMgr = NPCRelationshipManager::GetSingleton();
-            nlohmann::json rmDump = relMgr.DumpJson();
-            if (!revealSecrets) {
-                SanitizeRelationshipManagerDumpForUI(rmDump, relMgr);
-            }
-            root["relationshipManager"] = std::move(rmDump);
+            root["relationshipManager"] = NPCRelationshipManager::GetSingleton().DumpJson(view);
 
             // 5. Affection Service
             root["affectionService"] = AffectionService::GetSingleton().DumpJson();
@@ -2581,20 +2075,16 @@ namespace MARAS {
             root["playerChildrenService"] = PlayerChildrenService::GetSingleton().DumpJson();
 
             // 9. Matchmaking Service
-            nlohmann::json mmDump = MatchmakingService::GetSingleton().DumpJson();
-            if (!revealSecrets && mmDump.is_object() && mmDump.contains("lastPlayerPartnerCheatingDay")) {
-                mmDump["lastPlayerPartnerCheatingDay"] = -1.0f;
-            }
-            root["matchmakingService"] = std::move(mmDump);
+            root["matchmakingService"] = MatchmakingService::GetSingleton().DumpJson(view);
 
             // 10. Deceased Registry
-            root["deceasedRegistry"] = DeceasedRegistry::GetSingleton().DumpJson();
+            root["deceasedRegistry"] = DeceasedRegistry::GetSingleton().DumpJson(view);
 
             // 11. Banter Coordinator Service
-            root["banterCoordinator"] = BanterCoordinatorService::GetSingleton().DumpJson();
+            root["banterCoordinator"] = BanterCoordinatorService::GetSingleton().DumpJson(view);
 
             // 12. Adult Child Travel Service
-            root["adultChildTravel"] = AdultChildTravelService::GetSingleton().DumpJson();
+            root["adultChildTravel"] = AdultChildTravelService::GetSingleton().DumpJson(view);
 
             std::filesystem::path dumpsDir = "Data/SKSE/Plugins/MARAS/dumps";
             std::error_code ec;

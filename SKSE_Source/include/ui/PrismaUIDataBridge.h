@@ -1,8 +1,14 @@
 #pragma once
 
 #include "PCH.h"
+#include <atomic>
 
 namespace MARAS {
+
+    namespace Projection {
+        class PerspectiveView;
+        struct PerceivedChildLineage;
+    }
 
     class PrismaUIDataBridge {
     public:
@@ -33,7 +39,6 @@ namespace MARAS {
         void OnChildUpdated(const struct ChildRegistryEntry& entry);
         void OnChildRemoved(RE::FormID childID);
         void OnChildPromoted(RE::FormID oldID, RE::FormID newID);
-        nlohmann::json BuildChildJson(const struct ChildRegistryEntry& entry);
 
         void Revert();
 
@@ -84,11 +89,11 @@ namespace MARAS {
 
         // Helper JSON builders
         nlohmann::json BuildNPCProfileJson(RE::FormID formID);
+        nlohmann::json BuildNPCProfileJson(RE::FormID formID, const Projection::PerspectiveView& view);
+        nlohmann::json BuildChildJson(const Projection::PerceivedChildLineage& child, const Projection::PerspectiveView& view);
         nlohmann::json BuildSettingsJson();
 
-        // Cached placed child references discovered across indexed forms
-        std::unordered_set<RE::FormID> cachedChildRefIDs;
-        RE::FormID lastRequestedDetailNpcID_ = 0;
+        std::atomic<RE::FormID> lastRequestedDetailNpcID_{ 0 };
     };
 
 }  // namespace MARAS

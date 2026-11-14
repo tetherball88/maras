@@ -4,6 +4,10 @@
 
 namespace MARAS {
 
+    namespace Projection {
+        class PerspectiveView;
+    }
+
     struct DeceasedPartnerSnapshot {
         RE::FormID partnerBaseID{ 0 };
         RE::FormID partnerRefID{ 0 };
@@ -92,6 +96,7 @@ namespace MARAS {
 
         // Data dump
         [[nodiscard]] nlohmann::json DumpJson() const;
+        [[nodiscard]] nlohmann::json DumpJson(const Projection::PerspectiveView& view) const;
 
     private:
         DeceasedRegistry() = default;

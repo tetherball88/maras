@@ -77,6 +77,12 @@ namespace MARAS::ActorSvc {
     RE::TESNPC* GetActorBase(RE::FormID formID) {
         if (!CanLookupEngineForm(formID)) return nullptr;
 
+        if (auto entry = NPCIndex::GetSingleton().FindByFormID(formID); entry && entry->baseFormID != 0) {
+            if (auto* base = RE::TESForm::LookupByID<RE::TESNPC>(entry->baseFormID); base && !base->IsDeleted()) {
+                return base;
+            }
+        }
+
         if (auto* form = RE::TESForm::LookupByID(formID); form && !form->IsDeleted()) {
             if (auto* npc = form->As<RE::TESNPC>()) {
                 return npc;

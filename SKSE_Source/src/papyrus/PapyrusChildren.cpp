@@ -46,7 +46,6 @@ namespace MARAS::PapyrusInterface {
         if (!parentA) return result;
         RE::FormID pAID = parentA->GetFormID();
         RE::FormID pBID = parentB ? parentB->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         auto childIDs = NPCRelationshipManager::GetSingleton().GetChildren(pAID, pBID);
         for (auto cID : childIDs) {
             if (auto* a = NPCIndex::GetSingleton().GetActorFromFormId(cID)) {
@@ -59,7 +58,6 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::Actor*> GetChildrenOfActor(RE::StaticFunctionTag*, RE::Actor* parent) {
         std::vector<RE::Actor*> result;
         if (!parent) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = NPCRelationshipManager::GetSingleton().GetChildrenOfActor(parent->GetFormID());
         for (auto id : ids) {
             if (auto* a = NPCIndex::GetSingleton().GetActorFromFormId(id)) {
@@ -103,14 +101,12 @@ namespace MARAS::PapyrusInterface {
 
     RE::Actor* GetChildPet(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID petID = PlayerChildrenService::GetSingleton().GetPet(child->GetFormID());
         return petID != 0 ? NPCIndex::GetSingleton().GetActorFromFormId(petID) : nullptr;
     }
 
     RE::Actor* GetChildForPet(RE::StaticFunctionTag*, RE::Actor* pet) {
         if (!pet) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID childID = PlayerChildrenService::GetSingleton().GetChildForPet(pet->GetFormID());
         return childID != 0 ? NPCIndex::GetSingleton().GetActorFromFormId(childID) : nullptr;
     }
@@ -129,13 +125,11 @@ namespace MARAS::PapyrusInterface {
 
     bool IsChildPetBanned(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsChildPetBanned(child->GetFormID());
     }
 
     bool IsPetBanned(RE::StaticFunctionTag*, RE::Actor* child) {
         RE::FormID childID = child ? child->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsPetBanned(childID);
     }
 
@@ -161,13 +155,11 @@ namespace MARAS::PapyrusInterface {
 
     float GetChildPetRetryTimestamp(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return 0.0f;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().GetPetRetryTimestamp(child->GetFormID());
     }
 
     bool IsPetRetryAvailable(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return true;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsPetRetryAvailable(child->GetFormID());
     }
 
@@ -180,21 +172,18 @@ namespace MARAS::PapyrusInterface {
 
     RE::Actor* GetChildCritter(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID critterID = PlayerChildrenService::GetSingleton().GetCritter(child->GetFormID());
         return critterID != 0 ? NPCIndex::GetSingleton().GetActorFromFormId(critterID) : nullptr;
     }
 
     RE::Actor* GetChildForCritter(RE::StaticFunctionTag*, RE::Actor* critter) {
         if (!critter) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID childID = PlayerChildrenService::GetSingleton().GetChildForCritter(critter->GetFormID());
         return childID != 0 ? NPCIndex::GetSingleton().GetActorFromFormId(childID) : nullptr;
     }
 
     RE::Actor* GetChildForPetOrCritter(RE::StaticFunctionTag*, RE::Actor* petOrCritter) {
         if (!petOrCritter) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID childID = PlayerChildrenService::GetSingleton().GetChildForPetOrCritter(petOrCritter->GetFormID());
         return childID != 0 ? NPCIndex::GetSingleton().GetActorFromFormId(childID) : nullptr;
     }
@@ -213,13 +202,11 @@ namespace MARAS::PapyrusInterface {
 
     bool IsChildCritterBanned(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsChildCritterBanned(child->GetFormID());
     }
 
     bool IsCritterBanned(RE::StaticFunctionTag*, RE::Actor* child) {
         RE::FormID childID = child ? child->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsCritterBanned(childID);
     }
 
@@ -245,13 +232,11 @@ namespace MARAS::PapyrusInterface {
 
     float GetChildCritterRetryTimestamp(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return 0.0f;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().GetCritterRetryTimestamp(child->GetFormID());
     }
 
     bool IsChildCritterRetryAvailable(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return true;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsCritterRetryAvailable(child->GetFormID());
     }
 
@@ -263,14 +248,12 @@ namespace MARAS::PapyrusInterface {
 
     bool IsChildNewlyAdopted(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsNewlyAdopted(child->GetFormID());
     }
 
     bool IsChildPlayerAdopted(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return false;
         RE::FormID childID = child->GetFormID();
-        std::lock_guard lock(GetPapyrusMutex());
         if (NPCRelationshipManager::GetSingleton().IsGuardian(childID, kPlayerFormID)) {
             MARAS_LOG_DEBUG("Child {:08X} has player as guardian", childID);
             return true;
@@ -288,13 +271,11 @@ namespace MARAS::PapyrusInterface {
     }
 
     bool IsChildChestIntroduced(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().IsChildChestIntroduced();
     }
 
     std::vector<RE::Actor*> GetAllPlayerChildren(RE::StaticFunctionTag*) {
         std::vector<RE::Actor*> result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = PlayerChildrenService::GetSingleton().GetAllPlayerChildren(true);
         for (auto id : ids) {
             if (auto* a = NPCIndex::GetSingleton().GetActorFromFormId(id)) {
@@ -307,7 +288,6 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::Actor*> GetChildrenAssignedToHouse(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse) {
         std::vector<RE::Actor*> result;
         if (!playerHouse) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = PlayerChildrenService::GetSingleton().GetChildrenForHouse(playerHouse->GetFormID(), true);
         result.reserve(ids.size());
         for (auto id : ids) {
@@ -320,21 +300,18 @@ namespace MARAS::PapyrusInterface {
 
     RE::Actor* GetNewlyAdoptedChild(RE::StaticFunctionTag*, RE::BGSLocation* loc) {
         if (!loc) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         auto id = PlayerChildrenService::GetSingleton().GetNewlyAdoptedChild(loc->GetFormID());
         return NPCIndex::GetSingleton().GetActorFromFormId(id);
     }
 
     RE::Actor* GetChildWithoutPet(RE::StaticFunctionTag*, RE::BGSLocation* loc) {
         if (!loc) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         auto id = PlayerChildrenService::GetSingleton().GetChildWithoutPet(loc->GetFormID());
         return NPCIndex::GetSingleton().GetActorFromFormId(id);
     }
 
     RE::Actor* GetChildWithoutCritter(RE::StaticFunctionTag*, RE::BGSLocation* loc) {
         if (!loc) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         auto id = PlayerChildrenService::GetSingleton().GetChildWithoutCritter(loc->GetFormID());
         return NPCIndex::GetSingleton().GetActorFromFormId(id);
     }
@@ -342,7 +319,6 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::Actor*> GetChildrenWithoutScene(RE::StaticFunctionTag*, RE::BGSLocation* loc, std::int32_t sceneID) {
         std::vector<RE::Actor*> result;
         if (!loc) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = PlayerChildrenService::GetSingleton().GetChildrenWithoutScene(loc->GetFormID(), sceneID);
         result.reserve(ids.size());
         for (auto id : ids) {
@@ -355,7 +331,6 @@ namespace MARAS::PapyrusInterface {
 
     RE::Actor* GetWeightedRandomChild(RE::StaticFunctionTag*, RE::BGSLocation* loc) {
         if (!loc) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         auto id = PlayerChildrenService::GetSingleton().GetWeightedRandomChild(loc->GetFormID());
         return NPCIndex::GetSingleton().GetActorFromFormId(id);
     }
@@ -368,7 +343,6 @@ namespace MARAS::PapyrusInterface {
 
     bool HasChildPlayedScene(RE::StaticFunctionTag*, RE::Actor* child, std::int32_t sceneID) {
         if (!child) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().HasChildPlayedScene(child->GetFormID(), sceneID);
     }
 
@@ -380,7 +354,6 @@ namespace MARAS::PapyrusInterface {
 
     float GetChildLastInteractionTimestamp(RE::StaticFunctionTag*, RE::Actor* child) {
         if (!child) return 0.0f;
-        std::lock_guard lock(GetPapyrusMutex());
         return PlayerChildrenService::GetSingleton().GetLastInteractionTimestamp(child->GetFormID());
     }
 
@@ -423,7 +396,6 @@ namespace MARAS::PapyrusInterface {
 
     bool IsNPCPregnant(RE::StaticFunctionTag*, RE::Actor* mother) {
         if (!mother) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsNPCPregnant(mother->GetFormID());
     }
 
@@ -452,14 +424,12 @@ namespace MARAS::PapyrusInterface {
 
     int32_t FindUnbornChild(RE::StaticFunctionTag*, RE::Actor* mother) {
         if (!mother) return 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int32_t>(NPCRelationshipManager::GetSingleton().FindUnbornChild(mother->GetFormID()));
     }
 
     std::vector<int32_t> GetUnbornChildren(RE::StaticFunctionTag*, RE::Actor* mother) {
         std::vector<int32_t> result;
         if (!mother) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto unborn = NPCRelationshipManager::GetSingleton().GetUnbornChildren(mother->GetFormID());
         result.reserve(unborn.size());
         for (auto id : unborn) {
@@ -470,7 +440,6 @@ namespace MARAS::PapyrusInterface {
 
     int32_t GetUnbornChildCount(RE::StaticFunctionTag*, RE::Actor* mother) {
         if (!mother) return 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int32_t>(NPCRelationshipManager::GetSingleton().GetUnbornChildren(mother->GetFormID()).size());
     }
 
@@ -511,17 +480,14 @@ namespace MARAS::PapyrusInterface {
     }
 
     bool IsSecretForBioFather(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsSecretForBioFather(static_cast<RE::FormID>(childID));
     }
 
     bool IsSecretForPartner(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsSecretForPartner(static_cast<RE::FormID>(childID));
     }
 
     bool IsPregnancySecretForPartner(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsPregnancySecretForPartner(static_cast<RE::FormID>(childID));
     }
 
@@ -537,7 +503,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     int32_t GetChildStage(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int32_t>(NPCRelationshipManager::GetSingleton().GetChildStage(
             static_cast<RE::FormID>(childID)));
     }
@@ -550,17 +515,14 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::string GetChildTrainingLocation(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().GetChildTrainingLocation(static_cast<RE::FormID>(childID));
     }
 
     int32_t GetChildTrainingClass(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().GetChildTrainingClass(static_cast<RE::FormID>(childID));
     }
 
     int32_t GetChildSavedRaceIndex(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().GetChildSavedRaceIndex(static_cast<RE::FormID>(childID));
     }
 
@@ -575,7 +537,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     int32_t GetChildGender(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int32_t>(NPCRelationshipManager::GetSingleton().GetChildGender(
             static_cast<RE::FormID>(childID)));
     }
@@ -592,7 +553,6 @@ namespace MARAS::PapyrusInterface {
 
     int32_t FindSyntheticChild(RE::StaticFunctionTag*, RE::Actor* mother, std::string name) {
         RE::FormID mID = mother ? mother->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int32_t>(NPCRelationshipManager::GetSingleton().FindSyntheticChild(mID, name));
     }
 
@@ -605,7 +565,6 @@ namespace MARAS::PapyrusInterface {
 
     RE::Actor* GetPrimaryPartner(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID partnerID = NPCRelationshipManager::GetSingleton().GetPrimaryPartner(actor->GetFormID());
         if (partnerID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(partnerID);
@@ -613,7 +572,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     RE::Actor* GetGuardianA(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID gID = NPCRelationshipManager::GetSingleton().GetGuardianA(static_cast<RE::FormID>(childID));
         if (gID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(gID);
@@ -621,7 +579,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     RE::Actor* GetGuardianB(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID gID = NPCRelationshipManager::GetSingleton().GetGuardianB(static_cast<RE::FormID>(childID));
         if (gID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(gID);
@@ -630,7 +587,6 @@ namespace MARAS::PapyrusInterface {
 
     std::vector<RE::Actor*> GetGuardians(RE::StaticFunctionTag*, int32_t childID) {
         std::vector<RE::Actor*> result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto [gA, gB] = NPCRelationshipManager::GetSingleton().GetGuardians(static_cast<RE::FormID>(childID));
         for (auto gID : { gA, gB }) {
             if (gID != 0) {
@@ -646,7 +602,6 @@ namespace MARAS::PapyrusInterface {
 
     RE::Actor* GetCoGuardian(RE::StaticFunctionTag*, int32_t childID, RE::Actor* actor) {
         if (!actor) return nullptr;
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID coID = NPCRelationshipManager::GetSingleton().GetCoGuardian(static_cast<RE::FormID>(childID), actor->GetFormID());
         if (coID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(coID);
@@ -655,12 +610,10 @@ namespace MARAS::PapyrusInterface {
 
     bool IsGuardian(RE::StaticFunctionTag*, int32_t childID, RE::Actor* actor) {
         if (!actor) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsGuardian(static_cast<RE::FormID>(childID), actor->GetFormID());
     }
 
     RE::Actor* GetBioMother(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID mID = NPCRelationshipManager::GetSingleton().GetBioMother(static_cast<RE::FormID>(childID));
         if (mID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(mID);
@@ -668,7 +621,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     RE::Actor* GetBioFather(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID bID = NPCRelationshipManager::GetSingleton().GetBioFather(static_cast<RE::FormID>(childID));
         if (bID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(bID);
@@ -676,7 +628,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     RE::Actor* GetMotherPartner(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID pID = NPCRelationshipManager::GetSingleton().GetMotherPartner(static_cast<RE::FormID>(childID));
         if (pID == 0) return nullptr;
         auto* refr = ActorSvc::GetReference(pID);
@@ -696,14 +647,12 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::string GetChildName(RE::StaticFunctionTag*, int32_t childID) {
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().GetChildName(static_cast<RE::FormID>(childID));
     }
 
     int32_t FindChildPaternitySecret(RE::StaticFunctionTag*, RE::Actor* parent1, RE::Actor* parent2, std::string childName) {
         RE::FormID p1 = parent1 ? parent1->GetFormID() : 0;
         RE::FormID p2 = parent2 ? parent2->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int32_t>(NPCRelationshipManager::GetSingleton().FindChildPaternitySecret(p1, p2, childName));
     }
 
@@ -712,7 +661,6 @@ namespace MARAS::PapyrusInterface {
         RE::FormID mID = mother->GetFormID();
         RE::FormID pID = partner ? partner->GetFormID() : 0;
         RE::FormID bID = bioFather ? bioFather->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().BuildPregnancyAnnouncedMessage(mID, pID, bID, bioFatherName, childCount);
     }
 
@@ -721,7 +669,6 @@ namespace MARAS::PapyrusInterface {
         RE::FormID mID = mother->GetFormID();
         RE::FormID pID = partner ? partner->GetFormID() : 0;
         RE::FormID bID = bioFather ? bioFather->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().BuildPregnancyAnnouncedJson(mID, pID, bID, bioFatherName, childCount);
     }
 
@@ -733,7 +680,6 @@ namespace MARAS::PapyrusInterface {
         for (int32_t id : childIDs) {
             cIDs.push_back(static_cast<RE::FormID>(id));
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().BuildChildBirthMessage(mID, cIDs, maskSecrets);
     }
 
@@ -745,7 +691,6 @@ namespace MARAS::PapyrusInterface {
         for (int32_t id : childIDs) {
             cIDs.push_back(static_cast<RE::FormID>(id));
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().BuildChildBirthJson(mID, cIDs, maskSecrets);
     }
 

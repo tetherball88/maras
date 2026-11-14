@@ -18,8 +18,11 @@
 #include "ui/PrismaUIDataBridge.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/WorldStateLegacyAdapters.h"
 #include "maras/foundation/IRng.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
@@ -1180,10 +1183,10 @@ namespace MARAS {
 
     // Status availability checks
     bool NPCRelationshipManager::IsAvailableForDating(RE::FormID npcFormID) const {
-        if (npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (npcFormID == kPlayerFormID && snap->settings->enablePlayerPolygamy) {
             return true;
         }
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
         for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
             const auto* edge = snap->relationships->FindEdge(key);
             if (edge && IsMainTier(static_cast<RelationshipStatus>(edge->status))) {
@@ -1201,10 +1204,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForEngaged(RE::FormID npcFormID) const {
-        if (npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (npcFormID == kPlayerFormID && snap->settings->enablePlayerPolygamy) {
             return true;
         }
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
         for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
             const auto* edge = snap->relationships->FindEdge(key);
             if (edge &&
@@ -1223,10 +1226,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForMarried(RE::FormID npcFormID) const {
-        if (npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (npcFormID == kPlayerFormID && snap->settings->enablePlayerPolygamy) {
             return true;
         }
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
         for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
             const auto* edge = snap->relationships->FindEdge(key);
             if (edge && edge->status == State::RelationshipStatus::Married) {
@@ -1629,7 +1632,7 @@ namespace MARAS {
 
         bool aIsPlayer = (actorA == kPlayerFormID);
         bool bIsPlayer = (actorB == kPlayerFormID);
-        bool polygamyEnabled = Settings::GetSingleton().GetEnablePolygamy();
+        bool polygamyEnabled = snap->settings->enablePlayerPolygamy;
 
         auto validateActorWithOtherPartners = [&](RE::FormID self, RE::FormID other, bool isPlayer, const std::string& name) -> bool {
             if (isPlayer && polygamyEnabled) {
@@ -4046,26 +4049,31 @@ namespace MARAS {
         MARAS_LOG_INFO("  Temperament: {}", static_cast<int>(profile->temperament));
     }
 
-    nlohmann::json NPCRelationshipManager::DumpJson() const {
+    nlohmann::json NPCRelationshipManager::DumpJson(const Projection::PerspectiveView& view) const {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         nlohmann::json root;
 
-        auto stageToString = [](ChildStage s) -> std::string {
+        auto stageToString = [](State::ChildStage s) -> std::string {
             switch (s) {
-                case ChildStage::Unborn:   return "unborn";
-                case ChildStage::Infant:   return "infant";
-                case ChildStage::Child:    return "child";
-                case ChildStage::Training: return "training";
-                case ChildStage::Adult:    return "adult";
+                case State::ChildStage::Unborn:   return "unborn";
+                case State::ChildStage::Infant:   return "infant";
+                case State::ChildStage::Child:    return "child";
+                case State::ChildStage::Training: return "training";
+                case State::ChildStage::Adult:    return "adult";
             }
             return "child";
+        };
+
+        auto packPairKey = [](State::ActorId a, State::ActorId b) noexcept -> uint64_t {
+            const State::CanonicalPairKey k{ a, b };
+            return (static_cast<uint64_t>(k.first.raw()) << 32) | static_cast<uint64_t>(k.second.raw());
         };
 
         // 1. Registered NPCs & Profiles
         nlohmann::json profilesArray = nlohmann::json::array();
         std::vector<RE::FormID> actorsToExport;
         actorsToExport.push_back(kPlayerFormID);
-        for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
+        for (const auto& [refId, prof] : view.Actors().AllProfiles()) {
             if (prof.isRegisteredAdult && !refId.IsNull() && !refId.IsPlayer()) {
                 actorsToExport.push_back(refId.raw());
             }
@@ -4088,7 +4096,7 @@ namespace MARAS {
                 p["gender"] = (ActorSvc::GetSex(formID) == 1) ? "female" : "male";
             }
 
-            if (const auto* stateProf = snap->actors->Find(State::RefId{ formID })) {
+            if (const auto* stateProf = view.Actors().Find(State::RefId{ formID })) {
                 const NPCProfileData prof = LegacyAdapters::ToLegacyNPCProfile(*stateProf);
                 p["socialClass"] = {
                     {"id", static_cast<uint8_t>(prof.socialClass)},
@@ -4137,12 +4145,18 @@ namespace MARAS {
         }
         root["npcProfiles"] = profilesArray;
 
+        const auto visibleChildren = view.GetVisibleChildren();
+        const auto visibleAffairs = view.GetAllVisibleAffairs();
+
+        std::unordered_map<uint64_t, std::vector<const Projection::PerceivedAffair*>> affairsByCouple;
+        for (const auto& affair : visibleAffairs) {
+            affairsByCouple[packPairKey(affair.cheater, affair.deceivedPartner)].push_back(&affair);
+        }
+
         // 2. Relationship Pairs
         nlohmann::json pairsArray = nlohmann::json::array();
-        for (const auto& [pairKey, edge] : snap->relationships->AllEdges()) {
-            const auto coupleAffairs = snap->affairs->GetForCouplePair(edge.pair);
-            const NPCRelationshipData data = LegacyAdapters::ToLegacyRelationshipData(edge, coupleAffairs);
-            const RelationshipPairKey key(pairKey.first.raw(), pairKey.second.raw());
+        for (const auto& edge : view.GetVisibleRelationshipEdges()) {
+            const RelationshipPairKey key(edge.pair.first.raw(), edge.pair.second.raw());
 
             nlohmann::json pairObj;
             pairObj["actorA"] = {
@@ -4154,20 +4168,20 @@ namespace MARAS {
                 {"name", ActorSvc::GetName(key.actorB)}
             };
             pairObj["status"] = {
-                {"id", static_cast<uint8_t>(data.status)},
-                {"name", Utils::RelationshipStatusToString(data.status)}
+                {"id", static_cast<uint8_t>(edge.status)},
+                {"name", Utils::RelationshipStatusToString(static_cast<RelationshipStatus>(edge.status))}
             };
             pairObj["originalStatus"] = {
-                {"id", static_cast<uint8_t>(data.originalStatus)},
-                {"name", Utils::RelationshipStatusToString(data.originalStatus)}
+                {"id", static_cast<uint8_t>(edge.originalStatus)},
+                {"name", Utils::RelationshipStatusToString(static_cast<RelationshipStatus>(edge.originalStatus))}
             };
-            pairObj["isOpen"] = data.isOpen;
+            pairObj["isOpen"] = edge.isOpen;
 
             // Status history
             nlohmann::json histArray = nlohmann::json::array();
-            for (const auto& h : data.statusHistory) {
+            for (const auto& h : edge.statusHistory) {
                 nlohmann::json hObj;
-                RelationshipStatus fromSt = h.fromStatus;
+                auto fromSt = static_cast<RelationshipStatus>(h.fromStatus);
                 if (h.timestamp < 0 && fromSt == RelationshipStatus::Candidate) {
                     fromSt = RelationshipStatus::Unknown;
                 }
@@ -4177,7 +4191,7 @@ namespace MARAS {
                 };
                 hObj["toStatus"] = {
                     {"id", static_cast<uint8_t>(h.toStatus)},
-                    {"name", Utils::RelationshipStatusToString(h.toStatus)}
+                    {"name", Utils::RelationshipStatusToString(static_cast<RelationshipStatus>(h.toStatus))}
                 };
                 if (std::isnan(h.timestamp) || h.timestamp < 0.0f) {
                     hObj["timestamp"] = -1;
@@ -4185,7 +4199,7 @@ namespace MARAS {
                     hObj["timestamp"] = h.timestamp;
                 }
 
-                RE::FormID initID = h.initiatorFormID;
+                RE::FormID initID = h.initiator.raw();
                 if (initID == 0 || (h.timestamp < 0 && (key.actorA != kPlayerFormID && key.actorB != kPlayerFormID) && initID == kPlayerFormID)) {
                     initID = DetermineDefaultInitiator(key.actorA, key.actorB);
                 }
@@ -4203,66 +4217,83 @@ namespace MARAS {
 
             // Cheating records
             nlohmann::json cheatArray = nlohmann::json::array();
-            for (const auto& c : data.cheatingRecords) {
-                nlohmann::json cObj;
-                cObj["cheater"] = {
-                    {"formId", std::format("{:08X}", c.cheaterID)},
-                    {"name", ActorSvc::GetName(c.cheaterID)}
-                };
-                cObj["victim"] = {
-                    {"formId", std::format("{:08X}", c.victimID)},
-                    {"name", ActorSvc::GetName(c.victimID)}
-                };
-                cObj["affairPartner"] = {
-                    {"formId", std::format("{:08X}", c.affairPartnerID)},
-                    {"name", ActorSvc::GetName(c.affairPartnerID)}
-                };
-                cObj["count"] = c.count;
-                cObj["lastTimestamp"] = c.lastTimestamp;
-                cObj["isSecret"] = c.isSecret;
-                cObj["affairType"] = {
-                    {"id", static_cast<uint8_t>(c.affairType)},
-                    {"name", Utils::AffairTypeToString(c.affairType)}
-                };
-                cObj["affairStatus"] = {
-                    {"id", static_cast<uint8_t>(c.affairStatus)},
-                    {"name", Utils::AffairStatusToString(c.affairStatus)}
-                };
-                cObj["affairStage"] = {
-                    {"id", static_cast<uint8_t>(c.affairStage)},
-                    {"name", Utils::AffairStageToString(c.affairStage)}
-                };
-                cObj["stageStartDay"] = c.stageStartDay;
-                cheatArray.push_back(cObj);
+            if (auto itAffairs = affairsByCouple.find(packPairKey(edge.pair.first, edge.pair.second));
+                itAffairs != affairsByCouple.end()) {
+                for (const auto* affair : itAffairs->second) {
+                    const RE::FormID cheaterID = affair->cheater.raw();
+                    const RE::FormID victimID = affair->deceivedPartner.raw();
+                    const RE::FormID paramourID = affair->paramour.raw();
+                    nlohmann::json cObj;
+                    cObj["cheater"] = {
+                        {"formId", std::format("{:08X}", cheaterID)},
+                        {"name", ActorSvc::GetName(cheaterID)}
+                    };
+                    cObj["victim"] = {
+                        {"formId", std::format("{:08X}", victimID)},
+                        {"name", ActorSvc::GetName(victimID)}
+                    };
+                    cObj["affairPartner"] = {
+                        {"formId", std::format("{:08X}", paramourID)},
+                        {"name", ActorSvc::GetName(paramourID)}
+                    };
+                    cObj["count"] = affair->incidentCount;
+                    cObj["lastTimestamp"] = affair->lastTimestamp;
+                    cObj["isSecret"] = affair->isSecret;
+                    cObj["affairType"] = {
+                        {"id", static_cast<uint8_t>(affair->affairType)},
+                        {"name", Utils::AffairTypeToString(static_cast<AffairType>(affair->affairType))}
+                    };
+                    cObj["affairStatus"] = {
+                        {"id", static_cast<uint8_t>(affair->affairStatus)},
+                        {"name", Utils::AffairStatusToString(static_cast<AffairStatus>(affair->affairStatus))}
+                    };
+                    cObj["affairStage"] = {
+                        {"id", static_cast<uint8_t>(affair->effectiveAffairStage)},
+                        {"name", Utils::AffairStageToString(static_cast<AffairStage>(affair->effectiveAffairStage))}
+                    };
+                    cObj["stageStartDay"] = affair->stageStartDay;
+                    cheatArray.push_back(cObj);
+                }
             }
             pairObj["cheatingRecords"] = cheatArray;
 
             // Children associated with this pair
             nlohmann::json childrenArray = nlohmann::json::array();
-            for (auto cID : GetChildren(key.actorA, key.actorB)) {
-                auto entryOpt = GetChildEntry(cID);
-                if (entryOpt.has_value()) {
-                    nlohmann::json cObj;
-                    cObj["childId"] = std::format("{:08X}", cID);
-                    cObj["name"] = entryOpt->name;
-                    cObj["timestamp"] = entryOpt->timestamp;
-                    cObj["isAdopted"] = entryOpt->isAdopted;
-                    cObj["isBiologicalChild"] = entryOpt->isBiologicalChild;
-                    cObj["stage"] = {
-                        {"id", static_cast<uint8_t>(entryOpt->stage)},
-                        {"name", stageToString(entryOpt->stage)}
-                    };
-                    if (!entryOpt->trainingLocation.empty()) {
-                        cObj["trainingLocation"] = entryOpt->trainingLocation;
-                    }
-                    auto* actor = HasPhysicalActor(cID)
-                        ? NPCIndex::GetSingleton().GetActorFromFormId(cID)
-                        : nullptr;
-                    bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
-                    cObj["hasRefID"] = hasRealActor;
-                    cObj["isEphemeral"] = !hasRealActor || (entryOpt->stage == ChildStage::Infant) || (entryOpt->stage == ChildStage::Training);
-                    childrenArray.push_back(cObj);
+            std::unordered_set<RE::FormID> emittedChildIds;
+            for (const auto& perceivedChild : visibleChildren) {
+                const bool guardianMatch =
+                    perceivedChild.guardians.HasGuardian(edge.pair.first) &&
+                    perceivedChild.guardians.HasGuardian(edge.pair.second);
+                const bool perceivedBioMatch =
+                    perceivedChild.IsActorPerceivedBioParent(edge.pair.first) &&
+                    perceivedChild.IsActorPerceivedBioParent(edge.pair.second);
+                if (!guardianMatch && !perceivedBioMatch) {
+                    continue;
                 }
+                const RE::FormID cID = perceivedChild.childId.raw();
+                if (!emittedChildIds.insert(cID).second) {
+                    continue;
+                }
+                nlohmann::json cObj;
+                cObj["childId"] = std::format("{:08X}", cID);
+                cObj["name"] = perceivedChild.name;
+                cObj["timestamp"] = perceivedChild.timestamp;
+                cObj["isAdopted"] = perceivedChild.isAdopted;
+                cObj["isBiologicalChild"] = perceivedChild.isBiologicalChild;
+                cObj["stage"] = {
+                    {"id", static_cast<uint8_t>(perceivedChild.stage)},
+                    {"name", stageToString(perceivedChild.stage)}
+                };
+                if (!perceivedChild.trainingLocation.empty()) {
+                    cObj["trainingLocation"] = perceivedChild.trainingLocation;
+                }
+                auto* actor = HasPhysicalActor(cID)
+                    ? NPCIndex::GetSingleton().GetActorFromFormId(cID)
+                    : nullptr;
+                bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
+                cObj["hasRefID"] = hasRealActor;
+                cObj["isEphemeral"] = !hasRealActor || (perceivedChild.stage == State::ChildStage::Infant) || (perceivedChild.stage == State::ChildStage::Training);
+                childrenArray.push_back(cObj);
             }
             pairObj["children"] = childrenArray;
 
@@ -4272,101 +4303,140 @@ namespace MARAS {
 
         // 3. Child Registry
         nlohmann::json childrenRegArray = nlohmann::json::array();
-        for (const auto& [childKey, childRec] : snap->lineage->AllChildren()) {
-            const RE::FormID childID = childKey.raw();
-            const ChildRegistryEntry entry = LegacyAdapters::ToLegacyChildEntry(childRec);
+        for (const auto& perceived : visibleChildren) {
+            const RE::FormID childID = perceived.childId.raw();
+            const auto* rawChild = snap->lineage->FindChild(perceived.childId);
+            const RE::FormID gAID = perceived.guardians.slotA.raw();
+            const RE::FormID gBID = perceived.guardians.slotB.raw();
+            const RE::FormID bioMotherID = perceived.bioMother.raw();
+            const RE::FormID bioFatherID = perceived.perceivedBioFather.raw();
+            const RE::FormID presumedFatherID = perceived.presumedFather.raw();
+
             nlohmann::json cObj;
             cObj["child"] = {
                 {"formId", std::format("{:08X}", childID)},
-                {"name", entry.name.empty() ? ActorSvc::GetName(childID) : entry.name}
+                {"name", perceived.name.empty() ? ActorSvc::GetName(childID) : perceived.name}
             };
             cObj["guardianA"] = {
-                {"formId", std::format("{:08X}", entry.guardianAID)},
-                {"name", entry.guardianAID == 0 ? "" : ActorSvc::GetName(entry.guardianAID)}
+                {"formId", std::format("{:08X}", gAID)},
+                {"name", gAID == 0 ? "" : ActorSvc::GetName(gAID)}
             };
             cObj["guardianB"] = {
-                {"formId", std::format("{:08X}", entry.guardianBID)},
-                {"name", entry.guardianBID == 0 ? "" : ActorSvc::GetName(entry.guardianBID)}
+                {"formId", std::format("{:08X}", gBID)},
+                {"name", gBID == 0 ? "" : ActorSvc::GetName(gBID)}
             };
-            cObj["timestamp"] = entry.timestamp;
-            cObj["isAdopted"] = entry.isAdopted;
+            cObj["timestamp"] = perceived.timestamp;
+            cObj["isAdopted"] = perceived.isAdopted;
             cObj["bioMother"] = {
-                {"formId", std::format("{:08X}", entry.bioMotherID)},
-                {"name", entry.bioMotherID == 0 ? "" : ActorSvc::GetName(entry.bioMotherID)}
+                {"formId", std::format("{:08X}", bioMotherID)},
+                {"name", bioMotherID == 0 ? "" : ActorSvc::GetName(bioMotherID)}
             };
+            std::string bioFatherName = "";
+            if (bioFatherID == kUnknownFatherFormID) {
+                bioFatherName = "Unknown";
+            } else if (bioFatherID != 0) {
+                bioFatherName = ActorSvc::GetName(bioFatherID);
+            } else if (!perceived.perceivedBioFatherFallbackName.empty()) {
+                bioFatherName = perceived.perceivedBioFatherFallbackName;
+            }
             cObj["bioFather"] = {
-                {"formId", std::format("{:08X}", entry.bioFatherID)},
-                {"name", entry.bioFatherID == 0 ? "" : (entry.bioFatherID == kUnknownFatherFormID ? "Unknown" : ActorSvc::GetName(entry.bioFatherID))}
+                {"formId", std::format("{:08X}", bioFatherID)},
+                {"name", bioFatherName}
             };
             cObj["presumedFather"] = {
-                {"formId", std::format("{:08X}", entry.presumedFatherID)},
-                {"name", entry.presumedFatherID == 0 ? "" : ActorSvc::GetName(entry.presumedFatherID)}
+                {"formId", std::format("{:08X}", presumedFatherID)},
+                {"name", presumedFatherID == 0 ? "" : ActorSvc::GetName(presumedFatherID)}
             };
-            cObj["isBiologicalChild"] = entry.isBiologicalChild;
-            cObj["conceptionTimestamp"] = entry.conceptionTimestamp;
-            cObj["birthTimestamp"] = entry.birthTimestamp;
+            cObj["isBiologicalChild"] = perceived.isBiologicalChild;
+            cObj["conceptionTimestamp"] = perceived.conceptionTimestamp;
+            cObj["birthTimestamp"] = perceived.birthTimestamp;
             cObj["stage"] = {
-                {"id", static_cast<uint8_t>(entry.stage)},
-                {"name", stageToString(entry.stage)}
+                {"id", static_cast<uint8_t>(perceived.stage)},
+                {"name", stageToString(perceived.stage)}
             };
-            if (!entry.trainingLocation.empty()) {
-                cObj["trainingLocation"] = entry.trainingLocation;
+            if (!perceived.trainingLocation.empty()) {
+                cObj["trainingLocation"] = perceived.trainingLocation;
             }
-            if (entry.trainingClassIndex >= 0) {
-                cObj["trainingClassIndex"] = entry.trainingClassIndex;
-                cObj["trainingClassName"] = std::string(GetTrainingClassName(entry.trainingClassIndex));
+            if (perceived.trainingClassIndex >= 0) {
+                cObj["trainingClassIndex"] = perceived.trainingClassIndex;
+                cObj["trainingClassName"] = std::string(GetTrainingClassName(perceived.trainingClassIndex));
             }
-            if (entry.trainingStartGameDay > 0.0f) {
-                cObj["trainingStartGameDay"] = entry.trainingStartGameDay;
+            if (perceived.trainingStartGameDay > 0.0f) {
+                cObj["trainingStartGameDay"] = perceived.trainingStartGameDay;
             }
-            if (!entry.savedBioTemplateName.empty()) {
-                cObj["savedBioTemplateName"] = entry.savedBioTemplateName;
+            if (!perceived.savedBioTemplateName.empty()) {
+                cObj["savedBioTemplateName"] = perceived.savedBioTemplateName;
             }
-            if (entry.savedRaceIndex <= 9) {
-                cObj["savedRaceIndex"] = entry.savedRaceIndex;
-            }
-            if (entry.hairColorFormID != 0) {
-                cObj["hairColorFormId"] = std::format("{:08X}", entry.hairColorFormID);
-            }
-            if (entry.eyesPartFormID != 0) {
-                cObj["eyesPartFormId"] = std::format("{:08X}", entry.eyesPartFormID);
-            }
-            if (entry.hairPartFormID != 0) {
-                cObj["hairPartFormId"] = std::format("{:08X}", entry.hairPartFormID);
-            }
-            if (entry.facialHairPartFormID != 0) {
-                cObj["facialHairPartFormId"] = std::format("{:08X}", entry.facialHairPartFormID);
-            }
-            cObj["heightScale"] = entry.heightScale;
-            cObj["rpgApplied"] = entry.rpgApplied;
-            cObj["hasBeastblood"] = entry.hasBeastblood;
-            cObj["beastbloodEvaluated"] = entry.beastbloodEvaluated;
-            cObj["bioLineageEvaluated"] = entry.bioLineageEvaluated;
-            cObj["guardianLineageEvaluated"] = entry.guardianLineageEvaluated;
-            if (!entry.daedricBlessingId.empty()) {
-                cObj["daedricBlessingId"] = entry.daedricBlessingId;
-            }
-            if (entry.lastAppliedLevel > 0) {
-                cObj["lastAppliedLevel"] = entry.lastAppliedLevel;
+            if (rawChild) {
+                if (rawChild->savedRaceIndex <= 9) {
+                    cObj["savedRaceIndex"] = rawChild->savedRaceIndex;
+                }
+                if (rawChild->hairColorFormId.raw() != 0) {
+                    cObj["hairColorFormId"] = std::format("{:08X}", rawChild->hairColorFormId.raw());
+                }
+                if (rawChild->eyesPartFormId.raw() != 0) {
+                    cObj["eyesPartFormId"] = std::format("{:08X}", rawChild->eyesPartFormId.raw());
+                }
+                if (rawChild->hairPartFormId.raw() != 0) {
+                    cObj["hairPartFormId"] = std::format("{:08X}", rawChild->hairPartFormId.raw());
+                }
+                if (rawChild->facialHairPartFormId.raw() != 0) {
+                    cObj["facialHairPartFormId"] = std::format("{:08X}", rawChild->facialHairPartFormId.raw());
+                }
+                cObj["heightScale"] = rawChild->heightScale;
+                cObj["rpgApplied"] = rawChild->rpgApplied;
+                cObj["hasBeastblood"] = perceived.hasBeastblood;
+                cObj["beastbloodEvaluated"] = view.IsOmniscient() ? rawChild->beastbloodEvaluated : false;
+                cObj["bioLineageEvaluated"] = rawChild->bioLineageEvaluated;
+                cObj["guardianLineageEvaluated"] = rawChild->guardianLineageEvaluated;
+                if (!rawChild->daedricBlessingId.empty()) {
+                    cObj["daedricBlessingId"] = rawChild->daedricBlessingId;
+                }
+                if (rawChild->lastAppliedLevel > 0) {
+                    cObj["lastAppliedLevel"] = rawChild->lastAppliedLevel;
+                }
+            } else {
+                cObj["heightScale"] = 1.0f;
+                cObj["rpgApplied"] = false;
+                cObj["hasBeastblood"] = perceived.hasBeastblood;
+                cObj["beastbloodEvaluated"] = false;
+                cObj["bioLineageEvaluated"] = false;
+                cObj["guardianLineageEvaluated"] = false;
             }
             auto* regActor = HasPhysicalActor(childID)
                 ? NPCIndex::GetSingleton().GetActorFromFormId(childID)
                 : nullptr;
             bool regHasRealActor = (regActor != nullptr && !regActor->IsDeleted());
             cObj["hasRefID"] = regHasRealActor;
-            cObj["isEphemeral"] = !regHasRealActor || (entry.stage == ChildStage::Unborn) || (entry.stage == ChildStage::Infant) || (entry.stage == ChildStage::Training);
-            cObj["paternitySecret"] = {
-                {"isSecret", entry.paternitySecret.isSecret},
-                {"isSecretForBioFather", entry.paternitySecret.isSecretForBioFather},
-                {"isSecretForPartner", entry.paternitySecret.isSecretForPartner},
-                {"discovered", entry.paternitySecret.discovered},
-                {"discoveredByPartner", entry.paternitySecret.discoveredByPartner},
-                {"discoveredByBioFather", entry.paternitySecret.discoveredByBioFather},
-                {"hasPhenotypeMismatch", entry.paternitySecret.hasPhenotypeMismatch},
-                {"lastCheckTimestamp", entry.paternitySecret.lastCheckTimestamp},
-                {"bioFatherName", entry.paternitySecret.bioFatherName},
-                {"bioFatherRaceFormId", entry.paternitySecret.bioFatherRaceID != 0 ? std::format("{:08X}", entry.paternitySecret.bioFatherRaceID) : ""}
-            };
+            cObj["isEphemeral"] = !regHasRealActor || (perceived.stage == State::ChildStage::Unborn) || (perceived.stage == State::ChildStage::Infant) || (perceived.stage == State::ChildStage::Training);
+            if (perceived.paternitySecret.has_value()) {
+                const auto& sec = *perceived.paternitySecret;
+                cObj["paternitySecret"] = {
+                    {"isSecret", sec.isSecret},
+                    {"isSecretForBioFather", sec.isSecretForBioFather},
+                    {"isSecretForPartner", sec.isSecretForPartner},
+                    {"discovered", sec.discovered},
+                    {"discoveredByPartner", sec.discoveredByPartner},
+                    {"discoveredByBioFather", sec.discoveredByBioFather},
+                    {"hasPhenotypeMismatch", sec.hasPhenotypeMismatch},
+                    {"lastCheckTimestamp", (view.IsOmniscient() && rawChild) ? rawChild->paternitySecret.lastCheckTimestamp : 0.0f},
+                    {"bioFatherName", sec.trueBioFatherFallbackName},
+                    {"bioFatherRaceFormId", sec.trueBioFatherRaceId.raw() != 0 ? std::format("{:08X}", sec.trueBioFatherRaceId.raw()) : ""}
+                };
+            } else {
+                cObj["paternitySecret"] = {
+                    {"isSecret", false},
+                    {"isSecretForBioFather", false},
+                    {"isSecretForPartner", false},
+                    {"discovered", false},
+                    {"discoveredByPartner", false},
+                    {"discoveredByBioFather", false},
+                    {"hasPhenotypeMismatch", false},
+                    {"lastCheckTimestamp", 0.0f},
+                    {"bioFatherName", ""},
+                    {"bioFatherRaceFormId", ""}
+                };
+            }
             childrenRegArray.push_back(cObj);
         }
         root["childrenRegistry"] = childrenRegArray;
@@ -4411,26 +4481,33 @@ namespace MARAS {
 
         // 6. Active Pregnancies
         nlohmann::json pregArray = nlohmann::json::array();
-        for (const auto& [childKey, childRec] : snap->lineage->AllChildren()) {
-            if (childRec.stage != State::ChildStage::Unborn) continue;
-            const RE::FormID cID = childKey.raw();
-            const RE::FormID bioMotherID = childRec.bioMother.raw();
-            const RE::FormID bioFatherID = childRec.bioFather.raw();
+        for (const auto& perceived : visibleChildren) {
+            if (perceived.stage != State::ChildStage::Unborn) continue;
+            const RE::FormID bioMotherID = perceived.bioMother.raw();
+            const RE::FormID bioFatherID = perceived.perceivedBioFather.raw();
+            const RE::FormID presumedFatherID = perceived.presumedFather.raw();
             nlohmann::json pObj;
             pObj["mother"] = {
                 {"formId", std::format("{:08X}", bioMotherID)},
                 {"name", ActorSvc::GetName(bioMotherID)}
             };
             pObj["isPregnant"] = true;
-            pObj["conceptionTimestamp"] = childRec.conceptionTimestamp;
-            RE::FormID presumedFatherID = GetMotherPartner(cID);
+            pObj["conceptionTimestamp"] = perceived.conceptionTimestamp;
             pObj["presumedFather"] = {
                 {"formId", presumedFatherID != 0 ? std::format("{:08X}", presumedFatherID) : ""},
                 {"name", presumedFatherID != 0 ? ActorSvc::GetName(presumedFatherID) : ""}
             };
+            std::string pregFatherName = "";
+            if (bioFatherID == kUnknownFatherFormID) {
+                pregFatherName = "Unknown";
+            } else if (bioFatherID != 0) {
+                pregFatherName = ActorSvc::GetName(bioFatherID);
+            } else if (!perceived.perceivedBioFatherFallbackName.empty()) {
+                pregFatherName = perceived.perceivedBioFatherFallbackName;
+            }
             pObj["bioFather"] = {
                 {"formId", std::format("{:08X}", bioFatherID)},
-                {"name", (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID) ? ActorSvc::GetName(bioFatherID) : (bioFatherID == kUnknownFatherFormID ? "Unknown" : "")}
+                {"name", pregFatherName}
             };
             pregArray.push_back(pObj);
         }
@@ -4438,7 +4515,9 @@ namespace MARAS {
 
         // 7. Pending Partner Intents
         nlohmann::json intentsArray = nlohmann::json::array();
-        for (const auto& [partnerId, stateIntent] : snap->relationships->AllPendingIntents()) {
+        for (const auto& [partnerId, rawIntent] : snap->relationships->AllPendingIntents()) {
+            (void)rawIntent;
+            const State::PendingPartnerIntentRecord stateIntent = view.GetPerceivedPendingIntent(partnerId);
             const PendingPartnerIntent intent = LegacyAdapters::ToLegacyPendingPartnerIntent(stateIntent);
             if (intent.type == PartnerIntentType::None) continue;
             nlohmann::json iObj;
@@ -4461,6 +4540,13 @@ namespace MARAS {
         root["nextSyntheticChildId"] = std::format("{:08X}", snap->lineage->NextSyntheticChildRaw());
 
         return root;
+    }
+
+    nlohmann::json NPCRelationshipManager::DumpJson() const {
+        return DumpJson(Projection::PerspectiveView::ForDashboard(
+            State::WorldStore::GetSingleton().Snapshot(),
+            State::SpatialSnapshotStore::GetSingleton().Snapshot(),
+            &GetEngineWerewolfStateProvider()));
     }
 
 }  // namespace MARAS

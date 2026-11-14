@@ -395,7 +395,11 @@ namespace MARAS::State {
             ActorId motherPartner,
             ActorId explicitPresumedFather,
             ActorId viewer) const noexcept {
-            if (!HasActiveSecret() || discovered) {
+            const bool anyUndiscovered =
+                (isSecretForPartner && !discoveredByPartner) ||
+                (isSecretForBioFather && !discoveredByBioFather) ||
+                (isPregnancySecretForPartner && !discoveredByPartner);
+            if (!HasActiveSecret() || discovered || !anyUndiscovered) {
                 return true;
             }
             if (!bioMother.IsNull() && viewer == bioMother) {

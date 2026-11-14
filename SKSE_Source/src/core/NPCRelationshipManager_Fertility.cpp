@@ -4,6 +4,7 @@
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/PackageOverrideService.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/SessionEpoch.h"
@@ -12,6 +13,8 @@
 #include "core/SkyrimNetMemoryService.h"
 #include "core/SkyrimNetProfileService.h"
 #include "core/WorldStateLegacyAdapters.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -876,29 +879,38 @@ namespace MARAS {
             };
             std::vector<FatherGroup> groups;
 
-            for (RE::FormID uID : unbornIDs) {
-                auto childOpt = mgr.GetChildEntry(uID);
-                if (!childOpt.has_value()) continue;
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const auto motherView = Projection::PerspectiveView::ForActor(
+                worldSnap, spatialSnap, State::ActorId{ motherID }, &GetEngineWerewolfStateProvider());
+            const auto partnerView =
+                (partnerID != 0)
+                    ? std::optional<Projection::PerspectiveView>(Projection::PerspectiveView::ForActor(
+                          worldSnap, spatialSnap, State::ActorId{ partnerID }, &GetEngineWerewolfStateProvider()))
+                    : std::nullopt;
 
-                RE::FormID bID = mgr.GetBioFather(uID);
-                if (bID == 0) {
-                    bID = childOpt->bioFatherID;
-                }
+            for (RE::FormID uID : unbornIDs) {
+                const State::ChildId childKey{ uID };
+                const auto perceivedMotherOpt = motherView.GetPerceivedChild(childKey);
+                if (!perceivedMotherOpt.has_value()) continue;
+                const auto& perceived = *perceivedMotherOpt;
+
+                const RE::FormID bID = perceived.perceivedBioFather.raw();
                 std::string fName;
                 if (bID != 0 && bID != kUnknownFatherFormID) {
-                    fName = ActorSvc::GetName(bID);
+                    fName = ResolveActorNameSafe(bID, *worldSnap, *spatialSnap);
                 }
                 if (fName.empty()) {
-                    fName = childOpt->paternitySecret.bioFatherName;
+                    fName = perceived.perceivedBioFatherFallbackName;
                 }
                 if (fName.empty()) {
                     fName = !bioNameFallback.empty() ? bioNameFallback : "an unknown father";
                 }
 
-                bool isPart = (bID != 0 && partnerID != 0 && bID == partnerID) || (!result.partnerName.empty() && fName == result.partnerName);
-                bool isSec = childOpt->paternitySecret.isSecretForPartner;
-                if (!isSec && partnerID != 0 && !isPart) {
-                    isSec = true;
+                const bool isPart = (bID != 0 && partnerID != 0 && bID == partnerID) || (!result.partnerName.empty() && fName == result.partnerName);
+                bool isSec = false;
+                if (partnerView.has_value()) {
+                    isSec = !partnerView->CanViewerKnowTrueBioFather(childKey) || !partnerView->CanViewerKnowPregnancy(childKey);
                 }
 
                 auto it = std::find_if(groups.begin(), groups.end(), [&](const FatherGroup& g) {
@@ -1138,13 +1150,23 @@ namespace MARAS {
                 result.partnerName = ActorSvc::GetName(partnerID);
             }
 
+            const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+            const auto view =
+                maskSecrets
+                    ? Projection::PerspectiveView::ForDialogueTarget(
+                          worldSnap, spatialSnap, &GetEngineWerewolfStateProvider())
+                    : Projection::PerspectiveView::ForDashboard(
+                          worldSnap, spatialSnap, /*revealSecretsOverride=*/true, &GetEngineWerewolfStateProvider());
+
             std::vector<RE::FormID> targetIDs = childIDs;
             if (targetIDs.empty()) {
-                for (const auto& [cID, entry] : mgr.GetAllChildren()) {
-                    RE::FormID actualMotherID = mgr.GetBioMother(cID);
-                    if (MatchesActor(actualMotherID, motherID) || entry.HasGuardian(motherID)) {
-                        if (entry.stage == ChildStage::Infant || entry.stage == ChildStage::Child) {
-                            targetIDs.push_back(cID);
+                for (const auto& perceivedChild : view.GetVisibleChildren()) {
+                    if (MatchesActor(perceivedChild.bioMother.raw(), motherID) ||
+                        perceivedChild.guardians.HasGuardian(State::ActorId{ motherID })) {
+                        if (perceivedChild.stage == State::ChildStage::Infant ||
+                            perceivedChild.stage == State::ChildStage::Child) {
+                            targetIDs.push_back(perceivedChild.childId.raw());
                         }
                     }
                 }
@@ -1154,13 +1176,15 @@ namespace MARAS {
             std::vector<BirthFatherGroup> groups;
 
             for (RE::FormID cID : targetIDs) {
-                auto childOpt = mgr.GetChildEntry(cID);
-                if (!childOpt.has_value()) continue;
+                const State::ChildId childKey{ cID };
+                const auto perceivedOpt = view.GetPerceivedChild(childKey);
+                if (!perceivedOpt.has_value()) continue;
+                const auto& perceived = *perceivedOpt;
 
                 BirthChildItem item;
                 item.childID = cID;
-                item.name = (childOpt->name.empty() || StringUtils::CaseInsensitiveEquals(childOpt->name, "Newborn")) ? "" : childOpt->name;
-                item.gender = childOpt->gender;
+                item.name = (perceived.name.empty() || StringUtils::CaseInsensitiveEquals(perceived.name, "Newborn")) ? "" : perceived.name;
+                item.gender = perceived.gender;
                 if (item.gender == 0) {
                     item.relation = "son";
                 } else if (item.gender == 1) {
@@ -1169,34 +1193,35 @@ namespace MARAS {
                     item.relation = "child";
                 }
 
-                RE::FormID bID = mgr.GetBioFather(cID);
-                if (bID == 0) {
-                    bID = childOpt->bioFatherID;
-                }
+                const RE::FormID bID = maskSecrets ? perceived.publicBioFather.raw() : perceived.perceivedBioFather.raw();
                 std::string fName;
                 if (bID != 0 && bID != kUnknownFatherFormID) {
-                    fName = ActorSvc::GetName(bID);
+                    fName = ResolveActorNameSafe(bID, *worldSnap, *spatialSnap);
                 }
-                if (fName.empty()) {
-                    fName = childOpt->paternitySecret.bioFatherName;
+                if (fName.empty() && !maskSecrets) {
+                    fName = perceived.perceivedBioFatherFallbackName;
                 }
                 if (fName.empty()) {
                     fName = "an unknown father";
                 }
 
-                bool isPart = (bID != 0 && partnerID != 0 && bID == partnerID) || (!result.partnerName.empty() && fName == result.partnerName);
-                bool isSecPartner = childOpt->paternitySecret.isSecretForPartner;
-                if (!isSecPartner && partnerID != 0 && !isPart) {
-                    isSecPartner = true;
-                }
-                if (maskSecrets && isSecPartner && partnerID != 0) {
-                    bID = partnerID;
-                    fName = result.partnerName;
-                    isPart = true;
-                    isSecPartner = false;
+                const bool isPart = (bID != 0 && partnerID != 0 && bID == partnerID) || (!result.partnerName.empty() && fName == result.partnerName);
+                bool isSecPartner = false;
+                bool isSecBio = false;
+                if (!maskSecrets) {
+                    if (partnerID != 0 && !isPart) {
+                        const auto partnerView = Projection::PerspectiveView::ForActor(
+                            worldSnap, spatialSnap, State::ActorId{ partnerID }, &GetEngineWerewolfStateProvider());
+                        isSecPartner = !partnerView.CanViewerKnowTrueBioFather(childKey);
+                    }
+                    if (bID != 0 && bID != kUnknownFatherFormID && !isPart) {
+                        const auto bioView = Projection::PerspectiveView::ForActor(
+                            worldSnap, spatialSnap, State::ActorId{ bID }, &GetEngineWerewolfStateProvider());
+                        isSecBio = !bioView.CanViewerKnowTrueBioFather(childKey);
+                    }
                 }
                 item.isSecretForPartner = isSecPartner;
-                item.isSecretForBio = maskSecrets ? false : childOpt->paternitySecret.isSecretForBioFather;
+                item.isSecretForBio = isSecBio;
 
                 ChildBirthResult::ChildJsonInfo cJson;
                 cJson.name = item.name.empty() ? "child" : item.name;
@@ -2061,27 +2086,53 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsSecretForBioFather(RE::FormID childID) const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
-        return rec ? rec->paternitySecret.isSecretForBioFather : false;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const State::ChildId childKey{ childID };
+        const auto* rec = worldSnap->lineage->FindChild(childKey);
+        if (!rec || !rec->paternitySecret.isSecretForBioFather) {
+            return false;
+        }
+        if (rec->bioFather.IsNull() || rec->bioFather.raw() == kUnknownFatherFormID) {
+            return !rec->paternitySecret.discovered && !rec->paternitySecret.discoveredByBioFather;
+        }
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto bioView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, rec->bioFather, &GetEngineWerewolfStateProvider());
+        return !bioView.CanViewerKnowTrueBioFather(childKey);
     }
 
     bool NPCRelationshipManager::IsSecretForPartner(RE::FormID childID) const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
-        if (!rec || GetMotherPartner(childID) == 0) {
+        const RE::FormID partnerID = GetMotherPartner(childID);
+        if (partnerID == 0) {
             return false;
         }
-        return rec->paternitySecret.isSecretForPartner;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const State::ChildId childKey{ childID };
+        const auto* rec = worldSnap->lineage->FindChild(childKey);
+        if (!rec || !rec->paternitySecret.isSecretForPartner) {
+            return false;
+        }
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto partnerView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, State::ActorId{ partnerID }, &GetEngineWerewolfStateProvider());
+        return !partnerView.CanViewerKnowTrueBioFather(childKey);
     }
 
     bool NPCRelationshipManager::IsPregnancySecretForPartner(RE::FormID childID) const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
-        if (!rec || rec->stage != State::ChildStage::Unborn || GetMotherPartner(childID) == 0) {
+        const RE::FormID partnerID = GetMotherPartner(childID);
+        if (partnerID == 0) {
             return false;
         }
-        return rec->paternitySecret.isSecretForPartner && rec->paternitySecret.isPregnancySecretForPartner;
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const State::ChildId childKey{ childID };
+        const auto* rec = worldSnap->lineage->FindChild(childKey);
+        if (!rec || rec->stage != State::ChildStage::Unborn || !rec->paternitySecret.isSecretForPartner) {
+            return false;
+        }
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto partnerView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, State::ActorId{ partnerID }, &GetEngineWerewolfStateProvider());
+        return !partnerView.CanViewerKnowPregnancy(childKey);
     }
 
     bool NPCRelationshipManager::SetChildStage(RE::FormID childID, ChildStage stage) {
@@ -2216,7 +2267,22 @@ namespace MARAS {
 
         ChildRegistryEntry entry = *entryOpt;
         EvaluateChildBeastbloodInheritance(entry);
-        if (AdultChildProgression::DoesTrainingRequireBeastblood(trainingClassIndex) && !entry.hasBeastblood) {
+        const bool isPlayerChild = entry.HasGuardian(kPlayerFormID);
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto dashboardView = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, &GetEngineWerewolfStateProvider());
+        const auto perceivedOpt = dashboardView.GetPerceivedChild(State::ChildId{ childID });
+        bool allowBeastbloodTraining = entry.hasBeastblood;
+        if (isPlayerChild) {
+            const bool unpersistedFirstEvalVisible =
+                !entryOpt->beastbloodEvaluated && entry.hasBeastblood &&
+                (dashboardView.IsActorKnownWerewolf(State::ActorId{ entry.bioMotherID }) ||
+                 (perceivedOpt.has_value() && dashboardView.IsActorKnownWerewolf(perceivedOpt->perceivedBioFather)));
+            allowBeastbloodTraining =
+                (perceivedOpt.has_value() && perceivedOpt->hasBeastblood) || unpersistedFirstEvalVisible;
+        }
+        if (AdultChildProgression::DoesTrainingRequireBeastblood(trainingClassIndex) && !allowBeastbloodTraining) {
             if (outReason) {
                 *outReason = "Requires child to carry Hircine's Beastblood (inherited Lycanthropy)";
             }
@@ -2225,7 +2291,6 @@ namespace MARAS {
             return false;
         }
 
-        const bool isPlayerChild = entry.HasGuardian(kPlayerFormID);
         int32_t paidTuitionGold = 0;
         int32_t appliedDiscountPercent = 0;
         std::string appliedDiscountReason;
@@ -2240,7 +2305,8 @@ namespace MARAS {
             }
 
             const int32_t baseCost = std::max(0, Settings::GetSingleton().Snapshot()->childTrainingCost);
-            const auto discountInfo = AdultChildProgression::GetSingleton().EvaluateChildTrainingDiscount(entry, trainingClassIndex);
+            const auto discountInfo = AdultChildProgression::GetSingleton().EvaluateChildTrainingDiscount(
+                State::ChildId{ childID }, trainingClassIndex, dashboardView);
             const int32_t cost = AdultChildProgression::GetDiscountedTrainingCost(trainingClassIndex, baseCost, discountInfo.discountPercent);
             appliedDiscountPercent = discountInfo.discountPercent;
             appliedDiscountReason = discountInfo.reason;
