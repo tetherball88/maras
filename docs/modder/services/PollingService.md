@@ -7,15 +7,22 @@
 ## 1. Initialization & Save-Load Baseline
 
 When a save loads or a new game begins:
-1. **Baseline Capture**: Captures the current set of active followers (`previousTeammates_`) and the current integer game day (`previousGameDay_`) immediately so that loading into a save does not falsely fire "follower added" or "new day" events.
-2. **Player Faction Sanitization**: Runs an immediate `SanitizePlayerMarriedFaction()` pass via [FactionService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/FactionService.md) to ensure the player actor never retains the vanilla `PlayerMarriedFaction` by mistake.
-3. **Catch-Up Engagement Check**: Schedules a game-thread task to run `CheckAutoMarriageForEngagedNPCs` in [NPCRelationshipManager](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/NPCRelationshipManager.md) so any NPC-to-NPC engagements that matured past their 5-day threshold while away are promoted cleanly.
+1. **Initial Spatial Snapshot**: Publishes an immediate baseline spatial actor snapshot on the main game thread so off-thread readers never observe an unpopulated world immediately after load. When shutting down or reverting state on save reload, `PollingService::Shutdown()` resets the published spatial snapshot back to an empty snapshot so stale actor data cannot bleed across saves.
+2. **Baseline Capture**: Captures the current set of active followers (`previousTeammates_`) and the current integer game day (`previousGameDay_`) immediately so that loading into a save does not falsely fire "follower added" or "new day" events.
+3. **Player Faction Sanitization**: Runs an immediate `SanitizePlayerMarriedFaction()` pass via [FactionService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/FactionService.md) to ensure the player actor never retains the vanilla `PlayerMarriedFaction` by mistake.
+4. **Catch-Up Engagement Check**: Schedules a game-thread task to run `CheckAutoMarriageForEngagedNPCs` in [NPCRelationshipManager](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/NPCRelationshipManager.md) so any NPC-to-NPC engagements that matured past their 5-day threshold while away are promoted cleanly.
 
 ---
 
 ## 2. Throttled Real-Time Polling Loops
 
 `UpdateEventSink` (`plugin.cpp`) coalesces input ticks (every `500ms`, or immediately when `DialogueEventSink::IsWaitingForSpeaker()` is active) into at most one `SessionEpoch`-guarded SKSE main-thread task at a time. Whenever `PollingService::Update()` runs on the main game thread (skipped automatically while any pause menu is open), it evaluates independent real-time timers:
+
+### 500-Millisecond Interval (2 Hz): Lock-Free Spatial Actor Snapshot
+Every **500 milliseconds** of unpaused real time:
+- Samples the Player character and loaded `ProcessLists` high-process actors on the SKSE main thread alongside the current calendar game day.
+- Records spatial coordinates, cell/location IDs, race/base metadata, liveness/combat/scene/mannequin/keyword/follower flags, werewolf status, and bounded UTF-8 display names into a fixed-layout array sorted ascending by reference FormID for binary search lookup.
+- Reuses pre-reserved snapshot buffers from a small recycled pool whenever no off-thread reader still holds a reference, avoiding per-tick heap allocations in steady state while allowing off-thread readers to consume an immutable lock-free point-in-time view without racing live engine pointers.
 
 ### 1.5-Second Interval: Intimate Scene & Children Flee Ticks
 Every **1.5 seconds** of unpaused real time (fast atomic no-op when idle):

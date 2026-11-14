@@ -414,10 +414,12 @@ namespace MARAS::State {
                 (!motherPartner.IsNull() && !isBioSameAsPartner &&
                  (bioMother.IsNull() || motherPartner != bioMother) &&
                  (isSecretForPartner || !explicitPresumedFather.IsNull()));
-            if (hasPresumedPartner) {
+            if (hasPresumedPartner && !viewer.IsNull() && viewer == motherPartner) {
                 return !isSecretForPartner || discoveredByPartner;
             }
-            return !isSecretForBioFather || discoveredByBioFather;
+            return (!isSecretForPartner || discoveredByPartner) &&
+                   (!isSecretForBioFather || discoveredByBioFather) &&
+                   (!isPregnancySecretForPartner || discoveredByPartner);
         }
 
         bool operator==(const PaternitySecretState&) const = default;
