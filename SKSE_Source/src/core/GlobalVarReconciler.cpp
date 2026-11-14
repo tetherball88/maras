@@ -58,7 +58,7 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             if (!pendingReconcile_.exchange(true, std::memory_order_acq_rel)) {
                 if (!AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::ReconcileGlobals", []() {
-                        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+                        GlobalVarReconciler::GetSingleton().ReconcileGlobalsOnMainThread();
                     })) {
                     pendingReconcile_.store(false, std::memory_order_release);
                 }
@@ -66,6 +66,10 @@ namespace MARAS {
             return;
         }
 
+        ReconcileGlobalsOnMainThread();
+    }
+
+    void GlobalVarReconciler::ReconcileGlobalsOnMainThread() {
         pendingReconcile_.store(false, std::memory_order_release);
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();

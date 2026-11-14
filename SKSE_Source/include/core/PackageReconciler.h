@@ -86,6 +86,7 @@ namespace MARAS {
         static bool ShouldSkipForFollower(RE::Actor* actor, RE::FormID sandboxPkgID, RE::FormID childFollowPkgID);
 
         void ReassertBasePackage(RE::Actor* actor, RE::TESPackage* basePkg);
+        void ReconcileWorldOnMainThread();
         RE::FormID ResolveRolePackageId(State::PackageRole role, const PackageRegistrySnapshot& snap) const noexcept;
         void EnsureCachedPackageIds(PackageRegistrySnapshot& draft) const noexcept;
 
@@ -94,6 +95,7 @@ namespace MARAS {
         mutable std::mutex writeMutex_{};
         std::atomic<std::shared_ptr<const PackageRegistrySnapshot>> snapshot_{
             std::make_shared<const PackageRegistrySnapshot>() };
+        std::atomic<bool> pendingWorldReconcile_{ false };
     };
 
 }  // namespace MARAS

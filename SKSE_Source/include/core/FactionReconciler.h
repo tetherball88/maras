@@ -3,6 +3,7 @@
 #include "PCH.h"
 #include "maras/state/EngineSyncPlan.h"
 
+#include <atomic>
 #include <functional>
 #include <optional>
 #include <shared_mutex>
@@ -65,6 +66,8 @@ namespace MARAS {
         // Reconciles Player + all MARAS-relevant adults, children, and companions after co-save load.
         void ReconcileAllOnLoad();
 
+        void Revert() noexcept;
+
         // Explicitly strips MARAS/Hearthfires household factions from a child leaving player custody
         // prior to restoring pre-adoption snapshotted factions.
         void ClearChildHouseholdFactions(RE::Actor* actor);
@@ -74,6 +77,10 @@ namespace MARAS {
         ~FactionReconciler() = default;
         FactionReconciler(const FactionReconciler&) = delete;
         FactionReconciler& operator=(const FactionReconciler&) = delete;
+
+        void ReconcilePlayerOnMainThread();
+        void ReconcileAllOnLoadOnMainThread();
+        void ClearChildHouseholdFactionsOnMainThread(RE::Actor* actor);
 
         bool SyncActorFaction(
             RE::Actor* actor,
@@ -112,6 +119,7 @@ namespace MARAS {
         std::shared_mutex mutex_{};
         std::vector<FactionAddedCallback> addedListeners_{};
         std::vector<FactionRemovedCallback> removedListeners_{};
+        std::atomic<bool> pendingAllOnLoad_{ false };
     };
 
 }  // namespace MARAS

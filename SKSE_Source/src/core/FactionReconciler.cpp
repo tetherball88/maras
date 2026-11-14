@@ -460,6 +460,10 @@ namespace MARAS {
             return;
         }
 
+        ReconcilePlayerOnMainThread();
+    }
+
+    void FactionReconciler::ReconcilePlayerOnMainThread() {
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
             return;
@@ -589,7 +593,7 @@ namespace MARAS {
         }
 
         if (plan.clearYoungChildFactions) {
-            ClearChildHouseholdFactions(actor);
+            ClearChildHouseholdFactionsOnMainThread(actor);
         }
 
         if (plan.ensurePotentialFollower) {
@@ -695,10 +699,17 @@ namespace MARAS {
                 AddCurrentEpochTask("FactionReconciler::ClearChildHouseholdFactions", [actorId]() {
                     std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     if (auto* a = RE::TESForm::LookupByID<RE::Actor>(actorId); a && !a->IsDeleted()) {
-                        FactionReconciler::GetSingleton().ClearChildHouseholdFactions(a);
+                        FactionReconciler::GetSingleton().ClearChildHouseholdFactionsOnMainThread(a);
                     }
                 });
             }
+            return;
+        }
+        ClearChildHouseholdFactionsOnMainThread(actor);
+    }
+
+    void FactionReconciler::ClearChildHouseholdFactionsOnMainThread(RE::Actor* actor) {
+        if (!actor || actor->IsDeleted()) {
             return;
         }
         auto& fc = FormCache::GetSingleton();
@@ -716,7 +727,7 @@ namespace MARAS {
         }
 
         if (actor->IsPlayerRef()) {
-            ReconcilePlayer();
+            ReconcilePlayerOnMainThread();
             return;
         }
 
@@ -799,7 +810,7 @@ namespace MARAS {
         }
 
         if (actorId == kPlayerFormID) {
-            ReconcilePlayer();
+            ReconcilePlayerOnMainThread();
             return;
         }
 
@@ -821,15 +832,28 @@ namespace MARAS {
         }
     }
 
+    void FactionReconciler::Revert() noexcept {
+        pendingAllOnLoad_.store(false, std::memory_order_release);
+    }
+
     void FactionReconciler::ReconcileAllOnLoad() {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
-            AddCurrentEpochTask("FactionReconciler::ReconcileAllOnLoad", []() {
-                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                FactionReconciler::GetSingleton().ReconcileAllOnLoad();
-            });
+            if (!pendingAllOnLoad_.exchange(true, std::memory_order_acq_rel)) {
+                if (!AddEpochTask(GetSessionEpoch(), "FactionReconciler::ReconcileAllOnLoad", []() {
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                        FactionReconciler::GetSingleton().ReconcileAllOnLoadOnMainThread();
+                    })) {
+                    pendingAllOnLoad_.store(false, std::memory_order_release);
+                }
+            }
             return;
         }
-        ReconcilePlayer();
+        ReconcileAllOnLoadOnMainThread();
+    }
+
+    void FactionReconciler::ReconcileAllOnLoadOnMainThread() {
+        pendingAllOnLoad_.store(false, std::memory_order_release);
+        ReconcilePlayerOnMainThread();
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         std::unordered_set<RE::FormID> targets;

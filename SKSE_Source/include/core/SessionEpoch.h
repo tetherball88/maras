@@ -23,6 +23,17 @@ namespace MARAS {
         return expectedEpoch != 0 && GetSessionEpoch() == expectedEpoch;
     }
 
+    // RAII scope marking execution inside an SKSE::TaskInterface::AddTask main-thread callback.
+    class ScopedMainThreadTask {
+    public:
+        ScopedMainThreadTask() noexcept;
+        ~ScopedMainThreadTask() noexcept;
+        ScopedMainThreadTask(const ScopedMainThreadTask&) = delete;
+        ScopedMainThreadTask& operator=(const ScopedMainThreadTask&) = delete;
+    };
+
+    [[nodiscard]] bool IsInMainThreadTask() noexcept;
+
     // Schedules a task on the SKSE main game thread bound to `expectedEpoch`.
     // Automatically drops the task if the save session transitioned before execution,
     // and wraps execution in try/catch per SKSE_Source/AGENTS.md §6.
@@ -41,6 +52,7 @@ namespace MARAS {
             return false;
         }
         taskIF->AddTask([expectedEpoch, tag, task = std::forward<Fn>(fn)]() mutable {
+            ScopedMainThreadTask mainScope;
             const SessionEpoch currentEpoch = GetSessionEpoch();
             if (currentEpoch != expectedEpoch) {
                 MARAS_LOG_DEBUG("[SessionEpoch] Dropped stale main-thread task '{}' across save boundary (expected={}, current={})",

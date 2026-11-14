@@ -44,6 +44,7 @@ namespace MARAS {
 
     namespace {
         std::atomic<SessionEpoch> g_sessionEpoch{ 1 };
+        thread_local std::uint32_t s_mainThreadTaskDepth = 0;
     }
 
     SessionEpoch GetSessionEpoch() noexcept {
@@ -54,6 +55,22 @@ namespace MARAS {
         const SessionEpoch next = g_sessionEpoch.fetch_add(1, std::memory_order_acq_rel) + 1;
         MARAS_LOG_INFO("[SessionEpoch] Advanced session epoch to {} (reason: {})", next, reason);
         return next;
+    }
+
+    ScopedMainThreadTask::ScopedMainThreadTask() noexcept {
+        if (s_mainThreadTaskDepth++ == 0) {
+            DeferredActorResolver::GetSingleton().CaptureMainThread();
+        }
+    }
+
+    ScopedMainThreadTask::~ScopedMainThreadTask() noexcept {
+        if (s_mainThreadTaskDepth > 0) {
+            --s_mainThreadTaskDepth;
+        }
+    }
+
+    bool IsInMainThreadTask() noexcept {
+        return s_mainThreadTaskDepth > 0;
     }
 
 }  // namespace MARAS
@@ -362,6 +379,7 @@ namespace MARAS::Serialization {
         ResetPluginEventSinks();
         DeferredActorResolver::GetSingleton().Revert();
         GlobalVarReconciler::GetSingleton().Revert();
+        FactionReconciler::GetSingleton().Revert();
         BuffReconciler::GetSingleton().Revert();
         PollingService::GetSingleton().Shutdown();
         State::WorldStore::GetSingleton().Revert();

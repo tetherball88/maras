@@ -158,6 +158,7 @@ namespace MARAS {
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
         taskIF->AddTask([this, expectedEpoch, action = std::move(action), payload = std::move(payload)]() {
+            ScopedMainThreadTask mainScope;
             try {
                 std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
                 if (action != "uiReady" && !IsSessionEpochCurrent(expectedEpoch)) {
@@ -625,10 +626,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendSettingsData", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendSettingsData();
+                PrismaUIDataBridge::GetSingleton().SendSettingsDataOnMainThread();
             });
             return;
         }
+        SendSettingsDataOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendSettingsDataOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -734,10 +739,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendOverviewData", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                PrismaUIDataBridge::GetSingleton().SendOverviewDataOnMainThread();
             });
             return;
         }
+        SendOverviewDataOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendOverviewDataOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -893,10 +902,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendHouseholdBuffs", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendHouseholdBuffs();
+                PrismaUIDataBridge::GetSingleton().SendHouseholdBuffsOnMainThread();
             });
             return;
         }
+        SendHouseholdBuffsOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendHouseholdBuffsOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -909,10 +922,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendNPCList", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendNPCList();
+                PrismaUIDataBridge::GetSingleton().SendNPCListOnMainThread();
             });
             return;
         }
+        SendNPCListOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendNPCListOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -931,10 +948,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendNPCDetail", [npcFormID]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendNPCDetail(npcFormID);
+                PrismaUIDataBridge::GetSingleton().SendNPCDetailOnMainThread(npcFormID);
             });
             return;
         }
+        SendNPCDetailOnMainThread(npcFormID);
+    }
+
+    void PrismaUIDataBridge::SendNPCDetailOnMainThread(RE::FormID npcFormID) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -975,25 +996,33 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendMatchmakingData", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendMatchmakingData();
+                PrismaUIDataBridge::GetSingleton().SendMatchmakingDataOnMainThread();
             });
             return;
         }
+        SendMatchmakingDataOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendMatchmakingDataOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
-        SendNPCList();
-        SendMatchmakingSettings();
+        SendNPCListOnMainThread();
+        SendMatchmakingSettingsOnMainThread();
     }
 
     void PrismaUIDataBridge::SendMatchmakingResults(const std::vector<MatchmakingResult>& results, bool isGlobal) {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendMatchmakingResults", [results, isGlobal]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendMatchmakingResults(results, isGlobal);
+                PrismaUIDataBridge::GetSingleton().SendMatchmakingResultsOnMainThread(results, isGlobal);
             });
             return;
         }
+        SendMatchmakingResultsOnMainThread(results, isGlobal);
+    }
+
+    void PrismaUIDataBridge::SendMatchmakingResultsOnMainThread(const std::vector<MatchmakingResult>& results, bool isGlobal) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1027,10 +1056,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendGeneratedMemories", [partnerFormId, memoriesArray]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(partnerFormId, memoriesArray);
+                PrismaUIDataBridge::GetSingleton().SendGeneratedMemoriesOnMainThread(partnerFormId, memoriesArray);
             });
             return;
         }
+        SendGeneratedMemoriesOnMainThread(partnerFormId, memoriesArray);
+    }
+
+    void PrismaUIDataBridge::SendGeneratedMemoriesOnMainThread(RE::FormID partnerFormId, const nlohmann::json& memoriesArray) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1045,10 +1078,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendMatchmakingSettings", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendMatchmakingSettings();
+                PrismaUIDataBridge::GetSingleton().SendMatchmakingSettingsOnMainThread();
             });
             return;
         }
+        SendMatchmakingSettingsOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendMatchmakingSettingsOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1208,10 +1245,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::OnAffectionChanged", [npcFormID, value]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().OnAffectionChanged(npcFormID, value);
+                PrismaUIDataBridge::GetSingleton().OnAffectionChangedOnMainThread(npcFormID, value);
             });
             return;
         }
+        OnAffectionChangedOnMainThread(npcFormID, value);
+    }
+
+    void PrismaUIDataBridge::OnAffectionChangedOnMainThread(RE::FormID npcFormID, int value) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1226,10 +1267,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::OnStatusChanged", [actorA, actorB, status]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, status);
+                PrismaUIDataBridge::GetSingleton().OnStatusChangedOnMainThread(actorA, actorB, status);
             });
             return;
         }
+        OnStatusChangedOnMainThread(actorA, actorB, status);
+    }
+
+    void PrismaUIDataBridge::OnStatusChangedOnMainThread(RE::FormID actorA, RE::FormID actorB, uint8_t status) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1271,10 +1316,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::OnHierarchyChanged", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
+                PrismaUIDataBridge::GetSingleton().OnHierarchyChangedOnMainThread();
             });
             return;
         }
+        OnHierarchyChangedOnMainThread();
+    }
+
+    void PrismaUIDataBridge::OnHierarchyChangedOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1397,10 +1446,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::OnChildUpdated", [entry]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+                PrismaUIDataBridge::GetSingleton().OnChildUpdatedOnMainThread(entry);
             });
             return;
         }
+        OnChildUpdatedOnMainThread(entry);
+    }
+
+    void PrismaUIDataBridge::OnChildUpdatedOnMainThread(const ChildRegistryEntry& entry) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1418,10 +1471,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::OnChildRemoved", [childID]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().OnChildRemoved(childID);
+                PrismaUIDataBridge::GetSingleton().OnChildRemovedOnMainThread(childID);
             });
             return;
         }
+        OnChildRemovedOnMainThread(childID);
+    }
+
+    void PrismaUIDataBridge::OnChildRemovedOnMainThread(RE::FormID childID) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1436,10 +1493,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::OnChildPromoted", [oldID, newID]() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().OnChildPromoted(oldID, newID);
+                PrismaUIDataBridge::GetSingleton().OnChildPromotedOnMainThread(oldID, newID);
             });
             return;
         }
+        OnChildPromotedOnMainThread(oldID, newID);
+    }
+
+    void PrismaUIDataBridge::OnChildPromotedOnMainThread(RE::FormID oldID, RE::FormID newID) {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
@@ -1756,10 +1817,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIDataBridge::SendAllSkyrimNPCs", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIDataBridge::GetSingleton().SendAllSkyrimNPCs();
+                PrismaUIDataBridge::GetSingleton().SendAllSkyrimNPCsOnMainThread();
             });
             return;
         }
+        SendAllSkyrimNPCsOnMainThread();
+    }
+
+    void PrismaUIDataBridge::SendAllSkyrimNPCsOnMainThread() {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
