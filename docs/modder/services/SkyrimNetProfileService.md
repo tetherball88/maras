@@ -19,7 +19,7 @@
      - [`TTM_ServiceFertilityBF.OnAdultChildSpawned`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/TTM_ServiceFertilityBF.psc) (Beeing Female Stage 4 adult actor spawned)
 3. **Never Triggered on Relocation or Custody Reassignment**:
    - Household relocations, guardian reassignments, and custody transfers on divorce or parent death do **not** trigger profile regeneration.
-   - Each `(childID, ChildStage)` pair is deduplicated in `updatedActorStages_` (and pre-populated during co-save load in [`NPCRelationshipManager_Serialization.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Serialization.cpp)), ensuring a spawned child generates a profile at most once at `Stage 2` and once if later promoted to a placed `Stage 4` adult actor.
+   - Each `(childID, ChildStage)` pair is deduplicated in `updatedActorStages_` (and pre-populated post co-save load in [`NPCRelationshipManager::FinalizeLoad`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager.cpp#L3951-L3954)), ensuring a spawned child generates a profile at most once at `Stage 2` and once if later promoted to a placed `Stage 4` adult actor.
 4. **All Involved Parties Rendered into Profile Generation Context**:
    - Because SkyrimNet's `PublicRequestProfileUpdate` (`dynamic_bio_update.prompt` and `helpers/generate_profile.prompt`) injects `additionalInstructions` / `user_input` as a plain context string without rendering `0001_child_bio.prompt`, `SkyrimNetProfileService` pre-renders the character profiles and recent events of **all involved parties at the moment of bio generation/update**:
      - **Biological Mother** (`bioMotherID`)

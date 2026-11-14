@@ -87,9 +87,7 @@ namespace MARAS {
         std::unordered_map<RE::FormID, DeceasedNPCRecord> GetAllRecords() const;
         std::size_t GetDeceasedCount() const;
 
-        // Serialization
-        bool Save(SKSE::SerializationInterface* serialization);
-        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
+        // Runtime revert
         void Revert();
 
         // Data dump
@@ -104,11 +102,6 @@ namespace MARAS {
         DeceasedRegistry& operator=(DeceasedRegistry&&) = delete;
 
         void ResolveFormIDs(RE::FormID inputFormID, RE::FormID& outBaseID, RE::FormID& outRefID) const;
-        const DeceasedNPCRecord* FindRecordLocked(RE::FormID formID) const;
-
-        std::unordered_map<RE::FormID, DeceasedNPCRecord> recordsByBaseID_;
-        std::unordered_map<RE::FormID, RE::FormID> refToBaseMap_;
-        mutable std::shared_mutex mutex_;
     };
 
 }  // namespace MARAS

@@ -1,12 +1,7 @@
 #pragma once
 
 #include "core/NPCRelationshipManager.h"
-#include "core/Serialization.h"
 #include "utils/Common.h"
-
-namespace SKSE {
-    class SerializationInterface;
-}
 
 namespace MARAS {
 
@@ -72,13 +67,9 @@ namespace MARAS {
         void ResetCooldown(RE::FormID actorA, RE::FormID actorB);
         void ClearAllCooldowns();
 
-        // ── SKSE Co-Save Serialization ─────────────────────────────────────
+        // ── Runtime Revert & Data Dump ────────────────────────────────────
 
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
         void Revert();
-
-        // Data dump
         nlohmann::json DumpJson() const;
 
     private:
@@ -99,17 +90,6 @@ namespace MARAS {
 
         // Per-couple repetition cooldown multiplier relative to global scene cooldown (2x)
         static constexpr float kCoupleCooldownMultiplier = 2.0f;
-
-        mutable std::shared_mutex m_mutex;
-
-        // Default cooldown duration in game hours (24 in-game hours = 1 game day)
-        float m_cooldownHours{ 24.0f };
-
-        // Last scene execution timestamp (in game days passed, -1.0f means no scene played yet)
-        float m_lastSceneDay{ -1.0f };
-
-        // Last-picked timestamp per couple key (in game days passed)
-        std::unordered_map<RelationshipPairKey, float, RelationshipPairKeyHash> m_coupleCooldowns;
     };
 
 }  // namespace MARAS

@@ -1,11 +1,6 @@
 #pragma once
 
 #include "PCH.h"
-#include "core/Serialization.h"
-
-namespace SKSE {
-    class SerializationInterface;
-}
 
 namespace MARAS {
 
@@ -132,10 +127,6 @@ namespace MARAS {
         std::vector<RE::FormID> GetAllPlayerChildren(bool onlyRealActors = false) const;
         std::vector<RE::FormID> GetChildrenForHouse(RE::FormID playerHouseFormID, bool onlyRealActors = false) const;
 
-        // Serialization (decision 17 — own independent co-save record)
-        [[nodiscard]] bool Save(SKSE::SerializationInterface* serialization) const;
-        [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
-        void FinalizeLoad();
         void Revert();
 
         // Data dump
@@ -150,17 +141,8 @@ namespace MARAS {
         void RestoreChildFactions(RE::FormID childID);
         [[nodiscard]] bool HasFactionSnapshot(RE::FormID childID) const;
 
-        // Faction snapshot serialization
-        [[nodiscard]] bool SaveFactionSnapshots(SKSE::SerializationInterface* serialization) const;
-        [[nodiscard]] bool LoadFactionSnapshots(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
-        void RevertFactionSnapshots();
-
     private:
         PlayerChildrenService() = default;
-
-        std::unordered_map<RE::FormID, ChildHouseholdState> children_;
-        std::unordered_map<RE::FormID, ChildFactionSnapshot> factionSnapshots_;
-        bool childChestIntroduced_{ false };
     };
 
 }  // namespace MARAS

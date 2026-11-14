@@ -1,11 +1,11 @@
 #include "core/PlayerHouseService.h"
 
-#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/FormUtils.h"
@@ -21,23 +21,7 @@ namespace MARAS {
         constexpr std::int8_t kDefaultFactionRank = 0;
     }
 
-    PlayerHouseService::PlayerHouseService() { Revert(); }
-
-    PlayerHouseService::House* PlayerHouseService::FindHouse(RE::FormID houseFormID) {
-        if (houseFormID == 0) return nullptr;
-        auto it = std::find_if(houses_.begin(), houses_.end(), [houseFormID](const House& h) {
-            return h.id == houseFormID;
-        });
-        return (it != houses_.end()) ? &(*it) : nullptr;
-    }
-
-    const PlayerHouseService::House* PlayerHouseService::FindHouse(RE::FormID houseFormID) const {
-        if (houseFormID == 0) return nullptr;
-        auto it = std::find_if(houses_.begin(), houses_.end(), [houseFormID](const House& h) {
-            return h.id == houseFormID;
-        });
-        return (it != houses_.end()) ? &(*it) : nullptr;
-    }
+    PlayerHouseService::PlayerHouseService() = default;
 
     void PlayerHouseService::SetHousedFaction(RE::FormID tenantFormID, bool add) {
         auto* faction = FormCache::GetSingleton().GetSpouseHousedFaction();
@@ -147,22 +131,29 @@ namespace MARAS {
     bool PlayerHouseService::RegisterPlayerHouseCell(RE::FormID locationFormID, RE::FormID markerFormID) {
         if (locationFormID == 0) return false;
 
-        House* house = FindHouse(locationFormID);
-        if (!house) {
-            houses_.push_back(House{locationFormID, markerFormID, false, {}});
-            house = &houses_.back();
-        } else if (markerFormID != 0) {
-            house->marker = markerFormID;
-        }
+        std::vector<std::uint32_t> tenantsCopy;
+        std::size_t houseCount = 0;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::HouseId houseId{ locationFormID };
+            if (auto* existing = hh.FindHouseMutable(houseId)) {
+                if (markerFormID != 0) {
+                    existing->markerId = State::RefId{ markerFormID };
+                }
+                tenantsCopy = existing->tenantOrder;
+            } else {
+                hh.RegisterHouse(houseId, State::RefId{ markerFormID }, false);
+            }
+            houseCount = hh.AllHouses().size();
+        });
 
         if (markerFormID != 0) {
             MARAS_LOG_DEBUG("RegisterPlayerHouseCell: stored marker {:08X} for house {:08X}", markerFormID, locationFormID);
 
-            // Copy tenant list to avoid iterator invalidation if child assignment moves co-parents (Bug B1 fix)
-            auto tenantsCopy = house->tenants;
             auto& relMgr = NPCRelationshipManager::GetSingleton();
-            for (auto tenantID : tenantsCopy) {
-                if (relMgr.IsChildNPC(tenantID)) {
+            for (const RE::FormID tenantID : tenantsCopy) {
+                if (IsSyntheticChildID(tenantID) || relMgr.IsChildNPC(tenantID)) {
                     PlayerChildrenService::GetSingleton().AssignChildToHouse(tenantID, locationFormID, false);
                 } else {
                     UpdateSpouseHomeMarker(tenantID, locationFormID);
@@ -172,7 +163,7 @@ namespace MARAS {
 
         // Update the player houses count global
         if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
-            global->value = static_cast<float>(houses_.size());
+            global->value = static_cast<float>(houseCount);
             MARAS_LOG_DEBUG("Player houses count global set to {}", global->value);
         }
 
@@ -180,10 +171,12 @@ namespace MARAS {
     }
 
     std::vector<RE::FormID> PlayerHouseService::GetAllPlayerHouses() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& houses = snap->household->AllHouses();
         std::vector<RE::FormID> result;
-        result.reserve(houses_.size());
-        for (const auto& h : houses_) {
-            result.push_back(h.id);
+        result.reserve(houses.size());
+        for (const auto& h : houses) {
+            result.push_back(h.houseId.raw());
         }
         return result;
     }
@@ -201,26 +194,32 @@ namespace MARAS {
 
     RE::FormID PlayerHouseService::FindHouseByName(std::string_view name) const {
         if (name.empty()) return 0;
-        for (const auto& h : houses_) {
-            if (GetHouseName(h.id) == name) {
-                return h.id;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& h : snap->household->AllHouses()) {
+            const RE::FormID hId = h.houseId.raw();
+            if (GetHouseName(hId) == name) {
+                return hId;
             }
         }
         return 0;
     }
 
     std::vector<std::string> PlayerHouseService::GetAllPlayerHousesNames() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& houses = snap->household->AllHouses();
         std::vector<std::string> names;
-        names.reserve(houses_.size());
-        for (const auto& h : houses_) {
-            names.push_back(GetHouseName(h.id));
+        names.reserve(houses.size());
+        for (const auto& h : houses) {
+            names.push_back(GetHouseName(h.houseId.raw()));
         }
         return names;
     }
 
     RE::FormID PlayerHouseService::GetHouseMarkerFormID(RE::FormID playerHouseFormID) const noexcept {
-        const auto* h = FindHouse(playerHouseFormID);
-        return h ? h->marker : 0;
+        if (playerHouseFormID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* h = snap->household->FindHouse(State::HouseId{ playerHouseFormID });
+        return h ? h->markerId.raw() : 0;
     }
 
     RE::TESObjectREFR* PlayerHouseService::GetHouseMarkerRef(RE::FormID playerHouseFormID) const {
@@ -265,47 +264,53 @@ namespace MARAS {
             return false;
         }
 
-        House* targetHouse = FindHouse(playerHouseFormID);
-        if (!targetHouse) {
-            MARAS_LOG_WARN("RegisterTenantInPlayerHouse: target house {:08X} not found", playerHouseFormID);
-            return false;
-        }
-
         const bool isSynthetic = IsSyntheticChildID(tenantFormID);
         const bool isChild = isSynthetic || NPCRelationshipManager::GetSingleton().IsChildNPC(tenantFormID);
         if (isChild) {
             stayAtHome = true;
         }
 
-        auto it = tenants_.find(tenantFormID);
-        const bool alreadyRegistered = (it != tenants_.end());
-        const RE::FormID oldHouseID = alreadyRegistered ? it->second.house : 0;
+        bool houseFound = false;
+        bool alreadyRegistered = false;
+        bool sameHouseOnly = false;
+        bool stayChanged = false;
 
-        if (alreadyRegistered && oldHouseID == playerHouseFormID) {
-            if (it->second.stayAtHome != stayAtHome) {
-                SetTenantStayAtHome(tenantFormID, stayAtHome);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::HouseId dstHouseId{ playerHouseFormID };
+            if (!hh.FindHouse(dstHouseId)) {
+                return;
+            }
+            houseFound = true;
+
+            const State::HouseId prevHouse = hh.GetTenantHouse(tenantFormID);
+            alreadyRegistered = !prevHouse.IsNull();
+            if (alreadyRegistered && prevHouse == dstHouseId) {
+                sameHouseOnly = true;
+                if (hh.GetTenantStayAtHome(tenantFormID) != stayAtHome) {
+                    hh.SetTenantStayAtHome(tenantFormID, stayAtHome);
+                    stayChanged = true;
+                }
+                return;
+            }
+
+            hh.AssignTenant(tenantFormID, dstHouseId, stayAtHome, isChild);
+        });
+
+        if (!houseFound) {
+            MARAS_LOG_WARN("RegisterTenantInPlayerHouse: target house {:08X} not found", playerHouseFormID);
+            return false;
+        }
+
+        if (sameHouseOnly) {
+            if (stayChanged) {
+                ApplyStayAtHome(tenantFormID, stayAtHome);
+                if (stayAtHome && !isChild) {
+                    UpdateSpouseHomeMarker(tenantFormID, playerHouseFormID);
+                }
+                MARAS_LOG_INFO("PlayerHouseService: Set tenant {:08X} stayAtHome = {}", tenantFormID, stayAtHome);
             }
             return true;
-        }
-
-        // Moving from another house: detach from old house vector
-        if (alreadyRegistered && oldHouseID != 0) {
-            if (auto* oldHouse = FindHouse(oldHouseID)) {
-                auto& vec = oldHouse->tenants;
-                vec.erase(std::remove(vec.begin(), vec.end(), tenantFormID), vec.end());
-            }
-        }
-
-        // Add to target house vector
-        if (std::find(targetHouse->tenants.begin(), targetHouse->tenants.end(), tenantFormID) == targetHouse->tenants.end()) {
-            targetHouse->tenants.push_back(tenantFormID);
-        }
-
-        // Record or update tenant entry
-        if (alreadyRegistered) {
-            it->second = {playerHouseFormID, stayAtHome};
-        } else {
-            tenants_.emplace(tenantFormID, Tenant{playerHouseFormID, stayAtHome});
         }
 
         // Faction and marker management for spouses
@@ -325,45 +330,70 @@ namespace MARAS {
 
     void PlayerHouseService::SetTenantStayAtHome(RE::FormID tenantFormID, bool stayAtHome) {
         if (tenantFormID == 0) return;
-        auto it = tenants_.find(tenantFormID);
-        if (it == tenants_.end()) {
+
+        const bool isChild = IsSyntheticChildID(tenantFormID) || NPCRelationshipManager::GetSingleton().IsChildNPC(tenantFormID);
+        bool notRegistered = false;
+        bool changed = false;
+        RE::FormID houseFormID = 0;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::HouseId curHouse = hh.GetTenantHouse(tenantFormID);
+            if (curHouse.IsNull()) {
+                notRegistered = true;
+                return;
+            }
+            houseFormID = curHouse.raw();
+            if (hh.GetTenantStayAtHome(tenantFormID) == stayAtHome) {
+                return;
+            }
+            hh.SetTenantStayAtHome(tenantFormID, stayAtHome);
+            changed = true;
+        });
+
+        if (notRegistered) {
             MARAS_LOG_WARN("SetTenantStayAtHome: actor {:08X} is not a registered tenant", tenantFormID);
             return;
         }
+        if (!changed) {
+            return;
+        }
 
-        if (it->second.stayAtHome == stayAtHome) return;
-
-        it->second.stayAtHome = stayAtHome;
         ApplyStayAtHome(tenantFormID, stayAtHome);
 
-        if (stayAtHome && !IsSyntheticChildID(tenantFormID) && !NPCRelationshipManager::GetSingleton().IsChildNPC(tenantFormID)) {
-            UpdateSpouseHomeMarker(tenantFormID, it->second.house);
+        if (stayAtHome && !isChild) {
+            UpdateSpouseHomeMarker(tenantFormID, houseFormID);
         }
         MARAS_LOG_INFO("PlayerHouseService: Set tenant {:08X} stayAtHome = {}", tenantFormID, stayAtHome);
     }
 
     bool PlayerHouseService::GetTenantStayAtHome(RE::FormID tenantFormID) const {
-        auto it = tenants_.find(tenantFormID);
-        return (it != tenants_.end()) ? it->second.stayAtHome : true;
+        if (tenantFormID == 0) return true;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->household->GetTenantStayAtHome(tenantFormID);
     }
 
     bool PlayerHouseService::RemoveTenantFromPlayerHouse(RE::FormID tenantFormID) {
         if (tenantFormID == 0) return false;
 
-        auto it = tenants_.find(tenantFormID);
-        if (it == tenants_.end()) return false;
+        const bool isChild = IsSyntheticChildID(tenantFormID) || NPCRelationshipManager::GetSingleton().IsChildNPC(tenantFormID);
+        RE::FormID houseFormID = 0;
+        bool foundInTenants = false;
 
-        RE::FormID houseFormID = it->second.house;
-        bool isChild = IsSyntheticChildID(tenantFormID) || NPCRelationshipManager::GetSingleton().IsChildNPC(tenantFormID);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::HouseId prevHouse = hh.GetTenantHouse(tenantFormID);
+            if (prevHouse.IsNull()) {
+                return;
+            }
+            houseFormID = prevHouse.raw();
+            foundInTenants = true;
+            (void)hh.EvictTenant(tenantFormID);
+        });
 
-        // Remove from house tenants vector
-        if (auto* house = FindHouse(houseFormID)) {
-            auto& vec = house->tenants;
-            vec.erase(std::remove(vec.begin(), vec.end(), tenantFormID), vec.end());
+        if (!foundInTenants) {
+            return false;
         }
-
-        // Erase tenant mapping
-        tenants_.erase(it);
 
         // Unregister package overrides
         ApplyStayAtHome(tenantFormID, false);
@@ -405,8 +435,7 @@ namespace MARAS {
             return {};
         }
 
-        House* targetHouse = FindHouse(playerHouseFormID);
-        if (!targetHouse) {
+        if (!State::WorldStore::GetSingleton().Snapshot()->household->FindHouse(State::HouseId{ playerHouseFormID })) {
             MARAS_LOG_WARN("PlayerHouseService::RelocateFamilyUnit: Target house {:08X} not found", playerHouseFormID);
             return {};
         }
@@ -517,238 +546,85 @@ namespace MARAS {
     }
 
     std::vector<RE::FormID> PlayerHouseService::GetPlayerHouseTenants(RE::FormID playerHouseFormID) const {
-        const auto* h = FindHouse(playerHouseFormID);
-        return h ? h->tenants : std::vector<RE::FormID>{};
+        if (playerHouseFormID == 0) return {};
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* h = snap->household->FindHouse(State::HouseId{ playerHouseFormID });
+        if (!h) return {};
+        return std::vector<RE::FormID>(h->tenantOrder.begin(), h->tenantOrder.end());
     }
 
     RE::FormID PlayerHouseService::GetTenantHouseFormID(RE::FormID tenantFormID) const noexcept {
         if (tenantFormID == 0) return 0;
-        auto it = tenants_.find(tenantFormID);
-        return (it != tenants_.end()) ? it->second.house : 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->household->GetTenantHouse(tenantFormID).raw();
     }
 
     int PlayerHouseService::CountPlayerHouses() const noexcept {
-        return static_cast<int>(houses_.size());
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return static_cast<int>(snap->household->AllHouses().size());
     }
 
     void PlayerHouseService::SetHouseInitialMoveDone(RE::FormID houseFormID, bool done) {
-        if (auto* h = FindHouse(houseFormID)) {
-            h->initialMoveDone = done;
+        if (houseFormID == 0) return;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* h = ws.household.Write().FindHouseMutable(State::HouseId{ houseFormID })) {
+                h->initialMoveDone = done;
+                updated = true;
+            }
+        });
+        if (updated) {
             MARAS_LOG_INFO("SetHouseInitialMoveDone: house {:08X} initialMoveDone = {}", houseFormID, done);
         }
     }
 
     bool PlayerHouseService::IsHouseInitialMoveDone(RE::FormID houseFormID) const {
-        const auto* h = FindHouse(houseFormID);
+        if (houseFormID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* h = snap->household->FindHouse(State::HouseId{ houseFormID });
         return h ? h->initialMoveDone : false;
     }
 
-    bool PlayerHouseService::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
+    void PlayerHouseService::FinalizeLoad() {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& hh = *snap->household;
 
-        std::uint32_t houseCount = static_cast<std::uint32_t>(houses_.size());
-        if (!serialization->WriteRecordData(houseCount)) return false;
-
-        for (const auto& house : houses_) {
-            if (!serialization->WriteRecordData(house.id)) return false;
-            if (!serialization->WriteRecordData(house.marker)) return false;
-            if (!serialization->WriteRecordData(house.initialMoveDone)) return false;
-
-            std::uint32_t tenantCount = static_cast<std::uint32_t>(house.tenants.size());
-            if (!serialization->WriteRecordData(tenantCount)) return false;
-
-            for (auto tenantID : house.tenants) {
-                if (!serialization->WriteRecordData(tenantID)) return false;
-                bool stayAtHome = GetTenantStayAtHome(tenantID);
-                if (!serialization->WriteRecordData(stayAtHome)) return false;
-            }
+        if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
+            global->value = static_cast<float>(hh.AllHouses().size());
         }
 
-        MARAS_LOG_INFO("Saved {} player houses", houseCount);
-        return true;
-    }
+        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        auto& idx = NPCIndex::GetSingleton();
+        std::size_t syncedCount = 0;
 
-    bool PlayerHouseService::Load(SKSE::SerializationInterface* serialization, std::uint32_t version) {
-        if (!serialization) return false;
-
-        Revert();
-
-        auto failLoad = [this]() -> bool {
-            Revert();
-            return false;
-        };
-
-        constexpr std::uint32_t kMaxHouses = 1000;
-        constexpr std::uint32_t kMaxTenants = 10000;
-
-        std::uint32_t houseCount = 0;
-        if (!serialization->ReadRecordData(houseCount)) return failLoad();
-        if (houseCount > kMaxHouses) {
-            MARAS_LOG_ERROR("PlayerHouseService::Load - corrupt houseCount {}", houseCount);
-            return failLoad();
-        }
-
-        houses_.reserve(houseCount);
-        for (std::uint32_t i = 0; i < houseCount; ++i) {
-            RE::FormID savedHouse = 0;
-            if (!serialization->ReadRecordData(savedHouse)) return failLoad();
-
-            RE::FormID savedMarker = 0;
-            if (!serialization->ReadRecordData(savedMarker)) return failLoad();
-
-            bool moveDone = false;
-            if (version >= 4) {
-                if (!serialization->ReadRecordData(moveDone)) return failLoad();
+        for (const auto& [tenantID, assignment] : hh.AllTenants()) {
+            if (tenantID == 0 || tenantID == kPlayerFormID || IsSyntheticChildID(tenantID)) {
+                continue;
             }
-
-            std::uint32_t tenantCount = 0;
-            if (!serialization->ReadRecordData(tenantCount)) return failLoad();
-            if (tenantCount > kMaxTenants) {
-                MARAS_LOG_ERROR("PlayerHouseService::Load - corrupt tenantCount {}", tenantCount);
-                return failLoad();
-            }
-
-            struct LoadedTenant {
-                RE::FormID savedID{0};
-                bool stayAtHome{true};
-            };
-            std::vector<LoadedTenant> loadedTenants;
-            loadedTenants.reserve(tenantCount);
-
-            for (std::uint32_t j = 0; j < tenantCount; ++j) {
-                RE::FormID savedTid = 0;
-                if (!serialization->ReadRecordData(savedTid)) return failLoad();
-                bool stayAtHome = true;
-                if (version >= 4) {
-                    if (!serialization->ReadRecordData(stayAtHome)) return failLoad();
-                }
-                loadedTenants.push_back({savedTid, stayAtHome});
-            }
-
-            if (savedHouse == 0) continue;
-            RE::FormID houseID = 0;
-            if (!serialization->ResolveFormID(savedHouse, houseID) || houseID == 0) {
+            if (relMgr.IsChildNPC(tenantID)) {
                 continue;
             }
 
-            RE::FormID markerID = 0;
-            if (savedMarker != 0) {
-                serialization->ResolveFormID(savedMarker, markerID);
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(tenantID);
+            if (!actor) {
+                actor = idx.GetActorFromFormId(tenantID);
             }
-
-            House house{houseID, markerID, moveDone, {}};
-            house.tenants.reserve(tenantCount);
-
-            for (const auto& lt : loadedTenants) {
-                if (lt.savedID == 0) continue;
-                if (IsSyntheticChildID(lt.savedID)) {
-                    if (std::find(house.tenants.begin(), house.tenants.end(), lt.savedID) == house.tenants.end()) {
-                        house.tenants.push_back(lt.savedID);
-                    }
-                    tenants_[lt.savedID] = Tenant{houseID, true};
-                    continue;
+            if (actor && !actor->IsDead()) {
+                SetHousedFaction(tenantID, true);
+                AddMerchantFactionsToTenant(tenantID);
+                if (!assignment.houseId.IsNull()) {
+                    UpdateSpouseHomeMarker(tenantID, assignment.houseId.raw());
                 }
-                RE::FormID resolvedTid = 0;
-                bool resolved = false;
-                if ((lt.savedID & 0xFF000000) == 0xFF000000) {
-                    resolvedTid = lt.savedID;
-                    resolved = true;
-                } else {
-                    resolved = serialization->ResolveFormID(lt.savedID, resolvedTid) && resolvedTid != 0;
-                }
-                if (resolved && resolvedTid != 0 && resolvedTid != kPlayerFormID) {
-                    if (std::find(house.tenants.begin(), house.tenants.end(), resolvedTid) == house.tenants.end()) {
-                        house.tenants.push_back(resolvedTid);
-                    }
-                    tenants_[resolvedTid] = Tenant{houseID, lt.stayAtHome};
-                }
+                ++syncedCount;
             }
-
-            houses_.push_back(std::move(house));
+            ApplyStayAtHome(tenantID, assignment.stayAtHome);
         }
 
-        if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
-            global->value = static_cast<float>(houses_.size());
-        }
-
-        MARAS_LOG_INFO("Loaded {} player houses (from {} saved entries)", houses_.size(), houseCount);
-        return true;
-    }
-
-    void PlayerHouseService::FinalizeLoad() {
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        auto& deceasedReg = DeceasedRegistry::GetSingleton();
-        auto& idx = NPCIndex::GetSingleton();
-
-        std::size_t prunedCount = 0;
-        for (auto& house : houses_) {
-            std::vector<RE::FormID> survivingTenants;
-            survivingTenants.reserve(house.tenants.size());
-
-            for (RE::FormID tID : house.tenants) {
-                if (tID == 0 || tID == kPlayerFormID) {
-                    tenants_.erase(tID);
-                    ++prunedCount;
-                    continue;
-                }
-
-                if (IsSyntheticChildID(tID)) {
-                    if (!relMgr.GetChildEntry(tID).has_value()) {
-                        MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - pruning unresolved synthetic child {:08X} from house {:08X}",
-                                       tID, house.id);
-                        tenants_.erase(tID);
-                        ++prunedCount;
-                        continue;
-                    }
-                    tenants_[tID] = Tenant{house.id, true};
-                    survivingTenants.push_back(tID);
-                    continue;
-                }
-
-                auto* actor = RE::TESForm::LookupByID<RE::Actor>(tID);
-                if (!actor) {
-                    actor = idx.GetActorFromFormId(tID);
-                }
-                if (deceasedReg.IsDeceased(tID) || (actor && actor->IsDead()) || !ActorSvc::IsValid(tID)) {
-                    MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - pruning dead/invalid tenant {:08X} from house {:08X}",
-                                   tID, house.id);
-                    tenants_.erase(tID);
-                    ++prunedCount;
-                    continue;
-                }
-
-                if (relMgr.IsChildNPC(tID)) {
-                    tenants_[tID].stayAtHome = true;
-                } else if (actor) {
-                    SetHousedFaction(tID, true);
-                    AddMerchantFactionsToTenant(tID);
-                }
-                survivingTenants.push_back(tID);
-            }
-
-            house.tenants = std::move(survivingTenants);
-        }
-
-        // Prune any orphaned map entries not belonging to a valid house vector
-        for (auto it = tenants_.begin(); it != tenants_.end();) {
-            const auto* house = FindHouse(it->second.house);
-            if (!house || std::find(house->tenants.begin(), house->tenants.end(), it->first) == house->tenants.end()) {
-                it = tenants_.erase(it);
-                ++prunedCount;
-            } else {
-                ++it;
-            }
-        }
-
-        if (prunedCount > 0) {
-            MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - pruned {} stale tenant record(s); {} active tenant(s) remain",
-                           prunedCount, tenants_.size());
-        }
+        MARAS_LOG_INFO("PlayerHouseService::FinalizeLoad - synced {} house(s) and {} loaded adult tenant(s)",
+                       hh.AllHouses().size(), syncedCount);
     }
 
     void PlayerHouseService::Revert() {
-        houses_.clear();
-        tenants_.clear();
         if (auto* global = FormCache::GetSingleton().GetPlayerHousesCount()) {
             global->value = 0.0f;
         }
@@ -756,20 +632,26 @@ namespace MARAS {
     }
 
     nlohmann::json PlayerHouseService::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& hh = *snap->household;
+
         nlohmann::json j = nlohmann::json::array();
-        for (const auto& house : houses_) {
+        for (const auto& house : hh.AllHouses()) {
+            const RE::FormID houseID = house.houseId.raw();
+            const RE::FormID markerID = house.markerId.raw();
+
             nlohmann::json h;
-            h["houseFormId"] = std::format("{:08X}", house.id);
-            h["name"] = GetHouseName(house.id);
-            h["markerFormId"] = house.marker != 0 ? std::format("{:08X}", house.marker) : "";
+            h["houseFormId"] = std::format("{:08X}", houseID);
+            h["name"] = GetHouseName(houseID);
+            h["markerFormId"] = markerID != 0 ? std::format("{:08X}", markerID) : "";
             h["initialMoveDone"] = house.initialMoveDone;
 
             nlohmann::json tenantsArray = nlohmann::json::array();
-            for (auto tID : house.tenants) {
+            for (const RE::FormID tID : house.tenantOrder) {
                 nlohmann::json t;
                 t["formId"] = std::format("{:08X}", tID);
                 t["name"] = ActorSvc::GetName(tID);
-                t["stayAtHome"] = GetTenantStayAtHome(tID);
+                t["stayAtHome"] = hh.GetTenantStayAtHome(tID);
                 tenantsArray.push_back(t);
             }
             h["tenants"] = tenantsArray;

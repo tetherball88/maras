@@ -74,6 +74,7 @@ target_include_directories(maras_foundation PUBLIC
 add_library(maras_state STATIC
     modules/state/src/WorldTables.cpp
     modules/state/src/WorldState.cpp
+    modules/state/src/WorldStore.cpp
     modules/state/src/CoSaveCodec.cpp
 )
 target_compile_features(maras_state PUBLIC cxx_std_23)
@@ -174,6 +175,7 @@ if(MARAS_BUILD_TESTS)
         tests/test_cosave_migrations.cpp
         tests/test_custody_and_death.cpp
         tests/test_affair_ledger.cpp
+        tests/test_world_store.cpp
     )
     target_compile_features(maras_tests PRIVATE cxx_std_23)
     target_include_directories(maras_tests PRIVATE

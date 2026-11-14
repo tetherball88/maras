@@ -1,62 +1,83 @@
 #pragma once
 
 #include "PCH.h"
+#include "maras/state/CoSaveCodec.h"
+#include "maras/state/WorldState.h"
 
-namespace MARAS {
-    namespace Serialization {
-        // Plugin unique ID for SKSE serialization (must be exactly 4 characters)
-        constexpr std::uint32_t kMarasPluginID = 'MARS';
+namespace MARAS::Serialization {
 
-        // Current version of our serialization format
-        // Version 1: Original format (released)
-        // Version 2: Added homeMarker field to NPCRelationshipData (released)
-        // Version 3: Added addedKeywords set to NPCRelationshipData (released)
-        // Version 4: Unified format: NPC-NPC relationship pairs, status history, cheating records,
-        //            pending deferred relationships & children, child-centric registry (lifecycle,
-        //            fertility, paternity secrets, neutral guardians), and tenant stay-at-home preference.
-        // Version 5: Added presumedFatherID to ChildRegistryEntry in NPCRelationshipData.
-        // Version 6: Added trainingClassIndex, trainingStartGameDay, savedBioTemplateName, and savedRaceIndex
-        //            to ChildRegistryEntry in NPCRelationshipData.
-        // Version 7: Added PaternitySecret::bioFatherName and bioFatherRaceID to ChildRegistryEntry in
-        //            NPCRelationshipData ('NPCR'), dailyAffection_ per-type daily cap tracking to
-        //            AffectionService ('AFCT'), originalBedOwners_ furniture ownership map to
-        //            SpouseAssetsService ('SPAS'), optional DeceasedChildInfo on adult records in
-        //            DeceasedRegistry ('DCSD'), and two-phase post-chunk cross-service finalization.
-        constexpr std::uint32_t kDataVersion = 7;
+    // Plugin unique ID for SKSE serialization (must be exactly 4 characters)
+    constexpr std::uint32_t kMarasPluginID = 'MARS';
 
-        // Top-level SKSE co-save record types (12 records).
-        // Note: Status history, pending deferred relationships, pending deferred children, and the
-        // child-centric registry are serialized inline within kNPCRelationshipData ('NPCR').
-        constexpr std::uint32_t kNPCRelationshipData = 'NPCR';
-        // Spouse hierarchy data record
-        constexpr std::uint32_t kSpouseHierarchyData = 'SPHR';
-        // Affection system persistent data
-        constexpr std::uint32_t kAffectionData = 'AFCT';
-        // Player house persistent data
-        constexpr std::uint32_t kPlayerHouseData = 'PHOU';
-        // Spouse assets persistent data
-        constexpr std::uint32_t kSpouseAssetsData = 'SPAS';
-        // Player children runtime service data
-        constexpr std::uint32_t kPlayerChildrenData = 'PLCH';
-        // Child faction snapshots persistent data
-        constexpr std::uint32_t kChildFactionSnapshotData = 'CFSN';
-        // Matchmaking service persistent data
-        constexpr std::uint32_t kMatchmakingData = 'MKMK';
-        // Deceased registry persistent data
-        constexpr std::uint32_t kDeceasedRegistryData = 'DCSD';
-        // Banter coordinator persistent data
-        constexpr std::uint32_t kBanterData = 'BNTR';
-        // Adult child travel service persistent data
-        constexpr std::uint32_t kAdultChildTravelData = 'ACTR';
-        // Plugin settings (persistable global settings such as log level)
-        constexpr std::uint32_t kPluginSettingsData = 'CNFG';
+    // Current version of our serialization format (see State::CoSaveConstants for chunk details)
+    constexpr std::uint32_t kDataVersion = 7;
 
-        // Magic number to validate data integrity
-        constexpr std::uint32_t kMagicNumber = 0xDEADBEEF;
+    // Top-level SKSE co-save record types (12 records).
+    constexpr std::uint32_t kNPCRelationshipData = 'NPCR';
+    constexpr std::uint32_t kSpouseHierarchyData = 'SPHR';
+    constexpr std::uint32_t kAffectionData = 'AFCT';
+    constexpr std::uint32_t kPlayerHouseData = 'PHOU';
+    constexpr std::uint32_t kSpouseAssetsData = 'SPAS';
+    constexpr std::uint32_t kPlayerChildrenData = 'PLCH';
+    constexpr std::uint32_t kChildFactionSnapshotData = 'CFSN';
+    constexpr std::uint32_t kMatchmakingData = 'MKMK';
+    constexpr std::uint32_t kDeceasedRegistryData = 'DCSD';
+    constexpr std::uint32_t kBanterData = 'BNTR';
+    constexpr std::uint32_t kAdultChildTravelData = 'ACTR';
+    constexpr std::uint32_t kPluginSettingsData = 'CNFG';
 
-        // SKSE Co-Save Serialization Callbacks
-        void SaveCallback(SKSE::SerializationInterface* serialization);
-        void LoadCallback(SKSE::SerializationInterface* serialization);
-        void RevertCallback(SKSE::SerializationInterface* serialization);
-    }
-}
+    // Magic number to validate data integrity
+    constexpr std::uint32_t kMagicNumber = 0xDEADBEEF;
+
+    // Engine adapters bridging SKSE::SerializationInterface and CommonLibSSE actor/form lookups
+    // to the engine-header-free MARAS::State::WorldState and CoSaveCodec.
+    class SkseCoSaveReader final : public State::ICoSaveReader {
+    public:
+        explicit SkseCoSaveReader(SKSE::SerializationInterface* serialization) noexcept
+            : serialization_(serialization) {}
+
+        bool NextRecordInfo(std::uint32_t& outType, std::uint32_t& outVersion, std::uint32_t& outLength) override;
+        bool ReadBytes(void* dst, std::uint32_t numBytes) override;
+
+    private:
+        SKSE::SerializationInterface* serialization_{ nullptr };
+    };
+
+    class SkseCoSaveWriter final : public State::ICoSaveWriter {
+    public:
+        explicit SkseCoSaveWriter(SKSE::SerializationInterface* serialization) noexcept
+            : serialization_(serialization) {}
+
+        bool OpenRecord(std::uint32_t type, std::uint32_t version) override;
+        bool WriteBytes(const void* src, std::uint32_t numBytes) override;
+
+    private:
+        SKSE::SerializationInterface* serialization_{ nullptr };
+    };
+
+    class SkseFormIdResolver final : public State::IFormIdResolver {
+    public:
+        explicit SkseFormIdResolver(SKSE::SerializationInterface* serialization = nullptr) noexcept
+            : serialization_(serialization) {}
+
+        [[nodiscard]] bool ResolveFormId(std::uint32_t oldRawId, std::uint32_t& outNewRawId) const noexcept override;
+        [[nodiscard]] State::ActorSex GetSex(Foundation::ActorId actor) const noexcept override;
+        [[nodiscard]] bool IsAliveAndValid(Foundation::ActorId actor) const noexcept override;
+        [[nodiscard]] bool IsDynamicActorPresent(Foundation::RefId refId) const noexcept override;
+        [[nodiscard]] std::string GetActorName(Foundation::ActorId actor) const override;
+        [[nodiscard]] Foundation::FormRawId GetActorRaceId(Foundation::ActorId actor) const noexcept override;
+        [[nodiscard]] Foundation::BaseId GetActorBaseId(Foundation::ActorId actor) const noexcept override;
+
+    private:
+        SKSE::SerializationInterface* serialization_{ nullptr };
+    };
+
+    // Connects MARAS::Foundation::SetLogSink to MARAS_LOG_* macros
+    void InitializeFoundationLogSink() noexcept;
+
+    // SKSE Co-Save Serialization Callbacks
+    void SaveCallback(SKSE::SerializationInterface* serialization);
+    void LoadCallback(SKSE::SerializationInterface* serialization);
+    void RevertCallback(SKSE::SerializationInterface* serialization);
+
+}  // namespace MARAS::Serialization

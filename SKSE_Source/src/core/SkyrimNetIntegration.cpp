@@ -615,7 +615,7 @@ namespace {
         auto findOpenPrimary = [&](RE::FormID excludedPartnerID) -> RE::FormID {
             for (auto partnerID : partnerIDs) {
                 if (partnerID == excludedPartnerID) continue;
-                const auto* data = mgr.GetNPCData(actorFormID, partnerID);
+                const auto data = mgr.GetNPCData(actorFormID, partnerID);
                 if (data && isMainTierStatus(data->status) && data->isOpen) {
                     return partnerID;
                 }
@@ -625,14 +625,14 @@ namespace {
         auto hasOtherMainPair = [&](RE::FormID excludedPartnerID) {
             for (auto partnerID : partnerIDs) {
                 if (partnerID == excludedPartnerID) continue;
-                const auto* data = mgr.GetNPCData(actorFormID, partnerID);
+                const auto data = mgr.GetNPCData(actorFormID, partnerID);
                 if (data && isMainTierStatus(data->status)) return true;
             }
             return false;
         };
 
         for (auto partnerID : partnerIDs) {
-            const auto* data = mgr.GetNPCData(actorFormID, partnerID);
+            const auto data = mgr.GetNPCData(actorFormID, partnerID);
             if (!data) continue;
 
             if (isCurrentStatus(data->status) && !isActorCheatingWith(partnerID)) {
@@ -668,7 +668,7 @@ namespace {
             }
         }
 
-        const auto* playerRelationship = mgr.GetNPCData(actorFormID, kPlayerFormID);
+        const auto playerRelationship = mgr.GetNPCData(actorFormID, kPlayerFormID);
         if (actorFormID != kPlayerFormID && playerRelationship && isCurrentStatus(playerRelationship->status)) {
             j["player_relationship_status"] = statusToKey(playerRelationship->status);
             const auto& affSvc = AffectionService::GetSingleton();
@@ -692,7 +692,7 @@ namespace {
             std::vector<PlayerPartner> playerPartners;
             for (auto partnerID : mgr.GetAllPartners(kPlayerFormID)) {
                 if (partnerID == actorFormID) continue;
-                const auto* data = mgr.GetNPCData(kPlayerFormID, partnerID);
+                const auto data = mgr.GetNPCData(kPlayerFormID, partnerID);
                 if (data && isCurrentStatus(data->status)) {
                     playerPartners.push_back({ partnerID, data->status });
                 }
@@ -1842,7 +1842,7 @@ void RegisterSkyrimNetDecorators()
             std::string result;
             auto appendExclusivePartners = [&](const std::vector<RE::FormID>& partners) {
                 for (auto partnerId : partners) {
-                    const auto* rData = mgr.GetNPCData(fid, partnerId);
+                    const auto rData = mgr.GetNPCData(fid, partnerId);
                     if (rData && rData->isOpen) {
                         continue;
                     }
@@ -1913,7 +1913,7 @@ void RegisterSkyrimNetDecorators()
             std::string result;
             auto appendOpenPartners = [&](const std::vector<RE::FormID>& partners) {
                 for (auto partnerId : partners) {
-                    const auto* rData = mgr.GetNPCData(fid, partnerId);
+                    const auto rData = mgr.GetNPCData(fid, partnerId);
                     if (rData && rData->isOpen) {
                         std::string name = ActorSvc::GetName(partnerId);
                         if (!name.empty() && name != "None") {
@@ -1959,7 +1959,7 @@ void RegisterSkyrimNetDecorators()
         if (!mgr.GetAllPartners(fid).empty()) {
             return "true";
         }
-        if (mgr.GetNPCProfile(fid) != nullptr) {
+        if (mgr.GetNPCProfile(fid).has_value()) {
             return "true";
         }
 

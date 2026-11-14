@@ -13,9 +13,6 @@
 namespace MARAS {
 
     namespace {
-        constexpr uint8_t kSettingsVersionMarker = 0xFF;
-        constexpr uint32_t kSettingsSubVersion = 4;
-
         const std::unordered_map<std::string, uint32_t> kKeyNameToDxCode = {
             {"F1", 0x3B}, {"F2", 0x3C}, {"F3", 0x3D}, {"F4", 0x3E},
             {"F5", 0x3F}, {"F6", 0x40}, {"F7", 0x41}, {"F8", 0x42},
@@ -59,139 +56,157 @@ namespace MARAS {
             }
         }
 
-        // Single canonical table of all co-save persisted settings in exact binary serialization order.
-        // Used by SaveGameSettings, LoadGameSettings, RevertGameSettings, and DumpJson so fields and
-        // default values never drift out of sync.
-        template <typename Visitor>
-        void ForEachPersistedSetting(Visitor&& visit) {
-            // Required initial v4 header block (10 fields)
-            visit("skipWedding", &Settings::skipWedding, true);
-            visit("alwaysSuccessMarriage", &Settings::alwaysSuccessMarriage, true);
-            visit("logDestination", &Settings::logDestination, true);
-            visit("logLevel", &Settings::logLevel, true);
-            visit("affectionDecayMultiplier", &Settings::affectionDecayMultiplier, true);
-            visit("confirmStatusChange_Marry", &Settings::confirmStatusChange_Marry, true);
-            visit("confirmBreakup_Engagement", &Settings::confirmBreakup_Engagement, true);
-            visit("confirmDivorce", &Settings::confirmDivorce, true);
-            visit("confirmDivorceDuringLowAffectionQuest", &Settings::confirmDivorceDuringLowAffectionQuest, true);
-            visit("migratedFromStorageUtil", &Settings::migratedFromStorageUtil, true);
-
-            // Optional tail fields (in exact binary stream order)
-            visit("initialRelationshipScanDone", &Settings::initialRelationshipScanDone, false);
-            visit("childCustodyGenderPolicy", &Settings::childCustodyGenderPolicy, false);
-            visit("childCustodyPlayerPolicy", &Settings::childCustodyPlayerPolicy, false);
-            visit("childCustodyPrioritizeBioParent", &Settings::childCustodyPrioritizeBioParent, false);
-            visit("bGlobalBanCritter", &Settings::bGlobalBanCritter, false);
-            visit("bGlobalBanPet", &Settings::bGlobalBanPet, false);
-            visit("enableConfirmPlayerNpc", &Settings::enableConfirmPlayerNpc, false);
-            visit("enableConfirmNpcNpc", &Settings::enableConfirmNpcNpc, false);
-            visit("confirmStatusChange_Dating", &Settings::confirmStatusChange_Dating, false);
-            visit("confirmStatusChange_Engagement", &Settings::confirmStatusChange_Engagement, false);
-            visit("confirmStatusChange_Lover", &Settings::confirmStatusChange_Lover, false);
-            visit("confirmBreakup_Dating", &Settings::confirmBreakup_Dating, false);
-            visit("confirmBreakup_Lover", &Settings::confirmBreakup_Lover, false);
-            visit("confirmOpenRelationship", &Settings::confirmOpenRelationship, false);
-            visit("confirmCloseRelationship", &Settings::confirmCloseRelationship, false);
-            visit("skyrimnetActionRadius", &Settings::skyrimnetActionRadius, false);
-            visit("matchmakingEnabled", &Settings::matchmakingEnabled, false);
-            visit("matchmakingIntervalDays", &Settings::matchmakingIntervalDays, false);
-            visit("matchmakingMaxSuggestions", &Settings::matchmakingMaxSuggestions, false);
-            visit("matchmakingAllowBreakups", &Settings::matchmakingAllowBreakups, false);
-            visit("matchmakingAllowOpenClose", &Settings::matchmakingAllowOpenClose, false);
-            visit("matchmakingOrientation", &Settings::matchmakingOrientation, false);
-            visit("matchmakingAllowCheating", &Settings::matchmakingAllowCheating, false);
-            visit("matchmakingNpcCooldownDays", &Settings::matchmakingNpcCooldownDays, false);
-            visit("matchmakingUseLLM", &Settings::matchmakingUseLLM, false);
-            visit("diceRollChanceNewDating", &Settings::diceRollChanceNewDating, false);
-            visit("diceRollChanceNewEngaged", &Settings::diceRollChanceNewEngaged, false);
-            visit("diceRollChanceNewLoverAllowed", &Settings::diceRollChanceNewLoverAllowed, false);
-            visit("diceRollChanceNewLoverCheating", &Settings::diceRollChanceNewLoverCheating, false);
-            visit("diceRollChanceAdvance", &Settings::diceRollChanceAdvance, false);
-            visit("diceRollChanceBreakup", &Settings::diceRollChanceBreakup, false);
-            visit("diceRollChanceOpenClose", &Settings::diceRollChanceOpenClose, false);
-            visit("simulateNoSkyrimNet", &Settings::simulateNoSkyrimNet, false);
-            visit("matchmakingEvaluationStep", &Settings::matchmakingEvaluationStep, false);
-            visit("matchmakingGenerateMemories", &Settings::matchmakingGenerateMemories, false);
-            visit("paternityBaseChance", &Settings::paternityBaseChance, false);
-            visit("paternityDailyGrowth", &Settings::paternityDailyGrowth, false);
-            visit("paternityMaxChance", &Settings::paternityMaxChance, false);
-            visit("paternityPhenotypeBaseChance", &Settings::paternityPhenotypeBaseChance, false);
-            visit("paternityPhenotypeDailyGrowth", &Settings::paternityPhenotypeDailyGrowth, false);
-            visit("paternityPhenotypeMaxChance", &Settings::paternityPhenotypeMaxChance, false);
-            visit("paternityPhenotypeBirthChance", &Settings::paternityPhenotypeBirthChance, false);
-            visit("paternityNonSkyrimNetRevealChance", &Settings::paternityNonSkyrimNetRevealChance, false);
-            visit("paternityBreakupChance", &Settings::paternityBreakupChance, false);
-            visit("paternityBioStepUpChance", &Settings::paternityBioStepUpChance, false);
-            visit("paternityForceDiceRolls", &Settings::paternityForceDiceRolls, false);
-            visit("enableScenes", &Settings::enableScenes, false);
-            visit("enableScenes_Lover", &Settings::enableScenes_Lover, false);
-            visit("enableScenes_Dating", &Settings::enableScenes_Dating, false);
-            visit("enableScenes_Engaged", &Settings::enableScenes_Engaged, false);
-            visit("enableScenes_Married", &Settings::enableScenes_Married, false);
-            visit("enableScenes_OpenRelationship", &Settings::enableScenes_OpenRelationship, false);
-            visit("enableScenes_Cheating", &Settings::enableScenes_Cheating, false);
-            visit("enableScenes_CheatingDiscovered", &Settings::enableScenes_CheatingDiscovered, false);
-            visit("enableScenes_CheatingCaught", &Settings::enableScenes_CheatingCaught, false);
-            visit("enableScenes_LocTypeTemple", &Settings::enableScenes_LocTypeTemple, false);
-            visit("enableScenes_LocTypeStore", &Settings::enableScenes_LocTypeStore, false);
-            visit("enableScenes_LocTypeStewardsDwelling", &Settings::enableScenes_LocTypeStewardsDwelling, false);
-            visit("enableScenes_LocTypeInn", &Settings::enableScenes_LocTypeInn, false);
-            visit("enableScenes_LocTypeHouse", &Settings::enableScenes_LocTypeHouse, false);
-            visit("enableScenes_LocTypeBarracks", &Settings::enableScenes_LocTypeBarracks, false);
-            visit("enableScenes_LocTypeFarm", &Settings::enableScenes_LocTypeFarm, false);
-            visit("enableScenes_LocTypeGuild", &Settings::enableScenes_LocTypeGuild, false);
-            visit("enableScenes_LocTypePlayerHouse", &Settings::enableScenes_LocTypePlayerHouse, false);
-            visit("enableScenes_BYOH_LocTypeHomestead", &Settings::enableScenes_BYOH_LocTypeHomestead, false);
-            visit("enableScenes_LocTypeTown", &Settings::enableScenes_LocTypeTown, false);
-            visit("enableScenes_LocTypeSettlement", &Settings::enableScenes_LocTypeSettlement, false);
-            visit("enableScenes_LocTypeOrcStronghold", &Settings::enableScenes_LocTypeOrcStronghold, false);
-            visit("enableScenes_LocTypeCity", &Settings::enableScenes_LocTypeCity, false);
-            visit("enableScenes_LocTypeLumberMill", &Settings::enableScenes_LocTypeLumberMill, false);
-            visit("scenesCooldownHours", &Settings::scenesCooldownHours, false);
-            visit("disablePolygamyQuest", &Settings::disablePolygamyQuest, false);
-            visit("matchmakingConfirmResults", &Settings::matchmakingConfirmResults, false);
-            visit("revealSecretsInUI", &Settings::revealSecretsInUI, false);
-            visit("uiFullScreen", &Settings::uiFullScreen, false);
-            visit("uiScale", &Settings::uiScale, false);
-            visit("autoPauseOnOpen", &Settings::autoPauseOnOpen, false);
-            visit("playerPartnerCheatingAgencyEnabled", &Settings::playerPartnerCheatingAgencyEnabled, false);
-            visit("playerPartnerCheatingChanceMultiplier", &Settings::playerPartnerCheatingChanceMultiplier, false);
-            visit("playerPartnerCheatingMaxRollCap", &Settings::playerPartnerCheatingMaxRollCap, false);
-            visit("playerPartnerCheatingMaxSecretLovers", &Settings::playerPartnerCheatingMaxSecretLovers, false);
-            visit("playerPartnerCheatingAllowWhenHappy", &Settings::playerPartnerCheatingAllowWhenHappy, false);
-            visit("playerPartnerCheatingEnableNeglect", &Settings::playerPartnerCheatingEnableNeglect, false);
-            visit("playerPartnerCheatingEnableRevenge", &Settings::playerPartnerCheatingEnableRevenge, false);
-            visit("playerPartnerCheatingEnableHierarchy", &Settings::playerPartnerCheatingEnableHierarchy, false);
-            visit("playerPartnerCheatingEnableChildrenAnchor", &Settings::playerPartnerCheatingEnableChildrenAnchor, false);
-            visit("playerPartnerCheatingUseLLM", &Settings::playerPartnerCheatingUseLLM, false);
-            visit("playerPartnerCheatingConfirmResults", &Settings::playerPartnerCheatingConfirmResults, false);
-            visit("lonelinessThresholdDays", &Settings::lonelinessThresholdDays, false);
-            visit("playerPartnerAgencyOpenLoverChanceMultiplier", &Settings::playerPartnerAgencyOpenLoverChanceMultiplier, false);
-            visit("playerPartnerAgencyBreakupChanceMultiplier", &Settings::playerPartnerAgencyBreakupChanceMultiplier, false);
-            visit("playerPartnerAgencyEnableForceGreets", &Settings::playerPartnerAgencyEnableForceGreets, false);
-            visit("playerPartnerAgencyEnableHomeArrivalEvents", &Settings::playerPartnerAgencyEnableHomeArrivalEvents, false);
-            visit("playerPartnerOpenRelAgencyEnabled", &Settings::playerPartnerOpenRelAgencyEnabled, false);
-            visit("multLonelinessDecayStart", &Settings::multLonelinessDecayStart, false);
-            visit("multPartnerAgencyScanInterval", &Settings::multPartnerAgencyScanInterval, false);
-            visit("multRecentAttentionWindow", &Settings::multRecentAttentionWindow, false);
-            visit("multVeryRecentVisitWindow", &Settings::multVeryRecentVisitWindow, false);
-            visit("multNeglectGrowthStart", &Settings::multNeglectGrowthStart, false);
-            visit("multContentNeglectStart", &Settings::multContentNeglectStart, false);
-            visit("multProlongedAbsencePenalty", &Settings::multProlongedAbsencePenalty, false);
-            visit("multAffairTalkingEscalation", &Settings::multAffairTalkingEscalation, false);
-            visit("multMinSideFlingAgeForBreakup", &Settings::multMinSideFlingAgeForBreakup, false);
-            visit("multPartnerIntentTTL", &Settings::multPartnerIntentTTL, false);
-            visit("multHomeArrivalCooldown", &Settings::multHomeArrivalCooldown, false);
-            visit("multAffairFatigueStart", &Settings::multAffairFatigueStart, false);
-            visit("multRomanticAttendedBreakup", &Settings::multRomanticAttendedBreakup, false);
-            visit("multSuggestOpenNeglectMin", &Settings::multSuggestOpenNeglectMin, false);
-            visit("skyrimnetUseLLMMemories", &Settings::skyrimnetUseLLMMemories, false);
-            visit("skyrimnetUseDecisions", &Settings::skyrimnetUseDecisions, false);
-            visit("childTrainingDurationDays", &Settings::childTrainingDurationDays, false);
-            visit("childTrainingCost", &Settings::childTrainingCost, false);
-            visit("childTrainingRequireFaction", &Settings::childTrainingRequireFaction, false);
+        const std::unordered_map<std::string_view, bool State::SettingsData::*>& GetBoolSettingMap() {
+            static const std::unordered_map<std::string_view, bool State::SettingsData::*> kMap = {
+                {"disablepolygamyquest", &State::SettingsData::disablePolygamyQuest},
+                {"skipwedding", &State::SettingsData::skipWedding},
+                {"alwayssuccessmarriage", &State::SettingsData::alwaysSuccessMarriage},
+                {"alwayssuccess", &State::SettingsData::alwaysSuccessMarriage},
+                {"confirmstatuschange_marry", &State::SettingsData::confirmStatusChange_Marry},
+                {"confirmacceptproposal", &State::SettingsData::confirmStatusChange_Marry},
+                {"confirmbreakup_engagement", &State::SettingsData::confirmBreakup_Engagement},
+                {"confirmbreakupengagement", &State::SettingsData::confirmBreakup_Engagement},
+                {"confirmdivorce", &State::SettingsData::confirmDivorce},
+                {"confirmdivorceduringlowaffectionquest", &State::SettingsData::confirmDivorceDuringLowAffectionQuest},
+                {"confirmlowaffectiondivorce", &State::SettingsData::confirmDivorceDuringLowAffectionQuest},
+                {"migratedfromstorageutil", &State::SettingsData::migratedFromStorageUtil},
+                {"initialrelationshipscandone", &State::SettingsData::initialRelationshipScanDone},
+                {"childcustodyprioritizebioparent", &State::SettingsData::childCustodyPrioritizeBioParent},
+                {"bglobalbancritter", &State::SettingsData::bGlobalBanCritter},
+                {"globalbancritter", &State::SettingsData::bGlobalBanCritter},
+                {"bglobalbanpet", &State::SettingsData::bGlobalBanPet},
+                {"globalbanpet", &State::SettingsData::bGlobalBanPet},
+                {"enableconfirmplayernpc", &State::SettingsData::enableConfirmPlayerNpc},
+                {"enableconfirmnpcnpc", &State::SettingsData::enableConfirmNpcNpc},
+                {"enableconfirmationmodal", &State::SettingsData::enableConfirmationModal},
+                {"confirmstatuschange_dating", &State::SettingsData::confirmStatusChange_Dating},
+                {"confirmstatuschange_engagement", &State::SettingsData::confirmStatusChange_Engagement},
+                {"confirmstatuschange_lover", &State::SettingsData::confirmStatusChange_Lover},
+                {"confirmbreakup_dating", &State::SettingsData::confirmBreakup_Dating},
+                {"confirmbreakup_lover", &State::SettingsData::confirmBreakup_Lover},
+                {"confirmopenrelationship", &State::SettingsData::confirmOpenRelationship},
+                {"confirmcloserelationship", &State::SettingsData::confirmCloseRelationship},
+                {"toggleuimodctrl", &State::SettingsData::toggleUIModCtrl},
+                {"toggleuimodshift", &State::SettingsData::toggleUIModShift},
+                {"toggleuimodalt", &State::SettingsData::toggleUIModAlt},
+                {"matchmakingenabled", &State::SettingsData::matchmakingEnabled},
+                {"matchmakingallowbreakups", &State::SettingsData::matchmakingAllowBreakups},
+                {"matchmakingallowopenclose", &State::SettingsData::matchmakingAllowOpenClose},
+                {"matchmakingallowcheating", &State::SettingsData::matchmakingAllowCheating},
+                {"matchmakingusellm", &State::SettingsData::matchmakingUseLLM},
+                {"matchmakingevaluationstep", &State::SettingsData::matchmakingEvaluationStep},
+                {"matchmakinggeneratememories", &State::SettingsData::matchmakingGenerateMemories},
+                {"skyrimnetusellmmemories", &State::SettingsData::skyrimnetUseLLMMemories},
+                {"skyrimnetusedecisions", &State::SettingsData::skyrimnetUseDecisions},
+                {"matchmakingconfirmresults", &State::SettingsData::matchmakingConfirmResults},
+                {"paternityforcedicerolls", &State::SettingsData::paternityForceDiceRolls},
+                {"revealsecretsinui", &State::SettingsData::revealSecretsInUI},
+                {"uifullscreen", &State::SettingsData::uiFullScreen},
+                {"autopauseonopen", &State::SettingsData::autoPauseOnOpen},
+                {"enablescenes", &State::SettingsData::enableScenes},
+                {"enablescenes_lover", &State::SettingsData::enableScenes_Lover},
+                {"enablescenes_dating", &State::SettingsData::enableScenes_Dating},
+                {"enablescenes_engaged", &State::SettingsData::enableScenes_Engaged},
+                {"enablescenes_married", &State::SettingsData::enableScenes_Married},
+                {"enablescenes_openrelationship", &State::SettingsData::enableScenes_OpenRelationship},
+                {"enablescenes_cheating", &State::SettingsData::enableScenes_Cheating},
+                {"enablescenes_cheatingdiscovered", &State::SettingsData::enableScenes_CheatingDiscovered},
+                {"enablescenes_cheatingcaught", &State::SettingsData::enableScenes_CheatingCaught},
+                {"enablescenes_loctypetemple", &State::SettingsData::enableScenes_LocTypeTemple},
+                {"enablescenes_loctypestore", &State::SettingsData::enableScenes_LocTypeStore},
+                {"enablescenes_loctypestewardsdwelling", &State::SettingsData::enableScenes_LocTypeStewardsDwelling},
+                {"enablescenes_loctypeinn", &State::SettingsData::enableScenes_LocTypeInn},
+                {"enablescenes_loctypehouse", &State::SettingsData::enableScenes_LocTypeHouse},
+                {"enablescenes_loctypebarracks", &State::SettingsData::enableScenes_LocTypeBarracks},
+                {"enablescenes_loctypefarm", &State::SettingsData::enableScenes_LocTypeFarm},
+                {"enablescenes_loctypeguild", &State::SettingsData::enableScenes_LocTypeGuild},
+                {"enablescenes_loctypeplayerhouse", &State::SettingsData::enableScenes_LocTypePlayerHouse},
+                {"enablescenes_byoh_loctypehomestead", &State::SettingsData::enableScenes_BYOH_LocTypeHomestead},
+                {"enablescenes_loctypetown", &State::SettingsData::enableScenes_LocTypeTown},
+                {"enablescenes_loctypesettlement", &State::SettingsData::enableScenes_LocTypeSettlement},
+                {"enablescenes_loctypeorcstronghold", &State::SettingsData::enableScenes_LocTypeOrcStronghold},
+                {"enablescenes_loctypecity", &State::SettingsData::enableScenes_LocTypeCity},
+                {"enablescenes_loctypelumbermill", &State::SettingsData::enableScenes_LocTypeLumberMill},
+                {"playerpartnercheatingagencyenabled", &State::SettingsData::playerPartnerCheatingAgencyEnabled},
+                {"playerpartneropenrelagencyenabled", &State::SettingsData::playerPartnerOpenRelAgencyEnabled},
+                {"playerpartnercheatingallowwhenhappy", &State::SettingsData::playerPartnerCheatingAllowWhenHappy},
+                {"playerpartnercheatingenableneglect", &State::SettingsData::playerPartnerCheatingEnableNeglect},
+                {"playerpartnercheatingenablerevenge", &State::SettingsData::playerPartnerCheatingEnableRevenge},
+                {"playerpartnercheatingenablehierarchy", &State::SettingsData::playerPartnerCheatingEnableHierarchy},
+                {"playerpartnercheatingenablechildrenanchor", &State::SettingsData::playerPartnerCheatingEnableChildrenAnchor},
+                {"playerpartnercheatingusellm", &State::SettingsData::playerPartnerCheatingUseLLM},
+                {"playerpartnercheatingconfirmresults", &State::SettingsData::playerPartnerCheatingConfirmResults},
+                {"playerpartneragencyenableforcegreets", &State::SettingsData::playerPartnerAgencyEnableForceGreets},
+                {"playerpartneragencyenablehomearrivalevents", &State::SettingsData::playerPartnerAgencyEnableHomeArrivalEvents},
+                {"childtrainingrequirefaction", &State::SettingsData::childTrainingRequireFaction}
+            };
+            return kMap;
         }
-    }
+
+        using IntSettingMemberPtr = std::int32_t State::SettingsData::*;
+        const std::unordered_map<std::string_view, IntSettingMemberPtr>& GetIntSettingMap() {
+            static const std::unordered_map<std::string_view, IntSettingMemberPtr> kMap = {
+                {"logdestination", &State::SettingsData::logDestination},
+                {"actionscooldown", &State::SettingsData::actionsCooldown},
+                {"actionsdeclinecooldown", &State::SettingsData::actionsDeclineCooldown},
+                {"matchmakingintervaldays", &State::SettingsData::matchmakingIntervalDays},
+                {"matchmakingmaxsuggestions", &State::SettingsData::matchmakingMaxSuggestions},
+                {"matchmakingnpccooldowndays", &State::SettingsData::matchmakingNpcCooldownDays},
+                {"dicerollchancenewdating", &State::SettingsData::diceRollChanceNewDating},
+                {"dicerollchancenewengaged", &State::SettingsData::diceRollChanceNewEngaged},
+                {"dicerollchancenewloverallowed", &State::SettingsData::diceRollChanceNewLoverAllowed},
+                {"dicerollchancenewlovercheating", &State::SettingsData::diceRollChanceNewLoverCheating},
+                {"dicerollchanceadvance", &State::SettingsData::diceRollChanceAdvance},
+                {"dicerollchancebreakup", &State::SettingsData::diceRollChanceBreakup},
+                {"dicerollchanceopenclose", &State::SettingsData::diceRollChanceOpenClose},
+                {"paternitybasechance", &State::SettingsData::paternityBaseChance},
+                {"paternitymaxchance", &State::SettingsData::paternityMaxChance},
+                {"paternityphenotypebasechance", &State::SettingsData::paternityPhenotypeBaseChance},
+                {"paternityphenotypemaxchance", &State::SettingsData::paternityPhenotypeMaxChance},
+                {"paternityphenotypebirthchance", &State::SettingsData::paternityPhenotypeBirthChance},
+                {"paternitynonskyrimnetrevealchance", &State::SettingsData::paternityNonSkyrimNetRevealChance},
+                {"paternitybreakupchance", &State::SettingsData::paternityBreakupChance},
+                {"paternitybiostepupchance", &State::SettingsData::paternityBioStepUpChance},
+                {"playerpartnercheatingmaxrollcap", &State::SettingsData::playerPartnerCheatingMaxRollCap},
+                {"playerpartnercheatingmaxsecretlovers", &State::SettingsData::playerPartnerCheatingMaxSecretLovers},
+                {"lonelinessthresholddays", &State::SettingsData::lonelinessThresholdDays},
+                {"childtrainingdurationdays", &State::SettingsData::childTrainingDurationDays},
+                {"childtrainingcost", &State::SettingsData::childTrainingCost}
+            };
+            return kMap;
+        }
+
+        const std::unordered_map<std::string_view, float State::SettingsData::*>& GetFloatSettingMap() {
+            static const std::unordered_map<std::string_view, float State::SettingsData::*> kMap = {
+                {"affectiondecaymultiplier", &State::SettingsData::affectionDecayMultiplier},
+                {"affectiondecaymult", &State::SettingsData::affectionDecayMultiplier},
+                {"skyrimnetactionradius", &State::SettingsData::skyrimnetActionRadius},
+                {"actionradius", &State::SettingsData::skyrimnetActionRadius},
+                {"scenescooldownhours", &State::SettingsData::scenesCooldownHours},
+                {"paternitydailygrowth", &State::SettingsData::paternityDailyGrowth},
+                {"paternityphenotypedailygrowth", &State::SettingsData::paternityPhenotypeDailyGrowth},
+                {"uiscale", &State::SettingsData::uiScale},
+                {"playerpartnercheatingchancemultiplier", &State::SettingsData::playerPartnerCheatingChanceMultiplier},
+                {"playerpartneragencyopenloverchancemultiplier", &State::SettingsData::playerPartnerAgencyOpenLoverChanceMultiplier},
+                {"playerpartneragencybreakupchancemultiplier", &State::SettingsData::playerPartnerAgencyBreakupChanceMultiplier},
+                {"multlonelinessdecaystart", &State::SettingsData::multLonelinessDecayStart},
+                {"multpartneragencyscaninterval", &State::SettingsData::multPartnerAgencyScanInterval},
+                {"multrecentattentionwindow", &State::SettingsData::multRecentAttentionWindow},
+                {"multveryrecentvisitwindow", &State::SettingsData::multVeryRecentVisitWindow},
+                {"multneglectgrowthstart", &State::SettingsData::multNeglectGrowthStart},
+                {"multcontentneglectstart", &State::SettingsData::multContentNeglectStart},
+                {"multprolongedabsencepenalty", &State::SettingsData::multProlongedAbsencePenalty},
+                {"multaffairtalkingescalation", &State::SettingsData::multAffairTalkingEscalation},
+                {"multminsideflingageforbreakup", &State::SettingsData::multMinSideFlingAgeForBreakup},
+                {"multpartnerintentttl", &State::SettingsData::multPartnerIntentTTL},
+                {"multhomearrivalcooldown", &State::SettingsData::multHomeArrivalCooldown},
+                {"multaffairfatiguestart", &State::SettingsData::multAffairFatigueStart},
+                {"multromanticattendedbreakup", &State::SettingsData::multRomanticAttendedBreakup},
+                {"multsuggestopenneglectmin", &State::SettingsData::multSuggestOpenNeglectMin}
+            };
+            return kMap;
+        }
+    }  // namespace
 
     uint32_t Settings::ParseSingleKey(const std::string& keyStr) {
         if (keyStr.empty()) return 0;
@@ -218,11 +233,11 @@ namespace MARAS {
         return 0;
     }
 
-    void Settings::ParseKeyCombo(const std::string& comboStr) {
-        toggleUIKey = 0;
-        toggleUIModCtrl = false;
-        toggleUIModShift = false;
-        toggleUIModAlt = false;
+    void Settings::ParseKeyCombo(const std::string& comboStr, State::SettingsData& out) {
+        out.toggleUIKey = 0;
+        out.toggleUIModCtrl = false;
+        out.toggleUIModShift = false;
+        out.toggleUIModAlt = false;
 
         std::string trimmedCombo = StringUtils::TrimStd(comboStr);
         if (trimmedCombo.empty()) return;
@@ -234,13 +249,13 @@ namespace MARAS {
             if (part.empty()) continue;
 
             if (part == "CTRL" || part == "CONTROL" || part == "LCTRL" || part == "RCTRL") {
-                toggleUIModCtrl = true;
+                out.toggleUIModCtrl = true;
             } else if (part == "SHIFT" || part == "LSHIFT" || part == "RSHIFT") {
-                toggleUIModShift = true;
+                out.toggleUIModShift = true;
             } else if (part == "ALT" || part == "LALT" || part == "RALT") {
-                toggleUIModAlt = true;
+                out.toggleUIModAlt = true;
             } else {
-                toggleUIKey = ParseSingleKey(part);
+                out.toggleUIKey = ParseSingleKey(part);
             }
         }
     }
@@ -262,19 +277,19 @@ namespace MARAS {
             iniLogLevel = 1;
         }
 
-        {
-            std::unique_lock lock(settingsMutex_);
-            ParseKeyCombo(toggleVal);
-            defaultLogLevel = iniLogLevel;
-            logLevel = defaultLogLevel;
-        }
+        State::SettingsData baseline = State::WorldStore::GetSingleton().GetIniBaselineSettings();
+        ParseKeyCombo(toggleVal, baseline);
+        baseline.defaultLogLevel = iniLogLevel;
+        baseline.logLevel = iniLogLevel;
+        State::WorldStore::GetSingleton().SetIniBaselineSettings(baseline);
 
         LoggingService::GetSingleton().SetLogLevel(iniLogLevel);
 
         MARAS_LOG_INFO("Settings loaded from {}", pathStr);
         MARAS_LOG_INFO("  ToggleUI = '{}' -> Key 0x{:02X} (Ctrl={}, Shift={}, Alt={})",
-                       toggleVal, toggleUIKey, toggleUIModCtrl, toggleUIModShift, toggleUIModAlt);
-        MARAS_LOG_INFO("  Logging: Default LogLevel={}", defaultLogLevel);
+                       toggleVal, baseline.toggleUIKey, baseline.toggleUIModCtrl,
+                       baseline.toggleUIModShift, baseline.toggleUIModAlt);
+        MARAS_LOG_INFO("  Logging: Default LogLevel={}", baseline.defaultLogLevel);
     }
 
     int32_t Settings::GetStartDialGender() const {
@@ -289,14 +304,20 @@ namespace MARAS {
     }
 
     bool Settings::GetEnablePolygamy() const {
-        auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal();
-        return g ? (g->value != 0.0f) : true;
+        if (auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
+            return g->value != 0.0f;
+        }
+        return Snapshot()->enablePlayerPolygamy;
     }
 
     void Settings::SetEnablePolygamy(bool value) {
         if (auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
             g->value = value ? 1.0f : 0.0f;
         }
+        State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+            ws.settings.Write().enablePlayerPolygamy = value;
+        });
+
         if (value) {
             NPCRelationshipManager::GetSingleton().MarkPlayerCheatingAllowedOnPolygamy();
             FactionService::GetSingleton().SanitizePlayerMarriedFaction();
@@ -314,16 +335,10 @@ namespace MARAS {
         NPCRelationshipManager::GetSingleton().UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
     }
 
-    bool Settings::GetDisablePolygamyQuest() const {
-        std::shared_lock lock(settingsMutex_);
-        return disablePolygamyQuest;
-    }
-
     void Settings::SetDisablePolygamyQuest(bool value) {
-        {
-            std::unique_lock lock(settingsMutex_);
-            disablePolygamyQuest = value;
-        }
+        State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+            ws.settings.Write().disablePolygamyQuest = value;
+        });
         if (value) {
             if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
                 SKSE::ModCallbackEvent modEvent("maras_stop_polygamy_quest", "", 0.0f, nullptr);
@@ -351,426 +366,101 @@ namespace MARAS {
     }
 
     void Settings::SetSimulateNoSkyrimNet(bool value) {
-        {
-            std::unique_lock lock(settingsMutex_);
-            simulateNoSkyrimNet = value;
-        }
+        State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+            ws.settings.Write().simulateNoSkyrimNet = value;
+        });
         SyncSimulateNoSkyrimNetGlobal(value);
         MARAS_LOG_INFO("Settings::SetSimulateNoSkyrimNet - simulateNoSkyrimNet set to {} (global 0xC4 updated)", value);
     }
 
-    bool Settings::SaveGameSettings(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-
-        std::shared_lock lock(settingsMutex_);
-
-        if (!serialization->WriteRecordData(kSettingsVersionMarker) ||
-            !serialization->WriteRecordData(kSettingsSubVersion)) {
-            MARAS_LOG_ERROR("Settings::SaveGameSettings - failed to write version header");
-            return false;
-        }
-
-        bool ok = true;
-        ForEachPersistedSetting([&](std::string_view, auto memberPtr, bool) {
-            if (!ok) return;
-            const auto& field = this->*memberPtr;
-            using FieldType = std::decay_t<decltype(field)>;
-
-            if constexpr (std::is_same_v<FieldType, bool>) {
-                const uint8_t raw = field ? 1 : 0;
-                ok = serialization->WriteRecordData(raw);
-            } else if constexpr (std::is_enum_v<FieldType>) {
-                const uint8_t raw = static_cast<uint8_t>(field);
-                ok = serialization->WriteRecordData(raw);
-            } else {
-                ok = serialization->WriteRecordData(field);
-            }
+    void Settings::SetGlobalCritterBanned(bool banned) {
+        State::WorldStore::GetSingleton().Modify([banned](State::WorldState& ws) {
+            ws.settings.Write().bGlobalBanCritter = banned;
         });
-
-        if (!ok) {
-            MARAS_LOG_ERROR("Settings::SaveGameSettings - failed to write data");
-            return false;
-        }
-
-        MARAS_LOG_INFO("Settings::SaveGameSettings - successfully saved settings (subVersion={}, confirmation modal: playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={})",
-                       kSettingsSubVersion, enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
-                       confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
-                       confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship, confirmCloseRelationship);
-        return true;
     }
 
-    bool Settings::LoadGameSettings(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
-        if (!serialization) return false;
-
-        int32_t loadedLogLevel = defaultLogLevel;
-        bool loadedSimNoSkyrimNet = false;
-        std::string loadedGeneralLog;
-        std::string loadedModalLog;
-
-        {
-            std::unique_lock lock(settingsMutex_);
-            RevertGameSettingsUnlocked();
-
-            uint8_t firstByte = 0;
-            if (!serialization->ReadRecordData(firstByte)) {
-                MARAS_LOG_WARN("Settings::LoadGameSettings - failed to read initial byte");
-                return false;
-            }
-
-            bool hasVersionHeader = (firstByte == kSettingsVersionMarker);
-            uint32_t subVersion = 0;
-            if (hasVersionHeader) {
-                if (!serialization->ReadRecordData(subVersion) || subVersion < 1 || subVersion > kSettingsSubVersion) {
-                    MARAS_LOG_ERROR("Settings::LoadGameSettings - invalid or unsupported settings sub-version {}", subVersion);
-                    RevertGameSettingsUnlocked();
-                    return false;
-                }
-            }
-
-            bool isFirstField = true;
-            bool requiredReadFailed = false;
-            bool streamEnded = false;
-
-            ForEachPersistedSetting([&](std::string_view key, auto memberPtr, bool required) {
-                if (requiredReadFailed || streamEnded) return;
-                if (subVersion < 4 && key == "matchmakingUseLLM") {
-                    uint8_t legacyExcludePlayerActivePartners = 0;
-                    if (!serialization->ReadRecordData(legacyExcludePlayerActivePartners)) {
-                        streamEnded = true;
-                        return;
-                    }
-                }
-                if (subVersion < 2 && key == "playerPartnerCheatingChanceMultiplier") {
-                    int32_t legacyIntervalDays = 0;
-                    if (!serialization->ReadRecordData(legacyIntervalDays)) {
-                        streamEnded = true;
-                        return;
-                    }
-                }
-                auto& field = this->*memberPtr;
-                using FieldType = std::decay_t<decltype(field)>;
-
-                bool readOk = false;
-                if (isFirstField && !hasVersionHeader) {
-                    isFirstField = false;
-                    if constexpr (std::is_same_v<FieldType, bool>) {
-                        field = (firstByte != 0);
-                        readOk = true;
-                    }
-                } else {
-                    isFirstField = false;
-                    if constexpr (std::is_same_v<FieldType, bool>) {
-                        uint8_t raw = 0;
-                        if (serialization->ReadRecordData(raw)) {
-                            field = (raw != 0);
-                            readOk = true;
-                        }
-                    } else if constexpr (std::is_same_v<FieldType, ChildCustodyGenderPolicy>) {
-                        uint8_t raw = 0;
-                        if (serialization->ReadRecordData(raw)) {
-                            if (raw <= static_cast<uint8_t>(ChildCustodyGenderPolicy::StayWithFather)) {
-                                field = static_cast<ChildCustodyGenderPolicy>(raw);
-                            }
-                            readOk = true;
-                        }
-                    } else if constexpr (std::is_same_v<FieldType, ChildCustodyPlayerPolicy>) {
-                        uint8_t raw = 0;
-                        if (serialization->ReadRecordData(raw)) {
-                            if (raw <= static_cast<uint8_t>(ChildCustodyPlayerPolicy::NeverWithPlayer)) {
-                                field = static_cast<ChildCustodyPlayerPolicy>(raw);
-                            }
-                            readOk = true;
-                        }
-                    } else if constexpr (std::is_same_v<FieldType, MatchmakingOrientation>) {
-                        uint8_t raw = 0;
-                        if (serialization->ReadRecordData(raw)) {
-                            if (raw <= static_cast<uint8_t>(MatchmakingOrientation::HeteroAndLesbian)) {
-                                field = static_cast<MatchmakingOrientation>(raw);
-                            }
-                            readOk = true;
-                        }
-                    } else if constexpr (std::is_same_v<FieldType, float>) {
-                        float val = 0.0f;
-                        if (serialization->ReadRecordData(val)) {
-                            if (key == "uiScale") {
-                                if (!std::isnan(val) && val >= 0.5f && val <= 2.5f) {
-                                    field = val;
-                                }
-                            } else if (key != "skyrimnetActionRadius" || val > 0.0f) {
-                                field = val;
-                            }
-                            readOk = true;
-                        }
-                    } else {
-                        FieldType val{};
-                        if (serialization->ReadRecordData(val)) {
-                            field = val;
-                            readOk = true;
-                        }
-                    }
-                }
-
-                if (!readOk) {
-                    if (required) {
-                        requiredReadFailed = true;
-                    } else {
-                        streamEnded = true;
-                    }
-                }
-            });
-
-            if (requiredReadFailed) {
-                MARAS_LOG_WARN("Settings::LoadGameSettings - truncated settings record; reverting to defaults");
-                RevertGameSettingsUnlocked();
-                return false;
-            }
-
-            if (subVersion < 3) {
-                childTrainingRequireFaction = true;
-            }
-
-            if (logLevel < 0 || logLevel > 5) {
-                logLevel = defaultLogLevel;
-            }
-            loadedLogLevel = logLevel;
-            loadedSimNoSkyrimNet = simulateNoSkyrimNet;
-            loadedGeneralLog = std::format(
-                "Settings::LoadGameSettings - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
-                loadedLogLevel, skipWedding, initialRelationshipScanDone, static_cast<int>(childCustodyGenderPolicy),
-                static_cast<int>(childCustodyPlayerPolicy), childCustodyPrioritizeBioParent, bGlobalBanCritter,
-                bGlobalBanPet, matchmakingEnabled, matchmakingIntervalDays, static_cast<int>(matchmakingOrientation),
-                matchmakingAllowCheating);
-            loadedModalLog = std::format(
-                "Settings::LoadGameSettings - loaded confirmation modal settings: playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={}",
-                enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
-                confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
-                confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship,
-                confirmCloseRelationship);
-        }
-
-        SyncSimulateNoSkyrimNetGlobal(loadedSimNoSkyrimNet);
-        LoggingService::GetSingleton().SetLogLevel(loadedLogLevel);
-
-        MARAS_LOG_INFO("{}", loadedGeneralLog);
-        MARAS_LOG_INFO("{}", loadedModalLog);
-
-        return true;
+    void Settings::SetGlobalPetBanned(bool banned) {
+        State::WorldStore::GetSingleton().Modify([banned](State::WorldState& ws) {
+            ws.settings.Write().bGlobalBanPet = banned;
+        });
     }
 
-    void Settings::RevertGameSettingsUnlocked() {
-        const Settings defaults{};
-        ForEachPersistedSetting([&](std::string_view, auto memberPtr, bool) {
-            this->*memberPtr = defaults.*memberPtr;
-        });
-        logLevel = defaultLogLevel;
+    void Settings::ApplyPostLoadEngineSideEffects() {
+        const auto snap = Snapshot();
+        const auto& s = *snap;
+
+        SyncSimulateNoSkyrimNetGlobal(s.simulateNoSkyrimNet);
+        LoggingService::GetSingleton().SetLogLevel(s.logLevel);
+
+        MARAS_LOG_INFO(
+            "Settings::ApplyPostLoadEngineSideEffects - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
+            s.logLevel, s.skipWedding, s.initialRelationshipScanDone, static_cast<int>(s.childCustodyGenderPolicy),
+            static_cast<int>(s.childCustodyPlayerPolicy), s.childCustodyPrioritizeBioParent, s.bGlobalBanCritter,
+            s.bGlobalBanPet, s.matchmakingEnabled, s.matchmakingIntervalDays, static_cast<int>(s.matchmakingOrientation),
+            s.matchmakingAllowCheating);
+        MARAS_LOG_INFO(
+            "Settings::ApplyPostLoadEngineSideEffects - confirmation modal settings: playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={}",
+            s.enableConfirmPlayerNpc, s.enableConfirmNpcNpc, s.confirmStatusChange_Dating, s.confirmStatusChange_Engagement,
+            s.confirmStatusChange_Lover, s.confirmStatusChange_Marry, s.confirmBreakup_Dating, s.confirmBreakup_Engagement,
+            s.confirmBreakup_Lover, s.confirmDivorce, s.confirmDivorceDuringLowAffectionQuest, s.confirmOpenRelationship,
+            s.confirmCloseRelationship);
     }
 
     void Settings::RevertGameSettings() {
-        int32_t revertedLogLevel = defaultLogLevel;
-        std::string revertedModalLog;
-        {
-            std::unique_lock lock(settingsMutex_);
-            RevertGameSettingsUnlocked();
-            revertedLogLevel = logLevel;
-            revertedModalLog = std::format(
-                "Settings::RevertGameSettings - reverted confirmation modal settings to defaults (playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={})",
-                enableConfirmPlayerNpc, enableConfirmNpcNpc, confirmStatusChange_Dating, confirmStatusChange_Engagement,
-                confirmStatusChange_Lover, confirmStatusChange_Marry, confirmBreakup_Dating, confirmBreakup_Engagement,
-                confirmBreakup_Lover, confirmDivorce, confirmDivorceDuringLowAffectionQuest, confirmOpenRelationship,
-                confirmCloseRelationship);
-        }
+        auto& store = State::WorldStore::GetSingleton();
+        State::SettingsData reverted = store.GetIniBaselineSettings();
+        reverted.logLevel = reverted.defaultLogLevel;
+        reverted.enablePlayerPolygamy = GetEnablePolygamy();
+
+        store.Modify([&reverted](State::WorldState& ws) {
+            ws.settings.Reset(reverted);
+        });
 
         SyncSimulateNoSkyrimNetGlobal(false);
-        LoggingService::GetSingleton().SetLogLevel(revertedLogLevel);
+        LoggingService::GetSingleton().SetLogLevel(reverted.logLevel);
 
-        MARAS_LOG_INFO("Settings::RevertGameSettings - reverted settings to defaults (logLevel={})", revertedLogLevel);
-        MARAS_LOG_INFO("{}", revertedModalLog);
+        MARAS_LOG_INFO("Settings::RevertGameSettings - reverted settings to defaults (logLevel={})", reverted.logLevel);
+        MARAS_LOG_INFO(
+            "Settings::RevertGameSettings - reverted confirmation modal settings to defaults (playerNpc={}, npcNpc={}, dating={}, engagement={}, lover={}, marry={}, breakupDating={}, breakupEngagement={}, breakupLover={}, divorce={}, lowAffDivorce={}, openRel={}, closeRel={})",
+            reverted.enableConfirmPlayerNpc, reverted.enableConfirmNpcNpc, reverted.confirmStatusChange_Dating,
+            reverted.confirmStatusChange_Engagement, reverted.confirmStatusChange_Lover, reverted.confirmStatusChange_Marry,
+            reverted.confirmBreakup_Dating, reverted.confirmBreakup_Engagement, reverted.confirmBreakup_Lover,
+            reverted.confirmDivorce, reverted.confirmDivorceDuringLowAffectionQuest, reverted.confirmOpenRelationship,
+            reverted.confirmCloseRelationship);
     }
 
     nlohmann::json Settings::DumpJson() const {
         nlohmann::json j;
-        {
-            std::shared_lock lock(settingsMutex_);
-            ForEachPersistedSetting([&](std::string_view key, auto memberPtr, bool) {
-                const auto& field = this->*memberPtr;
-                using FieldType = std::decay_t<decltype(field)>;
-                if constexpr (std::is_enum_v<FieldType>) {
-                    j[std::string(key)] = static_cast<uint8_t>(field);
-                } else {
-                    j[std::string(key)] = field;
-                }
-            });
+        const auto snap = Snapshot();
+        const auto& s = *snap;
 
-            j["defaultLogLevel"] = defaultLogLevel;
-            // Legacy keys for backward compatibility
-            j["confirmAcceptProposal"] = confirmStatusChange_Marry;
-            j["confirmBreakupEngagement"] = confirmBreakup_Engagement;
-            j["confirmLowAffectionDivorce"] = confirmDivorceDuringLowAffectionQuest;
-            j["toggleUIKey"] = toggleUIKey;
-            j["toggleUIModCtrl"] = toggleUIModCtrl;
-            j["toggleUIModShift"] = toggleUIModShift;
-            j["toggleUIModAlt"] = toggleUIModAlt;
-            j["enableConfirmationModal"] = enableConfirmationModal;
-            j["actionsCooldown"] = actionsCooldown;
-            j["actionsDeclineCooldown"] = actionsDeclineCooldown;
-        }
+        State::ForEachPersistedSettingField([&](std::string_view key, auto memberPtr, bool) {
+            const auto& field = s.*memberPtr;
+            using FieldType = std::decay_t<decltype(field)>;
+            if constexpr (std::is_enum_v<FieldType>) {
+                j[std::string(key)] = static_cast<uint8_t>(field);
+            } else {
+                j[std::string(key)] = field;
+            }
+        });
+
+        j["defaultLogLevel"] = s.defaultLogLevel;
+        // Legacy keys for backward compatibility
+        j["confirmAcceptProposal"] = s.confirmStatusChange_Marry;
+        j["confirmBreakupEngagement"] = s.confirmBreakup_Engagement;
+        j["confirmLowAffectionDivorce"] = s.confirmDivorceDuringLowAffectionQuest;
+        j["toggleUIKey"] = s.toggleUIKey;
+        j["toggleUIModCtrl"] = s.toggleUIModCtrl;
+        j["toggleUIModShift"] = s.toggleUIModShift;
+        j["toggleUIModAlt"] = s.toggleUIModAlt;
+        j["enableConfirmationModal"] = s.enableConfirmationModal;
+        j["actionsCooldown"] = s.actionsCooldown;
+        j["actionsDeclineCooldown"] = s.actionsDeclineCooldown;
 
         j["startDialGender"] = GetStartDialGender();
         j["enablePolygamy"] = GetEnablePolygamy();
         j["minRelRankForDial"] = GetMinRelRankForDial();
         return j;
-    }
-
-    namespace {
-        const std::unordered_map<std::string_view, bool Settings::*>& GetBoolSettingMap() {
-            static const std::unordered_map<std::string_view, bool Settings::*> kMap = {
-                {"disablepolygamyquest", &Settings::disablePolygamyQuest},
-                {"skipwedding", &Settings::skipWedding},
-                {"alwayssuccessmarriage", &Settings::alwaysSuccessMarriage},
-                {"alwayssuccess", &Settings::alwaysSuccessMarriage},
-                {"confirmstatuschange_marry", &Settings::confirmStatusChange_Marry},
-                {"confirmacceptproposal", &Settings::confirmStatusChange_Marry},
-                {"confirmbreakup_engagement", &Settings::confirmBreakup_Engagement},
-                {"confirmbreakupengagement", &Settings::confirmBreakup_Engagement},
-                {"confirmdivorce", &Settings::confirmDivorce},
-                {"confirmdivorceduringlowaffectionquest", &Settings::confirmDivorceDuringLowAffectionQuest},
-                {"confirmlowaffectiondivorce", &Settings::confirmDivorceDuringLowAffectionQuest},
-                {"migratedfromstorageutil", &Settings::migratedFromStorageUtil},
-                {"initialrelationshipscandone", &Settings::initialRelationshipScanDone},
-                {"childcustodyprioritizebioparent", &Settings::childCustodyPrioritizeBioParent},
-                {"bglobalbancritter", &Settings::bGlobalBanCritter},
-                {"globalbancritter", &Settings::bGlobalBanCritter},
-                {"bglobalbanpet", &Settings::bGlobalBanPet},
-                {"globalbanpet", &Settings::bGlobalBanPet},
-                {"enableconfirmplayernpc", &Settings::enableConfirmPlayerNpc},
-                {"enableconfirmnpcnpc", &Settings::enableConfirmNpcNpc},
-                {"enableconfirmationmodal", &Settings::enableConfirmationModal},
-                {"confirmstatuschange_dating", &Settings::confirmStatusChange_Dating},
-                {"confirmstatuschange_engagement", &Settings::confirmStatusChange_Engagement},
-                {"confirmstatuschange_lover", &Settings::confirmStatusChange_Lover},
-                {"confirmbreakup_dating", &Settings::confirmBreakup_Dating},
-                {"confirmbreakup_lover", &Settings::confirmBreakup_Lover},
-                {"confirmopenrelationship", &Settings::confirmOpenRelationship},
-                {"confirmcloserelationship", &Settings::confirmCloseRelationship},
-                {"toggleuimodctrl", &Settings::toggleUIModCtrl},
-                {"toggleuimodshift", &Settings::toggleUIModShift},
-                {"toggleuimodalt", &Settings::toggleUIModAlt},
-                {"matchmakingenabled", &Settings::matchmakingEnabled},
-                {"matchmakingallowbreakups", &Settings::matchmakingAllowBreakups},
-                {"matchmakingallowopenclose", &Settings::matchmakingAllowOpenClose},
-                {"matchmakingallowcheating", &Settings::matchmakingAllowCheating},
-                {"matchmakingusellm", &Settings::matchmakingUseLLM},
-                {"matchmakingevaluationstep", &Settings::matchmakingEvaluationStep},
-                {"matchmakinggeneratememories", &Settings::matchmakingGenerateMemories},
-                {"skyrimnetusellmmemories", &Settings::skyrimnetUseLLMMemories},
-                {"skyrimnetusedecisions", &Settings::skyrimnetUseDecisions},
-                {"matchmakingconfirmresults", &Settings::matchmakingConfirmResults},
-                {"paternityforcedicerolls", &Settings::paternityForceDiceRolls},
-                {"revealsecretsinui", &Settings::revealSecretsInUI},
-                {"uifullscreen", &Settings::uiFullScreen},
-                {"autopauseonopen", &Settings::autoPauseOnOpen},
-                {"enablescenes", &Settings::enableScenes},
-                {"enablescenes_lover", &Settings::enableScenes_Lover},
-                {"enablescenes_dating", &Settings::enableScenes_Dating},
-                {"enablescenes_engaged", &Settings::enableScenes_Engaged},
-                {"enablescenes_married", &Settings::enableScenes_Married},
-                {"enablescenes_openrelationship", &Settings::enableScenes_OpenRelationship},
-                {"enablescenes_cheating", &Settings::enableScenes_Cheating},
-                {"enablescenes_cheatingdiscovered", &Settings::enableScenes_CheatingDiscovered},
-                {"enablescenes_cheatingcaught", &Settings::enableScenes_CheatingCaught},
-                {"enablescenes_loctypetemple", &Settings::enableScenes_LocTypeTemple},
-                {"enablescenes_loctypestore", &Settings::enableScenes_LocTypeStore},
-                {"enablescenes_loctypestewardsdwelling", &Settings::enableScenes_LocTypeStewardsDwelling},
-                {"enablescenes_loctypeinn", &Settings::enableScenes_LocTypeInn},
-                {"enablescenes_loctypehouse", &Settings::enableScenes_LocTypeHouse},
-                {"enablescenes_loctypebarracks", &Settings::enableScenes_LocTypeBarracks},
-                {"enablescenes_loctypefarm", &Settings::enableScenes_LocTypeFarm},
-                {"enablescenes_loctypeguild", &Settings::enableScenes_LocTypeGuild},
-                {"enablescenes_loctypeplayerhouse", &Settings::enableScenes_LocTypePlayerHouse},
-                {"enablescenes_byoh_loctypehomestead", &Settings::enableScenes_BYOH_LocTypeHomestead},
-                {"enablescenes_loctypetown", &Settings::enableScenes_LocTypeTown},
-                {"enablescenes_loctypesettlement", &Settings::enableScenes_LocTypeSettlement},
-                {"enablescenes_loctypeorcstronghold", &Settings::enableScenes_LocTypeOrcStronghold},
-                {"enablescenes_loctypecity", &Settings::enableScenes_LocTypeCity},
-                {"enablescenes_loctypelumbermill", &Settings::enableScenes_LocTypeLumberMill},
-                {"playerpartnercheatingagencyenabled", &Settings::playerPartnerCheatingAgencyEnabled},
-                {"playerpartneropenrelagencyenabled", &Settings::playerPartnerOpenRelAgencyEnabled},
-                {"playerpartnercheatingallowwhenhappy", &Settings::playerPartnerCheatingAllowWhenHappy},
-                {"playerpartnercheatingenableneglect", &Settings::playerPartnerCheatingEnableNeglect},
-                {"playerpartnercheatingenablerevenge", &Settings::playerPartnerCheatingEnableRevenge},
-                {"playerpartnercheatingenablehierarchy", &Settings::playerPartnerCheatingEnableHierarchy},
-                {"playerpartnercheatingenablechildrenanchor", &Settings::playerPartnerCheatingEnableChildrenAnchor},
-                {"playerpartnercheatingusellm", &Settings::playerPartnerCheatingUseLLM},
-                {"playerpartnercheatingconfirmresults", &Settings::playerPartnerCheatingConfirmResults},
-                {"playerpartneragencyenableforcegreets", &Settings::playerPartnerAgencyEnableForceGreets},
-                {"playerpartneragencyenablehomearrivalevents", &Settings::playerPartnerAgencyEnableHomeArrivalEvents},
-                {"childtrainingrequirefaction", &Settings::childTrainingRequireFaction}
-            };
-            return kMap;
-        }
-
-        const std::unordered_map<std::string_view, int32_t Settings::*>& GetIntSettingMap() {
-            static const std::unordered_map<std::string_view, int32_t Settings::*> kMap = {
-                {"logdestination", &Settings::logDestination},
-                {"actionscooldown", &Settings::actionsCooldown},
-                {"actionsdeclinecooldown", &Settings::actionsDeclineCooldown},
-                {"matchmakingintervaldays", &Settings::matchmakingIntervalDays},
-                {"matchmakingmaxsuggestions", &Settings::matchmakingMaxSuggestions},
-                {"matchmakingnpccooldowndays", &Settings::matchmakingNpcCooldownDays},
-                {"dicerollchancenewdating", &Settings::diceRollChanceNewDating},
-                {"dicerollchancenewengaged", &Settings::diceRollChanceNewEngaged},
-                {"dicerollchancenewloverallowed", &Settings::diceRollChanceNewLoverAllowed},
-                {"dicerollchancenewlovercheating", &Settings::diceRollChanceNewLoverCheating},
-                {"dicerollchanceadvance", &Settings::diceRollChanceAdvance},
-                {"dicerollchancebreakup", &Settings::diceRollChanceBreakup},
-                {"dicerollchanceopenclose", &Settings::diceRollChanceOpenClose},
-                {"paternitybasechance", &Settings::paternityBaseChance},
-                {"paternitymaxchance", &Settings::paternityMaxChance},
-                {"paternityphenotypebasechance", &Settings::paternityPhenotypeBaseChance},
-                {"paternityphenotypemaxchance", &Settings::paternityPhenotypeMaxChance},
-                {"paternityphenotypebirthchance", &Settings::paternityPhenotypeBirthChance},
-                {"paternitynonskyrimnetrevealchance", &Settings::paternityNonSkyrimNetRevealChance},
-                {"paternitybreakupchance", &Settings::paternityBreakupChance},
-                {"paternitybiostepupchance", &Settings::paternityBioStepUpChance},
-                {"playerpartnercheatingmaxrollcap", &Settings::playerPartnerCheatingMaxRollCap},
-                {"playerpartnercheatingmaxsecretlovers", &Settings::playerPartnerCheatingMaxSecretLovers},
-                {"lonelinessthresholddays", &Settings::lonelinessThresholdDays},
-                {"childtrainingdurationdays", &Settings::childTrainingDurationDays},
-                {"childtrainingcost", &Settings::childTrainingCost}
-            };
-            return kMap;
-        }
-
-        const std::unordered_map<std::string_view, float Settings::*>& GetFloatSettingMap() {
-            static const std::unordered_map<std::string_view, float Settings::*> kMap = {
-                {"affectiondecaymultiplier", &Settings::affectionDecayMultiplier},
-                {"affectiondecaymult", &Settings::affectionDecayMultiplier},
-                {"skyrimnetactionradius", &Settings::skyrimnetActionRadius},
-                {"actionradius", &Settings::skyrimnetActionRadius},
-                {"scenescooldownhours", &Settings::scenesCooldownHours},
-                {"paternitydailygrowth", &Settings::paternityDailyGrowth},
-                {"paternityphenotypedailygrowth", &Settings::paternityPhenotypeDailyGrowth},
-                {"uiscale", &Settings::uiScale},
-                {"playerpartnercheatingchancemultiplier", &Settings::playerPartnerCheatingChanceMultiplier},
-                {"playerpartneragencyopenloverchancemultiplier", &Settings::playerPartnerAgencyOpenLoverChanceMultiplier},
-                {"playerpartneragencybreakupchancemultiplier", &Settings::playerPartnerAgencyBreakupChanceMultiplier},
-                {"multlonelinessdecaystart", &Settings::multLonelinessDecayStart},
-                {"multpartneragencyscaninterval", &Settings::multPartnerAgencyScanInterval},
-                {"multrecentattentionwindow", &Settings::multRecentAttentionWindow},
-                {"multveryrecentvisitwindow", &Settings::multVeryRecentVisitWindow},
-                {"multneglectgrowthstart", &Settings::multNeglectGrowthStart},
-                {"multcontentneglectstart", &Settings::multContentNeglectStart},
-                {"multprolongedabsencepenalty", &Settings::multProlongedAbsencePenalty},
-                {"multaffairtalkingescalation", &Settings::multAffairTalkingEscalation},
-                {"multminsideflingageforbreakup", &Settings::multMinSideFlingAgeForBreakup},
-                {"multpartnerintentttl", &Settings::multPartnerIntentTTL},
-                {"multhomearrivalcooldown", &Settings::multHomeArrivalCooldown},
-                {"multaffairfatiguestart", &Settings::multAffairFatigueStart},
-                {"multromanticattendedbreakup", &Settings::multRomanticAttendedBreakup},
-                {"multsuggestopenneglectmin", &Settings::multSuggestOpenNeglectMin}
-            };
-            return kMap;
-        }
     }
 
     bool Settings::GetBoolByKey(std::string_view key) const {
@@ -779,14 +469,12 @@ namespace MARAS {
             return GetEnablePolygamy();
         }
         if (lowerKey == "simulatenoskyrimnet") {
-            std::shared_lock lock(settingsMutex_);
-            return simulateNoSkyrimNet;
+            return Snapshot()->simulateNoSkyrimNet;
         }
 
         const auto& map = GetBoolSettingMap();
         if (auto it = map.find(lowerKey); it != map.end()) {
-            std::shared_lock lock(settingsMutex_);
-            return this->*(it->second);
+            return (*Snapshot()).*(it->second);
         }
 
         MARAS_LOG_WARN("Settings::GetBoolByKey: unknown key '{}'", key);
@@ -818,8 +506,10 @@ namespace MARAS {
 
         const auto& map = GetBoolSettingMap();
         if (auto it = map.find(lowerKey); it != map.end()) {
-            std::unique_lock lock(settingsMutex_);
-            this->*(it->second) = value;
+            const auto memberPtr = it->second;
+            State::WorldStore::GetSingleton().Modify([memberPtr, value](State::WorldState& ws) {
+                ws.settings.Write().*memberPtr = value;
+            });
             return true;
         }
 
@@ -829,13 +519,14 @@ namespace MARAS {
 
     int32_t Settings::GetIntByKey(std::string_view key) const {
         const std::string lowerKey = StringUtils::ToLowerStd(key);
+        const auto snap = Snapshot();
+        const auto& s = *snap;
+
         if (lowerKey == "loglevel") {
-            std::shared_lock lock(settingsMutex_);
-            return logLevel;
+            return s.logLevel;
         }
         if (lowerKey == "toggleuikey") {
-            std::shared_lock lock(settingsMutex_);
-            return static_cast<int32_t>(toggleUIKey);
+            return static_cast<int32_t>(s.toggleUIKey);
         }
         if (lowerKey == "startdialgender") {
             return GetStartDialGender();
@@ -844,22 +535,18 @@ namespace MARAS {
             return GetMinRelRankForDial();
         }
         if (lowerKey == "childcustodygenderpolicy") {
-            std::shared_lock lock(settingsMutex_);
-            return static_cast<int32_t>(childCustodyGenderPolicy);
+            return static_cast<int32_t>(s.childCustodyGenderPolicy);
         }
         if (lowerKey == "childcustodyplayerpolicy") {
-            std::shared_lock lock(settingsMutex_);
-            return static_cast<int32_t>(childCustodyPlayerPolicy);
+            return static_cast<int32_t>(s.childCustodyPlayerPolicy);
         }
         if (lowerKey == "matchmakingorientation") {
-            std::shared_lock lock(settingsMutex_);
-            return static_cast<int32_t>(matchmakingOrientation);
+            return static_cast<int32_t>(s.matchmakingOrientation);
         }
 
         const auto& map = GetIntSettingMap();
         if (auto it = map.find(lowerKey); it != map.end()) {
-            std::shared_lock lock(settingsMutex_);
-            return this->*(it->second);
+            return s.*(it->second);
         }
 
         MARAS_LOG_WARN("Settings::GetIntByKey: unknown key '{}'", key);
@@ -873,8 +560,9 @@ namespace MARAS {
             return true;
         }
         if (lowerKey == "toggleuikey") {
-            std::unique_lock lock(settingsMutex_);
-            toggleUIKey = static_cast<uint32_t>(value);
+            State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+                ws.settings.Write().toggleUIKey = static_cast<uint32_t>(value);
+            });
             return true;
         }
         if (lowerKey == "startdialgender") {
@@ -887,24 +575,27 @@ namespace MARAS {
         }
         if (lowerKey == "childcustodygenderpolicy") {
             if (value >= 0 && value <= static_cast<int32_t>(ChildCustodyGenderPolicy::StayWithFather)) {
-                std::unique_lock lock(settingsMutex_);
-                childCustodyGenderPolicy = static_cast<ChildCustodyGenderPolicy>(value);
+                State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+                    ws.settings.Write().childCustodyGenderPolicy = static_cast<ChildCustodyGenderPolicy>(value);
+                });
                 return true;
             }
             return false;
         }
         if (lowerKey == "childcustodyplayerpolicy") {
             if (value >= 0 && value <= static_cast<int32_t>(ChildCustodyPlayerPolicy::NeverWithPlayer)) {
-                std::unique_lock lock(settingsMutex_);
-                childCustodyPlayerPolicy = static_cast<ChildCustodyPlayerPolicy>(value);
+                State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+                    ws.settings.Write().childCustodyPlayerPolicy = static_cast<ChildCustodyPlayerPolicy>(value);
+                });
                 return true;
             }
             return false;
         }
         if (lowerKey == "matchmakingorientation") {
             if (value >= 0 && value <= static_cast<int32_t>(MatchmakingOrientation::HeteroAndLesbian)) {
-                std::unique_lock lock(settingsMutex_);
-                matchmakingOrientation = static_cast<MatchmakingOrientation>(value);
+                State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
+                    ws.settings.Write().matchmakingOrientation = static_cast<MatchmakingOrientation>(value);
+                });
                 return true;
             }
             return false;
@@ -917,8 +608,10 @@ namespace MARAS {
             } else if (lowerKey == "childtrainingcost") {
                 value = std::clamp(value, 0, 10000);
             }
-            std::unique_lock lock(settingsMutex_);
-            this->*(it->second) = value;
+            const auto memberPtr = it->second;
+            State::WorldStore::GetSingleton().Modify([memberPtr, value](State::WorldState& ws) {
+                ws.settings.Write().*memberPtr = value;
+            });
             return true;
         }
 
@@ -930,8 +623,7 @@ namespace MARAS {
         const std::string lowerKey = StringUtils::ToLowerStd(key);
         const auto& map = GetFloatSettingMap();
         if (auto it = map.find(lowerKey); it != map.end()) {
-            std::shared_lock lock(settingsMutex_);
-            return this->*(it->second);
+            return (*Snapshot()).*(it->second);
         }
 
         MARAS_LOG_WARN("Settings::GetFloatByKey: unknown key '{}'", key);
@@ -945,10 +637,10 @@ namespace MARAS {
             if (lowerKey == "uiscale") {
                 value = std::clamp(value, 0.75f, 1.5f);
             }
-            {
-                std::unique_lock lock(settingsMutex_);
-                this->*(it->second) = value;
-            }
+            const auto memberPtr = it->second;
+            State::WorldStore::GetSingleton().Modify([memberPtr, value](State::WorldState& ws) {
+                ws.settings.Write().*memberPtr = value;
+            });
             if (lowerKey == "scenescooldownhours") {
                 BanterCoordinatorService::GetSingleton().SetCooldownHours(value);
             }
@@ -960,5 +652,3 @@ namespace MARAS {
     }
 
 }
-
-

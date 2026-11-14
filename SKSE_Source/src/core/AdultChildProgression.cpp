@@ -1205,7 +1205,7 @@ namespace MARAS {
             if (outReason) *outReason = "Invalid training class index";
             return false;
         }
-        if (!Settings::GetSingleton().childTrainingRequireFaction) {
+        if (!Settings::GetSingleton().Snapshot()->childTrainingRequireFaction) {
             return true;
         }
         return EvaluateTrainingRequirements(catalog_[static_cast<std::size_t>(classIndex)], outReason);
@@ -1917,12 +1917,12 @@ namespace MARAS {
         if (childID == 0 || IsSyntheticChildID(childID)) {
             return;
         }
-        auto it = mgr.childrenByID.find(childID);
-        if (it == mgr.childrenByID.end()) {
+        auto entryOpt = mgr.GetChildEntry(childID);
+        if (!entryOpt.has_value()) {
             MARAS_LOG_WARN("[ChildTraining] InitializeAndApplyChildVisualsAndRPG: child {:08X} not found in childrenByID", childID);
             return;
         }
-        auto& entry = it->second;
+        auto& entry = *entryOpt;
         auto* actor = ResolveActorPtr(childID);
         if (!actor) {
             MARAS_LOG_WARN("[ChildTraining] InitializeAndApplyChildVisualsAndRPG: failed to resolve Actor* for child {:08X} ('{}')",
@@ -2121,7 +2121,7 @@ namespace MARAS {
             const Temperament childTemperament = NPCTypeDeterminer::ComputeTemperament(inheritedSocialClass, childSkillType);
 
             // Store adult child archetype profile and sync M.A.R.A.S engine mirror factions
-            mgr.npcProfiles[childID] = NPCProfileData(childID, inheritedSocialClass, childSkillType, childTemperament);
+            mgr.UpsertNPCProfile(NPCProfileData(childID, inheritedSocialClass, childSkillType, childTemperament));
             mgr.AddToSocialClassFaction(childID, static_cast<std::int8_t>(inheritedSocialClass));
             mgr.AddToSkillTypeFaction(childID, static_cast<std::int8_t>(childSkillType));
             mgr.AddToTemperamentFaction(childID, static_cast<std::int8_t>(childTemperament));
@@ -2280,6 +2280,7 @@ namespace MARAS {
 
         // Apply per-actor 3D visuals and runtime ExtraCombatStyle
         ApplyChildVisualsToActor(actor, entry);
+        mgr.UpsertChildEntry(entry);
     }
 
     void AdultChildProgression::ApplyChildVisualsToActor(RE::Actor* actor, ChildRegistryEntry& entry) {
@@ -2693,21 +2694,26 @@ namespace MARAS {
     void AdultChildProgression::ApplyChildVisualsOn3DLoad(NPCRelationshipManager& mgr, RE::Actor* actor) {
         if (!actor) return;
         const RE::FormID formID = actor->GetFormID();
-        auto it = mgr.childrenByID.find(formID);
-        if (it == mgr.childrenByID.end()) return;
-        if (it->second.stage != ChildStage::Child && it->second.stage != ChildStage::Adult) return;
+        auto entryOpt = mgr.GetChildEntry(formID);
+        if (!entryOpt.has_value()) return;
+        if (entryOpt->stage != ChildStage::Child && entryOpt->stage != ChildStage::Adult) return;
 
-        if (it->second.hairColorFormID == 0 || (it->second.stage == ChildStage::Adult && !it->second.rpgApplied)) {
+        if (entryOpt->hairColorFormID == 0 || (entryOpt->stage == ChildStage::Adult && !entryOpt->rpgApplied)) {
             InitializeAndApplyChildVisualsAndRPG(mgr, formID);
         } else {
-            ApplyChildVisualsToActor(actor, it->second);
+            const std::uint16_t prevLevel = entryOpt->lastAppliedLevel;
+            ApplyChildVisualsToActor(actor, *entryOpt);
+            if (entryOpt->lastAppliedLevel != prevLevel) {
+                mgr.UpsertChildEntry(*entryOpt);
+            }
         }
     }
 
     void AdultChildProgression::ReassertAllChildVisualsOnLoad(NPCRelationshipManager& mgr) {
         std::vector<RE::FormID> childIDs;
-        childIDs.reserve(mgr.childrenByID.size());
-        for (const auto& [cID, entry] : mgr.childrenByID) {
+        const auto allChildren = mgr.GetAllChildren();
+        childIDs.reserve(allChildren.size());
+        for (const auto& [cID, entry] : allChildren) {
             if (!IsSyntheticChildID(cID) && (entry.stage == ChildStage::Child || entry.stage == ChildStage::Adult)) {
                 childIDs.push_back(cID);
             }

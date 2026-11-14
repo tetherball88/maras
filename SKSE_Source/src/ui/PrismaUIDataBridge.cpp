@@ -102,9 +102,7 @@ namespace MARAS {
         }
 
         bool ShouldRevealSecretsInUI() {
-            const auto& s = Settings::GetSingleton();
-            std::shared_lock lock(s.GetMutex());
-            return s.revealSecretsInUI;
+            return Settings::GetSingleton().Snapshot()->revealSecretsInUI;
         }
 
         uint64_t MakeOrderedPairKey(RE::FormID a, RE::FormID b) {
@@ -300,7 +298,7 @@ namespace MARAS {
                         actorB = PrismaUIDataBridge::StringToFormID(GetJsonString(*itB, "formId"));
                     }
 
-                    const auto* rawData = (actorA != 0 && actorB != 0) ? relMgr.GetNPCData(actorA, actorB) : nullptr;
+                    const auto rawData = (actorA != 0 && actorB != 0) ? relMgr.GetNPCData(actorA, actorB) : std::nullopt;
                     const RelationshipStatus rawStatus = rawData ? rawData->status : RelationshipStatus::Candidate;
                     const bool rawIsOpen = rawData ? rawData->isOpen : false;
                     const auto* rawHistory = rawData ? &rawData->statusHistory : nullptr;
@@ -744,7 +742,7 @@ namespace MARAS {
         RE::FormID tenantHouseID = houseSvc.GetTenantHouseFormID(formID);
         std::string currentHomeName = PlayerHouseService::GetHouseName(tenantHouseID);
         if (currentHomeName.empty()) {
-            if (const auto* npcProf = relMgr.GetNPCProfile(formID)) {
+            if (const auto npcProf = relMgr.GetNPCProfile(formID)) {
                 if (npcProf->currentHome.has_value() && npcProf->currentHome.value() != 0) {
                     currentHomeName = PlayerHouseService::GetHouseName(npcProf->currentHome.value());
                 }
@@ -761,7 +759,7 @@ namespace MARAS {
         profile["stayAtHome"] = houseSvc.GetTenantStayAtHome(formID);
 
         std::string origHomeName = "";
-        if (const auto* npcProf = relMgr.GetNPCProfile(formID)) {
+        if (const auto npcProf = relMgr.GetNPCProfile(formID)) {
             if (npcProf->originalHome.has_value() && npcProf->originalHome.value() != 0) {
                 RE::FormID ohID = npcProf->originalHome.value();
                 if (auto loc = RE::TESForm::LookupByID<RE::BGSLocation>(ohID)) {
@@ -790,7 +788,7 @@ namespace MARAS {
                 if (cEntry.guardianAID != kPlayerFormID && cEntry.guardianBID != kPlayerFormID) {
                     RE::FormID parentID = relMgr.ResolveNonPlayerChildTarget(cEntry);
                     if (parentID != 0) {
-                        if (const auto* parentProf = relMgr.GetNPCProfile(parentID)) {
+                        if (const auto parentProf = relMgr.GetNPCProfile(parentID)) {
                             if (parentProf->originalHome.has_value() && parentProf->originalHome.value() != 0) {
                                 RE::FormID ohID = parentProf->originalHome.value();
                                 if (auto loc = RE::TESForm::LookupByID<RE::BGSLocation>(ohID)) {
@@ -823,16 +821,17 @@ namespace MARAS {
     }
 
     nlohmann::json PrismaUIDataBridge::BuildSettingsJson() {
-        auto& settings = Settings::GetSingleton();
-        const bool enablePolygamy = settings.GetEnablePolygamy();
+        const auto& settingsMgr = Settings::GetSingleton();
+        const bool enablePolygamy = settingsMgr.GetEnablePolygamy();
         const bool hasSkyrimNet = IsSkyrimNetAvailable();
-        const int32_t startDialGender = settings.GetStartDialGender();
-        const int32_t minRelRankForDial = settings.GetMinRelRankForDial();
+        const int32_t startDialGender = settingsMgr.GetStartDialGender();
+        const int32_t minRelRankForDial = settingsMgr.GetMinRelRankForDial();
 
         nlohmann::json j;
         int32_t snappedTrainingCost = 0;
         {
-            std::shared_lock lock(settings.GetMutex());
+            const auto settingsSnap = settingsMgr.Snapshot();
+            const auto& settings = *settingsSnap;
             j["skipWedding"] = settings.skipWedding;
             j["affectionDecayMult"] = RoundFloat(settings.affectionDecayMultiplier);
             j["lonelinessThresholdDays"] = settings.lonelinessThresholdDays;
@@ -993,7 +992,7 @@ namespace MARAS {
         size_t divorcedCount = 0;
         size_t jiltedCount = 0;
         for (auto partnerID : relMgr.GetAllPartners(kPlayerFormID)) {
-            const auto* relData = relMgr.GetNPCData(kPlayerFormID, partnerID);
+            const auto relData = relMgr.GetNPCData(kPlayerFormID, partnerID);
             const RelationshipStatus rawStatus = relData ? relData->status : relMgr.GetRelationshipStatus(kPlayerFormID, partnerID);
             const bool rawIsOpen = relData ? relData->isOpen : false;
             const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
@@ -1169,7 +1168,7 @@ namespace MARAS {
             for (auto actorB : partners) {
                 uint64_t pairKey = MakeOrderedPairKey(actorA, actorB);
                 if (visitedPairs.insert(pairKey).second) {
-                    const auto* relData = relMgr.GetNPCData(actorA, actorB);
+                    const auto relData = relMgr.GetNPCData(actorA, actorB);
                     const RelationshipStatus rawStatus = relData ? relData->status : relMgr.GetRelationshipStatus(actorA, actorB);
                     const bool rawIsOpen = relData ? relData->isOpen : false;
                     const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
@@ -1403,7 +1402,7 @@ namespace MARAS {
         RelationshipStatus visibleStatus = relMgr.GetRelationshipStatus(npcFormID);
         if (!revealSecrets && npcFormID != kPlayerFormID) {
             const auto secretIndex = SecretAffairPairIndex::Build(relMgr);
-            const auto* relData = relMgr.GetNPCData(npcFormID, kPlayerFormID);
+            const auto relData = relMgr.GetNPCData(npcFormID, kPlayerFormID);
             const bool rawIsOpen = relData ? relData->isOpen : false;
             const auto* rawHistory = relData ? &relData->statusHistory : nullptr;
             if (auto maskedOpt = MaskRelationshipPairForUI(
@@ -1459,10 +1458,10 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendMatchmakingSettings() {
-        const auto& s = Settings::GetSingleton();
         nlohmann::json j;
         {
-            std::shared_lock lock(s.GetMutex());
+            const auto sSnap = Settings::GetSingleton().Snapshot();
+            const auto& s = *sSnap;
             j["enabled"] = s.matchmakingEnabled;
             j["intervalDays"] = s.matchmakingIntervalDays;
             j["maxSuggestions"] = s.matchmakingMaxSuggestions;
@@ -1549,9 +1548,8 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::ProcessUpdateMatchmakingSettings(const nlohmann::json& payload) {
-        auto& s = Settings::GetSingleton();
-        {
-            std::unique_lock lock(s.GetMutex());
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& s = ws.settings.Write();
             if (payload.contains("enabled")) s.matchmakingEnabled = GetJsonBool(payload, "enabled", s.matchmakingEnabled);
             if (payload.contains("intervalDays")) s.matchmakingIntervalDays = std::clamp(GetJsonInt(payload, "intervalDays", s.matchmakingIntervalDays), 1, 30);
             if (payload.contains("maxSuggestions")) s.matchmakingMaxSuggestions = std::clamp(GetJsonInt(payload, "maxSuggestions", s.matchmakingMaxSuggestions), 1, 15);
@@ -1607,7 +1605,7 @@ namespace MARAS {
             if (payload.contains("multAffairFatigueStart")) s.multAffairFatigueStart = std::clamp(GetJsonFloat(payload, "multAffairFatigueStart", s.multAffairFatigueStart), 0.5f, 20.0f);
             if (payload.contains("multRomanticAttendedBreakup")) s.multRomanticAttendedBreakup = std::clamp(GetJsonFloat(payload, "multRomanticAttendedBreakup", s.multRomanticAttendedBreakup), 0.1f, 10.0f);
             if (payload.contains("multSuggestOpenNeglectMin")) s.multSuggestOpenNeglectMin = std::clamp(GetJsonFloat(payload, "multSuggestOpenNeglectMin", s.multSuggestOpenNeglectMin), 0.1f, 10.0f);
-        }
+        });
         SendMatchmakingSettings();
     }
 
@@ -1622,7 +1620,7 @@ namespace MARAS {
     void PrismaUIDataBridge::OnStatusChanged(RE::FormID actorA, RE::FormID actorB, uint8_t status) {
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         const bool revealSecrets = ShouldRevealSecretsInUI();
-        const auto* relData = relMgr.GetNPCData(actorA, actorB);
+        const auto relData = relMgr.GetNPCData(actorA, actorB);
         uint8_t visibleStatus = status;
         bool visibleIsOpen = relData ? relData->isOpen : false;
 
@@ -2003,7 +2001,6 @@ namespace MARAS {
 
     void PrismaUIDataBridge::ProcessUpdateSetting(const nlohmann::json& payload) {
         std::string key = GetJsonString(payload, "key");
-        auto& s = Settings::GetSingleton();
 
         if (key == "debugSpell") {
             bool add = GetJsonBool(payload, "value", false);
@@ -2028,9 +2025,9 @@ namespace MARAS {
         auto itVal = payload.find("value");
         if (itVal != payload.end()) {
             if (itVal->is_boolean()) {
-                updated = s.SetBoolByKey(key, itVal->get<bool>());
+                updated = Settings::GetSingleton().SetBoolByKey(key, itVal->get<bool>());
                 if (updated && key == "autoPauseOnOpen" && PrismaUIManager::GetSingleton().IsDashboardOpen()) {
-                    PrismaUIManager::GetSingleton().SetDashboardPaused(s.autoPauseOnOpen);
+                    PrismaUIManager::GetSingleton().SetDashboardPaused(Settings::GetSingleton().Snapshot()->autoPauseOnOpen);
                 }
             } else if (itVal->is_number()) {
                 if (key == "affectionDecayMult" || key == "affectionDecayMultiplier" ||
@@ -2042,9 +2039,9 @@ namespace MARAS {
                     key == "playerPartnerAgencyOpenLoverChanceMultiplier" ||
                     key == "playerPartnerAgencyBreakupChanceMultiplier" ||
                     key.starts_with("mult")) {
-                    updated = s.SetFloatByKey(key, itVal->get<float>());
+                    updated = Settings::GetSingleton().SetFloatByKey(key, itVal->get<float>());
                 } else {
-                    updated = s.SetIntByKey(key, itVal->get<int32_t>());
+                    updated = Settings::GetSingleton().SetIntByKey(key, itVal->get<int32_t>());
                 }
             }
         }

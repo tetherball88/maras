@@ -133,8 +133,8 @@ sequenceDiagram
     alt Loading Existing Save
         SKSE->>Plugin: kPreLoadGame
         Plugin->>Plugin: BumpSessionEpoch, reset coalesced event sinks & transient caches
-        CoSave->>Plugin: RevertCallback() (BumpSessionEpoch, clear all service state)
-        CoSave->>Plugin: LoadCallback() (Phase 1: Read chunk types | Phase 2: Post-chunk cross-service finalization)
+        CoSave->>Plugin: RevertCallback() (BumpSessionEpoch, WorldStore::Revert, clear transient caches)
+        CoSave->>Plugin: LoadCallback() (Phase 1: CoSaveCodec LoadWorldState -> WorldStore::ReplaceState | Phase 2: Engine FinalizeLoad hooks)
         SKSE->>Plugin: kPostLoadGame
         Plugin->>Plugin: Rebuild NPCIndex, Resolve Pending Deferred NPCs, Reapply Buffs & Factions
     else Starting New Game
@@ -247,9 +247,9 @@ All persistent runtime state is stored in the SKSE co-save under plugin UID `'MA
 
 ### 5.1 Deterministic Chunk Save/Load Table & Two-Phase Load Finalization
 
-During `SaveCallback`, 12 top-level record chunks are written sequentially. During `LoadCallback`, loading executes in two phases:
-- **Phase 1 (Pure Chunk Deserialization)**: Chunks are dispatched by their 4-byte FourCC type code to populate each service's internal state without cross-service queries that assume chunk order or loaded-3D engine forms. Each service's `Load()` validates record counts and rolls back (`Revert()`) atomically on truncated/corrupt streams.
-- **Phase 2 (Post-Chunk Cross-Service Finalization)**: Once all 12 chunks have loaded (including `DeceasedRegistry` `'DCSD'`), `LoadCallback` runs `NPCRelationshipManager::FinalizeLoad()`, `AffectionService::FinalizeLoad()`, `PlayerHouseService::FinalizeLoad()`, `PlayerChildrenService::FinalizeLoad()`, `SpouseAssetsService::FinalizeLoad()`, `AdultChildTravelService::FinalizeLoad()`, `SpouseHierarchyManager::FillGaps(0, false)`, and `PackageOverrideService::RebuildFromTenants()` to prune deceased/orphaned actors, reconcile engine factions/ownership on loaded references, and rebuild package overrides (including traveling adult offspring).
+During `SaveCallback`, [`Serialization.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/Serialization.cpp) copies the live `WorldState` via `MARAS::State::WorldStore::GetSingleton().ReadLive()` and streams all 12 record chunks sequentially through `MARAS::State::SaveWorldState` (`SkseCoSaveWriter`). During `LoadCallback`, loading executes in two phases:
+- **Phase 1 (Pure Chunk Deserialization & Consolidation)**: A staged `WorldState` (seeded with INI baseline `SettingsData`) is populated via `MARAS::State::LoadWorldState` (`SkseCoSaveReader` + `SkseFormIdResolver`), validated per chunk without cross-service engine side effects, pruned by `MARAS::State::FinalizeWorldStateAfterLoad`, and committed atomically via `WorldStore::GetSingleton().ReplaceState(...)`. On revert (`RevertCallback`), `WorldStore::Revert()` clears persistent tables while restoring INI baseline settings.
+- **Phase 2 (Post-Chunk Engine Finalization)**: Once `WorldStore` holds the loaded state, `LoadCallback` runs `Settings::ApplyPostLoadEngineSideEffects()`, `NPCRelationshipManager::FinalizeLoad()`, `AffectionService::FinalizeLoad()`, `PlayerHouseService::FinalizeLoad()`, `PlayerChildrenService::ReassertAllOnLoad()`, `SpouseAssetsService::FinalizeLoad()`, `SpouseHierarchyManager::SyncAllFactionsAndGlobals()`, and `PackageOverrideService::RebuildFromTenants()` to reconcile engine globals, factions, ownership, linked references, and package overrides on loaded references.
 
 | Order | FourCC | Record Constant | Owning Service | Persisted Data Summary |
 | :---: | :---: | :--- | :--- | :--- |
@@ -269,12 +269,12 @@ During `SaveCallback`, 12 top-level record chunks are written sequentially. Duri
 ### 5.2 FormID Resolution & Save-Game Compatibility Rules
 - Every persisted `RE::FormID` is passed through `a_intfc->ResolveFormID(oldID, newID)` during `LoadCallback` so load-order changes do not corrupt references.
 - **Synthetic Child FormIDs** (`0xFF700001`–`0xFF7FFFFF`, tested via `NPCRelationshipManager::IsSyntheticChildID` and allocated via `AllocateSyntheticChildID`) bypass `ResolveFormID` because they represent pre-spawned/abstract biological children (`Unborn`, `Infant`, `InTraining`) until linked to a physical `RE::Actor` (`ReplaceChildID`). Real dynamically spawned `0xFF` child/adult actors (`>= 0xFF800000` or `< 0xFF700000`) are distinct from synthetic IDs and never advance `nextSyntheticChildID_`.
-- Chunk version (`a_version`) is passed to each service's `Load()` method so older co-save versions (`v1`–`v6`) migrate cleanly to `v7` without data loss.
+- Chunk version (`a_version`) is dispatched inside `MARAS::State::LoadWorldState` (`CoSaveCodec`) so older co-save versions (`v1`–`v6`) migrate cleanly to `v7` without data loss.
 
 ### 5.3 Engine-Free Core Modules (`maras_foundation`, `maras_state`) & Headless Test Gate (`maras_tests`)
 - **`maras_foundation`** (`SKSE_Source/modules/foundation/`): Zero-dependency C++23 static library providing strong 32/64-bit domain identifiers (`RefId`, `BaseId`, `SyntheticChildId`, `ActorId`, `ChildId`, `HouseId`, `CellId`, `LocationId`, `FormRawId`, `AffairId`, `CanonicalPairKey`), deterministic RNG injection (`IRng` / `DeterministicRng`), and an engine-free atomic log sink (`Logging.h`).
-- **`maras_state`** (`SKSE_Source/modules/state/`): Engine-header-free C++23 static library consolidating all persistent M.A.R.A.S domain state into `WorldState` across 10 normalized Copy-on-Write (`CowTable<T>`) tables (`ActorProfileTable`, `RelationshipEdgeTable`, `AffairLedger`, `LineageTable`, `SpouseHierarchyTable`, `HouseholdTable`, `AffectionTable`, `DeceasedTable`, `CooldownTable`, `SettingsData`), `WorldStateSnapshot` ($O(1)$ lock-free structural sharing), and the pure stream-abstracted `'MARS'` v1–v7 `CoSaveCodec` (`SaveWorldState`, `LoadWorldState`, `FinalizeWorldStateAfterLoad`).
-- **`WorldStateBridge`** (`SKSE_Source/include/core/WorldStateBridge.h` & `src/core/WorldStateBridge.cpp`): SKSE/CommonLibSSE adapter inside `MARAS.dll` bridging `SKSE::SerializationInterface` (`SkseCoSaveReader`, `SkseCoSaveWriter`), `SkseFormIdResolver`, foundation log forwarding, and compile-time `static_assert` FourCC/enum binary parity checks.
+- **`maras_state`** (`SKSE_Source/modules/state/`): Engine-header-free C++23 static library consolidating all persistent M.A.R.A.S domain state into `WorldState` across 10 normalized Copy-on-Write (`CowTable<T>`) tables (`ActorProfileTable`, `RelationshipEdgeTable`, `AffairLedger`, `LineageTable`, `SpouseHierarchyTable`, `HouseholdTable`, `AffectionTable`, `DeceasedTable`, `CooldownTable`, `SettingsData`), `WorldStateSnapshot` ($O(1)$ lock-free structural sharing), `WorldStore` (sole runtime owner offering lock-free `Snapshot()`, leaf-mutex `Modify(...)`, `ReplaceState(...)`, and INI-baseline-preserving `Revert()`), and the pure stream-abstracted `'MARS'` v1–v7 `CoSaveCodec` (`SaveWorldState`, `LoadWorldState`, `FinalizeWorldStateAfterLoad`).
+- **SKSE Co-Save Glue** (`SKSE_Source/include/core/Serialization.h` & `src/core/Serialization.cpp`): Adapter inside `MARAS.dll` bridging `SKSE::SerializationInterface` (`SkseCoSaveReader`, `SkseCoSaveWriter`, `SkseFormIdResolver`), foundation log forwarding (`InitializeFoundationLogSink`), and compile-time `static_assert` FourCC/enum binary parity checks directly against `maras_state`.
 - **`maras_tests`** (`SKSE_Source/tests/`): Standalone headless C++23 test runner linking **only** `maras_state` and `maras_foundation` (enforcing physical `LNK2019` engine-header isolation) and verifying `'MARS'` v1–v7 migrations, 12-chunk round-trips, chunk-order independence, atomic rollback, `CowTable` structural sharing, slot-neutral custody/death lifecycles, and 3-participant `AffairLedger` invariants.
 
 

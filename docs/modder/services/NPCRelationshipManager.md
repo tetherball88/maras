@@ -1,8 +1,7 @@
 # `NPCRelationshipManager` — Features & Behavioral Guide
 
 **Source**:
-- [`NPCRelationshipManager.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager.cpp) (Core relationship state machine, candidate registration, family checks, status promotions, faction mirrors & vanilla `BGSRelationship` scanner)
-- [`NPCRelationshipManager_Serialization.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Serialization.cpp) (SKSE co-save serialization, global count recalculation & JSON state dump)
+- [`NPCRelationshipManager.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager.cpp) (Core relationship state machine backed by `MARAS::State::WorldStore`, candidate registration, family checks, status promotions, faction mirrors, vanilla `BGSRelationship` scanner, post-load finalization/revert, global count recalculation & JSON state dump)
 - [`NPCRelationshipManager_Infidelity.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Infidelity.cpp) (Open relationships, directional cheating records, affair discovery & resolution)
 - [`NPCRelationshipManager_Children.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Children.cpp) (Child registry, marriage/divorce/death custody evaluation & non-player child AI package overrides)
 - [`NPCRelationshipManager_Fertility.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/NPCRelationshipManager_Fertility.cpp) (Pregnancy/birth lifecycle, racial phenotype classification, bio-father step-in & dual-edge paternity secrets)

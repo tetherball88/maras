@@ -6,10 +6,6 @@
 #include "core/SkyrimNetMemoryService.h"
 #include "utils/Common.h"
 
-namespace SKSE {
-    class SerializationInterface;
-}
-
 namespace MARAS {
 
     struct MatchmakingResult {
@@ -117,21 +113,17 @@ namespace MARAS {
         void RecordNpcCooldown(RE::FormID actorID, float currentDay);
         bool IsNpcOnCooldown(RE::FormID actorID, float currentDay) const;
         float GetNpcCooldownRemaining(RE::FormID actorID, float currentDay) const;
-        void ClearNpcCooldowns() { npcLastMatchmakingChangeDay_.clear(); }
-        const std::unordered_map<RE::FormID, float>& GetNpcCooldowns() const { return npcLastMatchmakingChangeDay_; }
+        void ClearNpcCooldowns();
 
-        // Serialization
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization, uint32_t version);
         void Revert();
 
         // Data dump
         [[nodiscard]] nlohmann::json DumpJson() const;
 
-        float GetLastMatchmakingDay() const { return lastMatchmakingDay_; }
-        void SetLastMatchmakingDay(float day) { lastMatchmakingDay_ = day; }
-        float GetLastPlayerPartnerCheatingDay() const { return lastPlayerPartnerCheatingDay_; }
-        void SetLastPlayerPartnerCheatingDay(float day) { lastPlayerPartnerCheatingDay_ = day; }
+        float GetLastMatchmakingDay() const;
+        void SetLastMatchmakingDay(float day);
+        float GetLastPlayerPartnerCheatingDay() const;
+        void SetLastPlayerPartnerCheatingDay(float day);
         float GetCurrentGameDay() const;
 
     private:
@@ -153,11 +145,6 @@ namespace MARAS {
             const std::vector<NPCEntry>& eligibleNPCs,
             std::unordered_set<RE::FormID>& usedActors,
             float currentGameDay);
-
-        float lastMatchmakingDay_ = -1.0f;
-        float lastPlayerPartnerCheatingDay_ = -1.0f;
-        std::unordered_map<RE::FormID, float> npcLastMatchmakingChangeDay_;
-        std::unordered_map<RE::FormID, float> lastHomeArrivalEventDayByLoc_;
     };
 
 }  // namespace MARAS

@@ -11,7 +11,8 @@
 #include "core/PackageOverrideService.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
-#include "core/Serialization.h"
+#include "core/WorldStateLegacyAdapters.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -323,10 +324,9 @@ namespace MARAS {
 
         RE::FormID existingMarkerID = 0;
         {
-            std::shared_lock lock(m_mutex);
-            auto it = m_activeDestinations.find(childID);
-            if (it != m_activeDestinations.end()) {
-                existingMarkerID = it->second.targetMarkerID;
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            if (const auto* rec = snap->household->FindAdultChildTravel(State::ChildId{ childID })) {
+                existingMarkerID = rec->targetMarkerId.raw();
             }
         }
 
@@ -371,10 +371,11 @@ namespace MARAS {
             }
         }
 
-        {
-            std::unique_lock lock(m_mutex);
-            m_activeDestinations[childID] = newState;
-        }
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            ws.household.Write().UpsertAdultChildTravel(
+                State::ChildId{ childID },
+                LegacyAdapters::ToAdultChildTravelRecord(newState));
+        });
 
         Utils::AssignPackageWithLinkedRef(childID, nextDest.markerRefID, keyword, travelPkg->GetFormID());
 
@@ -386,10 +387,9 @@ namespace MARAS {
 
     void AdultChildTravelService::UnregisterAdultChild(RE::FormID childID) {
         if (childID == 0) return;
-        {
-            std::unique_lock lock(m_mutex);
-            m_activeDestinations.erase(childID);
-        }
+        State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
+            ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
+        });
         if (!IsSyntheticChildID(childID)) {
             if (auto* keyword = FormCache::GetSingleton().GetChildSandboxAroundParentKeyword()) {
                 Utils::RemoveLinkedRef(childID, keyword);
@@ -408,6 +408,9 @@ namespace MARAS {
             }
         }
 
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& activeTravel = worldSnap->household->AllAdultChildTravel();
+
         for (RE::FormID cID : adultChildIDs) {
             auto* actor = RE::TESForm::LookupByID<RE::Actor>(cID);
             if (!actor || actor->IsDead() || actor->IsDisabled() || actor->IsDeleted()) continue;
@@ -416,33 +419,46 @@ namespace MARAS {
             }
 
             bool shouldRotate = false;
-            {
-                std::unique_lock lock(m_mutex);
-                auto it = m_activeDestinations.find(cID);
-                if (it == m_activeDestinations.end() || it->second.targetMarkerID == 0) {
-                    shouldRotate = true;
+            bool markArrived = false;
+            AdultChildTravelState updatedState{};
+
+            auto it = activeTravel.find(State::ChildId{ cID });
+            if (it == activeTravel.end() || it->second.targetMarkerId.raw() == 0) {
+                shouldRotate = true;
+            } else {
+                updatedState = LegacyAdapters::ToLegacyAdultChildTravelState(it->second);
+                if (updatedState.arrivedGameDay < 0.0f) {
+                    // Still walking to destination — check if they have arrived
+                    if (HasActorReachedDestination(actor, updatedState)) {
+                        updatedState.arrivedGameDay = currentGameDay;
+                        markArrived = true;
+                        MARAS_LOG_INFO("AdultChildTravelService: Adult child {:08X} ('{}') reached '{}' on day {:.2f} — staying for {:.1f} days",
+                                       cID, ActorSvc::GetName(cID), updatedState.destinationName, currentGameDay, updatedState.stayDurationDays);
+                    } else if (updatedState.assignedGameDay >= 0.0f &&
+                               (currentGameDay - updatedState.assignedGameDay) >= kMaxTravelTimeoutDays) {
+                        MARAS_LOG_INFO("AdultChildTravelService: Adult child {:08X} ('{}') travel to '{}' timed out after {:.1f} days; picking new destination",
+                                       cID, ActorSvc::GetName(cID), updatedState.destinationName, currentGameDay - updatedState.assignedGameDay);
+                        shouldRotate = true;
+                    }
                 } else {
-                    auto& state = it->second;
-                    if (state.arrivedGameDay < 0.0f) {
-                        // Still walking to destination — check if they have arrived
-                        if (HasActorReachedDestination(actor, state)) {
-                            state.arrivedGameDay = currentGameDay;
-                            MARAS_LOG_INFO("AdultChildTravelService: Adult child {:08X} ('{}') reached '{}' on day {:.2f} — staying for {:.1f} days",
-                                           cID, ActorSvc::GetName(cID), state.destinationName, currentGameDay, state.stayDurationDays);
-                        } else if (state.assignedGameDay >= 0.0f &&
-                                   (currentGameDay - state.assignedGameDay) >= kMaxTravelTimeoutDays) {
-                            MARAS_LOG_INFO("AdultChildTravelService: Adult child {:08X} ('{}') travel to '{}' timed out after {:.1f} days; picking new destination",
-                                           cID, ActorSvc::GetName(cID), state.destinationName, currentGameDay - state.assignedGameDay);
-                            shouldRotate = true;
-                        }
-                    } else {
-                        // Already arrived — stay at location for stayDurationDays (2-4 days) before rotating
-                        const float stayDays = std::clamp(state.stayDurationDays, kMinStayDurationDays, kMaxStayDurationDays);
-                        if ((currentGameDay - state.arrivedGameDay) >= stayDays) {
-                            shouldRotate = true;
-                        }
+                    // Already arrived — stay at location for stayDurationDays (2-4 days) before rotating
+                    const float stayDays = std::clamp(updatedState.stayDurationDays, kMinStayDurationDays, kMaxStayDurationDays);
+                    if ((currentGameDay - updatedState.arrivedGameDay) >= stayDays) {
+                        shouldRotate = true;
                     }
                 }
+            }
+
+            if (markArrived) {
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    if (const auto* existing = ws.household.Read().FindAdultChildTravel(State::ChildId{ cID })) {
+                        if (existing->targetMarkerId.raw() == updatedState.targetMarkerID) {
+                            ws.household.Write().UpsertAdultChildTravel(
+                                State::ChildId{ cID },
+                                LegacyAdapters::ToAdultChildTravelRecord(updatedState));
+                        }
+                    }
+                });
             }
 
             if (shouldRotate) {
@@ -469,207 +485,47 @@ namespace MARAS {
     }
 
     RE::FormID AdultChildTravelService::GetCurrentTargetMarkerID(RE::FormID childID) const {
-        std::shared_lock lock(m_mutex);
-        auto it = m_activeDestinations.find(childID);
-        return (it != m_activeDestinations.end()) ? it->second.targetMarkerID : 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* rec = snap->household->FindAdultChildTravel(State::ChildId{ childID });
+        return rec ? rec->targetMarkerId.raw() : 0;
     }
 
     std::string AdultChildTravelService::GetCurrentDestinationName(RE::FormID childID) const {
-        std::shared_lock lock(m_mutex);
-        auto it = m_activeDestinations.find(childID);
-        if (it == m_activeDestinations.end() || it->second.destinationName.empty()) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* rec = snap->household->FindAdultChildTravel(State::ChildId{ childID });
+        if (!rec || rec->destinationName.empty()) {
             return "Traveling Skyrim";
         }
-        if (it->second.arrivedGameDay < 0.0f) {
-            return "Traveling to " + it->second.destinationName;
+        if (rec->arrivedGameDay < 0.0f) {
+            return "Traveling to " + rec->destinationName;
         }
-        if (it->second.isFamilyVisit) {
-            return "Visiting " + it->second.destinationName;
+        if (rec->isFamilyVisit) {
+            return "Visiting " + rec->destinationName;
         }
-        return "Staying at " + it->second.destinationName;
+        return "Staying at " + rec->destinationName;
     }
 
     void AdultChildTravelService::Revert() {
-        std::unique_lock lock(m_mutex);
-        m_activeDestinations.clear();
         MARAS_LOG_INFO("AdultChildTravelService: reverted runtime travel states");
     }
 
-    bool AdultChildTravelService::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-
-        std::shared_lock lock(m_mutex);
-
-        if (!serialization->WriteRecordData(&Serialization::kMagicNumber, sizeof(Serialization::kMagicNumber))) {
-            return false;
-        }
-
-        const std::uint32_t count = static_cast<std::uint32_t>(m_activeDestinations.size());
-        if (!serialization->WriteRecordData(&count, sizeof(count))) {
-            return false;
-        }
-
-        for (const auto& [childID, state] : m_activeDestinations) {
-            if (!serialization->WriteRecordData(&childID, sizeof(childID)) ||
-                !serialization->WriteRecordData(&state.targetMarkerID, sizeof(state.targetMarkerID)) ||
-                !serialization->WriteRecordData(&state.targetLocationID, sizeof(state.targetLocationID)) ||
-                !serialization->WriteRecordData(&state.targetCellID, sizeof(state.targetCellID)) ||
-                !serialization->WriteRecordData(&state.assignedGameDay, sizeof(state.assignedGameDay)) ||
-                !serialization->WriteRecordData(&state.arrivedGameDay, sizeof(state.arrivedGameDay)) ||
-                !serialization->WriteRecordData(&state.stayDurationDays, sizeof(state.stayDurationDays)) ||
-                !serialization->WriteRecordData(&state.isFamilyVisit, sizeof(state.isFamilyVisit))) {
-                return false;
-            }
-
-            const std::uint32_t nameLen = static_cast<std::uint32_t>(state.destinationName.size());
-            if (!serialization->WriteRecordData(&nameLen, sizeof(nameLen))) {
-                return false;
-            }
-            if (nameLen > 0 && !serialization->WriteRecordData(state.destinationName.data(), nameLen)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    bool AdultChildTravelService::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
-        if (!serialization) return false;
-
-        std::unique_lock lock(m_mutex);
-        m_activeDestinations.clear();
-
-        std::uint32_t magic = 0;
-        if (!serialization->ReadRecordData(&magic, sizeof(magic)) || magic != Serialization::kMagicNumber) {
-            MARAS_LOG_ERROR("AdultChildTravelService::Load: Invalid magic number 0x{:08X}", magic);
-            return false;
-        }
-
-        constexpr std::uint32_t kMaxEntries = 4096;
-        std::uint32_t count = 0;
-        if (!serialization->ReadRecordData(&count, sizeof(count))) {
-            return false;
-        }
-        if (count > kMaxEntries) {
-            MARAS_LOG_ERROR("AdultChildTravelService::Load: corrupt count {} exceeds max {}", count, kMaxEntries);
-            return false;
-        }
-
-        auto resolveFormID = [serialization](RE::FormID oldID, RE::FormID& outNewID) -> bool {
-            if (oldID == 0) {
-                outNewID = 0;
-                return true;
-            }
-            if (oldID == kPlayerFormID || (oldID & 0xFF000000) == 0xFF000000) {
-                outNewID = oldID;
-                return true;
-            }
-            return serialization->ResolveFormID(oldID, outNewID);
-        };
-
-        constexpr std::uint32_t kMaxStringLen = 512;
-
-        for (std::uint32_t i = 0; i < count; ++i) {
-            RE::FormID oldChildID = 0;
-            RE::FormID oldMarkerID = 0;
-            RE::FormID oldLocID = 0;
-            RE::FormID oldCellID = 0;
-            float assignedDay = -1.0f;
-            float arrivedDay = -1.0f;
-            float stayDays = 3.0f;
-            bool isFamVisit = false;
-            std::uint32_t nameLen = 0;
-
-            if (!serialization->ReadRecordData(&oldChildID, sizeof(oldChildID)) ||
-                !serialization->ReadRecordData(&oldMarkerID, sizeof(oldMarkerID)) ||
-                !serialization->ReadRecordData(&oldLocID, sizeof(oldLocID)) ||
-                !serialization->ReadRecordData(&oldCellID, sizeof(oldCellID)) ||
-                !serialization->ReadRecordData(&assignedDay, sizeof(assignedDay)) ||
-                !serialization->ReadRecordData(&arrivedDay, sizeof(arrivedDay)) ||
-                !serialization->ReadRecordData(&stayDays, sizeof(stayDays)) ||
-                !serialization->ReadRecordData(&isFamVisit, sizeof(isFamVisit)) ||
-                !serialization->ReadRecordData(&nameLen, sizeof(nameLen))) {
-                return false;
-            }
-
-            if (nameLen > kMaxStringLen) {
-                MARAS_LOG_ERROR("AdultChildTravelService::Load: Destination name length {} exceeds max", nameLen);
-                return false;
-            }
-
-            std::string destName;
-            if (nameLen > 0) {
-                destName.resize(nameLen);
-                if (!serialization->ReadRecordData(destName.data(), nameLen)) {
-                    return false;
-                }
-            }
-
-            RE::FormID newChildID = 0;
-            RE::FormID newMarkerID = 0;
-            RE::FormID newLocID = 0;
-            RE::FormID newCellID = 0;
-
-            if (resolveFormID(oldChildID, newChildID) && resolveFormID(oldMarkerID, newMarkerID) &&
-                newChildID != 0 && newMarkerID != 0) {
-                (void)resolveFormID(oldLocID, newLocID);
-                (void)resolveFormID(oldCellID, newCellID);
-                m_activeDestinations[newChildID] = AdultChildTravelState{
-                    newMarkerID,
-                    newLocID,
-                    newCellID,
-                    std::move(destName),
-                    assignedDay,
-                    arrivedDay,
-                    std::clamp(stayDays, kMinStayDurationDays, kMaxStayDurationDays),
-                    isFamVisit};
-            }
-        }
-
-        MARAS_LOG_INFO("AdultChildTravelService: Loaded {} active adult child travel destination(s)",
-                       m_activeDestinations.size());
-        return true;
-    }
-
-    void AdultChildTravelService::FinalizeLoad() {
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        auto& deceasedReg = DeceasedRegistry::GetSingleton();
-
-        std::vector<RE::FormID> staleIDs;
+    nlohmann::json AdultChildTravelService::DumpJson() const {
+        std::size_t indexedInnCount = 0;
         {
             std::shared_lock lock(m_mutex);
-            for (const auto& [childID, state] : m_activeDestinations) {
-                auto entryOpt = relMgr.GetChildEntry(childID);
-                bool validAdult = entryOpt.has_value() && entryOpt->stage == ChildStage::Adult &&
-                                  !IsSyntheticChildID(childID) && !deceasedReg.IsDeceased(childID);
-                if (validAdult && ((childID & 0xFF000000) == 0xFF000000)) {
-                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
-                    if (!actor || actor->IsDeleted() || actor->IsDead()) {
-                        validAdult = false;
-                    }
-                }
-                if (!validAdult) {
-                    staleIDs.push_back(childID);
-                }
-            }
+            indexedInnCount = m_innDestinations.size();
         }
-        if (!staleIDs.empty()) {
-            std::unique_lock lock(m_mutex);
-            for (RE::FormID id : staleIDs) {
-                m_activeDestinations.erase(id);
-                MARAS_LOG_INFO("AdultChildTravelService::FinalizeLoad: Pruned stale adult child travel entry {:08X}", id);
-            }
-        }
-    }
 
-    nlohmann::json AdultChildTravelService::DumpJson() const {
-        std::shared_lock lock(m_mutex);
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& activeTravel = snap->household->AllAdultChildTravel();
 
         nlohmann::json j = nlohmann::json::object();
-        j["indexedInnCount"] = m_innDestinations.size();
+        j["indexedInnCount"] = indexedInnCount;
 
         nlohmann::json activeArray = nlohmann::json::array();
-        for (const auto& [childID, state] : m_activeDestinations) {
+        for (const auto& [childKey, rec] : activeTravel) {
+            const RE::FormID childID = childKey.raw();
+            const AdultChildTravelState state = LegacyAdapters::ToLegacyAdultChildTravelState(rec);
             nlohmann::json entry = nlohmann::json::object();
             entry["childFormId"] = std::format("{:08X}", childID);
             entry["childName"] = ActorSvc::GetName(childID);

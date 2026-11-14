@@ -46,16 +46,14 @@ namespace MARAS {
             logger->flush_on(flushLevel);
         }
 
-        {
-            std::unique_lock lock(Settings::GetSingleton().GetMutex());
-            Settings::GetSingleton().logLevel = level;
-        }
+        State::WorldStore::GetSingleton().Modify([level](State::WorldState& ws) {
+            ws.settings.Write().logLevel = level;
+        });
         MARAS_LOG_INFO("Applied log level {} (mapped to {})", level, static_cast<int>(lvl));
     }
 
     int32_t LoggingService::GetLogLevel() const {
-        std::shared_lock lock(Settings::GetSingleton().GetMutex());
-        return Settings::GetSingleton().logLevel;
+        return Settings::GetSingleton().Snapshot()->logLevel;
     }
 
 }  // namespace MARAS

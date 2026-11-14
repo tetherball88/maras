@@ -56,10 +56,12 @@ namespace MARAS {
         }
 
         m_pendingNewGameRelationshipScan = false;
-        if (!Settings::GetSingleton().initialRelationshipScanDone) {
+        if (!Settings::GetSingleton().Snapshot()->initialRelationshipScanDone) {
             MARAS_LOG_INFO("PrismaUIManager::TryRunPendingNewGameScan: character creation finished — running deferred new-game relationship scan");
             NPCRelationshipManager::GetSingleton().ScanExistingRelationships(/*isNewGame=*/true);
-            Settings::GetSingleton().initialRelationshipScanDone = true;
+            State::WorldStore::GetSingleton().Modify([](State::WorldState& ws) {
+                ws.settings.Write().initialRelationshipScanDone = true;
+            });
             NPCRelationshipManager::GetSingleton().LogStatistics();
         }
     }
@@ -214,7 +216,8 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         const uint32_t hotkeyCode = settings.toggleUIKey;
         if (hotkeyCode == 0) return RE::BSEventNotifyControl::kContinue;
 
@@ -426,7 +429,7 @@ namespace MARAS {
         const bool wasOpen = m_dashboardOpen;
         m_dashboardOpen = true;
         if (!wasOpen) {
-            m_dashboardPaused = Settings::GetSingleton().autoPauseOnOpen;
+            m_dashboardPaused = Settings::GetSingleton().Snapshot()->autoPauseOnOpen;
         }
 
         const bool wasValid = IsViewValid();
