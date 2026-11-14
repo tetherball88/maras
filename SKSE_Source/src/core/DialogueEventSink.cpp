@@ -1,6 +1,6 @@
 #include "core/DialogueEventSink.h"
 
-#include "core/NPCRelationshipManager.h"
+#include "core/FactionReconciler.h"
 #include "core/SessionEpoch.h"
 #include "utils/Common.h"
 
@@ -112,7 +112,8 @@ namespace MARAS {
     }
 
     void DialogueEventSink::SendDialogueEvent(RE::Actor* npc) {
-        NPCRelationshipManager::GetSingleton().UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+        FactionReconciler::GetSingleton().ReconcilePlayer();
+        FactionReconciler::GetSingleton().ReconcileLoadedActor(npc);
 
         auto* eventSource = SKSE::GetModCallbackEventSource();
         if (!eventSource) {

@@ -1,5 +1,7 @@
 #include "core/AffectionService.h"
 
+#include "core/BuffReconciler.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
@@ -154,9 +156,11 @@ namespace MARAS {
 
         MARAS_LOG_INFO("SetPermanentAffection: NPC {:08X} = {} (clamped from {})", npcFormID, clamped, amount);
 
-        // Update faction rank when loaded
-        if (actor) {
-            UpdateAffectionFaction(actor, npcFormID, clamped);
+        UpdateAffectionFaction(actor, npcFormID, clamped);
+        if (clamped != oldVal &&
+            State::WorldStore::GetSingleton().Snapshot()->relationships->GetStatus(
+                State::ActorId{ kPlayerFormID }, State::ActorId{ npcFormID }) == State::RelationshipStatus::Married) {
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
         }
 
         // Send event if threshold changed and event sending requested
@@ -242,13 +246,18 @@ namespace MARAS {
             aff.ClearDailyAccumulation();
         });
 
+        const auto updatedSnap = State::WorldStore::GetSingleton().Snapshot();
+        bool anyMarriedSpouseChanged = false;
         for (const auto& chg : applied) {
             const std::string oldThreshold = GetAffectionThreshold(chg.original);
             const std::string newThreshold = GetAffectionThreshold(chg.updated);
             MARAS_LOG_INFO("SetPermanentAffection: NPC {:08X} = {} (clamped from {})", chg.npcFormID, chg.updated, chg.unclamped);
 
-            if (chg.actor) {
-                UpdateAffectionFaction(chg.actor, chg.npcFormID, chg.updated);
+            UpdateAffectionFaction(chg.actor, chg.npcFormID, chg.updated);
+            if (chg.updated != chg.original &&
+                updatedSnap->relationships->GetStatus(State::ActorId{ kPlayerFormID }, State::ActorId{ chg.npcFormID }) ==
+                    State::RelationshipStatus::Married) {
+                anyMarriedSpouseChanged = true;
             }
             if (oldThreshold != newThreshold) {
                 SendAffectionChangeEvent(chg.npcFormID, newThreshold, chg.updated - chg.original);
@@ -258,12 +267,17 @@ namespace MARAS {
             MARAS_LOG_INFO("Applied daily affection for NPC {:08X}: {} -> {} (delta {})", chg.npcFormID, chg.original,
                            chg.updated, chg.updated - chg.original);
         }
+        if (anyMarriedSpouseChanged) {
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+        }
     }
 
     void AffectionService::FinalizeLoad() {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        std::size_t reasserted = 0;
+        std::vector<FormID> loadedActors;
+        loadedActors.reserve(snap->affection->AllPermanent().size());
         for (const auto& [actorId, val] : snap->affection->AllPermanent()) {
+            (void)val;
             const FormID id = actorId.raw();
             if (id == 0 || IsSyntheticChildID(id)) {
                 continue;
@@ -273,12 +287,14 @@ namespace MARAS {
                 actor = RE::TESForm::LookupByID<RE::Actor>(id);
             }
             if (actor && !actor->IsDead()) {
-                UpdateAffectionFaction(actor, id, ClampAffection(val));
-                ++reasserted;
+                loadedActors.push_back(id);
             }
         }
+        if (!loadedActors.empty()) {
+            FactionReconciler::GetSingleton().ReconcileActors(loadedActors);
+        }
         MARAS_LOG_INFO("AffectionService::FinalizeLoad - synchronized affection faction rank for {} loaded actor(s)",
-                       reasserted);
+                       loadedActors.size());
     }
 
     void AffectionService::Revert() {
@@ -409,12 +425,11 @@ namespace MARAS {
 
     int AffectionService::ClampAffection(int value) { return std::clamp(value, kAffectionMin, kAffectionMax); }
 
-    void AffectionService::UpdateAffectionFaction(RE::Actor* actor, FormID npcFormID, int affectionValue) {
-        auto faction = FormCache::GetSingleton().GetAffectionFaction();
-        if (faction) {
-            Utils::AddToFaction(actor, faction, static_cast<std::int8_t>(affectionValue));
-            MARAS_LOG_DEBUG("UpdateAffectionFaction: set faction {:08X} rank {} for NPC {:08X}", faction->GetFormID(),
-                            affectionValue, npcFormID);
+    void AffectionService::UpdateAffectionFaction(RE::Actor* actor, FormID npcFormID, int /*affectionValue*/) {
+        if (actor) {
+            FactionReconciler::GetSingleton().ReconcileLoadedActor(actor);
+        } else if (npcFormID != 0) {
+            FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
         }
     }
 

@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <unordered_set>
 
+#include "core/BuffReconciler.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
+#include "core/GlobalVarReconciler.h"
 #include "core/NPCIndex.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
@@ -12,34 +15,18 @@
 
 namespace MARAS {
     namespace {
-        // Helper to get spouse hierarchy faction (centralized cached lookup)
-        RE::TESFaction* GetHierarchyFaction() { return FormCache::GetSingleton().GetHierarchyFaction(); }
-
-        // Helper to set or remove a faction rank for an actor by FormID (centralized)
-        void SetActorHierarchyFactionRank(RE::FormID actorFormID, std::optional<std::int8_t> rank) {
-            if (actorFormID == 0) return;
-            auto faction = GetHierarchyFaction();
-            if (!faction) return;
-            auto actor = NPCIndex::GetSingleton().GetActorFromFormId(actorFormID);
-            if (!actor) return;
-
-            if (rank.has_value()) {
-                Utils::AddToFaction(actor, faction, *rank);
-            } else {
-                Utils::RemoveFromFaction(actor, faction);
+        // Reconcile spouse hierarchy faction via FactionReconciler
+        inline void ApplyFactionRank(RE::FormID id, int /*rank*/) {
+            if (id != 0) {
+                FactionReconciler::GetSingleton().ReconcileActor(id);
             }
         }
 
-        // Convenience wrappers to reduce repeated casting noise
-        inline std::optional<std::int8_t> MakeRankOpt(int rank) {
-            if (rank < INT8_MIN || rank > INT8_MAX) {
-                return std::nullopt;
+        inline void ClearFactionRank(RE::FormID id) {
+            if (id != 0) {
+                FactionReconciler::GetSingleton().ReconcileActor(id);
             }
-            return static_cast<std::int8_t>(rank);
         }
-
-        inline void ApplyFactionRank(RE::FormID id, int rank) { SetActorHierarchyFactionRank(id, MakeRankOpt(rank)); }
-        inline void ClearFactionRank(RE::FormID id) { SetActorHierarchyFactionRank(id, std::nullopt); }
 
         // Helper to send hierarchy changed event to Papyrus
         void SendHierarchyChangedEvent(RE::FormID npcFormID, const std::string& action, float newRank) {
@@ -157,6 +144,7 @@ namespace MARAS {
                         SendHierarchyChangedEvent(id, action, shiftDiff);
                     }
                 }
+                BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
             }
             PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
             return true;
@@ -185,6 +173,7 @@ namespace MARAS {
             SendHierarchyChangedEvent(occupant, "demote", static_cast<float>(rank - kSlots));
         }
 
+        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
         PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
         return true;
     }
@@ -206,6 +195,7 @@ namespace MARAS {
 
         if (assignedSlot >= 0) {
             ApplyFactionRank(npcFormID, assignedSlot);
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
             MARAS_LOG_INFO("Assigned spouse {:08X} to hierarchy slot {}", npcFormID, assignedSlot);
         }
     }
@@ -285,6 +275,7 @@ namespace MARAS {
                 SendHierarchyChangedEvent(id, action, diff);
             }
         }
+        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
     }
 
     void SpouseHierarchyManager::FillGaps(RE::FormID excludeFormID, bool sendEvents) {
@@ -338,33 +329,33 @@ namespace MARAS {
                 }
             }
         }
+        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
     }
 
     void SpouseHierarchyManager::SyncAllFactionsAndGlobals() {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto& slots = snap->hierarchy->Slots();
 
-        std::unordered_set<RE::FormID> topIds;
-        topIds.reserve(slots.size());
-        for (const auto id : slots) {
-            if (!id.IsNull()) {
-                topIds.insert(id.raw());
-            }
-        }
-
+        std::unordered_set<RE::FormID> actorIdSet;
+        actorIdSet.reserve(snap->actors->AllProfiles().size() + slots.size());
         for (const auto& [actorId, profile] : snap->actors->AllProfiles()) {
             (void)profile;
-            if (!actorId.IsNull() && !topIds.contains(actorId.raw())) {
-                ClearFactionRank(actorId.raw());
+            if (!actorId.IsNull()) {
+                actorIdSet.insert(actorId.raw());
+            }
+        }
+        for (const auto id : slots) {
+            if (!id.IsNull()) {
+                actorIdSet.insert(id.raw());
             }
         }
 
-        for (std::size_t i = 0; i < slots.size(); ++i) {
-            const RE::FormID id = slots[i].raw();
-            if (id != 0) {
-                ApplyFactionRank(id, static_cast<int>(i));
-            }
+        std::vector<RE::FormID> actorIds(actorIdSet.begin(), actorIdSet.end());
+        if (!actorIds.empty()) {
+            FactionReconciler::GetSingleton().ReconcileActors(actorIds);
         }
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
 
         MARAS_LOG_INFO("Synchronized spouse hierarchy factions for top {} slots", slots.size());
     }

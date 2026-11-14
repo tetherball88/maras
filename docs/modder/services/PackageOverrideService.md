@@ -1,8 +1,11 @@
-# PackageOverrideService — Feature & Mechanics Guide
+# PackageOverrideService & PackageReconciler — Feature & Mechanics Guide
 
-**Implementation**: [PackageOverrideService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageOverrideService.cpp)
+**Implementations**:
+- Engine Hook & INI Config Host: [PackageOverrideService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageOverrideService.cpp)
+- Idempotent Package Planner & RCU Publisher: [PackageReconciler.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageReconciler.cpp)
+- Unloaded Actor Queue: [DeferredActorResolver.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/DeferredActorResolver.cpp)
 
-`PackageOverrideService` intercepts the Creation Engine's AI package evaluation loop at the machine-code level (`RELOCATION_ID(36404, 37398) + 0x47`) to keep housed spouses, children, pets/critters, and dynamically spawned NPC children (`0xFF` Stage 2) anchored to their assigned M.A.R.A.S sandbox packages without requiring fixed quest aliases. At the same time, it dynamically steps aside whenever an actor is recruited as a follower or needs to run an important quest, scene, or whitelisted mod package.
+`PackageOverrideService` intercepts the Creation Engine's AI package evaluation loop at the machine-code level (`RELOCATION_ID(36404, 37398) + 0x47`) and loads `PackageOverrides.ini` filter rules. `PackageReconciler` computes desired package assignments in `EngineSyncPlan`, maintains home/parent/destination linked references, manages `DeferredActorResolver` convergence for unloaded references, and publishes immutable override snapshots lock-free (RCU) for `PackageStartHook` to read without lock contention. This keeps housed spouses, children, pets/critters, traveling adult offspring, and dynamically spawned NPC children (`0xFF` Stage 2) anchored to their active M.A.R.A.S packages while yielding cleanly whenever an actor follows the player or runs a whitelisted quest, scene, or mod package.
 
 ---
 
@@ -70,13 +73,16 @@ flowchart TD
 
 ---
 
-## 3. Immediate Injection & Save-Load Registry Rebuild
+## 3. Immediate Injection, RCU Snapshot & Save-Load Rebuild
 
-- **Immediate Run-Once Injection**:
-  - Whenever an actor is newly registered (and is not currently a player follower), `ReassertBasePackage` immediately calls `currentProcess->SetRunOncePackage(basePkg, actor)` followed by `EvaluatePackage` so the actor transitions to their home sandbox immediately without waiting for their current vanilla package timer to expire.
-- **Stateless Save-Load Rebuild (`RebuildFromTenants`)**:
-  - `PackageOverrideService` does not need its own co-save record. Instead, on every save load, it reconstructs its entire override registry deterministically from three authoritative sources:
-    1. All player-house tenants with `stayAtHome == true` in `PlayerHouseService` (`0x6A`).
-    2. All active pets and critters in `PlayerChildrenService` (`0xC0`).
-    3. All non-player `0xFF` Stage 2 children in `NPCRelationshipManager` (`0x376`), while simultaneously re-asserting their `0x377` parent/orphanage linked reference so they immediately follow their NPC parent or caretaker after loading a save.
+- **Lock-Free RCU Override Snapshot**:
+  - `PackageReconciler` computes each actor's desired package plan via `EngineSyncPlan` (`0x6A` home sandbox, `0xC0` pet/critter sandbox, `0x376` non-player child follow, or adult-child travel package) alongside home/parent/destination linked references, publishing an immutable registry snapshot (`std::atomic<std::shared_ptr<...>>`) read lock-free inside `PackageStartHook` with zero mutex contention on background AI threads.
+- **Immediate Run-Once Injection & Deferred Convergence**:
+  - Whenever an actor is newly registered or updated (and is not currently a player follower), `PackageReconciler` immediately calls `currentProcess->SetRunOncePackage(basePkg, actor)` followed by `EvaluatePackage` so the actor transitions without waiting for their vanilla package timer to expire. Unloaded actors or deferred home markers are tracked by `DeferredActorResolver` and converged when the actor loads 3D.
+- **Stateless Save-Load Rebuild**:
+  - Neither `PackageReconciler` nor `PackageOverrideService` stores its own co-save chunk. On every save load (and save revert), `PackageReconciler`'s world reconciliation reconstructs the RCU snapshot and linked references deterministically from `WorldStore`:
+    1. Player-house tenants with `stayAtHome == true` (`0x6A`, spawning or re-asserting home markers on the main thread when needed).
+    2. Active household pets and critters (`0xC0`).
+    3. Non-player `0xFF` Stage 2 children (`0x376`, with their parent/orphanage linked reference).
+    4. Active Stage 4 (`Adult`) children on travel assignments (`AdultChildTravelService`).
 

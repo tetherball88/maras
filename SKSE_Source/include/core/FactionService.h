@@ -1,13 +1,16 @@
 #pragma once
 
-#include "utils/Common.h"
+#include "PCH.h"
+#include "core/FactionReconciler.h"
 
 namespace MARAS {
 
+    // Thin backward-compatible facade forwarding to FactionReconciler.
     class FactionService {
     public:
-        using FactionAddedCallback = std::function<void(RE::Actor*, RE::TESFaction*, std::int8_t)>;
-        using FactionRemovedCallback = std::function<void(RE::Actor*, RE::TESFaction*)>;
+        using FactionAddedCallback = FactionReconciler::FactionAddedCallback;
+        using FactionRemovedCallback = FactionReconciler::FactionRemovedCallback;
+        using InternalFactionScope = FactionReconciler::InternalFactionScope;
 
         static FactionService& GetSingleton();
 
@@ -15,12 +18,6 @@ namespace MARAS {
 
         // Removes PlayerMarriedFaction from the player if polygamy is currently enabled.
         void SanitizePlayerMarriedFaction();
-
-        // RAII scope to mark internal MARAS faction mutations so engine hooks ignore them
-        struct InternalFactionScope {
-            InternalFactionScope();
-            ~InternalFactionScope();
-        };
 
         static bool IsInternalFactionUpdate();
 
@@ -37,10 +34,6 @@ namespace MARAS {
         ~FactionService() = default;
         FactionService(const FactionService&) = delete;
         FactionService& operator=(const FactionService&) = delete;
-
-        std::shared_mutex m_mutex;
-        std::vector<FactionAddedCallback> m_addedListeners;
-        std::vector<FactionRemovedCallback> m_removedListeners;
     };
 
 }  // namespace MARAS

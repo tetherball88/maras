@@ -1,14 +1,15 @@
-# `SpouseBuffService` & `BonusesService` — Features & Behavioral Guide
+# `SpouseBuffService`, `BonusesService` & `BuffReconciler` — Features & Behavioral Guide
 
 **Sources**:
 - [`SpouseBuffService.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/SpouseBuffService.cpp)
 - [`BonusesService.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/BonusesService.cpp)
+- [`BuffReconciler.cpp`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/BuffReconciler.cpp)
 
 ---
 
 ## 1. What These Services Do
 
-`BonusesService` loads the customizable buff definitions from `SKSE/Plugins/MARAS/bonuses.json`, while `SpouseBuffService` calculates the live strength of every passive **Social Class** and **Skill Type** bonus granted to the player by their spouses, scaling them dynamically by monogamy vs. polygamy rank, partner affection, and follower presence.
+`BonusesService` loads the customizable buff definitions from `SKSE/Plugins/MARAS/bonuses.json`, while `SpouseBuffService` calculates the live strength of every passive **Social Class** and **Skill Type** bonus granted to the player by their spouses, scaling them dynamically by monogamy vs. polygamy rank, partner affection, and follower presence. `BuffReconciler` applies those computed magnitudes idempotently to the engine's bonus perk ability spell magnitudes and perk entry-point values (with `RemovePerk`/`AddPerk` refresh) on every relevant state transition (marriage/divorce, hierarchy shift, permanent affection change, archetype update, teammate join/leave, and save load/revert).
 
 ---
 
@@ -41,4 +42,8 @@ For **Permanent Household Buffs** (and daily store income), a spouse's contribut
 - **Affection Scaling**: Both Permanent and Follower buffs are multiplied by each spouse's current **Affection Multiplier** (`1.25x` when *Happy*, `1.00x` when *Content*, `0.25x` when *Troubled*, and `0.00x` when *Estranged*). An estranged spouse provides zero buffs even if they are your Lead Spouse or active follower.
 - **Same-Archetype Stacking**: If you marry multiple spouses who share the same Social Class or bring multiple spouse followers who share the same Skill Type, their multipliers **stack additively** in that archetype's bucket.
 - **Live Dashboard Breakdown**: Generates a real-time breakdown for the Prisma UI **My Household $\rightarrow$ Household Buffs** view, showing the exact effective percentage/point bonus for all 14 buff categories, which spouses are actively contributing, and which at-home spouses *could* contribute to a Follower Buff if recruited into your party.
+
+### 2.4 Idempotent C++ Buff Reconciliation (`BuffReconciler`)
+- `BuffReconciler` evaluates the player's desired Social Class and Skill Type buff magnitudes via `EngineSyncPlan` (`ComputeBuffMultipliers` and `ComputeBonusTargetValue`) directly against the current `WorldStore` snapshot and active follower state.
+- Every relevant C++ mutation—relationship status transitions (including marriage/divorce), spouse hierarchy changes, permanent affection updates for married spouses, archetype updates, teammate changes, save load, and save revert—triggers `BuffReconciler` player buff reconciliation so active bonus perk ability spell magnitudes and perk entry-point values (with `RemovePerk`/`AddPerk` refresh) stay synchronized idempotently without relying on noisy polling or redundant updates.
 

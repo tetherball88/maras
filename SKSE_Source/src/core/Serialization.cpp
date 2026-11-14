@@ -6,14 +6,19 @@
 #include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
 #include "core/BanterCoordinatorService.h"
+#include "core/BuffReconciler.h"
 #include "core/ChildrenFleeService.h"
 #include "core/DeceasedRegistry.h"
+#include "core/DeferredActorResolver.h"
 #include "core/DialogueEventSink.h"
+#include "core/FactionReconciler.h"
+#include "core/GlobalVarReconciler.h"
 #include "core/IntimateThreadService.h"
 #include "core/MatchmakingService.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/PollingService.h"
@@ -344,13 +349,20 @@ namespace MARAS::Serialization {
             PlayerChildrenService::GetSingleton().ReassertAllOnLoad();
             SpouseAssetsService::GetSingleton().FinalizeLoad();
             SpouseHierarchyManager::GetSingleton().SyncAllFactionsAndGlobals();
-            PackageOverrideService::GetSingleton().RebuildFromTenants();
+            GlobalVarReconciler::GetSingleton().SyncExternalPolygamyGlobalToStore();
+            GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+            FactionReconciler::GetSingleton().ReconcileAllOnLoad();
+            PackageReconciler::GetSingleton().ReconcileWorld();
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
         }
     }
 
     void RevertCallback(SKSE::SerializationInterface*) {
         BumpSessionEpoch("Serialization::RevertCallback");
         ResetPluginEventSinks();
+        DeferredActorResolver::GetSingleton().Revert();
+        GlobalVarReconciler::GetSingleton().Revert();
+        BuffReconciler::GetSingleton().Revert();
         PollingService::GetSingleton().Shutdown();
         State::WorldStore::GetSingleton().Revert();
         Settings::GetSingleton().RevertGameSettings();
@@ -364,7 +376,7 @@ namespace MARAS::Serialization {
         MatchmakingService::GetSingleton().Revert();
         DeceasedRegistry::GetSingleton().Revert();
         BanterCoordinatorService::GetSingleton().Revert();
-        PackageOverrideService::GetSingleton().Revert();
+        PackageReconciler::GetSingleton().Revert();
         IntimateThreadService::GetSingleton().ClearAll();
         ChildrenFleeService::GetSingleton().Reset();
         SkyrimNetMemoryService::GetSingleton().Revert();

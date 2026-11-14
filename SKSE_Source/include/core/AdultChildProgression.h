@@ -123,6 +123,7 @@ namespace MARAS {
         static std::int32_t GetTrainingClassCount() noexcept;
         static bool IsValidTrainingClass(std::int32_t classIndex) noexcept;
         static std::int32_t FindTrainingClassByLocation(std::string_view locationName) noexcept;
+        static std::string_view GetTrainingClassId(std::int32_t classIndex) noexcept;
         static std::string_view GetTrainingClassName(std::int32_t classIndex) noexcept;
         static std::string_view GetTrainingLocationName(std::int32_t classIndex) noexcept;
         static std::string_view GetTrainingDescription(std::int32_t classIndex) noexcept;

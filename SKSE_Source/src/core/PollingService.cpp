@@ -6,11 +6,15 @@
 #include "RE/T/TESPackage.h"
 #include "core/AdultChildTravelService.h"
 #include "core/AffectionService.h"
+#include "core/BuffReconciler.h"
 #include "core/ChildrenFleeService.h"
+#include "core/FactionReconciler.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
+#include "core/GlobalVarReconciler.h"
 #include "core/IntimateThreadService.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerChildrenService.h"
 #include "core/MatchmakingService.h"
 #include "core/SessionEpoch.h"
@@ -350,6 +354,15 @@ namespace MARAS {
             MARAS_LOG_INFO("Teammate changes detected: {} added, {} removed", added.size(), removed.size());
             SendTeammateChangeEvent(added, removed);
             previousTeammates_ = std::move(currentTeammates);
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+            for (const auto id : added) {
+                FactionReconciler::GetSingleton().ReconcileActor(id);
+                PackageReconciler::GetSingleton().ReconcileActor(id);
+            }
+            for (const auto id : removed) {
+                FactionReconciler::GetSingleton().ReconcileActor(id);
+                PackageReconciler::GetSingleton().ReconcileActor(id);
+            }
         }
     }
 
@@ -495,7 +508,10 @@ namespace MARAS {
     }
 
     void PollingService::SanitizePlayerFactions() {
-        FactionService::GetSingleton().SanitizePlayerMarriedFaction();
+        FactionReconciler::GetSingleton().SanitizePlayerMarriedFaction();
+        FactionReconciler::GetSingleton().ReconcilePlayer();
+        GlobalVarReconciler::GetSingleton().SyncExternalPolygamyGlobalToStore();
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
     }
 
     void PollingService::PublishSpatialSnapshot() {

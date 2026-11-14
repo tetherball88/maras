@@ -5,41 +5,22 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/PollingService.h"
 #include "core/SpouseHierarchyManager.h"
+#include "maras/state/EngineSyncPlan.h"
 #include "services/ActorService.h"
 
 namespace MARAS {
 
     namespace {
-        // Multiplier configuration
-        constexpr float kSingleSpouseMultiplier = 2.0f;          // When only one spouse exists
-        constexpr std::array<float, 3> kRankMultipliers{1.0f,    // Lead (rank 0)
-                                                        0.5f,    // Second (rank 1)
-                                                        0.25f};  // Third (rank 2)
-        constexpr float kOtherSpouseMultiplier = 0.1f;           // Rank 3+
-
-        // Number of social classes aggregated for permanent multipliers.
-        // Keep in sync with NPCRelationshipManager::SocialClass enum.
-        constexpr std::size_t kSocialClassCount = 8;
-
-        inline float ComputeRankedSpouseMultiplier(int spouseRank, int spouseCount) {
-            if (spouseCount == 1) {
-                return kSingleSpouseMultiplier;
-            }
-
-            if (spouseRank >= 0 && spouseRank < static_cast<int>(kRankMultipliers.size())) {
-                return kRankMultipliers[static_cast<std::size_t>(spouseRank)];
-            }
-
-            return kOtherSpouseMultiplier;
-        }
+        constexpr std::size_t kSocialClassCount = State::BuffMultipliersPlan::kSocialClassCount;
 
         inline float ComputeSpouseMultiplierByID(RE::FormID fid, int spouseCount,
                                                  const SpouseHierarchyManager& hierarchy,
                                                  const AffectionService& affection) {
             if (fid == 0) return 0.0f;
             const int spouseRank = hierarchy.GetRank(fid);
-            const float affectionBuffMult = affection.GetMultiplierForNPC(fid);
-            return ComputeRankedSpouseMultiplier(spouseRank, spouseCount) * affectionBuffMult;
+            const float affectionBuffMult =
+                State::ComputeAffectionMultiplier(affection.GetPermanentAffection(fid));
+            return State::ComputeHierarchyRankMultiplier(spouseRank, spouseCount) * affectionBuffMult;
         }
 
         inline bool IndexInBounds(std::size_t index, std::size_t size) { return index < size; }
@@ -78,8 +59,9 @@ namespace MARAS {
                 continue;
             }
 
-            // Add affection multiplier from native AffectionService
-            const float affectionMultFollower = affection.GetMultiplierForNPC(fid);
+            // Add affection multiplier from shared pure formula
+            const float affectionMultFollower =
+                State::ComputeAffectionMultiplier(affection.GetPermanentAffection(fid));
 
             multipliers[idx] += affectionMultFollower;
         }
@@ -166,9 +148,9 @@ namespace MARAS {
             for (auto fid : marriedSpouses) {
                 if (relMgr.GetSocialClass(fid) == def.sc) {
                     int rank = hierarchy.GetRank(fid);
-                    float rankMult = ComputeRankedSpouseMultiplier(rank, spouseCount);
+                    float rankMult = State::ComputeHierarchyRankMultiplier(rank, spouseCount);
                     int affVal = affection.GetPermanentAffection(fid);
-                    float affMult = affection.GetMultiplierForNPC(fid);
+                    float affMult = State::ComputeAffectionMultiplier(affVal);
                     float netMult = rankMult * affMult;
                     totalMult += netMult;
 

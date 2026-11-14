@@ -3,10 +3,12 @@
 #include "core/AdultChildProgression.h"
 #include "core/AdultChildTravelService.h"
 #include "core/DeceasedRegistry.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCTypeDeterminer.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/SessionEpoch.h"
@@ -297,74 +299,19 @@ namespace MARAS {
     void NPCRelationshipManager::UpdateNonPlayerChildPackageOverride(RE::FormID childID) {
         if (childID == 0) return;
         const auto entryOpt = GetChildEntry(childID);
-        if (!entryOpt.has_value()) {
-            RemoveChildSandboxAroundParentLinkedRef(childID);
-            PackageOverrideService::GetSingleton().UnregisterActor(childID);
-            return;
-        }
-
-        const auto& entry = *entryOpt;
-
-        if (entry.stage == ChildStage::Adult) {
+        if (entryOpt.has_value() && entryOpt->stage == ChildStage::Adult) {
             if (!IsSyntheticChildID(childID)) {
                 AdultChildTravelService::GetSingleton().AssignOrUpdateDestination(childID, false);
             } else {
                 AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
-                RemoveChildSandboxAroundParentLinkedRef(childID);
-                PackageOverrideService::GetSingleton().UnregisterActor(childID);
             }
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
             return;
         }
 
-        // Manage dynamic spawned children (0xFFxxxxxx) at Stage 2 who are not in player household,
-        // OR any spawned Stage 2 player household child who is currently unhoused (house == 0)
-        bool isTemporaryID = ((childID >> 24) == 0xFF) && !IsSyntheticChildID(childID);
-        bool isPlayerHousehold = entry.HasGuardian(kPlayerFormID);
-        bool isUnhousedPlayerChild = isPlayerHousehold && !IsSyntheticChildID(childID) &&
-                                     (entry.stage == ChildStage::Child) &&
-                                     (PlayerChildrenService::GetSingleton().GetChildHouseFormID(childID) == 0);
-
-        if (entry.stage == ChildStage::Child &&
-            ((isTemporaryID && !isPlayerHousehold) || isUnhousedPlayerChild)) {
-            RE::FormID targetRefID = ResolveNonPlayerChildTarget(entry);
-            auto* keyword = FormCache::GetSingleton().GetChildSandboxAroundParentKeyword();
-            RE::FormID childFollowPkgID = 0;
-            if (auto* childPkg = FormCache::GetSingleton().GetChildrenNonPlayerFollowParentPackage()) {
-                childFollowPkgID = childPkg->GetFormID();
-            }
-            Utils::AssignPackageWithLinkedRef(childID, targetRefID, keyword, childFollowPkgID);
-
-            if (!isPlayerHousehold) {
-                auto* orphanageMarker = FormCache::GetSingleton().GetHonorhallOrphanageCenterMarker();
-                RE::FormID orphanageMarkerID = orphanageMarker ? orphanageMarker->GetFormID() : 0;
-                auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction();
-
-                if (orphanageMarkerID != 0 && targetRefID == orphanageMarkerID) {
-                    if (adoptableFaction) {
-                        Utils::AddToFaction(childID, adoptableFaction, 0);
-                        MARAS_LOG_INFO("UpdateNonPlayerChildPackageOverride: Child {:08X} parents deceased, sent to Honorhall Orphanage. Assigned BYOHRelationshipAdoptableFaction", childID);
-                    }
-                } else {
-                    if (adoptableFaction) {
-                        Utils::RemoveFromFaction(childID, adoptableFaction);
-                    }
-                }
-            } else if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
-                Utils::RemoveFromFaction(childID, adoptableFaction);
-            }
-        } else if (entry.stage == ChildStage::Child &&
-                   isPlayerHousehold && !IsSyntheticChildID(childID)) {
-            RemoveChildSandboxAroundParentLinkedRef(childID);
-            if (PlayerHouseService::GetSingleton().GetTenantStayAtHome(childID)) {
-                PackageOverrideService::GetSingleton().RegisterActor(childID);
-            } else {
-                PackageOverrideService::GetSingleton().UnregisterActor(childID);
-            }
-        } else {
-            RemoveChildSandboxAroundParentLinkedRef(childID);
-            PackageOverrideService::GetSingleton().UnregisterActor(childID);
-            AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
-        }
+        AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
+        PackageReconciler::GetSingleton().ReconcileActor(childID);
+        FactionReconciler::GetSingleton().ReconcileActor(childID);
     }
 
     void NPCRelationshipManager::ReevaluateAllNonPlayerChildrenPackages() {
@@ -377,8 +324,9 @@ namespace MARAS {
             }
         }
         for (const RE::FormID childID : childIDs) {
-            UpdateNonPlayerChildPackageOverride(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
         }
+        FactionReconciler::GetSingleton().ReconcileActors(childIDs);
     }
 
     void NPCRelationshipManager::SendChildEvent(const std::string& eventType, RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID, RE::FormID otherID, const std::string& reason) {
@@ -607,17 +555,10 @@ namespace MARAS {
                     AdultChildProgression::GetSingleton().ReleaseRuntimeBaseForActor(synthFormID);
                 }
                 PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(synthFormID);
-                RemoveChildSandboxAroundParentLinkedRef(synthFormID);
-                PackageOverrideService::GetSingleton().UnregisterActor(synthFormID);
+                PackageReconciler::GetSingleton().ReconcileActor(synthFormID);
             }
             PrismaUIDataBridge::GetSingleton().OnChildRemoved(synthFormID);
             PrismaUIDataBridge::GetSingleton().OnChildPromoted(synthFormID, childID);
-        }
-
-        if (!IsSyntheticChildID(childID) && entry.stage == ChildStage::Adult) {
-            if (auto* followerFaction = FormCache::GetSingleton().GetPotentialFollowerFaction()) {
-                Utils::AddToFaction(childID, followerFaction, 0);
-            }
         }
 
         if (!IsSyntheticChildID(childID) && (entry.stage == ChildStage::Child || entry.stage == ChildStage::Adult)) {
@@ -681,18 +622,7 @@ namespace MARAS {
         RE::FormID guardianAID = entryOpt ? entryOpt->guardianAID : 0;
         RE::FormID guardianBID = entryOpt ? entryOpt->guardianBID : 0;
 
-        if (!IsSyntheticChildID(childID)) {
-            if (auto* faction = FormCache::GetSingleton().GetPlayerChildBothParentsFaction()) {
-                Utils::RemoveFromFaction(childID, faction);
-            }
-            if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
-                Utils::RemoveFromFaction(childID, adoptableFaction);
-            }
-            RemoveChildSandboxAroundParentLinkedRef(childID);
-            PackageOverrideService::GetSingleton().UnregisterActor(childID);
-            AdultChildTravelService::GetSingleton().UnregisterAdultChild(childID);
-            AdultChildProgression::GetSingleton().ReleaseRuntimeBaseForActor(childID);
-        }
+        // Release household custody and restore snapshotted factions before erasing snapshot records
         PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
 
         bool removed = false;
@@ -703,7 +633,20 @@ namespace MARAS {
                 ws.household.Write().EraseChildState(key);
                 ws.household.Write().EraseChildFactionSnapshot(key);
             }
+            ws.household.Write().EraseAdultChildTravel(key);
         });
+
+        if (!IsSyntheticChildID(childID)) {
+            AdultChildProgression::GetSingleton().ReleaseRuntimeBaseForActor(childID);
+            if ((childID >> 24) == 0xFF) {
+                if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
+                    FactionReconciler::InternalFactionScope scope;
+                    Utils::RemoveFromFaction(childID, adoptableFaction);
+                }
+            }
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+        }
 
         if (removed) {
             if (guardianAID != 0) UpdateSpouseChildrenFaction(guardianAID);
@@ -1671,90 +1614,43 @@ namespace MARAS {
     void NPCRelationshipManager::UpdateChildBothParentsFaction(RE::FormID childID) {
         if (childID == 0) return;
 
-        auto entryOpt = GetChildEntry(childID);
-        if (!entryOpt) {
-            if (auto* faction = FormCache::GetSingleton().GetPlayerChildBothParentsFaction()) {
-                Utils::RemoveFromFaction(childID, faction);
+        const auto entryOpt = GetChildEntry(childID);
+        FactionReconciler::GetSingleton().ReconcileActor(childID);
+        if (entryOpt.has_value()) {
+            const RE::FormID otherParentID = entryOpt->GetOtherGuardian(kPlayerFormID);
+            if (otherParentID != 0) {
+                UpdateSpouseChildrenFaction(otherParentID);
             }
-            return;
-        }
-
-        const auto& entry = *entryOpt;
-        if (entry.stage == ChildStage::Adult || !entry.HasGuardian(kPlayerFormID)) {
-            if (auto* faction = FormCache::GetSingleton().GetPlayerChildBothParentsFaction()) {
-                Utils::RemoveFromFaction(childID, faction);
-            }
-            return;
-        }
-
-        RE::FormID otherParentID = entry.GetOtherGuardian(kPlayerFormID);
-        bool hasSpouseParent = (otherParentID != 0) && IsMarried(otherParentID, kPlayerFormID);
-
-        if (auto* faction = FormCache::GetSingleton().GetPlayerChildBothParentsFaction()) {
-            if (hasSpouseParent) {
-                std::int8_t rank = 1;
-                auto* parentActor = NPCIndex::GetSingleton().GetActorFromFormId(otherParentID);
-                auto* parentBase = parentActor ? parentActor->GetActorBase() : ActorSvc::GetActorBase(otherParentID);
-                if (parentBase) {
-                    rank = (parentBase->GetSex() == RE::SEX::kFemale) ? 1 : 2;
-                }
-                Utils::AddToFaction(childID, faction, rank);
-                MARAS_LOG_INFO("UpdateChildBothParentsFaction: Added child {:08X} ('{}') to TTM_PlayerChildBothParents (other parent {:08X} is spouse, rank={})", childID, entry.name, otherParentID, rank);
-            } else {
-                Utils::RemoveFromFaction(childID, faction);
-                MARAS_LOG_INFO("UpdateChildBothParentsFaction: Removed child {:08X} ('{}') from TTM_PlayerChildBothParents (other parent {:08X}, isSpouse: false)", childID, entry.name, otherParentID);
-            }
-        }
-
-        if (otherParentID != 0) {
-            UpdateSpouseChildrenFaction(otherParentID);
         }
     }
 
     void NPCRelationshipManager::UpdateSpouseChildrenFaction(RE::FormID spouseID) {
         if (spouseID == 0 || Utils::MatchesActor(spouseID, kPlayerFormID)) return;
-
-        auto* faction = FormCache::GetSingleton().GetSpouseChildrenFaction();
-        if (!faction) return;
-
-        bool isSpouse = IsMarried(spouseID, kPlayerFormID);
-        size_t childCount = GetChildren(kPlayerFormID, spouseID).size();
-        bool shouldHaveFaction = isSpouse && (childCount >= 1);
-        std::int8_t rank = static_cast<std::int8_t>(childCount);
-
-        if (shouldHaveFaction) {
-            Utils::AddToFaction(spouseID, faction, rank);
-            MARAS_LOG_INFO("UpdateSpouseChildrenFaction: Set TTM_SpouseChildren faction on spouse {:08X} to rank {}", spouseID, rank);
-        } else {
-            auto* spouseActor = RE::TESForm::LookupByID<RE::Actor>(spouseID);
-            const bool wasInFaction = spouseActor && spouseActor->IsInFaction(faction);
-            Utils::RemoveFromFaction(spouseID, faction);
-            if (wasInFaction) {
-                MARAS_LOG_INFO("UpdateSpouseChildrenFaction: Removed TTM_SpouseChildren faction from spouse {:08X} (isSpouse: {}, child count: {})", spouseID, isSpouse, childCount);
-            }
-        }
+        FactionReconciler::GetSingleton().ReconcileActor(spouseID);
     }
 
     void NPCRelationshipManager::UpdateAllSpousesChildrenFaction() {
-        std::unordered_set<RE::FormID> candidates;
+        std::unordered_set<RE::FormID> seen;
+        std::vector<RE::FormID> candidates;
         for (auto spouseID : GetAllMarried(kPlayerFormID)) {
-            candidates.insert(spouseID);
+            if (spouseID != 0 && !Utils::MatchesActor(spouseID, kPlayerFormID) && seen.insert(spouseID).second) {
+                candidates.push_back(spouseID);
+            }
         }
         {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
             for (const auto& [cKey, rec] : snap->lineage->AllChildren()) {
+                (void)cKey;
                 const auto entry = LegacyAdapters::ToLegacyChildEntry(rec);
                 if (entry.HasGuardian(kPlayerFormID)) {
                     RE::FormID coGuardian = entry.GetOtherGuardian(kPlayerFormID);
-                    if (coGuardian != 0) {
-                        candidates.insert(coGuardian);
+                    if (coGuardian != 0 && !Utils::MatchesActor(coGuardian, kPlayerFormID) && seen.insert(coGuardian).second) {
+                        candidates.push_back(coGuardian);
                     }
                 }
             }
         }
-        for (auto spouseID : candidates) {
-            UpdateSpouseChildrenFaction(spouseID);
-        }
+        FactionReconciler::GetSingleton().ReconcileActors(candidates);
     }
 
     RE::FormID NPCRelationshipManager::GetGuardianA(RE::FormID childID) const {

@@ -37,8 +37,8 @@ When an NPC is moved into a player house, `PlayerHouseService` handles both thei
    - Moves the spouse's persistent personal home marker (`XMarker`) to the target house's sandbox marker.
 4. **Stay-at-Home vs. Default Routine Toggle**:
    - Each adult tenant has a configurable **Stay at Home** setting (`stayAtHome`):
-     - **Enabled (`true`)**: Registers the spouse with [PackageOverrideService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageOverrideService.cpp), forcing them to sandbox inside the player home via the `TT_MARAS.esp` override quest.
-     - **Disabled (`false`)**: Unregisters the spouse from `PackageOverrideService`, allowing them to resume their vanilla daily schedule around town while still remaining registered as a resident of that house.
+     - **Enabled (`true`)**: Registers the spouse for home-sandbox override in `PackageReconciler` (enforced by [PackageOverrideService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PackageOverrideService.cpp)), keeping them inside the player home via `TT_MARAS.esp`'s sandbox package.
+     - **Disabled (`false`)**: Removes the spouse from `PackageReconciler`'s active override snapshot, allowing them to resume their vanilla daily schedule around town while still remaining registered as a resident of that house.
    - Re-enabling `stayAtHome` refreshes the spouse's home marker position to ensure they return to the correct house.
 
 ### Child Tenants
@@ -80,5 +80,5 @@ When the player relocates a spouse or a child via the Prisma UI Dashboard or dia
 ## 5. Persistence & Co-Save Recovery
 
 - Persists all registered player houses (Location FormID, Marker FormID, `initialMoveDone` flag) and their ordered tenant lists (including each tenant's `stayAtHome` toggle added in co-save version 4, defaulting to `true` when upgrading older saves).
-- On save load, resolves all FormIDs against the active load order, skips any uninstalled house/NPC mods cleanly, and triggers `PackageOverrideService::RebuildFromTenants()` so all `stayAtHome` spouses immediately regain their home AI package overrides.
+- On save load, resolves all FormIDs against the active load order, skips any uninstalled house/NPC mods cleanly, and runs world package reconciliation via `PackageReconciler` so all `stayAtHome` spouses immediately regain their home AI package overrides in the `PackageOverrideService` snapshot.
 

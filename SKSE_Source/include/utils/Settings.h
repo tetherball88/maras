@@ -37,6 +37,12 @@ namespace MARAS {
         int32_t GetMinRelRankForDial() const;
         void SetMinRelRankForDial(int32_t value);
 
+        bool GetPreferVanillaAudio() const;
+        void SetPreferVanillaAudio(bool value);
+
+        bool GetAllowAIDial() const;
+        void SetAllowAIDial(bool value);
+
         bool GetSimulateNoSkyrimNet() const {
             return Snapshot()->simulateNoSkyrimNet;
         }

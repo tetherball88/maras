@@ -1,6 +1,7 @@
 #include "core/NPCRelationshipManager.h"
 
 #include "core/AffectionService.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/SkyrimNetMemoryService.h"
@@ -139,12 +140,8 @@ namespace MARAS {
                 if (broken.memberID == kPlayerFormID || broken.loverID == kPlayerFormID) {
                     const RE::FormID npcID = (broken.memberID == kPlayerFormID) ? broken.loverID : broken.memberID;
                     if (npcID != 0) {
-                        UpdateTrackedFactionRank(npcID, RelationshipStatus::ExLover);
-                        UpdateSpouseCheatingFaction(npcID);
-                        UpdateSpouseOpenRelationshipFaction(npcID);
-                        UpdateCanFormNonCheatingMainFaction(npcID);
-                        UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
-                        ManageFactions(npcID, kPlayerFormID, RelationshipStatus::ExLover);
+                        FactionReconciler::GetSingleton().ReconcileActor(npcID);
+                        FactionReconciler::GetSingleton().ReconcilePlayer();
 
                         RE::Actor* partnerActor = RE::TESForm::LookupByID<RE::Actor>(npcID);
                         if (!partnerActor) {
@@ -155,10 +152,8 @@ namespace MARAS {
                         }
                     }
                 } else {
-                    UpdateCanFormNonCheatingMainFaction(broken.memberID);
-                    UpdateCanFormNonCheatingMainFaction(broken.loverID);
-                    ManageFactions(broken.memberID, broken.loverID, RelationshipStatus::ExLover);
-                    ManageFactions(broken.loverID, broken.memberID, RelationshipStatus::ExLover);
+                    FactionReconciler::GetSingleton().ReconcileActor(broken.memberID);
+                    FactionReconciler::GetSingleton().ReconcileActor(broken.loverID);
                 }
 
                 if (sendEvent) {
@@ -174,18 +169,26 @@ namespace MARAS {
             RecalculateAndUpdateGlobals();
         }
 
-        for (RE::FormID cheaterID : allowedCheatersToRefresh) {
-            UpdateSpouseCheatingFaction(cheaterID);
+        {
+            std::unordered_set<RE::FormID> toReconcile;
+            for (RE::FormID cheaterID : allowedCheatersToRefresh) {
+                if (cheaterID != 0 && cheaterID != kPlayerFormID) {
+                    toReconcile.insert(cheaterID);
+                }
+            }
+            if (actorA != 0 && actorA != kPlayerFormID) {
+                toReconcile.insert(actorA);
+            }
+            if (actorB != 0 && actorB != kPlayerFormID) {
+                toReconcile.insert(actorB);
+            }
+            for (const RE::FormID id : toReconcile) {
+                FactionReconciler::GetSingleton().ReconcileActor(id);
+            }
+            if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
+                FactionReconciler::GetSingleton().ReconcilePlayer();
+            }
         }
-        if (actorA == kPlayerFormID) {
-            UpdateSpouseOpenRelationshipFaction(actorB);
-            UpdateSpouseCheatingFaction(actorB);
-        } else if (actorB == kPlayerFormID) {
-            UpdateSpouseOpenRelationshipFaction(actorA);
-            UpdateSpouseCheatingFaction(actorA);
-        }
-        UpdateCanFormNonCheatingMainFaction(actorA);
-        UpdateCanFormNonCheatingMainFaction(actorB);
         PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, static_cast<uint8_t>(pairStatus));
         if (wasOpen != isOpen && (sendEvent || SkyrimNetMemoryService::IsMatchmakingApplyActive())) {
             SkyrimNetMemoryService::GetSingleton().RecordOpenRelationshipToggle(actorA, actorB, isOpen);
@@ -838,126 +841,52 @@ namespace MARAS {
 
     void NPCRelationshipManager::UpdateSpouseCheatingFaction(RE::FormID npcFormID) {
         if (npcFormID == 0 || npcFormID == kPlayerFormID) return;
-
-        auto* faction = FormCache::GetSingleton().GetSpouseCheatingFaction();
-        if (!faction) return;
-
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const State::ActorId npc{ npcFormID };
-        const auto relStatus = static_cast<RelationshipStatus>(snap->relationships->GetStatus(npc, State::ActorId::Player()));
-        if (!IsMainTier(relStatus)) {
-            Utils::RemoveFromFaction(npcFormID, faction);
-            return;
-        }
-
-        bool hasOngoingSecret = false;
-        bool hasOngoingKnown = false;
-        for (const auto& rec : snap->affairs->GetForCouplePair(State::CanonicalPairKey{ npc, State::ActorId::Player() })) {
-            if (rec.cheater == npc &&
-                rec.deceivedPartner.IsPlayer() &&
-                rec.affairStatus == State::AffairStatus::Ongoing) {
-                if (rec.isSecret) {
-                    hasOngoingSecret = true;
-                } else {
-                    hasOngoingKnown = true;
-                }
-            }
-        }
-
-        std::int8_t targetRank = -1;
-        if (hasOngoingKnown) {
-            targetRank = 1;
-        } else if (hasOngoingSecret) {
-            targetRank = 0;
-        }
-
-        if (targetRank >= 0) {
-            Utils::AddToFaction(npcFormID, faction, targetRank);
-            MARAS_LOG_INFO("UpdateSpouseCheatingFaction: Set TTM_SpouseCheating faction on {:08X} to rank {}", npcFormID, targetRank);
-        } else {
-            Utils::RemoveFromFaction(npcFormID, faction);
-            MARAS_LOG_INFO("UpdateSpouseCheatingFaction: Removed TTM_SpouseCheating faction from {:08X}", npcFormID);
-        }
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
     }
 
     void NPCRelationshipManager::UpdateSpouseOpenRelationshipFaction(RE::FormID npcFormID) {
         if (npcFormID == 0 || npcFormID == kPlayerFormID) return;
-
-        auto* faction = FormCache::GetSingleton().GetSpouseOpenRelationshipFaction();
-        if (!faction) return;
-
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const State::ActorId npc{ npcFormID };
-        const auto relStatus = static_cast<RelationshipStatus>(snap->relationships->GetStatus(npc, State::ActorId::Player()));
-        const bool isOpen = IsMainTier(relStatus) && snap->relationships->IsPairOpen(npc, State::ActorId::Player());
-
-        if (isOpen) {
-            Utils::AddToFaction(npcFormID, faction, 0);
-            MARAS_LOG_INFO("UpdateSpouseOpenRelationshipFaction: Set TTM_SpouseOpenRelationship faction on {:08X} to rank 0", npcFormID);
-        } else {
-            Utils::RemoveFromFaction(npcFormID, faction);
-            MARAS_LOG_INFO("UpdateSpouseOpenRelationshipFaction: Removed TTM_SpouseOpenRelationship faction from {:08X}", npcFormID);
-        }
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
     }
 
     void NPCRelationshipManager::UpdateCanFormNonCheatingMainFaction(RE::FormID npcFormID) {
         if (npcFormID == 0 || npcFormID == 0x07) return;
-
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const State::ActorId actor{ npcFormID };
-        if (npcFormID != kPlayerFormID && !snap->actors->IsRegisteredAdult(State::RefId{ npcFormID })) return;
-
-        auto* faction = FormCache::GetSingleton().GetCanFormNonCheatingMainFaction();
-        if (!faction) return;
-
-        bool hasClosedMainRelationship = false;
-        if (!(npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy())) {
-            for (const auto& pairKey : snap->relationships->GetAdjacentPairs(actor)) {
-                const auto* edge = snap->relationships->FindEdge(pairKey);
-                if (edge && IsMainTier(static_cast<RelationshipStatus>(edge->status)) && !edge->isOpen) {
-                    hasClosedMainRelationship = true;
-                    break;
-                }
-            }
+        if (npcFormID == kPlayerFormID) {
+            FactionReconciler::GetSingleton().ReconcilePlayer();
+            return;
         }
-
-        // Rank 0 = can't form relationship without cheating (in closed main-tier relationship)
-        // Rank 1 = can form relationship without cheating (polygamous player, open main-tier, lover, or single/candidate/ex)
-        const std::int8_t targetRank = hasClosedMainRelationship ? 0 : 1;
-        Utils::AddToFaction(npcFormID, faction, targetRank);
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (!snap->actors->IsRegisteredAdult(State::RefId{ npcFormID })) return;
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
     }
 
     void NPCRelationshipManager::UpdateAllSpousesCheatingAndOpenFactions() {
-        std::unordered_set<RE::FormID> candidates;
+        std::unordered_set<RE::FormID> seen;
+        std::vector<RE::FormID> candidates;
         {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
             for (const auto& pairKey : snap->relationships->GetAdjacentPairs(State::ActorId::Player())) {
                 const RE::FormID partnerID = pairKey.Other(State::ActorId::Player()).raw();
-                if (partnerID != 0 && partnerID != kPlayerFormID) {
-                    candidates.insert(partnerID);
+                if (partnerID != 0 && partnerID != kPlayerFormID && seen.insert(partnerID).second) {
+                    candidates.push_back(partnerID);
                 }
             }
         }
-        for (const RE::FormID partnerID : candidates) {
-            UpdateSpouseCheatingFaction(partnerID);
-            UpdateSpouseOpenRelationshipFaction(partnerID);
-        }
+        FactionReconciler::GetSingleton().ReconcileActors(candidates);
     }
 
     void NPCRelationshipManager::UpdateAllCanFormNonCheatingMainFactions() {
-        UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+        FactionReconciler::GetSingleton().ReconcilePlayer();
         std::vector<RE::FormID> registered;
         {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
             for (const auto& [refId, profile] : snap->actors->AllProfiles()) {
-                if (profile.isRegisteredAdult && !refId.IsNull()) {
+                if (profile.isRegisteredAdult && !refId.IsNull() && !refId.IsPlayer()) {
                     registered.push_back(refId.raw());
                 }
             }
         }
-        for (const RE::FormID npcID : registered) {
-            UpdateCanFormNonCheatingMainFaction(npcID);
-        }
+        FactionReconciler::GetSingleton().ReconcileActors(registered);
     }
 
     bool NPCRelationshipManager::SetCheatingDiscovered(RE::FormID cheaterID, RE::FormID affairPartnerID, AffairDiscovery discovery) {

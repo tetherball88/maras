@@ -9,6 +9,7 @@
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
@@ -294,10 +295,21 @@ namespace MARAS {
             return false;
         }
 
-        // Ensure adult child is never enrolled as a young household child or a permanent house tenant
+        // Ensure adult child is never enrolled as a young household child
         PlayerChildrenService::GetSingleton().OnChildRemovedFromHousehold(childID);
-        if (PlayerHouseService::GetSingleton().GetTenantHouseFormID(childID) != 0) {
-            (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(childID);
+
+        // Guard against evicting a housed adult tenant or player spouse
+        if (PlayerHouseService::GetSingleton().GetTenantHouseFormID(childID) != 0 ||
+            relMgr.IsMarried(childID, kPlayerFormID)) {
+            const bool hadTravel =
+                State::WorldStore::GetSingleton().Snapshot()->household->FindAdultChildTravel(State::ChildId{ childID }) != nullptr;
+            if (hadTravel) {
+                State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
+                    ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
+                });
+            }
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+            return false;
         }
 
         RE::FormID existingMarkerID = 0;
@@ -316,7 +328,7 @@ namespace MARAS {
         }
 
         if (!forceRotate && existingMarkerID != 0 && HasPhysicalActor(existingMarkerID)) {
-            Utils::AssignPackageWithLinkedRef(childID, existingMarkerID, keyword, travelPkg->GetFormID());
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
             return true;
         }
 
@@ -355,7 +367,7 @@ namespace MARAS {
                 LegacyAdapters::ToAdultChildTravelRecord(newState));
         });
 
-        Utils::AssignPackageWithLinkedRef(childID, nextDest.markerRefID, keyword, travelPkg->GetFormID());
+        PackageReconciler::GetSingleton().ReconcileActor(childID);
 
         MARAS_LOG_INFO("AdultChildTravelService: Assigned adult child {:08X} ('{}') -> '{}' (marker {:08X}, stayDays={:.1f}, arrived={}, familyVisit={})",
                        childID, ActorSvc::GetName(childID), nextDest.name, nextDest.markerRefID,
@@ -365,14 +377,15 @@ namespace MARAS {
 
     void AdultChildTravelService::UnregisterAdultChild(RE::FormID childID) {
         if (childID == 0) return;
-        State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
-            ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
-        });
+        const bool hadTravel =
+            State::WorldStore::GetSingleton().Snapshot()->household->FindAdultChildTravel(State::ChildId{ childID }) != nullptr;
+        if (hadTravel) {
+            State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
+                ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
+            });
+        }
         if (!IsSyntheticChildID(childID)) {
-            if (auto* keyword = FormCache::GetSingleton().GetChildSandboxAroundParentKeyword()) {
-                Utils::RemoveLinkedRef(childID, keyword);
-            }
-            PackageOverrideService::GetSingleton().UnregisterActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
         }
     }
 

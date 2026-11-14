@@ -5,8 +5,10 @@
 #include "core/LoggingService.h"
 #include "core/BanterCoordinatorService.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/FactionReconciler.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
+#include "core/GlobalVarReconciler.h"
 #include "utils/ActorUtils.h"
 #include <Windows.h>
 
@@ -293,14 +295,11 @@ namespace MARAS {
     }
 
     int32_t Settings::GetStartDialGender() const {
-        auto* g = FormCache::GetSingleton().GetStartDialGenderGlobal();
-        return g ? static_cast<int32_t>(g->value) : 0;
+        return GlobalVarReconciler::GetSingleton().GetStartDialGender();
     }
 
     void Settings::SetStartDialGender(int32_t value) {
-        if (auto* g = FormCache::GetSingleton().GetStartDialGenderGlobal()) {
-            g->value = static_cast<float>(value);
-        }
+        GlobalVarReconciler::GetSingleton().SetStartDialGender(value);
     }
 
     bool Settings::GetEnablePolygamy() const {
@@ -311,28 +310,16 @@ namespace MARAS {
     }
 
     void Settings::SetEnablePolygamy(bool value) {
-        if (auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
-            g->value = value ? 1.0f : 0.0f;
-        }
         State::WorldStore::GetSingleton().Modify([value](State::WorldState& ws) {
             ws.settings.Write().enablePlayerPolygamy = value;
         });
 
         if (value) {
             NPCRelationshipManager::GetSingleton().MarkPlayerCheatingAllowedOnPolygamy();
-            FactionService::GetSingleton().SanitizePlayerMarriedFaction();
-        } else {
-            auto& relMgr = NPCRelationshipManager::GetSingleton();
-            if (!relMgr.GetAllMarried(kPlayerFormID).empty()) {
-                if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-                    if (auto* marriedFaction = FormCache::GetSingleton().GetMarriedFaction()) {
-                        FactionService::InternalFactionScope scope;
-                        Utils::AddToFaction(player, marriedFaction, 0);
-                    }
-                }
-            }
         }
-        NPCRelationshipManager::GetSingleton().UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+        FactionReconciler::GetSingleton().ReconcilePlayer();
+        NPCRelationshipManager::GetSingleton().UpdateAllSpousesCheatingAndOpenFactions();
     }
 
     void Settings::SetDisablePolygamyQuest(bool value) {
@@ -349,20 +336,31 @@ namespace MARAS {
     }
 
     int32_t Settings::GetMinRelRankForDial() const {
-        auto* g = FormCache::GetSingleton().GetMinRelRankForDialGlobal();
-        return g ? static_cast<int32_t>(g->value) : -4;
+        return GlobalVarReconciler::GetSingleton().GetMinRelRankForDial();
     }
 
     void Settings::SetMinRelRankForDial(int32_t value) {
-        if (auto* g = FormCache::GetSingleton().GetMinRelRankForDialGlobal()) {
-            g->value = static_cast<float>(value);
-        }
+        GlobalVarReconciler::GetSingleton().SetMinRelRankForDial(value);
     }
 
-    void Settings::SyncSimulateNoSkyrimNetGlobal(bool value) const {
-        if (auto* g = FormCache::GetSingleton().GetSkyrimNetInstalledGlobal()) {
-            g->value = value ? 0.0f : ((GetModuleHandleW(L"SkyrimNet.dll") != nullptr) ? 1.0f : 0.0f);
-        }
+    bool Settings::GetPreferVanillaAudio() const {
+        return GlobalVarReconciler::GetSingleton().GetPreferVanillaAudio();
+    }
+
+    void Settings::SetPreferVanillaAudio(bool value) {
+        GlobalVarReconciler::GetSingleton().SetPreferVanillaAudio(value);
+    }
+
+    bool Settings::GetAllowAIDial() const {
+        return GlobalVarReconciler::GetSingleton().GetAllowAIDial();
+    }
+
+    void Settings::SetAllowAIDial(bool value) {
+        GlobalVarReconciler::GetSingleton().SetAllowAIDial(value);
+    }
+
+    void Settings::SyncSimulateNoSkyrimNetGlobal(bool /*value*/) const {
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
     }
 
     void Settings::SetSimulateNoSkyrimNet(bool value) {
@@ -389,17 +387,9 @@ namespace MARAS {
         const auto snap = Snapshot();
         const auto& s = *snap;
 
-        SyncSimulateNoSkyrimNetGlobal(s.simulateNoSkyrimNet);
         LoggingService::GetSingleton().SetLogLevel(s.logLevel);
-
-        if (auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
-            const bool globalPolygamy = (g->value != 0.0f);
-            if (globalPolygamy != s.enablePlayerPolygamy) {
-                State::WorldStore::GetSingleton().Modify([globalPolygamy](State::WorldState& ws) {
-                    ws.settings.Write().enablePlayerPolygamy = globalPolygamy;
-                });
-            }
-        }
+        GlobalVarReconciler::GetSingleton().SyncExternalPolygamyGlobalToStore();
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
 
         MARAS_LOG_INFO(
             "Settings::ApplyPostLoadEngineSideEffects - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
@@ -425,7 +415,7 @@ namespace MARAS {
             ws.settings.Reset(reverted);
         });
 
-        SyncSimulateNoSkyrimNetGlobal(false);
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         LoggingService::GetSingleton().SetLogLevel(reverted.logLevel);
 
         MARAS_LOG_INFO("Settings::RevertGameSettings - reverted settings to defaults (logLevel={})", reverted.logLevel);
@@ -469,6 +459,8 @@ namespace MARAS {
         j["startDialGender"] = GetStartDialGender();
         j["enablePolygamy"] = GetEnablePolygamy();
         j["minRelRankForDial"] = GetMinRelRankForDial();
+        j["preferVanillaAudio"] = GetPreferVanillaAudio();
+        j["allowAIDial"] = GetAllowAIDial();
         return j;
     }
 
@@ -476,6 +468,12 @@ namespace MARAS {
         const std::string lowerKey = StringUtils::ToLowerStd(key);
         if (lowerKey == "enablepolygamy") {
             return GetEnablePolygamy();
+        }
+        if (lowerKey == "prefervanillaaudio") {
+            return GetPreferVanillaAudio();
+        }
+        if (lowerKey == "allowaidial") {
+            return GetAllowAIDial();
         }
         if (lowerKey == "simulatenoskyrimnet") {
             return Snapshot()->simulateNoSkyrimNet;
@@ -498,6 +496,14 @@ namespace MARAS {
         }
         if (lowerKey == "enablepolygamy") {
             SetEnablePolygamy(value);
+            return true;
+        }
+        if (lowerKey == "prefervanillaaudio") {
+            SetPreferVanillaAudio(value);
+            return true;
+        }
+        if (lowerKey == "allowaidial") {
+            SetAllowAIDial(value);
             return true;
         }
         if (lowerKey == "simulatenoskyrimnet") {
