@@ -301,7 +301,7 @@ namespace MARAS {
                 std::string hName = PlayerHouseService::GetHouseName(houseID);
                 if (!hName.empty()) return hName;
             }
-            if (const auto* prof = NPCRelationshipManager::GetSingleton().GetNPCProfile(id)) {
+            if (const auto prof = NPCRelationshipManager::GetSingleton().GetNPCProfile(id)) {
                 if (prof->currentHome.has_value() && *prof->currentHome != 0) {
                     std::string hName = PlayerHouseService::GetHouseName(*prof->currentHome);
                     if (!hName.empty()) return hName;
@@ -389,7 +389,7 @@ namespace MARAS {
             }
 
             std::string partnerName = ActorSvc::GetName(partnerId);
-            const auto* pairData = mgr.GetNPCData(actorFormID, partnerId);
+            const auto pairData = mgr.GetNPCData(actorFormID, partnerId);
             auto children = mgr.GetChildren(actorFormID, partnerId);
             size_t childCount = children.size();
             std::string statusStr = StringUtils::ToLowerStd(Utils::RelationshipStatusToString(status));
@@ -471,7 +471,8 @@ namespace MARAS {
             ep.episodeID = nextEpisodeID_++;
             ep.firstEventTime = now;
             ep.isMatchmaking = event.isMatchmaking;
-            const auto& settings = Settings::GetSingleton();
+            const auto settingsSnap = Settings::GetSingleton().Snapshot();
+            const auto& settings = *settingsSnap;
             const bool useLLM = ep.isMatchmaking ? settings.matchmakingGenerateMemories : settings.skyrimnetUseLLMMemories;
             const auto graceWindow = useLLM ? kEpisodeGraceWindow : kProgrammaticGraceWindow;
             ep.flushTime = now + graceWindow;
@@ -529,7 +530,8 @@ namespace MARAS {
             }
             auto it = activeEpisodes_.begin();
             while (it != activeEpisodes_.end()) {
-                const auto& settings = Settings::GetSingleton();
+                const auto settingsSnap = Settings::GetSingleton().Snapshot();
+                const auto& settings = *settingsSnap;
                 const bool useLLM = it->isMatchmaking ? settings.matchmakingGenerateMemories : settings.skyrimnetUseLLMMemories;
                 const auto effectiveFlushTime = useLLM
                                                     ? it->flushTime
@@ -860,7 +862,8 @@ namespace MARAS {
             return;
         }
 
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         const bool useLLM = episode.isMatchmaking ? settings.matchmakingGenerateMemories : settings.skyrimnetUseLLMMemories;
         if (!useLLM) {
             uint64_t epID = episode.episodeID;
@@ -1240,7 +1243,8 @@ namespace MARAS {
         if (CanActorGenerateMemory(actorA)) targets.push_back(actorA);
         if (CanActorGenerateMemory(actorB)) targets.push_back(actorB);
 
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         const bool useLLM = settings.matchmakingGenerateMemories;
         if (!useLLM) {
             std::unordered_map<RE::FormID, std::vector<RE::FormID>> relMap;

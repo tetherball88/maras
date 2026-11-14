@@ -27,9 +27,7 @@ namespace MARAS {
         // Apply accumulated daily affection to permanent for all registered NPCs
         void ApplyDailyAffectionsForAll();
 
-        // Serialization
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = Serialization::kDataVersion);
+        // Post-load engine sync and runtime revert helpers
         void FinalizeLoad();
         void Revert();
 
@@ -71,17 +69,8 @@ namespace MARAS {
         int CalculateTotalDailyDelta(const std::unordered_map<std::string, float>& dailyByType) const;
         float CalculateLonelinessDecay(FormID npcFormID, bool isFollowing, size_t activePartnerCount) const;
 
-        // permanent affection per NPC
-        std::unordered_map<FormID, int> permanentAffection_;
-
-        // daily affection per NPC -> type -> amount
-        std::unordered_map<FormID, std::unordered_map<std::string, float>> dailyAffection_;
-
         // per-type min/max clamp settings (type -> {min, max})
         std::unordered_map<std::string, std::pair<int, int>> minMaxByType_;
-
-        // Track last game day when NPC received affection
-        std::unordered_map<FormID, float> lastAffectionDay_;
     };
 
 }  // namespace MARAS

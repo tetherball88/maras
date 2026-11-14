@@ -286,7 +286,7 @@ namespace MARAS {
                                     continue;
                                 }
 
-                                const auto* pairData = relMgr.GetNPCData(cheaterID, victimID);
+                                const auto pairData = relMgr.GetNPCData(cheaterID, victimID);
                                 if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || pairData->isOpen) {
                                     continue;
                                 }
@@ -348,7 +348,7 @@ namespace MARAS {
                                     continue;
                                 }
 
-                                const auto* pairData = relMgr.GetNPCData(partnerID, witnessID);
+                                const auto pairData = relMgr.GetNPCData(partnerID, witnessID);
                                 if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || !pairData->isOpen) {
                                     continue;
                                 }
@@ -515,7 +515,7 @@ namespace MARAS {
                     }
 
                     // Re-verify that (cheaterID, victimID) is still a closed main-tier relationship
-                    const auto* pairData = relMgr.GetNPCData(pc.cheaterID, victimID);
+                    const auto pairData = relMgr.GetNPCData(pc.cheaterID, victimID);
                     if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || pairData->isOpen) {
                         continue;
                     }
@@ -609,7 +609,7 @@ namespace MARAS {
                     }
 
                     // Re-verify that (ow.actorID, witnessID) is still an open main-tier relationship
-                    const auto* pairData = relMgr.GetNPCData(ow.actorID, witnessID);
+                    const auto pairData = relMgr.GetNPCData(ow.actorID, witnessID);
                     if (!pairData || !NPCRelationshipManager::IsMainTier(pairData->status) || !pairData->isOpen) {
                         continue;
                     }

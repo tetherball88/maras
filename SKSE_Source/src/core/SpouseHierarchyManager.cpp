@@ -1,10 +1,11 @@
 #include "core/SpouseHierarchyManager.h"
 
-#include "core/DeceasedRegistry.h"
+#include <algorithm>
+#include <unordered_set>
+
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
-#include "core/NPCRelationshipManager.h"
-#include "core/Serialization.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/ActorUtils.h"
@@ -66,304 +67,318 @@ namespace MARAS {
         return instance;
     }
 
-    SpouseHierarchyManager::SpouseHierarchyManager() { ranks_.fill(0); }
+    SpouseHierarchyManager::SpouseHierarchyManager() = default;
 
     int SpouseHierarchyManager::GetRank(RE::FormID npcFormID) const {
-        for (size_t i = 0; i < ranks_.size(); ++i) {
-            if (ranks_[i] == npcFormID) {
-                return static_cast<int>(i);
-            }
+        if (npcFormID == 0) return 4;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->hierarchy->GetRank(State::ActorId{ npcFormID });
+    }
+
+    RE::FormID SpouseHierarchyManager::GetSpouseByRank(int rank) const {
+        if (rank < 0 || rank >= static_cast<int>(State::SpouseHierarchyTable::kSlotCount)) {
+            return 0;
         }
-        return 4;  // 4+ default
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->hierarchy->GetSpouseAtSlot(static_cast<std::size_t>(rank)).raw();
     }
 
     bool SpouseHierarchyManager::SetRank(RE::FormID npcFormID, int rank) {
         if (npcFormID == 0) return false;
 
-        // Normalize ranks: anything >=3 or negative -> remove from top 3 (valid rank indices: 0,1,2)
-        if (rank < 0 || rank >= static_cast<int>(ranks_.size())) {
-            int cur = GetRank(npcFormID);
-            if (cur >= 0 && cur < static_cast<int>(ranks_.size())) {
-                for (size_t i = 0; i < ranks_.size(); ++i) {
-                    if (ranks_[i] == npcFormID) {
-                        ranks_[i] = 0;
+        constexpr int kSlots = static_cast<int>(State::SpouseHierarchyTable::kSlotCount);
+        std::array<State::ActorId, State::SpouseHierarchyTable::kSlotCount> oldSlots{};
+        std::array<State::ActorId, State::SpouseHierarchyTable::kSlotCount> newSlots{};
+        int oldRank = 4;
+        RE::FormID occupant = 0;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            oldSlots = ws.hierarchy.Read().Slots();
+            oldRank = ws.hierarchy.Read().GetRank(State::ActorId{ npcFormID });
+
+            if (rank < 0 || rank >= kSlots) {
+                if (oldRank >= 0 && oldRank < kSlots) {
+                    const auto married = ws.GetPlayerSpousesInMarriageOrder();
+                    std::vector<State::ActorId> liveMarried;
+                    liveMarried.reserve(married.size());
+                    const auto& dec = ws.deceased.Read();
+                    for (const auto id : married) {
+                        if (!id.IsNull() && !dec.IsDeceased(id)) {
+                            liveMarried.push_back(id);
+                        }
+                    }
+                    ws.hierarchy.Write().SetRank(State::ActorId{ npcFormID }, rank, liveMarried);
+                }
+            } else if (oldRank != rank) {
+                occupant = oldSlots[static_cast<std::size_t>(rank)].raw();
+                ws.hierarchy.Write().SetRank(State::ActorId{ npcFormID }, rank, {});
+            }
+
+            newSlots = ws.hierarchy.Read().Slots();
+        });
+
+        // Apply engine side effects and notifications strictly after releasing WorldStore mutex
+        if (rank < 0 || rank >= kSlots) {
+            if (oldRank >= 0 && oldRank < kSlots) {
+                ClearFactionRank(npcFormID);
+                const float diff = static_cast<float>(oldRank - kSlots);
+                SendHierarchyChangedEvent(npcFormID, "demote", diff);
+
+                for (const auto oldId : oldSlots) {
+                    if (oldId.IsNull() || oldId.raw() == npcFormID) continue;
+                    const bool stillPresent = std::any_of(newSlots.begin(), newSlots.end(), [&](State::ActorId s) {
+                        return s == oldId;
+                    });
+                    if (!stillPresent) {
+                        ClearFactionRank(oldId.raw());
                     }
                 }
-                ClearFactionRank(npcFormID);
-                float diff = static_cast<float>(cur - static_cast<int>(ranks_.size()));
-                SendHierarchyChangedEvent(npcFormID, "demote", diff);
-                FillGaps(npcFormID, true);
-            }
-            PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
-            return true;
-        }
-
-        // Requesting a top-3 rank (0..2)
-        int cur = GetRank(npcFormID);
-
-        // If already in desired rank, nothing to do
-        if (cur == rank) return true;
-
-        RE::FormID occupant = ranks_[rank];
-
-        if (occupant == 0) {
-            // Empty spot: place the NPC directly into the requested slot
-            if (cur >= 0 && cur < static_cast<int>(ranks_.size())) {
-                ranks_[cur] = 0;
-            }
-            ranks_[rank] = npcFormID;
-            ApplyFactionRank(npcFormID, rank);
-            {
-                const char* action = (rank < cur) ? "promote" : "demote";
-                float diff = static_cast<float>(cur - rank);
-                SendHierarchyChangedEvent(npcFormID, action, diff);
-            }
-            PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
-            return true;
-        }
-
-        // Occupied spot
-        if (cur >= 0 && cur < static_cast<int>(ranks_.size())) {
-            // NPC already had a top-3 spot: swap
-            ranks_[cur] = occupant;
-            ranks_[rank] = npcFormID;
-            // update faction ranks for both
-            ApplyFactionRank(occupant, cur);
-            ApplyFactionRank(npcFormID, rank);
-            // Notify Papyrus about both changes (send rank difference old-new)
-            {
-                // npc: old=cur -> new=rank
-                const char* npcAction = (rank < cur) ? "promote" : "demote";
-                float npcDiff = static_cast<float>(cur - rank);
-                SendHierarchyChangedEvent(npcFormID, npcAction, npcDiff);
-                // occupant: old=rank -> new=cur
-                const char* occAction = (cur < rank) ? "promote" : "demote";
-                float occDiff = static_cast<float>(rank - cur);
-                SendHierarchyChangedEvent(occupant, occAction, occDiff);
-            }
-            PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
-            return true;
-        } else {
-            // NPC was 4+ and takes an occupied spot -> evict current occupant to 4+
-            ranks_[rank] = npcFormID;
-            for (size_t i = 0; i < ranks_.size(); ++i) {
-                if (ranks_[i] == occupant && static_cast<int>(i) != rank) {
-                    ranks_[i] = 0;
+                for (std::size_t i = 0; i < newSlots.size(); ++i) {
+                    const RE::FormID id = newSlots[i].raw();
+                    if (id != 0) {
+                        ApplyFactionRank(id, static_cast<int>(i));
+                        MARAS_LOG_DEBUG("Filled spouse hierarchy slot {} with {:08X}", i, id);
+                    }
+                }
+                for (std::size_t newIdx = 0; newIdx < newSlots.size(); ++newIdx) {
+                    const RE::FormID id = newSlots[newIdx].raw();
+                    if (id == 0 || id == npcFormID) continue;
+                    int prevIdx = 4;
+                    for (std::size_t j = 0; j < oldSlots.size(); ++j) {
+                        if (oldSlots[j].raw() == id) {
+                            prevIdx = static_cast<int>(j);
+                            break;
+                        }
+                    }
+                    const int curIdx = static_cast<int>(newIdx);
+                    if (prevIdx != curIdx) {
+                        const char* action = (curIdx < prevIdx) ? "promote" : "demote";
+                        const float shiftDiff = static_cast<float>(prevIdx - curIdx);
+                        SendHierarchyChangedEvent(id, action, shiftDiff);
+                    }
                 }
             }
-            // update faction ranks: set new npc, remove old occupant
-            ApplyFactionRank(npcFormID, rank);
-            ClearFactionRank(occupant);
-            // Notify Papyrus: send rank differences (old - new)
-            {
-                float npcDiff = static_cast<float>(cur - rank);
-                SendHierarchyChangedEvent(npcFormID, "promote", npcDiff);
-                // occupant demoted out of hierarchy (represented as rank size -> outside range)
-                float occDiff = static_cast<float>(rank - static_cast<int>(ranks_.size()));
-                SendHierarchyChangedEvent(occupant, "demote", occDiff);
-            }
             PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
             return true;
         }
+
+        if (oldRank == rank) {
+            return true;
+        }
+
+        if (occupant == 0) {
+            ApplyFactionRank(npcFormID, rank);
+            const char* action = (rank < oldRank) ? "promote" : "demote";
+            const float diff = static_cast<float>(oldRank - rank);
+            SendHierarchyChangedEvent(npcFormID, action, diff);
+        } else if (oldRank >= 0 && oldRank < kSlots) {
+            ApplyFactionRank(occupant, oldRank);
+            ApplyFactionRank(npcFormID, rank);
+            const char* npcAction = (rank < oldRank) ? "promote" : "demote";
+            SendHierarchyChangedEvent(npcFormID, npcAction, static_cast<float>(oldRank - rank));
+            const char* occAction = (oldRank < rank) ? "promote" : "demote";
+            SendHierarchyChangedEvent(occupant, occAction, static_cast<float>(rank - oldRank));
+        } else {
+            ApplyFactionRank(npcFormID, rank);
+            ClearFactionRank(occupant);
+            SendHierarchyChangedEvent(npcFormID, "promote", static_cast<float>(oldRank - rank));
+            SendHierarchyChangedEvent(occupant, "demote", static_cast<float>(rank - kSlots));
+        }
+
+        PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
+        return true;
     }
 
     void SpouseHierarchyManager::OnSpouseAdded(RE::FormID npcFormID) {
-        // If already in top3, nothing to do
-        if (GetRank(npcFormID) <= 2) return;
-
-        // Find first empty slot
-        for (size_t i = 0; i < ranks_.size(); ++i) {
-            if (ranks_[i] == 0) {
-                ranks_[i] = npcFormID;
-                // set faction rank
-                ApplyFactionRank(npcFormID, static_cast<int>(i));
-                MARAS_LOG_INFO("Assigned spouse {:08X} to hierarchy slot {}", npcFormID, i);
+        if (npcFormID == 0) return;
+        int assignedSlot = -1;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const int before = ws.hierarchy.Read().GetRank(State::ActorId{ npcFormID });
+            if (before <= 2) {
                 return;
             }
+            ws.hierarchy.Write().OnSpouseAdded(State::ActorId{ npcFormID });
+            const int after = ws.hierarchy.Read().GetRank(State::ActorId{ npcFormID });
+            if (after <= 2) {
+                assignedSlot = after;
+            }
+        });
+
+        if (assignedSlot >= 0) {
+            ApplyFactionRank(npcFormID, assignedSlot);
+            MARAS_LOG_INFO("Assigned spouse {:08X} to hierarchy slot {}", npcFormID, assignedSlot);
         }
-        // No empty slot: do nothing (4+)
     }
 
     void SpouseHierarchyManager::OnSpouseRemoved(RE::FormID npcFormID) {
+        if (npcFormID == 0) return;
+
         bool wasPresent = false;
-        for (size_t i = 0; i < ranks_.size(); ++i) {
-            if (ranks_[i] == npcFormID) {
-                // remove faction rank
-                ClearFactionRank(npcFormID);
-                ranks_[i] = 0;
-                wasPresent = true;
-            }
-        }
-        if (wasPresent) {
-            MARAS_LOG_INFO("Removed spouse {:08X} from hierarchy and filling gaps", npcFormID);
-            FillGaps();
-        }
-    }
+        std::array<State::ActorId, State::SpouseHierarchyTable::kSlotCount> oldSlots{};
+        std::array<State::ActorId, State::SpouseHierarchyTable::kSlotCount> newSlots{};
 
-    void SpouseHierarchyManager::FillGaps(RE::FormID excludeFormID, bool sendEvents) {
-        // Rebuild the top slots by keeping existing top-ranked spouses in order
-        // and then appending other married NPCs. This ensures that when a
-        // top slot is vacated (e.g. divorce at slot 0) the remaining top-ranked
-        // spouses shift up (1->0, 2->1) and the 3rd slot is filled from the
-        // remaining married NPCs, if any.
-        auto& rel = NPCRelationshipManager::GetSingleton();
-        auto married = rel.GetAllMarried();
-        const auto& deceasedReg = DeceasedRegistry::GetSingleton();
-        std::unordered_set<RE::FormID> marriedSet(married.begin(), married.end());
-
-        // Build candidates: existing top-ranked spouses first (preserve their relative order),
-        // then other married NPCs not already present (and not explicitly excluded).
-        std::vector<RE::FormID> candidates;
-        candidates.reserve(ranks_.size() + married.size());
-        std::unordered_set<RE::FormID> present;
-
-        for (auto id : ranks_) {
-            if (id != 0 && id != excludeFormID && !deceasedReg.IsDeceased(id) && marriedSet.contains(id)) {
-                candidates.push_back(id);
-                present.insert(id);
-            }
-        }
-
-        for (auto id : married) {
-            if (id != 0 && id != excludeFormID && !deceasedReg.IsDeceased(id) && present.find(id) == present.end()) {
-                candidates.push_back(id);
-                present.insert(id);
-            }
-        }
-
-        // Compose new ranks array from candidates, preserving order and shifting up as needed
-        std::array<RE::FormID, 3> newRanks;
-        newRanks.fill(0);
-        for (size_t i = 0; i < ranks_.size() && i < candidates.size(); ++i) {
-            newRanks[i] = candidates[i];
-        }
-
-        // Clear faction rank for any old occupant that no longer appears in newRanks
-        for (auto old : ranks_) {
-            if (old == 0) continue;
-            bool stillPresent = false;
-            for (auto nr : newRanks) {
-                if (nr == old) {
-                    stillPresent = true;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            oldSlots = ws.hierarchy.Read().Slots();
+            for (const auto id : oldSlots) {
+                if (id.raw() == npcFormID) {
+                    wasPresent = true;
                     break;
                 }
             }
+            if (!wasPresent) {
+                return;
+            }
+
+            const auto married = ws.GetPlayerSpousesInMarriageOrder();
+            const auto& dec = ws.deceased.Read();
+            auto& hier = ws.hierarchy.Write();
+            for (std::size_t i = 0; i < State::SpouseHierarchyTable::kSlotCount; ++i) {
+                if (hier.GetSpouseAtSlot(i).raw() == npcFormID) {
+                    hier.SetRawSlot(i, State::ActorId{});
+                }
+            }
+            hier.FillGaps(married, State::ActorId{ npcFormID }, [&](State::ActorId id) {
+                return dec.IsDeceased(id);
+            });
+            newSlots = hier.Slots();
+        });
+
+        if (!wasPresent) {
+            return;
+        }
+
+        ClearFactionRank(npcFormID);
+        MARAS_LOG_INFO("Removed spouse {:08X} from hierarchy and filling gaps", npcFormID);
+
+        for (const auto oldId : oldSlots) {
+            if (oldId.IsNull() || oldId.raw() == npcFormID) continue;
+            const bool stillPresent = std::any_of(newSlots.begin(), newSlots.end(), [&](State::ActorId s) {
+                return s == oldId;
+            });
             if (!stillPresent) {
-                ClearFactionRank(old);
+                ClearFactionRank(oldId.raw());
             }
         }
 
-        // Apply faction ranks for new positions and log assignments
-        for (size_t i = 0; i < newRanks.size(); ++i) {
-            auto id = newRanks[i];
+        for (std::size_t i = 0; i < newSlots.size(); ++i) {
+            const RE::FormID id = newSlots[i].raw();
             if (id != 0) {
                 ApplyFactionRank(id, static_cast<int>(i));
                 MARAS_LOG_DEBUG("Filled spouse hierarchy slot {} with {:08X}", i, id);
             }
         }
 
-        // Send hierarchy changed events for any spouse whose rank changed
+        for (std::size_t newIdx = 0; newIdx < newSlots.size(); ++newIdx) {
+            const RE::FormID id = newSlots[newIdx].raw();
+            if (id == 0) continue;
+            int prevIdx = 4;
+            for (std::size_t j = 0; j < oldSlots.size(); ++j) {
+                if (oldSlots[j].raw() == id) {
+                    prevIdx = static_cast<int>(j);
+                    break;
+                }
+            }
+            const int curIdx = static_cast<int>(newIdx);
+            if (prevIdx != curIdx) {
+                const char* action = (curIdx < prevIdx) ? "promote" : "demote";
+                const float diff = static_cast<float>(prevIdx - curIdx);
+                SendHierarchyChangedEvent(id, action, diff);
+            }
+        }
+    }
+
+    void SpouseHierarchyManager::FillGaps(RE::FormID excludeFormID, bool sendEvents) {
+        std::array<State::ActorId, State::SpouseHierarchyTable::kSlotCount> oldSlots{};
+        std::array<State::ActorId, State::SpouseHierarchyTable::kSlotCount> newSlots{};
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            oldSlots = ws.hierarchy.Read().Slots();
+            const auto married = ws.GetPlayerSpousesInMarriageOrder();
+            const auto& dec = ws.deceased.Read();
+            ws.hierarchy.Write().FillGaps(married, State::ActorId{ excludeFormID }, [&](State::ActorId id) {
+                return dec.IsDeceased(id);
+            });
+            newSlots = ws.hierarchy.Read().Slots();
+        });
+
+        for (const auto oldId : oldSlots) {
+            if (oldId.IsNull()) continue;
+            const bool stillPresent = std::any_of(newSlots.begin(), newSlots.end(), [&](State::ActorId s) {
+                return s == oldId;
+            });
+            if (!stillPresent) {
+                ClearFactionRank(oldId.raw());
+            }
+        }
+
+        for (std::size_t i = 0; i < newSlots.size(); ++i) {
+            const RE::FormID id = newSlots[i].raw();
+            if (id != 0) {
+                ApplyFactionRank(id, static_cast<int>(i));
+                MARAS_LOG_DEBUG("Filled spouse hierarchy slot {} with {:08X}", i, id);
+            }
+        }
+
         if (sendEvents) {
-            for (auto id : present) {
+            for (std::size_t newIdx = 0; newIdx < newSlots.size(); ++newIdx) {
+                const RE::FormID id = newSlots[newIdx].raw();
                 if (id == 0) continue;
-                int oldRank = 4;  // default 4+ for not present
-                for (size_t i = 0; i < ranks_.size(); ++i) {
-                    if (ranks_[i] == id) {
-                        oldRank = static_cast<int>(i);
+                int prevIdx = 4;
+                for (std::size_t j = 0; j < oldSlots.size(); ++j) {
+                    if (oldSlots[j].raw() == id) {
+                        prevIdx = static_cast<int>(j);
                         break;
                     }
                 }
-
-                int newRank = 4;
-                for (size_t i = 0; i < newRanks.size(); ++i) {
-                    if (newRanks[i] == id) {
-                        newRank = static_cast<int>(i);
-                        break;
-                    }
-                }
-
-                if (oldRank != newRank) {
-                    const char* action = (newRank < oldRank) ? "promote" : "demote";
-                    float diff = static_cast<float>(oldRank - newRank);
+                const int curIdx = static_cast<int>(newIdx);
+                if (prevIdx != curIdx) {
+                    const char* action = (curIdx < prevIdx) ? "promote" : "demote";
+                    const float diff = static_cast<float>(prevIdx - curIdx);
                     SendHierarchyChangedEvent(id, action, diff);
                 }
             }
         }
-
-        // Commit new ranks
-        ranks_ = newRanks;
     }
 
-    bool SpouseHierarchyManager::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
+    void SpouseHierarchyManager::SyncAllFactionsAndGlobals() {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& slots = snap->hierarchy->Slots();
 
-        // Write number of slots (always 3)
-        std::uint32_t slotCount = static_cast<std::uint32_t>(ranks_.size());
-        if (!serialization->WriteRecordData(slotCount)) return false;
-
-        for (auto id : ranks_) {
-            if (!serialization->WriteRecordData(id)) return false;
-        }
-
-        MARAS_LOG_INFO("Saved spouse hierarchy ({} slots)", ranks_.size());
-        return true;
-    }
-
-    bool SpouseHierarchyManager::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
-        if (!serialization) return false;
-
-        std::uint32_t slotCount = 0;
-        if (!serialization->ReadRecordData(slotCount)) return false;
-
-        constexpr std::uint32_t kMaxSerializedSlots = 64;
-        if (slotCount > kMaxSerializedSlots) {
-            MARAS_LOG_ERROR("SpouseHierarchyManager::Load - corrupt slotCount {} exceeds max {}", slotCount,
-                            kMaxSerializedSlots);
-            return false;
-        }
-
-        ranks_.fill(0);
-
-        for (std::uint32_t i = 0; i < slotCount; ++i) {
-            RE::FormID savedId = 0;
-            if (!serialization->ReadRecordData(savedId)) {
-                ranks_.fill(0);
-                return false;
-            }
-            if (i >= ranks_.size()) {
-                continue;
-            }
-
-            // Resolve saved formIDs to current load-order IDs
-            RE::FormID resolved = 0;
-            if (savedId != 0 && !IsSyntheticChildID(savedId) && serialization->ResolveFormID(savedId, resolved) && resolved != 0) {
-                auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(resolved);
-                if ((actor && actor->IsDead()) || (!actor && !ActorSvc::IsValid(resolved))) {
-                    MARAS_LOG_INFO("SpouseHierarchyManager::Load - skipping dead/invalid actor {:08X}", resolved);
-                    ranks_[i] = 0;
-                } else {
-                    ranks_[i] = resolved;
-                }
-            } else {
-                ranks_[i] = 0;  // unresolved or empty
+        std::unordered_set<RE::FormID> topIds;
+        topIds.reserve(slots.size());
+        for (const auto id : slots) {
+            if (!id.IsNull()) {
+                topIds.insert(id.raw());
             }
         }
 
-        MARAS_LOG_INFO("Loaded spouse hierarchy");
-        return true;
-    }
+        for (const auto& [actorId, profile] : snap->actors->AllProfiles()) {
+            (void)profile;
+            if (!actorId.IsNull() && !topIds.contains(actorId.raw())) {
+                ClearFactionRank(actorId.raw());
+            }
+        }
 
-    void SpouseHierarchyManager::Revert() {
-        ranks_.fill(0);
+        for (std::size_t i = 0; i < slots.size(); ++i) {
+            const RE::FormID id = slots[i].raw();
+            if (id != 0) {
+                ApplyFactionRank(id, static_cast<int>(i));
+            }
+        }
+
+        MARAS_LOG_INFO("Synchronized spouse hierarchy factions for top {} slots", slots.size());
     }
 
     nlohmann::json SpouseHierarchyManager::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& slots = snap->hierarchy->Slots();
         nlohmann::json j = nlohmann::json::array();
-        for (size_t i = 0; i < ranks_.size(); ++i) {
+        for (std::size_t i = 0; i < slots.size(); ++i) {
+            const RE::FormID id = slots[i].raw();
             nlohmann::json r;
             r["rank"] = static_cast<int>(i);
-            r["formId"] = ranks_[i] != 0 ? std::format("{:08X}", ranks_[i]) : "";
-            r["name"] = ranks_[i] != 0 ? ActorSvc::GetName(ranks_[i]) : "";
+            r["formId"] = id != 0 ? std::format("{:08X}", id) : "";
+            r["name"] = id != 0 ? ActorSvc::GetName(id) : "";
             j.push_back(r);
         }
         return j;

@@ -7,18 +7,6 @@ namespace MARAS {
 
     class PlayerHouseService {
     public:
-        struct House {
-            RE::FormID id{0};
-            RE::FormID marker{0};
-            bool initialMoveDone{false};
-            std::vector<RE::FormID> tenants;
-        };
-
-        struct Tenant {
-            RE::FormID house{0};
-            bool stayAtHome{true};
-        };
-
         static PlayerHouseService& GetSingleton();
 
         // Register a player house location and store a custom placed marker for it
@@ -51,9 +39,7 @@ namespace MARAS {
         void SetHouseInitialMoveDone(RE::FormID houseFormID, bool done);
         bool IsHouseInitialMoveDone(RE::FormID houseFormID) const;
 
-        // Serialization
-        [[nodiscard]] bool Save(SKSE::SerializationInterface* serialization) const;
-        [[nodiscard]] bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = Serialization::kDataVersion);
+        // Post-load engine sync and runtime revert helpers
         void FinalizeLoad();
         void Revert();
 
@@ -62,12 +48,6 @@ namespace MARAS {
 
     private:
         PlayerHouseService();
-
-        std::vector<House> houses_;
-        std::unordered_map<RE::FormID, Tenant> tenants_;
-
-        House* FindHouse(RE::FormID houseFormID);
-        const House* FindHouse(RE::FormID houseFormID) const;
 
         bool UpdateSpouseHomeMarker(RE::FormID spouseFormID, RE::FormID playerHouseFormID);
         void SetHousedFaction(RE::FormID tenantFormID, bool add);

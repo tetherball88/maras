@@ -403,7 +403,7 @@ namespace MARAS {
             return;
         }
 
-        const bool shouldDumpReport = (Settings::GetSingleton().logLevel <= 1);
+        const bool shouldDumpReport = (Settings::GetSingleton().Snapshot()->logLevel <= 1);
         std::vector<UniqueNPCInfo> uniqueBaseNPCs;
         std::vector<ExcludedNPCInfo> excludedUnique;
         std::vector<ExcludedNPCInfo> excludedNonUnique;

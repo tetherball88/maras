@@ -45,8 +45,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".agents/skills/maras-build-
   - **Never** capture raw `RE::Actor*`, `RE::TESObjectREFR*`, or `RE::TESForm*` in async/timer lambdas—capture `RE::FormID` / strong IDs and re-validate (`!IsDeleted()`, `IsDead()`, `Is3DLoaded()`) on the main thread.
   - Fence all async LLM callbacks, deferred tasks, and modal queues with `IsSessionEpochCurrent(expectedEpoch)`. Call `ResetPluginEventSinks()` *before* bumping/adopting a new epoch.
 - **Lock Ordering (`PapyrusInterface::GetPapyrusMutex()` Outer First)**:
-  - Acquire `GetPapyrusMutex()` (`std::recursive_mutex`) before any leaf mutex (`Settings::settingsMutex_`, `AdultChildTravelService::m_mutex`, `PackageOverrideService::m_mutex`, `DeceasedRegistry::mutex_`, `SkyrimNetMemoryService::mutex_`, `PrismaModalManager::m_mutex`). Leaf mutexes must **never** acquire `GetPapyrusMutex()`.
-  - Read off-thread `Settings` fields through `std::shared_lock`-guarded getters (`GetSimulateNoSkyrimNet()`, `GetSkyrimNetActionRadius()`), and never return `const char*` into mutex-guarded maps after unlock.
+  - Acquire `GetPapyrusMutex()` (`std::recursive_mutex`) before any leaf mutex (`MARAS::State::WorldStore`'s internal write mutex via `WorldStore::Modify(...)`, `AdultChildTravelService::m_mutex`, `PackageOverrideService::m_mutex`, `SkyrimNetMemoryService::mutex_`, `PrismaModalManager::m_mutex`). Leaf mutexes must **never** acquire `GetPapyrusMutex()` or call engine/UI/Papyrus/`NPCIndex` APIs.
+  - Persistent state queries read lock-free `WorldStore::Snapshot()` (`Settings::Snapshot()`, `GetSimulateNoSkyrimNet()`, `GetSkyrimNetActionRadius()`), and never return `const char*` into mutex-guarded maps after unlock.
 - **Threads & Loader-Lock Safety**:
   - **Never** use `std::thread(...).detach()` for gameplay/matchmaking/timers (use `PollingService` ticks), **never** use `AddUITask` when `AddTask` suffices, **never** create self-capturing `std::shared_ptr` cycles, and **never** `join()` a worker thread inside a static destructor (deadlocks under Windows `LdrpLoaderLock` at `ExitProcess`—isolate queue state in `std::shared_ptr` and `request_stop()` + `detach()`).
 - **Runtime-Cloned Forms (`AdultChildProgression`)**:
@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".agents/skills/maras-build-
 - **`'MARS'` v7 Co-Save Invariants** (activate `maras-cosave-and-tests` skill when modifying chunks):
   1. Preserve `v1`–`v7` load compatibility across all 12 chunks (`NPCR`, `SPHR`, `AFCT`, `PHOU`, `SPAS`, `PLCH`, `CFSN`, `MKMK`, `DCSD`, `BNTR`, `ACTR`, `CNFG`).
   2. Enforce `kMaxEntries` caps and check every read; on failure, immediately `Revert()` and `return false` (never `break;` mid-stream).
-  3. **Two-Phase Load**: `Load()` performs pure per-service deserialization + `ResolveFormID` (preserving `0` sentinels like `originalBedOwners_`; `'PLCH'` independent of `'CFSN'`). Cross-table pruning, hierarchy gap-filling, faction/bed sync, and `PackageOverrideService` rebuilds (`0xDD3` for traveling Stage 4 adults) run only in `FinalizeLoad()` after all 12 chunks finish.
+  3. **Two-Phase Load**: `Serialization::LoadCallback` deserializes all chunks into a staged `WorldState` via `State::LoadWorldState` (preserving `0` sentinels like `originalBedOwners_`; `'PLCH'` independent of `'CFSN'`) and commits `FinalizeWorldStateAfterLoad` through `WorldStore::ReplaceState`. Engine post-load hooks (`Settings::ApplyPostLoadEngineSideEffects`, service `FinalizeLoad()` / `ReassertAllOnLoad()` hooks, `SpouseHierarchyManager::FillGaps` / `SyncAllFactionsAndGlobals`, `PackageOverrideService::RebuildFromTenants`) run afterward once all 12 chunks are loaded.
   4. **Engine-Safe `Revert()`**: Clear all C++ containers, cooldowns, and `PollingService::Reset()` without mutating engine factions/ownership on torn-down forms.
 
 ---

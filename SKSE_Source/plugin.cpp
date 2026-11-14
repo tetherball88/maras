@@ -33,7 +33,6 @@
 #include "core/SkyrimNetProfileService.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
-#include "core/WorldStateBridge.h"
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -343,7 +342,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     SKSE::Init(skse);
 
     SetupLogging();
-    MARAS::WorldStateBridge::InitializeFoundationLogSink();
+    MARAS::Serialization::InitializeFoundationLogSink();
     MARAS_LOG_INFO("MARAS plugin loading...");
 
     // Register serialization callbacks
@@ -420,12 +419,14 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         // On a new game, defer modals and the initial relationship scan until character creation (RaceSex Menu) closes
                         if (isNewGame) {
                             MARAS::PrismaUIManager::GetSingleton().OnNewGameStarted(
-                                !MARAS::Settings::GetSingleton().initialRelationshipScanDone);
+                                !MARAS::Settings::GetSingleton().Snapshot()->initialRelationshipScanDone);
                         } else {
                             MARAS::PrismaUIManager::GetSingleton().ResetNewGameDeferral();
-                            if (!MARAS::Settings::GetSingleton().initialRelationshipScanDone) {
+                            if (!MARAS::Settings::GetSingleton().Snapshot()->initialRelationshipScanDone) {
                                 MARAS::NPCRelationshipManager::GetSingleton().ScanExistingRelationships(/*isNewGame=*/false);
-                                MARAS::Settings::GetSingleton().initialRelationshipScanDone = true;
+                                MARAS::State::WorldStore::GetSingleton().Modify([](MARAS::State::WorldState& ws) {
+                                    ws.settings.Write().initialRelationshipScanDone = true;
+                                });
                             }
                         }
 

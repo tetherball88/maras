@@ -4,16 +4,6 @@
 
 namespace MARAS {
 
-    // Tracks discovered data for a registered cell
-    struct RegisteredCellData {
-        // Minimal data to track a shared home
-        bool sharedWithPlayer = false;        // whether this cell is currently shared with player
-        std::set<RE::FormID> sharingSpouses;  // set of NPCs who have requested the cell be shared
-        // Remember the original 'public' flag on the cell so it can be restored
-        bool originalPublicRecorded = false;  // true if originalPublicState was captured
-        bool originalPublicState = false;     // original value of the cell's public flag
-    };
-
     class SpouseAssetsService {
     public:
         static SpouseAssetsService& GetSingleton();
@@ -30,9 +20,7 @@ namespace MARAS {
         // Query whether a cell is currently shared with the player
         bool IsHouseSharedWithPlayer(RE::FormID cellFormID) const;
 
-        // Persistence
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version = 7);
+        // Post-load engine sync and runtime revert helpers
         void FinalizeLoad();
         void Revert();
 
@@ -43,10 +31,6 @@ namespace MARAS {
         // Helpers to transfer/restore furniture ownership (use HomeCellService data)
         void ShareFurniture(RE::FormID npcFormID);
         void StopShareFurniture(RE::FormID npcFormID);
-
-        // Data
-        std::map<RE::FormID, RegisteredCellData> sharedHomes_;          // cellFormID -> data
-        std::unordered_map<RE::FormID, RE::FormID> originalBedOwners_;  // bedRefID -> original owner FormID
     };
 
 }  // namespace MARAS

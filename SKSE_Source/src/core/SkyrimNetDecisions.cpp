@@ -50,7 +50,7 @@ namespace MARAS::SkyrimNetDecisions {
     }
 
     bool ShouldUseDecisions() {
-        return Settings::GetSingleton().skyrimnetUseDecisions && IsDecisionsAvailable();
+        return Settings::GetSingleton().Snapshot()->skyrimnetUseDecisions && IsDecisionsAvailable();
     }
 
     bool ShouldFallbackToChatOnFailure(std::string_view resultJson, int success) {

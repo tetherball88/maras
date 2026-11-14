@@ -1,14 +1,8 @@
 #pragma once
 
 #include "core/RelationshipTypes.h"
-#include "core/Serialization.h"
 #include "utils/Common.h"
 #include "utils/JsonOverrideLoader.h"
-
-// Forward declare SKSE interface
-namespace SKSE {
-    class SerializationInterface;
-}
 
 namespace MARAS {
 
@@ -301,51 +295,12 @@ namespace MARAS {
               isAdopted(adopted) {}
     };
 
-    // Main storage and management class
+    // Main management facade backed by MARAS::State::WorldStore
     class NPCRelationshipManager {
-        friend class AdultChildProgression;
     private:
-        // Master set - all registered NPCs
-        std::unordered_set<RE::FormID> allRegistered;
-
-        // Pending deferred relationships for unspawned NPCs (keyed by Base FormID)
-        std::unordered_map<RE::FormID, std::vector<PendingRelationshipData>> pendingRelationshipsByBaseID;
-
-        // Pending deferred children (keyed by child base FormID)
-        std::unordered_map<RE::FormID, PendingChildData> pendingChildrenByBaseID;
-
-        // Primary child-centric registry (keyed by child FormID)
-        std::unordered_map<RE::FormID, ChildRegistryEntry> childrenByID;
-
-        // Counter for generating unique synthetic child FormIDs for newborns (0xFF700001..0xFF7FFFFF)
-        uint32_t nextSyntheticChildID_{ 0xFF700001 };
-
-        // Allocates a synthetic child FormID bounded strictly within [kSyntheticChildIDMin + 1, kSyntheticChildIDMax]
-        RE::FormID AllocateSyntheticChildID();
-
-        // Clears any pending marriage-adoption Papyrus callback tracking on Revert/Clear
-        static void ClearPendingMarriageAdoptions();
-
-        // NPC attribute profiles
-        std::unordered_map<RE::FormID, NPCProfileData> npcProfiles;
-
-        // Stored relationship pairs
-        std::unordered_map<RelationshipPairKey, NPCRelationshipData, RelationshipPairKeyHash> relationshipPairs;
-
-        // Per-actor adjacency index into relationshipPairs for O(degree(actor)) lookups
-        std::unordered_map<RE::FormID, std::vector<RelationshipPairKey>> actorPairIndex_;
-
-        // Override data storage
+        // Override data storage (loaded from Data/SKSE/Plugins/MARAS/*.json at kDataLoaded)
         Utils::OverrideMap npcOverrides;
 
-        // Pending partner intents for Tier 2 Player-Partner Agency (keyed by partner FormID)
-        std::unordered_map<RE::FormID, PendingPartnerIntent> pendingPartnerIntents_;
-
-        // Adjacency index & pair access helpers
-        void IndexPair(const RelationshipPairKey& key);
-        void UnindexPair(const RelationshipPairKey& key);
-        NPCRelationshipData& GetOrCreatePairData(RE::FormID actorA, RE::FormID actorB);
-        const std::vector<RelationshipPairKey>& GetActorPairKeys(RE::FormID actorID) const;
         size_t CountPartnersWithStatus(RE::FormID npcFormID, RelationshipStatus status) const;
         void RefreshPartnerRelationshipFactions(RE::FormID partnerID);
 
@@ -355,9 +310,6 @@ namespace MARAS {
                                 const std::function<void(RE::FormID, RE::FormID)>& postAction = nullptr,
                                 bool sendEvent = true);
 
-        // Helper for deduplicating and adding pending deferred relationship entries
-        void AddPendingRelationship(RE::FormID baseID, const PendingRelationshipData& data);
-        void AddPendingChild(RE::FormID childBaseID, const PendingChildData& data);
         void TryResolvePendingChildren(RE::FormID baseID, RE::FormID refID);
 
         // Helper methods for child custody evaluation on birth, marriage, and divorce/breakup
@@ -512,9 +464,10 @@ namespace MARAS {
         std::vector<RE::FormID> GetAllPartners(RE::FormID npcFormID) const;
 
         // Data access
-        const NPCProfileData* GetNPCProfile(RE::FormID npcFormID) const;
-        const NPCRelationshipData* GetNPCData(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;
-        const std::unordered_map<RelationshipPairKey, NPCRelationshipData, RelationshipPairKeyHash>& GetAllRelationshipPairs() const { return relationshipPairs; }
+        std::optional<NPCProfileData> GetNPCProfile(RE::FormID npcFormID) const;
+        void UpsertNPCProfile(const NPCProfileData& profile);
+        std::optional<NPCRelationshipData> GetNPCData(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;
+        std::unordered_map<RelationshipPairKey, NPCRelationshipData, RelationshipPairKeyHash> GetAllRelationshipPairs() const;
         RelationshipStatus GetRelationshipStatus(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;
         SocialClass GetSocialClass(RE::FormID npcFormID) const;
         SkillType GetSkillType(RE::FormID npcFormID) const;
@@ -536,7 +489,7 @@ namespace MARAS {
         uint32_t GetCheatingCount(RE::FormID cheaterID, RE::FormID victimID) const;
         std::vector<RE::FormID> GetCheatedOnPartners(RE::FormID cheaterID) const;
         std::vector<RE::FormID> GetCheatersWhoCheatedOn(RE::FormID victimID) const;
-        const std::vector<CheatingRecord>& GetCheatingRecords(RE::FormID actorA, RE::FormID actorB) const;
+        std::vector<CheatingRecord> GetCheatingRecords(RE::FormID actorA, RE::FormID actorB) const;
         std::vector<CheatingRecord> GetCheatingRecordsForActor(RE::FormID actorID) const;
         bool SetCheatingAffairStatus(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID, AffairStatus status);
         AffairStatus GetCheatingAffairStatus(RE::FormID cheaterID, RE::FormID victimID, RE::FormID affairPartnerID) const;
@@ -545,7 +498,6 @@ namespace MARAS {
         void SetPartnerPendingIntent(RE::FormID partnerID, PartnerIntentType type, RE::FormID relatedLoverID = 0);
         PendingPartnerIntent GetPartnerPendingIntent(RE::FormID partnerID) const;
         void ClearPartnerIntent(RE::FormID partnerID);
-        const std::unordered_map<RE::FormID, PendingPartnerIntent>& GetAllPendingPartnerIntents() const { return pendingPartnerIntents_; }
         void MarkCheatingAllowedForPair(RE::FormID actorA, RE::FormID actorB);
         void MarkPlayerCheatingAllowedOnPolygamy();
         void EvaluateCheatingOnStatusChange(RE::FormID npcFormID, RE::FormID targetFormID, RelationshipStatus newStatus);
@@ -569,9 +521,10 @@ namespace MARAS {
         bool RemoveChild(RE::FormID childID);
         bool SetChildGuardian(RE::FormID childID, int slot /*0=A, 1=B*/, RE::FormID guardianID);
         std::optional<ChildRegistryEntry> GetChildEntry(RE::FormID childID) const;
+        void UpsertChildEntry(const ChildRegistryEntry& entry);
         std::vector<RE::FormID> GetChildrenOfActor(RE::FormID parentID) const;
         std::vector<RE::FormID> GetChildren(RE::FormID guardianAID, RE::FormID guardianBID) const;
-        const std::unordered_map<RE::FormID, ChildRegistryEntry>& GetAllChildren() const;
+        std::unordered_map<RE::FormID, ChildRegistryEntry> GetAllChildren() const;
         bool IsChildNPC(RE::FormID formID) const;
         void UpdateChildBothParentsFaction(RE::FormID childID);
         void UpdateSpouseChildrenFaction(RE::FormID spouseID);
@@ -672,7 +625,7 @@ namespace MARAS {
         std::string BuildChildBirthJson(RE::FormID motherID, const std::vector<RE::FormID>& childIDs = {}, bool maskSecrets = false) const;
 
         // Status change history management
-        const std::vector<StatusChangeRecord>& GetStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;
+        std::vector<StatusChangeRecord> GetStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;
         std::optional<StatusChangeRecord> GetStatusHistoryEntry(RE::FormID npcFormID, RE::FormID targetFormID, std::size_t index) const;
         size_t GetStatusHistoryCount(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID) const;
         void ClearStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID = kPlayerFormID);
@@ -720,12 +673,9 @@ namespace MARAS {
         size_t GetExDatingCount(RE::FormID targetFormID = kPlayerFormID) const;
         size_t GetExLoverCount(RE::FormID targetFormID = kPlayerFormID) const;
 
-        // Save/Load support
+        // Runtime lifecycle & post-load engine sync support
         void Clear();
-
-        // SKSE serialization support
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version, std::uint32_t length = 0);
+        static void ClearPendingMarriageAdoptions();
         void FinalizeLoad();
         void Revert();
 

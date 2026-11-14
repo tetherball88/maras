@@ -9,14 +9,13 @@ description: >-
 Whenever adding, removing, or renaming a configuration setting, update **all** applicable layers in the same change:
 
 1. **Pure State & Co-Save Codec (`SKSE_Source/modules/state/`):**
-   - `modules/state/include/maras/state/DomainTypes.h` (`MARAS::State::SettingsData` field + default value + `operator==`).
-   - `modules/state/src/CoSaveCodec.cpp` (`'CNFG'` chunk serializer/deserializer: bump `'CNFG'` sub-version if changing binary layout and guard reads for older sub-versions).
-   - `src/core/WorldStateBridge.cpp` (if bridging between `MARAS::Settings` and `MARAS::State::SettingsData`).
+   - `modules/state/include/maras/state/WorldTables.h` (`MARAS::State::SettingsData` field + default value + `operator==`, and register the field in `ForEachPersistedSettingField` if it is co-save persisted).
+   - `modules/state/src/CoSaveCodec.cpp` (`'CNFG'` chunk serializer/deserializer in `SaveChunkCNFG` / `LoadChunkCNFG`: bump `'CNFG'` sub-version if changing binary layout and guard reads for older sub-versions).
    - `tests/test_cosave_migrations.cpp` (assert non-default value round-trips losslessly through `'CNFG'` and resets on `Revert()`).
 
 2. **Engine Settings Service (`SKSE_Source/include/utils/Settings.h` & `src/utils/Settings.cpp`):**
-   - Declare member + default in `Settings.h` (add `std::shared_lock lock(settingsMutex_);` getter if read from off-main-thread SkyrimNet decorators or worker threads).
-   - Update `Settings.cpp`: INI `Load` (if INI-backed), `SaveGameSettings`, `LoadGameSettings`, `RevertGameSettingsUnlocked`, `DumpJson`, key-lookup maps (`GetBoolSettingMap` / `GetIntSettingMap` / `GetFloatSettingMap`), and `SaveToSkyrimNetConfig` (if SkyrimNet-relevant).
+   - Expose read/write accessors on `Settings` backed by `MARAS::State::WorldStore` (`Snapshot().settings` for lock-free reads; `Modify(...)` for writes + engine global/SkyrimNet side-effect updates).
+   - Update `Settings.cpp`: INI `Load` (updates `WorldStore::SetIniBaselineSettings` + live state), `ApplyPostLoadEngineSideEffects`, `DumpJson` (if non-persisted or custom formatted), key-lookup maps (`GetBoolSettingMap` / `GetIntSettingMap` / `GetFloatSettingMap` using `State::SettingsData::*` member pointers), and `SaveToSkyrimNetConfig` (if SkyrimNet-relevant).
 
 3. **Prisma UI C++ Bridge (`SKSE_Source/src/ui/PrismaUIDataBridge.cpp`):**
    - Include in outgoing payloads (`SendOverviewData` and/or `SendMatchmakingSettings`).

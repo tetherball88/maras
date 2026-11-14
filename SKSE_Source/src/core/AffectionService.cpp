@@ -1,9 +1,9 @@
 #include "core/AffectionService.h"
 
-#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/ActorUtils.h"
@@ -98,29 +98,37 @@ namespace MARAS {
             return;
         }
 
-        auto key = NormalizeType(type);
-        dailyAffection_[npcFormID][key] += amount;
-
-        // Record positive interactions as player attention
+        const auto key = NormalizeType(type);
+        std::optional<float> currentDay;
         if (amount > 0.0f) {
-            RecordAffectionInteraction(npcFormID);
+            if (auto* calendar = RE::Calendar::GetSingleton()) {
+                currentDay = calendar->GetDaysPassed();
+            }
         }
 
-        MARAS_LOG_DEBUG("AddAffection: NPC {:08X} += {} ({}) (daily now {})", npcFormID, amount, key,
-                        dailyAffection_[npcFormID][key]);
+        float newDaily = 0.0f;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& aff = ws.affection.Write();
+            const State::ActorId id{ npcFormID };
+            newDaily = aff.GetDailyAccumulation(id, key) + amount;
+            aff.SetDailyAccumulation(id, key, newDaily);
+            if (currentDay.has_value()) {
+                aff.SetLastInteractionDay(id, *currentDay);
+            }
+        });
+
+        MARAS_LOG_DEBUG("AddAffection: NPC {:08X} += {} ({}) (daily now {})", npcFormID, amount, key, newDaily);
     }
 
     float AffectionService::GetDailyAffection(FormID npcFormID, const std::string& type) const {
-        auto key = NormalizeType(type);
-        auto it = dailyAffection_.find(npcFormID);
-        if (it == dailyAffection_.end()) return 0.0f;
-        auto it2 = it->second.find(key);
-        return (it2 == it->second.end()) ? 0.0f : it2->second;
+        const auto key = NormalizeType(type);
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->affection->GetDailyAccumulation(State::ActorId{ npcFormID }, key);
     }
 
     int AffectionService::GetPermanentAffection(FormID npcFormID) const {
-        auto it = permanentAffection_.find(npcFormID);
-        return (it == permanentAffection_.end()) ? 0 : it->second;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->affection->GetPermanent(State::ActorId{ npcFormID }, 0);
     }
 
     void AffectionService::SetPermanentAffection(FormID npcFormID, int amount, bool sendEvent) {
@@ -133,14 +141,17 @@ namespace MARAS {
             return;
         }
 
-        int clamped = ClampAffection(amount);
-        int oldVal = GetPermanentAffection(npcFormID);
+        const int clamped = ClampAffection(amount);
+        int oldVal = 0;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const State::ActorId id{ npcFormID };
+            oldVal = ws.affection.Read().GetPermanent(id, 0);
+            ws.affection.Write().SetPermanent(id, clamped);
+        });
 
-        std::string oldThreshold = GetAffectionThreshold(oldVal);
-        std::string newThreshold = GetAffectionThreshold(clamped);
+        const std::string oldThreshold = GetAffectionThreshold(oldVal);
+        const std::string newThreshold = GetAffectionThreshold(clamped);
 
-        // Store new value
-        permanentAffection_[npcFormID] = clamped;
         MARAS_LOG_INFO("SetPermanentAffection: NPC {:08X} = {} (clamped from {})", npcFormID, clamped, amount);
 
         // Update faction rank when loaded
@@ -175,269 +186,111 @@ namespace MARAS {
     }
 
     void AffectionService::ApplyDailyAffectionsForAll() {
-        for (auto& [npcFormID, typeMap] : dailyAffection_) {
-            if (typeMap.empty()) continue;
-
-            int original = GetPermanentAffection(npcFormID);
-            int deltaTotal = CalculateTotalDailyDelta(typeMap);
-
-            if (deltaTotal != 0) {
-                int updated = ClampAffection(original + deltaTotal);
-                SetPermanentAffection(npcFormID, updated);
-                MARAS_LOG_INFO("Applied daily affection for NPC {:08X}: {} -> {} (delta {})", npcFormID, original,
-                               updated, updated - original);
-            }
-
-            // Clear daily after applying
-            typeMap.clear();
-        }
-    }
-
-    bool AffectionService::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-
-        // Write permanent affection count
-        std::uint32_t count = static_cast<std::uint32_t>(permanentAffection_.size());
-        if (!serialization->WriteRecordData(count)) return false;
-
-        for (const auto& [formID, amount] : permanentAffection_) {
-            if (!serialization->WriteRecordData(formID) || !serialization->WriteRecordData(amount)) return false;
-        }
-
-        MARAS_LOG_INFO("Saved {} permanent affection records", count);
-
-        // Write last affection day count
-        std::uint32_t dayCount = static_cast<std::uint32_t>(lastAffectionDay_.size());
-        if (!serialization->WriteRecordData(dayCount)) return false;
-
-        for (const auto& [formID, day] : lastAffectionDay_) {
-            if (!serialization->WriteRecordData(formID) || !serialization->WriteRecordData(day)) return false;
-        }
-
-        MARAS_LOG_INFO("Saved {} last affection day records", dayCount);
-
-        // Version 7+: Write daily affection accumulation records (so intra-day caps cannot be bypassed by save/reload)
-        std::uint32_t dailyActorCount = 0;
-        for (const auto& [formID, typeMap] : dailyAffection_) {
-            if (!typeMap.empty()) {
-                ++dailyActorCount;
-            }
-        }
-        if (!serialization->WriteRecordData(dailyActorCount)) return false;
-
-        for (const auto& [formID, typeMap] : dailyAffection_) {
-            if (typeMap.empty()) continue;
-            if (!serialization->WriteRecordData(formID)) return false;
-            std::uint32_t typeCount = static_cast<std::uint32_t>(typeMap.size());
-            if (!serialization->WriteRecordData(typeCount)) return false;
-            for (const auto& [typeName, amount] : typeMap) {
-                std::uint32_t len = static_cast<std::uint32_t>(typeName.size());
-                if (!serialization->WriteRecordData(len)) return false;
-                if (len > 0 && !serialization->WriteRecordData(typeName.data(), len)) return false;
-                if (!serialization->WriteRecordData(amount)) return false;
-            }
-        }
-
-        MARAS_LOG_INFO("Saved {} daily affection actor records", dailyActorCount);
-
-        return true;
-    }
-
-    bool AffectionService::Load(SKSE::SerializationInterface* serialization, std::uint32_t version) {
-        if (!serialization) return false;
-
-        Revert();
-
-        auto failLoad = [this]() -> bool {
-            Revert();
-            return false;
+        struct PendingDaily {
+            FormID npcFormID{ 0 };
+            RE::Actor* actor{ nullptr };
+            int deltaTotal{ 0 };
+            bool valid{ false };
         };
 
-        constexpr std::uint32_t kMaxRecords = 100000;
-        constexpr std::uint32_t kMaxTypesPerActor = 256;
-        constexpr std::uint32_t kMaxTypeNameLen = 512;
-
-        // Load permanent affection
-        std::uint32_t count = 0;
-        if (!serialization->ReadRecordData(count)) return failLoad();
-        if (count > kMaxRecords) {
-            MARAS_LOG_ERROR("AffectionService::Load - corrupt permanent affection count {}", count);
-            return failLoad();
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& allDaily = snap->affection->AllDaily();
+        if (allDaily.empty()) {
+            return;
         }
 
-        for (std::uint32_t i = 0; i < count; ++i) {
-            RE::FormID oldFormID = 0, newFormID = 0;
-            int amount = 0;
-            if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(amount)) return failLoad();
-            if (IsSyntheticChildID(oldFormID) || !serialization->ResolveFormID(oldFormID, newFormID) || newFormID == 0) {
-                MARAS_LOG_WARN("AffectionService::Load - could not resolve FormID {:08X}, skipping", oldFormID);
-                continue;
-            }
-
-            // Retain unloaded actors when valid; skip dead or invalid/deleted actors
-            auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-            if ((actor && actor->IsDead()) || (!actor && !ActorSvc::IsValid(newFormID))) {
-                MARAS_LOG_INFO("AffectionService::Load - skipping dead/invalid actor {:08X}", newFormID);
-                continue;
-            }
-
-            int clamped = ClampAffection(amount);
-            permanentAffection_[newFormID] = clamped;
-            if (actor) {
-                UpdateAffectionFaction(actor, newFormID, clamped);
-            }
-        }
-
-        MARAS_LOG_INFO("Loaded {} permanent affection records", permanentAffection_.size());
-
-        // Load last affection days
-        std::uint32_t dayCount = 0;
-        if (!serialization->ReadRecordData(dayCount)) {
-            MARAS_LOG_WARN("Could not read last affection day count, continuing without it");
-            return true;  // Not fatal, might be old save
-        }
-        if (dayCount > kMaxRecords) {
-            MARAS_LOG_ERROR("AffectionService::Load - corrupt last affection day count {}", dayCount);
-            return failLoad();
-        }
-
-        for (std::uint32_t i = 0; i < dayCount; ++i) {
-            RE::FormID oldFormID = 0, newFormID = 0;
-            float day = 0.0f;
-            if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(day)) {
-                MARAS_LOG_ERROR("AffectionService::Load - failed to read last affection day record {}", i);
-                return failLoad();
-            }
-            if (IsSyntheticChildID(oldFormID) || !serialization->ResolveFormID(oldFormID, newFormID) || newFormID == 0) {
-                MARAS_LOG_WARN("AffectionService::Load - could not resolve FormID {:08X} for last affection day",
-                               oldFormID);
-                continue;
-            }
-
-            auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-            if ((actor && actor->IsDead()) || (!actor && !ActorSvc::IsValid(newFormID))) {
-                continue;
-            }
-
-            lastAffectionDay_[newFormID] = day;
-        }
-
-        MARAS_LOG_INFO("Loaded {} last affection day records", lastAffectionDay_.size());
-
-        // Version 7+: Load daily affection accumulation records
-        if (version >= 7) {
-            std::uint32_t dailyActorCount = 0;
-            if (!serialization->ReadRecordData(dailyActorCount)) {
-                return failLoad();
-            }
-            if (dailyActorCount > kMaxRecords) {
-                MARAS_LOG_ERROR("AffectionService::Load - corrupt dailyActorCount {}", dailyActorCount);
-                return failLoad();
-            }
-            for (std::uint32_t i = 0; i < dailyActorCount; ++i) {
-                RE::FormID oldFormID = 0, newFormID = 0;
-                std::uint32_t typeCount = 0;
-                if (!serialization->ReadRecordData(oldFormID) || !serialization->ReadRecordData(typeCount)) {
-                    MARAS_LOG_ERROR("AffectionService::Load - failed to read daily affection actor header {}", i);
-                    return failLoad();
-                }
-                if (typeCount > kMaxTypesPerActor) {
-                    MARAS_LOG_ERROR("AffectionService::Load - corrupt daily affection typeCount {}", typeCount);
-                    return failLoad();
-                }
-
-                bool validActor = false;
-                if (!IsSyntheticChildID(oldFormID) && serialization->ResolveFormID(oldFormID, newFormID) && newFormID != 0) {
-                    auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(newFormID);
-                    validActor = (actor != nullptr) ? !actor->IsDead() : ActorSvc::IsValid(newFormID);
-                }
-
-                for (std::uint32_t t = 0; t < typeCount; ++t) {
-                    std::uint32_t len = 0;
-                    if (!serialization->ReadRecordData(len) || len > kMaxTypeNameLen) {
-                        MARAS_LOG_ERROR("AffectionService::Load - invalid daily affection type length {}", len);
-                        return failLoad();
-                    }
-                    std::string typeName;
-                    if (len > 0) {
-                        typeName.resize(len);
-                        if (!serialization->ReadRecordData(typeName.data(), len)) {
-                            return failLoad();
-                        }
-                    }
-                    float amount = 0.0f;
-                    if (!serialization->ReadRecordData(amount)) {
-                        return failLoad();
-                    }
-                    if (validActor && !typeName.empty() && !std::isnan(amount) && !std::isinf(amount)) {
-                        dailyAffection_[newFormID][NormalizeType(typeName)] = amount;
-                    }
+        std::vector<PendingDaily> pending;
+        pending.reserve(allDaily.size());
+        for (const auto& [actorId, typeMap] : allDaily) {
+            if (typeMap.empty()) continue;
+            const FormID npcFormID = actorId.raw();
+            const int deltaTotal = CalculateTotalDailyDelta(typeMap);
+            RE::Actor* actor = nullptr;
+            bool valid = false;
+            if (deltaTotal != 0 && npcFormID != 0 && npcFormID != kPlayerFormID && !IsSyntheticChildID(npcFormID)) {
+                actor = NPCIndex::GetSingleton().GetActorFromFormId(npcFormID);
+                valid = actor != nullptr || ActorSvc::IsValid(npcFormID);
+                if (!valid) {
+                    MARAS_LOG_ERROR("SetPermanentAffection: Cannot find valid actor/base for FormID {:08X}", npcFormID);
                 }
             }
-            MARAS_LOG_INFO("Loaded {} daily affection actor records", dailyAffection_.size());
+            pending.push_back(PendingDaily{ npcFormID, actor, deltaTotal, valid });
         }
 
-        return true;
+        struct AppliedChange {
+            FormID npcFormID{ 0 };
+            RE::Actor* actor{ nullptr };
+            int original{ 0 };
+            int unclamped{ 0 };
+            int updated{ 0 };
+        };
+        std::vector<AppliedChange> applied;
+        applied.reserve(pending.size());
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& aff = ws.affection.Write();
+            for (const auto& item : pending) {
+                if (item.valid && item.deltaTotal != 0) {
+                    const State::ActorId id{ item.npcFormID };
+                    const int original = aff.GetPermanent(id, 0);
+                    const int unclamped = original + item.deltaTotal;
+                    const int updated = ClampAffection(unclamped);
+                    aff.SetPermanent(id, updated);
+                    applied.push_back(AppliedChange{ item.npcFormID, item.actor, original, unclamped, updated });
+                }
+            }
+            aff.ClearDailyAccumulation();
+        });
+
+        for (const auto& chg : applied) {
+            const std::string oldThreshold = GetAffectionThreshold(chg.original);
+            const std::string newThreshold = GetAffectionThreshold(chg.updated);
+            MARAS_LOG_INFO("SetPermanentAffection: NPC {:08X} = {} (clamped from {})", chg.npcFormID, chg.updated, chg.unclamped);
+
+            if (chg.actor) {
+                UpdateAffectionFaction(chg.actor, chg.npcFormID, chg.updated);
+            }
+            if (oldThreshold != newThreshold) {
+                SendAffectionChangeEvent(chg.npcFormID, newThreshold, chg.updated - chg.original);
+            }
+            PrismaUIDataBridge::GetSingleton().OnAffectionChanged(chg.npcFormID, chg.updated);
+
+            MARAS_LOG_INFO("Applied daily affection for NPC {:08X}: {} -> {} (delta {})", chg.npcFormID, chg.original,
+                           chg.updated, chg.updated - chg.original);
+        }
     }
 
     void AffectionService::FinalizeLoad() {
-        auto& deceasedReg = DeceasedRegistry::GetSingleton();
-        auto shouldPrune = [&deceasedReg](RE::FormID id) -> bool {
-            if (id == 0 || IsSyntheticChildID(id) || deceasedReg.IsDeceased(id)) {
-                return true;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        std::size_t reasserted = 0;
+        for (const auto& [actorId, val] : snap->affection->AllPermanent()) {
+            const FormID id = actorId.raw();
+            if (id == 0 || IsSyntheticChildID(id)) {
+                continue;
             }
-            auto* actor = RE::TESForm::LookupByID<RE::Actor>(id);
+            auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(id);
             if (!actor) {
-                actor = NPCIndex::GetSingleton().GetActorFromFormId(id);
+                actor = RE::TESForm::LookupByID<RE::Actor>(id);
             }
-            if (actor && actor->IsDead()) {
-                return true;
-            }
-            return !ActorSvc::IsValid(id);
-        };
-
-        std::size_t pruned = 0;
-        for (auto it = permanentAffection_.begin(); it != permanentAffection_.end();) {
-            if (shouldPrune(it->first)) {
-                it = permanentAffection_.erase(it);
-                ++pruned;
-            } else {
-                ++it;
+            if (actor && !actor->IsDead()) {
+                UpdateAffectionFaction(actor, id, ClampAffection(val));
+                ++reasserted;
             }
         }
-        for (auto it = lastAffectionDay_.begin(); it != lastAffectionDay_.end();) {
-            if (shouldPrune(it->first)) {
-                it = lastAffectionDay_.erase(it);
-            } else {
-                ++it;
-            }
-        }
-        for (auto it = dailyAffection_.begin(); it != dailyAffection_.end();) {
-            if (shouldPrune(it->first)) {
-                it = dailyAffection_.erase(it);
-            } else {
-                ++it;
-            }
-        }
-
-        if (pruned > 0) {
-            MARAS_LOG_INFO("AffectionService::FinalizeLoad - pruned {} deceased/invalid permanent affection record(s)",
-                           pruned);
-        }
+        MARAS_LOG_INFO("AffectionService::FinalizeLoad - synchronized affection faction rank for {} loaded actor(s)",
+                       reasserted);
     }
 
     void AffectionService::Revert() {
-        permanentAffection_.clear();
-        dailyAffection_.clear();
-        lastAffectionDay_.clear();
         ResetDefaultMinMax();
         MARAS_LOG_INFO("Reverted affection service state");
     }
 
     void AffectionService::RemoveNPCData(FormID npcFormID) {
-        permanentAffection_.erase(npcFormID);
-        dailyAffection_.erase(npcFormID);
-        lastAffectionDay_.erase(npcFormID);
+        if (npcFormID == 0) return;
+        State::WorldStore::GetSingleton().Modify([npcFormID](State::WorldState& ws) {
+            ws.affection.Write().EraseActor(State::ActorId{ npcFormID });
+        });
         MARAS_LOG_DEBUG("Removed affection data for NPC {:08X}", npcFormID);
     }
 
@@ -460,28 +313,33 @@ namespace MARAS {
     }
 
     void AffectionService::RecordAffectionInteraction(FormID npcFormID) {
-        auto calendar = RE::Calendar::GetSingleton();
-        if (calendar) {
-            lastAffectionDay_[npcFormID] = calendar->GetDaysPassed();
+        if (npcFormID == 0) return;
+        if (auto* calendar = RE::Calendar::GetSingleton()) {
+            const float currentDay = calendar->GetDaysPassed();
+            State::WorldStore::GetSingleton().Modify([npcFormID, currentDay](State::WorldState& ws) {
+                ws.affection.Write().SetLastInteractionDay(State::ActorId{ npcFormID }, currentDay);
+            });
         }
     }
 
     float AffectionService::GetDaysSinceLastAffection(FormID npcFormID) const {
-        auto calendar = RE::Calendar::GetSingleton();
+        auto* calendar = RE::Calendar::GetSingleton();
         if (!calendar) return 0.0f;
 
-        float currentDay = calendar->GetDaysPassed();
-        auto it = lastAffectionDay_.find(npcFormID);
-        if (it == lastAffectionDay_.end()) {
+        const float currentDay = calendar->GetDaysPassed();
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto dayOpt = snap->affection->GetLastInteractionDay(State::ActorId{ npcFormID });
+        if (!dayOpt.has_value()) {
             // Never recorded, assume it's been a while
             return kNeverRecordedDaysSince;
         }
 
-        return currentDay - it->second;
+        return currentDay - *dayOpt;
     }
 
     void AffectionService::OnDayChanged() {
         auto& manager = NPCRelationshipManager::GetSingleton();
+        const float lonelinessStartDays = Settings::GetSingleton().Snapshot()->GetLonelinessDecayStartDays();
 
         // Married, engaged, dating, and lover partners of the player experience loneliness decay
         std::unordered_set<RE::FormID> uniquePartners;
@@ -501,7 +359,7 @@ namespace MARAS {
             float daysSince = GetDaysSinceLastAffection(npcFormID);
 
             // Only apply decay if not following and no affection received for more than the threshold
-            if (!isFollowing && daysSince <= Settings::GetSingleton().GetLonelinessDecayStartDays()) {
+            if (!isFollowing && daysSince <= lonelinessStartDays) {
                 continue;
             }
 
@@ -519,12 +377,15 @@ namespace MARAS {
     }
 
     void AffectionService::SetDecayMultiplier(float multiplier) {
-        Settings::GetSingleton().affectionDecayMultiplier = std::clamp(multiplier, 0.0f, 2.0f);
-        MARAS_LOG_INFO("Affection decay multiplier set to {}", Settings::GetSingleton().affectionDecayMultiplier);
+        const float clamped = std::clamp(multiplier, 0.0f, 2.0f);
+        State::WorldStore::GetSingleton().Modify([clamped](State::WorldState& ws) {
+            ws.settings.Write().affectionDecayMultiplier = clamped;
+        });
+        MARAS_LOG_INFO("Affection decay multiplier set to {}", clamped);
     }
 
     float AffectionService::GetDecayMultiplier() const {
-        return Settings::GetSingleton().affectionDecayMultiplier;
+        return Settings::GetSingleton().Snapshot()->affectionDecayMultiplier;
     }
 
     // Private helper methods
@@ -597,7 +458,7 @@ namespace MARAS {
 
     float AffectionService::CalculateLonelinessDecay(FormID npcFormID, bool isFollowing,
                                                      size_t activePartnerCount) const {
-        float decayMult = Settings::GetSingleton().affectionDecayMultiplier;
+        const float decayMult = Settings::GetSingleton().Snapshot()->affectionDecayMultiplier;
         // If decay is disabled (multiplier = 0), return 0
         if (decayMult <= 0.0f) {
             return 0.0f;
@@ -738,24 +599,36 @@ namespace MARAS {
     }
 
     nlohmann::json AffectionService::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& permMap = snap->affection->AllPermanent();
+        const auto& dayMap = snap->affection->AllLastDays();
+        const auto& dailyMap = snap->affection->AllDaily();
+
+        auto* calendar = RE::Calendar::GetSingleton();
+        const float currentDay = calendar ? calendar->GetDaysPassed() : 0.0f;
+
         nlohmann::json j;
-        j["decayMultiplier"] = GetDecayMultiplier();
+        j["decayMultiplier"] = snap->settings->affectionDecayMultiplier;
 
         nlohmann::json permArray = nlohmann::json::array();
-        for (const auto& [formID, val] : permanentAffection_) {
+        for (const auto& [actorId, val] : permMap) {
+            const FormID formID = actorId.raw();
             nlohmann::json a;
             a["formId"] = std::format("{:08X}", formID);
             a["name"] = ActorSvc::GetName(formID);
             a["value"] = val;
-            auto dayIt = lastAffectionDay_.find(formID);
-            a["lastAffectionDay"] = (dayIt != lastAffectionDay_.end()) ? dayIt->second : -1.0f;
-            a["daysSinceLastAffection"] = GetDaysSinceLastAffection(formID);
+            const auto dayIt = dayMap.find(actorId);
+            a["lastAffectionDay"] = (dayIt != dayMap.end()) ? dayIt->second : -1.0f;
+            a["daysSinceLastAffection"] = !calendar
+                                              ? 0.0f
+                                              : (dayIt != dayMap.end() ? currentDay - dayIt->second : kNeverRecordedDaysSince);
             permArray.push_back(a);
         }
         j["permanentAffection"] = permArray;
 
         nlohmann::json dailyArray = nlohmann::json::array();
-        for (const auto& [formID, typeMap] : dailyAffection_) {
+        for (const auto& [actorId, typeMap] : dailyMap) {
+            const FormID formID = actorId.raw();
             nlohmann::json d;
             d["formId"] = std::format("{:08X}", formID);
             d["name"] = ActorSvc::GetName(formID);

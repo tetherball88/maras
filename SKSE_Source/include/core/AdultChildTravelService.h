@@ -63,11 +63,6 @@ namespace MARAS {
         // Clears runtime travel state on game revert
         void Revert();
 
-        // Co-save serialization ('ACTR')
-        bool Save(SKSE::SerializationInterface* serialization) const;
-        bool Load(SKSE::SerializationInterface* serialization, std::uint32_t version);
-        void FinalizeLoad();
-
         // Data dump
         nlohmann::json DumpJson() const;
 
@@ -82,7 +77,6 @@ namespace MARAS {
 
         mutable std::shared_mutex m_mutex;
         std::vector<TravelDestination> m_innDestinations;
-        std::unordered_map<RE::FormID, AdultChildTravelState> m_activeDestinations;
     };
 
 }  // namespace MARAS

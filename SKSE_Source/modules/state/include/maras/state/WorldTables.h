@@ -1044,6 +1044,36 @@ namespace MARAS::State {
         [[nodiscard]] constexpr float GetHomeArrivalCooldownDays() const noexcept {
             return GetBaseLonelinessDays() * multHomeArrivalCooldown;
         }
+        [[nodiscard]] constexpr float GetRecentEffortMaxDays() const noexcept {
+            return GetBaseLonelinessDays() * multRecentAttentionWindow;
+        }
+        [[nodiscard]] constexpr float GetOpenRecentVisitMitigationMaxDays() const noexcept {
+            return GetBaseLonelinessDays() * multVeryRecentVisitWindow;
+        }
+        [[nodiscard]] constexpr float GetNeglectTroubledStartDays() const noexcept {
+            return GetBaseLonelinessDays() * multNeglectGrowthStart;
+        }
+        [[nodiscard]] constexpr float GetNeglectContentStartDays() const noexcept {
+            return GetBaseLonelinessDays() * multContentNeglectStart;
+        }
+        [[nodiscard]] constexpr float GetProlongedAbsencePenaltyDays() const noexcept {
+            return GetBaseLonelinessDays() * multProlongedAbsencePenalty;
+        }
+        [[nodiscard]] constexpr float GetMinSideLoverAgeForBreakupDays() const noexcept {
+            return GetBaseLonelinessDays() * multMinSideFlingAgeForBreakup;
+        }
+        [[nodiscard]] constexpr float GetAffairFatigueStartDays() const noexcept {
+            return GetBaseLonelinessDays() * multAffairFatigueStart;
+        }
+        [[nodiscard]] constexpr float GetOpenFlingNoveltyDays() const noexcept {
+            return GetBaseLonelinessDays() * multAffairFatigueStart;
+        }
+        [[nodiscard]] constexpr float GetRomanticAttendedBreakupMaxDays() const noexcept {
+            return GetBaseLonelinessDays() * multRomanticAttendedBreakup;
+        }
+        [[nodiscard]] constexpr float GetSuggestOpenNeglectMinDays() const noexcept {
+            return GetBaseLonelinessDays() * multSuggestOpenNeglectMin;
+        }
 
         bool operator==(const SettingsData&) const = default;
     };

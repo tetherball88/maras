@@ -8,6 +8,7 @@
 #include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/LoggingService.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -513,7 +514,8 @@ namespace MARAS {
     }
 
     nlohmann::json MatchmakingService::BuildScheduledContext(float currentGameDay) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         const auto allEntries = NPCIndex::GetSingleton().GetAllEntries(NPCFilter::AdultOnly);
 
         std::ostringstream npcsStream;
@@ -560,7 +562,8 @@ namespace MARAS {
     }
 
     nlohmann::json MatchmakingService::BuildManualContext(RE::FormID targetNpcFormID, float currentGameDay) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         const auto& mgr = NPCRelationshipManager::GetSingleton();
         const auto allEntries = NPCIndex::GetSingleton().GetAllEntries(NPCFilter::AdultOnly);
 
@@ -622,12 +625,14 @@ namespace MARAS {
     }
 
     void MatchmakingService::TryScheduledMatchmaking(float currentGameDay) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (!settings.matchmakingEnabled) {
             return;
         }
 
-        if (lastMatchmakingDay_ >= 0.0f && (currentGameDay - lastMatchmakingDay_) < static_cast<float>(settings.matchmakingIntervalDays)) {
+        const float lastMatchmakingDay = GetLastMatchmakingDay();
+        if (lastMatchmakingDay >= 0.0f && (currentGameDay - lastMatchmakingDay) < static_cast<float>(settings.matchmakingIntervalDays)) {
             return;
         }
 
@@ -894,7 +899,7 @@ namespace MARAS {
             // Always record household & interior home cells into activeCells
             RE::FormID tenantHouseID = houseSvc.GetTenantHouseFormID(actorFormID);
             if (tenantHouseID == 0) {
-                if (const auto* prof = relMgr.GetNPCProfile(actorFormID)) {
+                if (const auto prof = relMgr.GetNPCProfile(actorFormID)) {
                     if (prof->currentHome.has_value() && prof->currentHome.value() != 0) {
                         tenantHouseID = prof->currentHome.value();
                     } else if (prof->originalHome.has_value() && prof->originalHome.value() != 0) {
@@ -1012,7 +1017,7 @@ namespace MARAS {
         }
 
         bool HasPastMarasRelationship(const NPCRelationshipManager& mgr, RE::FormID actorA, RE::FormID actorB) {
-            const auto* data = mgr.GetNPCData(actorA, actorB);
+            const auto data = mgr.GetNPCData(actorA, actorB);
             if (!data) return false;
             if (data->status == RelationshipStatus::ExLover || data->status == RelationshipStatus::ExDating ||
                 data->status == RelationshipStatus::Jilted || data->status == RelationshipStatus::Divorced) {
@@ -1143,7 +1148,7 @@ namespace MARAS {
                 const auto& mode = taskItem.partner.evalMode;
                 if (mode == "suggest_open" || mode == "suggest_close") {
                     if (taskItem.willSuggest &&
-                        Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
+                        Settings::GetSingleton().Snapshot()->playerPartnerAgencyEnableForceGreets &&
                         mgrRef.GetPartnerPendingIntent(taskItem.partner.partnerID).type == PartnerIntentType::None) {
                         PartnerIntentType sType = (mode == "suggest_open")
                                                       ? PartnerIntentType::SuggestOpen
@@ -1185,7 +1190,7 @@ namespace MARAS {
                                        taskItem.partner.sideLoverName, taskItem.partner.sideLoverID, taskItem.willConfess);
                         llmMatches.push_back(std::move(br));
                     } else if (taskItem.willConfess && taskItem.partner.canConfess &&
-                               Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
+                               Settings::GetSingleton().Snapshot()->playerPartnerAgencyEnableForceGreets &&
                                mgrRef.GetPartnerPendingIntent(taskItem.partner.partnerID).type == PartnerIntentType::None) {
                         mgrRef.SetPartnerPendingIntent(taskItem.partner.partnerID, confType, taskItem.partner.sideLoverID);
                         MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] '{}' (0x{:08X}) approved guilt confession intent '{}' for 0x{:08X} without breakup",
@@ -1342,7 +1347,7 @@ namespace MARAS {
                 ctx["affectionTier"] = tp.affectionTier;
                 ctx["daysSincePlayerInteraction"] = daysSinceInt;
                 ctx["daysSinceLastVisit"] = daysSinceInt;
-                const float baseL = std::max(1.0f, Settings::GetSingleton().GetLonelinessDecayStartDays());
+                const float baseL = std::max(1.0f, Settings::GetSingleton().Snapshot()->GetLonelinessDecayStartDays());
                 const float absenceRatio = tp.daysSinceInteraction / baseL;
                 std::string playerPresenceHint;
                 if (absenceRatio <= 0.25f) {
@@ -1530,7 +1535,7 @@ namespace MARAS {
             MARAS_LOG_INFO("[Matchmaking:PartnerAgency] FinalizeInfidelityMatches: 0 matches to apply.");
             return;
         }
-        if (Settings::GetSingleton().playerPartnerCheatingConfirmResults) {
+        if (Settings::GetSingleton().Snapshot()->playerPartnerCheatingConfirmResults) {
             MARAS_LOG_INFO("[Matchmaking:PartnerAgency] playerPartnerCheatingConfirmResults is enabled. Presenting review modal for {} partner agency change(s).",
                            matches.size());
             ShowMatchmakingReviewModal(
@@ -1546,7 +1551,8 @@ namespace MARAS {
     }
 
     void MatchmakingService::TryScheduledPlayerPartnerInfidelity(float currentGameDay) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (!settings.playerPartnerCheatingAgencyEnabled && !settings.playerPartnerOpenRelAgencyEnabled) {
             MARAS_LOG_DEBUG("[Matchmaking:PartnerAgency] Skipping scheduled scan at day {:.2f}: playerPartnerCheatingAgencyEnabled={}, playerPartnerOpenRelAgencyEnabled={}",
                             currentGameDay, settings.playerPartnerCheatingAgencyEnabled, settings.playerPartnerOpenRelAgencyEnabled);
@@ -1554,10 +1560,11 @@ namespace MARAS {
         }
 
         float intervalDays = settings.GetPartnerAgencyScanIntervalDays();
-        if (lastPlayerPartnerCheatingDay_ >= 0.0f &&
-            (currentGameDay - lastPlayerPartnerCheatingDay_) < static_cast<float>(intervalDays)) {
+        const float lastPartnerCheatDay = GetLastPlayerPartnerCheatingDay();
+        if (lastPartnerCheatDay >= 0.0f &&
+            (currentGameDay - lastPartnerCheatDay) < static_cast<float>(intervalDays)) {
             MARAS_LOG_DEBUG("[Matchmaking:PartnerAgency] Skipping scheduled scan at day {:.2f}: {:.2f}d elapsed since last scan at day {:.2f} (required interval: {:.2f}d)",
-                            currentGameDay, currentGameDay - lastPlayerPartnerCheatingDay_, lastPlayerPartnerCheatingDay_, intervalDays);
+                            currentGameDay, currentGameDay - lastPartnerCheatDay, lastPartnerCheatDay, intervalDays);
             return;
         }
 
@@ -1580,7 +1587,7 @@ namespace MARAS {
         collectPartners(mgr.GetAllEngaged(kPlayerFormID));
         collectPartners(mgr.GetAllDating(kPlayerFormID));
 
-        lastPlayerPartnerCheatingDay_ = currentGameDay;
+        SetLastPlayerPartnerCheatingDay(currentGameDay);
 
         if (playerMainPartners.empty()) {
             MARAS_LOG_INFO("[Matchmaking:PartnerAgency] Scheduled scan triggered at day {:.2f} (interval={:.2f}d), but player has 0 active main partners.",
@@ -1607,7 +1614,7 @@ namespace MARAS {
         std::uniform_int_distribution<int> jitterDist(0, 8);
 
         std::vector<TemptedPlayerPartner> temptedPartners;
-        auto getLatestRelStartDay = [](const NPCRelationshipData* relData) -> float {
+        auto getLatestRelStartDay = [](const std::optional<NPCRelationshipData>& relData) -> float {
             if (!relData) return -1.0f;
             for (auto it = relData->statusHistory.rbegin(); it != relData->statusHistory.rend(); ++it) {
                 if (!NPCRelationshipManager::IsBreakupStatus(it->toStatus) && it->timestamp >= 0.0f) {
@@ -1748,7 +1755,7 @@ namespace MARAS {
                     }
                     ongoingAffairCount++;
                     std::string loverName = ActorSvc::GetName(rec.affairPartnerID);
-                    const auto* loverPair = mgr.GetNPCData(partnerID, rec.affairPartnerID);
+                    const auto loverPair = mgr.GetNPCData(partnerID, rec.affairPartnerID);
                     float affairStartDay = (getLatestRelStartDay(loverPair) >= 0.0f)
                                                ? getLatestRelStartDay(loverPair)
                                                : (rec.stageStartDay > 0.0f ? rec.stageStartDay : static_cast<float>(rec.lastTimestamp));
@@ -1913,7 +1920,7 @@ namespace MARAS {
                 for (RE::FormID lid : openLovers) {
                     if (lid == 0 || lid == kPlayerFormID) continue;
                     std::string loverName = ActorSvc::GetName(lid);
-                    const auto* loverPair = mgr.GetNPCData(partnerID, lid);
+                    const auto loverPair = mgr.GetNPCData(partnerID, lid);
                     float flingAgeDays = (getLatestRelStartDay(loverPair) >= 0.0f)
                                              ? std::max(0.0f, currentGameDay - getLatestRelStartDay(loverPair))
                                              : 0.0f;
@@ -2292,7 +2299,7 @@ namespace MARAS {
             // 4. Bonus_Hierarchy
             float bonusHierarchy = 0.0f;
             int rank = (status == RelationshipStatus::Married) ? hierMgr.GetRank(partnerID) : -1;
-            if (settings.playerPartnerCheatingEnableHierarchy && settings.GetEnablePolygamy() &&
+            if (settings.playerPartnerCheatingEnableHierarchy && Settings::GetSingleton().GetEnablePolygamy() &&
                 status == RelationshipStatus::Married && totalPlayerMarriedSpouses > 1) {
                 if (rank == 0) {
                     bonusHierarchy = 0.0f;
@@ -2465,11 +2472,11 @@ namespace MARAS {
                     continue;
                 }
 
-                const auto* playerRelData = mgr.GetNPCData(tp.partnerID, kPlayerFormID);
+                const auto playerRelData = mgr.GetNPCData(tp.partnerID, kPlayerFormID);
                 float playerRelStartDay = (getLatestRelStartDay(playerRelData) >= 0.0f)
                                               ? getLatestRelStartDay(playerRelData)
                                               : 0.0f;
-                const auto* candRelData = mgr.GetNPCData(tp.partnerID, candID);
+                const auto candRelData = mgr.GetNPCData(tp.partnerID, candID);
                 int histSideBreakups = 0;
                 if (candRelData) {
                     for (const auto& hist : candRelData->statusHistory) {
@@ -2756,12 +2763,13 @@ namespace MARAS {
     }
 
     void MatchmakingService::RunLLMScheduledMatchmaking(float currentGameDay) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
+        const float prevMatchmakingDay = GetLastMatchmakingDay();
         MARAS_LOG_INFO("[Matchmaking:RunLLMScheduledMatchmaking] Triggering scheduled AI matchmaking at game day {:.2f} (last run: {:.2f}, interval: {} days)",
-                       currentGameDay, lastMatchmakingDay_, settings.matchmakingIntervalDays);
+                       currentGameDay, prevMatchmakingDay, settings.matchmakingIntervalDays);
 
-        const float prevMatchmakingDay = lastMatchmakingDay_;
-        lastMatchmakingDay_ = currentGameDay;
+        SetLastMatchmakingDay(currentGameDay);
 
         nlohmann::json ctx = BuildScheduledContext(currentGameDay);
         std::string contextJson = SafeJsonDump(ctx);
@@ -2784,7 +2792,7 @@ namespace MARAS {
                             { "The scheduled matchmaking scan request failed or returned an empty response." },
                             [this, expectedEpoch, currentGameDay]() {
                                 if (!IsSessionEpochCurrent(expectedEpoch)) return;
-                                lastMatchmakingDay_ = -1.0f;
+                                SetLastMatchmakingDay(-1.0f);
                                 TryScheduledMatchmaking(currentGameDay);
                             },
                             []() {
@@ -2801,7 +2809,7 @@ namespace MARAS {
                             { "The scheduled matchmaking scan returned malformed or unreadable JSON data." },
                             [this, expectedEpoch, currentGameDay]() {
                                 if (!IsSessionEpochCurrent(expectedEpoch)) return;
-                                lastMatchmakingDay_ = -1.0f;
+                                SetLastMatchmakingDay(-1.0f);
                                 TryScheduledMatchmaking(currentGameDay);
                             },
                             []() {
@@ -2817,8 +2825,8 @@ namespace MARAS {
                 });
         });
         if (!dispatched) {
-            MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] SendCustomPromptToLLM returned false; restoring lastMatchmakingDay_ to {:.2f}", prevMatchmakingDay);
-            lastMatchmakingDay_ = prevMatchmakingDay;
+            MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] SendCustomPromptToLLM returned false; restoring lastMatchmakingDay to {:.2f}", prevMatchmakingDay);
+            SetLastMatchmakingDay(prevMatchmakingDay);
         }
     }
 
@@ -2826,7 +2834,8 @@ namespace MARAS {
         std::vector<DiceRollActionSlot> slots;
         if (maxSlots <= 0) return slots;
 
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
 
         struct ActionOption {
             std::string action;
@@ -2934,7 +2943,8 @@ namespace MARAS {
         std::unordered_set<RE::FormID>& usedActors,
         float currentGameDay)
     {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         auto& mgr = NPCRelationshipManager::GetSingleton();
 
         thread_local std::mt19937 gen(std::random_device{}());
@@ -3191,15 +3201,17 @@ namespace MARAS {
     }
 
     void MatchmakingService::RunDiceRollMatchmaking(float currentGameDay) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (!settings.matchmakingEnabled) {
             return;
         }
 
+        const float prevMatchmakingDay = GetLastMatchmakingDay();
         MARAS_LOG_INFO("================================================================================");
         MARAS_LOG_INFO("[Matchmaking:DiceRoll] Starting scheduled Dice Roll matchmaking scan");
         MARAS_LOG_INFO("[Matchmaking:DiceRoll] Game Day: {:.2f} (Last Run: {:.2f}, Interval: {} days, Max Slots: {})",
-                       currentGameDay, lastMatchmakingDay_, settings.matchmakingIntervalDays, settings.matchmakingMaxSuggestions);
+                       currentGameDay, prevMatchmakingDay, settings.matchmakingIntervalDays, settings.matchmakingMaxSuggestions);
         MARAS_LOG_INFO("[Matchmaking:DiceRoll] Chances: Dating={}%, Engaged={}%, LoverAllowed={}%, LoverCheating={}%, Advance={}%, Breakup={}%, OpenClose={}%",
                        settings.diceRollChanceNewDating, settings.diceRollChanceNewEngaged, settings.diceRollChanceNewLoverAllowed,
                        settings.diceRollChanceNewLoverCheating, settings.diceRollChanceAdvance, settings.diceRollChanceBreakup, settings.diceRollChanceOpenClose);
@@ -3207,7 +3219,7 @@ namespace MARAS {
                        static_cast<int>(settings.matchmakingOrientation), settings.matchmakingAllowCheating,
                        settings.matchmakingAllowBreakups, settings.matchmakingAllowOpenClose);
 
-        lastMatchmakingDay_ = currentGameDay;
+        SetLastMatchmakingDay(currentGameDay);
 
         const auto allEntries = NPCIndex::GetSingleton().GetAllEntries(NPCFilter::AdultOnly);
         std::vector<NPCEntry> eligibleNPCs;
@@ -3448,7 +3460,7 @@ namespace MARAS {
         for (auto partnerId : partnerIDs) {
             auto st = mgr.GetRelationshipStatus(actorFormID, partnerId);
             if (st == RelationshipStatus::Dating || st == RelationshipStatus::Engaged || st == RelationshipStatus::Married) {
-                const auto* pairData = mgr.GetNPCData(actorFormID, partnerId);
+                const auto pairData = mgr.GetNPCData(actorFormID, partnerId);
                 if (pairData && pairData->isOpen) {
                     hasOpenMainPartner = true;
                     break;
@@ -3464,7 +3476,7 @@ namespace MARAS {
                 continue;
             }
 
-            const auto* pairData = mgr.GetNPCData(actorFormID, partnerId);
+            const auto pairData = mgr.GetNPCData(actorFormID, partnerId);
             std::string partnerName = ActorSvc::GetName(partnerId);
             if (partnerName.empty() || partnerName == "None") continue;
 
@@ -3680,7 +3692,8 @@ namespace MARAS {
         }
 
         auto& mgr = NPCRelationshipManager::GetSingleton();
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
 
         std::vector<ModalChecklistItem> items;
         items.reserve(candidates.size());
@@ -3695,7 +3708,7 @@ namespace MARAS {
             item.label = std::format("{} & {}", nameA, nameB);
 
             RelationshipStatus currentSt = mgr.GetRelationshipStatus(cand.actorAFormID, cand.actorBFormID);
-            const auto* pairData = mgr.GetNPCData(cand.actorAFormID, cand.actorBFormID);
+            const auto pairData = mgr.GetNPCData(cand.actorAFormID, cand.actorBFormID);
             std::string currentLabel = FormatStatusDisplayLabel(currentSt);
             if (IsActiveRelationship(currentSt) && pairData) {
                 currentLabel += pairData->isOpen ? " (Open)" : " (Exclusive)";
@@ -4002,7 +4015,8 @@ namespace MARAS {
             return;
         }
 
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (settings.matchmakingConfirmResults) {
             MARAS_LOG_INFO("[Matchmaking:StartMemoryBatch] matchmakingConfirmResults is enabled. Presenting review modal for {} match(es) (isScheduled: {})",
                            verifiedMatches.size(), isScheduledScan);
@@ -4023,7 +4037,8 @@ namespace MARAS {
             return;
         }
 
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         const bool generateMemories = IsSkyrimNetAvailable();
         // Log matchmaking application and memory mode
         MARAS_LOG_INFO("[Matchmaking:ExecuteMemoryBatchOrApply] Applying {} match(es) (isScheduled: {}, generateMemories: {}, useLLMMemories: {}).",
@@ -4131,7 +4146,8 @@ namespace MARAS {
         }
 
         auto& mgr = NPCRelationshipManager::GetSingleton();
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
 
         if (result.action == "new" || result.action == "advance") {
             std::string familyReason;
@@ -4283,7 +4299,7 @@ namespace MARAS {
                 case RelationshipStatus::ExLover:
                     success = mgr.PromoteToExLover(result.actorAFormID, result.actorBFormID, /*sendEvent=*/false);
                     if (success && result.postBreakupIntent != PartnerIntentType::None &&
-                        Settings::GetSingleton().playerPartnerAgencyEnableForceGreets &&
+                        Settings::GetSingleton().Snapshot()->playerPartnerAgencyEnableForceGreets &&
                         mgr.GetPartnerPendingIntent(result.actorAFormID).type == PartnerIntentType::None) {
                         mgr.SetPartnerPendingIntent(result.actorAFormID, result.postBreakupIntent, result.actorBFormID);
                         MARAS_LOG_INFO("[Matchmaking:ApplyMatch] Queued post-breakup confession intent '{}' for '{}' (0x{:08X}) regarding ex-lover 0x{:08X}",
@@ -4380,7 +4396,8 @@ namespace MARAS {
 
         // Trigger batched Tier 2 narrative verification for mechanically valid candidates
         if (!candidatesToVerify.empty()) {
-            [[maybe_unused]] const auto& settings = Settings::GetSingleton();
+            const auto settingsSnap = Settings::GetSingleton().Snapshot();
+            const auto& settings = *settingsSnap;
             if (!settings.matchmakingEvaluationStep) {
                 MARAS_LOG_INFO("[Matchmaking:ProcessScheduledResults] Evaluation step disabled. Advancing {} candidate pair(s) directly to memory/apply pipeline",
                                candidatesToVerify.size());
@@ -4498,25 +4515,57 @@ namespace MARAS {
         if (actorID == 0 || actorID == kPlayerFormID) return;
         RE::FormID ref = NPCIndex::GetSingleton().GetRefID(actorID);
         RE::FormID canonicalId = (ref != 0) ? ref : actorID;
-        npcLastMatchmakingChangeDay_[canonicalId] = currentDay;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            ws.cooldowns.Write().npcLastMatchmakingChangeDay[State::ActorId{ canonicalId }] = currentDay;
+        });
         MARAS_LOG_INFO("[Matchmaking:RecordNpcCooldown] NPC 0x{:08X} placed on relationship change cooldown at game day {:.2f}",
                        canonicalId, currentDay);
     }
 
+    void MatchmakingService::ClearNpcCooldowns() {
+        State::WorldStore::GetSingleton().Modify([](State::WorldState& ws) {
+            ws.cooldowns.Write().npcLastMatchmakingChangeDay.clear();
+        });
+        MARAS_LOG_INFO("[Matchmaking:ClearNpcCooldowns] Cleared all NPC matchmaking cooldowns");
+    }
+
+    float MatchmakingService::GetLastMatchmakingDay() const {
+        return State::WorldStore::GetSingleton().Snapshot()->cooldowns->lastMatchmakingDay;
+    }
+
+    void MatchmakingService::SetLastMatchmakingDay(float day) {
+        State::WorldStore::GetSingleton().Modify([day](State::WorldState& ws) {
+            ws.cooldowns.Write().lastMatchmakingDay = day;
+        });
+    }
+
+    float MatchmakingService::GetLastPlayerPartnerCheatingDay() const {
+        return State::WorldStore::GetSingleton().Snapshot()->cooldowns->lastPlayerPartnerCheatingDay;
+    }
+
+    void MatchmakingService::SetLastPlayerPartnerCheatingDay(float day) {
+        State::WorldStore::GetSingleton().Modify([day](State::WorldState& ws) {
+            ws.cooldowns.Write().lastPlayerPartnerCheatingDay = day;
+        });
+    }
+
     bool MatchmakingService::IsNpcOnCooldown(RE::FormID actorID, float currentDay) const {
         if (actorID == 0 || actorID == kPlayerFormID) return false;
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (settings.matchmakingNpcCooldownDays <= 0) return false;
 
         RE::FormID ref = NPCIndex::GetSingleton().GetRefID(actorID);
         RE::FormID canonicalId = (ref != 0) ? ref : actorID;
 
-        auto it = npcLastMatchmakingChangeDay_.find(canonicalId);
-        if (it == npcLastMatchmakingChangeDay_.end()) {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& npcCooldowns = worldSnap->cooldowns->npcLastMatchmakingChangeDay;
+        auto it = npcCooldowns.find(State::ActorId{ canonicalId });
+        if (it == npcCooldowns.end()) {
             if (canonicalId != actorID) {
-                it = npcLastMatchmakingChangeDay_.find(actorID);
+                it = npcCooldowns.find(State::ActorId{ actorID });
             }
-            if (it == npcLastMatchmakingChangeDay_.end()) return false;
+            if (it == npcCooldowns.end()) return false;
         }
 
         float elapsed = currentDay - it->second;
@@ -4525,18 +4574,21 @@ namespace MARAS {
 
     float MatchmakingService::GetNpcCooldownRemaining(RE::FormID actorID, float currentDay) const {
         if (actorID == 0 || actorID == kPlayerFormID) return 0.0f;
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (settings.matchmakingNpcCooldownDays <= 0) return 0.0f;
 
         RE::FormID ref = NPCIndex::GetSingleton().GetRefID(actorID);
         RE::FormID canonicalId = (ref != 0) ? ref : actorID;
 
-        auto it = npcLastMatchmakingChangeDay_.find(canonicalId);
-        if (it == npcLastMatchmakingChangeDay_.end()) {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& npcCooldowns = worldSnap->cooldowns->npcLastMatchmakingChangeDay;
+        auto it = npcCooldowns.find(State::ActorId{ canonicalId });
+        if (it == npcCooldowns.end()) {
             if (canonicalId != actorID) {
-                it = npcLastMatchmakingChangeDay_.find(actorID);
+                it = npcCooldowns.find(State::ActorId{ actorID });
             }
-            if (it == npcLastMatchmakingChangeDay_.end()) return 0.0f;
+            if (it == npcCooldowns.end()) return 0.0f;
         }
 
         float elapsed = currentDay - it->second;
@@ -4545,7 +4597,8 @@ namespace MARAS {
     }
 
     bool MatchmakingService::EvaluatePartnerHomeArrival(RE::BGSLocation* newLocation) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         auto* playerActor = RE::PlayerCharacter::GetSingleton();
         RE::TESObjectCELL* currentCell = playerActor ? playerActor->GetParentCell() : nullptr;
         RE::BGSLocation* cellLoc = newLocation ? newLocation : (currentCell ? currentCell->GetLocation() : nullptr);
@@ -4678,7 +4731,7 @@ namespace MARAS {
                 }
 
                 // 2. NPCProfile currentHome / originalHome / homeMarker
-                const auto* prof = mgr.GetNPCProfile(partnerID);
+                const auto prof = mgr.GetNPCProfile(partnerID);
                 if (!residesHere && prof) {
                     if (prof->currentHome.has_value() && matchesOriginalHomeForm(prof->currentHome.value())) {
                         residesHere = true;
@@ -4868,12 +4921,16 @@ namespace MARAS {
         }
 
         // Priority #2: Side-Lover Home-Arrival Scenarios (6 Scenarios)
-        auto itCool = lastHomeArrivalEventDayByLoc_.find(locationKey);
-        if (itCool != lastHomeArrivalEventDayByLoc_.end() &&
-            (currentGameDay - itCool->second) < settings.GetHomeArrivalCooldownDays()) {
-            MARAS_LOG_INFO("[Matchmaking:HomeArrival:Priority2] Location '{}' (key=0x{:08X}) is on home-arrival cooldown ({:.2f}d elapsed since day {:.2f} < {:.2f}d required); skipping side-lover scenarios.",
-                           currentLocName, locationKey, currentGameDay - itCool->second, itCool->second, settings.GetHomeArrivalCooldownDays());
-            return false;
+        {
+            const auto coolSnap = State::WorldStore::GetSingleton().Snapshot();
+            const auto& homeCooldowns = coolSnap->cooldowns->lastHomeArrivalEventDayByLoc;
+            auto itCool = homeCooldowns.find(State::LocationId{ locationKey });
+            if (itCool != homeCooldowns.end() &&
+                (currentGameDay - itCool->second) < settings.GetHomeArrivalCooldownDays()) {
+                MARAS_LOG_INFO("[Matchmaking:HomeArrival:Priority2] Location '{}' (key=0x{:08X}) is on home-arrival cooldown ({:.2f}d elapsed since day {:.2f} < {:.2f}d required); skipping side-lover scenarios.",
+                               currentLocName, locationKey, currentGameDay - itCool->second, itCool->second, settings.GetHomeArrivalCooldownDays());
+                return false;
+            }
         }
 
         thread_local std::mt19937 gen(std::random_device{}());
@@ -5031,7 +5088,9 @@ namespace MARAS {
                 }
             }
 
-            lastHomeArrivalEventDayByLoc_[locationKey] = currentGameDay;
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                ws.cooldowns.Write().lastHomeArrivalEventDayByLoc[State::LocationId{ locationKey }] = currentGameDay;
+            });
 
             if (isLetterScenario) {
                 Temperament temp = mgr.GetTemperament(partnerID);
@@ -5164,114 +5223,21 @@ namespace MARAS {
         return false;
     }
 
-    bool MatchmakingService::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-        if (!serialization->WriteRecordData(lastMatchmakingDay_)) {
-            MARAS_LOG_ERROR("MatchmakingService::Save - failed to write lastMatchmakingDay_");
-            return false;
-        }
-
-        uint32_t count = static_cast<uint32_t>(npcLastMatchmakingChangeDay_.size());
-        if (!serialization->WriteRecordData(count)) {
-            MARAS_LOG_ERROR("MatchmakingService::Save - failed to write cooldown count");
-            return false;
-        }
-
-        for (const auto& [actorID, day] : npcLastMatchmakingChangeDay_) {
-            if (!serialization->WriteRecordData(actorID) || !serialization->WriteRecordData(day)) {
-                MARAS_LOG_ERROR("MatchmakingService::Save - failed to write cooldown entry for 0x{:08X}", actorID);
-                return false;
-            }
-        }
-        if (!serialization->WriteRecordData(lastPlayerPartnerCheatingDay_)) {
-            MARAS_LOG_ERROR("MatchmakingService::Save - failed to write lastPlayerPartnerCheatingDay_");
-            return false;
-        }
-        uint32_t locCoolCount = static_cast<uint32_t>(lastHomeArrivalEventDayByLoc_.size());
-        if (!serialization->WriteRecordData(locCoolCount)) {
-            return false;
-        }
-        for (const auto& [locID, day] : lastHomeArrivalEventDayByLoc_) {
-            if (!serialization->WriteRecordData(locID) || !serialization->WriteRecordData(day)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    bool MatchmakingService::Load(SKSE::SerializationInterface* serialization, uint32_t /*version*/) {
-        if (!serialization) return false;
-        Revert();
-        if (!serialization->ReadRecordData(lastMatchmakingDay_)) {
-            MARAS_LOG_WARN("MatchmakingService::Load - failed to read lastMatchmakingDay_, resetting");
-            Revert();
-            return false;
-        }
-
-        constexpr uint32_t kMaxCooldownEntries = 100000;
-        uint32_t count = 0;
-        if (serialization->ReadRecordData(count)) {
-            if (count > kMaxCooldownEntries) {
-                MARAS_LOG_ERROR("MatchmakingService::Load - corrupt cooldown count {}", count);
-                Revert();
-                return false;
-            }
-            for (uint32_t i = 0; i < count; ++i) {
-                RE::FormID savedID = 0;
-                float day = 0.0f;
-                if (!serialization->ReadRecordData(savedID) || !serialization->ReadRecordData(day)) {
-                    MARAS_LOG_ERROR("MatchmakingService::Load - truncated cooldown entry {}/{}; reverting partial state", i, count);
-                    Revert();
-                    return false;
-                }
-                RE::FormID resolvedID = 0;
-                if (savedID != 0 && !IsSyntheticChildID(savedID) && serialization->ResolveFormID(savedID, resolvedID)) {
-                    npcLastMatchmakingChangeDay_[resolvedID] = day;
-                }
-            }
-            float savedPartnerCheatDay = -1.0f;
-            if (serialization->ReadRecordData(savedPartnerCheatDay)) {
-                lastPlayerPartnerCheatingDay_ = savedPartnerCheatDay;
-                uint32_t locCoolCount = 0;
-                if (serialization->ReadRecordData(locCoolCount)) {
-                    if (locCoolCount > kMaxCooldownEntries) {
-                        MARAS_LOG_ERROR("MatchmakingService::Load - corrupt locCoolCount {}", locCoolCount);
-                        Revert();
-                        return false;
-                    }
-                    for (uint32_t i = 0; i < locCoolCount; ++i) {
-                        RE::FormID savedLocID = 0;
-                        float locDay = 0.0f;
-                        if (!serialization->ReadRecordData(savedLocID) || !serialization->ReadRecordData(locDay)) {
-                            MARAS_LOG_ERROR("MatchmakingService::Load - truncated locCool entry {}/{}; reverting partial state", i, locCoolCount);
-                            Revert();
-                            return false;
-                        }
-                        RE::FormID resolvedLocID = 0;
-                        if (savedLocID != 0 && serialization->ResolveFormID(savedLocID, resolvedLocID)) {
-                            lastHomeArrivalEventDayByLoc_[resolvedLocID] = locDay;
-                        }
-                    }
-                }
-            }
-        }
-        return true;
-    }
-
     void MatchmakingService::Revert() {
-        lastMatchmakingDay_ = -1.0f;
-        npcLastMatchmakingChangeDay_.clear();
-        lastPlayerPartnerCheatingDay_ = -1.0f;
-        lastHomeArrivalEventDayByLoc_.clear();
+        MARAS_LOG_INFO("Reverted MatchmakingService data");
     }
 
     nlohmann::json MatchmakingService::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& cooldownData = *snap->cooldowns;
+
         nlohmann::json j;
-        j["lastMatchmakingDay"] = lastMatchmakingDay_;
-        j["lastPlayerPartnerCheatingDay"] = lastPlayerPartnerCheatingDay_;
+        j["lastMatchmakingDay"] = cooldownData.lastMatchmakingDay;
+        j["lastPlayerPartnerCheatingDay"] = cooldownData.lastPlayerPartnerCheatingDay;
         nlohmann::json cooldowns = nlohmann::json::array();
         float currentDay = GetCurrentGameDay();
-        for (const auto& [actorID, lastDay] : npcLastMatchmakingChangeDay_) {
+        for (const auto& [actorKey, lastDay] : cooldownData.npcLastMatchmakingChangeDay) {
+            const RE::FormID actorID = actorKey.raw();
             nlohmann::json c;
             c["formId"] = std::format("{:08X}", actorID);
             c["name"] = ActorSvc::GetName(actorID);

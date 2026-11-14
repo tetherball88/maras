@@ -1,5 +1,6 @@
 #include "core/NPCRelationshipManager.h"
 
+#include "core/AdultChildProgression.h"
 #include "core/AffectionService.h"
 #include "core/DeceasedRegistry.h"
 #include "core/FactionService.h"
@@ -12,10 +13,14 @@
 #include "core/Serialization.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
+#include "core/SkyrimNetProfileService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "core/SpouseAssetsService.h"
 #include "core/SpouseHierarchyManager.h"
+#include "core/WorldStateLegacyAdapters.h"
+#include "maras/foundation/IRng.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -28,7 +33,192 @@
 #include <RE/E/ExtraLinkedRef.h>
 #include <RE/S/SendHUDMessage.h>
 
+#include <cmath>
+#include <random>
+
 namespace MARAS {
+
+    namespace Detail {
+
+        class CachedActorMetadataProvider final : public State::IActorMetadataProvider {
+        public:
+            struct Entry {
+                State::ActorSex sex{ State::ActorSex::Unknown };
+                bool aliveAndValid{ false };
+                bool dynamicPresent{ false };
+                std::string name{};
+                State::FormRawId raceId{};
+                State::BaseId baseId{};
+            };
+
+            void Capture(RE::FormID rawId) {
+                if (rawId == 0 || entries_.contains(rawId)) {
+                    return;
+                }
+                Entry e{};
+                const State::ActorId actorId{ rawId };
+                if (actorId.IsUnknownFather() || actorId.IsSyntheticChild()) {
+                    entries_.emplace(rawId, std::move(e));
+                    return;
+                }
+                if (actorId.IsPlayer()) {
+                    e.aliveAndValid = true;
+                    if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+                        if (auto* base = player->GetActorBase()) {
+                            e.sex = static_cast<State::ActorSex>(static_cast<std::int8_t>(base->GetSex()));
+                        }
+                        if (auto* race = player->GetRace()) {
+                            e.raceId = State::FormRawId{ race->GetFormID() };
+                        }
+                        const char* nm = player->GetName();
+                        e.name = (nm && nm[0] != '\0') ? nm : "Player";
+                    } else {
+                        e.name = "Player";
+                    }
+                    e.baseId = State::BaseId{ kPlayerBaseID };
+                    entries_.emplace(rawId, std::move(e));
+                    return;
+                }
+
+                const std::uint8_t s = ActorSvc::GetSex(rawId);
+                if (s == 0) {
+                    e.sex = State::ActorSex::Male;
+                } else if (s == 1) {
+                    e.sex = State::ActorSex::Female;
+                }
+
+                e.name = ActorSvc::GetName(rawId);
+                if (auto* race = ActorSvc::GetRace(rawId)) {
+                    e.raceId = State::FormRawId{ race->GetFormID() };
+                }
+                if (Foundation::IsDynamicRuntimeActorRawId(rawId)) {
+                    e.baseId = State::BaseId{ rawId };
+                    if (auto* form = RE::TESForm::LookupByID(rawId); form && !form->IsDeleted()) {
+                        if (auto* act = form->As<RE::Actor>()) {
+                            e.dynamicPresent = true;
+                            e.aliveAndValid = !act->IsDead();
+                        }
+                    }
+                } else {
+                    RE::FormID bId = NPCIndex::GetSingleton().GetBaseID(rawId);
+                    if (bId == 0) {
+                        if (auto* base = ActorSvc::GetActorBase(rawId)) {
+                            bId = base->GetFormID();
+                        }
+                    }
+                    if (bId != 0) {
+                        e.baseId = State::BaseId{ bId };
+                    }
+                    if (auto* loaded = NPCIndex::GetSingleton().GetActorFromFormId(rawId)) {
+                        e.aliveAndValid = !loaded->IsDead() && !loaded->IsDeleted();
+                    } else if (auto* form = RE::TESForm::LookupByID(rawId)) {
+                        if (!form->IsDeleted()) {
+                            if (auto* act = form->As<RE::Actor>()) {
+                                e.aliveAndValid = !act->IsDead();
+                            } else {
+                                e.aliveAndValid = ActorSvc::IsValid(rawId);
+                            }
+                        }
+                    } else {
+                        e.aliveAndValid = ActorSvc::IsValid(rawId);
+                    }
+                }
+                entries_.emplace(rawId, std::move(e));
+            }
+
+            State::ActorSex GetSex(State::ActorId actor) const noexcept override {
+                if (const auto it = entries_.find(actor.raw()); it != entries_.end()) {
+                    return it->second.sex;
+                }
+                return State::ActorSex::Unknown;
+            }
+
+            bool IsAliveAndValid(State::ActorId actor) const noexcept override {
+                if (const auto it = entries_.find(actor.raw()); it != entries_.end()) {
+                    return it->second.aliveAndValid;
+                }
+                return false;
+            }
+
+            bool IsDynamicActorPresent(State::RefId refId) const noexcept override {
+                if (const auto it = entries_.find(refId.raw()); it != entries_.end()) {
+                    return it->second.dynamicPresent;
+                }
+                return false;
+            }
+
+            std::string GetActorName(State::ActorId actor) const override {
+                if (const auto it = entries_.find(actor.raw()); it != entries_.end()) {
+                    return it->second.name;
+                }
+                return {};
+            }
+
+            State::FormRawId GetActorRaceId(State::ActorId actor) const noexcept override {
+                if (const auto it = entries_.find(actor.raw()); it != entries_.end()) {
+                    return it->second.raceId;
+                }
+                return {};
+            }
+
+            State::BaseId GetActorBaseId(State::ActorId actor) const noexcept override {
+                if (const auto it = entries_.find(actor.raw()); it != entries_.end()) {
+                    return it->second.baseId;
+                }
+                return {};
+            }
+
+        private:
+            std::unordered_map<RE::FormID, Entry> entries_{};
+        };
+
+        std::unique_ptr<State::IActorMetadataProvider> CaptureActorMetadata(const std::vector<RE::FormID>& actorIDs) {
+            auto provider = std::make_unique<CachedActorMetadataProvider>();
+            for (const RE::FormID id : actorIDs) {
+                provider->Capture(id);
+            }
+            return provider;
+        }
+
+        std::unique_ptr<State::IActorMetadataProvider> CaptureWorldActorMetadata(
+            const std::shared_ptr<const State::WorldStateSnapshot>& snap,
+            const std::vector<RE::FormID>& extraActorIDs) {
+            auto provider = std::make_unique<CachedActorMetadataProvider>();
+            provider->Capture(kPlayerFormID);
+            for (const RE::FormID id : extraActorIDs) {
+                provider->Capture(id);
+            }
+            if (snap) {
+                for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
+                    (void)prof;
+                    provider->Capture(refId.raw());
+                }
+                for (const auto& [pair, edge] : snap->relationships->AllEdges()) {
+                    (void)edge;
+                    provider->Capture(pair.first.raw());
+                    provider->Capture(pair.second.raw());
+                }
+                for (const auto& [cId, rec] : snap->lineage->AllChildren()) {
+                    (void)cId;
+                    provider->Capture(rec.childId.raw());
+                    provider->Capture(rec.guardians.slotA.raw());
+                    provider->Capture(rec.guardians.slotB.raw());
+                    provider->Capture(rec.bioMother.raw());
+                    provider->Capture(rec.bioFather.raw());
+                    provider->Capture(rec.presumedFather.raw());
+                }
+            }
+            return provider;
+        }
+
+        Foundation::DeterministicRng MakeEngineRng() {
+            std::random_device rd;
+            const std::uint32_t seed =
+                static_cast<std::uint32_t>(rd()) ^ (static_cast<std::uint32_t>(rd()) << 16);
+            return Foundation::DeterministicRng(seed != 0 ? seed : 0x517CC1B7u);
+        }
+
+    }  // namespace Detail
 
     RE::FormID NPCRelationshipManager::DetermineDefaultInitiator(RE::FormID actorA, RE::FormID actorB) {
         auto getSex = [](RE::FormID id) -> uint8_t {
@@ -130,59 +320,12 @@ namespace MARAS {
         MARAS_LOG_DEBUG("Dispatched TTM_ServiceBuff.Maintenance() to synchronize player marriage buffs");
     }
 
-    void NPCRelationshipManager::IndexPair(const RelationshipPairKey& key) {
-        auto addForActor = [this, &key](RE::FormID actorID) {
-            if (actorID == 0) return;
-            auto& vec = actorPairIndex_[actorID];
-            if (std::find(vec.begin(), vec.end(), key) == vec.end()) {
-                vec.push_back(key);
-            }
-        };
-        addForActor(key.actorA);
-        addForActor(key.actorB);
-    }
-
-    void NPCRelationshipManager::UnindexPair(const RelationshipPairKey& key) {
-        auto removeForActor = [this, &key](RE::FormID actorID) {
-            if (actorID == 0) return;
-            auto it = actorPairIndex_.find(actorID);
-            if (it == actorPairIndex_.end()) return;
-            auto& vec = it->second;
-            vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end());
-            if (vec.empty()) {
-                actorPairIndex_.erase(it);
-            }
-        };
-        removeForActor(key.actorA);
-        removeForActor(key.actorB);
-    }
-
-    NPCRelationshipData& NPCRelationshipManager::GetOrCreatePairData(RE::FormID actorA, RE::FormID actorB) {
-        RelationshipPairKey key(actorA, actorB);
-        auto [it, inserted] = relationshipPairs.try_emplace(key, actorA, actorB);
-        it->second.pairKey = key;
-        if (inserted) {
-            IndexPair(key);
-        }
-        return it->second;
-    }
-
-    const std::vector<RelationshipPairKey>& NPCRelationshipManager::GetActorPairKeys(RE::FormID actorID) const {
-        static const std::vector<RelationshipPairKey> emptyKeys;
-        if (actorID == 0) return emptyKeys;
-        auto it = actorPairIndex_.find(actorID);
-        return (it != actorPairIndex_.end()) ? it->second : emptyKeys;
-    }
-
     size_t NPCRelationshipManager::CountPartnersWithStatus(RE::FormID npcFormID, RelationshipStatus status) const {
-        size_t count = 0;
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == status && key.GetOther(npcFormID) != 0) {
-                ++count;
-            }
-        }
-        return count;
+        if (npcFormID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->relationships->GetPartnersWithStatus(
+            State::ActorId{ npcFormID },
+            static_cast<State::RelationshipStatus>(status)).size();
     }
 
     void NPCRelationshipManager::RefreshPartnerRelationshipFactions(RE::FormID partnerID) {
@@ -237,24 +380,20 @@ namespace MARAS {
 
     bool NPCRelationshipManager::HasAnyOpenMainPair(RE::FormID actorID) const {
         if (actorID == 0) return false;
-        for (const auto& key : GetActorPairKeys(actorID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && IsMainTier(it->second.status) && it->second.isOpen) {
-                return true;
-            }
-        }
-        return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->relationships->HasAnyOpenMainPair(State::ActorId{ actorID });
     }
 
     int NPCRelationshipManager::BreakAllLoverConnections(RE::FormID actorID, bool onlyCheating, bool sendEvent) {
         if (actorID == 0) return 0;
         std::vector<RE::FormID> loversToBreak;
-        for (const auto& key : GetActorPairKeys(actorID)) {
-            auto it = relationshipPairs.find(key);
-            if (it == relationshipPairs.end()) continue;
-            const auto& data = it->second;
-            if (data.status == RelationshipStatus::Lover) {
-                RE::FormID partnerID = key.GetOther(actorID);
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const State::ActorId actor{ actorID };
+            for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
+                const auto* edge = snap->relationships->FindEdge(key);
+                if (!edge || edge->status != State::RelationshipStatus::Lover) continue;
+                const RE::FormID partnerID = key.Other(actor).raw();
                 if (partnerID == 0) continue;
 
                 if (onlyCheating) {
@@ -294,14 +433,22 @@ namespace MARAS {
             }
         }
 
-        RelationshipPairKey key(npcFormID, targetFormID);
-        auto existingIt = relationshipPairs.find(key);
-        RelationshipStatus oldStatus = (existingIt != relationshipPairs.end()) ? existingIt->second.status : RelationshipStatus::Candidate;
-        if (existingIt != relationshipPairs.end() && oldStatus == status) {
-            MARAS_LOG_INFO("ChangeStatusCommon skipped for {:08X} / {:08X}: already {}",
-                           npcFormID, targetFormID, Utils::RelationshipStatusToString(status));
-            return false;
+        const State::ActorId actorA{ npcFormID };
+        const State::ActorId actorB{ targetFormID };
+        const State::CanonicalPairKey pairKey{ actorA, actorB };
+
+        RelationshipStatus oldStatus = RelationshipStatus::Candidate;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const auto* existingEdge = snap->relationships->FindEdge(pairKey);
+            oldStatus = existingEdge ? static_cast<RelationshipStatus>(existingEdge->status) : RelationshipStatus::Candidate;
+            if (existingEdge != nullptr && oldStatus == status) {
+                MARAS_LOG_INFO("ChangeStatusCommon skipped for {:08X} / {:08X}: already {}",
+                               npcFormID, targetFormID, Utils::RelationshipStatusToString(status));
+                return false;
+            }
         }
+
         if (oldStatus != status) {
             std::string blockReason;
             if (!CanFormRelationship(npcFormID, targetFormID, status, &blockReason)) {
@@ -314,47 +461,83 @@ namespace MARAS {
             }
         }
 
-        bool shouldAutoOpen = false;
-        if (oldStatus != status && IsMainTier(status)) {
-            shouldAutoOpen = HasAnyOpenMainPair(npcFormID) || HasAnyOpenMainPair(targetFormID);
-        }
-
-        auto& data = GetOrCreatePairData(npcFormID, targetFormID);
-        if (oldStatus != status) {
-            auto calendar = RE::Calendar::GetSingleton();
-            float currentDays = calendar ? calendar->GetDaysPassed() : 0.0f;
-            RE::FormID initiator = 0;
-            if (currentDays >= 0.0f) {
-                if (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID) {
-                    initiator = kPlayerFormID;
-                } else if (npcFormID != 0) {
-                    initiator = npcFormID;
-                } else {
-                    initiator = DetermineDefaultInitiator(npcFormID, targetFormID);
-                }
+        auto* calendar = RE::Calendar::GetSingleton();
+        const float currentDays = calendar ? calendar->GetDaysPassed() : 0.0f;
+        RE::FormID initiator = 0;
+        if (currentDays >= 0.0f) {
+            if (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID) {
+                initiator = kPlayerFormID;
+            } else if (npcFormID != 0) {
+                initiator = npcFormID;
             } else {
                 initiator = DetermineDefaultInitiator(npcFormID, targetFormID);
             }
-            data.statusHistory.emplace_back(oldStatus, status, currentDays, initiator);
+        } else {
+            initiator = DetermineDefaultInitiator(npcFormID, targetFormID);
+        }
 
+        bool skippedDuplicate = false;
+        bool recordedTransition = false;
+        bool appliedAutoOpen = false;
+        bool resetOpenOnBreakup = false;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& rels = ws.relationships.Write();
+            const auto* preEdge = rels.FindEdge(pairKey);
+            const RelationshipStatus preStatus =
+                preEdge ? static_cast<RelationshipStatus>(preEdge->status) : RelationshipStatus::Candidate;
+            if (preEdge != nullptr && preStatus == status) {
+                skippedDuplicate = true;
+                return;
+            }
+
+            const bool openMainExists =
+                (preStatus != status && IsMainTier(status)) &&
+                (rels.HasAnyOpenMainPair(actorA) || rels.HasAnyOpenMainPair(actorB));
+
+            auto& edge = rels.GetOrCreateEdge(actorA, actorB);
+            const auto targetStateStatus = static_cast<State::RelationshipStatus>(status);
+
+            if (preStatus != status) {
+                recordedTransition = true;
+                edge.statusHistory.push_back(State::StatusTransitionEntry{
+                    .fromStatus = static_cast<State::RelationshipStatus>(preStatus),
+                    .toStatus = targetStateStatus,
+                    .timestamp = currentDays,
+                    .initiator = State::ActorId{ initiator },
+                });
+
+                if (IsMainTier(status) && !edge.isOpen && openMainExists) {
+                    edge.isOpen = true;
+                    appliedAutoOpen = true;
+                } else if (IsBreakupStatus(status) && edge.isOpen) {
+                    edge.isOpen = false;
+                    resetOpenOnBreakup = true;
+                }
+            }
+
+            edge.status = targetStateStatus;
+            oldStatus = preStatus;
+        });
+
+        if (skippedDuplicate) {
+            MARAS_LOG_INFO("ChangeStatusCommon skipped for {:08X} / {:08X}: already {}",
+                           npcFormID, targetFormID, Utils::RelationshipStatusToString(status));
+            return false;
+        }
+
+        if (recordedTransition) {
             if (status == RelationshipStatus::Engaged && npcFormID != kPlayerFormID && targetFormID != kPlayerFormID && npcFormID != 0 && targetFormID != 0) {
                 MARAS_LOG_INFO("NPC-NPC pair {:08X} - {:08X} became engaged at game day {:.2f}; scheduled for auto-marriage in 5 days",
                                npcFormID, targetFormID, currentDays);
             }
-
-            if (IsMainTier(status) && !data.isOpen) {
-                if (shouldAutoOpen) {
-                    data.isOpen = true;
-                    MARAS_LOG_INFO("Forward-only auto-open applied for pair {:08X} - {:08X}", npcFormID, targetFormID);
-                }
-            } else if (IsBreakupStatus(status) && data.isOpen) {
-                data.isOpen = false;
+            if (appliedAutoOpen) {
+                MARAS_LOG_INFO("Forward-only auto-open applied for pair {:08X} - {:08X}", npcFormID, targetFormID);
+            } else if (resetOpenOnBreakup) {
                 MARAS_LOG_INFO("Reset isOpen to false on breakup ({}) for pair {:08X} - {:08X}",
                                Utils::RelationshipStatusToString(status), npcFormID, targetFormID);
             }
         }
-
-        data.status = status;
 
         if (targetFormID == kPlayerFormID) {
             if (oldStatus != status && IsActivePartnerStatus(status) && npcFormID != 0 && npcFormID != kPlayerFormID) {
@@ -505,22 +688,47 @@ namespace MARAS {
         }
 
         const bool wasMarriedToPlayer = (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Married);
-
         std::unordered_set<RE::FormID> survivingPartners;
-        auto pairKeys = GetActorPairKeys(npcFormID);
-        for (const auto& key : pairKeys) {
-            RE::FormID otherID = key.GetOther(npcFormID);
-            if (otherID != 0) {
-                survivingPartners.insert(otherID);
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const State::ActorId actor{ npcFormID };
+            for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
+                const RE::FormID otherID = key.Other(actor).raw();
+                if (otherID != 0) {
+                    survivingPartners.insert(otherID);
+                }
             }
-            UnindexPair(key);
-            relationshipPairs.erase(key);
         }
 
         CleanupActorIntentsAndThirdPartyAffairs(npcFormID, /*eraseRecords=*/true, survivingPartners);
 
-        allRegistered.erase(npcFormID);
-        npcProfiles.erase(npcFormID);
+        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
+        SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcFormID);
+        (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcFormID);
+        AffectionService::GetSingleton().RemoveNPCData(npcFormID);
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const State::ActorId actor{ npcFormID };
+            for (const State::ActorId affected : ws.affairs.Write().EraseAllInvolvingActor(actor)) {
+                if (affected.raw() != 0 && affected.raw() != npcFormID) {
+                    survivingPartners.insert(affected.raw());
+                }
+            }
+            const auto pairsCopy = ws.relationships->GetAdjacentPairs(actor);
+            auto& rels = ws.relationships.Write();
+            for (const auto& pair : pairsCopy) {
+                const RE::FormID otherID = pair.Other(actor).raw();
+                if (otherID != 0) {
+                    survivingPartners.insert(otherID);
+                }
+                rels.EraseEdge(pair);
+            }
+            rels.ClearIntentsInvolving(actor);
+            ws.cooldowns.Write().EraseActor(actor);
+            if (actor.HasPhysicalActor()) {
+                ws.actors.Write().Erase(actor.AsRefId());
+            }
+        });
 
         // Clean up engine factions on the unregistered NPC
         {
@@ -545,11 +753,6 @@ namespace MARAS {
             RefreshPartnerRelationshipFactions(partnerID);
         }
 
-        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
-        SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcFormID);
-        (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcFormID);
-        AffectionService::GetSingleton().RemoveNPCData(npcFormID);
-
         RecalculateAndUpdateGlobals();
         if (wasMarriedToPlayer) {
             DispatchPlayerBuffMaintenance();
@@ -570,20 +773,41 @@ namespace MARAS {
         EvaluateChildCustodyOnDeath(npcFormID);
 
         std::unordered_set<RE::FormID> survivingPartners;
-        auto pairKeys = GetActorPairKeys(npcFormID);
-        for (const auto& key : pairKeys) {
-            RE::FormID otherID = key.GetOther(npcFormID);
-            if (otherID != 0) {
-                survivingPartners.insert(otherID);
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const State::ActorId actor{ npcFormID };
+            for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
+                const RE::FormID otherID = key.Other(actor).raw();
+                if (otherID != 0) {
+                    survivingPartners.insert(otherID);
+                }
             }
-            UnindexPair(key);
-            relationshipPairs.erase(key);
         }
 
         CleanupActorIntentsAndThirdPartyAffairs(npcFormID, /*eraseRecords=*/false, survivingPartners);
 
-        allRegistered.erase(npcFormID);
-        npcProfiles.erase(npcFormID);
+        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
+        SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcFormID);
+        (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcFormID);
+        AffectionService::GetSingleton().RemoveNPCData(npcFormID);
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const State::ActorId actor{ npcFormID };
+            const auto pairsCopy = ws.relationships->GetAdjacentPairs(actor);
+            auto& rels = ws.relationships.Write();
+            for (const auto& pair : pairsCopy) {
+                const RE::FormID otherID = pair.Other(actor).raw();
+                if (otherID != 0) {
+                    survivingPartners.insert(otherID);
+                }
+                rels.EraseEdge(pair);
+            }
+            rels.ClearIntentsInvolving(actor);
+            ws.cooldowns.Write().EraseActor(actor);
+            if (actor.HasPhysicalActor()) {
+                ws.actors.Write().Erase(actor.AsRefId());
+            }
+        });
 
         // Clean up engine factions on the deceased NPC
         {
@@ -608,11 +832,6 @@ namespace MARAS {
             RefreshPartnerRelationshipFactions(partnerID);
         }
 
-        SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcFormID);
-        SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcFormID);
-        (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcFormID);
-        AffectionService::GetSingleton().RemoveNPCData(npcFormID);
-
         RecalculateAndUpdateGlobals();
         if (wasMarriedToPlayer) {
             DispatchPlayerBuffMaintenance();
@@ -626,66 +845,20 @@ namespace MARAS {
         std::vector<std::pair<RE::FormID, RelationshipStatus>> result;
         if (actorID == 0) return result;
 
-        for (const auto& key : GetActorPairKeys(actorID)) {
-            auto it = relationshipPairs.find(key);
-            if (it == relationshipPairs.end()) continue;
-            const auto& data = it->second;
-            if (IsActivePartnerStatus(data.status)) {
-                RE::FormID partnerID = key.GetOther(actorID);
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const State::ActorId actor{ actorID };
+        for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (!edge) continue;
+            const auto status = static_cast<RelationshipStatus>(edge->status);
+            if (IsActivePartnerStatus(status)) {
+                const RE::FormID partnerID = key.Other(actor).raw();
                 if (partnerID != 0) {
-                    result.emplace_back(partnerID, data.status);
+                    result.emplace_back(partnerID, status);
                 }
             }
         }
         return result;
-    }
-
-    void NPCRelationshipManager::AddPendingRelationship(RE::FormID baseID, const PendingRelationshipData& data) {
-        if (baseID == 0) return;
-        auto& list = pendingRelationshipsByBaseID[baseID];
-        for (const auto& existing : list) {
-            if (existing.partnerBaseID == data.partnerBaseID &&
-                existing.partnerRefID == data.partnerRefID &&
-                existing.targetStatus == data.targetStatus) {
-                return; // Skip duplicate entry
-            }
-        }
-        list.push_back(data);
-    }
-
-    void NPCRelationshipManager::AddPendingChild(RE::FormID childBaseID, const PendingChildData& data) {
-        if (childBaseID == 0) return;
-        auto it = pendingChildrenByBaseID.find(childBaseID);
-        if (it != pendingChildrenByBaseID.end()) {
-            auto& existing = it->second;
-            if (existing.childRefID == 0 && data.childRefID != 0) {
-                existing.childRefID = data.childRefID;
-            }
-            if (existing.parentABaseID == 0 && data.parentABaseID != 0) {
-                existing.parentABaseID = data.parentABaseID;
-                existing.parentARefID = data.parentARefID;
-            } else if (existing.parentBBaseID == 0 && data.parentABaseID != 0 && data.parentABaseID != existing.parentABaseID) {
-                existing.parentBBaseID = data.parentABaseID;
-                existing.parentBRefID = data.parentARefID;
-            }
-            if (existing.parentBBaseID == 0 && data.parentBBaseID != 0 && data.parentBBaseID != existing.parentABaseID) {
-                existing.parentBBaseID = data.parentBBaseID;
-                existing.parentBRefID = data.parentBRefID;
-            }
-            if (existing.parentARefID == 0 && data.parentARefID != 0 && existing.parentABaseID == data.parentABaseID) {
-                existing.parentARefID = data.parentARefID;
-            }
-            if (existing.parentBRefID == 0 && data.parentBRefID != 0 && existing.parentBBaseID == data.parentBBaseID) {
-                existing.parentBRefID = data.parentBRefID;
-            }
-            existing.isAdopted = existing.isAdopted && data.isAdopted;
-        } else {
-            pendingChildrenByBaseID[childBaseID] = data;
-        }
-        MARAS_LOG_INFO("AddPendingChild: Deferred child Base {:08X} (parents {:08X} / {:08X}, adopted: {}) to pending",
-                       childBaseID, pendingChildrenByBaseID[childBaseID].parentABaseID,
-                       pendingChildrenByBaseID[childBaseID].parentBBaseID,
-                       pendingChildrenByBaseID[childBaseID].isAdopted);
     }
 
     void NPCRelationshipManager::TryResolvePendingChildren(RE::FormID baseID, RE::FormID refID) {
@@ -711,12 +884,28 @@ namespace MARAS {
             return { bioMother, bioFather };
         };
 
+        // Snapshot pending children before mutating WorldStore / registering actors
+        std::optional<PendingChildData> matchingSelfPending;
+        std::vector<PendingChildData> parentPendingSnapshot;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const auto& allPending = snap->lineage->AllPendingChildren();
+            if (const auto it = allPending.find(State::BaseId{ baseID }); it != allPending.end()) {
+                matchingSelfPending = LegacyAdapters::ToLegacyPendingChild(it->second);
+            }
+            for (const auto& [cBase, entry] : allPending) {
+                if (entry.childBaseId.raw() != baseID &&
+                    (entry.parentABaseId.raw() == baseID || entry.parentBBaseId.raw() == baseID)) {
+                    parentPendingSnapshot.push_back(LegacyAdapters::ToLegacyPendingChild(entry));
+                }
+            }
+        }
+
         // 1. Check if incoming actor is a pending child
         auto& npcIndex = NPCIndex::GetSingleton();
         SkyrimNetMemoryService::SuppressScope suppressMemories;
-        auto childIt = pendingChildrenByBaseID.find(baseID);
-        if (childIt != pendingChildrenByBaseID.end()) {
-            auto pending = childIt->second;
+        if (matchingSelfPending.has_value()) {
+            PendingChildData pending = *matchingSelfPending;
             pending.childRefID = refID;
 
             RE::FormID pARef = pending.parentARefID != 0 ? pending.parentARefID : npcIndex.GetRefID(pending.parentABaseID);
@@ -729,13 +918,15 @@ namespace MARAS {
             pending.parentBRefID = pBRef;
 
             if (pARef != 0 || pBRef != 0) {
-                bool awaitingOtherParent = (pending.parentABaseID != 0 && pARef == 0) ||
-                                           (pending.parentBBaseID != 0 && pBRef == 0);
-                if (awaitingOtherParent) {
-                    pendingChildrenByBaseID[baseID] = pending;
-                } else {
-                    pendingChildrenByBaseID.erase(childIt);
-                }
+                const bool awaitingOtherParent = (pending.parentABaseID != 0 && pARef == 0) ||
+                                                 (pending.parentBBaseID != 0 && pBRef == 0);
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    if (awaitingOtherParent) {
+                        ws.lineage.Write().AddPendingChild(State::BaseId{ baseID }, LegacyAdapters::ToPendingChildEntry(pending));
+                    } else {
+                        (void)ws.lineage.Write().ErasePendingChild(State::BaseId{ baseID });
+                    }
+                });
 
                 auto [bioMother, bioFather] = resolveBioParents(pARef, pBRef, pending.isAdopted);
                 RE::FormID gA = pARef;
@@ -752,38 +943,34 @@ namespace MARAS {
                 MARAS_LOG_INFO("TryResolvePendingChildren: Resolved pending child {:08X} for guardians {:08X} / {:08X} (bioM: {:08X}, bioF: {:08X}, adopted: {})",
                                refID, gA, gB, bioMother, bioFather, pending.isAdopted);
             } else {
-                pendingChildrenByBaseID[baseID] = pending;
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    ws.lineage.Write().AddPendingChild(State::BaseId{ baseID }, LegacyAdapters::ToPendingChildEntry(pending));
+                });
             }
         }
 
         // 2. Check if incoming actor is a parent of any pending children
-        std::vector<std::pair<RE::FormID, PendingChildData>> snapshot(pendingChildrenByBaseID.begin(), pendingChildrenByBaseID.end());
-        for (auto& [cBaseID, pending] : snapshot) {
-            bool matchesParent = false;
+        for (PendingChildData pending : parentPendingSnapshot) {
             if (pending.parentABaseID == baseID) {
                 pending.parentARefID = refID;
-                matchesParent = true;
             }
             if (pending.parentBBaseID == baseID) {
                 pending.parentBRefID = refID;
-                matchesParent = true;
-            }
-
-            if (!matchesParent) {
-                continue;
             }
 
             RE::FormID cRef = pending.childRefID != 0 ? pending.childRefID : npcIndex.GetRefID(pending.childBaseID);
             pending.childRefID = cRef;
 
             if (cRef != 0 && (pending.parentARefID != 0 || pending.parentBRefID != 0)) {
-                bool awaitingOtherParent = (pending.parentABaseID != 0 && pending.parentARefID == 0) ||
-                                           (pending.parentBBaseID != 0 && pending.parentBRefID == 0);
-                if (awaitingOtherParent) {
-                    pendingChildrenByBaseID[cBaseID] = pending;
-                } else {
-                    pendingChildrenByBaseID.erase(cBaseID);
-                }
+                const bool awaitingOtherParent = (pending.parentABaseID != 0 && pending.parentARefID == 0) ||
+                                                 (pending.parentBBaseID != 0 && pending.parentBRefID == 0);
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    if (awaitingOtherParent) {
+                        ws.lineage.Write().AddPendingChild(State::BaseId{ pending.childBaseID }, LegacyAdapters::ToPendingChildEntry(pending));
+                    } else {
+                        (void)ws.lineage.Write().ErasePendingChild(State::BaseId{ pending.childBaseID });
+                    }
+                });
 
                 auto [bioMother, bioFather] = resolveBioParents(pending.parentARefID, pending.parentBRefID, pending.isAdopted);
                 RE::FormID gA = pending.parentARefID;
@@ -800,7 +987,9 @@ namespace MARAS {
                 MARAS_LOG_INFO("TryResolvePendingChildren: Resolved pending child {:08X} on parent load (guardians {:08X} / {:08X}, bioM: {:08X}, bioF: {:08X}, adopted: {})",
                                cRef, gA, gB, bioMother, bioFather, pending.isAdopted);
             } else {
-                pendingChildrenByBaseID[cBaseID] = pending;
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    ws.lineage.Write().AddPendingChild(State::BaseId{ pending.childBaseID }, LegacyAdapters::ToPendingChildEntry(pending));
+                });
             }
         }
     }
@@ -815,13 +1004,24 @@ namespace MARAS {
         SkyrimNetMemoryService::SuppressScope suppressMemories;
         TryResolvePendingChildren(baseID, refID);
 
-        auto it = pendingRelationshipsByBaseID.find(baseID);
-        if (it == pendingRelationshipsByBaseID.end()) {
+        std::vector<PendingRelationshipData> pendingList;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const auto& allPending = snap->actors->AllPendingRelationships();
+            if (const auto it = allPending.find(State::BaseId{ baseID }); it != allPending.end()) {
+                pendingList.reserve(it->second.size());
+                for (const auto& entry : it->second) {
+                    pendingList.push_back(LegacyAdapters::ToLegacyPendingRelationship(entry));
+                }
+            }
+        }
+        if (pendingList.empty()) {
             return;
         }
 
-        auto pendingList = std::move(it->second);
-        pendingRelationshipsByBaseID.erase(it);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            (void)ws.actors.Write().ErasePendingRelationshipsForBase(State::BaseId{ baseID });
+        });
 
         MARAS_LOG_INFO("TryResolvePendingRelationships: Resolving {} pending relationship(s) for '{}' (Base ID {:08X} -> Ref ID {:08X})",
                        pendingList.size(), ActorSvc::GetName(refID), baseID, refID);
@@ -854,12 +1054,14 @@ namespace MARAS {
                     if (pending.targetStatus != RelationshipStatus::Unknown) {
                         ApplyImportedVanillaStatus(refID, partnerRefID, pending.originalStatus, pending.targetStatus);
 
-                        auto& pairData = GetOrCreatePairData(refID, partnerRefID);
-                        for (auto& hist : pairData.statusHistory) {
-                            if (hist.timestamp >= 0) {
-                                hist.timestamp = -1;
+                        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                            auto& edge = ws.relationships.Write().GetOrCreateEdge(State::ActorId{ refID }, State::ActorId{ partnerRefID });
+                            for (auto& hist : edge.statusHistory) {
+                                if (hist.timestamp >= 0.0f) {
+                                    hist.timestamp = -1.0f;
+                                }
                             }
-                        }
+                        });
 
                         MARAS_LOG_INFO("TryResolvePendingRelationships: Assigned status {} between '{}' ({:08X}) and '{}' ({:08X})",
                                        Utils::RelationshipStatusToString(pending.targetStatus),
@@ -868,8 +1070,12 @@ namespace MARAS {
                     }
                 }
             } else {
-                PendingRelationshipData remaining(baseID, refID, pending.targetStatus, pending.originalStatus);
-                AddPendingRelationship(pending.partnerBaseID, remaining);
+                const PendingRelationshipData remaining(baseID, refID, pending.targetStatus, pending.originalStatus);
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    ws.actors.Write().AddPendingRelationship(
+                        State::BaseId{ pending.partnerBaseID },
+                        LegacyAdapters::ToPendingRelationshipEntry(remaining));
+                });
                 MARAS_LOG_INFO("TryResolvePendingRelationships: Resolved actor '{}' ({:08X}), partner base '{}' ({:08X}) remains pending",
                                ActorSvc::GetName(refID), refID,
                                ActorSvc::GetName(pending.partnerBaseID), pending.partnerBaseID);
@@ -894,7 +1100,8 @@ namespace MARAS {
     // Status checks
     bool NPCRelationshipManager::IsRegistered(RE::FormID npcFormID) const {
         if (npcFormID == kPlayerFormID || npcFormID == 0 || npcFormID == 0x07) return false;
-        return allRegistered.contains(npcFormID);
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->actors->IsRegisteredAdult(State::RefId{ npcFormID });
     }
 
     bool NPCRelationshipManager::IsCandidate(RE::FormID npcFormID, RE::FormID targetFormID) const {
@@ -916,7 +1123,7 @@ namespace MARAS {
     bool NPCRelationshipManager::IsMostRecentRelationshipDivorced(RE::FormID actorA, RE::FormID actorB) const {
         if (actorA == 0 || actorB == 0 || actorA == actorB) return false;
 
-        const auto* data = GetNPCData(actorA, actorB);
+        const auto data = GetNPCData(actorA, actorB);
         if (!data) return false;
 
         // Inspect only the single most recent status transition if history exists, otherwise current status
@@ -976,9 +1183,10 @@ namespace MARAS {
         if (npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
             return true;
         }
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && IsMainTier(it->second.status)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && IsMainTier(static_cast<RelationshipStatus>(edge->status))) {
                 return false;
             }
         }
@@ -996,10 +1204,11 @@ namespace MARAS {
         if (npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
             return true;
         }
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() &&
-                (it->second.status == RelationshipStatus::Engaged || it->second.status == RelationshipStatus::Married)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge &&
+                (edge->status == State::RelationshipStatus::Engaged || edge->status == State::RelationshipStatus::Married)) {
                 return false;
             }
         }
@@ -1017,9 +1226,10 @@ namespace MARAS {
         if (npcFormID == kPlayerFormID && Settings::GetSingleton().GetEnablePolygamy()) {
             return true;
         }
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Married) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Married) {
                 return false;
             }
         }
@@ -1045,9 +1255,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForDivorced(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Married) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Married) {
                 return true;
             }
         }
@@ -1062,9 +1273,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForJilted(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Engaged) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Engaged) {
                 return true;
             }
         }
@@ -1079,9 +1291,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForExDating(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Dating) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Dating) {
                 return true;
             }
         }
@@ -1096,9 +1309,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForExLover(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Lover) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Lover) {
                 return true;
             }
         }
@@ -1113,9 +1327,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForBreakup(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && IsActivePartnerStatus(it->second.status)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && IsActivePartnerStatus(static_cast<RelationshipStatus>(edge->status))) {
                 return true;
             }
         }
@@ -1130,9 +1345,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForBreakupDating(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Dating) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Dating) {
                 return true;
             }
         }
@@ -1147,9 +1363,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForBreakupLover(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == RelationshipStatus::Lover) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == State::RelationshipStatus::Lover) {
                 return true;
             }
         }
@@ -1164,9 +1381,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForOpenRelationship(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && IsMainTier(it->second.status) && !it->second.isOpen) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && IsMainTier(static_cast<RelationshipStatus>(edge->status)) && !edge->isOpen) {
                 return true;
             }
         }
@@ -1181,9 +1399,10 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::IsAvailableForCloseRelationship(RE::FormID npcFormID) const {
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && IsMainTier(it->second.status) && it->second.isOpen) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && IsMainTier(static_cast<RelationshipStatus>(edge->status)) && edge->isOpen) {
                 return true;
             }
         }
@@ -1284,19 +1503,19 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::CanOpenRelationship(RE::FormID actorA, RE::FormID actorB) const {
-        RelationshipPairKey key(actorA, actorB);
-        auto it = relationshipPairs.find(key);
-        if (it != relationshipPairs.end()) {
-            return IsMainTier(it->second.status) && !it->second.isOpen;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+        if (edge) {
+            return IsMainTier(static_cast<RelationshipStatus>(edge->status)) && !edge->isOpen;
         }
         return false;
     }
 
     bool NPCRelationshipManager::CanCloseRelationship(RE::FormID actorA, RE::FormID actorB) const {
-        RelationshipPairKey key(actorA, actorB);
-        auto it = relationshipPairs.find(key);
-        if (it != relationshipPairs.end()) {
-            return IsMainTier(it->second.status) && it->second.isOpen;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+        if (edge) {
+            return IsMainTier(static_cast<RelationshipStatus>(edge->status)) && edge->isOpen;
         }
         return false;
     }
@@ -1331,11 +1550,12 @@ namespace MARAS {
         if (nameA.empty() || nameA == "None") nameA = (actorA == kPlayerFormID) ? "Player" : fmt::format("0x{:08X}", actorA);
         if (nameB.empty() || nameB == "None") nameB = (actorB == kPlayerFormID) ? "Player" : fmt::format("0x{:08X}", actorB);
 
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+
         // Validate existing direct relationship between actorA and actorB
-        RelationshipPairKey directKey(actorA, actorB);
-        auto directIt = relationshipPairs.find(directKey);
-        if (directIt != relationshipPairs.end()) {
-            const auto directStatus = directIt->second.status;
+        const auto* directEdge = snap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+        if (directEdge) {
+            const auto directStatus = static_cast<RelationshipStatus>(directEdge->status);
             if (status == RelationshipStatus::Lover) {
                 if (directStatus == RelationshipStatus::Lover) {
                     if (outReason) {
@@ -1375,28 +1595,28 @@ namespace MARAS {
         }
 
         if (status == RelationshipStatus::Divorced) {
-            if (directIt == relationshipPairs.end() || directIt->second.status != RelationshipStatus::Married) {
+            if (!directEdge || directEdge->status != State::RelationshipStatus::Married) {
                 if (outReason) *outReason = "Can only divorce if currently Married.";
                 return false;
             }
             return true;
         }
         if (status == RelationshipStatus::Jilted) {
-            if (directIt == relationshipPairs.end() || directIt->second.status != RelationshipStatus::Engaged) {
+            if (!directEdge || directEdge->status != State::RelationshipStatus::Engaged) {
                 if (outReason) *outReason = "Can only be jilted if currently Engaged.";
                 return false;
             }
             return true;
         }
         if (status == RelationshipStatus::ExDating) {
-            if (directIt == relationshipPairs.end() || directIt->second.status != RelationshipStatus::Dating) {
+            if (!directEdge || directEdge->status != State::RelationshipStatus::Dating) {
                 if (outReason) *outReason = "Can only transition to Ex-Dating if currently Dating.";
                 return false;
             }
             return true;
         }
         if (status == RelationshipStatus::ExLover) {
-            if (directIt == relationshipPairs.end() || directIt->second.status != RelationshipStatus::Lover) {
+            if (!directEdge || directEdge->status != State::RelationshipStatus::Lover) {
                 if (outReason) *outReason = "Can only transition to Ex-Lover if currently Lovers.";
                 return false;
             }
@@ -1416,20 +1636,22 @@ namespace MARAS {
                 return true;
             }
 
-            for (const auto& key : GetActorPairKeys(self)) {
-                if (!key.Contains(other)) {
-                    auto it = relationshipPairs.find(key);
-                    if (it == relationshipPairs.end()) continue;
-                    const auto& data = it->second;
+            const State::ActorId selfId{ self };
+            const State::ActorId otherId{ other };
+            for (const auto& key : snap->relationships->GetAdjacentPairs(selfId)) {
+                if (!key.Contains(otherId)) {
+                    const auto* edge = snap->relationships->FindEdge(key);
+                    if (!edge) continue;
+                    const auto edgeStatus = static_cast<RelationshipStatus>(edge->status);
 
-                    RE::FormID existingPartnerID = key.GetOther(self);
+                    RE::FormID existingPartnerID = key.Other(selfId).raw();
                     std::string partnerName = ActorSvc::GetName(existingPartnerID);
                     if (partnerName.empty() || partnerName == "None") {
                         partnerName = (existingPartnerID == kPlayerFormID) ? "Player" : fmt::format("0x{:08X}", existingPartnerID);
                     }
 
                     if (status == RelationshipStatus::Dating || status == RelationshipStatus::Married) {
-                        if (IsMainTier(data.status)) {
+                        if (IsMainTier(edgeStatus)) {
                             if (outReason) {
                                 *outReason = isPlayer
                                     ? "Cannot enter another main relationship: Polygamy is disabled in settings."
@@ -1438,7 +1660,7 @@ namespace MARAS {
                             return false;
                         }
                     } else if (status == RelationshipStatus::Engaged) {
-                        if (data.status == RelationshipStatus::Engaged || data.status == RelationshipStatus::Married) {
+                        if (edgeStatus == RelationshipStatus::Engaged || edgeStatus == RelationshipStatus::Married) {
                             if (outReason) {
                                 *outReason = isPlayer
                                     ? "Cannot enter another engagement/marriage: Polygamy is disabled in settings."
@@ -1446,7 +1668,7 @@ namespace MARAS {
                             }
                             return false;
                         }
-                        if (data.status == RelationshipStatus::Dating) {
+                        if (edgeStatus == RelationshipStatus::Dating) {
                             if (outReason) {
                                 *outReason = isPlayer
                                     ? "Cannot propose engagement to this actor while dating someone else."
@@ -1758,12 +1980,10 @@ namespace MARAS {
                                           (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
                                           ClearPartnerIntent(npcID);
                                       } else {
-                                          if (auto itA = pendingPartnerIntents_.find(id);
-                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ id }).relatedLover.raw() == target) {
                                               ClearPartnerIntent(id);
                                           }
-                                          if (auto itB = pendingPartnerIntents_.find(target);
-                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ target }).relatedLover.raw() == id) {
                                               ClearPartnerIntent(target);
                                           }
                                       }
@@ -1782,12 +2002,10 @@ namespace MARAS {
                                           (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
                                           ClearPartnerIntent(npcID);
                                       } else {
-                                          if (auto itA = pendingPartnerIntents_.find(id);
-                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ id }).relatedLover.raw() == target) {
                                               ClearPartnerIntent(id);
                                           }
-                                          if (auto itB = pendingPartnerIntents_.find(target);
-                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ target }).relatedLover.raw() == id) {
                                               ClearPartnerIntent(target);
                                           }
                                       }
@@ -1824,12 +2042,10 @@ namespace MARAS {
                                           (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
                                           ClearPartnerIntent(npcID);
                                       } else {
-                                          if (auto itA = pendingPartnerIntents_.find(id);
-                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ id }).relatedLover.raw() == target) {
                                               ClearPartnerIntent(id);
                                           }
-                                          if (auto itB = pendingPartnerIntents_.find(target);
-                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ target }).relatedLover.raw() == id) {
                                               ClearPartnerIntent(target);
                                           }
                                       }
@@ -1848,12 +2064,10 @@ namespace MARAS {
                                           (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
                                           ClearPartnerIntent(npcID);
                                       } else {
-                                          if (auto itA = pendingPartnerIntents_.find(id);
-                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ id }).relatedLover.raw() == target) {
                                               ClearPartnerIntent(id);
                                           }
-                                          if (auto itB = pendingPartnerIntents_.find(target);
-                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ target }).relatedLover.raw() == id) {
                                               ClearPartnerIntent(target);
                                           }
                                       }
@@ -1876,12 +2090,10 @@ namespace MARAS {
                                           (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
                                           ClearPartnerIntent(npcID);
                                       } else {
-                                          if (auto itA = pendingPartnerIntents_.find(id);
-                                              itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == target) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ id }).relatedLover.raw() == target) {
                                               ClearPartnerIntent(id);
                                           }
-                                          if (auto itB = pendingPartnerIntents_.find(target);
-                                              itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == id) {
+                                          if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ target }).relatedLover.raw() == id) {
                                               ClearPartnerIntent(target);
                                           }
                                       }
@@ -1914,118 +2126,30 @@ namespace MARAS {
             return false;
         }
 
-        // Remove any pending deferred relationships between their base IDs
-        RE::FormID baseA = (actorA == kPlayerFormID) ? kPlayerFormID : npcIndex.GetBaseID(actorA);
-        RE::FormID baseB = (actorB == kPlayerFormID) ? kPlayerFormID : npcIndex.GetBaseID(actorB);
-        auto removePendingFor = [&](RE::FormID ownerBase, RE::FormID partnerBase, RE::FormID partnerRef) {
-            if (ownerBase == 0) return;
-            auto it = pendingRelationshipsByBaseID.find(ownerBase);
-            if (it == pendingRelationshipsByBaseID.end()) return;
-            auto& vec = it->second;
-            vec.erase(
-                std::remove_if(vec.begin(), vec.end(),
-                               [&](const PendingRelationshipData& d) {
-                                   return (partnerBase != 0 && d.partnerBaseID == partnerBase) ||
-                                          (partnerRef != 0 && d.partnerRefID == partnerRef);
-                               }),
-                vec.end());
-            if (vec.empty()) {
-                pendingRelationshipsByBaseID.erase(it);
-            }
-        };
-        removePendingFor(baseA, baseB, actorB);
-        removePendingFor(baseB, baseA, actorA);
+        const RE::FormID baseA = (actorA == kPlayerFormID) ? kPlayerFormID : npcIndex.GetBaseID(actorA);
+        const RE::FormID baseB = (actorB == kPlayerFormID) ? kPlayerFormID : npcIndex.GetBaseID(actorB);
+        const bool isPlayerPair = (actorA == kPlayerFormID || actorB == kPlayerFormID);
+        const RE::FormID playerPartnerID = isPlayerPair ? ((actorA == kPlayerFormID) ? actorB : actorA) : 0;
+        const bool wasMarriedToPlayer =
+            isPlayerPair && (GetRelationshipStatus(playerPartnerID, kPlayerFormID) == RelationshipStatus::Married);
 
-        // Clean any CheatingRecord across all pairs where (actorA, actorB) is either the (cheater, affairPartner) or (cheater, victim)
-        std::unordered_set<RE::FormID> affectedActors{ actorA, actorB };
-        for (auto& [pairKey, pairData] : relationshipPairs) {
-            auto& records = pairData.cheatingRecords;
-            if (records.empty()) continue;
-            auto oldSize = records.size();
-            for (const auto& rec : records) {
-                bool matchAffair = (rec.cheaterID == actorA && rec.affairPartnerID == actorB) ||
-                                   (rec.cheaterID == actorB && rec.affairPartnerID == actorA);
-                bool matchVictim = (rec.cheaterID == actorA && rec.victimID == actorB) ||
-                                   (rec.cheaterID == actorB && rec.victimID == actorA);
-                if (matchAffair || matchVictim) {
-                    if (rec.cheaterID != 0) affectedActors.insert(rec.cheaterID);
-                    if (rec.victimID != 0) affectedActors.insert(rec.victimID);
-                    if (rec.affairPartnerID != 0) affectedActors.insert(rec.affairPartnerID);
-                }
-            }
-            records.erase(
-                std::remove_if(records.begin(), records.end(),
-                               [actorA, actorB](const CheatingRecord& rec) {
-                                   bool matchAffair = (rec.cheaterID == actorA && rec.affairPartnerID == actorB) ||
-                                                      (rec.cheaterID == actorB && rec.affairPartnerID == actorA);
-                                   bool matchVictim = (rec.cheaterID == actorA && rec.victimID == actorB) ||
-                                                      (rec.cheaterID == actorB && rec.victimID == actorA);
-                                   return matchAffair || matchVictim;
-                               }),
-                records.end());
-            if (records.size() != oldSize) {
-                MARAS_LOG_INFO("RemoveRelationship: Cleaned {} cheating record(s) from pair ({:08X}, {:08X})",
-                               oldSize - records.size(), pairKey.actorA, pairKey.actorB);
-            }
-        }
-
-        bool wasMarriedToPlayer = false;
-        if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
-            RE::FormID npcID = (actorA == kPlayerFormID) ? actorB : actorA;
-            wasMarriedToPlayer = (GetRelationshipStatus(npcID, kPlayerFormID) == RelationshipStatus::Married);
-            ClearPartnerIntent(npcID);
-
-            // Reset the (npcID, Player) pair to a clean Candidate record with no history or flags
-            auto& pairData = GetOrCreatePairData(npcID, kPlayerFormID);
-            pairData.status = RelationshipStatus::Candidate;
-            pairData.originalStatus = RelationshipStatus::Unknown;
-            pairData.isOpen = false;
-            pairData.statusHistory.clear();
-            pairData.cheatingRecords.clear();
-
-            UpdateTrackedFactionRank(npcID, RelationshipStatus::Candidate);
-            ManageFactions(npcID, kPlayerFormID, RelationshipStatus::Candidate);
-
-            SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(npcID);
-            SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(npcID);
-            (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(npcID);
-            AffectionService::GetSingleton().RemoveNPCData(npcID);
+        // Pre-clear partner intents and spouse household/hierarchy engine state before edge reset/erase
+        if (isPlayerPair) {
+            ClearPartnerIntent(playerPartnerID);
+            SpouseHierarchyManager::GetSingleton().OnSpouseRemoved(playerPartnerID);
+            SpouseAssetsService::GetSingleton().StopShareHouseWithPlayer(playerPartnerID);
+            (void)PlayerHouseService::GetSingleton().RemoveTenantFromPlayerHouse(playerPartnerID);
+            AffectionService::GetSingleton().RemoveNPCData(playerPartnerID);
         } else {
-            // Clear any partner intents whose relatedLoverID was the removed affair partner
-            std::vector<RE::FormID> intentsToClear;
-            if (auto itA = pendingPartnerIntents_.find(actorA);
-                itA != pendingPartnerIntents_.end() && itA->second.relatedLoverID == actorB) {
-                intentsToClear.push_back(actorA);
+            if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ actorA }).relatedLover.raw() == actorB) {
+                ClearPartnerIntent(actorA);
             }
-            if (auto itB = pendingPartnerIntents_.find(actorB);
-                itB != pendingPartnerIntents_.end() && itB->second.relatedLoverID == actorA) {
-                intentsToClear.push_back(actorB);
+            if (State::WorldStore::GetSingleton().Snapshot()->relationships->GetPendingIntent(State::ActorId{ actorB }).relatedLover.raw() == actorA) {
+                ClearPartnerIntent(actorB);
             }
-            for (RE::FormID pID : intentsToClear) {
-                ClearPartnerIntent(pID);
-            }
-
-            // NPC-to-NPC pair: completely erase the pair record
-            RelationshipPairKey key(actorA, actorB);
-            UnindexPair(key);
-            relationshipPairs.erase(key);
-
-            // Ensure both NPCs remain registered as Candidates with Player if they have no player relationship record yet
-            for (RE::FormID npcID : { actorA, actorB }) {
-                if (GetRelationshipStatus(npcID, kPlayerFormID) == RelationshipStatus::Unknown) {
-                    auto& playerPair = GetOrCreatePairData(npcID, kPlayerFormID);
-                    playerPair.status = RelationshipStatus::Candidate;
-                    UpdateTrackedFactionRank(npcID, RelationshipStatus::Candidate);
-                }
-            }
-
-            ManageFactions(actorA, actorB, RelationshipStatus::Candidate);
-            ManageFactions(actorB, actorA, RelationshipStatus::Candidate);
         }
 
-        // If a vanilla child had one of (actorA, actorB) auto-inferred as a second bio parent solely from this
-        // relationship during ScanExistingRelationships (without an engine ParentChild BGSRelationship), strip that inferred bio link
-        // before evaluating divorce custody so sole custody goes to the actual parent.
+        // Pre-compute inferred vanilla bio parent strips outside Modify (inspects TESNPC::relationships)
         auto hasEngineParentChildLink = [](RE::FormID childActorID, RE::FormID parentActorID) -> bool {
             constexpr RE::FormID kParentChildAssocFormID = 0x000142C6;
             if (childActorID == 0 || parentActorID == 0) return false;
@@ -2046,21 +2170,154 @@ namespace MARAS {
             return false;
         };
 
-        for (auto& [cID, entry] : childrenByID) {
-            if (entry.isBiologicalChild || entry.isAdopted) continue;
-            bool aIsBio = MatchesActor(entry.bioMotherID, actorA) || MatchesActor(entry.bioFatherID, actorA);
-            bool bIsBio = MatchesActor(entry.bioMotherID, actorB) || MatchesActor(entry.bioFatherID, actorB);
-            if (aIsBio && bIsBio) {
-                bool aEngineLink = hasEngineParentChildLink(cID, actorA);
-                bool bEngineLink = hasEngineParentChildLink(cID, actorB);
-                if (aEngineLink && !bEngineLink) {
-                    if (MatchesActor(entry.bioMotherID, actorB)) entry.bioMotherID = 0;
-                    if (MatchesActor(entry.bioFatherID, actorB)) entry.bioFatherID = 0;
-                } else if (bEngineLink && !aEngineLink) {
-                    if (MatchesActor(entry.bioMotherID, actorA)) entry.bioMotherID = 0;
-                    if (MatchesActor(entry.bioFatherID, actorA)) entry.bioFatherID = 0;
+        struct InferredBioStrip {
+            RE::FormID childID{ 0 };
+            RE::FormID actorToStrip{ 0 };
+        };
+        std::vector<InferredBioStrip> bioStrips;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            for (const auto& [cId, rec] : snap->lineage->AllChildren()) {
+                if (rec.isBiologicalChild || rec.isAdopted) continue;
+                const bool aIsBio = MatchesActor(rec.bioMother.raw(), actorA) || MatchesActor(rec.bioFather.raw(), actorA);
+                const bool bIsBio = MatchesActor(rec.bioMother.raw(), actorB) || MatchesActor(rec.bioFather.raw(), actorB);
+                if (aIsBio && bIsBio) {
+                    const bool aEngineLink = hasEngineParentChildLink(cId.raw(), actorA);
+                    const bool bEngineLink = hasEngineParentChildLink(cId.raw(), actorB);
+                    if (aEngineLink && !bEngineLink) {
+                        bioStrips.push_back({ cId.raw(), actorB });
+                    } else if (bEngineLink && !aEngineLink) {
+                        bioStrips.push_back({ cId.raw(), actorA });
+                    }
                 }
             }
+        }
+
+        std::unordered_set<RE::FormID> affectedActors{ actorA, actorB };
+        std::vector<std::pair<State::CanonicalPairKey, std::size_t>> cleanedCheatLogs;
+        std::array<RE::FormID, 2> addedCandidateActors{};
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto removePendingFor = [&](RE::FormID ownerBase, RE::FormID partnerBase, RE::FormID partnerRef) {
+                if (ownerBase == 0) return;
+                const auto& allPending = ws.actors->AllPendingRelationships();
+                const auto it = allPending.find(State::BaseId{ ownerBase });
+                if (it == allPending.end()) return;
+                std::vector<State::PendingRelationshipEntry> kept;
+                kept.reserve(it->second.size());
+                for (const auto& entry : it->second) {
+                    const bool matches = (partnerBase != 0 && entry.partnerBaseId.raw() == partnerBase) ||
+                                         (partnerRef != 0 && entry.partnerRefId.raw() == partnerRef);
+                    if (!matches) {
+                        kept.push_back(entry);
+                    }
+                }
+                (void)ws.actors.Write().ErasePendingRelationshipsForBase(State::BaseId{ ownerBase });
+                for (const auto& entry : kept) {
+                    ws.actors.Write().AddPendingRelationship(State::BaseId{ ownerBase }, entry);
+                }
+            };
+            removePendingFor(baseA, baseB, actorB);
+            removePendingFor(baseB, baseA, actorA);
+
+            // Clean any AffairRecord where (actorA, actorB) is (cheater, paramour) or (cheater, deceivedPartner)
+            auto matchesRemovedPair = [actorA, actorB](const State::AffairRecord& rec) -> bool {
+                const bool matchAffair = (rec.cheater.raw() == actorA && rec.paramour.raw() == actorB) ||
+                                         (rec.cheater.raw() == actorB && rec.paramour.raw() == actorA);
+                const bool matchVictim = (rec.cheater.raw() == actorA && rec.deceivedPartner.raw() == actorB) ||
+                                         (rec.cheater.raw() == actorB && rec.deceivedPartner.raw() == actorA);
+                return matchAffair || matchVictim;
+            };
+
+            std::unordered_set<State::CanonicalPairKey, State::CanonicalPairKeyHash> affectedCouplePairs;
+            for (const auto& [affId, rec] : ws.affairs->AllRecords()) {
+                (void)affId;
+                if (matchesRemovedPair(rec)) {
+                    if (!rec.cheater.IsNull()) affectedActors.insert(rec.cheater.raw());
+                    if (!rec.deceivedPartner.IsNull()) affectedActors.insert(rec.deceivedPartner.raw());
+                    if (!rec.paramour.IsNull()) affectedActors.insert(rec.paramour.raw());
+                    affectedCouplePairs.insert(rec.CouplePair());
+                }
+            }
+            for (const auto& couplePair : affectedCouplePairs) {
+                const auto existing = ws.affairs->GetForCouplePair(couplePair);
+                std::vector<State::AffairRecord> kept;
+                std::size_t removedCount = 0;
+                for (const auto& rec : existing) {
+                    if (matchesRemovedPair(rec)) {
+                        ++removedCount;
+                    } else {
+                        kept.push_back(rec);
+                    }
+                }
+                ws.affairs.Write().EraseForCouplePair(couplePair);
+                for (const auto& rec : kept) {
+                    ws.affairs.Write().ImportSerializedRecord(
+                        rec.CouplePair(),
+                        rec.cheater,
+                        rec.deceivedPartner,
+                        rec.paramour,
+                        rec.incidentCount,
+                        rec.lastTimestamp,
+                        rec.isSecret,
+                        rec.affairType,
+                        rec.affairStatus,
+                        rec.affairStage,
+                        rec.stageStartDay);
+                }
+                if (removedCount > 0) {
+                    cleanedCheatLogs.emplace_back(couplePair, removedCount);
+                }
+            }
+
+            if (isPlayerPair) {
+                // Reset the (npcID, Player) pair to a clean Candidate record with no history or flags
+                auto& edge = ws.relationships.Write().GetOrCreateEdge(State::ActorId{ playerPartnerID }, State::ActorId::Player());
+                edge.status = State::RelationshipStatus::Candidate;
+                edge.originalStatus = State::RelationshipStatus::Unknown;
+                edge.isOpen = false;
+                edge.statusHistory.clear();
+            } else {
+                // NPC-to-NPC pair: completely erase the pair record
+                (void)ws.relationships.Write().EraseEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+                std::size_t idx = 0;
+                for (RE::FormID npcID : { actorA, actorB }) {
+                    if (ws.relationships->FindEdge(State::ActorId{ npcID }, State::ActorId::Player()) == nullptr) {
+                        auto& playerEdge = ws.relationships.Write().GetOrCreateEdge(State::ActorId{ npcID }, State::ActorId::Player());
+                        playerEdge.status = State::RelationshipStatus::Candidate;
+                        addedCandidateActors[idx++] = npcID;
+                    }
+                }
+            }
+
+            for (const auto& strip : bioStrips) {
+                if (auto* child = ws.lineage.Write().FindChildMutable(State::ChildId{ strip.childID })) {
+                    if (MatchesActor(child->bioMother.raw(), strip.actorToStrip)) {
+                        child->bioMother = State::ActorId{};
+                    }
+                    if (MatchesActor(child->bioFather.raw(), strip.actorToStrip)) {
+                        child->bioFather = State::ActorId{};
+                    }
+                }
+            }
+        });
+
+        for (const auto& [couplePair, count] : cleanedCheatLogs) {
+            MARAS_LOG_INFO("RemoveRelationship: Cleaned {} cheating record(s) from pair ({:08X}, {:08X})",
+                           count, couplePair.first.raw(), couplePair.second.raw());
+        }
+
+        if (isPlayerPair) {
+            UpdateTrackedFactionRank(playerPartnerID, RelationshipStatus::Candidate);
+            ManageFactions(playerPartnerID, kPlayerFormID, RelationshipStatus::Candidate);
+        } else {
+            for (const RE::FormID npcID : addedCandidateActors) {
+                if (npcID != 0) {
+                    UpdateTrackedFactionRank(npcID, RelationshipStatus::Candidate);
+                }
+            }
+            ManageFactions(actorA, actorB, RelationshipStatus::Candidate);
+            ManageFactions(actorB, actorA, RelationshipStatus::Candidate);
         }
 
         // Resolve custody of any shared children or unborn pregnancies using the Divorce Custody rules
@@ -2133,7 +2390,15 @@ namespace MARAS {
 
     // Bulk retrievals
     std::vector<RE::FormID> NPCRelationshipManager::GetAllRegisteredNPCs() const {
-        return std::vector<RE::FormID>(allRegistered.begin(), allRegistered.end());
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        std::vector<RE::FormID> result;
+        result.reserve(snap->actors->Size());
+        for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
+            if (prof.isRegisteredAdult && !refId.IsNull() && !refId.IsPlayer()) {
+                result.push_back(refId.raw());
+            }
+        }
+        return result;
     }
 
     std::vector<RE::FormID> NPCRelationshipManager::GetAllCandidates(RE::FormID targetFormID) const {
@@ -2174,10 +2439,14 @@ namespace MARAS {
 
     std::vector<RE::FormID> NPCRelationshipManager::GetPartners(RE::FormID npcFormID, RelationshipStatus status) const {
         std::vector<RE::FormID> result;
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() && it->second.status == status) {
-                RE::FormID partner = key.GetOther(npcFormID);
+        if (npcFormID == 0) return result;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const State::ActorId actor{ npcFormID };
+        const auto targetStateStatus = static_cast<State::RelationshipStatus>(status);
+        for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge && edge->status == targetStateStatus) {
+                const RE::FormID partner = key.Other(actor).raw();
                 if (partner != 0) result.push_back(partner);
             }
         }
@@ -2186,12 +2455,15 @@ namespace MARAS {
 
     std::vector<RE::FormID> NPCRelationshipManager::GetAllPartners(RE::FormID npcFormID) const {
         std::vector<RE::FormID> result;
-        for (const auto& key : GetActorPairKeys(npcFormID)) {
-            auto it = relationshipPairs.find(key);
-            if (it != relationshipPairs.end() &&
-                it->second.status != RelationshipStatus::Unknown &&
-                it->second.status != RelationshipStatus::Candidate) {
-                RE::FormID partner = key.GetOther(npcFormID);
+        if (npcFormID == 0) return result;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const State::ActorId actor{ npcFormID };
+        for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (edge &&
+                edge->status != State::RelationshipStatus::Unknown &&
+                edge->status != State::RelationshipStatus::Candidate) {
+                const RE::FormID partner = key.Other(actor).raw();
                 if (partner != 0) result.push_back(partner);
             }
         }
@@ -2199,15 +2471,59 @@ namespace MARAS {
     }
 
     // Data access
-    const NPCProfileData* NPCRelationshipManager::GetNPCProfile(RE::FormID npcFormID) const {
-        auto it = npcProfiles.find(npcFormID);
-        return (it != npcProfiles.end()) ? &it->second : nullptr;
+    std::optional<NPCProfileData> NPCRelationshipManager::GetNPCProfile(RE::FormID npcFormID) const {
+        if (npcFormID == 0) return std::nullopt;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* rec = snap->actors->Find(State::RefId{ npcFormID });
+        if (!rec) return std::nullopt;
+        return LegacyAdapters::ToLegacyNPCProfile(*rec);
     }
 
-    const NPCRelationshipData* NPCRelationshipManager::GetNPCData(RE::FormID npcFormID, RE::FormID targetFormID) const {
-        RelationshipPairKey key(npcFormID, targetFormID);
-        auto it = relationshipPairs.find(key);
-        return (it != relationshipPairs.end()) ? &it->second : nullptr;
+    void NPCRelationshipManager::UpsertNPCProfile(const NPCProfileData& profile) {
+        if (profile.formID == 0) return;
+
+        RE::FormID resolvedBaseId = 0;
+        if (profile.formID == kPlayerFormID) {
+            resolvedBaseId = kPlayerBaseID;
+        } else if (Foundation::IsDynamicRuntimeActorRawId(profile.formID)) {
+            resolvedBaseId = profile.formID;
+        } else {
+            resolvedBaseId = NPCIndex::GetSingleton().GetBaseID(profile.formID);
+            if (resolvedBaseId == 0) {
+                if (auto* base = ActorSvc::GetActorBase(profile.formID)) {
+                    resolvedBaseId = base->GetFormID();
+                }
+            }
+        }
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const auto* existing = ws.actors->Find(State::RefId{ profile.formID });
+            const State::BaseId effectiveBase =
+                (resolvedBaseId != 0) ? State::BaseId{ resolvedBaseId } : (existing ? existing->baseId : State::BaseId{});
+            const bool isRegAdult = existing ? existing->isRegisteredAdult : true;
+            ws.actors.Write().Upsert(LegacyAdapters::ToActorProfileRecord(profile, effectiveBase, isRegAdult));
+        });
+    }
+
+    std::optional<NPCRelationshipData> NPCRelationshipManager::GetNPCData(RE::FormID npcFormID, RE::FormID targetFormID) const {
+        if (npcFormID == 0 || targetFormID == 0) return std::nullopt;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ npcFormID }, State::ActorId{ targetFormID });
+        if (!edge) return std::nullopt;
+        const auto coupleAffairs = snap->affairs->GetForCouplePair(edge->pair);
+        return LegacyAdapters::ToLegacyRelationshipData(*edge, coupleAffairs);
+    }
+
+    std::unordered_map<RelationshipPairKey, NPCRelationshipData, RelationshipPairKeyHash>
+    NPCRelationshipManager::GetAllRelationshipPairs() const {
+        std::unordered_map<RelationshipPairKey, NPCRelationshipData, RelationshipPairKeyHash> result;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [pairKey, edge] : snap->relationships->AllEdges()) {
+            RelationshipPairKey legacyKey(pairKey.first.raw(), pairKey.second.raw());
+            const auto coupleAffairs = snap->affairs->GetForCouplePair(edge.pair);
+            result.emplace(legacyKey, LegacyAdapters::ToLegacyRelationshipData(edge, coupleAffairs));
+        }
+        return result;
     }
 
     RelationshipStatus NPCRelationshipManager::GetRelationshipStatus(RE::FormID npcFormID, RE::FormID targetFormID) const {
@@ -2249,8 +2565,11 @@ namespace MARAS {
             return false;
         }
 
-        auto& profile = npcProfiles[npcFormID];
-        profile.homeMarker = markerFormID;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->legacyHomeMarker = State::RefId{ markerFormID };
+            }
+        });
 
         if (markerFormID != 0) {
             SetLinkedRefForHomeMarker(npcFormID, markerFormID);
@@ -2269,9 +2588,11 @@ namespace MARAS {
         if (npcFormID == 0) {
             return;
         }
-        if (auto it = npcProfiles.find(npcFormID); it != npcProfiles.end()) {
-            it->second.currentHome.reset();
-        }
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->legacyCurrentHome.reset();
+            }
+        });
         if (!IsSyntheticChildID(npcFormID)) {
             if (auto* homeSandboxKeyword = FormCache::GetSingleton().GetHomeSandboxKeyword()) {
                 Utils::RemoveLinkedRef(npcFormID, homeSandboxKeyword);
@@ -2316,52 +2637,81 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::AddTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID) {
-        auto it = npcProfiles.find(npcFormID);
-        if (it == npcProfiles.end()) {
-            return false;
-        }
-        it->second.addedKeywords.insert(keywordFormID);
-        return true;
+        if (npcFormID == 0 || keywordFormID == 0) return false;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->addedKeywords.insert(State::FormRawId{ keywordFormID });
+                updated = true;
+            }
+        });
+        return updated;
     }
 
     bool NPCRelationshipManager::RemoveTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID) {
-        auto it = npcProfiles.find(npcFormID);
-        if (it == npcProfiles.end()) {
-            return false;
-        }
-        it->second.addedKeywords.erase(keywordFormID);
-        return true;
+        if (npcFormID == 0 || keywordFormID == 0) return false;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->addedKeywords.erase(State::FormRawId{ keywordFormID });
+                updated = true;
+            }
+        });
+        return updated;
     }
 
     // Status change history management
-    const std::vector<StatusChangeRecord>& NPCRelationshipManager::GetStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID) const {
-        static const std::vector<StatusChangeRecord> emptyHistory;
-        auto data = GetNPCData(npcFormID, targetFormID);
-        return data ? data->statusHistory : emptyHistory;
+    std::vector<StatusChangeRecord> NPCRelationshipManager::GetStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID) const {
+        std::vector<StatusChangeRecord> history;
+        if (npcFormID == 0 || targetFormID == 0) return history;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ npcFormID }, State::ActorId{ targetFormID });
+        if (!edge) return history;
+        history.reserve(edge->statusHistory.size());
+        for (const auto& entry : edge->statusHistory) {
+            history.push_back(LegacyAdapters::ToLegacyStatusChange(entry));
+        }
+        return history;
     }
 
     std::optional<StatusChangeRecord> NPCRelationshipManager::GetStatusHistoryEntry(RE::FormID npcFormID, RE::FormID targetFormID, std::size_t index) const {
-        auto data = GetNPCData(npcFormID, targetFormID);
-        if (!data || index >= data->statusHistory.size()) {
+        const auto history = GetStatusHistory(npcFormID, targetFormID);
+        if (index >= history.size()) {
             return std::nullopt;
         }
-        return data->statusHistory[index];
+        return history[index];
     }
 
     size_t NPCRelationshipManager::GetStatusHistoryCount(RE::FormID npcFormID, RE::FormID targetFormID) const {
-        return GetStatusHistory(npcFormID, targetFormID).size();
+        if (npcFormID == 0 || targetFormID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ npcFormID }, State::ActorId{ targetFormID });
+        return edge ? edge->statusHistory.size() : 0;
     }
 
     void NPCRelationshipManager::ClearStatusHistory(RE::FormID npcFormID, RE::FormID targetFormID) {
-        RelationshipPairKey key(npcFormID, targetFormID);
-        auto it = relationshipPairs.find(key);
-        if (it != relationshipPairs.end()) {
-            it->second.statusHistory.clear();
-        }
+        if (npcFormID == 0 || targetFormID == 0) return;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const State::CanonicalPairKey key{ State::ActorId{ npcFormID }, State::ActorId{ targetFormID } };
+            if (const auto* existing = ws.relationships->FindEdge(key)) {
+                auto updated = *existing;
+                updated.statusHistory.clear();
+                ws.relationships.Write().UpsertEdge(std::move(updated));
+            }
+        });
     }
 
     // Statistics
-    size_t NPCRelationshipManager::GetTotalRegisteredCount() const { return allRegistered.size(); }
+    size_t NPCRelationshipManager::GetTotalRegisteredCount() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        size_t count = 0;
+        for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
+            if (prof.isRegisteredAdult && !refId.IsNull() && !refId.IsPlayer()) {
+                ++count;
+            }
+        }
+        return count;
+    }
 
     size_t NPCRelationshipManager::GetCandidateCount(RE::FormID targetFormID) const {
         return CountPartnersWithStatus(targetFormID, RelationshipStatus::Candidate);
@@ -2625,8 +2975,11 @@ namespace MARAS {
     bool NPCRelationshipManager::SetSocialClass(RE::FormID npcFormID, std::int8_t socialClass) {
         if (socialClass < 0 || socialClass >= static_cast<std::int8_t>(SocialClass::_Count)) return false;
         if (!EnsureRegistered(npcFormID)) return false;
-        auto& profile = npcProfiles[npcFormID];
-        profile.socialClass = static_cast<SocialClass>(socialClass);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->socialClass = static_cast<State::SocialClass>(socialClass);
+            }
+        });
         AddToSocialClassFaction(npcFormID, socialClass);
         return true;
     }
@@ -2634,8 +2987,11 @@ namespace MARAS {
     bool NPCRelationshipManager::SetSkillType(RE::FormID npcFormID, std::int8_t skillType) {
         if (skillType < 0 || skillType >= static_cast<std::int8_t>(SkillType::_Count)) return false;
         if (!EnsureRegistered(npcFormID)) return false;
-        auto& profile = npcProfiles[npcFormID];
-        profile.skillType = static_cast<SkillType>(skillType);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->skillType = static_cast<State::SkillType>(skillType);
+            }
+        });
         AddToSkillTypeFaction(npcFormID, skillType);
         return true;
     }
@@ -2643,8 +2999,11 @@ namespace MARAS {
     bool NPCRelationshipManager::SetTemperament(RE::FormID npcFormID, std::int8_t temperament) {
         if (temperament < 0 || temperament >= static_cast<std::int8_t>(Temperament::_Count)) return false;
         if (!EnsureRegistered(npcFormID)) return false;
-        auto& profile = npcProfiles[npcFormID];
-        profile.temperament = static_cast<Temperament>(temperament);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
+                prof->temperament = static_cast<State::Temperament>(temperament);
+            }
+        });
         AddToTemperamentFaction(npcFormID, temperament);
         return true;
     }
@@ -2690,18 +3049,59 @@ namespace MARAS {
             return NPCTypeDeterminer::ComputeTemperament(socialClass, skillType);
         }();
 
-        allRegistered.insert(npcFormID);
-        MARAS_LOG_INFO("EnsureRegistered: inserted {:08X} into allRegistered", npcFormID);
-        if (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Unknown) {
-            UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
+        RE::FormID resolvedBaseID = 0;
+        if (Foundation::IsDynamicRuntimeActorRawId(npcFormID)) {
+            resolvedBaseID = npcFormID;
+        } else {
+            resolvedBaseID = npcIndex.GetBaseID(npcFormID);
+            if (resolvedBaseID == 0) {
+                if (auto* actorBase = ActorSvc::GetActorBase(npcFormID)) {
+                    resolvedBaseID = actorBase->GetFormID();
+                }
+            }
         }
 
+        bool newlyRegistered = false;
         try {
-            npcProfiles[npcFormID] = NPCProfileData(npcFormID, socialClass, skillType, temperament);
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                const State::RefId refId{ npcFormID };
+                if (ws.actors->IsRegisteredAdult(refId)) {
+                    return;
+                }
+                NPCProfileData legacyProfile(npcFormID, socialClass, skillType, temperament);
+                if (const auto* existing = ws.actors->Find(refId)) {
+                    if (existing->legacyOriginalHome.has_value()) {
+                        legacyProfile.originalHome = existing->legacyOriginalHome->raw();
+                    }
+                    if (existing->legacyCurrentHome.has_value()) {
+                        legacyProfile.currentHome = existing->legacyCurrentHome->raw();
+                    }
+                    if (existing->legacyHomeMarker.has_value()) {
+                        legacyProfile.homeMarker = existing->legacyHomeMarker->raw();
+                    }
+                    for (const auto kw : existing->addedKeywords) {
+                        legacyProfile.addedKeywords.insert(kw.raw());
+                    }
+                    if (resolvedBaseID == 0) {
+                        resolvedBaseID = existing->baseId.raw();
+                    }
+                }
+                ws.actors.Write().Upsert(
+                    LegacyAdapters::ToActorProfileRecord(legacyProfile, State::BaseId{ resolvedBaseID }, true));
+                newlyRegistered = true;
+            });
         } catch (const std::exception& e) {
             MARAS_LOG_ERROR("Exception while storing NPC profile for {:08X}: {}", npcFormID, e.what());
-            allRegistered.erase(npcFormID);
             return false;
+        }
+
+        if (!newlyRegistered) {
+            return true;
+        }
+
+        MARAS_LOG_INFO("EnsureRegistered: registered {:08X} in WorldStore", npcFormID);
+        if (GetRelationshipStatus(npcFormID, kPlayerFormID) == RelationshipStatus::Unknown) {
+            UpdateTrackedFactionRank(npcFormID, RelationshipStatus::Candidate);
         }
 
         try {
@@ -2733,9 +3133,8 @@ namespace MARAS {
                        Utils::SocialClassToString(socialClass), Utils::SkillTypeToString(skillType),
                        Utils::TemperamentToString(temperament));
 
-        RE::FormID baseID = npcIndex.GetBaseID(npcFormID);
-        if (baseID != 0 && baseID != npcFormID) {
-            TryResolvePendingRelationships(baseID, npcFormID);
+        if (resolvedBaseID != 0 && resolvedBaseID != npcFormID) {
+            TryResolvePendingRelationships(resolvedBaseID, npcFormID);
         }
 
         RecalculateAndUpdateGlobals();
@@ -2743,21 +3142,26 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::HasMarasMaritalHistory(RE::FormID npcFormID) const {
-        for (const auto& [key, data] : relationshipPairs) {
-            if (key.Contains(npcFormID)) {
-                if (data.status == RelationshipStatus::Engaged ||
-                    data.status == RelationshipStatus::Married ||
-                    data.status == RelationshipStatus::Divorced ||
-                    data.status == RelationshipStatus::Jilted) {
+        if (npcFormID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (!edge) continue;
+            const auto status = static_cast<RelationshipStatus>(edge->status);
+            if (status == RelationshipStatus::Engaged ||
+                status == RelationshipStatus::Married ||
+                status == RelationshipStatus::Divorced ||
+                status == RelationshipStatus::Jilted) {
+                return true;
+            }
+            for (const auto& entry : edge->statusHistory) {
+                const auto fromSt = static_cast<RelationshipStatus>(entry.fromStatus);
+                const auto toSt = static_cast<RelationshipStatus>(entry.toStatus);
+                if (fromSt == RelationshipStatus::Engaged || fromSt == RelationshipStatus::Married ||
+                    fromSt == RelationshipStatus::Divorced || fromSt == RelationshipStatus::Jilted ||
+                    toSt == RelationshipStatus::Engaged || toSt == RelationshipStatus::Married ||
+                    toSt == RelationshipStatus::Divorced || toSt == RelationshipStatus::Jilted) {
                     return true;
-                }
-                for (const auto& entry : data.statusHistory) {
-                    if (entry.fromStatus == RelationshipStatus::Engaged || entry.fromStatus == RelationshipStatus::Married ||
-                        entry.fromStatus == RelationshipStatus::Divorced || entry.fromStatus == RelationshipStatus::Jilted ||
-                        entry.toStatus == RelationshipStatus::Engaged || entry.toStatus == RelationshipStatus::Married ||
-                        entry.toStatus == RelationshipStatus::Divorced || entry.toStatus == RelationshipStatus::Jilted) {
-                        return true;
-                    }
                 }
             }
         }
@@ -2765,10 +3169,11 @@ namespace MARAS {
     }
 
     RelationshipStatus NPCRelationshipManager::GetOriginalRelationshipStatus(RE::FormID actorA, RE::FormID actorB) const {
-        RelationshipPairKey key(actorA, actorB);
-        auto it = relationshipPairs.find(key);
-        if (it != relationshipPairs.end()) {
-            return it->second.originalStatus;
+        if (actorA == 0 || actorB == 0) return RelationshipStatus::Unknown;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+        if (edge) {
+            return static_cast<RelationshipStatus>(edge->originalStatus);
         }
         return RelationshipStatus::Unknown;
     }
@@ -2776,8 +3181,10 @@ namespace MARAS {
     bool NPCRelationshipManager::SetOriginalRelationshipStatus(RE::FormID actorA, RE::FormID actorB, RelationshipStatus status) {
         EnsureRegistered(actorA);
         EnsureRegistered(actorB);
-        auto& pair = GetOrCreatePairData(actorA, actorB);
-        pair.originalStatus = status;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& edge = ws.relationships.Write().GetOrCreateEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+            edge.originalStatus = static_cast<State::RelationshipStatus>(status);
+        });
 
         MARAS_LOG_INFO("Set original relationship status between {:08X} and {:08X} to {}",
                        actorA, actorB, Utils::RelationshipStatusToString(status));
@@ -2790,7 +3197,10 @@ namespace MARAS {
         // relationship that was superseded (e.g. by the Player) must pass through its vanilla state first.
         if (targetStatus == RelationshipStatus::Divorced || targetStatus == RelationshipStatus::ExDating ||
             targetStatus == RelationshipStatus::ExLover) {
-            GetOrCreatePairData(actorA, actorB).status = vanillaStatus;
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                auto& edge = ws.relationships.Write().GetOrCreateEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+                edge.status = static_cast<State::RelationshipStatus>(vanillaStatus);
+            });
         }
         SkyrimNetMemoryService::SuppressScope suppressMemories;
         return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/false);
@@ -2865,14 +3275,16 @@ namespace MARAS {
         }
 
         // Check if an actor has an existing MARAS relationship (not Candidate/Unknown) with a non-vanilla partner (e.g. Player)
-        auto hasNonVanillaMarasRelationship = [this, &vanillaPairKeys](RE::FormID npcFormID) -> bool {
-            for (const auto& key : GetActorPairKeys(npcFormID)) {
-                auto it = relationshipPairs.find(key);
-                if (it != relationshipPairs.end() &&
-                    it->second.status != RelationshipStatus::Candidate &&
-                    it->second.status != RelationshipStatus::Unknown) {
-                    // If this pair is NOT a vanilla relationship (e.g. Player or custom mod partner)
-                    if (vanillaPairKeys.find(key) == vanillaPairKeys.end()) {
+        auto hasNonVanillaMarasRelationship = [&vanillaPairKeys](RE::FormID npcFormID) -> bool {
+            if (npcFormID == 0) return false;
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+                const auto* edge = snap->relationships->FindEdge(key);
+                if (edge &&
+                    edge->status != State::RelationshipStatus::Candidate &&
+                    edge->status != State::RelationshipStatus::Unknown) {
+                    RelationshipPairKey legacyKey(key.first.raw(), key.second.raw());
+                    if (vanillaPairKeys.find(legacyKey) == vanillaPairKeys.end()) {
                         return true;
                     }
                 }
@@ -2881,12 +3293,16 @@ namespace MARAS {
         };
 
         // Check if an actor is in an active, non-open main-tier relationship (Dating/Engaged/Married) with a non-vanilla partner
-        auto hasNonVanillaMainTierRelationship = [this, &vanillaPairKeys](RE::FormID npcFormID) -> bool {
-            for (const auto& key : GetActorPairKeys(npcFormID)) {
-                auto it = relationshipPairs.find(key);
-                if (it != relationshipPairs.end() && IsMainTier(it->second.status) && !it->second.isOpen &&
-                    vanillaPairKeys.find(key) == vanillaPairKeys.end()) {
-                    return true;
+        auto hasNonVanillaMainTierRelationship = [&vanillaPairKeys](RE::FormID npcFormID) -> bool {
+            if (npcFormID == 0) return false;
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            for (const auto& key : snap->relationships->GetAdjacentPairs(State::ActorId{ npcFormID })) {
+                const auto* edge = snap->relationships->FindEdge(key);
+                if (edge && IsMainTier(static_cast<RelationshipStatus>(edge->status)) && !edge->isOpen) {
+                    RelationshipPairKey legacyKey(key.first.raw(), key.second.raw());
+                    if (vanillaPairKeys.find(legacyKey) == vanillaPairKeys.end()) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -3070,12 +3486,20 @@ namespace MARAS {
                 RE::FormID r1 = isRef1 ? refID1 : 0;
                 RE::FormID r2 = isRef2 ? refID2 : 0;
 
-                if (!isRef1) {
-                    AddPendingRelationship(baseID1, PendingRelationshipData(baseID2, r2, targetMarasStatus, vanillaStatus));
-                }
-                if (!isRef2) {
-                    AddPendingRelationship(baseID2, PendingRelationshipData(baseID1, r1, targetMarasStatus, vanillaStatus));
-                }
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    if (!isRef1) {
+                        ws.actors.Write().AddPendingRelationship(
+                            State::BaseId{ baseID1 },
+                            LegacyAdapters::ToPendingRelationshipEntry(
+                                PendingRelationshipData(baseID2, r2, targetMarasStatus, vanillaStatus)));
+                    }
+                    if (!isRef2) {
+                        ws.actors.Write().AddPendingRelationship(
+                            State::BaseId{ baseID2 },
+                            LegacyAdapters::ToPendingRelationshipEntry(
+                                PendingRelationshipData(baseID1, r1, targetMarasStatus, vanillaStatus)));
+                    }
+                });
                 MARAS_LOG_INFO("ScanExistingRelationships: Deferred relationship between Base {:08X} (ref {:08X}) and Base {:08X} (ref {:08X})",
                                baseID1, r1, baseID2, r2);
                 continue;
@@ -3092,13 +3516,15 @@ namespace MARAS {
                 if (targetMarasStatus != RelationshipStatus::Unknown) {
                     ApplyImportedVanillaStatus(refID1, refID2, vanillaStatus, targetMarasStatus);
 
-                    auto& pairData = GetOrCreatePairData(refID1, refID2);
                     RE::FormID defaultInit = DetermineDefaultInitiator(refID1, refID2);
-                    for (auto& hist : pairData.statusHistory) {
-                        hist.timestamp = -1.0f;
-                        hist.fromStatus = RelationshipStatus::Unknown;
-                        hist.initiatorFormID = defaultInit;
-                    }
+                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                        auto& edge = ws.relationships.Write().GetOrCreateEdge(State::ActorId{ refID1 }, State::ActorId{ refID2 });
+                        for (auto& hist : edge.statusHistory) {
+                            hist.timestamp = -1.0f;
+                            hist.fromStatus = State::RelationshipStatus::Unknown;
+                            hist.initiator = State::ActorId{ defaultInit };
+                        }
+                    });
 
                     MARAS_LOG_INFO("ScanExistingRelationships: Assigned MARAS status {} (original {}) between {} ({:08X}) and {} ({:08X})",
                                    Utils::RelationshipStatusToString(targetMarasStatus),
@@ -3133,13 +3559,17 @@ namespace MARAS {
             // If a second ParentChild BGSRelationship record was not present, look for a romantic partner of parent A
             if (parentBBaseID == 0 && parentBRefID == 0) {
                 RE::FormID lookupParentA = parentARefID != 0 ? parentARefID : entry.parentABaseID;
-                for (const auto& [key, data] : relationshipPairs) {
-                    if (key.Contains(lookupParentA)) {
-                        if (data.status == RelationshipStatus::Married || data.status == RelationshipStatus::Dating || data.status == RelationshipStatus::Lover) {
-                            parentBRefID = key.GetOther(lookupParentA);
-                            parentBBaseID = npcIndex.GetBaseID(parentBRefID);
-                            break;
-                        }
+                const auto snap = State::WorldStore::GetSingleton().Snapshot();
+                const State::ActorId parentActor{ lookupParentA };
+                for (const auto& key : snap->relationships->GetAdjacentPairs(parentActor)) {
+                    const auto* edge = snap->relationships->FindEdge(key);
+                    if (edge &&
+                        (edge->status == State::RelationshipStatus::Married ||
+                         edge->status == State::RelationshipStatus::Dating ||
+                         edge->status == State::RelationshipStatus::Lover)) {
+                        parentBRefID = key.Other(parentActor).raw();
+                        parentBBaseID = npcIndex.GetBaseID(parentBRefID);
+                        break;
                     }
                 }
             }
@@ -3199,11 +3629,18 @@ namespace MARAS {
             }
 
             // If child is unspawned or either parent is not yet spawned, register pending entry
-            AddPendingChild(entry.childBaseID,
-                            PendingChildData(entry.childBaseID, childRefID,
-                                             entry.parentABaseID, parentARefID,
-                                             parentBBaseID, parentBRefID,
-                                             entry.isAdopted));
+            const PendingChildData pendingChild(
+                entry.childBaseID, childRefID,
+                entry.parentABaseID, parentARefID,
+                parentBBaseID, parentBRefID,
+                entry.isAdopted);
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                ws.lineage.Write().AddPendingChild(
+                    State::BaseId{ entry.childBaseID },
+                    LegacyAdapters::ToPendingChildEntry(pendingChild));
+            });
+            MARAS_LOG_INFO("ScanExistingRelationships: Deferred child Base {:08X} (parents {:08X} / {:08X}, adopted: {}) to pending",
+                           entry.childBaseID, entry.parentABaseID, parentBBaseID, entry.isAdopted);
         }
 
         SyncAllMarriedCouplesChildCustody();
@@ -3308,13 +3745,15 @@ namespace MARAS {
                             if (currentStatus == RelationshipStatus::Candidate || currentStatus == RelationshipStatus::Unknown) {
                                 ApplyImportedVanillaStatus(kPlayerRefID, npcRefID, entry.vanillaStatus, chosenStatus);
 
-                                auto& pairData = GetOrCreatePairData(kPlayerRefID, npcRefID);
                                 RE::FormID defaultInit = DetermineDefaultInitiator(kPlayerRefID, npcRefID);
-                                for (auto& hist : pairData.statusHistory) {
-                                    hist.timestamp = -1.0f;
-                                    hist.fromStatus = RelationshipStatus::Unknown;
-                                    hist.initiatorFormID = defaultInit;
-                                }
+                                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                                    auto& edge = ws.relationships.Write().GetOrCreateEdge(State::ActorId::Player(), State::ActorId{ npcRefID });
+                                    for (auto& hist : edge.statusHistory) {
+                                        hist.timestamp = -1.0f;
+                                        hist.fromStatus = State::RelationshipStatus::Unknown;
+                                        hist.initiator = State::ActorId{ defaultInit };
+                                    }
+                                });
 
                                 MARAS_LOG_INFO("ScanExistingRelationships (Audit Modal): Imported player relationship {} (original {}) with {} ({:08X})",
                                                Utils::RelationshipStatusToString(chosenStatus),
@@ -3323,9 +3762,12 @@ namespace MARAS {
                                 auditImported++;
                             }
                         } else {
-                            AddPendingRelationship(
-                                entry.npcBaseID,
-                                PendingRelationshipData(kPlayerBaseID, kPlayerRefID, chosenStatus, entry.vanillaStatus));
+                            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                                ws.actors.Write().AddPendingRelationship(
+                                    State::BaseId{ entry.npcBaseID },
+                                    LegacyAdapters::ToPendingRelationshipEntry(
+                                        PendingRelationshipData(kPlayerBaseID, kPlayerRefID, chosenStatus, entry.vanillaStatus)));
+                            });
                             MARAS_LOG_INFO("ScanExistingRelationships (Audit Modal): Deferred player relationship {} (original {}) for unspawned NPC '{}' (Base {:08X})",
                                            Utils::RelationshipStatusToString(chosenStatus),
                                            Utils::RelationshipStatusToString(entry.vanillaStatus),
@@ -3343,22 +3785,25 @@ namespace MARAS {
                 });
         }
 
+        const auto finalSnap = State::WorldStore::GetSingleton().Snapshot();
         auto endTime = std::chrono::steady_clock::now();
         auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         MARAS_LOG_INFO("ScanExistingRelationships: Complete in {} ms — Scanned {} vanilla relationships, imported {} adult pairs, {} child records, queued {} player audit entries, deferred {} pending pairs and {} pending children",
-                       elapsedMs, scannedCount, importedCount, childImportedCount, playerAuditEntries.size(), pendingRelationshipsByBaseID.size(), pendingChildrenByBaseID.size());
+                       elapsedMs, scannedCount, importedCount, childImportedCount, playerAuditEntries.size(),
+                       finalSnap->actors->AllPendingRelationships().size(),
+                       finalSnap->lineage->AllPendingChildren().size());
     }
 
     float NPCRelationshipManager::GetEngagementTimestamp(RE::FormID actorA, RE::FormID actorB) const {
-        RelationshipPairKey key(actorA, actorB);
-        auto it = relationshipPairs.find(key);
-        if (it == relationshipPairs.end() || it->second.status != RelationshipStatus::Engaged) {
+        if (actorA == 0 || actorB == 0) return -1.0f;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+        if (!edge || edge->status != State::RelationshipStatus::Engaged) {
             return -1.0f;
         }
 
-        const auto& data = it->second;
-        for (auto hIt = data.statusHistory.rbegin(); hIt != data.statusHistory.rend(); ++hIt) {
-            if (hIt->toStatus == RelationshipStatus::Engaged) {
+        for (auto hIt = edge->statusHistory.rbegin(); hIt != edge->statusHistory.rend(); ++hIt) {
+            if (hIt->toStatus == State::RelationshipStatus::Engaged) {
                 return hIt->timestamp;
             }
         }
@@ -3368,42 +3813,60 @@ namespace MARAS {
     void NPCRelationshipManager::CheckAutoMarriageForEngagedNPCs(float currentDay) {
         constexpr float kAutoMarriageDaysThreshold = 5.0f;
 
-        // Collect couples ready for auto-marriage first to prevent iterator invalidation
+        // Collect couples ready for backfill or auto-marriage from immutable snapshot
+        std::vector<State::CanonicalPairKey> pairsToBackfill;
         std::vector<std::pair<RE::FormID, RE::FormID>> couplesToMarry;
 
-        for (auto& [key, data] : relationshipPairs) {
-            // Strictly NPC-NPC only: ignore if either partner is player or invalid
-            if (key.actorA == kPlayerFormID || key.actorB == kPlayerFormID || key.actorA == 0 || key.actorB == 0) {
-                continue;
-            }
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            for (const auto& [key, edge] : snap->relationships->AllEdges()) {
+                // Strictly NPC-NPC only: ignore if either partner is player or invalid
+                if (key.first.IsNull() || key.second.IsNull() || key.first.IsPlayer() || key.second.IsPlayer()) {
+                    continue;
+                }
 
-            if (data.status != RelationshipStatus::Engaged) {
-                continue;
-            }
+                if (edge.status != State::RelationshipStatus::Engaged) {
+                    continue;
+                }
 
-            // Find when they became engaged from status history
-            float engagementTime = -1.0f;
-            for (auto hIt = data.statusHistory.rbegin(); hIt != data.statusHistory.rend(); ++hIt) {
-                if (hIt->toStatus == RelationshipStatus::Engaged) {
-                    engagementTime = hIt->timestamp;
-                    break;
+                float engagementTime = -1.0f;
+                for (auto hIt = edge.statusHistory.rbegin(); hIt != edge.statusHistory.rend(); ++hIt) {
+                    if (hIt->toStatus == State::RelationshipStatus::Engaged) {
+                        engagementTime = hIt->timestamp;
+                        break;
+                    }
+                }
+
+                if (engagementTime < 0.0f) {
+                    pairsToBackfill.push_back(key);
+                    continue;
+                }
+
+                const float elapsed = currentDay - engagementTime;
+                if (elapsed >= kAutoMarriageDaysThreshold) {
+                    MARAS_LOG_INFO("Engaged NPC pair {:08X} - {:08X} reached {:.2f} days engaged (threshold {:.1f}); queueing for auto-marriage",
+                                   key.first.raw(), key.second.raw(), elapsed, kAutoMarriageDaysThreshold);
+                    couplesToMarry.emplace_back(key.first.raw(), key.second.raw());
                 }
             }
+        }
 
-            // If engaged but missing an engagement record, backfill timestamp to current day so they marry in 5 days
-            if (engagementTime < 0.0f) {
-                data.statusHistory.emplace_back(RelationshipStatus::Unknown, RelationshipStatus::Engaged, currentDay, key.actorA);
-                MARAS_LOG_INFO("Recorded initial engagement timestamp {:.2f} for NPC pair {:08X} - {:08X}",
-                               currentDay, key.actorA, key.actorB);
-                continue;
-            }
-
-            float elapsed = currentDay - engagementTime;
-            if (elapsed >= kAutoMarriageDaysThreshold) {
-                MARAS_LOG_INFO("Engaged NPC pair {:08X} - {:08X} reached {:.2f} days engaged (threshold {:.1f}); queueing for auto-marriage",
-                               key.actorA, key.actorB, elapsed, kAutoMarriageDaysThreshold);
-                couplesToMarry.emplace_back(key.actorA, key.actorB);
-            }
+        if (!pairsToBackfill.empty()) {
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                auto& rels = ws.relationships.Write();
+                for (const auto& key : pairsToBackfill) {
+                    auto* edge = const_cast<State::RelationshipEdgeRecord*>(rels.FindEdge(key));
+                    if (!edge || edge->status != State::RelationshipStatus::Engaged) continue;
+                    edge->statusHistory.push_back(State::StatusTransitionEntry{
+                        .fromStatus = State::RelationshipStatus::Unknown,
+                        .toStatus = State::RelationshipStatus::Engaged,
+                        .timestamp = currentDay,
+                        .initiator = key.first,
+                    });
+                    MARAS_LOG_INFO("Recorded initial engagement timestamp {:.2f} for NPC pair {:08X} - {:08X}",
+                                   currentDay, key.first.raw(), key.second.raw());
+                }
+            });
         }
 
         for (const auto& [actorA, actorB] : couplesToMarry) {
@@ -3430,6 +3893,574 @@ namespace MARAS {
                 MARAS_LOG_ERROR("Failed to auto-marry engaged NPC couple {:08X} and {:08X}", actorA, actorB);
             }
         }
+    }
+
+    // =========================================================================
+    // Lifecycle, Post-Load Engine Sync, Globals, Logging & Diagnostics
+    // =========================================================================
+
+    void NPCRelationshipManager::Clear() {
+        AdultChildProgression::GetSingleton().RevertRuntimeBases();
+        ClearPendingMarriageAdoptions();
+        State::WorldStore::GetSingleton().Modify([](State::WorldState& ws) {
+            ws.actors.Write().Clear();
+            ws.relationships.Write().Clear();
+            ws.affairs.Write().Clear();
+            ws.lineage.Write().Clear();
+        });
+
+        MARAS_LOG_INFO("Cleared all NPC relationship data");
+    }
+
+    void NPCRelationshipManager::FinalizeLoad() {
+        // CoSaveCodec::LoadWorldState already pruned orphaned 0xFF actors/children, reconciled
+        // dead-on-load / deceased adults & children, marked parents/guardians registered, synced
+        // married custody in WorldState::lineage, and filled SpouseHierarchyTable gaps.
+        // Here we perform the remaining engine-level and child-progression post-load steps.
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+
+        // 1. Re-apply runtime home markers & added keywords onto loaded engine forms
+        for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
+            const RE::FormID actorId = refId.raw();
+            if (actorId == 0) continue;
+
+            if (prof.legacyHomeMarker.has_value() && prof.legacyHomeMarker->raw() != 0) {
+                SetLinkedRefForHomeMarker(actorId, prof.legacyHomeMarker->raw());
+            }
+
+            if (!prof.addedKeywords.empty() && actorId != kPlayerFormID) {
+                if (auto* base = ActorSvc::GetActorBase(actorId)) {
+                    for (const auto kwId : prof.addedKeywords) {
+                        if (auto* kw = RE::TESForm::LookupByID<RE::BGSKeyword>(kwId.raw())) {
+                            if (!base->HasKeyword(kw)) {
+                                base->AddKeyword(kw);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Complete any un-evaluated child progression rolls and reset runtime level sync
+        std::vector<ChildRegistryEntry> childrenSnapshot;
+        childrenSnapshot.reserve(snap->lineage->Size());
+        for (const auto& [childId, childRec] : snap->lineage->AllChildren()) {
+            (void)childId;
+            childrenSnapshot.push_back(LegacyAdapters::ToLegacyChildEntry(childRec));
+        }
+
+        for (ChildRegistryEntry& entry : childrenSnapshot) {
+            SkyrimNetProfileService::GetSingleton().MarkActorStageUpdated(entry.childID, entry.stage);
+            const bool missingBeastblood = !entry.beastbloodEvaluated;
+            const bool missingBioLineage = (entry.stage != ChildStage::Unborn && !entry.bioLineageEvaluated);
+            const bool missingGuardLineage = (entry.stage == ChildStage::Adult && !entry.guardianLineageEvaluated);
+            const bool needsLevelReset = (entry.lastAppliedLevel != 0);
+
+            if (missingBeastblood) {
+                EvaluateChildBeastbloodInheritance(entry);
+            }
+            if (missingBioLineage) {
+                AdultChildProgression::GetSingleton().EvaluateChildBioLineageAtBirth(*this, entry);
+            }
+            if (missingGuardLineage) {
+                AdultChildProgression::GetSingleton().EvaluateChildGuardianLineageAtGraduation(*this, entry);
+            }
+            // Force runtime SetBaseActorValue sync on first 3D load after loading a save
+            entry.lastAppliedLevel = 0;
+
+            if (missingBeastblood || missingBioLineage || missingGuardLineage || needsLevelReset) {
+                UpsertChildEntry(entry);
+            }
+        }
+
+        // 3. Re-synchronize globals, cheating/open/non-cheating factions, custody & child AI packages
+        RecalculateAndUpdateGlobals();
+        UpdateAllCanFormNonCheatingMainFactions();
+        SyncAllMarriedCouplesChildCustody();
+        ReevaluateAllNonPlayerChildrenPackages();
+    }
+
+    void NPCRelationshipManager::Revert() {
+        MARAS_LOG_INFO("Reverting NPC relationship data");
+        Clear();
+    }
+
+    void NPCRelationshipManager::RecalculateAndUpdateGlobals() {
+        std::int32_t loveInterests = static_cast<std::int32_t>(GetAllEngaged(kPlayerFormID).size() + GetAllMarried(kPlayerFormID).size());
+        std::int32_t spouses = static_cast<std::int32_t>(GetAllMarried(kPlayerFormID).size());
+
+        auto& cache = FormCache::GetSingleton();
+
+        if (auto globalLove = cache.GetLoveInterestsCount()) {
+            globalLove->value = static_cast<float>(loveInterests);
+            MARAS_LOG_DEBUG("Updated LoveInterestsCount global to {}", loveInterests);
+        }
+
+        if (auto globalSpouses = cache.GetSpousesCount()) {
+            globalSpouses->value = static_cast<float>(spouses);
+            MARAS_LOG_DEBUG("Updated SpousesCount global to {}", spouses);
+        }
+
+        UpdateAllSpousesChildrenFaction();
+        UpdateAllSpousesCheatingAndOpenFactions();
+        UpdateCanFormNonCheatingMainFaction(kPlayerFormID);
+    }
+
+    void NPCRelationshipManager::LogStatistics() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& allPending = snap->actors->AllPendingRelationships();
+
+        MARAS_LOG_INFO("MARAS NPC Statistics:");
+        MARAS_LOG_INFO("  Total Registered: {}", GetTotalRegisteredCount());
+        MARAS_LOG_INFO("  Candidates (Player): {}", GetCandidateCount(kPlayerFormID));
+        MARAS_LOG_INFO("  Engaged (Player): {}", GetEngagedCount(kPlayerFormID));
+        MARAS_LOG_INFO("  Married (Player): {}", GetMarriedCount(kPlayerFormID));
+        MARAS_LOG_INFO("  Divorced (Player): {}", GetDivorcedCount(kPlayerFormID));
+        MARAS_LOG_INFO("  Jilted (Player): {}", GetJiltedCount(kPlayerFormID));
+        MARAS_LOG_INFO("  ExDating (Player): {}", GetExDatingCount(kPlayerFormID));
+        MARAS_LOG_INFO("  ExLover (Player): {}", GetExLoverCount(kPlayerFormID));
+        MARAS_LOG_INFO("  Pending Deferred Base Entries: {}", allPending.size());
+
+        for (const auto& [baseId, pendingList] : allPending) {
+            for (const auto& pending : pendingList) {
+                MARAS_LOG_INFO("    [Pending] Base {:08X} <-> Partner Base {:08X} (Ref {:08X}) | Target: {}, Original: {}",
+                               baseId.raw(), pending.partnerBaseId.raw(), pending.partnerRefId.raw(),
+                               Utils::RelationshipStatusToString(static_cast<RelationshipStatus>(pending.targetStatus)),
+                               Utils::RelationshipStatusToString(static_cast<RelationshipStatus>(pending.originalStatus)));
+            }
+        }
+    }
+
+    void NPCRelationshipManager::LogNPCDetails(RE::FormID npcFormID) const {
+        auto profile = GetNPCProfile(npcFormID);
+        if (!profile) {
+            MARAS_LOG_WARN("NPC {:08X} profile not found in MARAS data", npcFormID);
+            return;
+        }
+
+        auto data = GetNPCData(npcFormID, kPlayerFormID);
+        MARAS_LOG_INFO("NPC {:08X} Details:", npcFormID);
+        MARAS_LOG_INFO("  Status with Player: {}", data ? static_cast<int>(data->status) : -1);
+        MARAS_LOG_INFO("  Social Class: {}", static_cast<int>(profile->socialClass));
+        MARAS_LOG_INFO("  Skill Type: {}", static_cast<int>(profile->skillType));
+        MARAS_LOG_INFO("  Temperament: {}", static_cast<int>(profile->temperament));
+    }
+
+    nlohmann::json NPCRelationshipManager::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        nlohmann::json root;
+
+        auto stageToString = [](ChildStage s) -> std::string {
+            switch (s) {
+                case ChildStage::Unborn:   return "unborn";
+                case ChildStage::Infant:   return "infant";
+                case ChildStage::Child:    return "child";
+                case ChildStage::Training: return "training";
+                case ChildStage::Adult:    return "adult";
+            }
+            return "child";
+        };
+
+        // 1. Registered NPCs & Profiles
+        nlohmann::json profilesArray = nlohmann::json::array();
+        std::vector<RE::FormID> actorsToExport;
+        actorsToExport.push_back(kPlayerFormID);
+        for (const auto& [refId, prof] : snap->actors->AllProfiles()) {
+            if (prof.isRegisteredAdult && !refId.IsNull() && !refId.IsPlayer()) {
+                actorsToExport.push_back(refId.raw());
+            }
+        }
+
+        for (auto formID : actorsToExport) {
+            nlohmann::json p;
+            p["formId"] = std::format("{:08X}", formID);
+            if (formID == kPlayerFormID) {
+                auto player = RE::PlayerCharacter::GetSingleton();
+                p["name"] = ActorSvc::GetName(kPlayerFormID);
+                std::string pRace = ActorSvc::GetRaceName(kPlayerFormID);
+                p["race"] = !pRace.empty() ? pRace : "Nord";
+                p["gender"] = (player && player->GetActorBase()) ? (player->GetActorBase()->GetSex() == RE::SEXES::kFemale ? "female" : "male") : "male";
+                p["isChild"] = false;
+            } else {
+                p["name"] = ActorSvc::GetName(formID);
+                p["race"] = ActorSvc::GetRaceName(formID);
+                p["isChild"] = IsChildNPC(formID);
+                p["gender"] = (ActorSvc::GetSex(formID) == 1) ? "female" : "male";
+            }
+
+            if (const auto* stateProf = snap->actors->Find(State::RefId{ formID })) {
+                const NPCProfileData prof = LegacyAdapters::ToLegacyNPCProfile(*stateProf);
+                p["socialClass"] = {
+                    {"id", static_cast<uint8_t>(prof.socialClass)},
+                    {"name", Utils::SocialClassToString(prof.socialClass)}
+                };
+                p["skillType"] = {
+                    {"id", static_cast<uint8_t>(prof.skillType)},
+                    {"name", Utils::SkillTypeToString(prof.skillType)}
+                };
+                p["temperament"] = {
+                    {"id", static_cast<uint8_t>(prof.temperament)},
+                    {"name", Utils::TemperamentToString(prof.temperament)}
+                };
+
+                if (prof.originalHome.has_value()) {
+                    nlohmann::json h;
+                    h["formId"] = std::format("{:08X}", *prof.originalHome);
+                    std::string hName = "";
+                    if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(*prof.originalHome)) {
+                        if (cell->GetName()) hName = cell->GetName();
+                    }
+                    h["name"] = hName;
+                    p["originalHome"] = h;
+                }
+                if (prof.currentHome.has_value()) {
+                    nlohmann::json h;
+                    h["formId"] = std::format("{:08X}", *prof.currentHome);
+                    std::string hName = "";
+                    if (auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(*prof.currentHome)) {
+                        if (cell->GetName()) hName = cell->GetName();
+                    }
+                    h["name"] = hName;
+                    p["currentHome"] = h;
+                }
+                if (prof.homeMarker.has_value()) {
+                    p["homeMarker"] = std::format("{:08X}", *prof.homeMarker);
+                }
+                nlohmann::json kwArray = nlohmann::json::array();
+                for (auto kwID : prof.addedKeywords) {
+                    kwArray.push_back(std::format("{:08X}", kwID));
+                }
+                p["addedKeywords"] = kwArray;
+            }
+
+            profilesArray.push_back(p);
+        }
+        root["npcProfiles"] = profilesArray;
+
+        // 2. Relationship Pairs
+        nlohmann::json pairsArray = nlohmann::json::array();
+        for (const auto& [pairKey, edge] : snap->relationships->AllEdges()) {
+            const auto coupleAffairs = snap->affairs->GetForCouplePair(edge.pair);
+            const NPCRelationshipData data = LegacyAdapters::ToLegacyRelationshipData(edge, coupleAffairs);
+            const RelationshipPairKey key(pairKey.first.raw(), pairKey.second.raw());
+
+            nlohmann::json pairObj;
+            pairObj["actorA"] = {
+                {"formId", std::format("{:08X}", key.actorA)},
+                {"name", ActorSvc::GetName(key.actorA)}
+            };
+            pairObj["actorB"] = {
+                {"formId", std::format("{:08X}", key.actorB)},
+                {"name", ActorSvc::GetName(key.actorB)}
+            };
+            pairObj["status"] = {
+                {"id", static_cast<uint8_t>(data.status)},
+                {"name", Utils::RelationshipStatusToString(data.status)}
+            };
+            pairObj["originalStatus"] = {
+                {"id", static_cast<uint8_t>(data.originalStatus)},
+                {"name", Utils::RelationshipStatusToString(data.originalStatus)}
+            };
+            pairObj["isOpen"] = data.isOpen;
+
+            // Status history
+            nlohmann::json histArray = nlohmann::json::array();
+            for (const auto& h : data.statusHistory) {
+                nlohmann::json hObj;
+                RelationshipStatus fromSt = h.fromStatus;
+                if (h.timestamp < 0 && fromSt == RelationshipStatus::Candidate) {
+                    fromSt = RelationshipStatus::Unknown;
+                }
+                hObj["fromStatus"] = {
+                    {"id", static_cast<uint8_t>(fromSt)},
+                    {"name", Utils::RelationshipStatusToString(fromSt)}
+                };
+                hObj["toStatus"] = {
+                    {"id", static_cast<uint8_t>(h.toStatus)},
+                    {"name", Utils::RelationshipStatusToString(h.toStatus)}
+                };
+                if (std::isnan(h.timestamp) || h.timestamp < 0.0f) {
+                    hObj["timestamp"] = -1;
+                } else {
+                    hObj["timestamp"] = h.timestamp;
+                }
+
+                RE::FormID initID = h.initiatorFormID;
+                if (initID == 0 || (h.timestamp < 0 && (key.actorA != kPlayerFormID && key.actorB != kPlayerFormID) && initID == kPlayerFormID)) {
+                    initID = DetermineDefaultInitiator(key.actorA, key.actorB);
+                }
+                std::string initName = ActorSvc::GetName(initID);
+                if (initName.empty() && initID != 0) {
+                    initName = std::format("Actor {:08X}", initID);
+                }
+                hObj["initiator"] = {
+                    {"formId", std::format("{:08X}", initID)},
+                    {"name", initName}
+                };
+                histArray.push_back(hObj);
+            }
+            pairObj["statusHistory"] = histArray;
+
+            // Cheating records
+            nlohmann::json cheatArray = nlohmann::json::array();
+            for (const auto& c : data.cheatingRecords) {
+                nlohmann::json cObj;
+                cObj["cheater"] = {
+                    {"formId", std::format("{:08X}", c.cheaterID)},
+                    {"name", ActorSvc::GetName(c.cheaterID)}
+                };
+                cObj["victim"] = {
+                    {"formId", std::format("{:08X}", c.victimID)},
+                    {"name", ActorSvc::GetName(c.victimID)}
+                };
+                cObj["affairPartner"] = {
+                    {"formId", std::format("{:08X}", c.affairPartnerID)},
+                    {"name", ActorSvc::GetName(c.affairPartnerID)}
+                };
+                cObj["count"] = c.count;
+                cObj["lastTimestamp"] = c.lastTimestamp;
+                cObj["isSecret"] = c.isSecret;
+                cObj["affairType"] = {
+                    {"id", static_cast<uint8_t>(c.affairType)},
+                    {"name", Utils::AffairTypeToString(c.affairType)}
+                };
+                cObj["affairStatus"] = {
+                    {"id", static_cast<uint8_t>(c.affairStatus)},
+                    {"name", Utils::AffairStatusToString(c.affairStatus)}
+                };
+                cObj["affairStage"] = {
+                    {"id", static_cast<uint8_t>(c.affairStage)},
+                    {"name", Utils::AffairStageToString(c.affairStage)}
+                };
+                cObj["stageStartDay"] = c.stageStartDay;
+                cheatArray.push_back(cObj);
+            }
+            pairObj["cheatingRecords"] = cheatArray;
+
+            // Children associated with this pair
+            nlohmann::json childrenArray = nlohmann::json::array();
+            for (auto cID : GetChildren(key.actorA, key.actorB)) {
+                auto entryOpt = GetChildEntry(cID);
+                if (entryOpt.has_value()) {
+                    nlohmann::json cObj;
+                    cObj["childId"] = std::format("{:08X}", cID);
+                    cObj["name"] = entryOpt->name;
+                    cObj["timestamp"] = entryOpt->timestamp;
+                    cObj["isAdopted"] = entryOpt->isAdopted;
+                    cObj["isBiologicalChild"] = entryOpt->isBiologicalChild;
+                    cObj["stage"] = {
+                        {"id", static_cast<uint8_t>(entryOpt->stage)},
+                        {"name", stageToString(entryOpt->stage)}
+                    };
+                    if (!entryOpt->trainingLocation.empty()) {
+                        cObj["trainingLocation"] = entryOpt->trainingLocation;
+                    }
+                    auto* actor = HasPhysicalActor(cID)
+                        ? NPCIndex::GetSingleton().GetActorFromFormId(cID)
+                        : nullptr;
+                    bool hasRealActor = (actor != nullptr && !actor->IsDeleted());
+                    cObj["hasRefID"] = hasRealActor;
+                    cObj["isEphemeral"] = !hasRealActor || (entryOpt->stage == ChildStage::Infant) || (entryOpt->stage == ChildStage::Training);
+                    childrenArray.push_back(cObj);
+                }
+            }
+            pairObj["children"] = childrenArray;
+
+            pairsArray.push_back(pairObj);
+        }
+        root["relationshipPairs"] = pairsArray;
+
+        // 3. Child Registry
+        nlohmann::json childrenRegArray = nlohmann::json::array();
+        for (const auto& [childKey, childRec] : snap->lineage->AllChildren()) {
+            const RE::FormID childID = childKey.raw();
+            const ChildRegistryEntry entry = LegacyAdapters::ToLegacyChildEntry(childRec);
+            nlohmann::json cObj;
+            cObj["child"] = {
+                {"formId", std::format("{:08X}", childID)},
+                {"name", entry.name.empty() ? ActorSvc::GetName(childID) : entry.name}
+            };
+            cObj["guardianA"] = {
+                {"formId", std::format("{:08X}", entry.guardianAID)},
+                {"name", entry.guardianAID == 0 ? "" : ActorSvc::GetName(entry.guardianAID)}
+            };
+            cObj["guardianB"] = {
+                {"formId", std::format("{:08X}", entry.guardianBID)},
+                {"name", entry.guardianBID == 0 ? "" : ActorSvc::GetName(entry.guardianBID)}
+            };
+            cObj["timestamp"] = entry.timestamp;
+            cObj["isAdopted"] = entry.isAdopted;
+            cObj["bioMother"] = {
+                {"formId", std::format("{:08X}", entry.bioMotherID)},
+                {"name", entry.bioMotherID == 0 ? "" : ActorSvc::GetName(entry.bioMotherID)}
+            };
+            cObj["bioFather"] = {
+                {"formId", std::format("{:08X}", entry.bioFatherID)},
+                {"name", entry.bioFatherID == 0 ? "" : (entry.bioFatherID == kUnknownFatherFormID ? "Unknown" : ActorSvc::GetName(entry.bioFatherID))}
+            };
+            cObj["presumedFather"] = {
+                {"formId", std::format("{:08X}", entry.presumedFatherID)},
+                {"name", entry.presumedFatherID == 0 ? "" : ActorSvc::GetName(entry.presumedFatherID)}
+            };
+            cObj["isBiologicalChild"] = entry.isBiologicalChild;
+            cObj["conceptionTimestamp"] = entry.conceptionTimestamp;
+            cObj["birthTimestamp"] = entry.birthTimestamp;
+            cObj["stage"] = {
+                {"id", static_cast<uint8_t>(entry.stage)},
+                {"name", stageToString(entry.stage)}
+            };
+            if (!entry.trainingLocation.empty()) {
+                cObj["trainingLocation"] = entry.trainingLocation;
+            }
+            if (entry.trainingClassIndex >= 0) {
+                cObj["trainingClassIndex"] = entry.trainingClassIndex;
+                cObj["trainingClassName"] = std::string(GetTrainingClassName(entry.trainingClassIndex));
+            }
+            if (entry.trainingStartGameDay > 0.0f) {
+                cObj["trainingStartGameDay"] = entry.trainingStartGameDay;
+            }
+            if (!entry.savedBioTemplateName.empty()) {
+                cObj["savedBioTemplateName"] = entry.savedBioTemplateName;
+            }
+            if (entry.savedRaceIndex <= 9) {
+                cObj["savedRaceIndex"] = entry.savedRaceIndex;
+            }
+            if (entry.hairColorFormID != 0) {
+                cObj["hairColorFormId"] = std::format("{:08X}", entry.hairColorFormID);
+            }
+            if (entry.eyesPartFormID != 0) {
+                cObj["eyesPartFormId"] = std::format("{:08X}", entry.eyesPartFormID);
+            }
+            if (entry.hairPartFormID != 0) {
+                cObj["hairPartFormId"] = std::format("{:08X}", entry.hairPartFormID);
+            }
+            if (entry.facialHairPartFormID != 0) {
+                cObj["facialHairPartFormId"] = std::format("{:08X}", entry.facialHairPartFormID);
+            }
+            cObj["heightScale"] = entry.heightScale;
+            cObj["rpgApplied"] = entry.rpgApplied;
+            cObj["hasBeastblood"] = entry.hasBeastblood;
+            cObj["beastbloodEvaluated"] = entry.beastbloodEvaluated;
+            cObj["bioLineageEvaluated"] = entry.bioLineageEvaluated;
+            cObj["guardianLineageEvaluated"] = entry.guardianLineageEvaluated;
+            if (!entry.daedricBlessingId.empty()) {
+                cObj["daedricBlessingId"] = entry.daedricBlessingId;
+            }
+            if (entry.lastAppliedLevel > 0) {
+                cObj["lastAppliedLevel"] = entry.lastAppliedLevel;
+            }
+            auto* regActor = HasPhysicalActor(childID)
+                ? NPCIndex::GetSingleton().GetActorFromFormId(childID)
+                : nullptr;
+            bool regHasRealActor = (regActor != nullptr && !regActor->IsDeleted());
+            cObj["hasRefID"] = regHasRealActor;
+            cObj["isEphemeral"] = !regHasRealActor || (entry.stage == ChildStage::Unborn) || (entry.stage == ChildStage::Infant) || (entry.stage == ChildStage::Training);
+            cObj["paternitySecret"] = {
+                {"isSecret", entry.paternitySecret.isSecret},
+                {"isSecretForBioFather", entry.paternitySecret.isSecretForBioFather},
+                {"isSecretForPartner", entry.paternitySecret.isSecretForPartner},
+                {"discovered", entry.paternitySecret.discovered},
+                {"discoveredByPartner", entry.paternitySecret.discoveredByPartner},
+                {"discoveredByBioFather", entry.paternitySecret.discoveredByBioFather},
+                {"hasPhenotypeMismatch", entry.paternitySecret.hasPhenotypeMismatch},
+                {"lastCheckTimestamp", entry.paternitySecret.lastCheckTimestamp},
+                {"bioFatherName", entry.paternitySecret.bioFatherName},
+                {"bioFatherRaceFormId", entry.paternitySecret.bioFatherRaceID != 0 ? std::format("{:08X}", entry.paternitySecret.bioFatherRaceID) : ""}
+            };
+            childrenRegArray.push_back(cObj);
+        }
+        root["childrenRegistry"] = childrenRegArray;
+
+        // 4. Pending Relationships
+        nlohmann::json pendingRelsArray = nlohmann::json::array();
+        for (const auto& [baseId, relsList] : snap->actors->AllPendingRelationships()) {
+            for (const auto& entry : relsList) {
+                const PendingRelationshipData r = LegacyAdapters::ToLegacyPendingRelationship(entry);
+                nlohmann::json rObj;
+                rObj["baseFormId"] = std::format("{:08X}", baseId.raw());
+                rObj["partnerBaseId"] = std::format("{:08X}", r.partnerBaseID);
+                rObj["partnerRefId"] = std::format("{:08X}", r.partnerRefID);
+                rObj["targetStatus"] = {
+                    {"id", static_cast<uint8_t>(r.targetStatus)},
+                    {"name", Utils::RelationshipStatusToString(r.targetStatus)}
+                };
+                rObj["originalStatus"] = {
+                    {"id", static_cast<uint8_t>(r.originalStatus)},
+                    {"name", Utils::RelationshipStatusToString(r.originalStatus)}
+                };
+                pendingRelsArray.push_back(rObj);
+            }
+        }
+        root["pendingRelationships"] = pendingRelsArray;
+
+        // 5. Pending Children
+        nlohmann::json pendingChildrenArray = nlohmann::json::array();
+        for (const auto& [cBaseId, cEntry] : snap->lineage->AllPendingChildren()) {
+            const PendingChildData cData = LegacyAdapters::ToLegacyPendingChild(cEntry);
+            nlohmann::json cObj;
+            cObj["childBaseId"] = std::format("{:08X}", cBaseId.raw());
+            cObj["childRefId"] = std::format("{:08X}", cData.childRefID);
+            cObj["parentABaseId"] = std::format("{:08X}", cData.parentABaseID);
+            cObj["parentARefId"] = std::format("{:08X}", cData.parentARefID);
+            cObj["parentBBaseId"] = std::format("{:08X}", cData.parentBBaseID);
+            cObj["parentBRefId"] = std::format("{:08X}", cData.parentBRefID);
+            cObj["isAdopted"] = cData.isAdopted;
+            pendingChildrenArray.push_back(cObj);
+        }
+        root["pendingChildren"] = pendingChildrenArray;
+
+        // 6. Active Pregnancies
+        nlohmann::json pregArray = nlohmann::json::array();
+        for (const auto& [childKey, childRec] : snap->lineage->AllChildren()) {
+            if (childRec.stage != State::ChildStage::Unborn) continue;
+            const RE::FormID cID = childKey.raw();
+            const RE::FormID bioMotherID = childRec.bioMother.raw();
+            const RE::FormID bioFatherID = childRec.bioFather.raw();
+            nlohmann::json pObj;
+            pObj["mother"] = {
+                {"formId", std::format("{:08X}", bioMotherID)},
+                {"name", ActorSvc::GetName(bioMotherID)}
+            };
+            pObj["isPregnant"] = true;
+            pObj["conceptionTimestamp"] = childRec.conceptionTimestamp;
+            RE::FormID presumedFatherID = GetMotherPartner(cID);
+            pObj["presumedFather"] = {
+                {"formId", presumedFatherID != 0 ? std::format("{:08X}", presumedFatherID) : ""},
+                {"name", presumedFatherID != 0 ? ActorSvc::GetName(presumedFatherID) : ""}
+            };
+            pObj["bioFather"] = {
+                {"formId", std::format("{:08X}", bioFatherID)},
+                {"name", (bioFatherID != 0 && bioFatherID != kUnknownFatherFormID) ? ActorSvc::GetName(bioFatherID) : (bioFatherID == kUnknownFatherFormID ? "Unknown" : "")}
+            };
+            pregArray.push_back(pObj);
+        }
+        root["pregnancyState"] = pregArray;
+
+        // 7. Pending Partner Intents
+        nlohmann::json intentsArray = nlohmann::json::array();
+        for (const auto& [partnerId, stateIntent] : snap->relationships->AllPendingIntents()) {
+            const PendingPartnerIntent intent = LegacyAdapters::ToLegacyPendingPartnerIntent(stateIntent);
+            if (intent.type == PartnerIntentType::None) continue;
+            nlohmann::json iObj;
+            iObj["partner"] = {
+                {"formId", std::format("{:08X}", partnerId.raw())},
+                {"name", ActorSvc::GetName(partnerId.raw())}
+            };
+            iObj["intent"] = {
+                {"id", static_cast<uint8_t>(intent.type)},
+                {"name", Utils::PartnerIntentTypeToString(intent.type)}
+            };
+            iObj["createdGameDay"] = intent.createdGameDay;
+            iObj["relatedLover"] = {
+                {"formId", intent.relatedLoverID != 0 ? std::format("{:08X}", intent.relatedLoverID) : ""},
+                {"name", intent.relatedLoverID != 0 ? ActorSvc::GetName(intent.relatedLoverID) : ""}
+            };
+            intentsArray.push_back(iObj);
+        }
+        root["pendingPartnerIntents"] = intentsArray;
+        root["nextSyntheticChildId"] = std::format("{:08X}", snap->lineage->NextSyntheticChildRaw());
+
+        return root;
     }
 
 }  // namespace MARAS

@@ -243,7 +243,9 @@ bool ConfirmationModal::IsOnCooldown(const char* actionType, RE::Actor* originat
 }
 
 int32_t ConfirmationModal::CheckAndSet(const char* actionType, const std::vector<RE::Actor*>& actors) {
-    const int normalSec = Settings::GetSingleton().actionsCooldown;
+    const auto sSnap = Settings::GetSingleton().Snapshot();
+    const auto& s = *sSnap;
+    const int normalSec = s.actionsCooldown;
     std::vector<std::string> keys;
     keys.reserve(actors.size());
     for (RE::Actor* actor : actors) {
@@ -287,8 +289,10 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
     MARAS_LOG_INFO("ConfirmationModal::Show - actionType='{}' (actionEnum={}) mainActors={} secondaryActors={} paramsJson='{}'",
                    actionTypeStr, static_cast<int>(action), mainActorList, secondaryActorList, paramsJson ? paramsJson : "");
 
-    const int normalSec  = Settings::GetSingleton().actionsCooldown;
-    const int declineSec = Settings::GetSingleton().actionsDeclineCooldown;
+    const auto sSnap = Settings::GetSingleton().Snapshot();
+    const auto& s = *sSnap;
+    const int normalSec  = s.actionsCooldown;
+    const int declineSec = s.actionsDeclineCooldown;
 
     std::vector<std::string> keys;
     keys.reserve(mainActors.size() + secondaryActors.size());
@@ -330,7 +334,7 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
     }
 
     // Master switch
-    if (!Settings::GetSingleton().enableConfirmationModal) {
+    if (!s.enableConfirmationModal) {
         MARAS_LOG_INFO("ConfirmationModal::Show - auto-accepting (master confirmation modal setting enableConfirmationModal is false)");
         SetCooldownAll(keys, normalSec);
         return ReturnNow(5);
@@ -360,13 +364,13 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
         }
     }
 
-    if (hasPlayer && !Settings::GetSingleton().enableConfirmPlayerNpc) {
+    if (hasPlayer && !s.enableConfirmPlayerNpc) {
         MARAS_LOG_INFO("ConfirmationModal::Show - auto-accepting (Player-NPC modals disabled: enableConfirmPlayerNpc=false)");
         SetCooldownAll(keys, normalSec);
         return ReturnNow(4);
     }
 
-    if (!hasPlayer && !Settings::GetSingleton().enableConfirmNpcNpc) {
+    if (!hasPlayer && !s.enableConfirmNpcNpc) {
         MARAS_LOG_INFO("ConfirmationModal::Show - auto-accepting (NPC-NPC modals disabled: enableConfirmNpcNpc=false)");
         SetCooldownAll(keys, normalSec);
         return ReturnNow(4);
@@ -525,7 +529,8 @@ std::string ConfirmationModal::FormatActorNames(const std::vector<RE::Actor*>& a
 }
 
 bool ConfirmationModal::IsActionTypeEnabled(ModalAction action) {
-    const auto& s = Settings::GetSingleton();
+    const auto sSnap = Settings::GetSingleton().Snapshot();
+    const auto& s = *sSnap;
     switch (action) {
         case ModalAction::Dating: return s.confirmStatusChange_Dating;
         case ModalAction::Engaged: return s.confirmStatusChange_Engagement;

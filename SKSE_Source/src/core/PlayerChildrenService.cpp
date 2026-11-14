@@ -5,12 +5,13 @@
 #include <unordered_set>
 
 #include "core/AffectionService.h"
-#include "core/DeceasedRegistry.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
 #include "core/PlayerHouseService.h"
+#include "core/WorldStateLegacyAdapters.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -38,7 +39,7 @@ namespace MARAS {
 
     void PlayerChildrenService::SnapshotChildFactions(RE::FormID childID) {
         if (childID == 0 || IsSyntheticChildID(childID)) return;
-        if (factionSnapshots_.find(childID) != factionSnapshots_.end()) {
+        if (HasFactionSnapshot(childID)) {
             MARAS_LOG_DEBUG("SnapshotChildFactions: Child {:08X} already has a faction snapshot, skipping", childID);
             return;
         }
@@ -90,7 +91,14 @@ namespace MARAS {
             }
         }
 
-        factionSnapshots_[childID] = snapshot;
+        auto record = LegacyAdapters::ToChildFactionSnapshotRecord(snapshot);
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::ChildId cid{ childID };
+            if (!hh.AllChildFactionSnapshots().contains(cid)) {
+                hh.UpsertChildFactionSnapshot(cid, std::move(record));
+            }
+        });
         MARAS_LOG_INFO("SnapshotChildFactions: Recorded snapshot for child {:08X} ({} factions, crime: {:08X})",
                        childID, snapshot.factions.size(), snapshot.crimeFactionID);
     }
@@ -100,10 +108,12 @@ namespace MARAS {
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
         if (!actor) return;
 
-        auto it = factionSnapshots_.find(childID);
-        if (it != factionSnapshots_.end()) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& snaps = snap->household->AllChildFactionSnapshots();
+        auto it = snaps.find(State::ChildId{ childID });
+        if (it != snaps.end()) {
             for (const auto& entry : it->second.factions) {
-                if (auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(entry.factionID)) {
+                if (auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(entry.factionId.raw())) {
                     Utils::RemoveFromFaction(actor, faction);
                 }
             }
@@ -117,21 +127,31 @@ namespace MARAS {
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
         if (!actor) return;
 
-        auto it = factionSnapshots_.find(childID);
-        if (it != factionSnapshots_.end()) {
-            for (const auto& entry : it->second.factions) {
-                if (auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(entry.factionID)) {
+        std::optional<State::ChildFactionSnapshotRecord> foundSnap;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const auto& snaps = snap->household->AllChildFactionSnapshots();
+            if (auto it = snaps.find(State::ChildId{ childID }); it != snaps.end()) {
+                foundSnap = it->second;
+            }
+        }
+
+        if (foundSnap.has_value()) {
+            for (const auto& entry : foundSnap->factions) {
+                if (auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(entry.factionId.raw())) {
                     Utils::AddToFaction(actor, faction, entry.rank);
                 }
             }
-            if (it->second.crimeFactionID != 0) {
-                if (auto* crimeFaction = RE::TESForm::LookupByID<RE::TESFaction>(it->second.crimeFactionID)) {
+            if (!foundSnap->crimeFactionId.IsNull()) {
+                if (auto* crimeFaction = RE::TESForm::LookupByID<RE::TESFaction>(foundSnap->crimeFactionId.raw())) {
                     Utils::SetCrimeFaction(actor, crimeFaction);
                 }
             }
             MARAS_LOG_INFO("RestoreChildFactions: Restored {} snapshotted factions and crime faction {:08X} for child {:08X}",
-                           it->second.factions.size(), it->second.crimeFactionID, childID);
-            factionSnapshots_.erase(it);
+                           foundSnap->factions.size(), foundSnap->crimeFactionId.raw(), childID);
+            State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
+                ws.household.Write().EraseChildFactionSnapshot(State::ChildId{ childID });
+            });
         } else {
             MARAS_LOG_DEBUG("RestoreChildFactions: No faction snapshot found for child {:08X}", childID);
         }
@@ -139,15 +159,22 @@ namespace MARAS {
     }
 
     bool PlayerChildrenService::HasFactionSnapshot(RE::FormID childID) const {
-        return factionSnapshots_.find(childID) != factionSnapshots_.end();
+        if (childID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        return snap->household->AllChildFactionSnapshots().contains(State::ChildId{ childID });
     }
 
     void PlayerChildrenService::OnChildAddedToHousehold(RE::FormID childID, RE::FormID initialHouseFormID) {
         if (childID == 0) return;
 
-        auto& state = children_[childID];
-        state.childID = childID;
-        state.isNewlyAdopted = true;
+        State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::ChildId cid{ childID };
+            State::ChildHouseholdRecord rec = hh.FindChildState(cid) ? *hh.FindChildState(cid) : State::ChildHouseholdRecord{};
+            rec.childId = cid;
+            rec.isNewlyAdopted = true;
+            hh.UpsertChildState(std::move(rec));
+        });
 
         if (!IsSyntheticChildID(childID)) {
             // 1. Snapshot original factions before modifying anything (if not already snapshotted)
@@ -160,9 +187,16 @@ namespace MARAS {
             auto& formCache = FormCache::GetSingleton();
             if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
                 // Reinstate crime faction from snapshot if available
-                auto itSnap = factionSnapshots_.find(childID);
-                if (itSnap != factionSnapshots_.end() && itSnap->second.crimeFactionID != 0) {
-                    if (auto* crimeFaction = RE::TESForm::LookupByID<RE::TESFaction>(itSnap->second.crimeFactionID)) {
+                RE::FormID crimeFactionId = 0;
+                {
+                    const auto snap = State::WorldStore::GetSingleton().Snapshot();
+                    const auto& snaps = snap->household->AllChildFactionSnapshots();
+                    if (auto itSnap = snaps.find(State::ChildId{ childID }); itSnap != snaps.end()) {
+                        crimeFactionId = itSnap->second.crimeFactionId.raw();
+                    }
+                }
+                if (crimeFactionId != 0) {
+                    if (auto* crimeFaction = RE::TESForm::LookupByID<RE::TESFaction>(crimeFactionId)) {
                         Utils::SetCrimeFaction(actor, crimeFaction);
                     }
                 }
@@ -212,8 +246,9 @@ namespace MARAS {
     }
 
     void PlayerChildrenService::OnChildRemovedFromHousehold(RE::FormID childID) {
-        auto it = children_.find(childID);
-        if (it == children_.end()) return;
+        if (childID == 0 || !State::WorldStore::GetSingleton().Snapshot()->household->FindChildState(State::ChildId{ childID })) {
+            return;
+        }
 
         RemovePet(childID);
         RemoveCritter(childID);
@@ -249,7 +284,9 @@ namespace MARAS {
             RestoreChildFactions(childID);
         }
 
-        children_.erase(it);
+        State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
+            ws.household.Write().EraseChildState(State::ChildId{ childID });
+        });
         MARAS_LOG_INFO("OnChildRemovedFromHousehold: Removed child {:08X} from household and restored factions", childID);
     }
 
@@ -261,9 +298,14 @@ namespace MARAS {
             return false;
         }
 
-        auto& state = children_[childID];
-        state.childID = childID;
-        state.currentHouseFormID = playerHouseFormID;
+        State::WorldStore::GetSingleton().Modify([childID, playerHouseFormID](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::ChildId cid{ childID };
+            State::ChildHouseholdRecord rec = hh.FindChildState(cid) ? *hh.FindChildState(cid) : State::ChildHouseholdRecord{};
+            rec.childId = cid;
+            rec.currentHouseId = State::HouseId{ playerHouseFormID };
+            hh.UpsertChildState(std::move(rec));
+        });
 
         if (!IsSyntheticChildID(childID)) {
             if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
@@ -291,29 +333,42 @@ namespace MARAS {
     }
 
     RE::FormID PlayerChildrenService::GetChildHouseFormID(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        if (it != children_.end() && it->second.currentHouseFormID != 0) {
-            return it->second.currentHouseFormID;
+        if (childID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (const auto* st = snap->household->FindChildState(State::ChildId{ childID })) {
+            if (!st->currentHouseId.IsNull()) {
+                return st->currentHouseId.raw();
+            }
         }
-        return PlayerHouseService::GetSingleton().GetTenantHouseFormID(childID);
+        return snap->household->GetTenantHouse(childID).raw();
     }
 
     void PlayerChildrenService::ClearChildHouseAssignment(RE::FormID childID) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end() && it->second.currentHouseFormID != 0) {
-            MARAS_LOG_DEBUG("ClearChildHouseAssignment: Cleared house {:08X} from child {:08X}",
-                            it->second.currentHouseFormID, childID);
-            it->second.currentHouseFormID = 0;
+        RE::FormID prevHouse = 0;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID });
+                st && !st->currentHouseId.IsNull()) {
+                prevHouse = st->currentHouseId.raw();
+                st->currentHouseId = State::HouseId{};
+            }
+        });
+        if (prevHouse != 0) {
+            MARAS_LOG_DEBUG("ClearChildHouseAssignment: Cleared house {:08X} from child {:08X}", prevHouse, childID);
         }
     }
 
     bool PlayerChildrenService::SetChildHomeMarker(RE::FormID childID, RE::FormID markerFormID) {
         if (childID == 0) return false;
 
-        auto& state = children_[childID];
-        state.childID = childID;
-        state.homeMarkerFormID = markerFormID;
+        State::WorldStore::GetSingleton().Modify([childID, markerFormID](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::ChildId cid{ childID };
+            State::ChildHouseholdRecord rec = hh.FindChildState(cid) ? *hh.FindChildState(cid) : State::ChildHouseholdRecord{};
+            rec.childId = cid;
+            rec.homeMarkerId = State::RefId{ markerFormID };
+            hh.UpsertChildState(std::move(rec));
+        });
 
         if (markerFormID != 0 && !IsSyntheticChildID(childID)) {
             auto* keyword = FormCache::GetSingleton().GetHomeSandboxKeyword();
@@ -325,20 +380,19 @@ namespace MARAS {
     }
 
     RE::FormID PlayerChildrenService::GetChildHomeMarker(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            return it->second.homeMarkerFormID;
-        }
-        return 0;
+        if (childID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->homeMarkerId.raw() : 0;
     }
 
     RE::TESObjectREFR* PlayerChildrenService::GetOrCreateChildHomeMarker(RE::Actor* childActor) {
         if (!childActor) return nullptr;
 
-        RE::FormID childID = childActor->GetFormID();
-        auto it = children_.find(childID);
-        if (it != children_.end() && it->second.homeMarkerFormID != 0) {
-            if (auto* existingMarker = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->second.homeMarkerFormID)) {
+        const RE::FormID childID = childActor->GetFormID();
+        const RE::FormID existingMarkerID = GetChildHomeMarker(childID);
+        if (existingMarkerID != 0) {
+            if (auto* existingMarker = RE::TESForm::LookupByID<RE::TESObjectREFR>(existingMarkerID)) {
                 return existingMarker;
             }
         }
@@ -365,29 +419,40 @@ namespace MARAS {
 
     void PlayerChildrenService::ApplyPackageForCurrentState(RE::FormID childID) {
         if (childID == 0 || IsSyntheticChildID(childID)) return;
-        auto it = children_.find(childID);
-        if (it == children_.end()) return;
-        auto& state = it->second;
+        float currentOrder = 0.0f;
+        bool forcegreetPending = false;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+            if (!st) return;
+            currentOrder = st->currentOrder;
+            forcegreetPending = st->forcegreetPending;
+        }
 
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID);
         if (!actor) return;
 
         // Sync Variable06 (Order) and Variable07 (Forcegreet) ActorValues
         if (auto* avOwner = actor->AsActorValueOwner()) {
-            avOwner->SetActorValue(RE::ActorValue::kVariable06, state.currentOrder);
-            avOwner->SetActorValue(RE::ActorValue::kVariable07, state.forcegreetPending ? 1.0f : 0.0f);
+            avOwner->SetActorValue(RE::ActorValue::kVariable06, currentOrder);
+            avOwner->SetActorValue(RE::ActorValue::kVariable07, forcegreetPending ? 1.0f : 0.0f);
         }
 
         actor->EvaluatePackage();
-        MARAS_LOG_DEBUG("ApplyPackageForCurrentState: Updated child {:08X} (order: {}, forcegreet: {})", childID, state.currentOrder, state.forcegreetPending);
+        MARAS_LOG_DEBUG("ApplyPackageForCurrentState: Updated child {:08X} (order: {}, forcegreet: {})", childID, currentOrder, forcegreetPending);
     }
 
     void PlayerChildrenService::ResetForceGreeting(RE::FormID childID) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it == children_.end()) return;
+        bool found = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                st->forcegreetPending = false;
+                found = true;
+            }
+        });
+        if (!found) return;
 
-        it->second.forcegreetPending = false;
         if (!IsSyntheticChildID(childID)) {
             if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
                 if (auto* avOwner = actor->AsActorValueOwner()) {
@@ -400,30 +465,42 @@ namespace MARAS {
     }
 
     bool PlayerChildrenService::IssueOrder(RE::FormID childID, float orderValue, float durationGameHours) {
-        auto it = children_.find(childID);
-        if (it == children_.end()) return false;
+        if (childID == 0) return false;
+        auto* calendar = RE::Calendar::GetSingleton();
+        const float nowDay = calendar ? calendar->GetDaysPassed() : 0.0f;
 
-        auto& state = it->second;
+        bool found = false;
+        RE::FormID conflictChildID = 0;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::ChildId cid{ childID };
+            auto* st = hh.FindChildStateMutable(cid);
+            if (!st) return;
+            found = true;
 
-        // Same-order-lock (ported from vanilla IssueOrderWithDuration): void gift-triggered play
-        // orders (dummy/doll) if another child in this household is already running that exact order.
-        if (std::abs(orderValue - 1.1f) < 0.01f || std::abs(orderValue - 1.2f) < 0.01f) {
-            for (const auto& [otherChildID, otherState] : children_) {
-                if (otherChildID == childID) continue;
-                if (otherState.currentHouseFormID != state.currentHouseFormID) continue;
-                if (std::abs(otherState.currentOrder - orderValue) < 0.01f) {
-                    MARAS_LOG_DEBUG("IssueOrder: Voided order {} for child {:08X}, already active on child {:08X} in the same household",
-                                    orderValue, childID, otherChildID);
-                    return false;
+            // Same-order-lock (ported from vanilla IssueOrderWithDuration): void gift-triggered play
+            // orders (dummy/doll) if another child in this household is already running that exact order.
+            if (std::abs(orderValue - 1.1f) < 0.01f || std::abs(orderValue - 1.2f) < 0.01f) {
+                for (const auto& [otherChildId, otherState] : hh.AllChildStates()) {
+                    if (otherChildId == cid) continue;
+                    if (otherState.currentHouseId != st->currentHouseId) continue;
+                    if (std::abs(otherState.currentOrder - orderValue) < 0.01f) {
+                        conflictChildID = otherChildId.raw();
+                        return;
+                    }
                 }
             }
+
+            st->currentOrder = orderValue;
+            st->orderExpiryGameDay = (durationGameHours > 0.0f) ? (nowDay + (durationGameHours / 24.0f)) : -1.0f;
+        });
+
+        if (!found) return false;
+        if (conflictChildID != 0) {
+            MARAS_LOG_DEBUG("IssueOrder: Voided order {} for child {:08X}, already active on child {:08X} in the same household",
+                            orderValue, childID, conflictChildID);
+            return false;
         }
-
-        state.currentOrder = orderValue;
-
-        auto* calendar = RE::Calendar::GetSingleton();
-        float nowDay = calendar ? calendar->GetDaysPassed() : 0.0f;
-        state.orderExpiryGameDay = (durationGameHours > 0.0f) ? (nowDay + (durationGameHours / 24.0f)) : -1.0f;
 
         ApplyPackageForCurrentState(childID);
         MARAS_LOG_INFO("IssueOrder: Issued order {} to child {:08X} for {} game hours", orderValue, childID, durationGameHours);
@@ -431,26 +508,50 @@ namespace MARAS {
     }
 
     void PlayerChildrenService::Tick(float currentGameDay) {
-        for (auto& [childID, state] : children_) {
-            if (state.orderExpiryGameDay >= 0.0f && currentGameDay >= state.orderExpiryGameDay) {
-                MARAS_LOG_INFO("Tick: Order {} expired for child {:08X} (game day {})", state.currentOrder, childID, currentGameDay);
-                state.currentOrder = 0.0f;
-                state.orderExpiryGameDay = -1.0f;
-                ApplyPackageForCurrentState(childID);
+        struct ExpiredOrder {
+            RE::FormID childID{ 0 };
+            float orderValue{ 0.0f };
+        };
+        std::vector<ExpiredOrder> expired;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            std::vector<State::ChildId> expiredIds;
+            for (const auto& [cid, st] : hh.AllChildStates()) {
+                if (st.orderExpiryGameDay >= 0.0f && currentGameDay >= st.orderExpiryGameDay) {
+                    expiredIds.push_back(cid);
+                }
             }
+            for (const auto cid : expiredIds) {
+                if (auto* st = hh.FindChildStateMutable(cid)) {
+                    expired.push_back(ExpiredOrder{ cid.raw(), st->currentOrder });
+                    st->currentOrder = 0.0f;
+                    st->orderExpiryGameDay = -1.0f;
+                }
+            }
+        });
+
+        for (const auto& item : expired) {
+            MARAS_LOG_INFO("Tick: Order {} expired for child {:08X} (game day {})", item.orderValue, item.childID, currentGameDay);
+            ApplyPackageForCurrentState(item.childID);
         }
     }
 
     void PlayerChildrenService::RollForcegreetForHousehold() {
-        if (children_.empty()) return;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& allChildren = snap->household->AllChildStates();
+        if (allChildren.empty()) return;
 
         // Track houses that already have an active forcegreet slot (ONE shared per-household slot)
         std::unordered_set<RE::FormID> housesWithActiveForcegreet;
         std::unordered_map<RE::FormID, std::vector<RE::FormID>> houseChildrenMap;
 
-        for (const auto& [childID, state] : children_) {
+        for (const auto& [cid, state] : allChildren) {
+            const RE::FormID childID = cid.raw();
             if (IsSyntheticChildID(childID)) continue;
-            RE::FormID houseID = state.currentHouseFormID != 0 ? state.currentHouseFormID : GetChildHouseFormID(childID);
+            const RE::FormID houseID = !state.currentHouseId.IsNull()
+                                           ? state.currentHouseId.raw()
+                                           : snap->household->GetTenantHouse(childID).raw();
             if (houseID == 0) continue;
 
             if (state.forcegreetPending) {
@@ -460,17 +561,31 @@ namespace MARAS {
             }
         }
 
+        std::vector<std::pair<RE::FormID, RE::FormID>> chosenByHouse;
         for (const auto& [houseID, list] : houseChildrenMap) {
             if (list.empty() || housesWithActiveForcegreet.find(houseID) != housesWithActiveForcegreet.end()) {
                 continue;
             }
             RE::FormID chosenChildID = PickWeightedChild(list);
-            if (chosenChildID == 0) continue;
+            if (chosenChildID != 0) {
+                chosenByHouse.emplace_back(houseID, chosenChildID);
+            }
+        }
 
-            auto& state = children_[chosenChildID];
-            state.forcegreetPending = true;
+        if (chosenByHouse.empty()) return;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            for (const auto& [houseID, chosenChildID] : chosenByHouse) {
+                (void)houseID;
+                if (auto* st = hh.FindChildStateMutable(State::ChildId{ chosenChildID })) {
+                    st->forcegreetPending = true;
+                }
+            }
+        });
+
+        for (const auto& [houseID, chosenChildID] : chosenByHouse) {
             ApplyPackageForCurrentState(chosenChildID);
-
             MARAS_LOG_INFO("RollForcegreetForHousehold: Picked child {:08X} for forcegreet in house {:08X}", chosenChildID, houseID);
         }
     }
@@ -513,17 +628,22 @@ namespace MARAS {
     }  // namespace
 
     bool PlayerChildrenService::AssignPet(RE::FormID childID, RE::FormID petActorOrBaseID) {
-        auto it = children_.find(childID);
-        if (it == children_.end()) return false;
+        if (childID == 0) return false;
+        bool found = false;
+        RE::FormID oldPetID = 0;
 
-        RE::FormID oldPetID = it->second.petFormID;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                found = true;
+                oldPetID = st->petId.raw();
+                st->petId = State::RefId{ petActorOrBaseID };
+            }
+        });
+
+        if (!found) return false;
+
         if (oldPetID != 0 && oldPetID != petActorOrBaseID) {
             ClearPetOrCritterFactions(oldPetID);
-        }
-
-        it->second.petFormID = petActorOrBaseID;
-
-        if (oldPetID != 0 && oldPetID != petActorOrBaseID) {
             if (GetChildForPetOrCritter(oldPetID) == 0) {
                 PackageOverrideService::GetSingleton().UnregisterActor(oldPetID);
             }
@@ -536,17 +656,26 @@ namespace MARAS {
     }
 
     RE::FormID PlayerChildrenService::GetPet(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.petFormID : 0;
+        if (childID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->petId.raw() : 0;
     }
 
     bool PlayerChildrenService::RemovePet(RE::FormID childID) {
         if (childID == 0) return false;
-        auto it = children_.find(childID);
-        if (it == children_.end()) return false;
+        bool found = false;
+        RE::FormID oldPetID = 0;
 
-        RE::FormID oldPetID = it->second.petFormID;
-        it->second.petFormID = 0;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                found = true;
+                oldPetID = st->petId.raw();
+                st->petId = State::RefId{};
+            }
+        });
+
+        if (!found) return false;
 
         if (oldPetID != 0) {
             ClearPetOrCritterFactions(oldPetID);
@@ -561,8 +690,9 @@ namespace MARAS {
 
     RE::FormID PlayerChildrenService::GetChildForPet(RE::FormID petID) const {
         if (petID == 0) return 0;
-        for (const auto& [childID, state] : children_) {
-            if (state.petFormID == petID) return childID;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            if (state.petId.raw() == petID) return cid.raw();
         }
         return 0;
     }
@@ -570,16 +700,23 @@ namespace MARAS {
 
     void PlayerChildrenService::SetChildPetBanned(RE::FormID childID, bool banned) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            it->second.petBanned = banned;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                st->petBanned = banned;
+                updated = true;
+            }
+        });
+        if (updated) {
             MARAS_LOG_INFO("SetChildPetBanned: Set child {:08X} petBanned = {}", childID, banned);
         }
     }
 
     bool PlayerChildrenService::IsChildPetBanned(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.petBanned : false;
+        if (childID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->petBanned : false;
     }
 
     bool PlayerChildrenService::IsPetBanned(RE::FormID childID) const {
@@ -597,9 +734,14 @@ namespace MARAS {
 
     void PlayerChildrenService::SetPetRetryTimestamp(RE::FormID childID, float timestamp) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            it->second.petRetryTimestamp = timestamp;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                st->petRetryTimestamp = timestamp;
+                updated = true;
+            }
+        });
+        if (updated) {
             MARAS_LOG_INFO("SetPetRetryTimestamp: Set child {:08X} petRetryTimestamp = {:.2f}", childID, timestamp);
         }
     }
@@ -614,29 +756,37 @@ namespace MARAS {
     }
 
     float PlayerChildrenService::GetPetRetryTimestamp(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.petRetryTimestamp : 0.0f;
+        if (childID == 0) return 0.0f;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->petRetryTimestamp : 0.0f;
     }
 
     bool PlayerChildrenService::IsPetRetryAvailable(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        if (it == children_.end()) return true;
-        return IsCompanionRetryCooldownElapsed(it->second.petRetryTimestamp);
+        if (childID == 0) return true;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        if (!st) return true;
+        return IsCompanionRetryCooldownElapsed(st->petRetryTimestamp);
     }
 
     bool PlayerChildrenService::AssignCritter(RE::FormID childID, RE::FormID critterFormID) {
         if (childID == 0) return false;
-        auto it = children_.find(childID);
-        if (it == children_.end()) return false;
+        bool found = false;
+        RE::FormID oldCritterID = 0;
 
-        RE::FormID oldCritterID = it->second.critterFormID;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                found = true;
+                oldCritterID = st->critterId.raw();
+                st->critterId = State::RefId{ critterFormID };
+            }
+        });
+
+        if (!found) return false;
+
         if (oldCritterID != 0 && oldCritterID != critterFormID) {
             ClearPetOrCritterFactions(oldCritterID);
-        }
-
-        it->second.critterFormID = critterFormID;
-
-        if (oldCritterID != 0 && oldCritterID != critterFormID) {
             if (GetChildForPetOrCritter(oldCritterID) == 0) {
                 PackageOverrideService::GetSingleton().UnregisterActor(oldCritterID);
             }
@@ -649,17 +799,26 @@ namespace MARAS {
     }
 
     RE::FormID PlayerChildrenService::GetCritter(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.critterFormID : 0;
+        if (childID == 0) return 0;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->critterId.raw() : 0;
     }
 
     bool PlayerChildrenService::RemoveCritter(RE::FormID childID) {
         if (childID == 0) return false;
-        auto it = children_.find(childID);
-        if (it == children_.end()) return false;
+        bool found = false;
+        RE::FormID oldCritterID = 0;
 
-        RE::FormID oldCritterID = it->second.critterFormID;
-        it->second.critterFormID = 0;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                found = true;
+                oldCritterID = st->critterId.raw();
+                st->critterId = State::RefId{};
+            }
+        });
+
+        if (!found) return false;
 
         if (oldCritterID != 0) {
             ClearPetOrCritterFactions(oldCritterID);
@@ -674,28 +833,34 @@ namespace MARAS {
 
     RE::FormID PlayerChildrenService::GetChildForCritter(RE::FormID critterID) const {
         if (critterID == 0) return 0;
-        for (const auto& [childID, state] : children_) {
-            if (state.critterFormID == critterID) return childID;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            if (state.critterId.raw() == critterID) return cid.raw();
         }
         return 0;
     }
 
     RE::FormID PlayerChildrenService::GetChildForPetOrCritter(RE::FormID petOrCritterID) const {
         if (petOrCritterID == 0) return 0;
-        for (const auto& [childID, state] : children_) {
-            if (state.petFormID == petOrCritterID || state.critterFormID == petOrCritterID) return childID;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            if (state.petId.raw() == petOrCritterID || state.critterId.raw() == petOrCritterID) {
+                return cid.raw();
+            }
         }
         return 0;
     }
 
     std::vector<RE::FormID> PlayerChildrenService::GetAllPetAndCritterIDs() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
         std::vector<RE::FormID> result;
-        for (const auto& [childID, state] : children_) {
-            if (state.petFormID != 0) {
-                result.push_back(state.petFormID);
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            (void)cid;
+            if (!state.petId.IsNull()) {
+                result.push_back(state.petId.raw());
             }
-            if (state.critterFormID != 0) {
-                result.push_back(state.critterFormID);
+            if (!state.critterId.IsNull()) {
+                result.push_back(state.critterId.raw());
             }
         }
         return result;
@@ -703,16 +868,23 @@ namespace MARAS {
 
     void PlayerChildrenService::SetChildCritterBanned(RE::FormID childID, bool banned) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            it->second.critterBanned = banned;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                st->critterBanned = banned;
+                updated = true;
+            }
+        });
+        if (updated) {
             MARAS_LOG_INFO("SetChildCritterBanned: Set child {:08X} critterBanned = {}", childID, banned);
         }
     }
 
     bool PlayerChildrenService::IsChildCritterBanned(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.critterBanned : false;
+        if (childID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->critterBanned : false;
     }
 
     bool PlayerChildrenService::IsCritterBanned(RE::FormID childID) const {
@@ -730,45 +902,79 @@ namespace MARAS {
 
     void PlayerChildrenService::SetIsNewlyAdopted(RE::FormID childID, bool isNewlyAdopted, bool clearSameHouse) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            it->second.isNewlyAdopted = isNewlyAdopted;
-            MARAS_LOG_INFO("SetIsNewlyAdopted: Set child {:08X} isNewlyAdopted = {}", childID, isNewlyAdopted);
+        bool updated = false;
+        RE::FormID sameHouseID = 0;
+        std::vector<RE::FormID> clearedChildIDs;
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            auto& hh = ws.household.Write();
+            const State::ChildId cid{ childID };
+            auto* st = hh.FindChildStateMutable(cid);
+            if (!st) return;
+
+            st->isNewlyAdopted = isNewlyAdopted;
+            updated = true;
 
             if (clearSameHouse) {
-                RE::FormID houseID = it->second.currentHouseFormID != 0 ? it->second.currentHouseFormID : GetChildHouseFormID(childID);
-                if (houseID != 0) {
-                    for (auto& [otherID, state] : children_) {
-                        if (otherID == childID) continue;
-                        if (state.currentHouseFormID == houseID || (state.currentHouseFormID == 0 && GetChildHouseFormID(otherID) == houseID)) {
-                            state.isNewlyAdopted = false;
-                            MARAS_LOG_INFO("SetIsNewlyAdopted: Cleared isNewlyAdopted for child {:08X} in house {:08X}", otherID, houseID);
+                const State::HouseId houseId = !st->currentHouseId.IsNull()
+                                                   ? st->currentHouseId
+                                                   : hh.GetTenantHouse(childID);
+                if (!houseId.IsNull()) {
+                    sameHouseID = houseId.raw();
+                    std::vector<State::ChildId> toClear;
+                    for (const auto& [otherCid, otherState] : hh.AllChildStates()) {
+                        if (otherCid == cid) continue;
+                        if (otherState.currentHouseId == houseId ||
+                            (otherState.currentHouseId.IsNull() && hh.GetTenantHouse(otherCid.raw()) == houseId)) {
+                            toClear.push_back(otherCid);
+                        }
+                    }
+                    for (const auto otherCid : toClear) {
+                        if (auto* otherMut = hh.FindChildStateMutable(otherCid)) {
+                            otherMut->isNewlyAdopted = false;
+                            clearedChildIDs.push_back(otherCid.raw());
                         }
                     }
                 }
+            }
+        });
+
+        if (updated) {
+            MARAS_LOG_INFO("SetIsNewlyAdopted: Set child {:08X} isNewlyAdopted = {}", childID, isNewlyAdopted);
+            for (const RE::FormID otherID : clearedChildIDs) {
+                MARAS_LOG_INFO("SetIsNewlyAdopted: Cleared isNewlyAdopted for child {:08X} in house {:08X}", otherID, sameHouseID);
             }
         }
     }
 
     bool PlayerChildrenService::IsNewlyAdopted(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.isNewlyAdopted : false;
+        if (childID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->isNewlyAdopted : false;
     }
 
     void PlayerChildrenService::SetChildChestIntroduced(bool introduced) {
-        childChestIntroduced_ = introduced;
+        State::WorldStore::GetSingleton().Modify([introduced](State::WorldState& ws) {
+            ws.household.Write().SetChildChestIntroduced(introduced);
+        });
         MARAS_LOG_INFO("SetChildChestIntroduced: Set global childChestIntroduced = {}", introduced);
     }
 
     bool PlayerChildrenService::IsChildChestIntroduced() const {
-        return childChestIntroduced_;
+        return State::WorldStore::GetSingleton().Snapshot()->household->IsChildChestIntroduced();
     }
 
     void PlayerChildrenService::SetCritterRetryTimestamp(RE::FormID childID, float timestamp) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            it->second.critterRetryTimestamp = timestamp;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                st->critterRetryTimestamp = timestamp;
+                updated = true;
+            }
+        });
+        if (updated) {
             MARAS_LOG_INFO("SetCritterRetryTimestamp: Set child {:08X} critterRetryTimestamp = {:.2f}", childID, timestamp);
         }
     }
@@ -783,26 +989,36 @@ namespace MARAS {
     }
 
     float PlayerChildrenService::GetCritterRetryTimestamp(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.critterRetryTimestamp : 0.0f;
+        if (childID == 0) return 0.0f;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->critterRetryTimestamp : 0.0f;
     }
 
     bool PlayerChildrenService::IsCritterRetryAvailable(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        if (it == children_.end()) return true;
-        return IsCompanionRetryCooldownElapsed(it->second.critterRetryTimestamp);
+        if (childID == 0) return true;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        if (!st) return true;
+        return IsCompanionRetryCooldownElapsed(st->critterRetryTimestamp);
     }
 
     std::optional<ChildHouseholdState> PlayerChildrenService::GetState(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        if (it != children_.end()) return it->second;
-        return std::nullopt;
+        if (childID == 0) return std::nullopt;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        if (!st) return std::nullopt;
+        return LegacyAdapters::ToLegacyChildHouseholdState(*st);
     }
 
     std::vector<RE::FormID> PlayerChildrenService::GetAllPlayerChildren(bool onlyRealActors) const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& allChildren = snap->household->AllChildStates();
         std::vector<RE::FormID> list;
-        list.reserve(children_.size());
-        for (const auto& [cID, state] : children_) {
+        list.reserve(allChildren.size());
+        for (const auto& [cid, state] : allChildren) {
+            (void)state;
+            const RE::FormID cID = cid.raw();
             if (!onlyRealActors || !IsSyntheticChildID(cID)) {
                 list.push_back(cID);
             }
@@ -814,9 +1030,11 @@ namespace MARAS {
         std::vector<RE::FormID> list;
         MARAS_LOG_DEBUG("GetChildrenForHouse: Player house form ID: {:08X} (onlyRealActors: {})", playerHouseFormID, onlyRealActors);
         if (playerHouseFormID == 0) return list;
-        for (const auto& [cID, state] : children_) {
-            MARAS_LOG_DEBUG("GetChildrenForHouse: Child {:08X} has house {:08X}", cID, state.currentHouseFormID);
-            if (state.currentHouseFormID == playerHouseFormID) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            const RE::FormID cID = cid.raw();
+            MARAS_LOG_DEBUG("GetChildrenForHouse: Child {:08X} has house {:08X}", cID, state.currentHouseId.raw());
+            if (state.currentHouseId.raw() == playerHouseFormID) {
                 if (!onlyRealActors || !IsSyntheticChildID(cID)) {
                     list.push_back(cID);
                 }
@@ -827,84 +1045,100 @@ namespace MARAS {
 
     void PlayerChildrenService::SetChildPlayedScene(RE::FormID childID, int32_t sceneID, bool played) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            if (sceneID == 1) it->second.playedScene1 = played;
-            else if (sceneID == 2) it->second.playedScene2 = played;
+        bool updated = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                if (sceneID == 1) st->playedScene1 = played;
+                else if (sceneID == 2) st->playedScene2 = played;
+                updated = true;
+            }
+        });
+        if (updated) {
             MARAS_LOG_INFO("SetChildPlayedScene: child {:08X} scene {} = {}", childID, sceneID, played);
         }
     }
 
     bool PlayerChildrenService::HasChildPlayedScene(RE::FormID childID, int32_t sceneID) const {
-        auto it = children_.find(childID);
-        if (it == children_.end()) return false;
-        if (sceneID == 1) return it->second.playedScene1;
-        if (sceneID == 2) return it->second.playedScene2;
+        if (childID == 0) return false;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        if (!st) return false;
+        if (sceneID == 1) return st->playedScene1;
+        if (sceneID == 2) return st->playedScene2;
         return false;
     }
 
     void PlayerChildrenService::RecordChildInteraction(RE::FormID childID) {
         if (childID == 0) return;
-        auto it = children_.find(childID);
-        if (it != children_.end()) {
-            float currentDays = 0.0f;
-            if (auto calendar = RE::Calendar::GetSingleton()) {
-                currentDays = calendar->GetDaysPassed();
+        float currentDays = 0.0f;
+        if (auto calendar = RE::Calendar::GetSingleton()) {
+            currentDays = calendar->GetDaysPassed();
+        }
+
+        bool found = false;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                st->lastInteractionTimestamp = currentDays;
+                found = true;
             }
-            it->second.lastInteractionTimestamp = currentDays;
-            MARAS_LOG_INFO("RecordChildInteraction: child {:08X} timestamp = {:.2f}", childID, currentDays);
+        });
 
-            auto* player = RE::PlayerCharacter::GetSingleton();
-            auto* playerCell = player ? player->GetParentCell() : nullptr;
-            if (playerCell) {
-                auto& relMgr = NPCRelationshipManager::GetSingleton();
-                auto entryOpt = relMgr.GetChildEntry(childID);
-                if (entryOpt.has_value()) {
-                    const auto& entry = *entryOpt;
-                    std::unordered_set<RE::FormID> coParentIDs;
-                    auto addCandidate = [&](RE::FormID id) {
-                        if (id != 0 && id != kPlayerFormID) {
-                            coParentIDs.insert(id);
-                        }
-                    };
-                    addCandidate(entry.guardianAID);
-                    addCandidate(entry.guardianBID);
-                    addCandidate(entry.bioMotherID);
-                    if (entry.paternitySecret.isSecretForPartner) {
-                        addCandidate(entry.presumedFatherID != 0 ? entry.presumedFatherID : relMgr.GetMotherPartner(childID));
+        if (!found) return;
+
+        MARAS_LOG_INFO("RecordChildInteraction: child {:08X} timestamp = {:.2f}", childID, currentDays);
+
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        auto* playerCell = player ? player->GetParentCell() : nullptr;
+        if (playerCell) {
+            auto& relMgr = NPCRelationshipManager::GetSingleton();
+            auto entryOpt = relMgr.GetChildEntry(childID);
+            if (entryOpt.has_value()) {
+                const auto& entry = *entryOpt;
+                std::unordered_set<RE::FormID> coParentIDs;
+                auto addCandidate = [&](RE::FormID id) {
+                    if (id != 0 && id != kPlayerFormID) {
+                        coParentIDs.insert(id);
                     }
-                    if (!entry.paternitySecret.isSecretForBioFather) {
-                        addCandidate(entry.bioFatherID);
+                };
+                addCandidate(entry.guardianAID);
+                addCandidate(entry.guardianBID);
+                addCandidate(entry.bioMotherID);
+                if (entry.paternitySecret.isSecretForPartner) {
+                    addCandidate(entry.presumedFatherID != 0 ? entry.presumedFatherID : relMgr.GetMotherPartner(childID));
+                }
+                if (!entry.paternitySecret.isSecretForBioFather) {
+                    addCandidate(entry.bioFatherID);
+                }
+
+                for (RE::FormID partnerID : coParentIDs) {
+                    auto status = relMgr.GetRelationshipStatus(partnerID, kPlayerFormID);
+                    if (!NPCRelationshipManager::IsActivePartnerStatus(status)) {
+                        continue;
+                    }
+                    auto* partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
+                    if (!partnerActor || partnerActor->GetParentCell() != playerCell) {
+                        continue;
                     }
 
-                    for (RE::FormID partnerID : coParentIDs) {
-                        auto status = relMgr.GetRelationshipStatus(partnerID, kPlayerFormID);
-                        if (!NPCRelationshipManager::IsActivePartnerStatus(status)) {
-                            continue;
-                        }
-                        auto* partnerActor = RE::TESForm::LookupByID<RE::Actor>(partnerID);
-                        if (!partnerActor || partnerActor->GetParentCell() != playerCell) {
-                            continue;
-                        }
-
-                        float affection = 2.0f;
-                        auto temperament = relMgr.GetTemperament(partnerID);
-                        if (temperament == Temperament::Romantic || temperament == Temperament::Humble) {
-                            affection = 3.0f;
-                        } else if (temperament == Temperament::Independent) {
-                            affection = 1.0f;
-                        }
-
-                        AffectionService::GetSingleton().AddAffection(partnerID, affection, "family");
+                    float affection = 2.0f;
+                    auto temperament = relMgr.GetTemperament(partnerID);
+                    if (temperament == Temperament::Romantic || temperament == Temperament::Humble) {
+                        affection = 3.0f;
+                    } else if (temperament == Temperament::Independent) {
+                        affection = 1.0f;
                     }
+
+                    AffectionService::GetSingleton().AddAffection(partnerID, affection, "family");
                 }
             }
         }
     }
 
     float PlayerChildrenService::GetLastInteractionTimestamp(RE::FormID childID) const {
-        auto it = children_.find(childID);
-        return (it != children_.end()) ? it->second.lastInteractionTimestamp : 0.0f;
+        if (childID == 0) return 0.0f;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household->FindChildState(State::ChildId{ childID });
+        return st ? st->lastInteractionTimestamp : 0.0f;
     }
 
     RE::FormID PlayerChildrenService::PickWeightedChild(const std::vector<RE::FormID>& candidateIDs) const {
@@ -944,8 +1178,10 @@ namespace MARAS {
     RE::FormID PlayerChildrenService::GetNewlyAdoptedChild(RE::FormID playerHouseFormID) const {
         std::vector<RE::FormID> candidates;
         if (playerHouseFormID == 0) return 0;
-        for (const auto& [cID, state] : children_) {
-            if (state.currentHouseFormID == playerHouseFormID && state.isNewlyAdopted && !IsSyntheticChildID(cID)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            const RE::FormID cID = cid.raw();
+            if (state.currentHouseId.raw() == playerHouseFormID && state.isNewlyAdopted && !IsSyntheticChildID(cID)) {
                 candidates.push_back(cID);
             }
         }
@@ -955,8 +1191,10 @@ namespace MARAS {
     RE::FormID PlayerChildrenService::GetChildWithoutPet(RE::FormID playerHouseFormID) const {
         std::vector<RE::FormID> candidates;
         if (playerHouseFormID == 0) return 0;
-        for (const auto& [cID, state] : children_) {
-            if (state.currentHouseFormID == playerHouseFormID && state.petFormID == 0 && !IsPetBanned(cID) && !IsSyntheticChildID(cID)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            const RE::FormID cID = cid.raw();
+            if (state.currentHouseId.raw() == playerHouseFormID && state.petId.IsNull() && !IsPetBanned(cID) && !IsSyntheticChildID(cID)) {
                 candidates.push_back(cID);
             }
         }
@@ -966,8 +1204,10 @@ namespace MARAS {
     RE::FormID PlayerChildrenService::GetChildWithoutCritter(RE::FormID playerHouseFormID) const {
         std::vector<RE::FormID> candidates;
         if (playerHouseFormID == 0) return 0;
-        for (const auto& [cID, state] : children_) {
-            if (state.currentHouseFormID == playerHouseFormID && state.critterFormID == 0 && !IsCritterBanned(cID) && !IsSyntheticChildID(cID)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            const RE::FormID cID = cid.raw();
+            if (state.currentHouseId.raw() == playerHouseFormID && state.critterId.IsNull() && !IsCritterBanned(cID) && !IsSyntheticChildID(cID)) {
                 candidates.push_back(cID);
             }
         }
@@ -977,8 +1217,11 @@ namespace MARAS {
     std::vector<RE::FormID> PlayerChildrenService::GetChildrenWithoutScene(RE::FormID playerHouseFormID, int32_t sceneID) const {
         std::vector<RE::FormID> candidates;
         if (playerHouseFormID == 0) return candidates;
-        for (const auto& [cID, state] : children_) {
-            if (state.currentHouseFormID == playerHouseFormID && !HasChildPlayedScene(cID, sceneID) && !IsSyntheticChildID(cID)) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        for (const auto& [cid, state] : snap->household->AllChildStates()) {
+            const RE::FormID cID = cid.raw();
+            const bool played = (sceneID == 1) ? state.playedScene1 : ((sceneID == 2) ? state.playedScene2 : false);
+            if (state.currentHouseId.raw() == playerHouseFormID && !played && !IsSyntheticChildID(cID)) {
                 candidates.push_back(cID);
             }
         }
@@ -999,292 +1242,47 @@ namespace MARAS {
         return PickWeightedChild(GetChildrenForHouse(playerHouseFormID, true));
     }
 
-    bool PlayerChildrenService::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-
-        // Save global state
-        if (!serialization->WriteRecordData(childChestIntroduced_)) return false;
-
-        std::uint32_t count = static_cast<std::uint32_t>(children_.size());
-        if (!serialization->WriteRecordData(count)) return false;
-
-        for (const auto& [cID, state] : children_) {
-            if (!serialization->WriteRecordData(state.childID) ||
-                !serialization->WriteRecordData(state.currentHouseFormID) ||
-                !serialization->WriteRecordData(state.homeMarkerFormID) ||
-                !serialization->WriteRecordData(state.petFormID) ||
-                !serialization->WriteRecordData(state.critterFormID) ||
-                !serialization->WriteRecordData(state.currentOrder) ||
-                !serialization->WriteRecordData(state.orderExpiryGameDay) ||
-                !serialization->WriteRecordData(state.forcegreetPending) ||
-                !serialization->WriteRecordData(state.critterBanned) ||
-                !serialization->WriteRecordData(state.petBanned) ||
-                !serialization->WriteRecordData(state.isNewlyAdopted) ||
-                !serialization->WriteRecordData(state.critterRetryTimestamp) ||
-                !serialization->WriteRecordData(state.petRetryTimestamp) ||
-                !serialization->WriteRecordData(state.playedScene1) ||
-                !serialization->WriteRecordData(state.playedScene2) ||
-                !serialization->WriteRecordData(state.lastInteractionTimestamp)) {
-                MARAS_LOG_ERROR("Failed to write PlayerChildrenService state for child {:08X}", cID);
-                return false;
-            }
-        }
-
-        MARAS_LOG_INFO("Saved PlayerChildrenService state for {} children (chestIntroduced: {})", count, childChestIntroduced_);
-        return true;
-    }
-
-    bool PlayerChildrenService::Load(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
-        if (!serialization) return false;
-
-        // Clear only PLCH state — never call Revert() here, or loading PLCH after CFSN wipes factionSnapshots_!
-        children_.clear();
-        childChestIntroduced_ = false;
-
-        // Load global state
-        if (!serialization->ReadRecordData(childChestIntroduced_)) return false;
-
-        constexpr std::uint32_t kMaxChildren = 10000;
-        std::uint32_t count = 0;
-        if (!serialization->ReadRecordData(count)) return false;
-        if (count > kMaxChildren) {
-            MARAS_LOG_ERROR("PlayerChildrenService::Load - corrupt count {}", count);
-            return false;
-        }
-
-        for (std::uint32_t i = 0; i < count; ++i) {
-            ChildHouseholdState state;
-            RE::FormID oldCID = 0, oldHouse = 0, oldHomeMarker = 0, oldPet = 0, oldCritter = 0;
-
-            if (!serialization->ReadRecordData(oldCID) ||
-                !serialization->ReadRecordData(oldHouse) ||
-                !serialization->ReadRecordData(oldHomeMarker) ||
-                !serialization->ReadRecordData(oldPet) ||
-                !serialization->ReadRecordData(oldCritter) ||
-                !serialization->ReadRecordData(state.currentOrder) ||
-                !serialization->ReadRecordData(state.orderExpiryGameDay) ||
-                !serialization->ReadRecordData(state.forcegreetPending) ||
-                !serialization->ReadRecordData(state.critterBanned) ||
-                !serialization->ReadRecordData(state.petBanned) ||
-                !serialization->ReadRecordData(state.isNewlyAdopted) ||
-                !serialization->ReadRecordData(state.critterRetryTimestamp) ||
-                !serialization->ReadRecordData(state.petRetryTimestamp) ||
-                !serialization->ReadRecordData(state.playedScene1) ||
-                !serialization->ReadRecordData(state.playedScene2) ||
-                !serialization->ReadRecordData(state.lastInteractionTimestamp)) {
-                children_.clear();
-                childChestIntroduced_ = false;
-                return false;
-            }
-
-            bool validCID = false;
-            if (IsSyntheticChildID(oldCID)) {
-                state.childID = oldCID;
-                validCID = true;
-            } else if (oldCID == kPlayerFormID) {
-                state.childID = kPlayerFormID;
-                validCID = true;
-            } else if ((oldCID & 0xFF000000) == 0xFF000000) {
-                state.childID = oldCID;
-                validCID = true;
-            } else {
-                validCID = serialization->ResolveFormID(oldCID, state.childID);
-            }
-
-            if (validCID && state.childID != 0) {
-                if (oldHouse != 0) serialization->ResolveFormID(oldHouse, state.currentHouseFormID);
-                if (oldHomeMarker != 0) serialization->ResolveFormID(oldHomeMarker, state.homeMarkerFormID);
-                if (oldPet != 0) serialization->ResolveFormID(oldPet, state.petFormID);
-                if (oldCritter != 0) serialization->ResolveFormID(oldCritter, state.critterFormID);
-                children_[state.childID] = state;
-            }
-        }
-
-        MARAS_LOG_INFO("Loaded PlayerChildrenService state for {} children (chestIntroduced: {})", children_.size(), childChestIntroduced_);
-        return true;
-    }
-
-    void PlayerChildrenService::FinalizeLoad() {
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
-        auto& deceasedReg = DeceasedRegistry::GetSingleton();
-
-        auto shouldPruneChild = [&](RE::FormID cID) -> bool {
-            if (cID == 0 || cID == kPlayerFormID) return true;
-            if (IsSyntheticChildID(cID)) {
-                auto entryOpt = relMgr.GetChildEntry(cID);
-                return !entryOpt.has_value() || entryOpt->stage == ChildStage::Adult;
-            }
-            if (deceasedReg.IsDeceased(cID)) {
-                return true;
-            }
-            if ((cID & 0xFF000000) == 0xFF000000) {
-                auto* actor = RE::TESForm::LookupByID<RE::Actor>(cID);
-                if (!actor || actor->IsDeleted() || actor->IsDead()) {
-                    return true;
-                }
-            } else if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(cID); actor && actor->IsDead()) {
-                return true;
-            }
-            if (auto entryOpt = relMgr.GetChildEntry(cID); entryOpt.has_value() && entryOpt->stage == ChildStage::Adult) {
-                return true;
-            }
-            return false;
-        };
-
-        std::vector<RE::FormID> staleChildren;
-        for (const auto& [cID, state] : children_) {
-            if (shouldPruneChild(cID)) {
-                staleChildren.push_back(cID);
-            }
-        }
-        for (RE::FormID cID : staleChildren) {
-            children_.erase(cID);
-            MARAS_LOG_INFO("PlayerChildrenService::FinalizeLoad: Pruned stale child entry {:08X}", cID);
-        }
-
-        std::vector<RE::FormID> staleSnapshots;
-        for (const auto& [cID, snap] : factionSnapshots_) {
-            if (deceasedReg.IsDeceased(cID) ||
-                (((cID & 0xFF000000) == 0xFF000000) && !IsSyntheticChildID(cID) &&
-                 (!RE::TESForm::LookupByID<RE::Actor>(cID) || RE::TESForm::LookupByID<RE::Actor>(cID)->IsDeleted()))) {
-                staleSnapshots.push_back(cID);
-            }
-        }
-        for (RE::FormID cID : staleSnapshots) {
-            factionSnapshots_.erase(cID);
-        }
-    }
-
     void PlayerChildrenService::Revert() {
-        children_.clear();
-        childChestIntroduced_ = false;
-        RevertFactionSnapshots();
         MARAS_LOG_INFO("Reverted PlayerChildrenService data");
     }
 
-    bool PlayerChildrenService::SaveFactionSnapshots(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-
-        std::uint32_t count = static_cast<std::uint32_t>(factionSnapshots_.size());
-        if (!serialization->WriteRecordData(count)) return false;
-
-        for (const auto& [childID, snapshot] : factionSnapshots_) {
-            if (!serialization->WriteRecordData(childID) ||
-                !serialization->WriteRecordData(snapshot.crimeFactionID)) {
-                return false;
-            }
-            std::uint32_t fCount = static_cast<std::uint32_t>(snapshot.factions.size());
-            if (!serialization->WriteRecordData(fCount)) return false;
-            for (const auto& fEntry : snapshot.factions) {
-                if (!serialization->WriteRecordData(fEntry.factionID) ||
-                    !serialization->WriteRecordData(fEntry.rank)) {
-                    return false;
-                }
-            }
-        }
-        MARAS_LOG_INFO("Saved {} child faction snapshots", count);
-        return true;
-    }
-
-    bool PlayerChildrenService::LoadFactionSnapshots(SKSE::SerializationInterface* serialization, std::uint32_t /*version*/) {
-        if (!serialization) return false;
-
-        RevertFactionSnapshots();
-
-        constexpr std::uint32_t kMaxSnapshots = 10000;
-        constexpr std::uint32_t kMaxFactionsPerSnapshot = 1000;
-
-        std::uint32_t count = 0;
-        if (!serialization->ReadRecordData(count)) return false;
-        if (count > kMaxSnapshots) {
-            MARAS_LOG_ERROR("PlayerChildrenService::LoadFactionSnapshots - corrupt count {}", count);
-            return false;
-        }
-
-        for (std::uint32_t i = 0; i < count; ++i) {
-            RE::FormID oldChildID = 0, oldCrimeFactionID = 0;
-            if (!serialization->ReadRecordData(oldChildID) ||
-                !serialization->ReadRecordData(oldCrimeFactionID)) {
-                return false;
-            }
-
-            RE::FormID newChildID = 0;
-            bool validChild = false;
-            if (!IsSyntheticChildID(oldChildID)) {
-                validChild = (oldChildID == kPlayerFormID) ? (newChildID = kPlayerFormID, true)
-                                                           : serialization->ResolveFormID(oldChildID, newChildID);
-            }
-
-            RE::FormID newCrimeFactionID = 0;
-            if (oldCrimeFactionID != 0) {
-                serialization->ResolveFormID(oldCrimeFactionID, newCrimeFactionID);
-            }
-
-            std::uint32_t fCount = 0;
-            if (!serialization->ReadRecordData(fCount)) return false;
-            if (fCount > kMaxFactionsPerSnapshot) {
-                MARAS_LOG_ERROR("PlayerChildrenService::LoadFactionSnapshots - corrupt fCount {}", fCount);
-                return false;
-            }
-
-            std::vector<FactionRankEntry> loadedFactions;
-            loadedFactions.reserve(fCount);
-
-            for (std::uint32_t j = 0; j < fCount; ++j) {
-                RE::FormID oldFactionID = 0;
-                std::int8_t rank = 0;
-                if (!serialization->ReadRecordData(oldFactionID) ||
-                    !serialization->ReadRecordData(rank)) {
-                    return false;
-                }
-                RE::FormID newFactionID = 0;
-                if (serialization->ResolveFormID(oldFactionID, newFactionID)) {
-                    loadedFactions.push_back({ newFactionID, rank });
-                }
-            }
-
-            if (validChild && newChildID != 0) {
-                factionSnapshots_[newChildID] = ChildFactionSnapshot{ newCrimeFactionID, std::move(loadedFactions) };
-            }
-        }
-
-        MARAS_LOG_INFO("Loaded {} child faction snapshots", factionSnapshots_.size());
-        return true;
-    }
-
-    void PlayerChildrenService::RevertFactionSnapshots() {
-        factionSnapshots_.clear();
-        MARAS_LOG_INFO("Reverted child faction snapshots");
-    }
-
     void PlayerChildrenService::ReassertAllOnLoad() {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& childStates = snap->household->AllChildStates();
         auto* keyword = FormCache::GetSingleton().GetHomeSandboxKeyword();
-        for (const auto& [childID, state] : children_) {
+        for (const auto& [childKey, rec] : childStates) {
+            const RE::FormID childID = childKey.raw();
             if (IsSyntheticChildID(childID)) continue;
 
             ApplyPackageForCurrentState(childID);
 
-            if (state.homeMarkerFormID != 0) {
-                Utils::SetLinkedRef(childID, state.homeMarkerFormID, keyword);
+            if (rec.homeMarkerId.raw() != 0) {
+                Utils::SetLinkedRef(childID, rec.homeMarkerId.raw(), keyword);
             }
 
-            if (state.petFormID != 0) {
-                SetPetOrCritterFactionsAndPackage(state.petFormID, childID);
+            if (rec.petId.raw() != 0) {
+                SetPetOrCritterFactionsAndPackage(rec.petId.raw(), childID);
             }
 
-            if (state.critterFormID != 0) {
-                SetPetOrCritterFactionsAndPackage(state.critterFormID, childID);
+            if (rec.critterId.raw() != 0) {
+                SetPetOrCritterFactionsAndPackage(rec.critterId.raw(), childID);
             }
         }
-        MARAS_LOG_INFO("ReassertAllOnLoad: Reasserted package/LinkedRef state for {} children", children_.size());
+        MARAS_LOG_INFO("ReassertAllOnLoad: Reasserted package/LinkedRef state for {} children", childStates.size());
     }
 
     nlohmann::json PlayerChildrenService::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& childStates = snap->household->AllChildStates();
+        const auto& factionSnapshots = snap->household->AllChildFactionSnapshots();
+
         nlohmann::json j;
-        j["childChestIntroduced"] = childChestIntroduced_;
-        j["factionSnapshotsCount"] = factionSnapshots_.size();
+        j["childChestIntroduced"] = snap->household->IsChildChestIntroduced();
+        j["factionSnapshotsCount"] = factionSnapshots.size();
         nlohmann::json list = nlohmann::json::array();
-        for (const auto& [cID, state] : children_) {
+        for (const auto& [cKey, rec] : childStates) {
+            const RE::FormID cID = cKey.raw();
+            const ChildHouseholdState state = LegacyAdapters::ToLegacyChildHouseholdState(rec);
             nlohmann::json c;
             c["childId"] = std::format("{:08X}", cID);
             c["name"] = ActorSvc::GetName(cID);
@@ -1306,11 +1304,12 @@ namespace MARAS {
             c["playedScene2"] = state.playedScene2;
             c["lastInteractionTimestamp"] = state.lastInteractionTimestamp;
 
-            auto snapIt = factionSnapshots_.find(cID);
-            if (snapIt != factionSnapshots_.end()) {
+            auto snapIt = factionSnapshots.find(cKey);
+            if (snapIt != factionSnapshots.end()) {
+                const auto legacySnap = LegacyAdapters::ToLegacyChildFactionSnapshot(snapIt->second);
                 c["hasFactionSnapshot"] = true;
-                c["snapshotFactionCount"] = snapIt->second.factions.size();
-                c["snapshotCrimeFaction"] = snapIt->second.crimeFactionID != 0 ? std::format("{:08X}", snapIt->second.crimeFactionID) : "";
+                c["snapshotFactionCount"] = legacySnap.factions.size();
+                c["snapshotCrimeFaction"] = legacySnap.crimeFactionID != 0 ? std::format("{:08X}", legacySnap.crimeFactionID) : "";
             } else {
                 c["hasFactionSnapshot"] = false;
             }

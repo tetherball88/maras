@@ -4,6 +4,7 @@
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PollingService.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -12,8 +13,6 @@
 namespace MARAS {
 
     namespace {
-        constexpr std::uint32_t kMaxSerializedCooldowns = 100000;
-
         inline bool IsBanterQualifyingStatus(RelationshipStatus status) {
             return status == RelationshipStatus::Dating ||
                    status == RelationshipStatus::Lover ||
@@ -164,7 +163,8 @@ namespace MARAS {
     }
 
     std::vector<RE::Actor*> BanterCoordinatorService::FindBanterCoupleCandidates(float scanRadius) {
-        const auto& settings = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& settings = *settingsSnap;
         if (!settings.enableScenes) {
             MARAS_LOG_DEBUG("BanterCoordinator: Banter scenes disabled by master setting");
             return {};
@@ -286,10 +286,11 @@ namespace MARAS {
     }
 
     float BanterCoordinatorService::GetLastPlayedDay(RE::FormID actorA, RE::FormID actorB) const {
-        std::shared_lock lock(m_mutex);
-        RelationshipPairKey key(actorA, actorB);
-        auto it = m_coupleCooldowns.find(key);
-        return (it != m_coupleCooldowns.end()) ? it->second : -1.0f;
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& coupleCooldowns = snap->cooldowns->banterCoupleCooldowns;
+        const State::CanonicalPairKey key(State::ActorId{ actorA }, State::ActorId{ actorB });
+        auto it = coupleCooldowns.find(key);
+        return (it != coupleCooldowns.end()) ? it->second : -1.0f;
     }
 
     std::pair<RE::Actor*, RE::Actor*> BanterCoordinatorService::SelectPrioritizedCouple(
@@ -348,16 +349,15 @@ namespace MARAS {
     }
 
     float BanterCoordinatorService::GetCooldownHours() const {
-        return std::max(0.0f, Settings::GetSingleton().scenesCooldownHours);
+        return std::max(0.0f, Settings::GetSingleton().Snapshot()->scenesCooldownHours);
     }
 
     void BanterCoordinatorService::SetCooldownHours(float hours) {
         const float clamped = std::max(0.0f, hours);
-        {
-            std::unique_lock lock(m_mutex);
-            m_cooldownHours = clamped;
-        }
-        Settings::GetSingleton().scenesCooldownHours = clamped;
+        State::WorldStore::GetSingleton().Modify([clamped](State::WorldState& ws) {
+            ws.settings.Write().scenesCooldownHours = clamped;
+            ws.cooldowns.Write().savedBanterCooldownHours = clamped;
+        });
         MARAS_LOG_INFO("BanterCoordinator: Cooldown set to {} hours", clamped);
     }
 
@@ -367,12 +367,13 @@ namespace MARAS {
             return false;
         }
 
-        std::shared_lock lock(m_mutex);
-        if (m_lastSceneDay < 0.0f || currentDay < m_lastSceneDay) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const float lastSceneDay = snap->cooldowns->lastBanterSceneDay;
+        if (lastSceneDay < 0.0f || currentDay < lastSceneDay) {
             return false;
         }
         const float cooldownDays = cooldownHours / 24.0f;
-        return (currentDay - m_lastSceneDay) < cooldownDays;
+        return (currentDay - lastSceneDay) < cooldownDays;
     }
 
     void BanterCoordinatorService::RecordScenePlayed(RE::Actor* actorA, RE::Actor* actorB) {
@@ -381,19 +382,23 @@ namespace MARAS {
             currentDay = calendar->GetDaysPassed();
         }
 
-        std::unique_lock lock(m_mutex);
-        m_lastSceneDay = currentDay;
+        const RE::FormID idA = actorA ? actorA->GetFormID() : 0;
+        const RE::FormID idB = actorB ? actorB->GetFormID() : 0;
+        const std::string nameA = (actorA && actorA->GetName()) ? actorA->GetName() : "";
+        const std::string nameB = (actorB && actorB->GetName()) ? actorB->GetName() : "";
 
-        if (actorA && actorB) {
-            auto idA = actorA->GetFormID();
-            auto idB = actorB->GetFormID();
+        State::WorldStore::GetSingleton().Modify([currentDay, idA, idB](State::WorldState& ws) {
+            auto& cd = ws.cooldowns.Write();
+            cd.lastBanterSceneDay = currentDay;
             if (idA != 0 && idB != 0) {
-                RelationshipPairKey key(idA, idB);
-                m_coupleCooldowns[key] = currentDay;
-                MARAS_LOG_INFO("BanterCoordinator: Recorded scene played for pair ({:08X}: '{}', {:08X}: '{}') on day {:.3f}",
-                               idA, actorA->GetName(), idB, actorB->GetName(), currentDay);
-                return;
+                cd.banterCoupleCooldowns[State::CanonicalPairKey(State::ActorId{ idA }, State::ActorId{ idB })] = currentDay;
             }
+        });
+
+        if (idA != 0 && idB != 0) {
+            MARAS_LOG_INFO("BanterCoordinator: Recorded scene played for pair ({:08X}: '{}', {:08X}: '{}') on day {:.3f}",
+                           idA, nameA, idB, nameB, currentDay);
+            return;
         }
         MARAS_LOG_INFO("BanterCoordinator: Recorded scene played on day {:.3f}", currentDay);
     }
@@ -404,10 +409,11 @@ namespace MARAS {
             return false;
         }
 
-        std::shared_lock lock(m_mutex);
-        RelationshipPairKey key(actorA, actorB);
-        auto it = m_coupleCooldowns.find(key);
-        if (it == m_coupleCooldowns.end()) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& coupleCooldowns = snap->cooldowns->banterCoupleCooldowns;
+        const State::CanonicalPairKey key(State::ActorId{ actorA }, State::ActorId{ actorB });
+        auto it = coupleCooldowns.find(key);
+        if (it == coupleCooldowns.end()) {
             return false;
         }
         const float lastDay = it->second;
@@ -419,156 +425,52 @@ namespace MARAS {
     }
 
     void BanterCoordinatorService::SetCooldown(RE::FormID actorA, RE::FormID actorB, float currentDay) {
-        std::unique_lock lock(m_mutex);
-        RelationshipPairKey key(actorA, actorB);
-        m_coupleCooldowns[key] = currentDay;
+        State::WorldStore::GetSingleton().Modify([actorA, actorB, currentDay](State::WorldState& ws) {
+            const State::CanonicalPairKey key(State::ActorId{ actorA }, State::ActorId{ actorB });
+            ws.cooldowns.Write().banterCoupleCooldowns[key] = currentDay;
+        });
     }
 
     void BanterCoordinatorService::ResetCooldown(RE::FormID actorA, RE::FormID actorB) {
-        std::unique_lock lock(m_mutex);
-        RelationshipPairKey key(actorA, actorB);
-        m_coupleCooldowns.erase(key);
+        State::WorldStore::GetSingleton().Modify([actorA, actorB](State::WorldState& ws) {
+            const State::CanonicalPairKey key(State::ActorId{ actorA }, State::ActorId{ actorB });
+            ws.cooldowns.Write().banterCoupleCooldowns.erase(key);
+        });
         MARAS_LOG_INFO("BanterCoordinator: Reset cooldown for pair ({:08X}, {:08X})", actorA, actorB);
     }
 
     void BanterCoordinatorService::ClearAllCooldowns() {
-        std::unique_lock lock(m_mutex);
-        m_coupleCooldowns.clear();
-        m_lastSceneDay = -1.0f;
+        State::WorldStore::GetSingleton().Modify([](State::WorldState& ws) {
+            auto& cd = ws.cooldowns.Write();
+            cd.banterCoupleCooldowns.clear();
+            cd.lastBanterSceneDay = -1.0f;
+        });
         MARAS_LOG_INFO("BanterCoordinator: Cleared all couple and scene cooldowns");
     }
 
-    bool BanterCoordinatorService::Save(SKSE::SerializationInterface* serialization) const {
-        if (!serialization) return false;
-        const float cooldownHours = GetCooldownHours();
-        std::shared_lock lock(m_mutex);
-
-        if (!serialization->WriteRecordData(cooldownHours)) {
-            MARAS_LOG_ERROR("BanterCoordinator::Save: Failed to write cooldown hours");
-            return false;
-        }
-
-        std::uint32_t count = static_cast<std::uint32_t>(m_coupleCooldowns.size());
-        if (!serialization->WriteRecordData(count)) {
-            MARAS_LOG_ERROR("BanterCoordinator::Save: Failed to write count");
-            return false;
-        }
-
-        for (const auto& [key, timestamp] : m_coupleCooldowns) {
-            if (!serialization->WriteRecordData(key.actorA) ||
-                !serialization->WriteRecordData(key.actorB) ||
-                !serialization->WriteRecordData(timestamp)) {
-                MARAS_LOG_ERROR("BanterCoordinator::Save: Failed to write record data for pair ({:08X}, {:08X})",
-                                key.actorA, key.actorB);
-                return false;
-            }
-        }
-
-        if (!serialization->WriteRecordData(m_lastSceneDay)) {
-            MARAS_LOG_ERROR("BanterCoordinator::Save: Failed to write last scene day");
-            return false;
-        }
-
-        MARAS_LOG_INFO("BanterCoordinator::Save: Saved {} couple cooldowns, lastSceneDay={}", count, m_lastSceneDay);
-        return true;
-    }
-
-    bool BanterCoordinatorService::Load(SKSE::SerializationInterface* serialization, std::uint32_t version) {
-        if (!serialization) return false;
-        std::unique_lock lock(m_mutex);
-
-        m_coupleCooldowns.clear();
-        m_lastSceneDay = -1.0f;
-
-        if (version < 1) {
-            MARAS_LOG_ERROR("BanterCoordinator::Load: Invalid data version {}", version);
-            return false;
-        }
-
-        float savedCooldownHours = 24.0f;
-        if (!serialization->ReadRecordData(savedCooldownHours)) {
-            MARAS_LOG_ERROR("BanterCoordinator::Load: Failed to read cooldown hours");
-            return false;
-        }
-        m_cooldownHours = std::max(0.0f, savedCooldownHours);
-
-        std::uint32_t count = 0;
-        if (!serialization->ReadRecordData(count)) {
-            MARAS_LOG_ERROR("BanterCoordinator::Load: Failed to read count");
-            return false;
-        }
-
-        if (count > kMaxSerializedCooldowns) {
-            MARAS_LOG_ERROR("BanterCoordinator::Load: Cooldown count {} exceeds maximum sanity limit {}",
-                            count, kMaxSerializedCooldowns);
-            return false;
-        }
-
-        for (std::uint32_t i = 0; i < count; ++i) {
-            RE::FormID actorA = 0;
-            RE::FormID actorB = 0;
-            float timestamp = 0.0f;
-
-            if (!serialization->ReadRecordData(actorA) ||
-                !serialization->ReadRecordData(actorB) ||
-                !serialization->ReadRecordData(timestamp)) {
-                MARAS_LOG_ERROR("BanterCoordinator::Load: Failed to read record entry {}", i);
-                return false;
-            }
-
-            if (IsSyntheticChildID(actorA) || IsSyntheticChildID(actorB)) {
-                continue;
-            }
-
-            RE::FormID resolvedA = 0;
-            RE::FormID resolvedB = 0;
-            if (!serialization->ResolveFormID(actorA, resolvedA) ||
-                !serialization->ResolveFormID(actorB, resolvedB) ||
-                resolvedA == 0 || resolvedB == 0 || resolvedA == resolvedB) {
-                MARAS_LOG_WARN("BanterCoordinator::Load: Failed to resolve forms ({:08X}, {:08X}), skipping entry",
-                               actorA, actorB);
-                continue;
-            }
-
-            m_coupleCooldowns[RelationshipPairKey(resolvedA, resolvedB)] = timestamp;
-        }
-
-        if (version >= 2) {
-            if (!serialization->ReadRecordData(m_lastSceneDay)) {
-                MARAS_LOG_WARN("BanterCoordinator::Load: Failed to read last scene day (version 2)");
-                m_lastSceneDay = -1.0f;
-            }
-        }
-
-        MARAS_LOG_INFO("BanterCoordinator::Load: Successfully loaded {} couple cooldowns (cooldown: {} hrs, lastSceneDay: {})",
-                       m_coupleCooldowns.size(), m_cooldownHours, m_lastSceneDay);
-        return true;
-    }
-
     void BanterCoordinatorService::Revert() {
-        std::unique_lock lock(m_mutex);
-        m_coupleCooldowns.clear();
-        m_cooldownHours = std::max(0.0f, Settings::GetSingleton().scenesCooldownHours);
-        m_lastSceneDay = -1.0f;
         MARAS_LOG_INFO("BanterCoordinator::Revert: Reverted to clean state");
     }
 
     nlohmann::json BanterCoordinatorService::DumpJson() const {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto& cd = *snap->cooldowns;
         const float effectiveCooldownHours = GetCooldownHours();
-        std::shared_lock lock(m_mutex);
 
         nlohmann::json j = nlohmann::json::object();
         j["cooldownHours"] = effectiveCooldownHours;
-        j["savedCooldownHours"] = m_cooldownHours;
-        j["lastSceneDay"] = m_lastSceneDay;
+        j["savedCooldownHours"] = cd.savedBanterCooldownHours;
+        j["lastSceneDay"] = cd.lastBanterSceneDay;
 
         nlohmann::json cooldownsArray = nlohmann::json::array();
-        for (const auto& [key, lastDay] : m_coupleCooldowns) {
+        for (const auto& [key, lastDay] : cd.banterCoupleCooldowns) {
+            const RE::FormID idA = key.first.raw();
+            const RE::FormID idB = key.second.raw();
             nlohmann::json entry = nlohmann::json::object();
-            entry["actorAFormId"] = std::format("{:08X}", key.actorA);
-            entry["actorAName"] = ActorSvc::GetName(key.actorA);
-            entry["actorBFormId"] = std::format("{:08X}", key.actorB);
-            entry["actorBName"] = ActorSvc::GetName(key.actorB);
+            entry["actorAFormId"] = std::format("{:08X}", idA);
+            entry["actorAName"] = ActorSvc::GetName(idA);
+            entry["actorBFormId"] = std::format("{:08X}", idB);
+            entry["actorBName"] = ActorSvc::GetName(idB);
             entry["lastSceneDay"] = lastDay;
             cooldownsArray.push_back(std::move(entry));
         }
@@ -577,7 +479,8 @@ namespace MARAS {
     }
 
     bool BanterCoordinatorService::IsLocationAllowedForScenes(RE::BGSLocation* location) const {
-        const auto& s = Settings::GetSingleton();
+        const auto settingsSnap = Settings::GetSingleton().Snapshot();
+        const auto& s = *settingsSnap;
         if (!s.enableScenes || !location) {
             return false;
         }
