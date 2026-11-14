@@ -326,20 +326,7 @@ namespace MARAS {
             ws.settings.Write().disablePolygamyQuest = value;
         });
         if (value) {
-            auto dispatchEvent = []() {
-                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                    SKSE::ModCallbackEvent modEvent("maras_stop_polygamy_quest", "", 0.0f, nullptr);
-                    eventSource->SendEvent(&modEvent);
-                }
-            };
-            if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
-                dispatchEvent();
-            } else {
-                AddCurrentEpochTask("Settings::StopPolygamyQuestEvent", [dispatchEvent]() {
-                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                    dispatchEvent();
-                });
-            }
+            EmitModCallbackEvent("maras_stop_polygamy_quest", "", 0.0f, RE::FormID{ 0 });
         }
         MARAS_LOG_INFO("Settings::SetDisablePolygamyQuest - disablePolygamyQuest set to {}", value);
     }
@@ -423,6 +410,7 @@ namespace MARAS {
             ws.settings.Reset(reverted);
         });
 
+        GlobalVarReconciler::GetSingleton().ResetSessionGlobalsToDefaults();
         GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         LoggingService::GetSingleton().SetLogLevel(reverted.logLevel);
 

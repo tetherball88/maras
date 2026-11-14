@@ -12,6 +12,7 @@
 #include "maras/projection/PerspectiveView.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "utils/Common.h"
 #include "utils/EnumUtils.h"
@@ -1428,8 +1429,12 @@ namespace MARAS {
                     return;
                 }
 
-                auto taskData = std::make_unique<ChildProfileContextData>(
-                    GatherChildProfileContextOnGameThread(childID, stage, actor));
+                std::unique_ptr<ChildProfileContextData> taskData;
+                {
+                    std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+                    taskData = std::make_unique<ChildProfileContextData>(
+                        GatherChildProfileContextOnGameThread(childID, stage, actor));
+                }
                 taskData->sessionEpoch = expectedEpoch;
 
                 MARAS_LOG_INFO("[SkyrimNetProfile] Queuing async profile update for spawned child actor {:08X} ('{}', stage={}, uuid={:X}, bio='{}', involvedAdults={})",

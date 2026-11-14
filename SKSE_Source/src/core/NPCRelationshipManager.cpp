@@ -278,7 +278,7 @@ namespace MARAS {
             MARAS_LOG_DEBUG("SendStatusChangedEvent: Actor {:08X} is not currently loaded; dispatching events with null sender",
                             npcFormID);
         }
-        RE::TESForm* senderForm = npcActor ? static_cast<RE::TESForm*>(npcActor) : nullptr;
+        const RE::FormID senderID = npcActor ? npcActor->GetFormID() : 0;
 
         std::int32_t statusEnum = static_cast<std::int32_t>(status);
         std::string statusString(Utils::RelationshipStatusToString(status));
@@ -286,29 +286,20 @@ namespace MARAS {
         std::transform(statusString.begin(), statusString.end(), statusString.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-        auto eventSource = SKSE::GetModCallbackEventSource();
-        if (eventSource) {
-            SKSE::ModCallbackEvent modEvent("maras_status_changed", statusString, static_cast<float>(statusEnum),
-                                            senderForm);
-            eventSource->SendEvent(&modEvent);
-            MARAS_LOG_INFO("Sent maras_status_changed event for NPC {:08X} (target {:08X}): status={} ({})",
-                           npcFormID, targetFormID, statusEnum, statusString);
+        EmitModCallbackEvent("maras_status_changed", statusString, static_cast<float>(statusEnum), senderID);
+        MARAS_LOG_INFO("Sent maras_status_changed event for NPC {:08X} (target {:08X}): status={} ({})",
+                       npcFormID, targetFormID, statusEnum, statusString);
 
-            nlohmann::json fullJson;
-            fullJson["initiator"] = fmt::format("0x{:08X}", npcFormID);
-            fullJson["acceptor"] = fmt::format("0x{:08X}", targetFormID);
-            fullJson["initiatorName"] = ActorSvc::GetName(npcFormID);
-            fullJson["acceptorName"] = ActorSvc::GetName(targetFormID);
-            fullJson["status"] = statusString;
+        nlohmann::json fullJson;
+        fullJson["initiator"] = fmt::format("0x{:08X}", npcFormID);
+        fullJson["acceptor"] = fmt::format("0x{:08X}", targetFormID);
+        fullJson["initiatorName"] = ActorSvc::GetName(npcFormID);
+        fullJson["acceptorName"] = ActorSvc::GetName(targetFormID);
+        fullJson["status"] = statusString;
 
-            std::string fullJsonStr = fullJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-            SKSE::ModCallbackEvent fullModEvent("maras_status_changed_full", fullJsonStr, static_cast<float>(statusEnum),
-                                                senderForm);
-            eventSource->SendEvent(&fullModEvent);
-            MARAS_LOG_INFO("Sent maras_status_changed_full event: {}", fullJsonStr);
-        } else {
-            MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send event");
-        }
+        std::string fullJsonStr = fullJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+        EmitModCallbackEvent("maras_status_changed_full", fullJsonStr, static_cast<float>(statusEnum), senderID);
+        MARAS_LOG_INFO("Sent maras_status_changed_full event: {}", fullJsonStr);
     }
 
     void NPCRelationshipManager::DispatchPlayerBuffMaintenance() const {
@@ -433,7 +424,7 @@ namespace MARAS {
                 MARAS_LOG_WARN("ChangeStatusCommon blocked for {:08X} / {:08X} ({}) -> {}",
                                npcFormID, targetFormID, Utils::RelationshipStatusToString(status), blockReason);
                 if (!blockReason.empty() && (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID)) {
-                    RE::SendHUDMessage::ShowHUDMessage(blockReason.c_str());
+                    QueueHUDMessage(blockReason);
                 }
                 return false;
             }
@@ -2267,7 +2258,9 @@ namespace MARAS {
         }
 
         if (isPlayerPair) {
+            ClearCurrentHome(playerPartnerID);
             FactionReconciler::GetSingleton().ReconcileActor(playerPartnerID);
+            PackageReconciler::GetSingleton().ReconcileActor(playerPartnerID);
             FactionReconciler::GetSingleton().ReconcilePlayer();
         } else {
             for (const RE::FormID npcID : addedCandidateActors) {
@@ -2277,6 +2270,8 @@ namespace MARAS {
             }
             FactionReconciler::GetSingleton().ReconcileActor(actorA);
             FactionReconciler::GetSingleton().ReconcileActor(actorB);
+            PackageReconciler::GetSingleton().ReconcileActor(actorA);
+            PackageReconciler::GetSingleton().ReconcileActor(actorB);
         }
 
         // Resolve custody of any shared children or unborn pregnancies using the Divorce Custody rules
@@ -2469,6 +2464,11 @@ namespace MARAS {
             const bool isRegAdult = existing ? existing->isRegisteredAdult : true;
             ws.actors.Write().Upsert(LegacyAdapters::ToActorProfileRecord(profile, effectiveBase, isRegAdult));
         });
+
+        FactionReconciler::GetSingleton().ReconcileActor(profile.formID);
+        if (GetRelationshipStatus(profile.formID, kPlayerFormID) == RelationshipStatus::Married) {
+            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+        }
     }
 
     std::optional<NPCRelationshipData> NPCRelationshipManager::GetNPCData(RE::FormID npcFormID, RE::FormID targetFormID) const {
@@ -2876,18 +2876,18 @@ namespace MARAS {
         }
 
         if (npcFormID == kPlayerFormID || npcFormID == 0 || npcFormID == 0x07) return true;
-        if (IsRegistered(npcFormID)) {
-            MARAS_LOG_TRACE("EnsureRegistered: {:08X} is already registered", npcFormID);
-            return true;
-        }
-
         if (DeceasedRegistry::GetSingleton().IsDeceased(npcFormID)) {
             MARAS_LOG_DEBUG("EnsureRegistered: Skipping deceased NPC {:08X}", npcFormID);
             return false;
         }
-        if (auto* loadedActor = RE::TESForm::LookupByID<RE::Actor>(npcFormID); loadedActor && loadedActor->IsDead()) {
-            MARAS_LOG_DEBUG("EnsureRegistered: Skipping dead loaded actor {:08X}", npcFormID);
+        if (auto* loadedActor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
+            loadedActor && (loadedActor->IsDead() || loadedActor->IsDeleted())) {
+            MARAS_LOG_DEBUG("EnsureRegistered: Skipping dead or deleted loaded actor {:08X}", npcFormID);
             return false;
+        }
+        if (IsRegistered(npcFormID)) {
+            MARAS_LOG_TRACE("EnsureRegistered: {:08X} is already registered", npcFormID);
+            return true;
         }
 
         auto startTime = std::chrono::high_resolution_clock::now();

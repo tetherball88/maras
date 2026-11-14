@@ -187,6 +187,7 @@ namespace MARAS {
                 const RE::FormID cID = m_childID;
                 const RE::FormID spID = m_spouseID;
                 AddEpochTask(m_epoch, "MarriageAdoptionCallback::CompleteAdoption", [cID, spID]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     auto& relMgr = NPCRelationshipManager::GetSingleton();
                     if (!relMgr.IsMarried(kPlayerFormID, spID)) return;
                     auto entryOpt = relMgr.GetChildEntry(cID);
@@ -334,12 +335,6 @@ namespace MARAS {
     void NPCRelationshipManager::SendChildEvent(const std::string& eventType, RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID, RE::FormID otherID, const std::string& reason) {
         if (childID == 0) return;
 
-        auto* eventSource = SKSE::GetModCallbackEventSource();
-        if (!eventSource) {
-            MARAS_LOG_WARN("Could not get ModCallbackEventSource to send child event");
-            return;
-        }
-
         nlohmann::json payload;
         payload["eventType"] = eventType;
         payload["child"] = fmt::format("0x{:08X}", childID);
@@ -377,9 +372,9 @@ namespace MARAS {
         payload["reason"] = reason;
 
         std::string jsonStr = payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        RE::TESForm* childForm = IsSyntheticChildID(childID) ? nullptr : RE::TESForm::LookupByID(childID);
-        SKSE::ModCallbackEvent modEvent("maras_child_event", jsonStr, 0.0f, childForm);
-        eventSource->SendEvent(&modEvent);
+        const RE::FormID senderID =
+            (!IsSyntheticChildID(childID) && RE::TESForm::LookupByID(childID) != nullptr) ? childID : 0;
+        EmitModCallbackEvent("maras_child_event", jsonStr, 0.0f, senderID);
         MARAS_LOG_INFO("Sent maras_child_event: {}", jsonStr);
         SkyrimNetMemoryService::GetSingleton().RecordChildCustodyEvent(
             eventType, childID, guardianAID, guardianBID, otherID, reason);
@@ -865,15 +860,22 @@ namespace MARAS {
                     if (otherGuardianID != 0 && !Utils::MatchesActor(otherGuardianID, spouseID)) {
                         mgr.UpdateSpouseChildrenFaction(otherGuardianID);
                     }
-                    RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(
-                        new MarriageAdoptionCallback(cID, spouseID));
-                    auto childArg = childActor;
-                    auto spouseArg = spouseActor;
-                    RE::TESForm* houseArg = nullptr;
-                    auto args = RE::MakeFunctionArguments(std::move(childArg), std::move(spouseArg), std::move(houseArg));
-                    if (!vm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, callback)) {
-                        ClearMarriageAdoptionPending(cID);
-                    }
+                    DispatchPostLock([cID, spouseID]() {
+                        auto* innerVm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+                        auto* cActor = cID != 0 ? RE::TESForm::LookupByID<RE::Actor>(cID) : nullptr;
+                        auto* spActor = spouseID != 0 ? RE::TESForm::LookupByID<RE::Actor>(spouseID) : nullptr;
+                        if (!innerVm || !cActor || !spActor) {
+                            ClearMarriageAdoptionPending(cID);
+                            return;
+                        }
+                        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(
+                            new MarriageAdoptionCallback(cID, spouseID));
+                        RE::TESForm* houseArg = nullptr;
+                        auto args = RE::MakeFunctionArguments(std::move(cActor), std::move(spActor), std::move(houseArg));
+                        if (!innerVm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, callback)) {
+                            ClearMarriageAdoptionPending(cID);
+                        }
+                    }, "EvaluateChildCustodyOnMarriage::AdoptChildGlobal");
                     skippedChildIds.insert(cID);
                 }
             }
@@ -1242,11 +1244,8 @@ namespace MARAS {
                         baseOutcome = "mother_confessed_bio";
                     }
                     std::string eventOutcome = (delta.wasSecretPartner && delta.wasPregSecretPartner) ? (baseOutcome + "_unannounced") : baseOutcome;
-                    if (auto* source = SKSE::GetModCallbackEventSource()) {
-                        float childIdFloat = static_cast<float>(static_cast<int32_t>(cID));
-                        SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                        source->SendEvent(&modEvent);
-                    }
+                    const float childIdFloat = static_cast<float>(static_cast<int32_t>(cID));
+                    EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
                     SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(cID, baseOutcome, "none", delta.wasPregSecretPartner);
                 }
 
@@ -1261,11 +1260,8 @@ namespace MARAS {
                     RE::FormID bioFatherID = (delta.post.bioFatherID != 0 && delta.post.bioFatherID != kUnknownFatherFormID) ? delta.post.bioFatherID : 0;
 
                     MARAS_LOG_INFO("[Fertility] Divorce/Breakup: Auto-resolved paternity secret for child {:08X} ('{}')", cID, delta.post.name);
-                    if (auto* source = SKSE::GetModCallbackEventSource()) {
-                        float childIdFloat = static_cast<float>(static_cast<int32_t>(cID));
-                        SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", "divorce_revealed", childIdFloat, nullptr);
-                        source->SendEvent(&modEvent);
-                    }
+                    const float childIdFloat = static_cast<float>(static_cast<int32_t>(cID));
+                    EmitModCallbackEvent("maras_paternity_secret_resolved", "divorce_revealed", childIdFloat, RE::FormID{ 0 });
                     SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(cID, "divorce_revealed");
 
                     if (Utils::MatchesActor(motherID, kPlayerFormID) ||
@@ -1273,7 +1269,7 @@ namespace MARAS {
                         Utils::MatchesActor(bioFatherID, kPlayerFormID)) {
                         std::string notifyMsg = fmt::format("Paternity secret for {} has been resolved following breakup.",
                                                             delta.post.name.empty() ? "the child" : delta.post.name);
-                        RE::SendHUDMessage::ShowHUDMessage(notifyMsg.c_str());
+                        QueueHUDMessage(std::move(notifyMsg));
                     }
                 }
             }

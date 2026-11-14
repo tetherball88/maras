@@ -43,6 +43,7 @@ namespace MARAS {
 
         void CaptureMainThread() noexcept;
         [[nodiscard]] bool IsOnMainThread() const noexcept;
+        [[nodiscard]] bool CanSyncEngineInline() const noexcept;
 
         // Queues main-thread reconciliation for `actorId`, coalescing repeated requests per burst.
         void RequestSync(RE::FormID actorId, SyncFlags flags = SyncFlags::All);

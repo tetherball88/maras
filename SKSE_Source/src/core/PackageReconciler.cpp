@@ -7,6 +7,7 @@
 #include "core/ChildrenFleeService.h"
 #include "core/DeferredActorResolver.h"
 #include "core/FormCache.h"
+#include "core/LoggingService.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerChildrenService.h"
@@ -122,6 +123,10 @@ namespace MARAS {
         template <typename LogFn>
         void CheckAndLog(RE::FormID actorID, RE::FormID candidateID, RE::FormID resultID,
                          PackageDecision decision, LogFn&& logFn) {
+            if (decision != PackageDecision::NoSandbox &&
+                LoggingService::GetSingleton().GetLogLevel() > 1) {
+                return;
+            }
             const HookEvalState newState{ candidateID, resultID, decision };
             {
                 std::lock_guard lock(s_evalMutex);
@@ -180,6 +185,43 @@ namespace MARAS {
             plan.homeSandboxTargetId = Foundation::RefId{ createdMarker->GetFormID() };
         }
 
+        struct ResolvedStandardPackages {
+            RE::TESPackage* base{ nullptr };
+            RE::TESPackage* pet{ nullptr };
+            RE::TESPackage* childFollow{ nullptr };
+            RE::TESPackage* adultTravel{ nullptr };
+            RE::FormID baseId{ 0 };
+            RE::FormID petId{ 0 };
+            RE::FormID childFollowId{ 0 };
+            RE::FormID adultTravelId{ 0 };
+        };
+
+        ResolvedStandardPackages ResolveStandardPackages() noexcept {
+            auto& fc = FormCache::GetSingleton();
+            ResolvedStandardPackages out{};
+            out.base = fc.GetHomeSandboxPackage();
+            out.pet = fc.GetPetCritterHomeSandboxPackage();
+            out.childFollow = fc.GetChildrenNonPlayerFollowParentPackage();
+            out.adultTravel = fc.GetAdultChildTravelSandboxPackage();
+            out.baseId = out.base ? out.base->GetFormID() : 0;
+            out.petId = out.pet ? out.pet->GetFormID() : 0;
+            out.childFollowId = out.childFollow ? out.childFollow->GetFormID() : 0;
+            out.adultTravelId = out.adultTravel ? out.adultTravel->GetFormID() : 0;
+            return out;
+        }
+
+        void ApplyStandardPackagesToDraft(PackageReconciler::PackageRegistrySnapshot& draft,
+                                          const ResolvedStandardPackages& resolved) {
+            if (draft.baseSandboxPkgID == 0) draft.baseSandboxPkgID = resolved.baseId;
+            if (draft.petCritterSandboxPkgID == 0) draft.petCritterSandboxPkgID = resolved.petId;
+            if (draft.nonPlayerChildFollowPkgID == 0) draft.nonPlayerChildFollowPkgID = resolved.childFollowId;
+            if (draft.adultChildTravelPkgID == 0) draft.adultChildTravelPkgID = resolved.adultTravelId;
+            if (resolved.base) draft.resolvedPackages[resolved.baseId] = resolved.base;
+            if (resolved.pet) draft.resolvedPackages[resolved.petId] = resolved.pet;
+            if (resolved.childFollow) draft.resolvedPackages[resolved.childFollowId] = resolved.childFollow;
+            if (resolved.adultTravel) draft.resolvedPackages[resolved.adultTravelId] = resolved.adultTravel;
+        }
+
     }  // namespace
 
     bool PackageReconciler::MatchesPatternList(std::string_view text, const std::vector<std::string>& patterns) {
@@ -216,27 +258,7 @@ namespace MARAS {
     }
 
     void PackageReconciler::EnsureCachedPackageIds(PackageRegistrySnapshot& draft) const noexcept {
-        auto& fc = FormCache::GetSingleton();
-        if (draft.baseSandboxPkgID == 0) {
-            if (auto* pkg = fc.GetHomeSandboxPackage()) {
-                draft.baseSandboxPkgID = pkg->GetFormID();
-            }
-        }
-        if (draft.petCritterSandboxPkgID == 0) {
-            if (auto* pkg = fc.GetPetCritterHomeSandboxPackage()) {
-                draft.petCritterSandboxPkgID = pkg->GetFormID();
-            }
-        }
-        if (draft.nonPlayerChildFollowPkgID == 0) {
-            if (auto* pkg = fc.GetChildrenNonPlayerFollowParentPackage()) {
-                draft.nonPlayerChildFollowPkgID = pkg->GetFormID();
-            }
-        }
-        if (draft.adultChildTravelPkgID == 0) {
-            if (auto* pkg = fc.GetAdultChildTravelSandboxPackage()) {
-                draft.adultChildTravelPkgID = pkg->GetFormID();
-            }
-        }
+        ApplyStandardPackagesToDraft(draft, ResolveStandardPackages());
     }
 
     RE::FormID PackageReconciler::ResolveRolePackageId(
@@ -323,14 +345,8 @@ namespace MARAS {
             MARAS_LOG_INFO("PackageReconciler: config not found at '{}' (no patterns loaded)", iniPath);
         }
 
-        // Resolve package FormIDs outside writeMutex_
-        auto& fc = FormCache::GetSingleton();
-        const RE::FormID baseID = fc.GetHomeSandboxPackage() ? fc.GetHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID petID = fc.GetPetCritterHomeSandboxPackage() ? fc.GetPetCritterHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID childFollowID =
-            fc.GetChildrenNonPlayerFollowParentPackage() ? fc.GetChildrenNonPlayerFollowParentPackage()->GetFormID() : 0;
-        const RE::FormID adultTravelID =
-            fc.GetAdultChildTravelSandboxPackage() ? fc.GetAdultChildTravelSandboxPackage()->GetFormID() : 0;
+        // Resolve package FormIDs and pointers outside writeMutex_
+        const auto stdPkgs = ResolveStandardPackages();
 
         {
             std::lock_guard lock(writeMutex_);
@@ -340,10 +356,7 @@ namespace MARAS {
             next->pluginWhitelistPatterns = pluginWhitelistPatterns;
             next->questWhitelistPatterns = questWhitelistPatterns;
             next->questPriorityThreshold = questPriorityThreshold;
-            if (baseID != 0) next->baseSandboxPkgID = baseID;
-            if (petID != 0) next->petCritterSandboxPkgID = petID;
-            if (childFollowID != 0) next->nonPlayerChildFollowPkgID = childFollowID;
-            if (adultTravelID != 0) next->adultChildTravelPkgID = adultTravelID;
+            ApplyStandardPackagesToDraft(*next, stdPkgs);
             snapshot_.store(std::move(next), std::memory_order_release);
         }
 
@@ -353,17 +366,17 @@ namespace MARAS {
                 whitelistPatterns.size(), pluginWhitelistPatterns.size(), questWhitelistPatterns.size(),
                 questPriorityThreshold >= 0 ? std::to_string(questPriorityThreshold) : "disabled");
         }
-        if (baseID != 0) {
-            MARAS_LOG_INFO("PackageReconciler: base sandbox package resolved to {:08X}", baseID);
+        if (stdPkgs.baseId != 0) {
+            MARAS_LOG_INFO("PackageReconciler: base sandbox package resolved to {:08X}", stdPkgs.baseId);
         }
-        if (petID != 0) {
-            MARAS_LOG_INFO("PackageReconciler: pet/critter sandbox package resolved to {:08X}", petID);
+        if (stdPkgs.petId != 0) {
+            MARAS_LOG_INFO("PackageReconciler: pet/critter sandbox package resolved to {:08X}", stdPkgs.petId);
         }
-        if (childFollowID != 0) {
-            MARAS_LOG_INFO("PackageReconciler: non-player child follow package resolved to {:08X}", childFollowID);
+        if (stdPkgs.childFollowId != 0) {
+            MARAS_LOG_INFO("PackageReconciler: non-player child follow package resolved to {:08X}", stdPkgs.childFollowId);
         }
-        if (adultTravelID != 0) {
-            MARAS_LOG_INFO("PackageReconciler: adult child travel package resolved to {:08X}", adultTravelID);
+        if (stdPkgs.adultTravelId != 0) {
+            MARAS_LOG_INFO("PackageReconciler: adult child travel package resolved to {:08X}", stdPkgs.adultTravelId);
         }
     }
 
@@ -420,14 +433,8 @@ namespace MARAS {
         const bool linkedFollowChanged =
             ConvergeActorLinkedRef(actor, followKw, plan.childFollowTargetId.raw());
 
-        // Resolve package IDs cleanly outside writeMutex_
-        const RE::FormID formBasePkg = fc.GetHomeSandboxPackage() ? fc.GetHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID formPetPkg =
-            fc.GetPetCritterHomeSandboxPackage() ? fc.GetPetCritterHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID formChildFollowPkg =
-            fc.GetChildrenNonPlayerFollowParentPackage() ? fc.GetChildrenNonPlayerFollowParentPackage()->GetFormID() : 0;
-        const RE::FormID formAdultTravelPkg =
-            fc.GetAdultChildTravelSandboxPackage() ? fc.GetAdultChildTravelSandboxPackage()->GetFormID() : 0;
+        // Resolve package IDs and pointers cleanly outside writeMutex_
+        const auto stdPkgs = ResolveStandardPackages();
 
         RE::FormID desiredPkgId = 0;
         RE::FormID childFollowPkgId = 0;
@@ -438,10 +445,7 @@ namespace MARAS {
             std::lock_guard lock(writeMutex_);
             const auto current = snapshot_.load(std::memory_order_acquire);
             auto next = std::make_shared<PackageRegistrySnapshot>(*current);
-            if (next->baseSandboxPkgID == 0) next->baseSandboxPkgID = formBasePkg;
-            if (next->petCritterSandboxPkgID == 0) next->petCritterSandboxPkgID = formPetPkg;
-            if (next->nonPlayerChildFollowPkgID == 0) next->nonPlayerChildFollowPkgID = formChildFollowPkg;
-            if (next->adultChildTravelPkgID == 0) next->adultChildTravelPkgID = formAdultTravelPkg;
+            ApplyStandardPackagesToDraft(*next, stdPkgs);
 
             childFollowPkgId = next->nonPlayerChildFollowPkgID;
             desiredPkgId = ResolveRolePackageId(plan.role, *next);
@@ -500,7 +504,7 @@ namespace MARAS {
             return;
         }
 
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             DeferredActorResolver::GetSingleton().RequestSync(actorId, DeferredActorResolver::SyncFlags::Package);
             return;
         }
@@ -518,7 +522,7 @@ namespace MARAS {
     }
 
     void PackageReconciler::ReconcileWorld() {
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (!pendingWorldReconcile_.exchange(true, std::memory_order_acq_rel)) {
                 if (!AddEpochTask(GetSessionEpoch(), "PackageReconciler::ReconcileWorld", []() {
                         std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
@@ -539,13 +543,7 @@ namespace MARAS {
         auto* homeKw = fc.GetHomeSandboxKeyword();
         auto* followKw = fc.GetChildSandboxAroundParentKeyword();
 
-        const RE::FormID formBasePkg = fc.GetHomeSandboxPackage() ? fc.GetHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID formPetPkg =
-            fc.GetPetCritterHomeSandboxPackage() ? fc.GetPetCritterHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID formChildFollowPkg =
-            fc.GetChildrenNonPlayerFollowParentPackage() ? fc.GetChildrenNonPlayerFollowParentPackage()->GetFormID() : 0;
-        const RE::FormID formAdultTravelPkg =
-            fc.GetAdultChildTravelSandboxPackage() ? fc.GetAdultChildTravelSandboxPackage()->GetFormID() : 0;
+        const auto stdPkgs = ResolveStandardPackages();
 
         // Collect all candidates in precedence order plus any previously registered actors
         std::unordered_set<RE::FormID> candidateIds;
@@ -585,10 +583,7 @@ namespace MARAS {
         }
 
         auto nextSnapshot = std::make_shared<PackageRegistrySnapshot>(*oldSnapshot);
-        if (nextSnapshot->baseSandboxPkgID == 0) nextSnapshot->baseSandboxPkgID = formBasePkg;
-        if (nextSnapshot->petCritterSandboxPkgID == 0) nextSnapshot->petCritterSandboxPkgID = formPetPkg;
-        if (nextSnapshot->nonPlayerChildFollowPkgID == 0) nextSnapshot->nonPlayerChildFollowPkgID = formChildFollowPkg;
-        if (nextSnapshot->adultChildTravelPkgID == 0) nextSnapshot->adultChildTravelPkgID = formAdultTravelPkg;
+        ApplyStandardPackagesToDraft(*nextSnapshot, stdPkgs);
         nextSnapshot->registry.clear();
 
         if (nextSnapshot->baseSandboxPkgID == 0) {
@@ -662,6 +657,9 @@ namespace MARAS {
             nextSnapshot->pluginWhitelistPatterns = latest->pluginWhitelistPatterns;
             nextSnapshot->questWhitelistPatterns = latest->questWhitelistPatterns;
             nextSnapshot->questPriorityThreshold = latest->questPriorityThreshold;
+            for (const auto& [pkgId, pkgPtr] : latest->resolvedPackages) {
+                nextSnapshot->resolvedPackages.try_emplace(pkgId, pkgPtr);
+            }
             snapshot_.store(std::move(nextSnapshot), std::memory_order_release);
         }
 
@@ -686,11 +684,15 @@ namespace MARAS {
     }
 
     void PackageReconciler::SetBaseSandboxPackage(RE::FormID pkgID) {
+        RE::TESPackage* pkgPtr = (pkgID != 0) ? RE::TESForm::LookupByID<RE::TESPackage>(pkgID) : nullptr;
         {
             std::lock_guard lock(writeMutex_);
             const auto current = snapshot_.load(std::memory_order_acquire);
             auto next = std::make_shared<PackageRegistrySnapshot>(*current);
             next->baseSandboxPkgID = pkgID;
+            if (pkgPtr) {
+                next->resolvedPackages[pkgID] = pkgPtr;
+            }
             snapshot_.store(std::move(next), std::memory_order_release);
         }
         MARAS_LOG_INFO("PackageReconciler: base sandbox package set to {:08X}", pkgID);
@@ -749,14 +751,9 @@ namespace MARAS {
             return;
         }
 
-        auto& fc = FormCache::GetSingleton();
-        const RE::FormID formBasePkg = fc.GetHomeSandboxPackage() ? fc.GetHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID formPetPkg =
-            fc.GetPetCritterHomeSandboxPackage() ? fc.GetPetCritterHomeSandboxPackage()->GetFormID() : 0;
-        const RE::FormID formChildFollowPkg =
-            fc.GetChildrenNonPlayerFollowParentPackage() ? fc.GetChildrenNonPlayerFollowParentPackage()->GetFormID() : 0;
-        const RE::FormID formAdultTravelPkg =
-            fc.GetAdultChildTravelSandboxPackage() ? fc.GetAdultChildTravelSandboxPackage()->GetFormID() : 0;
+        const auto stdPkgs = ResolveStandardPackages();
+        RE::TESPackage* targetPkgPtr =
+            (targetPackageID != 0) ? RE::TESForm::LookupByID<RE::TESPackage>(targetPackageID) : nullptr;
 
         RE::FormID effectivePkgID = 0;
         RE::FormID childFollowPkgID = 0;
@@ -764,10 +761,10 @@ namespace MARAS {
             std::lock_guard lock(writeMutex_);
             const auto current = snapshot_.load(std::memory_order_acquire);
             auto next = std::make_shared<PackageRegistrySnapshot>(*current);
-            if (next->baseSandboxPkgID == 0) next->baseSandboxPkgID = formBasePkg;
-            if (next->petCritterSandboxPkgID == 0) next->petCritterSandboxPkgID = formPetPkg;
-            if (next->nonPlayerChildFollowPkgID == 0) next->nonPlayerChildFollowPkgID = formChildFollowPkg;
-            if (next->adultChildTravelPkgID == 0) next->adultChildTravelPkgID = formAdultTravelPkg;
+            ApplyStandardPackagesToDraft(*next, stdPkgs);
+            if (targetPkgPtr) {
+                next->resolvedPackages[targetPackageID] = targetPkgPtr;
+            }
 
             next->registry[actorID] = targetPackageID;
             effectivePkgID = (targetPackageID != 0) ? targetPackageID : next->baseSandboxPkgID;
@@ -783,7 +780,7 @@ namespace MARAS {
 
         InvalidateHookEvalActor(actorID);
 
-        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID); actor && !actor->IsDeleted()) {
                 if (auto* basePkg = RE::TESForm::LookupByID<RE::TESPackage>(effectivePkgID);
                     basePkg && !ShouldSkipForFollower(actor, effectivePkgID, childFollowPkgID)) {
@@ -826,7 +823,7 @@ namespace MARAS {
 
         InvalidateHookEvalActor(actorID);
 
-        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID); actor && !actor->IsDeleted()) {
                 actor->EvaluatePackage(false, true);
             }
@@ -867,6 +864,7 @@ namespace MARAS {
             const auto current = snapshot_.load(std::memory_order_acquire);
             auto next = std::make_shared<PackageRegistrySnapshot>(*current);
             next->registry.clear();
+            next->resolvedPackages.clear();
             snapshot_.store(std::move(next), std::memory_order_release);
         }
         ClearHookEvalCache();
@@ -903,7 +901,6 @@ namespace MARAS {
             const RE::FormID candidateID = candidate ? candidate->GetFormID() : 0;
             const char* rawEditorID = candidate ? candidate->GetFormEditorID() : nullptr;
             const char* editorID = (rawEditorID && rawEditorID[0] != '\0') ? rawEditorID : nullptr;
-            const std::string candidateName = GetPackageDesc(candidate);
 
             if (ShouldSkipForFollower(actor, sandboxID, snap->nonPlayerChildFollowPkgID)) {
                 CheckAndLog(actorID, candidateID, candidateID, PackageDecision::Follower, [&]() {
@@ -922,7 +919,7 @@ namespace MARAS {
             }
 
             if (!candidate) {
-                auto* sandboxPkg = RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+                auto* sandboxPkg = snap->FindPackage(sandboxID);
                 const RE::FormID resultID = sandboxPkg ? sandboxPkg->GetFormID() : 0;
                 CheckAndLog(actorID, candidateID, resultID, PackageDecision::CandidateNullAssertSandbox, [&]() {
                     MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='null' (00000000)", actorID);
@@ -935,6 +932,7 @@ namespace MARAS {
 
             if (candidateID == sandboxID) {
                 CheckAndLog(actorID, candidateID, candidateID, PackageDecision::AlreadyRunningSandbox, [&]() {
+                    const std::string candidateName = GetPackageDesc(candidate);
                     MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                     actorID, candidateName, candidateID);
                     MARAS_LOG_DEBUG("PackageStartHook: actor {:08X} already running sandbox {:08X}, no override needed",
@@ -946,6 +944,7 @@ namespace MARAS {
             if (editorID && !snap->whitelistPatterns.empty() &&
                 MatchesPatternList(editorID, snap->whitelistPatterns)) {
                 CheckAndLog(actorID, candidateID, candidateID, PackageDecision::Whitelist, [&]() {
+                    const std::string candidateName = GetPackageDesc(candidate);
                     MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                     actorID, candidateName, candidateID);
                     MARAS_LOG_DEBUG("PackageStartHook: allowing whitelisted '{}' ({:08X}) on actor {:08X}",
@@ -959,6 +958,7 @@ namespace MARAS {
                 if (file && file->fileName && file->fileName[0] != '\0' &&
                     MatchesPatternList(file->fileName, snap->pluginWhitelistPatterns)) {
                     CheckAndLog(actorID, candidateID, candidateID, PackageDecision::PluginWhitelist, [&]() {
+                        const std::string candidateName = GetPackageDesc(candidate);
                         MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                         actorID, candidateName, candidateID);
                         MARAS_LOG_DEBUG("PackageStartHook: allowing plugin-whitelisted '{}' ({:08X}) on actor {:08X}",
@@ -974,6 +974,7 @@ namespace MARAS {
             if (quest && questEdid && !snap->questWhitelistPatterns.empty() &&
                 MatchesPatternList(questEdid, snap->questWhitelistPatterns)) {
                 CheckAndLog(actorID, candidateID, candidateID, PackageDecision::QuestWhitelist, [&]() {
+                    const std::string candidateName = GetPackageDesc(candidate);
                     MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                     actorID, candidateName, candidateID);
                     MARAS_LOG_DEBUG("PackageStartHook: allowing '{}' ({:08X}) on actor {:08X} (quest whitelist '{}')",
@@ -986,6 +987,7 @@ namespace MARAS {
                 const int questPriority = static_cast<int>(quest->data.priority);
                 if (questPriority >= snap->questPriorityThreshold) {
                     CheckAndLog(actorID, candidateID, candidateID, PackageDecision::QuestPriorityAllowed, [&]() {
+                        const std::string candidateName = GetPackageDesc(candidate);
                         MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                         actorID, candidateName, candidateID);
                         MARAS_LOG_DEBUG(
@@ -994,9 +996,10 @@ namespace MARAS {
                     });
                     return candidate;
                 } else {
-                    auto* sandboxPkg = RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+                    auto* sandboxPkg = snap->FindPackage(sandboxID);
                     const RE::FormID resultID = sandboxPkg ? sandboxPkg->GetFormID() : 0;
                     CheckAndLog(actorID, candidateID, resultID, PackageDecision::QuestPrioritySuppressed, [&]() {
+                        const std::string candidateName = GetPackageDesc(candidate);
                         MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                         actorID, candidateName, candidateID);
                         MARAS_LOG_DEBUG(
@@ -1007,9 +1010,10 @@ namespace MARAS {
                 }
             }
 
-            auto* sandboxPkg = RE::TESForm::LookupByID<RE::TESPackage>(sandboxID);
+            auto* sandboxPkg = snap->FindPackage(sandboxID);
             const RE::FormID resultID = sandboxPkg ? sandboxPkg->GetFormID() : 0;
             CheckAndLog(actorID, candidateID, resultID, PackageDecision::SuppressedRedirectSandbox, [&]() {
+                const std::string candidateName = GetPackageDesc(candidate);
                 MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
                                 actorID, candidateName, candidateID);
                 MARAS_LOG_DEBUG("PackageStartHook: suppressing '{}' ({:08X}) on actor {:08X}, redirecting to sandbox",

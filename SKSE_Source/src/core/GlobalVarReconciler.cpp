@@ -5,6 +5,7 @@
 #include "core/SessionEpoch.h"
 #include "maras/state/EngineSyncPlan.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 
 #include <Windows.h>
 #include <algorithm>
@@ -55,9 +56,10 @@ namespace MARAS {
     }
 
     void GlobalVarReconciler::ReconcileGlobals() {
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (!pendingReconcile_.exchange(true, std::memory_order_acq_rel)) {
                 if (!AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::ReconcileGlobals", []() {
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                         GlobalVarReconciler::GetSingleton().ReconcileGlobalsOnMainThread();
                     })) {
                     pendingReconcile_.store(false, std::memory_order_release);
@@ -95,8 +97,9 @@ namespace MARAS {
     void GlobalVarReconciler::SetStartDialGender(std::int32_t value) {
         const std::int32_t clamped = std::clamp(value, kMinStartDialGender, kMaxStartDialGender);
         const float target = static_cast<float>(clamped);
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::SetStartDialGender", [target]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 SyncGlobalIfChanged(FormCache::GetSingleton().GetStartDialGenderGlobal(), target, "StartDialGender");
             });
             return;
@@ -115,8 +118,9 @@ namespace MARAS {
     void GlobalVarReconciler::SetMinRelRankForDial(std::int32_t value) {
         const std::int32_t clamped = std::clamp(value, kMinRelRankForDial, kMaxRelRankForDial);
         const float target = static_cast<float>(clamped);
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::SetMinRelRankForDial", [target]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 SyncGlobalIfChanged(FormCache::GetSingleton().GetMinRelRankForDialGlobal(), target, "MinRelRankForDial");
             });
             return;
@@ -126,13 +130,14 @@ namespace MARAS {
 
     bool GlobalVarReconciler::GetPreferVanillaAudio() const {
         auto* g = FormCache::GetSingleton().GetPreferVanillaAudioGlobal();
-        return g ? (g->value != 0.0f) : false;
+        return g ? (g->value != 0.0f) : true;
     }
 
     void GlobalVarReconciler::SetPreferVanillaAudio(bool value) {
         const float target = value ? 1.0f : 0.0f;
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::SetPreferVanillaAudio", [target]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 SyncGlobalIfChanged(FormCache::GetSingleton().GetPreferVanillaAudioGlobal(), target, "PreferVanillaAudio");
             });
             return;
@@ -142,18 +147,38 @@ namespace MARAS {
 
     bool GlobalVarReconciler::GetAllowAIDial() const {
         auto* g = FormCache::GetSingleton().GetAllowAIDialGlobal();
-        return g ? (g->value != 0.0f) : false;
+        return g ? (g->value != 0.0f) : true;
     }
 
     void GlobalVarReconciler::SetAllowAIDial(bool value) {
         const float target = value ? 1.0f : 0.0f;
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::SetAllowAIDial", [target]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 SyncGlobalIfChanged(FormCache::GetSingleton().GetAllowAIDialGlobal(), target, "AllowAIDial");
             });
             return;
         }
         SyncGlobalIfChanged(FormCache::GetSingleton().GetAllowAIDialGlobal(), target, "AllowAIDial");
+    }
+
+    void GlobalVarReconciler::ResetSessionGlobalsToDefaults() {
+        auto resetAll = []() {
+            auto& fc = FormCache::GetSingleton();
+            SyncGlobalIfChanged(fc.GetEnablePolygamyGlobal(), 0.0f, "EnablePolygamy");
+            SyncGlobalIfChanged(fc.GetStartDialGenderGlobal(), 0.0f, "StartDialGender");
+            SyncGlobalIfChanged(fc.GetMinRelRankForDialGlobal(), static_cast<float>(kMinRelRankForDial), "MinRelRankForDial");
+            SyncGlobalIfChanged(fc.GetPreferVanillaAudioGlobal(), 1.0f, "PreferVanillaAudio");
+            SyncGlobalIfChanged(fc.GetAllowAIDialGlobal(), 1.0f, "AllowAIDial");
+        };
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddEpochTask(GetSessionEpoch(), "GlobalVarReconciler::ResetSessionGlobalsToDefaults", [resetAll]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                resetAll();
+            });
+            return;
+        }
+        resetAll();
     }
 
     void GlobalVarReconciler::Revert() noexcept {

@@ -1,6 +1,7 @@
 #include "core/Serialization.h"
 
 #include <random>
+#include <vector>
 
 #include "core/AdultChildProgression.h"
 #include "core/AdultChildTravelService.h"
@@ -12,6 +13,7 @@
 #include "core/DeferredActorResolver.h"
 #include "core/DialogueEventSink.h"
 #include "core/FactionReconciler.h"
+#include "core/FormCache.h"
 #include "core/GlobalVarReconciler.h"
 #include "core/IntimateThreadService.h"
 #include "core/MatchmakingService.h"
@@ -45,6 +47,38 @@ namespace MARAS {
     namespace {
         std::atomic<SessionEpoch> g_sessionEpoch{ 1 };
         thread_local std::uint32_t s_mainThreadTaskDepth = 0;
+        thread_local std::uint32_t s_syncedVmCallDepth = 0;
+        thread_local std::uint32_t s_papyrusLockDepth = 0;
+
+        struct PostLockTask {
+            SessionEpoch expectedEpoch{ 0 };
+            const char* tag{ "PostLock" };
+            std::function<void()> fn;
+        };
+        thread_local std::vector<PostLockTask> s_postLockOutbox;
+
+        void RunPostLockItem(PostLockTask& item) noexcept {
+            const char* tag = item.tag ? item.tag : "PostLock";
+            if (!IsSessionEpochCurrent(item.expectedEpoch)) {
+                MARAS_LOG_DEBUG("[PostLock] Dropped stale task '{}' (expected={}, current={})",
+                                tag, item.expectedEpoch, GetSessionEpoch());
+                return;
+            }
+            if (!item.fn) {
+                return;
+            }
+            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                try {
+                    item.fn();
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("[PostLock] Exception in post-lock task '{}': {}", tag, e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("[PostLock] Unknown exception in post-lock task '{}'", tag);
+                }
+            } else {
+                AddEpochTask(item.expectedEpoch, tag, std::move(item.fn));
+            }
+        }
     }
 
     SessionEpoch GetSessionEpoch() noexcept {
@@ -69,6 +103,121 @@ namespace MARAS {
 
     bool IsInMainThreadTask() noexcept {
         return s_mainThreadTaskDepth > 0;
+    }
+
+    ScopedSyncedVmCall::ScopedSyncedVmCall() noexcept {
+        ++s_syncedVmCallDepth;
+    }
+
+    ScopedSyncedVmCall::~ScopedSyncedVmCall() noexcept {
+        if (s_syncedVmCallDepth > 0) {
+            --s_syncedVmCallDepth;
+        }
+    }
+
+    bool IsInSyncedVmCall() noexcept {
+        return s_syncedVmCallDepth > 0;
+    }
+
+    void EnterPapyrusDomainLock() noexcept {
+        ++s_papyrusLockDepth;
+    }
+
+    void ExitPapyrusDomainLockAndFlush() noexcept {
+        if (s_papyrusLockDepth == 0) {
+            return;
+        }
+        --s_papyrusLockDepth;
+        if (s_papyrusLockDepth > 0 || s_postLockOutbox.empty()) {
+            return;
+        }
+        try {
+            while (!s_postLockOutbox.empty()) {
+                std::vector<PostLockTask> batch;
+                batch.swap(s_postLockOutbox);
+                for (auto& item : batch) {
+                    RunPostLockItem(item);
+                }
+            }
+        } catch (const std::exception& e) {
+            MARAS_LOG_ERROR("[PostLock] Exception flushing post-lock outbox: {}", e.what());
+        } catch (...) {
+            MARAS_LOG_ERROR("[PostLock] Unknown exception flushing post-lock outbox");
+        }
+    }
+
+    bool IsPapyrusDomainLockedOnCurrentThread() noexcept {
+        return s_papyrusLockDepth > 0;
+    }
+
+    void DispatchPostLock(SessionEpoch expectedEpoch, std::function<void()> fn, const char* contextTag) {
+        if (!fn) {
+            return;
+        }
+        const char* tag = contextTag ? contextTag : "PostLock";
+        if (!IsSessionEpochCurrent(expectedEpoch)) {
+            MARAS_LOG_DEBUG("[PostLock] Dropped pre-stale task '{}' (expected={}, current={})",
+                            tag, expectedEpoch, GetSessionEpoch());
+            return;
+        }
+        if (IsPapyrusDomainLockedOnCurrentThread()) {
+            s_postLockOutbox.push_back(PostLockTask{ expectedEpoch, tag, std::move(fn) });
+            return;
+        }
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            try {
+                fn();
+            } catch (const std::exception& e) {
+                MARAS_LOG_ERROR("[PostLock] Exception in inline task '{}': {}", tag, e.what());
+            } catch (...) {
+                MARAS_LOG_ERROR("[PostLock] Unknown exception in inline task '{}'", tag);
+            }
+            return;
+        }
+        AddEpochTask(expectedEpoch, tag, std::move(fn));
+    }
+
+    void DispatchPostLock(std::function<void()> fn, const char* contextTag) {
+        DispatchPostLock(GetSessionEpoch(), std::move(fn), contextTag);
+    }
+
+    void EmitModCallbackEvent(std::string eventName,
+                              std::string strArg,
+                              float numArg,
+                              RE::FormID senderID) {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        DispatchPostLock(
+            expectedEpoch,
+            [eventName = std::move(eventName), strArg = std::move(strArg), numArg, senderID]() {
+                auto* eventSource = SKSE::GetModCallbackEventSource();
+                if (!eventSource) {
+                    MARAS_LOG_ERROR("[PostLock] ModCallbackEventSource unavailable for '{}'", eventName);
+                    return;
+                }
+                RE::TESForm* sender = senderID != 0 ? RE::TESForm::LookupByID(senderID) : nullptr;
+                SKSE::ModCallbackEvent modEvent(eventName.c_str(), strArg.c_str(), numArg, sender);
+                eventSource->SendEvent(&modEvent);
+            },
+            "EmitModCallbackEvent");
+    }
+
+    void QueueHUDMessage(std::string msg) {
+        if (msg.empty()) {
+            return;
+        }
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        DispatchPostLock(
+            expectedEpoch,
+            [expectedEpoch, msg = std::move(msg)]() mutable {
+                if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+                    RE::SendHUDMessage::ShowHUDMessage(msg.c_str());
+                } else {
+                    AddEpochTask(expectedEpoch, "QueueHUDMessage", [msg = std::move(msg)]() {
+                        RE::SendHUDMessage::ShowHUDMessage(msg.c_str());
+                    });
+                }
+            },
+            "QueueHUDMessage");
     }
 
 }  // namespace MARAS
@@ -343,7 +492,11 @@ namespace MARAS::Serialization {
 
         State::WorldState staged{};
         auto initialSettings = State::WorldStore::GetSingleton().GetIniBaselineSettings();
-        initialSettings.enablePlayerPolygamy = Settings::GetSingleton().GetEnablePolygamy();
+        if (auto* polyGlobal = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
+            initialSettings.enablePlayerPolygamy = (polyGlobal->value != 0.0f);
+        } else {
+            initialSettings.enablePlayerPolygamy = false;
+        }
         staged.settings.Reset(initialSettings);
 
         SkseCoSaveReader reader(serialization);
@@ -368,7 +521,6 @@ namespace MARAS::Serialization {
             GlobalVarReconciler::GetSingleton().ReconcileGlobals();
             FactionReconciler::GetSingleton().ReconcileAllOnLoad();
             PackageReconciler::GetSingleton().ReconcileWorld();
-            BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
         }
     }
 

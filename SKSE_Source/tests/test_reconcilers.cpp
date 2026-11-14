@@ -433,6 +433,7 @@ MARAS_TEST(Reconcilers, BuffMultipliersAndFormulas_SingleVsRankedSpousesAndNegat
     constexpr ActorId spouse1{ 0x0001E001u };
     constexpr ActorId spouse2{ 0x0001E002u };
     constexpr ActorId deadSpouse{ 0x0001E003u };
+    constexpr ActorId profilelessSpouse{ 0x0001E004u };
 
     // Single living spouse -> 2.0x rank multiplier * 1.25x affection (>=75) = 2.5x
     store.Modify([&](WorldState& ws) {
@@ -440,6 +441,10 @@ MARAS_TEST(Reconcilers, BuffMultipliersAndFormulas_SingleVsRankedSpousesAndNegat
         AddRelationship(ws, spouse1, ActorId::Player(), RelationshipStatus::Married);
         ws.hierarchy.Write().OnSpouseAdded(spouse1);
         ws.affection.Write().SetPermanent(spouse1, 80);
+
+        // Married spouse without an ActorProfileRecord must not count or dilute rank multipliers
+        AddRelationship(ws, profilelessSpouse, ActorId::Player(), RelationshipStatus::Married);
+        ws.affection.Write().SetPermanent(profilelessSpouse, 80);
 
         // Deceased spouse must not dilute spouseCount or contribute buffs
         DeceasedActorRecord dec{};
@@ -467,10 +472,15 @@ MARAS_TEST(Reconcilers, BuffMultipliersAndFormulas_SingleVsRankedSpousesAndNegat
     MARAS_CHECK(ApproxEq(b2.permanentSocialClassMultipliers[static_cast<std::size_t>(SocialClass::Nobles)], 1.25f));
     MARAS_CHECK(ApproxEq(b2.permanentSocialClassMultipliers[static_cast<std::size_t>(SocialClass::Religious)], 0.5f));
 
-    // Exact bonus.json negative-value parity without std::abs (TTM_ServiceBuff.psc match)
+    // "spell" takes positive magnitude via std::abs (Skyrim Effect::SetMagnitude clamps negatives);
+    // "add" preserves signed scaling.
     const auto noblesSpell = ComputeBonusTargetValue("spell", -5.0f, 1.25f);
     MARAS_CHECK_EQ(noblesSpell.isActive, true);
-    MARAS_CHECK(ApproxEq(noblesSpell.engineTargetValue, -6.25f));
+    MARAS_CHECK(ApproxEq(noblesSpell.engineTargetValue, 6.25f));
+
+    const auto signedAdd = ComputeBonusTargetValue("add", -5.0f, 1.25f);
+    MARAS_CHECK_EQ(signedAdd.isActive, true);
+    MARAS_CHECK(ApproxEq(signedAdd.engineTargetValue, -6.25f));
 
     const auto craftsmanMult = ComputeBonusTargetValue("multiply", -5.0f, 1.25f);
     MARAS_CHECK_EQ(craftsmanMult.isActive, true);
@@ -483,4 +493,20 @@ MARAS_TEST(Reconcilers, BuffMultipliersAndFormulas_SingleVsRankedSpousesAndNegat
     const auto inactiveMult = ComputeBonusTargetValue("multiply", 5.0f, 0.0f);
     MARAS_CHECK_EQ(inactiveMult.isActive, false);
     MARAS_CHECK(ApproxEq(inactiveMult.engineTargetValue, 1.0f));
+}
+
+MARAS_TEST(Reconcilers, FreshAndRevertedWorldStoreDefaultsPolygamyFalse) {
+    WorldStore store{};
+    MARAS_CHECK_EQ(store.Snapshot()->settings->enablePlayerPolygamy, false);
+    MARAS_CHECK_EQ(ComputeDesiredGlobals(*store.Snapshot(), true).enablePolygamy, false);
+
+    store.Modify([](WorldState& ws) {
+        ws.settings.Write().enablePlayerPolygamy = true;
+    });
+    MARAS_CHECK_EQ(store.Snapshot()->settings->enablePlayerPolygamy, true);
+    MARAS_CHECK_EQ(ComputeDesiredGlobals(*store.Snapshot(), true).enablePolygamy, true);
+
+    store.Revert();
+    MARAS_CHECK_EQ(store.Snapshot()->settings->enablePlayerPolygamy, false);
+    MARAS_CHECK_EQ(ComputeDesiredGlobals(*store.Snapshot(), true).enablePolygamy, false);
 }

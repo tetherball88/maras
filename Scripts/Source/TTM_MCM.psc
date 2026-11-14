@@ -13,6 +13,7 @@ EndEvent
 Event OnGameReload()
     ; Ongoing saves where TTM_MCM was already registered keep a minimal stub without re-registering on new games.
     if (ModName != "")
+        parent.OnGameReload()
         Pages = Utility.CreateStringArray(0)
     endif
 EndEvent
@@ -24,7 +25,29 @@ EndEvent
 Event OnPageReset(string a_page)
     SetCursorFillMode(TOP_TO_BOTTOM)
     AddHeaderOption("M.A.R.A.S Dashboard")
-    AddKeyMapOption("Dashboard Hotkey", MARAS.GetSettingInt("toggleUIKey"), OPTION_FLAG_DISABLED)
+    string modPrefix = ""
+    if (MARAS.GetSettingBool("toggleUIModCtrl"))
+        modPrefix = "Ctrl"
+    endif
+    if (MARAS.GetSettingBool("toggleUIModShift"))
+        if (modPrefix != "")
+            modPrefix += "+Shift"
+        else
+            modPrefix = "Shift"
+        endif
+    endif
+    if (MARAS.GetSettingBool("toggleUIModAlt"))
+        if (modPrefix != "")
+            modPrefix += "+Alt"
+        else
+            modPrefix = "Alt"
+        endif
+    endif
+    string hotkeyLabel = "Dashboard Hotkey"
+    if (modPrefix != "")
+        hotkeyLabel = "Dashboard Hotkey (" + modPrefix + "+)"
+    endif
+    AddKeyMapOption(hotkeyLabel, MARAS.GetSettingInt("toggleUIKey"), OPTION_FLAG_DISABLED)
     _oidOpenDashboard = AddTextOption("Open M.A.R.A.S Dashboard", "OPEN")
 EndEvent
 

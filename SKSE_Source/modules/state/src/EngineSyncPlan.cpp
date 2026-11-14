@@ -1,6 +1,7 @@
 #include "maras/state/EngineSyncPlan.h"
 
 #include <cctype>
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -445,8 +446,10 @@ namespace MARAS::State {
                 continue;
             }
             const auto* prof = snap.actors->Find(RefId{ spouseId.raw() });
-            const BaseId baseId = prof ? prof->baseId : BaseId{};
-            if (snap.deceased->IsDeceased(spouseId, baseId)) {
+            if (!prof) {
+                continue;
+            }
+            if (snap.deceased->IsDeceased(spouseId, prof->baseId)) {
                 continue;
             }
             livingSpouses.push_back(spouseId);
@@ -520,7 +523,14 @@ namespace MARAS::State {
             return out;
         }
 
-        // Both "spell" and "add" scale baseValue * multiplier without std::abs
+        if (CaseInsensitiveEq(bonusType, "spell")) {
+            out.rawScaledValue = std::abs(baseValue) * multiplier;
+            out.engineTargetValue = out.rawScaledValue;
+            out.isActive = (out.rawScaledValue != 0.0f);
+            return out;
+        }
+
+        // Non-spell ("add") preserves signed scaling
         out.rawScaledValue = baseValue * multiplier;
         out.engineTargetValue = out.rawScaledValue;
         out.isActive = (out.rawScaledValue != 0.0f);

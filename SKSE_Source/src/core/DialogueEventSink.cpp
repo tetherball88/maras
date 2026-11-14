@@ -115,14 +115,7 @@ namespace MARAS {
         FactionReconciler::GetSingleton().ReconcilePlayer();
         FactionReconciler::GetSingleton().ReconcileLoadedActor(npc);
 
-        auto* eventSource = SKSE::GetModCallbackEventSource();
-        if (!eventSource) {
-            MARAS_LOG_ERROR("DialogueEventSink: ModCallbackEventSource unavailable");
-            return;
-        }
-
-        SKSE::ModCallbackEvent modEvent{"maras_dialogue_opened", "", 0.0f, npc};
-        eventSource->SendEvent(&modEvent);
+        EmitModCallbackEvent("maras_dialogue_opened", "", 0.0f, npc);
         MARAS_LOG_INFO("Sent maras_dialogue_opened for actor {:08X} ({})", npc->GetFormID(), npc->GetName());
     }
 

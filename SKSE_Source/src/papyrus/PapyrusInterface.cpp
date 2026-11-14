@@ -96,7 +96,7 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
         const auto keywordID = keyword->GetFormID();
-        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (!base->AddKeyword(keyword)) {
                 return false;
             }
@@ -131,7 +131,7 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
         const auto keywordID = keyword->GetFormID();
-        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (!base->RemoveKeyword(keyword)) {
                 return false;
             }
@@ -238,11 +238,15 @@ namespace MARAS::PapyrusInterface {
 
         MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal queuing modal for '{}'", fianceName);
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm, stackID](const ModalResponse& resp) {
+            [expectedEpoch, vm, stackID](const ModalResponse& resp) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (resp.aborted) {
-                    vm->ReturnLatentResult(stackID, 1);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 1, "ShowSkipWeddingModal");
                     return;
                 }
 
@@ -254,10 +258,10 @@ namespace MARAS::PapyrusInterface {
                         PrismaUIDataBridge::GetSingleton().SendSettingsData();
                         MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal - persisted skipWedding=true");
                     }
-                    vm->ReturnLatentResult(stackID, 0);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 0, "ShowSkipWeddingModal");
                 } else {
                     int32_t result = dontAskAgain ? 2 : 1;
-                    vm->ReturnLatentResult(stackID, result);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, result, "ShowSkipWeddingModal");
                 }
             });
 
@@ -321,18 +325,22 @@ namespace MARAS::PapyrusInterface {
         MARAS_LOG_INFO("PapyrusInterface: ShowDivorceSettlementModal queuing modal for '{}' (fee={}, canPayDirectly={})",
                        req.subtitle, totalFee, canPayDirectly);
 
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm, stackID, canPayDirectly](const ModalResponse& resp) {
+            [expectedEpoch, vm, stackID, canPayDirectly](const ModalResponse& resp) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
                 if (resp.aborted) {
-                    vm->ReturnLatentResult(stackID, 1);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 1, "ShowDivorceSettlementModal");
                     return;
                 }
 
                 if (canPayDirectly && (resp.buttonIndex == 0 || resp.buttonId == "pay_now")) {
-                    vm->ReturnLatentResult(stackID, 0);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 0, "ShowDivorceSettlementModal");
                 } else {
-                    vm->ReturnLatentResult(stackID, 1);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 1, "ShowDivorceSettlementModal");
                 }
             });
 
@@ -431,7 +439,7 @@ namespace MARAS::PapyrusInterface {
                     return;
                 }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
-                    vm->ReturnLatentResult<RE::BGSLocation*>(stackID, nullptr);
+                    DispatchLatentFormResult<RE::BGSLocation>(expectedEpoch, vm, stackID, 0, "ShowChooseHomeModal");
                     return;
                 }
 
@@ -448,6 +456,7 @@ namespace MARAS::PapyrusInterface {
                 auto* chosenLoc = selectedHouseID != 0
                     ? RE::TESForm::LookupByID<RE::BGSLocation>(selectedHouseID)
                     : nullptr;
+                const RE::FormID resolvedHouseID = chosenLoc ? selectedHouseID : 0;
 
                 if (chosenLoc && !isChild && targetFormID != 0) {
                     const bool stayAtHome = (resp.GetString("schedule_mode", "stay") != "original");
@@ -457,7 +466,7 @@ namespace MARAS::PapyrusInterface {
                     svc.SetTenantStayAtHome(targetFormID, stayAtHome);
                 }
 
-                vm->ReturnLatentResult<RE::BGSLocation*>(stackID, chosenLoc);
+                DispatchLatentFormResult<RE::BGSLocation>(expectedEpoch, vm, stackID, resolvedHouseID, "ShowChooseHomeModal");
             });
 
         return RE::BSScript::LatentStatus::kStarted;
@@ -557,7 +566,7 @@ namespace MARAS::PapyrusInterface {
                     return;
                 }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
-                    vm->ReturnLatentResult<RE::Actor*>(stackID, nullptr);
+                    DispatchLatentFormResult<RE::Actor>(expectedEpoch, vm, stackID, 0, "ShowChooseAdoptionSpouseModal");
                     return;
                 }
 
@@ -571,10 +580,7 @@ namespace MARAS::PapyrusInterface {
                     }
                 }
 
-                auto* chosenSpouse = selectedSpouseID != 0
-                    ? RE::TESForm::LookupByID<RE::Actor>(selectedSpouseID)
-                    : nullptr;
-                vm->ReturnLatentResult<RE::Actor*>(stackID, chosenSpouse);
+                DispatchLatentFormResult<RE::Actor>(expectedEpoch, vm, stackID, selectedSpouseID, "ShowChooseAdoptionSpouseModal");
             });
 
         return RE::BSScript::LatentStatus::kStarted;
@@ -653,12 +659,12 @@ namespace MARAS::PapyrusInterface {
                     return;
                 }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "apply")) {
-                    vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(""));
+                    DispatchLatentResult<RE::BSFixedString>(expectedEpoch, vm, stackID, RE::BSFixedString(""), "ShowDebugStatusModal");
                     return;
                 }
 
                 const std::string chosen = resp.GetString("target_status", "");
-                vm->ReturnLatentResult<RE::BSFixedString>(stackID, RE::BSFixedString(chosen));
+                DispatchLatentResult<RE::BSFixedString>(expectedEpoch, vm, stackID, RE::BSFixedString(chosen), "ShowDebugStatusModal");
             });
 
         return RE::BSScript::LatentStatus::kStarted;
@@ -846,7 +852,7 @@ namespace MARAS::PapyrusInterface {
 
                 MARAS_LOG_INFO("PapyrusInterface: ShowChildMigrationAuditModal completed — kept={}, removed={}",
                                keptCount, removedCount);
-                vm->ReturnLatentResult<int32_t>(stackID, keptCount);
+                DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, keptCount, "ShowChildMigrationAuditModal");
             });
 
         return RE::BSScript::LatentStatus::kStarted;
@@ -980,340 +986,340 @@ namespace MARAS::PapyrusInterface {
 
     bool RegisterPapyrusFunctions(RE::BSScript::IVirtualMachine* vm) {
         // Core registration functions
-        vm->RegisterFunction("RegisterCandidate", "MARAS", RegisterCandidate);
-        vm->RegisterFunction("UnregisterNPC", "MARAS", UnregisterNPC);
+        RegisterSynced<RegisterCandidate>(vm, "RegisterCandidate");
+        RegisterSynced<UnregisterNPC>(vm, "UnregisterNPC");
 
         // Consolidated faction management functions
-        vm->RegisterFunction("SetNpcCharacteristics", "MARAS", SetNpcCharacteristics);
+        RegisterSynced<SetNpcCharacteristics>(vm, "SetNpcCharacteristics");
 
         // Consolidated status check functions
-        vm->RegisterFunction("IsNPCStatus", "MARAS", IsNPCStatus);
-        vm->RegisterFunction("IsNPCStatusByEnum", "MARAS", IsNPCStatusByEnum);
-        vm->RegisterFunction("IsNPCStatusWith", "MARAS", IsNPCStatusWith);
-        vm->RegisterFunction("IsNPCStatusWithByEnum", "MARAS", IsNPCStatusWithByEnum);
-        vm->RegisterFunction("GetOriginalRelationshipStatus", "MARAS", GetOriginalRelationshipStatus);
-        vm->RegisterFunction("GetOriginalRelationshipStatusString", "MARAS", GetOriginalRelationshipStatusString);
+        RegisterSynced<IsNPCStatus>(vm, "IsNPCStatus");
+        RegisterSynced<IsNPCStatusByEnum>(vm, "IsNPCStatusByEnum");
+        RegisterSynced<IsNPCStatusWith>(vm, "IsNPCStatusWith");
+        RegisterSynced<IsNPCStatusWithByEnum>(vm, "IsNPCStatusWithByEnum");
+        RegisterSynced<GetOriginalRelationshipStatus>(vm, "GetOriginalRelationshipStatus");
+        RegisterSynced<GetOriginalRelationshipStatusString>(vm, "GetOriginalRelationshipStatusString");
 
         // Consolidated status transition functions
-        vm->RegisterFunction("PromoteNPCToStatus", "MARAS", PromoteNPCToStatus);
-        vm->RegisterFunction("PromoteNPCToStatusByEnum", "MARAS", PromoteNPCToStatusByEnum);
-        vm->RegisterFunction("PromoteNPCToStatusWith", "MARAS", PromoteNPCToStatusWith);
-        vm->RegisterFunction("PromoteNPCToStatusWithByEnum", "MARAS", PromoteNPCToStatusWithByEnum);
+        RegisterSynced<PromoteNPCToStatus>(vm, "PromoteNPCToStatus");
+        RegisterSynced<PromoteNPCToStatusByEnum>(vm, "PromoteNPCToStatusByEnum");
+        RegisterSynced<PromoteNPCToStatusWith>(vm, "PromoteNPCToStatusWith");
+        RegisterSynced<PromoteNPCToStatusWithByEnum>(vm, "PromoteNPCToStatusWithByEnum");
 
         // Consolidated bulk retrieval functions
-        vm->RegisterFunction("GetNPCsByStatus", "MARAS", GetNPCsByStatus);
-        vm->RegisterFunction("GetNPCsByStatusEnum", "MARAS", GetNPCsByStatusEnum);
-        vm->RegisterFunction("GetNPCsByStatusWith", "MARAS", GetNPCsByStatusWith);
-        vm->RegisterFunction("GetRelationshipPartners", "MARAS", GetRelationshipPartners);
-        vm->RegisterFunction("GetCurrentTeammates", "MARAS", GetCurrentTeammates);
-        vm->RegisterFunction("IsPlayerFollower", "MARAS", IsPlayerFollower);
+        RegisterSynced<GetNPCsByStatus>(vm, "GetNPCsByStatus");
+        RegisterSynced<GetNPCsByStatusEnum>(vm, "GetNPCsByStatusEnum");
+        RegisterSynced<GetNPCsByStatusWith>(vm, "GetNPCsByStatusWith");
+        RegisterSynced<GetRelationshipPartners>(vm, "GetRelationshipPartners");
+        RegisterSynced<GetCurrentTeammates>(vm, "GetCurrentTeammates");
+        RegisterSynced<IsPlayerFollower>(vm, "IsPlayerFollower");
 
         // Consolidated statistics functions
-        vm->RegisterFunction("GetStatusCount", "MARAS", GetStatusCount);
-        vm->RegisterFunction("GetStatusCountByEnum", "MARAS", GetStatusCountByEnum);
+        RegisterSynced<GetStatusCount>(vm, "GetStatusCount");
+        RegisterSynced<GetStatusCountByEnum>(vm, "GetStatusCountByEnum");
 
         // Status history functions
-        vm->RegisterFunction("GetStatusHistoryCount", "MARAS", GetStatusHistoryCount);
-        vm->RegisterFunction("GetStatusHistoryEntry", "MARAS", GetStatusHistoryEntry);
+        RegisterSynced<GetStatusHistoryCount>(vm, "GetStatusHistoryCount");
+        RegisterSynced<GetStatusHistoryEntry>(vm, "GetStatusHistoryEntry");
 
         // Debug functions
-        vm->RegisterFunction("LogNPCStatistics", "MARAS", LogNPCStatistics);
-        vm->RegisterFunction("LogNPCDetails", "MARAS", LogNPCDetails);
-        vm->RegisterFunction("Log", "MARAS", Log);
-        vm->RegisterFunction("SetLogLevel", "MARAS", SetLogLevel);
-        vm->RegisterFunction("GetLogLevel", "MARAS", GetLogLevel);
+        RegisterSynced<LogNPCStatistics>(vm, "LogNPCStatistics");
+        RegisterSynced<LogNPCDetails>(vm, "LogNPCDetails");
+        RegisterSynced<Log>(vm, "Log");
+        RegisterSynced<SetLogLevel>(vm, "SetLogLevel");
+        RegisterSynced<GetLogLevel>(vm, "GetLogLevel");
 
         // Marriage difficulty calculation
-        vm->RegisterFunction("CalculateMarriageSuccessChance", "MARAS", CalculateMarriageSuccessChance);
+        RegisterSynced<CalculateMarriageSuccessChance>(vm, "CalculateMarriageSuccessChance");
 
         // Spouse hierarchy
-        vm->RegisterFunction("SetHierarchyRank", "MARAS", SetHierarchyRank);
-        vm->RegisterFunction("GetHierarchyRank", "MARAS", GetHierarchyRank);
+        RegisterSynced<SetHierarchyRank>(vm, "SetHierarchyRank");
+        RegisterSynced<GetHierarchyRank>(vm, "GetHierarchyRank");
 
         // Player house functions
-        vm->RegisterFunction("RegisterPlayerHouseCell", "MARAS", RegisterPlayerHouseCell);
-        vm->RegisterFunction("GetAllPlayerHouses", "MARAS", GetAllPlayerHouses);
-        vm->RegisterFunction("GetAllPlayerHousesNames", "MARAS", GetAllPlayerHousesNames);
-        vm->RegisterFunction("RegisterTenantInPlayerHouse", "MARAS", RegisterTenantInPlayerHouse);
-        vm->RegisterFunction("RemoveTenantFromPlayerHouse", "MARAS", RemoveTenantFromPlayerHouse);
-        vm->RegisterFunction("SetTenantStayAtHome", "MARAS", SetTenantStayAtHome);
-        vm->RegisterFunction("GetTenantStayAtHome", "MARAS", GetTenantStayAtHome);
-        vm->RegisterFunction("GetPlayerHouseTenants", "MARAS", GetPlayerHouseTenants);
-        vm->RegisterFunction("GetHouseMarker", "MARAS", GetHouseMarker);
-        vm->RegisterFunction("GetTenantHouse", "MARAS", GetTenantHouse);
-        vm->RegisterFunction("CountPlayerHouses", "MARAS", CountPlayerHouses);
+        RegisterSynced<RegisterPlayerHouseCell>(vm, "RegisterPlayerHouseCell");
+        RegisterSynced<GetAllPlayerHouses>(vm, "GetAllPlayerHouses");
+        RegisterSynced<GetAllPlayerHousesNames>(vm, "GetAllPlayerHousesNames");
+        RegisterSynced<RegisterTenantInPlayerHouse>(vm, "RegisterTenantInPlayerHouse");
+        RegisterSynced<RemoveTenantFromPlayerHouse>(vm, "RemoveTenantFromPlayerHouse");
+        RegisterSynced<SetTenantStayAtHome>(vm, "SetTenantStayAtHome");
+        RegisterSynced<GetTenantStayAtHome>(vm, "GetTenantStayAtHome");
+        RegisterSynced<GetPlayerHouseTenants>(vm, "GetPlayerHouseTenants");
+        RegisterSynced<GetHouseMarker>(vm, "GetHouseMarker");
+        RegisterSynced<GetTenantHouse>(vm, "GetTenantHouse");
+        RegisterSynced<CountPlayerHouses>(vm, "CountPlayerHouses");
 
         // Spouse assets functions
-        vm->RegisterFunction("GetCellDoors", "MARAS", GetCellDoors);
-        vm->RegisterFunction("ShareHouseWithPlayer", "MARAS", ShareHouseWithPlayer);
-        vm->RegisterFunction("StopShareHouseWithPlayer", "MARAS", StopShareHouseWithPlayer);
-        vm->RegisterFunction("IsHouseSharedWithPlayer", "MARAS", IsHouseSharedWithPlayer);
-        vm->RegisterFunction("HasSpouseSharedHouseWithPlayer", "MARAS", HasSpouseSharedHouseWithPlayer);
+        RegisterSynced<GetCellDoors>(vm, "GetCellDoors");
+        RegisterSynced<ShareHouseWithPlayer>(vm, "ShareHouseWithPlayer");
+        RegisterSynced<StopShareHouseWithPlayer>(vm, "StopShareHouseWithPlayer");
+        RegisterSynced<IsHouseSharedWithPlayer>(vm, "IsHouseSharedWithPlayer");
+        RegisterSynced<HasSpouseSharedHouseWithPlayer>(vm, "HasSpouseSharedHouseWithPlayer");
 
         // Home cell helpers
-        vm->RegisterFunction("GetNpcOriginalHouse", "MARAS", GetNpcOriginalHouse);
-        vm->RegisterFunction("GetNpcBeds", "MARAS", GetNpcBeds);
-        vm->RegisterFunction("GetNpcOriginalHouseCenterMarker", "MARAS", GetNpcOriginalHouseCenterMarker);
+        RegisterSynced<GetNpcOriginalHouse>(vm, "GetNpcOriginalHouse");
+        RegisterSynced<GetNpcBeds>(vm, "GetNpcBeds");
+        RegisterSynced<GetNpcOriginalHouseCenterMarker>(vm, "GetNpcOriginalHouseCenterMarker");
 
         // Home marker management
-        vm->RegisterFunction("GetTrackedNpcHomeMarker", "MARAS", GetTrackedNpcHomeMarker);
-        vm->RegisterFunction("SetTrackedNpcHomeMarker", "MARAS", SetTrackedNpcHomeMarker);
-        vm->RegisterFunction("GetChildHomeMarker", "MARAS", GetChildHomeMarker);
+        RegisterSynced<GetTrackedNpcHomeMarker>(vm, "GetTrackedNpcHomeMarker");
+        RegisterSynced<SetTrackedNpcHomeMarker>(vm, "SetTrackedNpcHomeMarker");
+        RegisterSynced<GetChildHomeMarker>(vm, "GetChildHomeMarker");
 
         // Spouse buff/service bindings
-        vm->RegisterFunction("GetSpouseMultiplier", "MARAS", GetSpouseMultiplier);
-        vm->RegisterFunction("GetFollowersMultipliers", "MARAS", GetFollowersMultipliers);
-        vm->RegisterFunction("GetPermanentMultipliers", "MARAS", GetPermanentMultipliers);
+        RegisterSynced<GetSpouseMultiplier>(vm, "GetSpouseMultiplier");
+        RegisterSynced<GetFollowersMultipliers>(vm, "GetFollowersMultipliers");
+        RegisterSynced<GetPermanentMultipliers>(vm, "GetPermanentMultipliers");
 
         // Affection system
-        vm->RegisterFunction("AddAffection", "MARAS", AddAffection);
-        vm->RegisterFunction("GetAffection", "MARAS", GetAffection);
-        vm->RegisterFunction("GetPermanentAffection", "MARAS", GetPermanentAffection);
-        vm->RegisterFunction("SetPermanentAffection", "MARAS", SetPermanentAffection);
-        vm->RegisterFunction("SetAffectionMinMax", "MARAS", SetAffectionMinMax);
-        vm->RegisterFunction("ApplyDailyAffection", "MARAS", ApplyDailyAffection);
-        vm->RegisterFunction("SetAffectionDecayMultiplier", "MARAS", SetAffectionDecayMultiplier);
-        vm->RegisterFunction("GetAffectionDecayMultiplier", "MARAS", GetAffectionDecayMultiplier);
+        RegisterSynced<AddAffection>(vm, "AddAffection");
+        RegisterSynced<GetAffection>(vm, "GetAffection");
+        RegisterSynced<GetPermanentAffection>(vm, "GetPermanentAffection");
+        RegisterSynced<SetPermanentAffection>(vm, "SetPermanentAffection");
+        RegisterSynced<SetAffectionMinMax>(vm, "SetAffectionMinMax");
+        RegisterSynced<ApplyDailyAffection>(vm, "ApplyDailyAffection");
+        RegisterSynced<SetAffectionDecayMultiplier>(vm, "SetAffectionDecayMultiplier");
+        RegisterSynced<GetAffectionDecayMultiplier>(vm, "GetAffectionDecayMultiplier");
 
         // NPC Type and Status Queries
-        vm->RegisterFunction("GetNpcStatusName", "MARAS", GetNpcStatusName);
-        vm->RegisterFunction("GetNpcStatusEnum", "MARAS", GetNpcStatusEnum);
-        vm->RegisterFunction("GetNpcStatusNameWith", "MARAS", GetNpcStatusNameWith);
-        vm->RegisterFunction("GetNpcStatusEnumWith", "MARAS", GetNpcStatusEnumWith);
+        RegisterSynced<GetNpcStatusName>(vm, "GetNpcStatusName");
+        RegisterSynced<GetNpcStatusEnum>(vm, "GetNpcStatusEnum");
+        RegisterSynced<GetNpcStatusNameWith>(vm, "GetNpcStatusNameWith");
+        RegisterSynced<GetNpcStatusEnumWith>(vm, "GetNpcStatusEnumWith");
 
-        vm->RegisterFunction("IsNPCInOpenRelationship", "MARAS", IsNPCInOpenRelationship);
-        vm->RegisterFunction("GetPairIsOpen", "MARAS", GetPairIsOpen);
-        vm->RegisterFunction("SetPairIsOpen", "MARAS", SetPairIsOpen);
-        vm->RegisterFunction("RecordCheating", "MARAS", RecordCheating);
-        vm->RegisterFunction("SetCheatingDiscovered", "MARAS", SetCheatingDiscovered);
-        vm->RegisterFunction("RegisterIntimateThread", "MARAS", RegisterIntimateThread);
-        vm->RegisterFunction("ReportIntimateInteraction", "MARAS", ReportIntimateInteraction);
-        vm->RegisterFunction("ClearIntimateThread", "MARAS", ClearIntimateThread);
-        vm->RegisterFunction("FleeChildrenFromPlayerCell", "MARAS", FleeChildrenFromPlayerCell);
-        vm->RegisterFunction("StopChildrenFleeing", "MARAS", StopChildrenFleeing);
-        vm->RegisterFunction("Breakup", "MARAS", Breakup);
-        vm->RegisterFunction("BreakAllLoverConnections", "MARAS", BreakAllLoverConnections);
-        vm->RegisterFunction("SetCheatingAffairStatus", "MARAS", SetCheatingAffairStatus);
-        vm->RegisterFunction("GetCheatingAffairStatus", "MARAS", GetCheatingAffairStatus);
-        vm->RegisterFunction("GetAffairStage", "MARAS", GetAffairStage);
-        vm->RegisterFunction("SetAffairStage", "MARAS", SetAffairStage);
-        vm->RegisterFunction("GetPartnerPendingIntent", "MARAS", GetPartnerPendingIntent);
-        vm->RegisterFunction("ClearPartnerIntent", "MARAS", ClearPartnerIntent);
-        vm->RegisterFunction("EvaluatePartnerHomeArrival", "MARAS", EvaluatePartnerHomeArrival);
-        vm->RegisterFunction("HasCheatedOn", "MARAS", HasCheatedOn);
-        vm->RegisterFunction("IsNPCCheating", "MARAS", IsNPCCheating);
-        vm->RegisterFunction("IsRelationshipCheating", "MARAS", IsRelationshipCheating);
-        vm->RegisterFunction("GetCheatingCount", "MARAS", GetCheatingCount);
-        vm->RegisterFunction("GetCheatedOnPartners", "MARAS", GetCheatedOnPartners);
-        vm->RegisterFunction("GetCheatersWhoCheatedOn", "MARAS", GetCheatersWhoCheatedOn);
-        vm->RegisterFunction("RegisterChildActor", "MARAS", RegisterChildActor);
-        vm->RegisterFunction("RemoveChild", "MARAS", RemoveChild);
-        vm->RegisterFunction("GetChildren", "MARAS", GetChildren);
-        vm->RegisterFunction("GetChildrenOfActor", "MARAS", GetChildrenOfActor);
-        vm->RegisterFunction("UpdateSpouseChildrenFaction", "MARAS", UpdateSpouseChildrenFaction);
-        vm->RegisterFunction("IsAvailableForStatus", "MARAS", IsAvailableForStatus);
-        vm->RegisterFunction("IsAvailableForStatusWith", "MARAS", IsAvailableForStatusWith);
-        vm->RegisterFunction("CanFormRelationship", "MARAS", CanFormRelationship);
-        vm->RegisterFunction("GetJsonString", "MARAS", GetJsonString);
-        vm->RegisterFunction("GetJsonActor", "MARAS", GetJsonActor);
-        vm->RegisterFunction("GetJsonForm", "MARAS", GetJsonForm);
-        vm->RegisterFunction("GetJsonInt", "MARAS", GetJsonInt);
-        vm->RegisterFunction("GetJsonFloat", "MARAS", GetJsonFloat);
-        vm->RegisterFunction("GetJsonBool", "MARAS", GetJsonBool);
-        vm->RegisterFunction("GetJsonArrayLength", "MARAS", GetJsonArrayLength);
-        vm->RegisterFunction("GetJsonActorArray", "MARAS", GetJsonActorArray);
-        vm->RegisterFunction("GetNpcTypes", "MARAS", GetNpcTypes);
-        vm->RegisterFunction("GetNpcTypeEnum", "MARAS", GetNpcTypeEnum);
-        vm->RegisterFunction("GetNpcCurrentTypeEnum", "MARAS", GetNpcCurrentTypeEnum);
-        vm->RegisterFunction("GetNpcCurrentTypeName", "MARAS", GetNpcCurrentTypeName);
+        RegisterSynced<IsNPCInOpenRelationship>(vm, "IsNPCInOpenRelationship");
+        RegisterSynced<GetPairIsOpen>(vm, "GetPairIsOpen");
+        RegisterSynced<SetPairIsOpen>(vm, "SetPairIsOpen");
+        RegisterSynced<RecordCheating>(vm, "RecordCheating");
+        RegisterSynced<SetCheatingDiscovered>(vm, "SetCheatingDiscovered");
+        RegisterSynced<RegisterIntimateThread>(vm, "RegisterIntimateThread");
+        RegisterSynced<ReportIntimateInteraction>(vm, "ReportIntimateInteraction");
+        RegisterSynced<ClearIntimateThread>(vm, "ClearIntimateThread");
+        RegisterSynced<FleeChildrenFromPlayerCell>(vm, "FleeChildrenFromPlayerCell");
+        RegisterSynced<StopChildrenFleeing>(vm, "StopChildrenFleeing");
+        RegisterSynced<Breakup>(vm, "Breakup");
+        RegisterSynced<BreakAllLoverConnections>(vm, "BreakAllLoverConnections");
+        RegisterSynced<SetCheatingAffairStatus>(vm, "SetCheatingAffairStatus");
+        RegisterSynced<GetCheatingAffairStatus>(vm, "GetCheatingAffairStatus");
+        RegisterSynced<GetAffairStage>(vm, "GetAffairStage");
+        RegisterSynced<SetAffairStage>(vm, "SetAffairStage");
+        RegisterSynced<GetPartnerPendingIntent>(vm, "GetPartnerPendingIntent");
+        RegisterSynced<ClearPartnerIntent>(vm, "ClearPartnerIntent");
+        RegisterSynced<EvaluatePartnerHomeArrival>(vm, "EvaluatePartnerHomeArrival");
+        RegisterSynced<HasCheatedOn>(vm, "HasCheatedOn");
+        RegisterSynced<IsNPCCheating>(vm, "IsNPCCheating");
+        RegisterSynced<IsRelationshipCheating>(vm, "IsRelationshipCheating");
+        RegisterSynced<GetCheatingCount>(vm, "GetCheatingCount");
+        RegisterSynced<GetCheatedOnPartners>(vm, "GetCheatedOnPartners");
+        RegisterSynced<GetCheatersWhoCheatedOn>(vm, "GetCheatersWhoCheatedOn");
+        RegisterSynced<RegisterChildActor>(vm, "RegisterChildActor");
+        RegisterSynced<RemoveChild>(vm, "RemoveChild");
+        RegisterSynced<GetChildren>(vm, "GetChildren");
+        RegisterSynced<GetChildrenOfActor>(vm, "GetChildrenOfActor");
+        RegisterSynced<UpdateSpouseChildrenFaction>(vm, "UpdateSpouseChildrenFaction");
+        RegisterSynced<IsAvailableForStatus>(vm, "IsAvailableForStatus");
+        RegisterSynced<IsAvailableForStatusWith>(vm, "IsAvailableForStatusWith");
+        RegisterSynced<CanFormRelationship>(vm, "CanFormRelationship");
+        RegisterSynced<GetJsonString>(vm, "GetJsonString");
+        RegisterSynced<GetJsonActor>(vm, "GetJsonActor");
+        RegisterSynced<GetJsonForm>(vm, "GetJsonForm");
+        RegisterSynced<GetJsonInt>(vm, "GetJsonInt");
+        RegisterSynced<GetJsonFloat>(vm, "GetJsonFloat");
+        RegisterSynced<GetJsonBool>(vm, "GetJsonBool");
+        RegisterSynced<GetJsonArrayLength>(vm, "GetJsonArrayLength");
+        RegisterSynced<GetJsonActorArray>(vm, "GetJsonActorArray");
+        RegisterSynced<GetNpcTypes>(vm, "GetNpcTypes");
+        RegisterSynced<GetNpcTypeEnum>(vm, "GetNpcTypeEnum");
+        RegisterSynced<GetNpcCurrentTypeEnum>(vm, "GetNpcCurrentTypeEnum");
+        RegisterSynced<GetNpcCurrentTypeName>(vm, "GetNpcCurrentTypeName");
 
         // Determination helpers
-        vm->RegisterFunction("DetermineSocialClass", "MARAS", DetermineSocialClass);
-        vm->RegisterFunction("DetermineSkillType", "MARAS", DetermineSkillType);
-        vm->RegisterFunction("DetermineTemperament", "MARAS", DetermineTemperament);
+        RegisterSynced<DetermineSocialClass>(vm, "DetermineSocialClass");
+        RegisterSynced<DetermineSkillType>(vm, "DetermineSkillType");
+        RegisterSynced<DetermineTemperament>(vm, "DetermineTemperament");
 
         // Bonuses JSON accessors
-        vm->RegisterFunction("GetBonusCount", "MARAS", GetBonusCount);
-        vm->RegisterFunction("GetBonusPerk", "MARAS", GetBonusPerk);
-        vm->RegisterFunction("GetBonusEffectIndex", "MARAS", GetBonusEffectIndex);
-        vm->RegisterFunction("GetBonusPerkValue", "MARAS", GetBonusPerkValue);
-        vm->RegisterFunction("GetBonusPerkType", "MARAS", GetBonusPerkType);
-        vm->RegisterFunction("GetBonusPerkUnit", "MARAS", GetBonusPerkUnit);
-        vm->RegisterFunction("GetBonusPerkDescription", "MARAS", GetBonusPerkDescription);
+        RegisterSynced<GetBonusCount>(vm, "GetBonusCount");
+        RegisterSynced<GetBonusPerk>(vm, "GetBonusPerk");
+        RegisterSynced<GetBonusEffectIndex>(vm, "GetBonusEffectIndex");
+        RegisterSynced<GetBonusPerkValue>(vm, "GetBonusPerkValue");
+        RegisterSynced<GetBonusPerkType>(vm, "GetBonusPerkType");
+        RegisterSynced<GetBonusPerkUnit>(vm, "GetBonusPerkUnit");
+        RegisterSynced<GetBonusPerkDescription>(vm, "GetBonusPerkDescription");
 
         // Keyword management
-        vm->RegisterFunction("HasNpcKeyword", "MARAS", HasNpcKeyword);
-        vm->RegisterFunction("AddNpcKeyword", "MARAS", AddNpcKeyword);
-        vm->RegisterFunction("RemoveNpcKeyword", "MARAS", RemoveNpcKeyword);
+        RegisterSynced<HasNpcKeyword>(vm, "HasNpcKeyword");
+        RegisterSynced<AddNpcKeyword>(vm, "AddNpcKeyword");
+        RegisterSynced<RemoveNpcKeyword>(vm, "RemoveNpcKeyword");
 
         // Prisma UI functions
-        vm->RegisterFunction("ShowUI", "MARAS", ShowUI);
-        vm->RegisterFunction("HideUI", "MARAS", HideUI);
-        vm->RegisterFunction("IsUIVisible", "MARAS", IsUIVisible);
+        RegisterSynced<ShowUI>(vm, "ShowUI");
+        RegisterSynced<HideUI>(vm, "HideUI");
+        RegisterSynced<IsUIVisible>(vm, "IsUIVisible");
 
         // Confirmation modal functions
-        RegisterLatentFixed<int32_t>(vm, "ShowConfirmationModal", "MARAS", ShowConfirmationModal);
-        RegisterLatentFixed<int32_t>(vm, "ShowSkipWeddingModal", "MARAS", ShowSkipWeddingModal);
-        RegisterLatentFixed<int32_t>(vm, "ShowDivorceSettlementModal", "MARAS", ShowDivorceSettlementModal);
-        RegisterLatentFixed<RE::BGSLocation*>(vm, "ShowChooseHomeModal", "MARAS", ShowChooseHomeModal);
-        RegisterLatentFixed<RE::Actor*>(vm, "ShowChooseAdoptionSpouseModal", "MARAS", ShowChooseAdoptionSpouseModal);
-        RegisterLatentFixed<RE::BSFixedString>(vm, "ShowDebugStatusModal", "MARAS", ShowDebugStatusModal);
-        RegisterLatentFixed<int32_t>(vm, "ShowChildMigrationAuditModal", "MARAS", ShowChildMigrationAuditModal);
-        vm->RegisterFunction("CheckAndSetActionCooldown", "MARAS", CheckAndSetActionCooldown);
+        RegisterLatentLocked<int32_t, ShowConfirmationModal>(vm, "ShowConfirmationModal");
+        RegisterLatentLocked<int32_t, ShowSkipWeddingModal>(vm, "ShowSkipWeddingModal");
+        RegisterLatentLocked<int32_t, ShowDivorceSettlementModal>(vm, "ShowDivorceSettlementModal");
+        RegisterLatentLocked<RE::BGSLocation*, ShowChooseHomeModal>(vm, "ShowChooseHomeModal");
+        RegisterLatentLocked<RE::Actor*, ShowChooseAdoptionSpouseModal>(vm, "ShowChooseAdoptionSpouseModal");
+        RegisterLatentLocked<RE::BSFixedString, ShowDebugStatusModal>(vm, "ShowDebugStatusModal");
+        RegisterLatentLocked<int32_t, ShowChildMigrationAuditModal>(vm, "ShowChildMigrationAuditModal");
+        RegisterSynced<CheckAndSetActionCooldown>(vm, "CheckAndSetActionCooldown");
 
         // Settings & Migration functions
-        vm->RegisterFunction("SetSettingBool", "MARAS", SetSettingBool);
-        vm->RegisterFunction("GetSettingBool", "MARAS", GetSettingBool);
-        vm->RegisterFunction("SetSettingInt", "MARAS", SetSettingInt);
-        vm->RegisterFunction("GetSettingInt", "MARAS", GetSettingInt);
-        vm->RegisterFunction("SetSettingFloat", "MARAS", SetSettingFloat);
-        vm->RegisterFunction("GetSettingFloat", "MARAS", GetSettingFloat);
-        vm->RegisterFunction("IsSettingsMigrated", "MARAS", IsSettingsMigrated);
-        vm->RegisterFunction("MarkSettingsMigrated", "MARAS", MarkSettingsMigrated);
+        RegisterSynced<SetSettingBool>(vm, "SetSettingBool");
+        RegisterSynced<GetSettingBool>(vm, "GetSettingBool");
+        RegisterSynced<SetSettingInt>(vm, "SetSettingInt");
+        RegisterSynced<GetSettingInt>(vm, "GetSettingInt");
+        RegisterSynced<SetSettingFloat>(vm, "SetSettingFloat");
+        RegisterSynced<GetSettingFloat>(vm, "GetSettingFloat");
+        RegisterSynced<IsSettingsMigrated>(vm, "IsSettingsMigrated");
+        RegisterSynced<MarkSettingsMigrated>(vm, "MarkSettingsMigrated");
 
-        vm->RegisterFunction("GetStartDialGender", "MARAS", GetStartDialGender);
-        vm->RegisterFunction("SetStartDialGender", "MARAS", SetStartDialGender);
-        vm->RegisterFunction("GetEnablePolygamy", "MARAS", GetEnablePolygamy);
-        vm->RegisterFunction("SetEnablePolygamy", "MARAS", SetEnablePolygamy);
-        vm->RegisterFunction("GetDisablePolygamyQuest", "MARAS", GetDisablePolygamyQuest);
-        vm->RegisterFunction("SetDisablePolygamyQuest", "MARAS", SetDisablePolygamyQuest);
-        vm->RegisterFunction("GetMinRelRankForDial", "MARAS", GetMinRelRankForDial);
-        vm->RegisterFunction("SetMinRelRankForDial", "MARAS", SetMinRelRankForDial);
+        RegisterSynced<GetStartDialGender>(vm, "GetStartDialGender");
+        RegisterSynced<SetStartDialGender>(vm, "SetStartDialGender");
+        RegisterSynced<GetEnablePolygamy>(vm, "GetEnablePolygamy");
+        RegisterSynced<SetEnablePolygamy>(vm, "SetEnablePolygamy");
+        RegisterSynced<GetDisablePolygamyQuest>(vm, "GetDisablePolygamyQuest");
+        RegisterSynced<SetDisablePolygamyQuest>(vm, "SetDisablePolygamyQuest");
+        RegisterSynced<GetMinRelRankForDial>(vm, "GetMinRelRankForDial");
+        RegisterSynced<SetMinRelRankForDial>(vm, "SetMinRelRankForDial");
 
         // Player children / household adoption functions
-        vm->RegisterFunction("AssignChildToHouse", "MARAS", AssignChildToHouse);
-        vm->RegisterFunction("IssueChildOrder", "MARAS", IssueChildOrder);
-        vm->RegisterFunction("ResetChildForceGreeting", "MARAS", ResetChildForceGreeting);
-        vm->RegisterFunction("AssignChildPet", "MARAS", AssignChildPet);
-        vm->RegisterFunction("GetChildPet", "MARAS", GetChildPet);
-        vm->RegisterFunction("GetChildForPet", "MARAS", GetChildForPet);
-        vm->RegisterFunction("RemoveChildPet", "MARAS", RemoveChildPet);
-        vm->RegisterFunction("SetChildPetBanned", "MARAS", SetChildPetBanned);
-        vm->RegisterFunction("IsChildPetBanned", "MARAS", IsChildPetBanned);
-        vm->RegisterFunction("IsPetBanned", "MARAS", IsPetBanned);
-        vm->RegisterFunction("SetGlobalPetBanned", "MARAS", SetGlobalPetBanned);
-        vm->RegisterFunction("IsGlobalPetBanned", "MARAS", IsGlobalPetBanned);
-        vm->RegisterFunction("SetChildPetRetryTimestamp", "MARAS", SetChildPetRetryTimestamp);
-        vm->RegisterFunction("RecordChildPetRetry", "MARAS", RecordChildPetRetry);
-        vm->RegisterFunction("GetChildPetRetryTimestamp", "MARAS", GetChildPetRetryTimestamp);
-        vm->RegisterFunction("IsPetRetryAvailable", "MARAS", IsPetRetryAvailable);
-        vm->RegisterFunction("AssignChildCritter", "MARAS", AssignChildCritter);
-        vm->RegisterFunction("GetChildCritter", "MARAS", GetChildCritter);
-        vm->RegisterFunction("GetChildForCritter", "MARAS", GetChildForCritter);
-        vm->RegisterFunction("GetChildForPetOrCritter", "MARAS", GetChildForPetOrCritter);
-        vm->RegisterFunction("RemoveChildCritter", "MARAS", RemoveChildCritter);
-        vm->RegisterFunction("SetChildCritterBanned", "MARAS", SetChildCritterBanned);
-        vm->RegisterFunction("IsChildCritterBanned", "MARAS", IsChildCritterBanned);
-        vm->RegisterFunction("IsCritterBanned", "MARAS", IsCritterBanned);
-        vm->RegisterFunction("SetChildIsNewlyAdopted", "MARAS", SetChildIsNewlyAdopted);
-        vm->RegisterFunction("IsChildNewlyAdopted", "MARAS", IsChildNewlyAdopted);
-        vm->RegisterFunction("IsChildPlayerAdopted", "MARAS", IsChildPlayerAdopted);
-        vm->RegisterFunction("SetHouseInitialMoveDone", "MARAS", SetHouseInitialMoveDone);
-        vm->RegisterFunction("IsHouseInitialMoveDone", "MARAS", IsHouseInitialMoveDone);
-        vm->RegisterFunction("SetChildChestIntroduced", "MARAS", SetChildChestIntroduced);
-        vm->RegisterFunction("IsChildChestIntroduced", "MARAS", IsChildChestIntroduced);
-        vm->RegisterFunction("SetGlobalCritterBanned", "MARAS", SetGlobalCritterBanned);
-        vm->RegisterFunction("IsGlobalCritterBanned", "MARAS", IsGlobalCritterBanned);
-        vm->RegisterFunction("SetChildCritterRetryTimestamp", "MARAS", SetChildCritterRetryTimestamp);
-        vm->RegisterFunction("RecordChildCritterRetry", "MARAS", RecordChildCritterRetry);
-        vm->RegisterFunction("GetChildCritterRetryTimestamp", "MARAS", GetChildCritterRetryTimestamp);
-        vm->RegisterFunction("IsChildCritterRetryAvailable", "MARAS", IsChildCritterRetryAvailable);
-        vm->RegisterFunction("GetAllPlayerChildren", "MARAS", GetAllPlayerChildren);
-        vm->RegisterFunction("GetChildrenAssignedToHouse", "MARAS", GetChildrenAssignedToHouse);
-        vm->RegisterFunction("GetNewlyAdoptedChild", "MARAS", GetNewlyAdoptedChild);
-        vm->RegisterFunction("GetChildWithoutPet", "MARAS", GetChildWithoutPet);
-        vm->RegisterFunction("GetChildWithoutCritter", "MARAS", GetChildWithoutCritter);
-        vm->RegisterFunction("GetChildrenWithoutScene", "MARAS", GetChildrenWithoutScene);
-        vm->RegisterFunction("GetWeightedRandomChild", "MARAS", GetWeightedRandomChild);
-        vm->RegisterFunction("SetChildPlayedScene", "MARAS", SetChildPlayedScene);
-        vm->RegisterFunction("HasChildPlayedScene", "MARAS", HasChildPlayedScene);
-        vm->RegisterFunction("RecordChildInteraction", "MARAS", RecordChildInteraction);
-        vm->RegisterFunction("GetChildLastInteractionTimestamp", "MARAS", GetChildLastInteractionTimestamp);
+        RegisterSynced<AssignChildToHouse>(vm, "AssignChildToHouse");
+        RegisterSynced<IssueChildOrder>(vm, "IssueChildOrder");
+        RegisterSynced<ResetChildForceGreeting>(vm, "ResetChildForceGreeting");
+        RegisterSynced<AssignChildPet>(vm, "AssignChildPet");
+        RegisterSynced<GetChildPet>(vm, "GetChildPet");
+        RegisterSynced<GetChildForPet>(vm, "GetChildForPet");
+        RegisterSynced<RemoveChildPet>(vm, "RemoveChildPet");
+        RegisterSynced<SetChildPetBanned>(vm, "SetChildPetBanned");
+        RegisterSynced<IsChildPetBanned>(vm, "IsChildPetBanned");
+        RegisterSynced<IsPetBanned>(vm, "IsPetBanned");
+        RegisterSynced<SetGlobalPetBanned>(vm, "SetGlobalPetBanned");
+        RegisterSynced<IsGlobalPetBanned>(vm, "IsGlobalPetBanned");
+        RegisterSynced<SetChildPetRetryTimestamp>(vm, "SetChildPetRetryTimestamp");
+        RegisterSynced<RecordChildPetRetry>(vm, "RecordChildPetRetry");
+        RegisterSynced<GetChildPetRetryTimestamp>(vm, "GetChildPetRetryTimestamp");
+        RegisterSynced<IsPetRetryAvailable>(vm, "IsPetRetryAvailable");
+        RegisterSynced<AssignChildCritter>(vm, "AssignChildCritter");
+        RegisterSynced<GetChildCritter>(vm, "GetChildCritter");
+        RegisterSynced<GetChildForCritter>(vm, "GetChildForCritter");
+        RegisterSynced<GetChildForPetOrCritter>(vm, "GetChildForPetOrCritter");
+        RegisterSynced<RemoveChildCritter>(vm, "RemoveChildCritter");
+        RegisterSynced<SetChildCritterBanned>(vm, "SetChildCritterBanned");
+        RegisterSynced<IsChildCritterBanned>(vm, "IsChildCritterBanned");
+        RegisterSynced<IsCritterBanned>(vm, "IsCritterBanned");
+        RegisterSynced<SetChildIsNewlyAdopted>(vm, "SetChildIsNewlyAdopted");
+        RegisterSynced<IsChildNewlyAdopted>(vm, "IsChildNewlyAdopted");
+        RegisterSynced<IsChildPlayerAdopted>(vm, "IsChildPlayerAdopted");
+        RegisterSynced<SetHouseInitialMoveDone>(vm, "SetHouseInitialMoveDone");
+        RegisterSynced<IsHouseInitialMoveDone>(vm, "IsHouseInitialMoveDone");
+        RegisterSynced<SetChildChestIntroduced>(vm, "SetChildChestIntroduced");
+        RegisterSynced<IsChildChestIntroduced>(vm, "IsChildChestIntroduced");
+        RegisterSynced<SetGlobalCritterBanned>(vm, "SetGlobalCritterBanned");
+        RegisterSynced<IsGlobalCritterBanned>(vm, "IsGlobalCritterBanned");
+        RegisterSynced<SetChildCritterRetryTimestamp>(vm, "SetChildCritterRetryTimestamp");
+        RegisterSynced<RecordChildCritterRetry>(vm, "RecordChildCritterRetry");
+        RegisterSynced<GetChildCritterRetryTimestamp>(vm, "GetChildCritterRetryTimestamp");
+        RegisterSynced<IsChildCritterRetryAvailable>(vm, "IsChildCritterRetryAvailable");
+        RegisterSynced<GetAllPlayerChildren>(vm, "GetAllPlayerChildren");
+        RegisterSynced<GetChildrenAssignedToHouse>(vm, "GetChildrenAssignedToHouse");
+        RegisterSynced<GetNewlyAdoptedChild>(vm, "GetNewlyAdoptedChild");
+        RegisterSynced<GetChildWithoutPet>(vm, "GetChildWithoutPet");
+        RegisterSynced<GetChildWithoutCritter>(vm, "GetChildWithoutCritter");
+        RegisterSynced<GetChildrenWithoutScene>(vm, "GetChildrenWithoutScene");
+        RegisterSynced<GetWeightedRandomChild>(vm, "GetWeightedRandomChild");
+        RegisterSynced<SetChildPlayedScene>(vm, "SetChildPlayedScene");
+        RegisterSynced<HasChildPlayedScene>(vm, "HasChildPlayedScene");
+        RegisterSynced<RecordChildInteraction>(vm, "RecordChildInteraction");
+        RegisterSynced<GetChildLastInteractionTimestamp>(vm, "GetChildLastInteractionTimestamp");
 
         // Deceased Registry queries
-        vm->RegisterFunction("IsWidow", "MARAS", IsWidow);
-        vm->RegisterFunction("IsNPCDeceased", "MARAS", IsNPCDeceased);
-        vm->RegisterFunction("WasMarriedTo", "MARAS", WasMarriedTo);
-        vm->RegisterFunction("WasEngagedTo", "MARAS", WasEngagedTo);
-        vm->RegisterFunction("WasExOf", "MARAS", WasExOf);
-        vm->RegisterFunction("GetDeceasedSpouseNames", "MARAS", GetDeceasedSpouseNames);
-        vm->RegisterFunction("GetDeceasedChildrenNames", "MARAS", GetDeceasedChildrenNames);
-        vm->RegisterFunction("HasDeceasedChildren", "MARAS", HasDeceasedChildren);
-        vm->RegisterFunction("GetDeceasedCount", "MARAS", GetDeceasedCount);
+        RegisterSynced<IsWidow>(vm, "IsWidow");
+        RegisterSynced<IsNPCDeceased>(vm, "IsNPCDeceased");
+        RegisterSynced<WasMarriedTo>(vm, "WasMarriedTo");
+        RegisterSynced<WasEngagedTo>(vm, "WasEngagedTo");
+        RegisterSynced<WasExOf>(vm, "WasExOf");
+        RegisterSynced<GetDeceasedSpouseNames>(vm, "GetDeceasedSpouseNames");
+        RegisterSynced<GetDeceasedChildrenNames>(vm, "GetDeceasedChildrenNames");
+        RegisterSynced<HasDeceasedChildren>(vm, "HasDeceasedChildren");
+        RegisterSynced<GetDeceasedCount>(vm, "GetDeceasedCount");
 
         // Fertility Mode Reloaded & Paternity Intrigue
-        vm->RegisterFunction("FindActorByName", "MARAS", FindActorByName);
-        vm->RegisterFunction("SetNPCPregnant", "MARAS", SetNPCPregnant);
-        vm->RegisterFunction("IsNPCPregnant", "MARAS", IsNPCPregnant);
-        vm->RegisterFunction("RegisterUnbornChild", "MARAS", RegisterUnbornChild);
-        vm->RegisterFunction("PromoteUnbornToInfant", "MARAS", PromoteUnbornToInfant);
-        vm->RegisterFunction("RemoveUnbornChild", "MARAS", RemoveUnbornChild);
-        vm->RegisterFunction("FindUnbornChild", "MARAS", FindUnbornChild);
-        vm->RegisterFunction("GetUnbornChildren", "MARAS", GetUnbornChildren);
-        vm->RegisterFunction("GetUnbornChildCount", "MARAS", GetUnbornChildCount);
-        vm->RegisterFunction("RegisterFertilityChild", "MARAS", RegisterFertilityChild);
-        vm->RegisterFunction("ResolvePaternitySecret", "MARAS", ResolvePaternitySecret);
-        vm->RegisterFunction("ResolvePaternitySecretForPartner", "MARAS", ResolvePaternitySecretForPartner);
-        vm->RegisterFunction("ResolvePaternitySecretForBioFather", "MARAS", ResolvePaternitySecretForBioFather);
-        vm->RegisterFunction("RevealPregnancyToPartner", "MARAS", RevealPregnancyToPartner);
-        vm->RegisterFunction("SetPaternitySecretEdges", "MARAS", SetPaternitySecretEdges);
-        vm->RegisterFunction("IsSecretForBioFather", "MARAS", IsSecretForBioFather);
-        vm->RegisterFunction("IsSecretForPartner", "MARAS", IsSecretForPartner);
-        vm->RegisterFunction("IsPregnancySecretForPartner", "MARAS", IsPregnancySecretForPartner);
-        vm->RegisterFunction("SetChildStage", "MARAS", SetChildStage);
-        vm->RegisterFunction("GetChildStage", "MARAS", GetChildStage);
-        vm->RegisterFunction("SetChildTrainingLocation", "MARAS", SetChildTrainingLocation);
-        vm->RegisterFunction("GetChildTrainingLocation", "MARAS", GetChildTrainingLocation);
-        vm->RegisterFunction("GetChildTrainingClass", "MARAS", GetChildTrainingClass);
-        vm->RegisterFunction("GetChildSavedRaceIndex", "MARAS", GetChildSavedRaceIndex);
-        vm->RegisterFunction("SetChildGender", "MARAS", SetChildGender);
-        vm->RegisterFunction("GetChildGender", "MARAS", GetChildGender);
-        vm->RegisterFunction("SetChildGuardian", "MARAS", SetChildGuardian);
-        vm->RegisterFunction("FindSyntheticChild", "MARAS", FindSyntheticChild);
-        vm->RegisterFunction("UpdateChildName", "MARAS", UpdateChildName);
-        vm->RegisterFunction("GetPrimaryPartner", "MARAS", GetPrimaryPartner);
-        vm->RegisterFunction("GetGuardianA", "MARAS", GetGuardianA);
-        vm->RegisterFunction("GetGuardianB", "MARAS", GetGuardianB);
-        vm->RegisterFunction("GetGuardians", "MARAS", GetGuardians);
-        vm->RegisterFunction("GetCoGuardian", "MARAS", GetCoGuardian);
-        vm->RegisterFunction("IsGuardian", "MARAS", IsGuardian);
-        vm->RegisterFunction("GetBioMother", "MARAS", GetBioMother);
-        vm->RegisterFunction("GetBioFather", "MARAS", GetBioFather);
-        vm->RegisterFunction("GetMotherPartner", "MARAS", GetMotherPartner);
-        vm->RegisterFunction("SetBioMother", "MARAS", SetBioMother);
-        vm->RegisterFunction("SetBioFather", "MARAS", SetBioFather);
-        vm->RegisterFunction("GetChildName", "MARAS", GetChildName);
-        vm->RegisterFunction("FindChildPaternitySecret", "MARAS", FindChildPaternitySecret);
-        vm->RegisterFunction("BuildPregnancyAnnouncedMessage", "MARAS", BuildPregnancyAnnouncedMessage);
-        vm->RegisterFunction("BuildPregnancyAnnouncedJson", "MARAS", BuildPregnancyAnnouncedJson);
-        vm->RegisterFunction("BuildChildBirthMessage", "MARAS", BuildChildBirthMessage);
-        vm->RegisterFunction("BuildChildBirthJson", "MARAS", BuildChildBirthJson);
+        RegisterSynced<FindActorByName>(vm, "FindActorByName");
+        RegisterSynced<SetNPCPregnant>(vm, "SetNPCPregnant");
+        RegisterSynced<IsNPCPregnant>(vm, "IsNPCPregnant");
+        RegisterSynced<RegisterUnbornChild>(vm, "RegisterUnbornChild");
+        RegisterSynced<PromoteUnbornToInfant>(vm, "PromoteUnbornToInfant");
+        RegisterSynced<RemoveUnbornChild>(vm, "RemoveUnbornChild");
+        RegisterSynced<FindUnbornChild>(vm, "FindUnbornChild");
+        RegisterSynced<GetUnbornChildren>(vm, "GetUnbornChildren");
+        RegisterSynced<GetUnbornChildCount>(vm, "GetUnbornChildCount");
+        RegisterSynced<RegisterFertilityChild>(vm, "RegisterFertilityChild");
+        RegisterSynced<ResolvePaternitySecret>(vm, "ResolvePaternitySecret");
+        RegisterSynced<ResolvePaternitySecretForPartner>(vm, "ResolvePaternitySecretForPartner");
+        RegisterSynced<ResolvePaternitySecretForBioFather>(vm, "ResolvePaternitySecretForBioFather");
+        RegisterSynced<RevealPregnancyToPartner>(vm, "RevealPregnancyToPartner");
+        RegisterSynced<SetPaternitySecretEdges>(vm, "SetPaternitySecretEdges");
+        RegisterSynced<IsSecretForBioFather>(vm, "IsSecretForBioFather");
+        RegisterSynced<IsSecretForPartner>(vm, "IsSecretForPartner");
+        RegisterSynced<IsPregnancySecretForPartner>(vm, "IsPregnancySecretForPartner");
+        RegisterSynced<SetChildStage>(vm, "SetChildStage");
+        RegisterSynced<GetChildStage>(vm, "GetChildStage");
+        RegisterSynced<SetChildTrainingLocation>(vm, "SetChildTrainingLocation");
+        RegisterSynced<GetChildTrainingLocation>(vm, "GetChildTrainingLocation");
+        RegisterSynced<GetChildTrainingClass>(vm, "GetChildTrainingClass");
+        RegisterSynced<GetChildSavedRaceIndex>(vm, "GetChildSavedRaceIndex");
+        RegisterSynced<SetChildGender>(vm, "SetChildGender");
+        RegisterSynced<GetChildGender>(vm, "GetChildGender");
+        RegisterSynced<SetChildGuardian>(vm, "SetChildGuardian");
+        RegisterSynced<FindSyntheticChild>(vm, "FindSyntheticChild");
+        RegisterSynced<UpdateChildName>(vm, "UpdateChildName");
+        RegisterSynced<GetPrimaryPartner>(vm, "GetPrimaryPartner");
+        RegisterSynced<GetGuardianA>(vm, "GetGuardianA");
+        RegisterSynced<GetGuardianB>(vm, "GetGuardianB");
+        RegisterSynced<GetGuardians>(vm, "GetGuardians");
+        RegisterSynced<GetCoGuardian>(vm, "GetCoGuardian");
+        RegisterSynced<IsGuardian>(vm, "IsGuardian");
+        RegisterSynced<GetBioMother>(vm, "GetBioMother");
+        RegisterSynced<GetBioFather>(vm, "GetBioFather");
+        RegisterSynced<GetMotherPartner>(vm, "GetMotherPartner");
+        RegisterSynced<SetBioMother>(vm, "SetBioMother");
+        RegisterSynced<SetBioFather>(vm, "SetBioFather");
+        RegisterSynced<GetChildName>(vm, "GetChildName");
+        RegisterSynced<FindChildPaternitySecret>(vm, "FindChildPaternitySecret");
+        RegisterSynced<BuildPregnancyAnnouncedMessage>(vm, "BuildPregnancyAnnouncedMessage");
+        RegisterSynced<BuildPregnancyAnnouncedJson>(vm, "BuildPregnancyAnnouncedJson");
+        RegisterSynced<BuildChildBirthMessage>(vm, "BuildChildBirthMessage");
+        RegisterSynced<BuildChildBirthJson>(vm, "BuildChildBirthJson");
 
         // Child name generation functions
-        vm->RegisterFunction("GenerateRandomChildName", "MARAS", GenerateRandomChildName);
-        vm->RegisterFunction("GenerateRandomChildNameForActor", "MARAS", GenerateRandomChildNameForActor);
-        vm->RegisterFunction("GenerateRandomChildNameForRace", "MARAS", GenerateRandomChildNameForRace);
-        vm->RegisterFunction("GetChildNames", "MARAS", GetChildNames);
-        vm->RegisterFunction("ReloadChildNames", "MARAS", ReloadChildNames);
+        RegisterSynced<GenerateRandomChildName>(vm, "GenerateRandomChildName");
+        RegisterSynced<GenerateRandomChildNameForActor>(vm, "GenerateRandomChildNameForActor");
+        RegisterSynced<GenerateRandomChildNameForRace>(vm, "GenerateRandomChildNameForRace");
+        RegisterSynced<GetChildNames>(vm, "GetChildNames");
+        RegisterSynced<ReloadChildNames>(vm, "ReloadChildNames");
 
         // Critter name generation functions
-        vm->RegisterFunction("GenerateRandomCritterName", "MARAS", GenerateRandomCritterName);
-        vm->RegisterFunction("GenerateRandomCritterNameForActor", "MARAS", GenerateRandomCritterNameForActor);
-        vm->RegisterFunction("GenerateRandomCritterNameForRace", "MARAS", GenerateRandomCritterNameForRace);
-        vm->RegisterFunction("GetCritterNames", "MARAS", GetCritterNames);
-        vm->RegisterFunction("ReloadCritterNames", "MARAS", ReloadCritterNames);
+        RegisterSynced<GenerateRandomCritterName>(vm, "GenerateRandomCritterName");
+        RegisterSynced<GenerateRandomCritterNameForActor>(vm, "GenerateRandomCritterNameForActor");
+        RegisterSynced<GenerateRandomCritterNameForRace>(vm, "GenerateRandomCritterNameForRace");
+        RegisterSynced<GetCritterNames>(vm, "GetCritterNames");
+        RegisterSynced<ReloadCritterNames>(vm, "ReloadCritterNames");
 
         // Banter Coordinator functions
-        vm->RegisterFunction("FindBanterCoupleCandidates", "MARAS", FindBanterCoupleCandidates);
-        vm->RegisterFunction("IsBanterPartnerPresent", "MARAS", IsBanterPartnerPresent);
-        vm->RegisterFunction("ResetBanterCoupleCooldown", "MARAS", ResetBanterCoupleCooldown);
-        vm->RegisterFunction("ClearAllBanterCooldowns", "MARAS", ClearAllBanterCooldowns);
-        vm->RegisterFunction("GetBanterCoupleCooldownHours", "MARAS", GetBanterCoupleCooldownHours);
-        vm->RegisterFunction("SetBanterCoupleCooldownHours", "MARAS", SetBanterCoupleCooldownHours);
-        vm->RegisterFunction("RecordScenePlayed", "MARAS", RecordScenePlayed);
-        vm->RegisterFunction("IsLocationAllowedForScenes", "MARAS", IsLocationAllowedForScenes);
-        vm->RegisterFunction("ShouldTriggerSkyrimNetNarration", "MARAS", ShouldTriggerSkyrimNetNarration);
-        vm->RegisterFunction("RegisterSkyrimNetEvent", "MARAS", RegisterSkyrimNetEvent);
+        RegisterSynced<FindBanterCoupleCandidates>(vm, "FindBanterCoupleCandidates");
+        RegisterSynced<IsBanterPartnerPresent>(vm, "IsBanterPartnerPresent");
+        RegisterSynced<ResetBanterCoupleCooldown>(vm, "ResetBanterCoupleCooldown");
+        RegisterSynced<ClearAllBanterCooldowns>(vm, "ClearAllBanterCooldowns");
+        RegisterSynced<GetBanterCoupleCooldownHours>(vm, "GetBanterCoupleCooldownHours");
+        RegisterSynced<SetBanterCoupleCooldownHours>(vm, "SetBanterCoupleCooldownHours");
+        RegisterSynced<RecordScenePlayed>(vm, "RecordScenePlayed");
+        RegisterSynced<IsLocationAllowedForScenes>(vm, "IsLocationAllowedForScenes");
+        RegisterSynced<ShouldTriggerSkyrimNetNarration>(vm, "ShouldTriggerSkyrimNetNarration");
+        RegisterSynced<RegisterSkyrimNetEvent>(vm, "RegisterSkyrimNetEvent");
 
         MARAS_LOG_INFO("Registered MARAS Papyrus functions including Confirmation Modal and Settings");
         return true;

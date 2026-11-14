@@ -4,6 +4,7 @@
 #include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
+#include "core/SessionEpoch.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/WorldStateLegacyAdapters.h"
 #include "maras/state/WorldStore.h"
@@ -28,19 +29,15 @@ namespace MARAS {
 
         void DispatchPartnerIntentChangedEvent(RE::FormID partnerID, PartnerIntentType type) {
             if (partnerID == 0 || partnerID == kPlayerFormID) return;
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                std::string intentStr = (type == PartnerIntentType::None)
-                    ? std::string("none")
-                    : std::string(Utils::PartnerIntentTypeToString(type));
-                RE::Actor* partnerActor = NPCIndex::GetSingleton().GetActorFromFormId(partnerID);
-                RE::TESForm* senderForm = partnerActor ? static_cast<RE::TESForm*>(partnerActor) : nullptr;
-                SKSE::ModCallbackEvent modEvent(
-                    "maras_partner_intent_changed",
-                    intentStr,
-                    static_cast<float>(static_cast<uint8_t>(type)),
-                    senderForm);
-                eventSource->SendEvent(&modEvent);
-            }
+            std::string intentStr = (type == PartnerIntentType::None)
+                ? std::string("none")
+                : std::string(Utils::PartnerIntentTypeToString(type));
+            RE::Actor* partnerActor = NPCIndex::GetSingleton().GetActorFromFormId(partnerID);
+            const RE::FormID senderID = partnerActor ? partnerActor->GetFormID() : 0;
+            EmitModCallbackEvent("maras_partner_intent_changed",
+                                 std::move(intentStr),
+                                 static_cast<float>(static_cast<uint8_t>(type)),
+                                 senderID);
         }
 
     }  // namespace
@@ -197,7 +194,7 @@ namespace MARAS {
             return true;
         }
 
-        if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+        {
             nlohmann::json jsonPayload;
             jsonPayload["actorA"] = fmt::format("0x{:08X}", actorA);
             jsonPayload["actorB"] = fmt::format("0x{:08X}", actorB);
@@ -207,12 +204,9 @@ namespace MARAS {
 
             std::string jsonStr = jsonPayload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             RE::Actor* senderActor = NPCIndex::GetSingleton().GetActorFromFormId(actorA);
-            RE::TESForm* senderForm = senderActor ? static_cast<RE::TESForm*>(senderActor) : nullptr;
-            SKSE::ModCallbackEvent modEvent("maras_open_relationship_changed", jsonStr, 0.0f, senderForm);
-            eventSource->SendEvent(&modEvent);
+            const RE::FormID senderID = senderActor ? senderActor->GetFormID() : 0;
+            EmitModCallbackEvent("maras_open_relationship_changed", jsonStr, 0.0f, senderID);
             MARAS_LOG_INFO("Sent maras_open_relationship_changed event: {}", jsonStr);
-        } else {
-            MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send maras_open_relationship_changed event");
         }
 
         return true;
@@ -1062,42 +1056,36 @@ namespace MARAS {
             }
 
             if (!eventsToSend.empty()) {
-                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                    for (const auto& ev : eventsToSend) {
-                        nlohmann::json jsonPayload;
-                        jsonPayload["cheater"] = fmt::format("0x{:08X}", ev.cheaterID);
-                        jsonPayload["cheaterName"] = ActorSvc::GetName(ev.cheaterID);
-                        jsonPayload["victim"] = fmt::format("0x{:08X}", ev.victimID);
-                        jsonPayload["victimName"] = ActorSvc::GetName(ev.victimID);
-                        jsonPayload["affairPartner"] = fmt::format("0x{:08X}", ev.affairPartnerID);
-                        jsonPayload["affairPartnerName"] = ActorSvc::GetName(ev.affairPartnerID);
+                for (const auto& ev : eventsToSend) {
+                    nlohmann::json jsonPayload;
+                    jsonPayload["cheater"] = fmt::format("0x{:08X}", ev.cheaterID);
+                    jsonPayload["cheaterName"] = ActorSvc::GetName(ev.cheaterID);
+                    jsonPayload["victim"] = fmt::format("0x{:08X}", ev.victimID);
+                    jsonPayload["victimName"] = ActorSvc::GetName(ev.victimID);
+                    jsonPayload["affairPartner"] = fmt::format("0x{:08X}", ev.affairPartnerID);
+                    jsonPayload["affairPartnerName"] = ActorSvc::GetName(ev.affairPartnerID);
 
-                        if (isDiscovery) {
-                            jsonPayload["type"] = Utils::AffairDiscoveryToString(discovery);
-                            std::string jsonStr = jsonPayload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-                            RE::Actor* senderActor = NPCIndex::GetSingleton().GetActorFromFormId(discovery == AffairDiscovery::Exposed ? ev.affairPartnerID : ev.cheaterID);
-                            RE::TESForm* senderForm = senderActor ? static_cast<RE::TESForm*>(senderActor) : nullptr;
-                            SKSE::ModCallbackEvent modEvent("maras_affair_exposed", jsonStr, 0.0f, senderForm);
-                            eventSource->SendEvent(&modEvent);
-                            MARAS_LOG_INFO("Sent maras_affair_exposed event (type: {}): {}", Utils::AffairDiscoveryToString(discovery), jsonStr);
-                            if (discovery == AffairDiscovery::Confessed || discovery == AffairDiscovery::Exposed) {
-                                SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(
-                                    ev.cheaterID, ev.victimID, ev.affairPartnerID, std::string(Utils::AffairDiscoveryToString(discovery)));
-                            }
-                        } else if (resolution != AffairResolution::None) {
-                            jsonPayload["resolution"] = statusOrResolution;
-                            std::string jsonStr = jsonPayload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-                            RE::Actor* senderActor = NPCIndex::GetSingleton().GetActorFromFormId(ev.cheaterID);
-                            RE::TESForm* senderForm = senderActor ? static_cast<RE::TESForm*>(senderActor) : nullptr;
-                            SKSE::ModCallbackEvent modEvent("maras_affair_resolved", jsonStr, 0.0f, senderForm);
-                            eventSource->SendEvent(&modEvent);
-                            MARAS_LOG_INFO("Sent maras_affair_resolved event: {}", jsonStr);
+                    if (isDiscovery) {
+                        jsonPayload["type"] = Utils::AffairDiscoveryToString(discovery);
+                        std::string jsonStr = jsonPayload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+                        RE::Actor* senderActor = NPCIndex::GetSingleton().GetActorFromFormId(discovery == AffairDiscovery::Exposed ? ev.affairPartnerID : ev.cheaterID);
+                        const RE::FormID senderID = senderActor ? senderActor->GetFormID() : 0;
+                        EmitModCallbackEvent("maras_affair_exposed", jsonStr, 0.0f, senderID);
+                        MARAS_LOG_INFO("Sent maras_affair_exposed event (type: {}): {}", Utils::AffairDiscoveryToString(discovery), jsonStr);
+                        if (discovery == AffairDiscovery::Confessed || discovery == AffairDiscovery::Exposed) {
                             SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(
-                                ev.cheaterID, ev.victimID, ev.affairPartnerID, statusOrResolution);
+                                ev.cheaterID, ev.victimID, ev.affairPartnerID, std::string(Utils::AffairDiscoveryToString(discovery)));
                         }
+                    } else if (resolution != AffairResolution::None) {
+                        jsonPayload["resolution"] = statusOrResolution;
+                        std::string jsonStr = jsonPayload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+                        RE::Actor* senderActor = NPCIndex::GetSingleton().GetActorFromFormId(ev.cheaterID);
+                        const RE::FormID senderID = senderActor ? senderActor->GetFormID() : 0;
+                        EmitModCallbackEvent("maras_affair_resolved", jsonStr, 0.0f, senderID);
+                        MARAS_LOG_INFO("Sent maras_affair_resolved event: {}", jsonStr);
+                        SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(
+                            ev.cheaterID, ev.victimID, ev.affairPartnerID, statusOrResolution);
                     }
-                } else {
-                    MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send affair event");
                 }
             }
         }
