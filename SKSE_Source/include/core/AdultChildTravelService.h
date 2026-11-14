@@ -9,6 +9,10 @@
 
 namespace MARAS {
 
+    namespace Projection {
+        class PerspectiveView;
+    }
+
     struct TravelDestination {
         RE::FormID markerRefID{ 0 };
         RE::FormID locationID{ 0 };
@@ -64,6 +68,7 @@ namespace MARAS {
         void Revert();
 
         // Data dump
+        nlohmann::json DumpJson(const Projection::PerspectiveView& view) const;
         nlohmann::json DumpJson() const;
 
     private:

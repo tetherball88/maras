@@ -8,6 +8,10 @@
 
 namespace MARAS {
 
+    namespace Projection {
+        class PerspectiveView;
+    }
+
     struct MatchmakingResult {
         std::string actorAName;
         std::string actorBName;
@@ -119,6 +123,7 @@ namespace MARAS {
 
         // Data dump
         [[nodiscard]] nlohmann::json DumpJson() const;
+        [[nodiscard]] nlohmann::json DumpJson(const Projection::PerspectiveView& view) const;
 
         float GetLastMatchmakingDay() const;
         void SetLastMatchmakingDay(float day);

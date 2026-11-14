@@ -57,6 +57,7 @@ namespace MARAS::Projection {
     struct PerceivedChildLineage {
         State::ChildId childId{};
         std::string name{};
+        std::int32_t timestamp{ 0 };
         State::ChildStage stage{ State::ChildStage::Child };
         std::uint8_t gender{ 2 };
         bool isAdopted{ true };
@@ -82,6 +83,7 @@ namespace MARAS::Projection {
         std::string trainingLocation{};
         std::int32_t trainingClassIndex{ -1 };
         float trainingStartGameDay{ 0.0f };
+        std::string savedBioTemplateName{};
 
         std::optional<PerceivedPaternitySecret> paternitySecret{};
 
@@ -152,6 +154,7 @@ namespace MARAS::Projection {
     struct PerceivedSiblingEntry {
         State::ChildId childId{};
         std::string name{};
+        std::int32_t timestamp{ 0 };
         State::ChildStage stage{ State::ChildStage::Child };
         std::uint8_t gender{ 2 };
         SiblingRelationKind relation{ SiblingRelationKind::Half };

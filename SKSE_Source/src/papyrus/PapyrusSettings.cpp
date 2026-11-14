@@ -11,7 +11,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     bool GetSettingBool(RE::StaticFunctionTag*, std::string key) {
-        std::lock_guard lock(GetPapyrusMutex());
         return Settings::GetSingleton().GetBoolByKey(key);
     }
 
@@ -21,7 +20,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     int32_t GetSettingInt(RE::StaticFunctionTag*, std::string key) {
-        std::lock_guard lock(GetPapyrusMutex());
         return Settings::GetSingleton().GetIntByKey(key);
     }
 
@@ -31,7 +29,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     float GetSettingFloat(RE::StaticFunctionTag*, std::string key) {
-        std::lock_guard lock(GetPapyrusMutex());
         return Settings::GetSingleton().GetFloatByKey(key);
     }
 

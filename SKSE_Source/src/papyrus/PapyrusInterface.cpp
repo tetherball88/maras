@@ -4,9 +4,13 @@
 #include "core/ChildrenFleeService.h"
 #include "core/IntimateThreadService.h"
 #include "core/LoggingService.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerHouseService.h"
 #include "core/SessionEpoch.h"
 #include "core/SkyrimNetIntegration.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
+#include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/ConfirmationModal.h"
 #include "ui/PrismaModalManager.h"
@@ -43,7 +47,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     void LogNPCStatistics(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         NPCRelationshipManager::GetSingleton().LogStatistics();
     }
 
@@ -52,7 +55,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("LogNPCDetails called with null NPC");
             return;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         NPCRelationshipManager::GetSingleton().LogNPCDetails(npc->GetFormID());
     }
 
@@ -313,7 +315,6 @@ namespace MARAS::PapyrusInterface {
         }
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
-        std::lock_guard lock(GetPapyrusMutex());
         auto& houseSvc = PlayerHouseService::GetSingleton();
         auto houses = houseSvc.GetAllPlayerHouses();
         if (houses.empty()) {
@@ -437,7 +438,6 @@ namespace MARAS::PapyrusInterface {
         }
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
-        std::lock_guard lock(GetPapyrusMutex());
         auto& relMgr = NPCRelationshipManager::GetSingleton();
         auto& houseSvc = PlayerHouseService::GetSingleton();
         auto spouses = relMgr.GetAllMarried();
@@ -565,7 +565,6 @@ namespace MARAS::PapyrusInterface {
         }
 
         const RE::FormID targetID = target->GetFormID();
-        std::lock_guard lock(GetPapyrusMutex());
         std::string targetName = ActorSvc::GetName(targetID);
         if (targetName.empty()) {
             targetName = fmt::format("NPC ({:08X})", targetID);
@@ -639,18 +638,23 @@ namespace MARAS::PapyrusInterface {
         }
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
-        std::lock_guard lock(GetPapyrusMutex());
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto playerView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, State::ActorId::Player(), &GetEngineWerewolfStateProvider());
+
         std::vector<RE::FormID> migratedChildIDs;
         std::vector<ModalChecklistItem> items;
 
-        for (const auto& [cID, cEntry] : relMgr.GetAllChildren()) {
+        for (const auto& perceived : playerView.GetVisibleChildren()) {
+            const RE::FormID cID = perceived.childId.raw();
             const bool isTempRef = ((cID >> 24) == 0xFF) && !IsSyntheticChildID(cID);
-            const bool involvesPlayer = (cEntry.guardianAID == kPlayerFormID ||
-                                         cEntry.guardianBID == kPlayerFormID ||
-                                         cEntry.bioMotherID == kPlayerFormID ||
-                                         cEntry.bioFatherID == kPlayerFormID);
-            if (!cEntry.isBiologicalChild && !isTempRef && !involvesPlayer) {
+            const bool involvesPlayer =
+                perceived.guardians.HasGuardian(State::ActorId::Player()) ||
+                perceived.bioMother.IsPlayer() ||
+                (!perceived.hideSecretFromViewer && perceived.perceivedBioFather.IsPlayer()) ||
+                (!perceived.hideSecretFromViewer && perceived.presumedFather.IsPlayer());
+            if (!perceived.isBiologicalChild && !isTempRef && !involvesPlayer) {
                 continue;
             }
 
@@ -658,44 +662,44 @@ namespace MARAS::PapyrusInterface {
 
             ModalChecklistItem item;
             item.id = fmt::format("child_{:08X}", cID);
-            item.label = !cEntry.name.empty() ? cEntry.name : ActorSvc::GetName(cID);
+            item.label = !perceived.name.empty() ? perceived.name : ResolveActorNameSafe(cID, *worldSnap, *spatialSnap);
             if (item.label.empty()) {
                 item.label = fmt::format("Child ({:08X})", cID);
             }
 
-            switch (cEntry.stage) {
-                case ChildStage::Unborn:
+            switch (perceived.stage) {
+                case State::ChildStage::Unborn:
                     item.badgeText = "Pregnancy";
                     item.badgeTone = "warning";
                     break;
-                case ChildStage::Infant:
+                case State::ChildStage::Infant:
                     item.badgeText = "Infant";
                     item.badgeTone = "accent";
                     break;
-                case ChildStage::Child:
-                    item.badgeText = cEntry.isAdopted ? "Adopted" : "Child";
-                    item.badgeTone = cEntry.isAdopted ? "accent" : "success";
+                case State::ChildStage::Child:
+                    item.badgeText = perceived.isAdopted ? "Adopted" : "Child";
+                    item.badgeTone = perceived.isAdopted ? "accent" : "success";
                     break;
-                case ChildStage::Training:
+                case State::ChildStage::Training:
                     item.badgeText = "Training";
                     item.badgeTone = "accent";
                     break;
-                case ChildStage::Adult:
+                case State::ChildStage::Adult:
                     item.badgeText = "Adult Child";
                     item.badgeTone = "neutral";
                     break;
             }
 
-            auto resolveActorName = [](RE::FormID id) -> std::string {
-                if (id == 0 || id == kUnknownFatherFormID) {
+            auto resolveActorName = [&](State::ActorId actorId) -> std::string {
+                if (actorId.IsNull() || actorId.raw() == kUnknownFatherFormID) {
                     return "";
                 }
-                return ActorSvc::GetName(id);
+                return ResolveActorNameSafe(actorId.raw(), *worldSnap, *spatialSnap);
             };
 
-            if (cEntry.isAdopted) {
-                std::string gAName = resolveActorName(cEntry.guardianAID);
-                std::string gBName = resolveActorName(cEntry.guardianBID);
+            if (perceived.isAdopted) {
+                std::string gAName = resolveActorName(perceived.guardians.slotA);
+                std::string gBName = resolveActorName(perceived.guardians.slotB);
                 if (!gAName.empty() && !gBName.empty()) {
                     item.subtitle = fmt::format("Adoptive Guardians: {} & {}", gAName, gBName);
                 } else if (!gAName.empty()) {
@@ -706,34 +710,10 @@ namespace MARAS::PapyrusInterface {
                     item.subtitle = "Adopted into Household";
                 }
             } else {
-                // Respect perspective-bound secret masking for the Player
-                bool canPlayerKnowSecret = true;
-                if (cEntry.paternitySecret.HasActiveSecret() && !cEntry.paternitySecret.discovered) {
-                    if (cEntry.bioMotherID == kPlayerFormID) {
-                        canPlayerKnowSecret = true;
-                    } else if (cEntry.bioFatherID == kPlayerFormID) {
-                        canPlayerKnowSecret = !cEntry.paternitySecret.isSecretForBioFather;
-                    } else if (cEntry.guardianAID == kPlayerFormID || cEntry.guardianBID == kPlayerFormID) {
-                        canPlayerKnowSecret = !cEntry.paternitySecret.isSecretForPartner;
-                    } else {
-                        canPlayerKnowSecret = false;
-                    }
-                }
-
-                std::string motherName = resolveActorName(cEntry.bioMotherID);
-                RE::FormID displayedFatherID = cEntry.bioFatherID;
-                if (!canPlayerKnowSecret) {
-                    if (cEntry.guardianAID != 0 && cEntry.guardianAID != cEntry.bioMotherID) {
-                        displayedFatherID = cEntry.guardianAID;
-                    } else if (cEntry.guardianBID != 0 && cEntry.guardianBID != cEntry.bioMotherID) {
-                        displayedFatherID = cEntry.guardianBID;
-                    } else {
-                        displayedFatherID = 0;
-                    }
-                }
-                std::string fatherName = resolveActorName(displayedFatherID);
-                if (fatherName.empty() && canPlayerKnowSecret && !cEntry.paternitySecret.bioFatherName.empty()) {
-                    fatherName = cEntry.paternitySecret.bioFatherName;
+                std::string motherName = resolveActorName(perceived.bioMother);
+                std::string fatherName = resolveActorName(perceived.perceivedBioFather);
+                if (fatherName.empty() && !perceived.perceivedBioFatherFallbackName.empty()) {
+                    fatherName = perceived.perceivedBioFatherFallbackName;
                 }
 
                 if (!motherName.empty() && !fatherName.empty()) {
@@ -891,12 +871,10 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::vector<RE::Actor*> FindBanterCoupleCandidates(RE::StaticFunctionTag*, float afScanRadius) {
-        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().FindBanterCoupleCandidates(afScanRadius);
     }
 
     bool IsBanterPartnerPresent(RE::StaticFunctionTag*, RE::Actor* akPartner, float afScanRadius) {
-        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().IsBanterPartnerPresent(akPartner, afScanRadius);
     }
 

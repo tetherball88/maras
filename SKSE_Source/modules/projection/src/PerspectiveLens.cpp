@@ -48,7 +48,7 @@ namespace MARAS::Projection {
                 .paramour = rec.paramour,
                 .incidentCount = rec.incidentCount,
                 .lastTimestamp = rec.lastTimestamp,
-                .isSecret = rec.isSecret,
+                .isSecret = IsSecretAffairRecord(rec),
                 .affairType = rec.affairType,
                 .affairStatus = rec.affairStatus,
                 .effectiveAffairStage = rec.deceivedPartner.IsPlayer()
@@ -230,18 +230,25 @@ namespace MARAS::Projection {
         if (!IsValidBiologicalParentId(actor)) {
             return false;
         }
-        if (const auto* childRec = world_->lineage->FindChild(State::ChildId{ actor.raw() });
-            childRec && childRec->hasBeastblood) {
-            return true;
+        if (mode_ == ViewerMode::DialogueTargetPublic) {
+            return false;
         }
-        if (werewolfProvider_ != nullptr) {
-            if (const auto provided = werewolfProvider_->IsAdultWerewolf(actor); provided.has_value()) {
-                return *provided;
+        if (const auto* childRec = world_->lineage->FindChild(State::ChildId{ actor.raw() })) {
+            if (childRec->hasBeastblood) {
+                return ProjectChildRecord(*childRec).hasBeastblood;
+            }
+            if (childRec->stage != State::ChildStage::Adult) {
+                return false;
             }
         }
         if (const State::RefId ref = actor.AsRefId(); !ref.IsNull()) {
             if (const auto* sample = spatial_->Find(ref); sample != nullptr) {
                 return sample->IsWerewolf();
+            }
+        }
+        if (werewolfProvider_ != nullptr) {
+            if (const auto provided = werewolfProvider_->IsAdultWerewolf(actor); provided.has_value()) {
+                return *provided;
             }
         }
         return false;
@@ -422,6 +429,7 @@ namespace MARAS::Projection {
         PerceivedChildLineage out{};
         out.childId = child.childId;
         out.name = child.name;
+        out.timestamp = child.timestamp;
         out.stage = child.stage;
         out.gender = child.gender;
         out.isAdopted = child.isAdopted;
@@ -434,6 +442,7 @@ namespace MARAS::Projection {
         out.trainingLocation = child.trainingLocation;
         out.trainingClassIndex = child.trainingClassIndex;
         out.trainingStartGameDay = child.trainingStartGameDay;
+        out.savedBioTemplateName = child.savedBioTemplateName;
         out.hideSecretFromViewer = ctx.hideSecretFromViewer;
         out.hasUndiscoveredPaternitySecret =
             (!ctx.isBioSameAsPresumed && !ctx.hideSecretFromViewer && ctx.rawHasUndiscoveredSecret);
@@ -490,7 +499,8 @@ namespace MARAS::Projection {
             out.hasBeastblood = child.hasBeastblood;
         } else if (child.hasBeastblood) {
             const bool visibleParentHasBeastblood =
-                IsActorKnownWerewolf(child.bioMother) || IsActorKnownWerewolf(out.perceivedBioFather);
+                (child.bioMother != child.childId.AsActorId() && IsActorKnownWerewolf(child.bioMother)) ||
+                (out.perceivedBioFather != child.childId.AsActorId() && IsActorKnownWerewolf(out.perceivedBioFather));
             out.hasBeastblood = !ctx.hideSecretFromViewer || visibleParentHasBeastblood;
         }
 
@@ -498,8 +508,16 @@ namespace MARAS::Projection {
         const bool hasIntrigueContext =
             (!ctx.effectivePresumedFather.IsNull() && !ctx.isBioSameAsPresumed) ||
             sec.isSecretForBioFather;
-        if (!ctx.hideSecretFromViewer && ctx.canViewerKnow && hasIntrigueContext &&
-            (sec.isSecret || sec.discovered || !child.presumedFather.IsNull())) {
+        const bool hasAnySecretHistoryOrContext =
+            hasIntrigueContext ||
+            sec.isSecret ||
+            sec.discovered ||
+            sec.discoveredByPartner ||
+            sec.discoveredByBioFather ||
+            sec.isPregnancySecretForPartner ||
+            sec.hasPhenotypeMismatch ||
+            !child.presumedFather.IsNull();
+        if (!ctx.hideSecretFromViewer && ctx.canViewerKnow && hasAnySecretHistoryOrContext) {
             PerceivedPaternitySecret pSec{};
             pSec.isSecret = !sec.discovered && (sec.isSecretForPartner || sec.isSecretForBioFather);
             pSec.isSecretForPartner = sec.isSecretForPartner;

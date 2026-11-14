@@ -11,9 +11,14 @@
 #include <vector>
 
 #include "core/RelationshipTypes.h"
+#include "maras/state/DomainTypes.h"
 #include "utils/Common.h"
 
 namespace MARAS {
+
+    namespace Projection {
+        class PerspectiveView;
+    }
 
     struct ChildRegistryEntry;
     class NPCRelationshipManager;
@@ -129,9 +134,11 @@ namespace MARAS {
         static bool DoesTrainingRequireBeastblood(std::int32_t classIndex) noexcept;
 
         // Parent affiliation discounts (10% Member / 25% Leader)
-        TrainingDiscountInfo EvaluateChildTrainingDiscount(const ChildRegistryEntry& entry,
-                                                           std::int32_t classIndex) const;
-        nlohmann::json BuildChildTrainingDiscountsJson(const ChildRegistryEntry& entry) const;
+        TrainingDiscountInfo EvaluateChildTrainingDiscount(State::ChildId childId,
+                                                           std::int32_t classIndex,
+                                                           const Projection::PerspectiveView& view) const;
+        nlohmann::json BuildChildTrainingDiscountsJson(State::ChildId childId,
+                                                       const Projection::PerspectiveView& view) const;
 
         // Player guild / Daedric covenant eligibility & Prisma UI metadata
         bool IsPlayerEligibleForTrainingClass(std::int32_t classIndex, std::string* outReason = nullptr);

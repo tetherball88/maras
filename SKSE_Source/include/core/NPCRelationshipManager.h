@@ -6,6 +6,10 @@
 
 namespace MARAS {
 
+    namespace Projection {
+        class PerspectiveView;
+    }
+
     // Unique key identifying a bidirectional relationship pair between two actors
     struct RelationshipPairKey {
         RE::FormID actorA;
@@ -681,6 +685,7 @@ namespace MARAS {
 
         // Data dump
         [[nodiscard]] nlohmann::json DumpJson() const;
+        [[nodiscard]] nlohmann::json DumpJson(const Projection::PerspectiveView& view) const;
 
         // Debug/logging
         void LogStatistics() const;

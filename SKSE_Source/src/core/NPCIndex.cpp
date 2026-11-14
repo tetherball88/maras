@@ -1,6 +1,7 @@
 #include "core/NPCIndex.h"
 
 #include "core/NPCIndexReportWriter.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "utils/ActorUtils.h"
 #include "utils/FormUtils.h"
 #include "utils/ProcessUtils.h"
@@ -858,52 +859,53 @@ namespace MARAS {
             return bestSubstringEntry;
         }
 
-        // 4. Live scan fallback across loaded process lists
-        RE::Actor* bestLiveMatch = nullptr;
+        // 4. Snapshot scan fallback across latest published 2 Hz SpatialActorSnapshot
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        RE::FormID bestLiveRefID = 0;
         int bestLiveDist = kMaxFuzzyDist + 1;
         const int searchLen = static_cast<int>(lowerSearch.length());
 
-        ProcessUtils::ForEachLoadedActor([&](RE::Actor* actor) {
-            if (!actor || actor->IsDeleted() || actor->IsDead()) return false;
-            auto displayName = actor->GetDisplayFullName();
-            if (!displayName || displayName[0] == '\0') return false;
+        if (spatialSnap) {
+            for (const auto& sample : spatialSnap->AllSamples()) {
+                if (sample.refId.IsNull() || sample.IsDeleted() || sample.IsDead()) continue;
+                const auto displayName = sample.DisplayNameView();
+                if (displayName.empty()) continue;
 
-            std::string lowerName = StringUtils::ToLowerStd(displayName);
+                std::string lowerName = StringUtils::ToLowerStd(displayName);
 
-            // Exact match early exit
-            if (lowerName == lowerSearch) {
-                bestLiveMatch = actor;
-                bestLiveDist = 0;
-                return true;
-            }
-
-            // Substring fast path
-            if (lowerName.find(lowerSearch) != std::string::npos) {
-                if (1 < bestLiveDist) {
-                    bestLiveDist = 1;
-                    bestLiveMatch = actor;
+                // Exact match early exit
+                if (lowerName == lowerSearch) {
+                    bestLiveRefID = sample.refId.raw();
+                    bestLiveDist = 0;
+                    break;
                 }
-                return false;
+
+                // Substring fast path
+                if (lowerName.find(lowerSearch) != std::string::npos) {
+                    if (1 < bestLiveDist) {
+                        bestLiveDist = 1;
+                        bestLiveRefID = sample.refId.raw();
+                    }
+                    continue;
+                }
+
+                // Length difference filter: skip Levenshtein if diff >= bestLiveDist
+                const int nameLen = static_cast<int>(lowerName.length());
+                const int lenDiff = std::abs(searchLen - nameLen);
+                if (lenDiff >= bestLiveDist) {
+                    continue;
+                }
+
+                const int dist = StringUtils::LevenshteinDistance(lowerSearch, lowerName);
+                if (dist < bestLiveDist) {
+                    bestLiveDist = dist;
+                    bestLiveRefID = sample.refId.raw();
+                }
             }
+        }
 
-            // Length difference filter: skip Levenshtein if diff >= bestLiveDist
-            const int nameLen = static_cast<int>(lowerName.length());
-            const int lenDiff = std::abs(searchLen - nameLen);
-            if (lenDiff >= bestLiveDist) {
-                return false;
-            }
-
-            int dist = StringUtils::LevenshteinDistance(lowerSearch, lowerName);
-            if (dist < bestLiveDist) {
-                bestLiveDist = dist;
-                bestLiveMatch = actor;
-            }
-
-            return false;
-        });
-
-        if (bestLiveMatch && bestLiveDist <= kMaxFuzzyDist) {
-            auto it = m_entriesByRef.find(bestLiveMatch->GetFormID());
+        if (bestLiveRefID != 0 && bestLiveDist <= kMaxFuzzyDist) {
+            auto it = m_entriesByRef.find(bestLiveRefID);
             if (it != m_entriesByRef.end() && PassesFilter(it->second, filter)) {
                 return &it->second;
             }
@@ -953,35 +955,56 @@ namespace MARAS {
 
     RE::Actor* NPCIndex::FindActorByNameNear(std::string_view searchTerm, RE::Actor* nearActor,
                                             bool allowSelf, NPCFilter filter) {
-        if (!nearActor || !nearActor->GetParentCell()) {
+        if (!nearActor) {
+            return FindActorByName(searchTerm, filter);
+        }
+
+        const RE::FormID nearRefId = nearActor->GetFormID();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const State::LoadedActorSample* nearSample =
+            (spatialSnap && nearRefId != 0) ? spatialSnap->Find(State::RefId{ nearRefId }) : nullptr;
+
+        if (!nearSample && !nearActor->GetParentCell()) {
             return FindActorByName(searchTerm, filter);
         }
 
         std::shared_lock lock(m_mutex);
-        if (searchTerm.empty()) return nullptr;
+        if (searchTerm.empty() || !spatialSnap) return nullptr;
 
         std::string lowerSearch = StringUtils::ToLowerStd(searchTerm);
         constexpr int kMaxDist = 3;
-        auto nearPos = nearActor->GetPosition();
+        float nearX = 0.0f;
+        float nearY = 0.0f;
+        float nearZ = 0.0f;
+        if (nearSample) {
+            nearX = nearSample->x;
+            nearY = nearSample->y;
+            nearZ = nearSample->z;
+        } else {
+            const auto nearPos = nearActor->GetPosition();
+            nearX = nearPos.x;
+            nearY = nearPos.y;
+            nearZ = nearPos.z;
+        }
 
         struct Candidate {
-            RE::Actor* actor;
+            RE::FormID refID;
             int nameScore;  // 0=exact, 1=substring, 2+=fuzzy
             float distSq;
         };
 
         std::vector<Candidate> candidates;
 
-        ProcessUtils::ForEachLoadedActor([&](RE::Actor* actor) {
-            if (!actor || actor->IsDeleted() || actor->IsDead()) return false;
-            if (!allowSelf && actor == nearActor) return false;
+        for (const auto& sample : spatialSnap->AllSamples()) {
+            if (sample.refId.IsNull() || sample.IsDeleted() || sample.IsDead()) continue;
+            if (!allowSelf && sample.refId.raw() == nearRefId) continue;
 
-            auto displayName = actor->GetDisplayFullName();
-            if (!displayName || displayName[0] == '\0') return false;
+            const auto displayName = sample.DisplayNameView();
+            if (displayName.empty()) continue;
 
             // Apply filter
-            if (filter == NPCFilter::AdultOnly && actor->IsChild()) return false;
-            if (filter == NPCFilter::ChildOnly && !actor->IsChild()) return false;
+            if (filter == NPCFilter::AdultOnly && sample.IsChild()) continue;
+            if (filter == NPCFilter::ChildOnly && !sample.IsChild()) continue;
 
             std::string lowerName = StringUtils::ToLowerStd(displayName);
             int nameScore = -1;
@@ -992,36 +1015,34 @@ namespace MARAS {
                        (lowerName.length() >= 4 && lowerSearch.find(lowerName) != std::string::npos)) {
                 nameScore = 1;
             } else {
-                int dist = StringUtils::LevenshteinDistance(lowerSearch, lowerName);
+                const int dist = StringUtils::LevenshteinDistance(lowerSearch, lowerName);
                 if (dist <= kMaxDist) {
                     nameScore = 2 + dist;
                 }
             }
 
             if (nameScore >= 0) {
-                auto pos = actor->GetPosition();
-                float dx = pos.x - nearPos.x;
-                float dy = pos.y - nearPos.y;
-                float dz = pos.z - nearPos.z;
-                candidates.push_back({ actor, nameScore, dx * dx + dy * dy + dz * dz });
-            }
-
-            return false;
-        });
-
-        if (candidates.empty()) return nullptr;
-
-        auto* best = &candidates[0];
-        for (size_t i = 1; i < candidates.size(); ++i) {
-            auto& c = candidates[i];
-            if (c.nameScore < best->nameScore ||
-                (c.nameScore == best->nameScore && c.distSq < best->distSq) ||
-                (c.nameScore == best->nameScore && c.distSq == best->distSq && c.actor->GetFormID() < best->actor->GetFormID())) {
-                best = &c;
+                const float dx = sample.x - nearX;
+                const float dy = sample.y - nearY;
+                const float dz = sample.z - nearZ;
+                candidates.push_back({ sample.refId.raw(), nameScore, dx * dx + dy * dy + dz * dz });
             }
         }
 
-        return best->actor;
+        if (candidates.empty()) return nullptr;
+
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+            if (a.nameScore != b.nameScore) return a.nameScore < b.nameScore;
+            if (a.distSq != b.distSq) return a.distSq < b.distSq;
+            return a.refID < b.refID;
+        });
+
+        for (const auto& c : candidates) {
+            if (auto* actor = GetActorFromFormIdLocked(c.refID)) {
+                return actor;
+            }
+        }
+        return nullptr;
     }
 
     std::optional<NPCEntry> NPCIndex::FindByFormID(RE::FormID formID) {
@@ -1151,17 +1172,18 @@ namespace MARAS {
                 }
             }
 
-            RE::Actor* found = nullptr;
-            ProcessUtils::ForEachLoadedActor([&](RE::Actor* a) {
-                if (!a || a->IsDeleted()) return false;
-                auto* base = a->GetActorBase();
-                if (base && base->GetFormID() == formID) {
-                    found = a;
-                    return true;
+            if (const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot()) {
+                for (const auto& sample : spatialSnap->AllSamples()) {
+                    if (sample.refId.IsNull() || sample.IsDeleted()) continue;
+                    if (sample.baseId.raw() == formID) {
+                        if (auto* refActor = RE::TESForm::LookupByID<RE::Actor>(sample.refId.raw())) {
+                            if (!refActor->IsDeleted()) {
+                                return refActor;
+                            }
+                        }
+                    }
                 }
-                return false;
-            });
-            if (found) return found;
+            }
         }
 
         return nullptr;

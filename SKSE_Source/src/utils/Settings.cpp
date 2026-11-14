@@ -392,6 +392,15 @@ namespace MARAS {
         SyncSimulateNoSkyrimNetGlobal(s.simulateNoSkyrimNet);
         LoggingService::GetSingleton().SetLogLevel(s.logLevel);
 
+        if (auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
+            const bool globalPolygamy = (g->value != 0.0f);
+            if (globalPolygamy != s.enablePlayerPolygamy) {
+                State::WorldStore::GetSingleton().Modify([globalPolygamy](State::WorldState& ws) {
+                    ws.settings.Write().enablePlayerPolygamy = globalPolygamy;
+                });
+            }
+        }
+
         MARAS_LOG_INFO(
             "Settings::ApplyPostLoadEngineSideEffects - loaded settings (logLevel={}, skipWedding={}, scanDone={}, custodyGender={}, custodyPlayer={}, custodyBio={}, globalBanCritter={}, globalBanPet={}, matchEnabled={}, matchInterval={}, matchOrientation={}, matchCheating={})",
             s.logLevel, s.skipWedding, s.initialRelationshipScanDone, static_cast<int>(s.childCustodyGenderPolicy),

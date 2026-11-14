@@ -23,6 +23,7 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/NPCTypeDeterminer.h"
 #include "core/PlayerHouseService.h"
+#include "maras/projection/PerspectiveView.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -991,39 +992,14 @@ namespace MARAS {
     }
 
     AdultChildProgression::TrainingDiscountInfo AdultChildProgression::EvaluateChildTrainingDiscount(
-        const ChildRegistryEntry& entry, std::int32_t classIndex) const {
+        State::ChildId childId, std::int32_t classIndex, const Projection::PerspectiveView& view) const {
         TrainingDiscountInfo result{};
         if (!IsValidTrainingClass(classIndex)) {
             return result;
         }
         const auto& spec = catalog_[static_cast<std::size_t>(classIndex)];
 
-        // Collect unique known parents/guardians (respecting undiscovered paternity secret masking)
-        std::vector<RE::FormID> parents;
-        parents.reserve(4);
-        auto addParent = [&](RE::FormID pid) {
-            if (pid == 0 || pid == kUnknownFatherFormID) {
-                return;
-            }
-            for (RE::FormID existing : parents) {
-                if (Utils::MatchesActor(existing, pid)) {
-                    return;
-                }
-            }
-            parents.push_back(pid);
-        };
-
-        addParent(entry.guardianAID);
-        addParent(entry.guardianBID);
-        addParent(entry.bioMotherID);
-        const bool maskPaternity = entry.paternitySecret.isSecretForPartner &&
-                                   !entry.paternitySecret.discovered &&
-                                   !entry.paternitySecret.discoveredByPartner;
-        const RE::FormID visibleFatherID = (maskPaternity && entry.presumedFatherID != 0)
-                                               ? entry.presumedFatherID
-                                               : entry.bioFatherID;
-        addParent(visibleFatherID);
-
+        const std::vector<State::ActorId> parents = view.GetVisibleParentIdsForTrainingDiscount(childId);
         if (parents.empty()) {
             return result;
         }
@@ -1064,7 +1040,8 @@ namespace MARAS {
             return false;
         };
 
-        auto isParentMember = [&](RE::FormID parentID) -> bool {
+        auto isParentMember = [&](State::ActorId parentActorId) -> bool {
+            const RE::FormID parentID = parentActorId.raw();
             for (const auto& facKey : spec.memberFactionKeys) {
                 if (auto* fac = ResolveFormFromKeyString<RE::TESFaction>(facKey, "training memberFaction")) {
                     if (GetActorFactionRank(parentID, fac) >= 0) {
@@ -1072,7 +1049,7 @@ namespace MARAS {
                     }
                 }
             }
-            if (spec.memberWerewolf && NPCRelationshipManager::IsActorWerewolf(parentID)) {
+            if (spec.memberWerewolf && view.IsActorKnownWerewolf(parentActorId)) {
                 return true;
             }
             if (Utils::MatchesActor(parentID, kPlayerFormID)) {
@@ -1091,19 +1068,19 @@ namespace MARAS {
         };
 
         // Check for 25% Leader discount first across all parents
-        for (RE::FormID parentID : parents) {
-            if (isParentLeader(parentID)) {
+        for (const State::ActorId parentActorId : parents) {
+            if (isParentLeader(parentActorId.raw())) {
                 result.discountPercent = 25;
-                result.reason = std::format("{} (Leader)", GetParentDisplayName(parentID));
+                result.reason = std::format("{} (Leader)", GetParentDisplayName(parentActorId.raw()));
                 return result;
             }
         }
 
         // Otherwise check for 10% Member discount across all parents
-        for (RE::FormID parentID : parents) {
-            if (isParentMember(parentID)) {
+        for (const State::ActorId parentActorId : parents) {
+            if (isParentMember(parentActorId)) {
                 result.discountPercent = 10;
-                result.reason = std::format("{} (Member)", GetParentDisplayName(parentID));
+                result.reason = std::format("{} (Member)", GetParentDisplayName(parentActorId.raw()));
                 return result;
             }
         }
@@ -1111,10 +1088,11 @@ namespace MARAS {
         return result;
     }
 
-    nlohmann::json AdultChildProgression::BuildChildTrainingDiscountsJson(const ChildRegistryEntry& entry) const {
+    nlohmann::json AdultChildProgression::BuildChildTrainingDiscountsJson(
+        State::ChildId childId, const Projection::PerspectiveView& view) const {
         nlohmann::json discounts = nlohmann::json::object();
         for (const auto& spec : catalog_) {
-            const auto info = EvaluateChildTrainingDiscount(entry, spec.index);
+            const auto info = EvaluateChildTrainingDiscount(childId, spec.index, view);
             if (info.discountPercent > 0) {
                 discounts[std::to_string(spec.index)] = {
                     {"percent", info.discountPercent},

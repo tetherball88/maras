@@ -1,7 +1,7 @@
 #pragma once
 
 #include "PCH.h"
-#include "core/NPCRelationshipManager.h"
+#include <cstdint>
 
 #include <atomic>
 #include <deque>
@@ -13,6 +13,7 @@
 
 namespace MARAS {
 
+    enum class ChildStage : uint8_t;
     struct ChildProfileContextData;
 
     /**

@@ -9,9 +9,12 @@
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PackageOverrideService.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/WorldStateLegacyAdapters.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
@@ -49,19 +52,6 @@ namespace MARAS {
             }
 
             return false;
-        }
-
-        bool IsActorAlive(RE::FormID actorID) {
-            if (actorID == 0 || IsSyntheticChildID(actorID)) return false;
-            if (actorID == kPlayerFormID) return true;
-            if (DeceasedRegistry::GetSingleton().IsDeceased(actorID)) return false;
-            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
-                return !actor->IsDead() && !actor->IsDisabled() && !actor->IsDeleted();
-            }
-            if (auto* actor = NPCIndex::GetSingleton().GetActorFromFormId(actorID)) {
-                return !actor->IsDead() && !actor->IsDisabled() && !actor->IsDeleted();
-            }
-            return true;
         }
 
         std::string GetFormDisplayName(const RE::TESForm* form) {
@@ -162,11 +152,16 @@ namespace MARAS {
         std::vector<TravelDestination> familyDests;
         std::unordered_set<RE::FormID> seenMarkers;
 
-        auto entryOpt = NPCRelationshipManager::GetSingleton().GetChildEntry(childID);
-        if (!entryOpt.has_value()) {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto childView = Projection::PerspectiveView::ForActor(
+            worldSnap, spatialSnap, State::ActorId{ childID }, &GetEngineWerewolfStateProvider());
+
+        const auto perceivedOpt = childView.GetPerceivedChild(State::ChildId{ childID });
+        if (!perceivedOpt.has_value() || perceivedOpt->stage == State::ChildStage::Unborn) {
             return familyDests;
         }
-        const auto& entry = *entryOpt;
+        const auto& perceived = *perceivedOpt;
 
         auto addDest = [&](RE::FormID markerID, RE::FormID locID, std::string label) {
             if (markerID == 0 || !HasPhysicalActor(markerID) || seenMarkers.contains(markerID)) {
@@ -187,74 +182,57 @@ namespace MARAS {
                 true});
         };
 
-        auto& houseSvc = PlayerHouseService::GetSingleton();
-        auto& relMgr = NPCRelationshipManager::GetSingleton();
+        const auto visitableParents = childView.GetVisitableFamilyParentIds(State::ChildId{ childID });
+        auto isSlotMarriedToPlayer = [&](State::ActorId slot) -> bool {
+            if (slot.IsNull() || slot.IsPlayer()) {
+                return false;
+            }
+            const auto pairOpt = childView.GetPerceivedPair(State::ActorId::Player(), slot);
+            return pairOpt.has_value() && pairOpt->status == State::RelationshipStatus::Married;
+        };
 
-        const bool canVisitBioFather = (entry.bioFatherID != 0 && entry.bioFatherID != kUnknownFatherFormID) &&
-                                       !entry.paternitySecret.isSecretForBioFather &&
-                                       !entry.paternitySecret.isSecretForPartner;
-
-        const bool isPresumedWithMother = (entry.presumedFatherID != 0) &&
-                                          (entry.HasGuardian(entry.presumedFatherID) ||
-                                           (entry.bioMotherID != 0 &&
-                                            NPCRelationshipManager::IsActivePartnerStatus(
-                                                relMgr.GetRelationshipStatus(entry.bioMotherID, entry.presumedFatherID))));
-
-        const bool canVisitPresumedFather = (entry.presumedFatherID != 0) &&
-                                            (entry.paternitySecret.isSecretForPartner || isPresumedWithMother);
-
-        const RE::FormID visitBioFatherID = canVisitBioFather ? entry.bioFatherID : 0;
-        const RE::FormID visitPresumedFatherID = canVisitPresumedFather ? entry.presumedFatherID : 0;
-
-        const bool isPlayerRelated = entry.HasGuardian(kPlayerFormID) ||
-                                     Utils::MatchesActor(entry.bioMotherID, kPlayerFormID) ||
-                                     (visitBioFatherID != 0 && Utils::MatchesActor(visitBioFatherID, kPlayerFormID)) ||
-                                     (visitPresumedFatherID != 0 && Utils::MatchesActor(visitPresumedFatherID, kPlayerFormID)) ||
-                                     (entry.guardianAID != 0 && relMgr.IsMarried(kPlayerFormID, entry.guardianAID)) ||
-                                     (entry.guardianBID != 0 && relMgr.IsMarried(kPlayerFormID, entry.guardianBID));
+        const bool isPlayerRelated =
+            std::find(visitableParents.begin(), visitableParents.end(), State::ActorId::Player()) != visitableParents.end() ||
+            perceived.guardians.HasGuardian(State::ActorId::Player()) ||
+            perceived.bioMother.IsPlayer() ||
+            perceived.perceivedBioFather.IsPlayer() ||
+            isSlotMarriedToPlayer(perceived.guardians.slotA) ||
+            isSlotMarriedToPlayer(perceived.guardians.slotB);
 
         if (isPlayerRelated) {
-            for (RE::FormID houseID : houseSvc.GetAllPlayerHouses()) {
-                RE::FormID markerID = houseSvc.GetHouseMarkerFormID(houseID);
-                if (markerID != 0) {
-                    std::string hName = PlayerHouseService::GetSingleton().GetHouseName(houseID);
-                    addDest(markerID, houseID, hName.empty() ? "Family Home" : hName);
+            for (const auto& houseRec : childView.Household().AllHouses()) {
+                if (!houseRec.markerId.IsNull()) {
+                    std::string hName = PlayerHouseService::GetHouseName(houseRec.houseId.raw());
+                    addDest(houseRec.markerId.raw(), houseRec.houseId.raw(), hName.empty() ? "Family Home" : std::move(hName));
                 }
             }
         }
 
-        const RE::FormID parents[] = {
-            entry.guardianAID,
-            entry.guardianBID,
-            entry.bioMotherID,
-            visitBioFatherID,
-            visitPresumedFatherID
-        };
+        for (const State::ActorId pActor : visitableParents) {
+            const RE::FormID pID = pActor.raw();
+            if (pActor.IsNull() || pActor.IsPlayer()) {
+                continue;
+            }
 
-        for (RE::FormID pID : parents) {
-            if (pID == 0 || pID == kPlayerFormID || !IsActorAlive(pID)) continue;
-
-            RE::FormID pHouseID = houseSvc.GetTenantHouseFormID(pID);
-            if (pHouseID != 0) {
-                RE::FormID hMarker = houseSvc.GetHouseMarkerFormID(pHouseID);
-                if (hMarker != 0) {
-                    std::string hName = PlayerHouseService::GetHouseName(pHouseID);
-                    addDest(hMarker, pHouseID, hName.empty() ? "Parents' Home" : hName);
+            const State::HouseId pHouseId = childView.Household().GetTenantHouse(pID);
+            if (!pHouseId.IsNull()) {
+                if (const auto* houseRec = childView.Household().FindHouse(pHouseId); houseRec && !houseRec->markerId.IsNull()) {
+                    std::string hName = PlayerHouseService::GetHouseName(pHouseId.raw());
+                    addDest(houseRec->markerId.raw(), pHouseId.raw(), hName.empty() ? "Parents' Home" : std::move(hName));
                     continue;
                 }
             }
 
-            if (auto* pActor = RE::TESForm::LookupByID<RE::Actor>(pID)) {
-                RE::FormID origMarker = HomeCellService::GetSingleton().GetNpcOriginalHouseCenterMarker(pActor);
+            std::string pName = ResolveActorNameSafe(pID, *worldSnap, *spatialSnap);
+            if (auto* pActorRef = RE::TESForm::LookupByID<RE::Actor>(pID)) {
+                const RE::FormID origMarker = HomeCellService::GetSingleton().GetNpcOriginalHouseCenterMarker(pActorRef);
                 if (origMarker != 0) {
-                    std::string pName = ActorSvc::GetName(pID);
-                    addDest(origMarker, 0, pName.empty() ? "Parents' Home" : pName);
+                    addDest(origMarker, 0, pName.empty() ? "Parents' Home" : std::move(pName));
                     continue;
                 }
             }
 
-            std::string pName = ActorSvc::GetName(pID);
-            addDest(pID, 0, pName.empty() ? "Parents" : pName);
+            addDest(pID, 0, pName.empty() ? "Parents" : std::move(pName));
         }
 
         return familyDests;
@@ -472,10 +450,11 @@ namespace MARAS {
     }
 
     void AdultChildTravelService::ReassertAllOnLoad() {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
         std::vector<RE::FormID> adultChildIDs;
-        for (const auto& [cID, entry] : NPCRelationshipManager::GetSingleton().GetAllChildren()) {
-            if (!IsSyntheticChildID(cID) && entry.stage == ChildStage::Adult) {
-                adultChildIDs.push_back(cID);
+        for (const auto& [cKey, rec] : worldSnap->lineage->AllChildren()) {
+            if (!cKey.IsSynthetic() && rec.stage == State::ChildStage::Adult) {
+                adultChildIDs.push_back(cKey.raw());
             }
         }
 
@@ -509,26 +488,121 @@ namespace MARAS {
         MARAS_LOG_INFO("AdultChildTravelService: reverted runtime travel states");
     }
 
-    nlohmann::json AdultChildTravelService::DumpJson() const {
+    nlohmann::json AdultChildTravelService::DumpJson(const Projection::PerspectiveView& view) const {
         std::size_t indexedInnCount = 0;
         {
             std::shared_lock lock(m_mutex);
             indexedInnCount = m_innDestinations.size();
         }
 
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto& activeTravel = snap->household->AllAdultChildTravel();
+        const auto& activeTravel = view.Household().AllAdultChildTravel();
 
         nlohmann::json j = nlohmann::json::object();
         j["indexedInnCount"] = indexedInnCount;
 
+        auto isFamilyDestinationVisible = [&](State::ChildId childKey, const AdultChildTravelState& state) -> bool {
+            if (!state.isFamilyVisit || view.CanViewerKnowTrueBioFather(childKey)) {
+                return true;
+            }
+            const auto perceivedOpt = view.GetPerceivedChild(childKey);
+            if (!perceivedOpt.has_value()) {
+                return false;
+            }
+            const auto& perceived = *perceivedOpt;
+            const auto visitableParents = view.GetVisitableFamilyParentIds(childKey);
+
+            auto isSlotMarriedToPlayer = [&](State::ActorId slot) -> bool {
+                if (slot.IsNull() || slot.IsPlayer()) {
+                    return false;
+                }
+                const auto pairOpt = view.GetPerceivedPair(State::ActorId::Player(), slot);
+                return pairOpt.has_value() && pairOpt->status == State::RelationshipStatus::Married;
+            };
+
+            const bool isPlayerRelated =
+                std::find(visitableParents.begin(), visitableParents.end(), State::ActorId::Player()) != visitableParents.end() ||
+                perceived.guardians.HasGuardian(State::ActorId::Player()) ||
+                perceived.bioMother.IsPlayer() ||
+                perceived.perceivedBioFather.IsPlayer() ||
+                isSlotMarriedToPlayer(perceived.guardians.slotA) ||
+                isSlotMarriedToPlayer(perceived.guardians.slotB);
+
+            if (isPlayerRelated) {
+                for (const auto& houseRec : view.Household().AllHouses()) {
+                    if ((state.targetMarkerID != 0 && houseRec.markerId.raw() == state.targetMarkerID) ||
+                        (state.targetLocationID != 0 && houseRec.houseId.raw() == state.targetLocationID)) {
+                        return true;
+                    }
+                }
+            }
+
+            std::vector<State::ActorId> visibleParents = visitableParents;
+            auto appendVisible = [&](State::ActorId pid) {
+                if (pid.IsNull() || pid.IsPlayer()) {
+                    return;
+                }
+                if (std::find(visibleParents.begin(), visibleParents.end(), pid) == visibleParents.end()) {
+                    visibleParents.push_back(pid);
+                }
+            };
+            appendVisible(perceived.guardians.slotA);
+            appendVisible(perceived.guardians.slotB);
+            appendVisible(perceived.bioMother);
+            appendVisible(perceived.perceivedBioFather);
+            if (!perceived.hideSecretFromViewer) {
+                appendVisible(perceived.presumedFather);
+            }
+
+            for (const State::ActorId pId : visibleParents) {
+                if (pId.IsNull() || pId.IsPlayer()) {
+                    continue;
+                }
+                if (state.targetMarkerID == pId.raw()) {
+                    return true;
+                }
+                const State::HouseId tenantHouseId = view.Household().GetTenantHouse(pId.raw());
+                if (!tenantHouseId.IsNull()) {
+                    if (state.targetLocationID == tenantHouseId.raw()) {
+                        return true;
+                    }
+                    if (const auto* houseRec = view.Household().FindHouse(tenantHouseId);
+                        houseRec && !houseRec->markerId.IsNull() && houseRec->markerId.raw() == state.targetMarkerID) {
+                        return true;
+                    }
+                }
+                if (auto* pActor = RE::TESForm::LookupByID<RE::Actor>(pId.raw())) {
+                    const RE::FormID origMarker = HomeCellService::GetSingleton().GetNpcOriginalHouseCenterMarker(pActor);
+                    if (origMarker != 0 && origMarker == state.targetMarkerID) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
         nlohmann::json activeArray = nlohmann::json::array();
         for (const auto& [childKey, rec] : activeTravel) {
+            if (!view.IsChildVisible(childKey)) {
+                continue;
+            }
             const RE::FormID childID = childKey.raw();
-            const AdultChildTravelState state = LegacyAdapters::ToLegacyAdultChildTravelState(rec);
+            AdultChildTravelState state = LegacyAdapters::ToLegacyAdultChildTravelState(rec);
+            if (!isFamilyDestinationVisible(childKey, state)) {
+                state.targetMarkerID = 0;
+                state.targetLocationID = 0;
+                state.targetCellID = 0;
+                state.destinationName = "Traveling";
+                state.isFamilyVisit = false;
+            }
+
+            const auto perceivedOpt = view.GetPerceivedChild(childKey);
+            std::string childName = (perceivedOpt && !perceivedOpt->name.empty())
+                                        ? perceivedOpt->name
+                                        : ActorSvc::GetName(childID);
+
             nlohmann::json entry = nlohmann::json::object();
             entry["childFormId"] = std::format("{:08X}", childID);
-            entry["childName"] = ActorSvc::GetName(childID);
+            entry["childName"] = std::move(childName);
             entry["targetMarkerFormId"] = std::format("{:08X}", state.targetMarkerID);
             entry["targetLocationFormId"] = std::format("{:08X}", state.targetLocationID);
             entry["targetCellFormId"] = std::format("{:08X}", state.targetCellID);
@@ -541,6 +615,14 @@ namespace MARAS {
         }
         j["activeDestinations"] = std::move(activeArray);
         return j;
+    }
+
+    nlohmann::json AdultChildTravelService::DumpJson() const {
+        const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
+        const auto view = Projection::PerspectiveView::ForDashboard(
+            worldSnap, spatialSnap, &GetEngineWerewolfStateProvider());
+        return DumpJson(view);
     }
 
 }  // namespace MARAS

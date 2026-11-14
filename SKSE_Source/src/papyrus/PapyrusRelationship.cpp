@@ -184,7 +184,6 @@ namespace MARAS::PapyrusInterface {
             return -1;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
         auto lower = StringUtils::ToLowerStd(type);
 
@@ -206,7 +205,6 @@ namespace MARAS::PapyrusInterface {
             return "Unknown";
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
         auto lower = StringUtils::ToLowerStd(type);
 
@@ -259,7 +257,6 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto lower = StringUtils::ToLowerStd(statusType);
         auto& manager = NPCRelationshipManager::GetSingleton();
 
@@ -288,7 +285,6 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
 
         if (statusEnum == -1) {
@@ -319,7 +315,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("IsNPCStatusWith: null actor provided");
             return false;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         auto status = Utils::StringToRelationshipStatus(statusType);
         return NPCRelationshipManager::GetSingleton().GetRelationshipStatus(npc->GetFormID(), target->GetFormID()) == status;
     }
@@ -333,19 +328,16 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("IsNPCStatusWithByEnum: invalid status enum {}", statusEnum);
             return false;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().GetRelationshipStatus(npc->GetFormID(), target->GetFormID()) == static_cast<RelationshipStatus>(statusEnum);
     }
 
     std::int32_t GetOriginalRelationshipStatus(RE::StaticFunctionTag*, RE::Actor* npc1, RE::Actor* npc2) {
         if (!npc1 || !npc2) return static_cast<std::int32_t>(RelationshipStatus::Unknown);
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(NPCRelationshipManager::GetSingleton().GetOriginalRelationshipStatus(npc1->GetFormID(), npc2->GetFormID()));
     }
 
     std::string GetOriginalRelationshipStatusString(RE::StaticFunctionTag*, RE::Actor* npc1, RE::Actor* npc2) {
         if (!npc1 || !npc2) return "unknown";
-        std::lock_guard lock(GetPapyrusMutex());
         auto st = NPCRelationshipManager::GetSingleton().GetOriginalRelationshipStatus(npc1->GetFormID(), npc2->GetFormID());
         return std::string(Utils::RelationshipStatusToString(st));
     }
@@ -355,7 +347,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetNpcStatusName: null actor provided");
             return "Unknown";
         }
-        std::lock_guard lock(GetPapyrusMutex());
         auto status = NPCRelationshipManager::GetSingleton().GetRelationshipStatus(npc->GetFormID());
         return std::string(Utils::RelationshipStatusToString(status));
     }
@@ -365,7 +356,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetNpcStatusNameWith: null actor provided");
             return "Unknown";
         }
-        std::lock_guard lock(GetPapyrusMutex());
         auto status = NPCRelationshipManager::GetSingleton().GetRelationshipStatus(npc->GetFormID(), target->GetFormID());
         return std::string(Utils::RelationshipStatusToString(status));
     }
@@ -376,7 +366,6 @@ namespace MARAS::PapyrusInterface {
             return -1;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
         if (!manager.IsRegistered(npc->GetFormID())) {
             return -1;
@@ -391,7 +380,6 @@ namespace MARAS::PapyrusInterface {
             return -1;
         }
 
-        std::lock_guard lock(GetPapyrusMutex());
         auto status = NPCRelationshipManager::GetSingleton().GetRelationshipStatus(npc->GetFormID(), target->GetFormID());
         if (status == RelationshipStatus::Unknown) {
             return -1;
@@ -528,7 +516,6 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     std::vector<RE::Actor*> GetNPCsByStatus(RE::StaticFunctionTag*, std::string statusType) {
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
         auto lower = StringUtils::ToLowerStd(statusType);
 
@@ -552,7 +539,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::vector<RE::Actor*> GetNPCsByStatusEnum(RE::StaticFunctionTag*, std::int32_t statusEnum) {
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
 
         if (statusEnum == -1) {
@@ -580,14 +566,12 @@ namespace MARAS::PapyrusInterface {
 
     std::vector<RE::Actor*> GetNPCsByStatusWith(RE::StaticFunctionTag*, RE::Actor* target, std::string statusType) {
         if (!target) return {};
-        std::lock_guard lock(GetPapyrusMutex());
         auto status = Utils::StringToRelationshipStatus(statusType);
         return ConvertFormIDsToActors(NPCRelationshipManager::GetSingleton().GetPartners(target->GetFormID(), status));
     }
 
     std::vector<RE::Actor*> GetRelationshipPartners(RE::StaticFunctionTag*, RE::Actor* npc, std::string statusType) {
         if (!npc) return {};
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
         auto lower = StringUtils::ToLowerStd(statusType);
         if (lower == "all") {
@@ -616,7 +600,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     int GetStatusCount(RE::StaticFunctionTag*, std::string statusType) {
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
         auto lower = StringUtils::ToLowerStd(statusType);
 
@@ -640,7 +623,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     int GetStatusCountByEnum(RE::StaticFunctionTag*, std::int32_t statusEnum) {
-        std::lock_guard lock(GetPapyrusMutex());
         auto& manager = NPCRelationshipManager::GetSingleton();
 
         if (statusEnum == -1) {
@@ -669,7 +651,6 @@ namespace MARAS::PapyrusInterface {
     int GetStatusHistoryCount(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* target) {
         if (!npc) return 0;
         RE::FormID targetID = target ? target->GetFormID() : kPlayerFormID;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<int>(NPCRelationshipManager::GetSingleton().GetStatusHistoryCount(npc->GetFormID(), targetID));
     }
 
@@ -677,12 +658,9 @@ namespace MARAS::PapyrusInterface {
         if (!npc || index < 0) return std::string();
         RE::FormID targetID = target ? target->GetFormID() : kPlayerFormID;
 
-        std::optional<StatusChangeRecord> optEntry;
-        {
-            std::lock_guard lock(GetPapyrusMutex());
-            optEntry = NPCRelationshipManager::GetSingleton().GetStatusHistoryEntry(
+        const std::optional<StatusChangeRecord> optEntry =
+            NPCRelationshipManager::GetSingleton().GetStatusHistoryEntry(
                 npc->GetFormID(), targetID, static_cast<std::size_t>(index));
-        }
 
         if (!optEntry.has_value()) {
             return std::string();
@@ -702,13 +680,11 @@ namespace MARAS::PapyrusInterface {
 
     bool IsNPCInOpenRelationship(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsNPCInOpenRelationship(npc->GetFormID());
     }
 
     bool GetPairIsOpen(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB) {
         if (!actorA || !actorB) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().GetPairIsOpen(actorA->GetFormID(), actorB->GetFormID());
     }
 
@@ -720,19 +696,16 @@ namespace MARAS::PapyrusInterface {
 
     bool IsAvailableForStatus(RE::StaticFunctionTag*, RE::Actor* npc, std::string status) {
         if (!npc) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsAvailableForStatus(npc->GetFormID(), status);
     }
 
     bool IsAvailableForStatusWith(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* target, std::string status) {
         if (!npc) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsAvailableForStatus(npc->GetFormID(), target ? target->GetFormID() : 0, status);
     }
 
     bool CanFormRelationship(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB, std::string status) {
         if (!actorA || !actorB) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().CanFormRelationship(actorA->GetFormID(), actorB->GetFormID(), status);
     }
 
@@ -776,7 +749,6 @@ namespace MARAS::PapyrusInterface {
         if (!cheater || !victim || !affairPartner) {
             return static_cast<std::int32_t>(AffairStatus::Ongoing);
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(NPCRelationshipManager::GetSingleton().GetCheatingAffairStatus(
             cheater->GetFormID(), victim->GetFormID(), affairPartner->GetFormID()));
     }
@@ -786,7 +758,6 @@ namespace MARAS::PapyrusInterface {
             return static_cast<std::int32_t>(AffairStage::Physical);
         }
         RE::FormID partnerID = affairPartner ? affairPartner->GetFormID() : 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(NPCRelationshipManager::GetSingleton().GetCheatingAffairStage(
             cheater->GetFormID(), victim->GetFormID(), partnerID));
     }
@@ -808,7 +779,6 @@ namespace MARAS::PapyrusInterface {
 
     std::string GetPartnerPendingIntent(RE::StaticFunctionTag*, RE::Actor* partner) {
         if (!partner) { MARAS_LOG_WARN("Papyrus GetPartnerPendingIntent called with null partner"); return "none"; }
-        std::lock_guard lock(GetPapyrusMutex());
         auto intent = NPCRelationshipManager::GetSingleton().GetPartnerPendingIntent(partner->GetFormID());
         std::string res(Utils::PartnerIntentTypeToString(intent.type));
         MARAS_LOG_DEBUG("Papyrus GetPartnerPendingIntent({:08X} '{}') -> '{}'", partner->GetFormID(), partner->GetDisplayFullName(), res);
@@ -830,32 +800,27 @@ namespace MARAS::PapyrusInterface {
 
     bool HasCheatedOn(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim) {
         if (!cheater || !victim) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().HasCheatedOn(cheater->GetFormID(), victim->GetFormID());
     }
 
     bool IsNPCCheating(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsNPCCheating(npc->GetFormID());
     }
 
     bool IsRelationshipCheating(RE::StaticFunctionTag*, RE::Actor* actorA, RE::Actor* actorB) {
         if (!actorA || !actorB) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return NPCRelationshipManager::GetSingleton().IsRelationshipCheating(actorA->GetFormID(), actorB->GetFormID());
     }
 
     std::int32_t GetCheatingCount(RE::StaticFunctionTag*, RE::Actor* cheater, RE::Actor* victim) {
         if (!cheater || !victim) return 0;
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(NPCRelationshipManager::GetSingleton().GetCheatingCount(cheater->GetFormID(), victim->GetFormID()));
     }
 
     std::vector<RE::Actor*> GetCheatedOnPartners(RE::StaticFunctionTag*, RE::Actor* cheater) {
         std::vector<RE::Actor*> result;
         if (!cheater) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = NPCRelationshipManager::GetSingleton().GetCheatedOnPartners(cheater->GetFormID());
         for (auto id : ids) {
             if (auto* a = NPCIndex::GetSingleton().GetActorFromFormId(id)) {
@@ -868,7 +833,6 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::Actor*> GetCheatersWhoCheatedOn(RE::StaticFunctionTag*, RE::Actor* victim) {
         std::vector<RE::Actor*> result;
         if (!victim) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto ids = NPCRelationshipManager::GetSingleton().GetCheatersWhoCheatedOn(victim->GetFormID());
         for (auto id : ids) {
             if (auto* a = NPCIndex::GetSingleton().GetActorFromFormId(id)) {
@@ -896,7 +860,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetHierarchyRank called with null actor");
             return 4;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseHierarchyManager::GetSingleton().GetRank(npc->GetFormID());
     }
 
@@ -907,7 +870,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("CalculateMarriageSuccessChance called with null NPC");
             return 0.0f;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return MarriageDifficulty::CalculateMarriageSuccessChance(npc, intimacyAdjustment, mostGold, housesOwned,
                                                                   horsesOwned, questsCompleted, dungeonsCleared,
                                                                   dragonSoulsCollected, playerKiller);
@@ -918,17 +880,14 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetSpouseMultiplier called with null actor");
             return 0.0f;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseBuffService::GetSpouseMultiplier(spouse);
     }
 
     std::vector<float> GetFollowersMultipliers(RE::StaticFunctionTag*, std::vector<RE::Actor*> followers) {
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseBuffService::GetFollowersMultipliers(followers);
     }
 
     std::vector<float> GetPermanentMultipliers(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseBuffService::GetPermanentMultipliers();
     }
 
@@ -985,7 +944,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetAffection: null actor provided");
             return 0.0f;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::AffectionService::GetSingleton().GetDailyAffection(npc->GetFormID(), type);
     }
 
@@ -994,7 +952,6 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetPermanentAffection: null actor provided");
             return 0;
         }
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::AffectionService::GetSingleton().GetPermanentAffection(npc->GetFormID());
     }
 
@@ -1023,7 +980,6 @@ namespace MARAS::PapyrusInterface {
     }
 
     float GetAffectionDecayMultiplier(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::AffectionService::GetSingleton().GetDecayMultiplier();
     }
 
@@ -1033,38 +989,32 @@ namespace MARAS::PapyrusInterface {
 
     bool IsWidow(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().IsWidowOrWidower(actor->GetFormID());
     }
 
     bool IsNPCDeceased(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().IsDeceased(actor->GetFormID());
     }
 
     bool WasMarriedTo(RE::StaticFunctionTag*, RE::Actor* deceased, RE::Actor* partner) {
         if (!deceased || !partner) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().WasMarriedTo(deceased->GetFormID(), partner->GetFormID());
     }
 
     bool WasEngagedTo(RE::StaticFunctionTag*, RE::Actor* deceased, RE::Actor* partner) {
         if (!deceased || !partner) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().WasEngagedTo(deceased->GetFormID(), partner->GetFormID());
     }
 
     bool WasExOf(RE::StaticFunctionTag*, RE::Actor* deceased, RE::Actor* partner) {
         if (!deceased || !partner) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().WasExOf(deceased->GetFormID(), partner->GetFormID());
     }
 
     std::vector<std::string> GetDeceasedSpouseNames(RE::StaticFunctionTag*, RE::Actor* actor) {
         std::vector<std::string> result;
         if (!actor) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto records = DeceasedRegistry::GetSingleton().GetDeceasedSpousesOf(actor->GetFormID());
         for (const auto& rec : records) {
             result.push_back(rec.name);
@@ -1075,7 +1025,6 @@ namespace MARAS::PapyrusInterface {
     std::vector<std::string> GetDeceasedChildrenNames(RE::StaticFunctionTag*, RE::Actor* actor) {
         std::vector<std::string> result;
         if (!actor) return result;
-        std::lock_guard lock(GetPapyrusMutex());
         auto records = DeceasedRegistry::GetSingleton().GetDeceasedChildrenOf(actor->GetFormID());
         for (const auto& rec : records) {
             result.push_back(rec.name);
@@ -1085,12 +1034,10 @@ namespace MARAS::PapyrusInterface {
 
     bool HasDeceasedChildren(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return false;
-        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().HasDeceasedChildren(actor->GetFormID());
     }
 
     std::int32_t GetDeceasedCount(RE::StaticFunctionTag*) {
-        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(DeceasedRegistry::GetSingleton().GetDeceasedCount());
     }
 

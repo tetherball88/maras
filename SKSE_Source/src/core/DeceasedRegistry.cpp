@@ -1,8 +1,11 @@
 #include "core/DeceasedRegistry.h"
 #include "core/AdultChildProgression.h"
 #include "core/NPCIndex.h"
+#include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerChildrenService.h"
 #include "core/WorldStateLegacyAdapters.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
@@ -494,10 +497,9 @@ namespace MARAS {
         MARAS_LOG_INFO("DeceasedRegistry reverted to clean state");
     }
 
-    nlohmann::json DeceasedRegistry::DumpJson() const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+    nlohmann::json DeceasedRegistry::DumpJson(const Projection::PerspectiveView& view) const {
         nlohmann::json j = nlohmann::json::array();
-        for (const auto& [key, stateRec] : snap->deceased->AllRecords()) {
+        for (const auto& [key, stateRec] : view.Deceased().AllRecords()) {
             const DeceasedNPCRecord rec = LegacyAdapters::ToLegacyDeceasedRecord(stateRec);
             nlohmann::json r;
             r["baseFormId"] = std::format("{:08X}", rec.baseFormID);
@@ -543,6 +545,16 @@ namespace MARAS {
             }
             if (rec.childInfo.has_value()) {
                 const auto& ci = rec.childInfo.value();
+                RE::FormID visibleBioFatherBaseId = ci.bioFatherBaseID;
+                if (!view.IsOmniscient()) {
+                    const RE::FormID lookupId = rec.refFormID != 0 ? rec.refFormID : rec.baseFormID;
+                    if (const auto perceivedChild = view.GetPerceivedChild(State::ChildId{ lookupId })) {
+                        const RE::FormID perceivedFatherRaw = perceivedChild->perceivedBioFather.raw();
+                        visibleBioFatherBaseId = (perceivedFatherRaw != 0 && perceivedFatherRaw != kUnknownFatherFormID)
+                            ? ResolveBaseFormIDSafe(perceivedFatherRaw, view.Spatial())
+                            : 0;
+                    }
+                }
                 nlohmann::json cInfo;
                 cInfo["guardianA"] = {
                     {"baseFormId", std::format("{:08X}", ci.guardianABaseID)},
@@ -555,7 +567,7 @@ namespace MARAS {
                     {"name", ci.guardianBName}
                 };
                 cInfo["bioMotherBaseId"] = std::format("{:08X}", ci.bioMotherBaseID);
-                cInfo["bioFatherBaseId"] = std::format("{:08X}", ci.bioFatherBaseID);
+                cInfo["bioFatherBaseId"] = std::format("{:08X}", visibleBioFatherBaseId);
                 cInfo["isAdopted"] = ci.isAdopted;
                 cInfo["houseFormId"] = ci.houseFormID != 0 ? std::format("{:08X}", ci.houseFormID) : "";
                 r["childInfo"] = cInfo;
@@ -564,6 +576,13 @@ namespace MARAS {
             j.push_back(r);
         }
         return j;
+    }
+
+    nlohmann::json DeceasedRegistry::DumpJson() const {
+        return DumpJson(Projection::PerspectiveView::ForDashboard(
+            State::WorldStore::GetSingleton().Snapshot(),
+            State::SpatialSnapshotStore::GetSingleton().Snapshot(),
+            &GetEngineWerewolfStateProvider()));
     }
 
 }  // namespace MARAS

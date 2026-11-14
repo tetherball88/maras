@@ -51,18 +51,21 @@ Located in `SKSE_Source/include/core/SkyrimNetIntegration.h` and `src/core/Skyri
     2. **Deceived Partner / Child Audience (`exactAudience = true`)**: Receives a secret-masked text/JSON (e.g., via `MARAS.BuildChildBirthMessage(..., maskSecrets = true)` / `MARAS.BuildChildBirthJson(..., maskSecrets = true)`) presenting the deceived partner as the biological father, with `targetActor = None` and `audience = [presumedFather]` (or `[presumedFather, child]`) so neither the privy mother nor nearby bystanders receive the masked event.
 
 ### 2.2 Registered C++ Prompt Decorators (`SkyrimNetIntegration.cpp`)
-Registered at `kDataLoaded` and invoked automatically by SkyrimNet's prompt engine when constructing NPC context:
+Registered at `kDataLoaded` and invoked automatically by SkyrimNet's prompt engine when constructing NPC context. All decorator callbacks execute lock-free against `WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`, and `PerspectiveView`:
 
 | Decorator Name | Arguments | Returned JSON / Context |
 | :--- | :--- | :--- |
-| `maras_is_enabled` | *(none)* | Boolean indicating whether M.A.R.A.S is active. |
-| `maras_get_actor_summary` | `actor` | Archetype (`socialClass`, `skillType`, `temperament`), player relationship status, affection tier, hierarchy rank, and housing state. |
-| `maras_get_all_relationships` | `actor` | Array of all active and historical relationships (player and NPC-to-NPC), including status, partner name, cheating/open-relationship flags, and history. |
-| `maras_get_affair_secrets` | `actor` | Secret infidelity details: whether `actor` is cheating, caught cheating, victim of an affair, or third-party paramour, plus who knows. |
-| `maras_get_children_info` | `actor` | Biological and guardian children of `actor`, co-parent/co-guardian names, adoption status, and any active `ChildPaternitySecret` state (`Suspected`, `Known`, `Resolved`, or `Hidden` secret held by the mother/paramour). |
-| `maras_get_household_context` | `actor` | Co-spouses sharing the same home, spouse hierarchy ranks (`Lead Spouse`, etc.), and household tension/harmony context. |
-| `maras_get_marriage_difficulty` | `actor` | Whether the actor's marriage/romance requirements (gold, houses, quests, relationship rank) are met by the player. |
-| `maras_get_deceased_partners` | `actor` | List of deceased current/former partners or children, when they died, and whether the player killed them. |
+| `ttm_is_registered` | `actor` | Boolean JSON indicating whether `actor` is tracked in M.A.R.A.S (Player, tracked NPC, registered child, or pregnant mother). |
+| `ttm_npc_relationship_profile` | `actor` *(optional render mode)* | Schema-v2 JSON relationship, pregnancy, family, and infidelity profile projected through `PerspectiveView::ForActor` (`ActorSelf` epistemic filtering) or `PerspectiveView::ForDialogueTarget` when `render_mode == "dialogue_target"` (public knowledge only; hides undiscovered affairs, secret paternity, `siblings`, and `has_beastblood`). |
+| `ttm_get_nearby_actors` | `actor` | JSON `{ "actorIds": [...] }` of nearby valid NPCs/Player queried off-thread from `SpatialActorSnapshot`. |
+| `ttm_get_ex_partner` | `actor` | Backstory sentence describing prior vanilla relationship (`Spouse`, `Courting`, `Lover`) ties to a player household member. |
+| `ttm_get_available_actions` | `actor` | Composite explanation list of relationship and drama actions currently valid for `actor` with nearby targets. |
+| `ttm_get_propose_dating_candidates`, `ttm_get_propose_lover_candidates`, `ttm_get_propose_engagement_candidates` | `actor` | Nearby eligible target names for proposing Dating, Lover, or Engagement. |
+| `ttm_get_breakup_dating_candidates`, `ttm_get_breakup_lover_candidates`, `ttm_get_breakup_engagement_candidates`, `ttm_get_divorce_candidates` | `actor` | Current partner/spouse names eligible for breakup, calling off engagement, or divorce. |
+| `ttm_get_open_relationship_candidates`, `ttm_get_close_relationship_candidates`, `ttm_get_open_main_partners`, `ttm_get_dating_partner` | `actor` | Partner names eligible for opening/closing a relationship, active open main-tier partners, or current dating partner. |
+| `ttm_get_exclusive_main_partners`, `ttm_get_lovers_becoming_ex` | `actor` | Consequence warnings listing exclusive main partners who would be betrayed or lovers who would become ex-lovers. |
+| `ttm_get_reveal_child_secret_candidates`, `ttm_get_discover_child_paternity_candidates` | `actor` | Nearby paternity secret reveal targets (for mother) and discovery targets (for deceived partner / bio father). |
+| `ttm_get_confess_affair_candidates`, `ttm_get_expose_affair_candidates`, `ttm_get_resolve_affair_candidates` | `actor` | Nearby partner/victim targets for confessing, exposing, or resolving affairs. |
 
 ---
 

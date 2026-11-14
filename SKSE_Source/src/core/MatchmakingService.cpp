@@ -8,6 +8,9 @@
 #include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/LoggingService.h"
+#include "core/PerspectiveEngineAdapters.h"
+#include "maras/projection/PerspectiveView.h"
+#include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
@@ -5227,13 +5230,12 @@ namespace MARAS {
         MARAS_LOG_INFO("Reverted MatchmakingService data");
     }
 
-    nlohmann::json MatchmakingService::DumpJson() const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto& cooldownData = *snap->cooldowns;
+    nlohmann::json MatchmakingService::DumpJson(const Projection::PerspectiveView& view) const {
+        const auto& cooldownData = view.Cooldowns();
 
         nlohmann::json j;
         j["lastMatchmakingDay"] = cooldownData.lastMatchmakingDay;
-        j["lastPlayerPartnerCheatingDay"] = cooldownData.lastPlayerPartnerCheatingDay;
+        j["lastPlayerPartnerCheatingDay"] = view.IsOmniscient() ? cooldownData.lastPlayerPartnerCheatingDay : -1.0f;
         nlohmann::json cooldowns = nlohmann::json::array();
         float currentDay = GetCurrentGameDay();
         for (const auto& [actorKey, lastDay] : cooldownData.npcLastMatchmakingChangeDay) {
@@ -5247,6 +5249,13 @@ namespace MARAS {
         }
         j["npcCooldowns"] = cooldowns;
         return j;
+    }
+
+    nlohmann::json MatchmakingService::DumpJson() const {
+        return DumpJson(Projection::PerspectiveView::ForDashboard(
+            State::WorldStore::GetSingleton().Snapshot(),
+            State::SpatialSnapshotStore::GetSingleton().Snapshot(),
+            &GetEngineWerewolfStateProvider()));
     }
 
 }  // namespace MARAS
