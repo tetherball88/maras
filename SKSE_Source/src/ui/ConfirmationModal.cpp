@@ -112,24 +112,18 @@ namespace {
 
         MARAS_LOG_INFO("ConfirmationModal::FireDeclineEvent - firing maras_decline: {}", payload);
 
-        if (auto* modEventSource = SKSE::GetModCallbackEventSource()) {
-            SKSE::ModCallbackEvent event{
-                "maras_decline",
-                payload,
-                0.0f,
-                player
-            };
-            modEventSource->SendEvent(&event);
-        }
+        EmitModCallbackEvent("maras_decline", std::move(payload), 0.0f, player);
     }
 
     void FireTriggerTextInput() {
         PrismaUIManager::GetSingleton().RunAfterFocusReleased([]() {
             MARAS_LOG_INFO("ConfirmationModal::FireTriggerTextInput - FocusMenu released, dispatching SkyrimNetApi.TriggerTextInput");
-            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            if (!vm) return;
-            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
-            vm->DispatchStaticCall("SkyrimNetApi", "TriggerTextInput", RE::MakeFunctionArguments(), nullCallback);
+            DispatchPostLock([]() {
+                auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+                if (!vm) return;
+                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
+                vm->DispatchStaticCall("SkyrimNetApi", "TriggerTextInput", RE::MakeFunctionArguments(), nullCallback);
+            }, "ConfirmationModal::TriggerTextInput");
         });
     }
 
@@ -456,7 +450,7 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
                 if (stateChanged) {
                     MARAS_LOG_INFO("ConfirmationModal callback - pair {:08X}/{:08X} state already changed while modal '{}' was open; ignoring modal selection",
                                    originatorID, targetID, resp.modalId);
-                    vm->ReturnLatentResult(stackID, 1);
+                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 1, "ConfirmationModal::StateChanged");
                     return;
                 }
             }
@@ -471,7 +465,7 @@ RE::BSScript::LatentStatus ConfirmationModal::Show(RE::BSScript::Internal::Virtu
                 FireDeclineEvent(action, actionTypeStr, mainActorList, secondaryActorList, activity, originatorID, targetID);
             }
 
-            vm->ReturnLatentResult(stackID, result);
+            DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, result, "ConfirmationModal");
         });
 
     return RE::BSScript::LatentStatus::kStarted;

@@ -63,6 +63,7 @@ namespace MARAS {
         bool cacheValid_{ false };
         std::vector<PerkGroup> perkGroups_;
         std::atomic<bool> pendingReconcile_{ false };
+        std::atomic<bool> forceRefreshOnLoad_{ true };
     };
 
 }  // namespace MARAS

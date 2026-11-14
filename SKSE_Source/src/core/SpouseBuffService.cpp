@@ -2,6 +2,7 @@
 
 #include "core/AffectionService.h"
 #include "core/BonusesService.h"
+#include "core/DeceasedRegistry.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/PollingService.h"
 #include "core/SpouseHierarchyManager.h"
@@ -24,6 +25,16 @@ namespace MARAS {
         }
 
         inline bool IndexInBounds(std::size_t index, std::size_t size) { return index < size; }
+
+        inline std::vector<RE::FormID> GetLivingRegisteredMarriedSpouses(
+            const NPCRelationshipManager& relationships) {
+            auto spouses = relationships.GetAllMarried(kPlayerFormID);
+            const auto& deceased = DeceasedRegistry::GetSingleton();
+            std::erase_if(spouses, [&](RE::FormID fid) {
+                return fid == 0 || !relationships.IsRegistered(fid) || deceased.IsDeceased(fid);
+            });
+            return spouses;
+        }
     }  // namespace
 
     float SpouseBuffService::GetSpouseMultiplier(const RE::Actor* spouse) {
@@ -43,13 +54,16 @@ namespace MARAS {
 
         const auto& relationships = NPCRelationshipManager::GetSingleton();
         const auto& affection = AffectionService::GetSingleton();
+        const auto& deceased = DeceasedRegistry::GetSingleton();
 
         for (const auto* actor : followers) {
             if (!actor) continue;
 
-            // Only count followers who are spouses
+            // Only count followers who are living, registered spouses
             const RE::FormID fid = actor->GetFormID();
-            if (!relationships.IsMarried(fid)) continue;
+            if (!relationships.IsMarried(fid) || !relationships.IsRegistered(fid) || deceased.IsDeceased(fid)) {
+                continue;
+            }
 
             // Determine skill type for this NPC
             const auto skill = relationships.GetSkillType(fid);
@@ -77,7 +91,7 @@ namespace MARAS {
         const auto& hierarchy = SpouseHierarchyManager::GetSingleton();
         const auto& affection = AffectionService::GetSingleton();
 
-        const auto marriedSpouses = relationships.GetAllMarried(kPlayerFormID);
+        const auto marriedSpouses = GetLivingRegisteredMarriedSpouses(relationships);
         const int spouseCount = static_cast<int>(marriedSpouses.size());
 
         for (const RE::FormID fid : marriedSpouses) {
@@ -106,7 +120,7 @@ namespace MARAS {
         const auto& affection = AffectionService::GetSingleton();
         auto teammates = PollingService::GetSingleton().GetCurrentTeammates();
 
-        auto marriedSpouses = relMgr.GetAllMarried(kPlayerFormID);
+        auto marriedSpouses = GetLivingRegisteredMarriedSpouses(relMgr);
         int spouseCount = static_cast<int>(marriedSpouses.size());
 
         // 1. Permanent Buffs (8 Social Classes)

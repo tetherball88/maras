@@ -3,6 +3,7 @@
 #include "core/FactionReconciler.h"
 #include "core/PackageReconciler.h"
 #include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 
 #include <REX/W32/KERNEL32.h>
 #include <utility>
@@ -41,6 +42,10 @@ namespace MARAS {
         return std::this_thread::get_id() == mainThreadId_.load(std::memory_order_acquire);
     }
 
+    bool DeferredActorResolver::CanSyncEngineInline() const noexcept {
+        return IsOnMainThread() || IsInSyncedVmCall();
+    }
+
     void DeferredActorResolver::RequestSync(RE::FormID actorId, SyncFlags flags) {
         const std::uint8_t mask = static_cast<std::uint8_t>(flags);
         if (actorId == 0 || mask == 0) {
@@ -63,6 +68,7 @@ namespace MARAS {
 
         const SessionEpoch epoch = GetSessionEpoch();
         if (!AddEpochTask(epoch, "DeferredActorResolver::DrainPending", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 DeferredActorResolver::GetSingleton().DrainPending();
             })) {
             std::lock_guard<std::mutex> lock(mutex_);

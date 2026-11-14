@@ -1,12 +1,44 @@
 #pragma once
 
+#include <mutex>
+#include <type_traits>
+#include <utility>
+
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 
 namespace MARAS::PapyrusInterface {
 
+    // Recursive domain mutex that tracks lock nesting per thread and flushes deferred
+    // post-lock dispatches (ModCallbackEvent, VM latent returns, HUD toasts) once the
+    // outermost lock drops cleanly.
+    class PapyrusDomainMutex {
+    public:
+        void lock() {
+            mtx_.lock();
+            EnterPapyrusDomainLock();
+        }
+
+        bool try_lock() {
+            if (!mtx_.try_lock()) {
+                return false;
+            }
+            EnterPapyrusDomainLock();
+            return true;
+        }
+
+        void unlock() noexcept {
+            mtx_.unlock();
+            ExitPapyrusDomainLockAndFlush();
+        }
+
+    private:
+        std::recursive_mutex mtx_;
+    };
+
     // Shared recursive mutex serializing concurrent Papyrus VM worker thread calls into MARAS domain services
-    inline std::recursive_mutex& GetPapyrusMutex() noexcept {
-        static std::recursive_mutex mtx;
+    inline PapyrusDomainMutex& GetPapyrusMutex() noexcept {
+        static PapyrusDomainMutex mtx;
         return mtx;
     }
 
@@ -425,6 +457,51 @@ namespace MARAS::PapyrusInterface {
                 RE::BSScript::LatentStatus(RE::BSScript::Internal::VirtualMachine*, RE::VMStackID, RE::StaticFunctionTag*, Args...),
                 RE::StaticFunctionTag*,
                 Args...>(fnName, className, callback));
+    }
+
+    template <auto Fn>
+    struct SyncedNativeWrapper;
+
+    template <class R, class... Args, R (*Fn)(RE::StaticFunctionTag*, Args...)>
+    struct SyncedNativeWrapper<Fn> {
+        static R Call(RE::StaticFunctionTag* tag, Args... args) {
+            ScopedSyncedVmCall vmScope;
+            std::lock_guard<PapyrusDomainMutex> lock(GetPapyrusMutex());
+            if constexpr (std::is_void_v<R>) {
+                Fn(tag, std::forward<Args>(args)...);
+            } else {
+                return Fn(tag, std::forward<Args>(args)...);
+            }
+        }
+    };
+
+    template <auto Fn>
+    struct LockedLatentWrapper;
+
+    template <class... Args, RE::BSScript::LatentStatus (*Fn)(RE::BSScript::Internal::VirtualMachine*, RE::VMStackID, RE::StaticFunctionTag*, Args...)>
+    struct LockedLatentWrapper<Fn> {
+        static RE::BSScript::LatentStatus Call(RE::BSScript::Internal::VirtualMachine* vm,
+                                               RE::VMStackID stackID,
+                                               RE::StaticFunctionTag* tag,
+                                               Args... args) {
+            ScopedSyncedVmCall vmScope;
+            std::lock_guard<PapyrusDomainMutex> lock(GetPapyrusMutex());
+            return Fn(vm, stackID, tag, std::forward<Args>(args)...);
+        }
+    };
+
+    template <auto Fn>
+    inline void RegisterSynced(RE::BSScript::IVirtualMachine* vm,
+                               std::string_view fnName,
+                               std::string_view className = "MARAS") {
+        vm->RegisterFunction(fnName, className, &SyncedNativeWrapper<Fn>::Call);
+    }
+
+    template <class LatentR, auto Fn>
+    inline void RegisterLatentLocked(RE::BSScript::IVirtualMachine* vm,
+                                     std::string_view fnName,
+                                     std::string_view className = "MARAS") {
+        RegisterLatentFixed<LatentR>(vm, fnName, className, &LockedLatentWrapper<Fn>::Call);
     }
 
 }  // namespace MARAS::PapyrusInterface

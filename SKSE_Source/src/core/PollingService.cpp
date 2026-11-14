@@ -463,55 +463,37 @@ namespace MARAS {
 
     void PollingService::SendTeammateChangeEvent(const std::unordered_set<FormID>& added,
                                                  const std::unordered_set<FormID>& removed) {
-        auto eventSource = SKSE::GetModCallbackEventSource();
-        if (!eventSource) {
-            MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send teammate change event");
-            return;
-        }
-
         if (!added.empty() || !removed.empty()) {
             MARAS_LOG_INFO("Sending teammate change event: {} added, {} removed", added.size(), removed.size());
-            SKSE::ModCallbackEvent modEvent("maras_teammate_change", "", 0.0f, nullptr);
-            eventSource->SendEvent(&modEvent);
+            EmitModCallbackEvent("maras_teammate_change", "", 0.0f, RE::FormID{ 0 });
         }
 
         // Send event for added teammates
         for (auto formID : added) {
-            auto actorForm = RE::TESForm::LookupByID(formID);
-            if (actorForm) {
-                SKSE::ModCallbackEvent modEvent("maras_teammate_added", "", 0.0f, actorForm);
-                eventSource->SendEvent(&modEvent);
+            if (RE::TESForm::LookupByID(formID)) {
+                EmitModCallbackEvent("maras_teammate_added", "", 0.0f, formID);
                 MARAS_LOG_INFO("Sent maras_teammate_added event for actor {:08X}", formID);
             }
         }
 
         // Send event for removed teammates
         for (auto formID : removed) {
-            auto actorForm = RE::TESForm::LookupByID(formID);
-            if (actorForm) {
-                SKSE::ModCallbackEvent modEvent("maras_teammate_removed", "", 0.0f, actorForm);
-                eventSource->SendEvent(&modEvent);
+            if (RE::TESForm::LookupByID(formID)) {
+                EmitModCallbackEvent("maras_teammate_removed", "", 0.0f, formID);
                 MARAS_LOG_INFO("Sent maras_teammate_removed event for actor {:08X}", formID);
             }
         }
     }
 
     void PollingService::SendDayChangeEvent(float newDay) {
-        auto eventSource = SKSE::GetModCallbackEventSource();
-        if (!eventSource) {
-            MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send day change event");
-            return;
-        }
-
-        SKSE::ModCallbackEvent modEvent("maras_day_changed", "", newDay, nullptr);
-        eventSource->SendEvent(&modEvent);
+        EmitModCallbackEvent("maras_day_changed", "", newDay, RE::FormID{ 0 });
         MARAS_LOG_INFO("Sent maras_day_changed event for day {}", newDay);
     }
 
     void PollingService::SanitizePlayerFactions() {
+        GlobalVarReconciler::GetSingleton().SyncExternalPolygamyGlobalToStore();
         FactionReconciler::GetSingleton().SanitizePlayerMarriedFaction();
         FactionReconciler::GetSingleton().ReconcilePlayer();
-        GlobalVarReconciler::GetSingleton().SyncExternalPolygamyGlobalToStore();
         GlobalVarReconciler::GetSingleton().ReconcileGlobals();
     }
 

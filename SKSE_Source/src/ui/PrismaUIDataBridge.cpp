@@ -1026,8 +1026,10 @@ namespace MARAS {
         if (!PrismaUIManager::GetSingleton().IsDomReady()) {
             return;
         }
+        const bool revealSecrets = Settings::GetSingleton().Snapshot()->revealSecretsInUI;
         nlohmann::json arr = nlohmann::json::array();
         for (const auto& r : results) {
+            const bool maskCheat = (!revealSecrets && r.isCheating);
             nlohmann::json item;
             item["actorAFormId"] = FormIDToString(r.actorAFormID);
             item["actorAName"] = r.actorAName;
@@ -1038,9 +1040,16 @@ namespace MARAS {
             item["action"] = r.action;
             item["targetStatus"] = r.targetStatus;
             item["suggestedStatus"] = static_cast<uint8_t>(Utils::StringToRelationshipStatus(r.targetStatus));
-            item["memory"] = r.memory;
-            item["reasoning"] = r.memory;
-            item["isCheating"] = r.isCheating;
+            if (maskCheat) {
+                const std::string neutralText = fmt::format("{} and {} grew closer.", r.actorAName, r.actorBName);
+                item["memory"] = neutralText;
+                item["reasoning"] = neutralText;
+                item["isCheating"] = false;
+            } else {
+                item["memory"] = r.memory;
+                item["reasoning"] = r.memory;
+                item["isCheating"] = r.isCheating;
+            }
             item["selected"] = true;
             item["compatibilityScore"] = 85;
             arr.push_back(item);
@@ -1798,6 +1807,13 @@ namespace MARAS {
             if (detailNpcId != 0) {
                 SendNPCDetail(detailNpcId);
             }
+        } else if (updated && key == "enablePolygamy") {
+            SendOverviewData();
+            SendSettingsData();
+            const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
+            if (detailNpcId != 0) {
+                SendNPCDetail(detailNpcId);
+            }
         } else if (updated && (key == "affectionDecayMult" || key == "affectionDecayMultiplier" ||
                                key == "childTrainingDurationDays" || key == "childTrainingCost" ||
                                key == "childTrainingRequireFaction" || key == "bGlobalBanCritter" ||
@@ -2010,23 +2026,25 @@ namespace MARAS {
                     MARAS_LOG_ERROR("PrismaUIDataBridge: ProcessAddChild failed - child {:08X} not found as Actor", childID);
                     return;
                 }
-                auto* spouseActor = (spouseID != 0 && spouseID != kPlayerFormID) ? RE::TESForm::LookupByID<RE::Actor>(spouseID) : nullptr;
-                auto* houseForm = explicitHouseID != 0 ? RE::TESForm::LookupByID(explicitHouseID) : nullptr;
 
                 MARAS_LOG_INFO("PrismaUIDataBridge: Player adoption for child {:08X} (spouse: {:08X}, house: {:08X}) - calling Papyrus AdoptChildGlobal",
                                childID, spouseID, explicitHouseID);
 
-                auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-                if (!vm) {
-                    MARAS_LOG_ERROR("PrismaUIDataBridge: VirtualMachine unavailable for AdoptChildGlobal");
-                    return;
-                }
-                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
-                auto childArg = childActor;
-                auto spouseArg = spouseActor;
-                auto houseArg = houseForm;
-                auto args = RE::MakeFunctionArguments(std::move(childArg), std::move(spouseArg), std::move(houseArg));
-                vm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, nullCallback);
+                DispatchPostLock([childID, spouseID, explicitHouseID]() {
+                    auto* cActor = RE::TESForm::LookupByID<RE::Actor>(childID);
+                    auto* spActor = (spouseID != 0 && spouseID != kPlayerFormID)
+                        ? RE::TESForm::LookupByID<RE::Actor>(spouseID)
+                        : nullptr;
+                    auto* hForm = explicitHouseID != 0 ? RE::TESForm::LookupByID(explicitHouseID) : nullptr;
+                    auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+                    if (!vm || !cActor) {
+                        MARAS_LOG_ERROR("PrismaUIDataBridge: VirtualMachine or child {:08X} unavailable for AdoptChildGlobal", childID);
+                        return;
+                    }
+                    RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
+                    auto args = RE::MakeFunctionArguments(std::move(cActor), std::move(spActor), std::move(hForm));
+                    vm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, nullCallback);
+                }, "PrismaUIDataBridge::AdoptChildGlobal");
                 return;
             }
 
@@ -2068,6 +2086,10 @@ namespace MARAS {
         if (childID == 0) return;
 
         auto& mgr = NPCRelationshipManager::GetSingleton();
+        const auto existingOpt = mgr.GetChildEntry(childID);
+        const bool revealSecrets = Settings::GetSingleton().Snapshot()->revealSecretsInUI;
+        const bool hasHiddenPaternity =
+            !revealSecrets && existingOpt && existingOpt->paternitySecret.HasActiveSecret();
         bool changed = false;
 
         if (payload.contains("guardianAId")) {
@@ -2086,18 +2108,33 @@ namespace MARAS {
             payload.contains("presumedFatherId") && !GetJsonString(payload, "presumedFatherId").empty();
         if (payload.contains("bioFatherId")) {
             RE::FormID bioFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "bioFatherId")));
-            changed |= mgr.SetBioFather(childID, bioFID);
-            if (!Settings::GetSingleton().Snapshot()->revealSecretsInUI && !hasExplicitPresumedInPayload) {
-                changed |= mgr.SetPresumedFather(childID, 0);
-                changed |= mgr.SetPaternitySecretEdges(childID, false, false);
+            if (hasHiddenPaternity && bioFID == existingOpt->presumedFatherID) {
+                MARAS_LOG_DEBUG("PrismaUIDataBridge: Preserving hidden paternity for child {:08X} (UI echoed presumedFatherId {:08X})",
+                                childID, bioFID);
+            } else {
+                changed |= mgr.SetBioFather(childID, bioFID);
+                if (!revealSecrets && !hasExplicitPresumedInPayload &&
+                    (!existingOpt || bioFID != existingOpt->bioFatherID)) {
+                    changed |= mgr.SetPresumedFather(childID, 0);
+                    changed |= mgr.SetPaternitySecretEdges(childID, false, false);
+                }
             }
         }
         if (payload.contains("presumedFatherId")) {
-            RE::FormID presFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "presumedFatherId")));
-            changed |= mgr.SetPresumedFather(childID, presFID);
+            if (hasHiddenPaternity && !hasExplicitPresumedInPayload) {
+                MARAS_LOG_DEBUG("PrismaUIDataBridge: Preserving masked presumedFatherId for child {:08X}", childID);
+            } else {
+                RE::FormID presFID = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "presumedFatherId")));
+                changed |= mgr.SetPresumedFather(childID, presFID);
+            }
         }
         if (payload.contains("hasBeastblood")) {
-            changed |= mgr.SetChildBeastblood(childID, GetJsonBool(payload, "hasBeastblood", false));
+            const bool reqBeast = GetJsonBool(payload, "hasBeastblood", false);
+            if (hasHiddenPaternity && existingOpt->hasBeastblood && !reqBeast) {
+                MARAS_LOG_DEBUG("PrismaUIDataBridge: Preserving masked hasBeastblood for child {:08X}", childID);
+            } else {
+                changed |= mgr.SetChildBeastblood(childID, reqBeast);
+            }
         }
 
         if (changed) {
@@ -2114,13 +2151,10 @@ namespace MARAS {
         }
         if (childID != 0) {
             MARAS_LOG_INFO("PrismaUIDataBridge: Spawning synthetic child {:08X}", childID);
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                std::string childIdStr = FormIDToString(childID);
-                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                SKSE::ModCallbackEvent modEvent("maras_spawn_synthetic_child", childIdStr, childIdFloat, nullptr);
-                eventSource->SendEvent(&modEvent);
-                MARAS_LOG_INFO("PrismaUIDataBridge: Dispatched maras_spawn_synthetic_child for {:08X}", childID);
-            }
+            std::string childIdStr = FormIDToString(childID);
+            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+            EmitModCallbackEvent("maras_spawn_synthetic_child", std::move(childIdStr), childIdFloat, RE::FormID{ 0 });
+            MARAS_LOG_INFO("PrismaUIDataBridge: Dispatched maras_spawn_synthetic_child for {:08X}", childID);
         }
     }
 

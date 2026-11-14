@@ -67,11 +67,8 @@ namespace MARAS {
                 relMgr.RemoveChild(victimID);
 
                 if (newlyRecorded) {
-                    if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                        SKSE::ModCallbackEvent modEvent("maras_child_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                        eventSource->SendEvent(&modEvent);
-                        MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
-                    }
+                    EmitModCallbackEvent("maras_child_died", "", isPlayerKiller ? 1.0f : 0.0f, victimID);
+                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_child_died event for child {:08X}", victimID);
                 }
 
                 return;
@@ -85,11 +82,8 @@ namespace MARAS {
             relMgr.RemoveChild(victimID);
 
             if (newlyRecorded) {
-                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                    SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                    eventSource->SendEvent(&modEvent);
-                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for graduated adult child {:08X}", victimID);
-                }
+                EmitModCallbackEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victimID);
+                MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for graduated adult child {:08X}", victimID);
             }
 
             if (relMgr.IsRegistered(victimID)) {
@@ -119,10 +113,7 @@ namespace MARAS {
                 }
                 petChildID = childSvc.GetChildForPetOrCritter(victimID);
             }
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                SKSE::ModCallbackEvent modEvent("maras_child_pet_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                eventSource->SendEvent(&modEvent);
-            }
+            EmitModCallbackEvent("maras_child_pet_died", "", isPlayerKiller ? 1.0f : 0.0f, victimID);
             return;
         }
 
@@ -146,11 +137,8 @@ namespace MARAS {
 
             // Dispatch mod event to Papyrus for ANY tracked actor who died
             if (newlyRecorded) {
-                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                    SKSE::ModCallbackEvent modEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victim);
-                    eventSource->SendEvent(&modEvent);
-                    MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for {:08X}", registeredID);
-                }
+                EmitModCallbackEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victimID);
+                MARAS_LOG_INFO("DeathEventHandler: Dispatched maras_actor_died event for {:08X}", registeredID);
             }
 
             // Perform death cleanup on active relationship records

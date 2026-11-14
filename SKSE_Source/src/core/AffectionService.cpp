@@ -5,6 +5,7 @@
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -446,16 +447,10 @@ namespace MARAS {
             MARAS_LOG_WARN("Could not find form for FormID {:08X} to send affection change event", npcFormID);
             return;
         }
-        auto eventSource = SKSE::GetModCallbackEventSource();
-        if (eventSource) {
-            float diff = static_cast<float>(delta);
-            SKSE::ModCallbackEvent modEvent("maras_change_affection", threshold, diff, npcForm);
-            eventSource->SendEvent(&modEvent);
-            MARAS_LOG_INFO("Sent maras_change_affection event for NPC {:08X}: threshold={} diff={}", npcFormID,
-                           threshold, diff);
-        } else {
-            MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send affection change event");
-        }
+        float diff = static_cast<float>(delta);
+        EmitModCallbackEvent("maras_change_affection", threshold, diff, npcFormID);
+        MARAS_LOG_INFO("Sent maras_change_affection event for NPC {:08X}: threshold={} diff={}", npcFormID,
+                       threshold, diff);
     }
 
     int AffectionService::CalculateTotalDailyDelta(const std::unordered_map<std::string, float>& dailyByType) const {

@@ -38,6 +38,7 @@ namespace MARAS {
         [[nodiscard]] bool GetAllowAIDial() const;
         void SetAllowAIDial(bool value);
 
+        void ResetSessionGlobalsToDefaults();
         void Revert() noexcept;
 
     private:

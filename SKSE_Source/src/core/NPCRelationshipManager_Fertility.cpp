@@ -1752,11 +1752,8 @@ namespace MARAS {
                 baseOutcome = "mother_confessed_bio";
             }
             std::string eventOutcome = (wasSecretPartner && wasPregSecretPartner) ? (baseOutcome + "_unannounced") : baseOutcome;
-            if (auto* source = SKSE::GetModCallbackEventSource()) {
-                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
-            }
+            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+            EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
             SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, baseOutcome, "none", wasPregSecretPartner);
         }
         return true;
@@ -1837,11 +1834,8 @@ namespace MARAS {
         if (sendEvent) {
             std::string baseOutcome = discoveredByPartner ? "presumed_father_learnt" : "mother_confessed_presumed";
             std::string eventOutcome = wasPregSecretPartner ? (baseOutcome + "_unannounced") : baseOutcome;
-            if (auto* source = SKSE::GetModCallbackEventSource()) {
-                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
-            }
+            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+            EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
             SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, baseOutcome, "none", wasPregSecretPartner);
         }
 
@@ -1900,11 +1894,8 @@ namespace MARAS {
 
         if (sendEvent) {
             std::string outcome = byVisibleBelly ? "pregnancy_visible_presumed" : "mother_shared_pregnancy_presumed";
-            if (auto* source = SKSE::GetModCallbackEventSource()) {
-                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", outcome, childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
-            }
+            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+            EmitModCallbackEvent("maras_paternity_secret_resolved", outcome, childIdFloat, RE::FormID{ 0 });
             SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, outcome);
         }
 
@@ -1979,11 +1970,8 @@ namespace MARAS {
 
         if (sendEvent) {
             std::string outcome = discoveredByBioFather ? "bio_father_learnt" : "mother_confessed_bio";
-            if (auto* source = SKSE::GetModCallbackEventSource()) {
-                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", outcome, childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
-            }
+            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+            EmitModCallbackEvent("maras_paternity_secret_resolved", outcome, childIdFloat, RE::FormID{ 0 });
             SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, outcome);
         }
 
@@ -2038,22 +2026,18 @@ namespace MARAS {
         MARAS_LOG_INFO("[Fertility] Set paternity secret edges on child {:08X} (secretBio: {}, secretPartner: {}, pregSecretPartner: {})",
                        childID, secretForBioFather, secretForPartner, finalPregSecretPartner);
 
-        if (auto* source = SKSE::GetModCallbackEventSource()) {
-            float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+        {
+            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
             if (bioLearned && partnerLearned) {
                 std::string eventOutcome = wasPregnancySecretPartner ? "mother_confessed_both_unannounced" : "mother_confessed_both";
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
+                EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
             } else if (bioLearned) {
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", "bio_father_learnt", childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
+                EmitModCallbackEvent("maras_paternity_secret_resolved", "bio_father_learnt", childIdFloat, RE::FormID{ 0 });
             } else if (partnerLearned) {
                 std::string eventOutcome = wasPregnancySecretPartner ? "presumed_father_learnt_unannounced" : "presumed_father_learnt";
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
+                EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
             } else if (pregnancyLearnedOnly) {
-                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", "mother_shared_pregnancy_presumed", childIdFloat, nullptr);
-                source->SendEvent(&modEvent);
+                EmitModCallbackEvent("maras_paternity_secret_resolved", "mother_shared_pregnancy_presumed", childIdFloat, RE::FormID{ 0 });
             }
         }
 
@@ -2497,10 +2481,10 @@ namespace MARAS {
             appliedDiscountReason.empty() ? "None" : appliedDiscountReason, entry.hasBeastblood,
             entry.savedBioTemplateName, entry.savedRaceIndex);
 
-        RE::SendHUDMessage::ShowHUDMessage(std::format("{} has been sent to {} to train as a {}.",
-                                          entry.name.empty() ? "Child" : entry.name,
-                                          entry.trainingLocation,
-                                          className).c_str());
+        QueueHUDMessage(std::format("{} has been sent to {} to train as a {}.",
+                                    entry.name.empty() ? "Child" : entry.name,
+                                    entry.trainingLocation,
+                                    className));
 
         SendChildEvent("sent_to_training", targetChildID, entry.guardianAID, entry.guardianBID, 0, entry.trainingLocation);
         return true;
@@ -2527,10 +2511,10 @@ namespace MARAS {
         MARAS_LOG_INFO("[Training] Child {:08X} ('{}') completed {} training at {} and graduated to Stage 4 (Adult)",
                        childID, entry.name, className, entry.trainingLocation);
 
-        RE::SendHUDMessage::ShowHUDMessage(std::format("{} has completed {} training at {} and is ready to return as an adult!",
-                                          entry.name.empty() ? "Your child" : entry.name,
-                                          className.empty() ? "adolescent" : className,
-                                          entry.trainingLocation.empty() ? "their academy" : entry.trainingLocation).c_str());
+        QueueHUDMessage(std::format("{} has completed {} training at {} and is ready to return as an adult!",
+                                    entry.name.empty() ? "Your child" : entry.name,
+                                    className.empty() ? "adolescent" : className,
+                                    entry.trainingLocation.empty() ? "their academy" : entry.trainingLocation));
 
         SendChildEvent("became_adult", childID, entry.guardianAID, entry.guardianBID, 0, entry.trainingLocation);
 

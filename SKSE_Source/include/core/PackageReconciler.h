@@ -37,6 +37,7 @@ namespace MARAS {
     public:
         struct PackageRegistrySnapshot {
             std::unordered_map<RE::FormID, RE::FormID> registry{};
+            std::unordered_map<RE::FormID, RE::TESPackage*> resolvedPackages{};
             RE::FormID baseSandboxPkgID{ 0 };            // 0x6A
             RE::FormID petCritterSandboxPkgID{ 0 };      // 0xC0
             RE::FormID nonPlayerChildFollowPkgID{ 0 };   // 0x376
@@ -45,6 +46,14 @@ namespace MARAS {
             std::vector<std::string> pluginWhitelistPatterns{};
             std::vector<std::string> questWhitelistPatterns{};
             int questPriorityThreshold{ -1 };
+
+            [[nodiscard]] RE::TESPackage* FindPackage(RE::FormID pkgId) const noexcept {
+                if (pkgId == 0) {
+                    return nullptr;
+                }
+                const auto it = resolvedPackages.find(pkgId);
+                return (it != resolvedPackages.end()) ? it->second : nullptr;
+            }
         };
 
         static PackageReconciler& GetSingleton();

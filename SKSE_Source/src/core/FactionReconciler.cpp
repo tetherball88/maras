@@ -205,43 +205,105 @@ namespace MARAS {
                 MARAS_LOG_INFO("FactionReconciler: Allowing removal rank ({}) for PlayerMarriedFaction on player", a_rank);
             }
 
-            // Validate relationship eligibility BEFORE mutating engine faction state
-            if (!isPlayer && isMarriedFaction) {
-                std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
-                auto& relMgr = NPCRelationshipManager::GetSingleton();
-                const auto currentStatus = relMgr.GetRelationshipStatus(a_actor->GetFormID(), kPlayerFormID);
+            const RE::FormID actorId = a_actor->GetFormID();
+            const RE::FormID factionId = a_faction->GetFormID();
 
-                if (a_rank >= 0) {
-                    if (currentStatus != RelationshipStatus::Married) {
-                        std::string blockReason;
-                        if (!relMgr.CanFormRelationship(a_actor->GetFormID(), kPlayerFormID,
-                                                        RelationshipStatus::Married, &blockReason)) {
-                            MARAS_LOG_WARN(
-                                "FactionReconciler: Blocked auto-promoting NPC {:08X} ({}) to Married with Player via PlayerMarriedFaction addition: {}",
-                                a_actor->GetFormID(), a_actor->GetName(), blockReason);
+            if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                if (_originalAddToFaction) {
+                    _originalAddToFaction(a_actor, a_faction, a_rank);
+                }
+                if (actorId != 0 && factionId != 0) {
+                    AddCurrentEpochTask("FactionReconciler::HookAddToFaction", [actorId, factionId, a_rank, isPlayer, isMarriedFaction]() {
+                        auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorId);
+                        auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(factionId);
+                        if (!actor || actor->IsDeleted() || !faction) {
                             return;
                         }
+                        if (!isPlayer && isMarriedFaction) {
+                            std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+                            auto& relMgr = NPCRelationshipManager::GetSingleton();
+                            const auto currentStatus = relMgr.GetRelationshipStatus(actorId, kPlayerFormID);
+                            if (a_rank >= 0) {
+                                if (currentStatus != RelationshipStatus::Married) {
+                                    std::string blockReason;
+                                    if (!relMgr.CanFormRelationship(actorId, kPlayerFormID,
+                                                                    RelationshipStatus::Married, &blockReason)) {
+                                        MARAS_LOG_WARN(
+                                            "FactionReconciler: Blocked/reverted off-thread auto-promoting NPC {:08X} ({}) to Married via PlayerMarriedFaction addition: {}",
+                                            actorId, actor->GetName(), blockReason);
+                                        FactionReconciler::GetSingleton().ReconcileActor(actorId);
+                                        return;
+                                    }
+                                    MARAS_LOG_INFO(
+                                        "FactionReconciler: Auto-promoting NPC {:08X} ({}) to Married via PlayerMarriedFaction addition (deferred from off-thread)",
+                                        actorId, actor->GetName());
+                                    relMgr.PromoteToMarried(actorId, kPlayerFormID);
+                                    FactionReconciler::GetSingleton().SanitizePlayerMarriedFaction();
+                                }
+                            } else if (currentStatus == RelationshipStatus::Married) {
+                                MARAS_LOG_INFO(
+                                    "FactionReconciler: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction rank reset (deferred from off-thread)",
+                                    actorId, actor->GetName());
+                                relMgr.PromoteToDivorced(actorId, kPlayerFormID);
+                            }
+                        }
+                        if (a_rank < 0) {
+                            FactionReconciler::GetSingleton().NotifyFactionRemoved(actor, faction);
+                        } else {
+                            FactionReconciler::GetSingleton().NotifyFactionAdded(actor, faction, a_rank);
+                        }
+                    });
+                }
+                return;
+            }
 
+            // Validate relationship eligibility BEFORE mutating engine faction state
+            if (!isPlayer && isMarriedFaction) {
+                bool notifyAdded = false;
+                bool notifyRemoved = false;
+                {
+                    std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+                    auto& relMgr = NPCRelationshipManager::GetSingleton();
+                    const auto currentStatus = relMgr.GetRelationshipStatus(actorId, kPlayerFormID);
+
+                    if (a_rank >= 0) {
+                        if (currentStatus != RelationshipStatus::Married) {
+                            std::string blockReason;
+                            if (!relMgr.CanFormRelationship(actorId, kPlayerFormID,
+                                                            RelationshipStatus::Married, &blockReason)) {
+                                MARAS_LOG_WARN(
+                                    "FactionReconciler: Blocked auto-promoting NPC {:08X} ({}) to Married with Player via PlayerMarriedFaction addition: {}",
+                                    actorId, a_actor->GetName(), blockReason);
+                                return;
+                            }
+
+                            MARAS_LOG_INFO(
+                                "FactionReconciler: Auto-promoting NPC {:08X} ({}) to Married via PlayerMarriedFaction addition",
+                                actorId, a_actor->GetName());
+                            if (_originalAddToFaction) {
+                                _originalAddToFaction(a_actor, a_faction, a_rank);
+                            }
+                            relMgr.PromoteToMarried(actorId, kPlayerFormID);
+                            FactionReconciler::GetSingleton().SanitizePlayerMarriedFaction();
+                            notifyAdded = true;
+                        }
+                    } else if (currentStatus == RelationshipStatus::Married) {
                         MARAS_LOG_INFO(
-                            "FactionReconciler: Auto-promoting NPC {:08X} ({}) to Married via PlayerMarriedFaction addition",
-                            a_actor->GetFormID(), a_actor->GetName());
+                            "FactionReconciler: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction rank reset",
+                            actorId, a_actor->GetName());
                         if (_originalAddToFaction) {
                             _originalAddToFaction(a_actor, a_faction, a_rank);
                         }
-                        relMgr.PromoteToMarried(a_actor->GetFormID(), kPlayerFormID);
-                        FactionReconciler::GetSingleton().SanitizePlayerMarriedFaction();
-                        FactionReconciler::GetSingleton().NotifyFactionAdded(a_actor, a_faction, a_rank);
-                        return;
+                        relMgr.PromoteToDivorced(actorId, kPlayerFormID);
+                        notifyRemoved = true;
                     }
-                } else if (currentStatus == RelationshipStatus::Married) {
-                    MARAS_LOG_INFO(
-                        "FactionReconciler: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction rank reset",
-                        a_actor->GetFormID(), a_actor->GetName());
-                    if (_originalAddToFaction) {
-                        _originalAddToFaction(a_actor, a_faction, a_rank);
-                    }
-                    relMgr.PromoteToDivorced(a_actor->GetFormID(), kPlayerFormID);
+                }
+                if (notifyRemoved) {
                     FactionReconciler::GetSingleton().NotifyFactionRemoved(a_actor, a_faction);
+                    return;
+                }
+                if (notifyAdded) {
+                    FactionReconciler::GetSingleton().NotifyFactionAdded(a_actor, a_faction, a_rank);
                     return;
                 }
             }
@@ -275,18 +337,53 @@ namespace MARAS {
 
             const bool isPlayer = a_actor->IsPlayerRef();
             const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
+            const RE::FormID actorId = a_actor->GetFormID();
+            const RE::FormID factionId = a_faction->GetFormID();
+
+            if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                if (_originalRemoveFromFaction) {
+                    _originalRemoveFromFaction(a_actor, a_faction);
+                }
+                if (actorId != 0 && factionId != 0) {
+                    AddCurrentEpochTask("FactionReconciler::HookRemoveFromFaction", [actorId, factionId, isPlayer, isMarriedFaction]() {
+                        auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorId);
+                        auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(factionId);
+                        if (!actor || actor->IsDeleted() || !faction) {
+                            return;
+                        }
+                        if (!isPlayer && isMarriedFaction) {
+                            std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+                            auto& relMgr = NPCRelationshipManager::GetSingleton();
+                            if (relMgr.GetRelationshipStatus(actorId, kPlayerFormID) == RelationshipStatus::Married) {
+                                MARAS_LOG_INFO(
+                                    "FactionReconciler: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction removal (deferred from off-thread)",
+                                    actorId, actor->GetName());
+                                relMgr.PromoteToDivorced(actorId, kPlayerFormID);
+                            }
+                        }
+                        FactionReconciler::GetSingleton().NotifyFactionRemoved(actor, faction);
+                    });
+                }
+                return;
+            }
 
             if (!isPlayer && isMarriedFaction) {
-                std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
-                auto& relMgr = NPCRelationshipManager::GetSingleton();
-                if (relMgr.GetRelationshipStatus(a_actor->GetFormID(), kPlayerFormID) == RelationshipStatus::Married) {
-                    MARAS_LOG_INFO(
-                        "FactionReconciler: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction removal",
-                        a_actor->GetFormID(), a_actor->GetName());
-                    if (_originalRemoveFromFaction) {
-                        _originalRemoveFromFaction(a_actor, a_faction);
+                bool notifyRemoved = false;
+                {
+                    std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
+                    auto& relMgr = NPCRelationshipManager::GetSingleton();
+                    if (relMgr.GetRelationshipStatus(actorId, kPlayerFormID) == RelationshipStatus::Married) {
+                        MARAS_LOG_INFO(
+                            "FactionReconciler: Auto-demoting NPC {:08X} ({}) to Divorced via PlayerMarriedFaction removal",
+                            actorId, a_actor->GetName());
+                        if (_originalRemoveFromFaction) {
+                            _originalRemoveFromFaction(a_actor, a_faction);
+                        }
+                        relMgr.PromoteToDivorced(actorId, kPlayerFormID);
+                        notifyRemoved = true;
                     }
-                    relMgr.PromoteToDivorced(a_actor->GetFormID(), kPlayerFormID);
+                }
+                if (notifyRemoved) {
                     FactionReconciler::GetSingleton().NotifyFactionRemoved(a_actor, a_faction);
                     return;
                 }
@@ -455,7 +552,7 @@ namespace MARAS {
     }
 
     void FactionReconciler::ReconcilePlayer() {
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             DeferredActorResolver::GetSingleton().RequestSync(kPlayerFormID, DeferredActorResolver::SyncFlags::Factions);
             return;
         }
@@ -693,7 +790,7 @@ namespace MARAS {
         if (!actor) {
             return;
         }
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             const RE::FormID actorId = actor->GetFormID();
             if (actorId != 0) {
                 AddCurrentEpochTask("FactionReconciler::ClearChildHouseholdFactions", [actorId]() {
@@ -804,7 +901,7 @@ namespace MARAS {
             return;
         }
 
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             DeferredActorResolver::GetSingleton().RequestSync(actorId, DeferredActorResolver::SyncFlags::Factions);
             return;
         }
@@ -837,7 +934,7 @@ namespace MARAS {
     }
 
     void FactionReconciler::ReconcileAllOnLoad() {
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (!pendingAllOnLoad_.exchange(true, std::memory_order_acq_rel)) {
                 if (!AddEpochTask(GetSessionEpoch(), "FactionReconciler::ReconcileAllOnLoad", []() {
                         std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());

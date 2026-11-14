@@ -4,6 +4,7 @@
 #include "core/FormCache.h"
 #include "core/HomeCellService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "core/SpouseHierarchyManager.h"
 #include "core/SkyrimNetDecisions.h"
 #include "core/SkyrimNetIntegration.h"
@@ -40,6 +41,21 @@ namespace MARAS {
             return obj[key].get<bool>();
         }
         return defaultVal;
+    }
+
+    static bool IsActorAliveAndValid(RE::FormID id) {
+        if (id == 0) {
+            return false;
+        }
+        if (DeceasedRegistry::GetSingleton().IsDeceased(id)) {
+            return false;
+        }
+        if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(id)) {
+            if (actor->IsDeleted() || actor->IsDead()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     float MatchmakingService::GetCurrentGameDay() const {
@@ -1148,8 +1164,16 @@ namespace MARAS {
                                    taskItem.partner.partnerName, taskItem.partner.partnerID, taskItem.partner.evalMode);
                     continue;
                 }
-                auto& mgrRef = NPCRelationshipManager::GetSingleton();
                 const auto& mode = taskItem.partner.evalMode;
+                if (!IsActorAliveAndValid(taskItem.partner.partnerID) ||
+                    ((mode == "breakup_affair" || mode == "breakup_open_lover") &&
+                     taskItem.partner.sideLoverID != 0 &&
+                     !IsActorAliveAndValid(taskItem.partner.sideLoverID))) {
+                    MARAS_LOG_INFO("[Matchmaking:PartnerAgency:LLM] Skipping task for '{}' (0x{:08X}, evalMode='{}') - actor is deceased or invalid",
+                                   taskItem.partner.partnerName, taskItem.partner.partnerID, mode);
+                    continue;
+                }
+                auto& mgrRef = NPCRelationshipManager::GetSingleton();
                 if (mode == "suggest_open" || mode == "suggest_close") {
                     if (taskItem.willSuggest &&
                         Settings::GetSingleton().Snapshot()->playerPartnerAgencyEnableForceGreets &&
@@ -3713,6 +3737,7 @@ namespace MARAS {
         auto& mgr = NPCRelationshipManager::GetSingleton();
         const auto settingsSnap = Settings::GetSingleton().Snapshot();
         const auto& settings = *settingsSnap;
+        const bool revealSecrets = settings.revealSecretsInUI;
 
         std::vector<ModalChecklistItem> items;
         items.reserve(candidates.size());
@@ -3737,7 +3762,7 @@ namespace MARAS {
             item.checked = true;
 
             if (cand.action == "new" || cand.action == "advance") {
-                if (cand.isCheating) {
+                if (cand.isCheating && revealSecrets) {
                     item.badgeText = "Cheating";
                     item.badgeTone = "warning";
                 } else if (cand.action == "advance") {
@@ -4166,6 +4191,12 @@ namespace MARAS {
             return false;
         }
 
+        if (!IsActorAliveAndValid(result.actorAFormID) || !IsActorAliveAndValid(result.actorBFormID)) {
+            result.skipped = true;
+            result.skipReason = "Actor is deceased or invalid";
+            return false;
+        }
+
         auto& mgr = NPCRelationshipManager::GetSingleton();
         const auto settingsSnap = Settings::GetSingleton().Snapshot();
         const auto& settings = *settingsSnap;
@@ -4264,6 +4295,12 @@ namespace MARAS {
     }
 
     bool MatchmakingService::ApplyMatch(MatchmakingResult& result) {
+        if (!IsActorAliveAndValid(result.actorAFormID) || !IsActorAliveAndValid(result.actorBFormID)) {
+            MARAS_LOG_WARN("[Matchmaking:ApplyMatch] Skipping {:08X} <-> {:08X} - actor is deceased or invalid",
+                           result.actorAFormID, result.actorBFormID);
+            return false;
+        }
+
         auto& mgr = NPCRelationshipManager::GetSingleton();
         bool success = false;
 
@@ -4924,12 +4961,8 @@ namespace MARAS {
                 payload["targetLocationFormId"] = PrismaUIDataBridge::FormIDToString(locationKey);
                 payload["targetLocationName"] = currentLocName;
 
-                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                    RE::TESForm* senderForm = partnerActor ? static_cast<RE::TESForm*>(partnerActor) : nullptr;
-                    std::string payloadStr = SafeJsonDump(payload);
-                    SKSE::ModCallbackEvent modEvent("maras_partner_home_arrival_event", payloadStr, 1.0f, senderForm);
-                    eventSource->SendEvent(&modEvent);
-                }
+                const RE::FormID senderID = partnerActor ? partnerActor->GetFormID() : 0;
+                EmitModCallbackEvent("maras_partner_home_arrival_event", SafeJsonDump(payload), 1.0f, senderID);
 
                 MARAS_LOG_INFO("[Matchmaking:HomeArrival:Priority1] Fired 100% pending intent scenario '{}' for '{}' (0x{:08X}, lover='{}' [0x{:08X}]) at '{}'; blocking side-lover scenarios for this visit",
                                scenario, partnerName, partnerID, loverName, intent.relatedLoverID, currentLocName);
@@ -5229,12 +5262,8 @@ namespace MARAS {
             payload["targetMarkerFormId"] = PrismaUIDataBridge::FormIDToString(targetMarkerID);
             payload["targetLocationName"] = targetLocName;
 
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                RE::TESForm* senderForm = partnerActor ? static_cast<RE::TESForm*>(partnerActor) : nullptr;
-                std::string payloadStr = SafeJsonDump(payload);
-                SKSE::ModCallbackEvent modEvent("maras_partner_home_arrival_event", payloadStr, 0.0f, senderForm);
-                eventSource->SendEvent(&modEvent);
-            }
+            const RE::FormID senderID = partnerActor ? partnerActor->GetFormID() : 0;
+            EmitModCallbackEvent("maras_partner_home_arrival_event", SafeJsonDump(payload), 0.0f, senderID);
 
             MARAS_LOG_INFO("[Matchmaking:HomeArrival:Priority2] Fired scenario '{}' for '{}' (0x{:08X}) with lover '{}' (0x{:08X}) at '{}' (targetLoc='{}' [0x{:08X}], marker=0x{:08X})",
                            scenario, partnerName, partnerID, loverName, activeLoverID, currentLocName,

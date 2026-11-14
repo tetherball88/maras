@@ -1029,8 +1029,8 @@ namespace MARAS::State {
         std::int32_t childTrainingCost{ 2000 };
         bool childTrainingRequireFaction{ true };
 
-        // Optional runtime mirror of enablePolygamy TESGlobal (default true per Settings::GetEnablePolygamy)
-        bool enablePlayerPolygamy{ true };
+        // Optional runtime mirror of enablePolygamy TESGlobal (matches 000006:TT_MARAS.esp default 0)
+        bool enablePlayerPolygamy{ false };
 
         [[nodiscard]] constexpr float GetBaseLonelinessDays() const noexcept {
             return static_cast<float>(std::clamp(lonelinessThresholdDays, 1, 14));

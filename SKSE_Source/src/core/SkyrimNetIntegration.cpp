@@ -2462,6 +2462,22 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
                             PrismaUIDataBridge::GetSingleton().SendOverviewData();
                             return;
                         }
+                        if (state->motherID != 0) {
+                            const bool motherDeadInEngine = [motherID = state->motherID]() {
+                                if (motherID == kPlayerFormID) {
+                                    auto* player = RE::PlayerCharacter::GetSingleton();
+                                    return player && player->IsDead();
+                                }
+                                auto* actor = RE::TESForm::LookupByID<RE::Actor>(motherID);
+                                return actor && (actor->IsDeleted() || actor->IsDead());
+                            }();
+                            if (DeceasedRegistry::GetSingleton().IsDeceased(state->motherID) || motherDeadInEngine) {
+                                MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: mother {:08X} ('{}') is deceased/dead; ignoring async result for child {:08X}.",
+                                               state->motherID, state->motherName, childID);
+                                PrismaUIDataBridge::GetSingleton().SendOverviewData();
+                                return;
+                            }
+                        }
 
                         if (!res.success) {
                             MARAS_LOG_WARN("[SkyrimNet] EvaluatePaternitySecret: evaluation failed for child {:08X} (usedDecisions={}, detail='{}').",
@@ -2574,11 +2590,8 @@ bool AddActorMemory(RE::FormID actorFormID, const std::string& content, float im
                             std::string eventOutcome = (wasPregSecretPartner && (outcome == "mother_confessed_presumed" || outcome == "presumed_father_learnt" || outcome == "mother_confessed_both"))
                                                            ? (outcome + "_unannounced")
                                                            : outcome;
-                            if (auto* source = SKSE::GetModCallbackEventSource()) {
-                                float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
-                                SKSE::ModCallbackEvent modEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, nullptr);
-                                source->SendEvent(&modEvent);
-                            }
+                            const float childIdFloat = static_cast<float>(static_cast<int32_t>(childID));
+                            EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
                             SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(childID, outcome, partnerReaction, wasPregSecretPartner);
                         }
 

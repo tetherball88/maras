@@ -311,7 +311,7 @@ namespace MARAS {
                                         std::string cName = cheaterActor ? cheaterActor->GetDisplayFullName() : ActorSvc::GetName(cheaterID);
                                         std::string pName = partnerActor ? partnerActor->GetDisplayFullName() : ActorSvc::GetName(partnerID);
                                         std::string msg = fmt::format("You caught {} with {}!", cName, pName);
-                                        RE::SendHUDMessage::ShowHUDMessage(msg.c_str());
+                                        QueueHUDMessage(std::move(msg));
                                     }
 
                                     if (victimActor && cheaterActor && partnerActor) {
@@ -458,13 +458,13 @@ namespace MARAS {
             }
         }
         if (!trackedKeys.empty()) {
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                auto* player = RE::PlayerCharacter::GetSingleton();
-                for (const auto& key : trackedKeys) {
-                    SKSE::ModCallbackEvent modEvent("maras_verify_intimate_thread", key.framework.c_str(),
-                                                    static_cast<float>(key.threadID), player);
-                    eventSource->SendEvent(&modEvent);
-                }
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            const RE::FormID playerID = player ? player->GetFormID() : 0;
+            for (const auto& key : trackedKeys) {
+                EmitModCallbackEvent("maras_verify_intimate_thread",
+                                     key.framework,
+                                     static_cast<float>(key.threadID),
+                                     playerID);
             }
         }
 
@@ -574,7 +574,7 @@ namespace MARAS {
                             std::string cName = cheaterActor->GetDisplayFullName();
                             std::string pName = partnerActor ? partnerActor->GetDisplayFullName() : ActorSvc::GetName(affairPartnerID);
                             std::string msg = fmt::format("You caught {} with {}!", cName, pName);
-                            RE::SendHUDMessage::ShowHUDMessage(msg.c_str());
+                            QueueHUDMessage(std::move(msg));
                         }
 
                         // Send Papyrus event with victim as sender
@@ -660,12 +660,6 @@ namespace MARAS {
                                                         const std::string& framework, int32_t threadID, bool isWalkIn) {
         if (!victimActor) return;
 
-        auto* eventSource = SKSE::GetModCallbackEventSource();
-        if (!eventSource) {
-            MARAS_LOG_ERROR("IntimateThreadService: ModCallbackEventSource unavailable to send maras_cheating_caught");
-            return;
-        }
-
         RE::FormID victimID = victimActor->GetFormID();
         RE::FormID cheaterID = cheaterActor ? cheaterActor->GetFormID() : 0;
         RE::FormID partnerID = partnerActor ? partnerActor->GetFormID() : 0;
@@ -682,8 +676,7 @@ namespace MARAS {
         payload["isWalkIn"] = isWalkIn;
 
         std::string jsonStr = payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        SKSE::ModCallbackEvent modEvent("maras_cheating_caught", jsonStr, static_cast<float>(threadID), victimActor);
-        eventSource->SendEvent(&modEvent);
+        EmitModCallbackEvent("maras_cheating_caught", std::move(jsonStr), static_cast<float>(threadID), victimID);
         MARAS_LOG_INFO("IntimateThreadService: Sent maras_cheating_caught event: victim={:08X}, cheater={:08X}, partner={:08X}, walkIn={}",
                        victimID, cheaterID, partnerID, isWalkIn);
         SkyrimNetMemoryService::GetSingleton().RecordInfidelityEvent(cheaterID, victimID, partnerID, "caught", isWalkIn);
@@ -692,12 +685,6 @@ namespace MARAS {
     void IntimateThreadService::SendOpenRelationshipWalkInEvent(RE::Actor* witnessActor, RE::Actor* partnerActor, RE::Actor* sexPartnerActor,
                                                                 const std::string& framework, int32_t threadID, bool isWalkIn) {
         if (!witnessActor) return;
-
-        auto* eventSource = SKSE::GetModCallbackEventSource();
-        if (!eventSource) {
-            MARAS_LOG_ERROR("IntimateThreadService: ModCallbackEventSource unavailable to send maras_open_relationship_walkin");
-            return;
-        }
 
         RE::FormID witnessID = witnessActor->GetFormID();
         RE::FormID partnerID = partnerActor ? partnerActor->GetFormID() : 0;
@@ -715,8 +702,7 @@ namespace MARAS {
         payload["isWalkIn"] = isWalkIn;
 
         std::string jsonStr = payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        SKSE::ModCallbackEvent modEvent("maras_open_relationship_walkin", jsonStr, static_cast<float>(threadID), witnessActor);
-        eventSource->SendEvent(&modEvent);
+        EmitModCallbackEvent("maras_open_relationship_walkin", std::move(jsonStr), static_cast<float>(threadID), witnessID);
         MARAS_LOG_INFO("IntimateThreadService: Sent maras_open_relationship_walkin event: witness={:08X}, partner={:08X}, sexPartner={:08X}, walkIn={}",
                        witnessID, partnerID, sexPartnerID, isWalkIn);
     }

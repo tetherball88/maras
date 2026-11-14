@@ -5,6 +5,8 @@
 #include <atomic>
 #include <cstdint>
 #include <exception>
+#include <functional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -33,6 +35,47 @@ namespace MARAS {
     };
 
     [[nodiscard]] bool IsInMainThreadTask() noexcept;
+
+    // RAII scope marking execution inside a Papyrus native wrapper synced via PapyrusDomainMutex.
+    // Distinct from ScopedMainThreadTask so IsOnMainThread() stays strictly WinMain + BSTaskPool
+    // while engine reconcilers use CanSyncEngineInline().
+    class ScopedSyncedVmCall {
+    public:
+        ScopedSyncedVmCall() noexcept;
+        ~ScopedSyncedVmCall() noexcept;
+        ScopedSyncedVmCall(const ScopedSyncedVmCall&) = delete;
+        ScopedSyncedVmCall& operator=(const ScopedSyncedVmCall&) = delete;
+    };
+
+    [[nodiscard]] bool IsInSyncedVmCall() noexcept;
+
+    // Thread-local Papyrus domain lock tracking + post-lock outbox flush to avoid
+    // holding GetPapyrusMutex() across SKSE ModCallbackEvents, VM latent returns, or engine calls.
+    void EnterPapyrusDomainLock() noexcept;
+    void ExitPapyrusDomainLockAndFlush() noexcept;
+    [[nodiscard]] bool IsPapyrusDomainLockedOnCurrentThread() noexcept;
+
+    void DispatchPostLock(SessionEpoch expectedEpoch,
+                          std::function<void()> fn,
+                          const char* contextTag = "PostLock");
+    void DispatchPostLock(std::function<void()> fn,
+                          const char* contextTag = "PostLock");
+
+    void EmitModCallbackEvent(std::string eventName,
+                              std::string strArg = {},
+                              float numArg = 0.0f,
+                              RE::FormID senderID = 0);
+    inline void EmitModCallbackEvent(std::string eventName,
+                                     std::string strArg,
+                                     float numArg,
+                                     RE::TESForm* sender) {
+        EmitModCallbackEvent(std::move(eventName),
+                             std::move(strArg),
+                             numArg,
+                             sender ? sender->GetFormID() : 0);
+    }
+
+    void QueueHUDMessage(std::string msg);
 
     // Schedules a task on the SKSE main game thread bound to `expectedEpoch`.
     // Automatically drops the task if the save session transitioned before execution,
@@ -73,6 +116,41 @@ namespace MARAS {
     template <typename Fn>
     bool AddCurrentEpochTask(const char* contextTag, Fn&& fn) {
         return AddEpochTask(GetSessionEpoch(), contextTag, std::forward<Fn>(fn));
+    }
+
+    template <class LatentR, class Val>
+    void DispatchLatentResult(SessionEpoch expectedEpoch,
+                              RE::BSScript::Internal::VirtualMachine* vm,
+                              RE::VMStackID stackID,
+                              Val&& val,
+                              const char* contextTag = "LatentResult") {
+        if (!vm || stackID == 0) {
+            return;
+        }
+        DispatchPostLock(
+            expectedEpoch,
+            [vm, stackID, result = std::forward<Val>(val)]() mutable {
+                vm->ReturnLatentResult<LatentR>(stackID, std::move(result));
+            },
+            contextTag);
+    }
+
+    template <class FormT>
+    void DispatchLatentFormResult(SessionEpoch expectedEpoch,
+                                  RE::BSScript::Internal::VirtualMachine* vm,
+                                  RE::VMStackID stackID,
+                                  RE::FormID formID,
+                                  const char* contextTag = "LatentFormResult") {
+        if (!vm || stackID == 0) {
+            return;
+        }
+        DispatchPostLock(
+            expectedEpoch,
+            [vm, stackID, formID]() {
+                FormT* resolved = formID != 0 ? RE::TESForm::LookupByID<FormT>(formID) : nullptr;
+                vm->ReturnLatentResult<FormT*>(stackID, resolved);
+            },
+            contextTag);
     }
 
 }  // namespace MARAS

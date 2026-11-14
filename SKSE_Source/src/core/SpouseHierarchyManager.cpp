@@ -8,6 +8,7 @@
 #include "core/FormCache.h"
 #include "core/GlobalVarReconciler.h"
 #include "core/NPCIndex.h"
+#include "core/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -31,21 +32,14 @@ namespace MARAS {
         // Helper to send hierarchy changed event to Papyrus
         void SendHierarchyChangedEvent(RE::FormID npcFormID, const std::string& action, float newRank) {
             if (npcFormID == 0) return;
-            auto npcForm = RE::TESForm::LookupByID(npcFormID);
-            if (!npcForm) {
+            if (!RE::TESForm::LookupByID(npcFormID)) {
                 MARAS_LOG_WARN("Could not find form for FormID {:08X} to send hierarchy event", npcFormID);
                 return;
             }
 
-            auto eventSource = SKSE::GetModCallbackEventSource();
-            if (eventSource) {
-                SKSE::ModCallbackEvent modEvent("maras_hierarchy_changed", action, newRank, npcForm);
-                eventSource->SendEvent(&modEvent);
-                MARAS_LOG_INFO("Sent maras_hierarchy_changed event for NPC {:08X}: action={} rank={}", npcFormID,
-                               action, newRank);
-            } else {
-                MARAS_LOG_ERROR("Could not get ModCallbackEventSource to send hierarchy event");
-            }
+            EmitModCallbackEvent("maras_hierarchy_changed", action, newRank, npcFormID);
+            MARAS_LOG_INFO("Sent maras_hierarchy_changed event for NPC {:08X}: action={} rank={}", npcFormID,
+                           action, newRank);
         }
     }  // namespace
 

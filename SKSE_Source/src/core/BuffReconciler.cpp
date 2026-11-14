@@ -56,6 +56,7 @@ namespace MARAS {
 
     void BuffReconciler::Revert() {
         pendingReconcile_.store(false, std::memory_order_release);
+        forceRefreshOnLoad_.store(true, std::memory_order_release);
         InvalidateCache();
     }
 
@@ -122,7 +123,7 @@ namespace MARAS {
     }
 
     void BuffReconciler::ReconcilePlayerBuffs() {
-        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
             if (!pendingReconcile_.exchange(true, std::memory_order_acq_rel)) {
                 if (!AddEpochTask(GetSessionEpoch(), "BuffReconciler::ReconcilePlayerBuffs", []() {
                         std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
@@ -149,6 +150,8 @@ namespace MARAS {
         if (perkGroups_.empty()) {
             return;
         }
+
+        const bool forceRefresh = forceRefreshOnLoad_.exchange(false, std::memory_order_acq_rel);
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto teammatesRaw = PollingService::GetSingleton().GetCurrentTeammates();
@@ -262,7 +265,7 @@ namespace MARAS {
                 }
             }
 
-            if (anyFormValueChanged) {
+            if (anyFormValueChanged || (forceRefresh && playerHasPerk)) {
                 if (playerHasPerk) {
                     player->RemovePerk(perk);
                 }
