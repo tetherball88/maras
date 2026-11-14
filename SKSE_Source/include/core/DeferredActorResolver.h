@@ -16,8 +16,9 @@ namespace MARAS {
      * Main-thread gate and unloaded-actor reconciliation queue (`PendingEngineSyncSet`).
      *
      * Responsibilities:
-     * 1. Tracks the Skyrim main game thread ID (`CaptureMainThread()` at `SKSEPluginLoad` /
-     *    `kInputLoaded` / `ScopedMainThreadTask`, never `kDataLoaded` which runs on `InitTESThread`).
+     * 1. Tracks the Skyrim WinMain thread ID (`CaptureMainThread()` at `SKSEPluginLoad` /
+     *    `kInputLoaded` only — never `kDataLoaded` [`InitTESThread`] and never `ScopedMainThreadTask`,
+     *    because `BSTaskPool` rotates across `BSJobs` worker threads where `IsInMainThreadTask()` scopes execution).
      * 2. When off-thread callers request faction/package reconciliation, merges `SyncFlags`
      *    into `pendingSync_` and schedules a single coalesced `SessionEpoch`-fenced task
      *    to flush on the main thread.

@@ -58,9 +58,7 @@ namespace MARAS {
     }
 
     ScopedMainThreadTask::ScopedMainThreadTask() noexcept {
-        if (s_mainThreadTaskDepth++ == 0) {
-            DeferredActorResolver::GetSingleton().CaptureMainThread();
-        }
+        ++s_mainThreadTaskDepth;
     }
 
     ScopedMainThreadTask::~ScopedMainThreadTask() noexcept {
