@@ -64,11 +64,13 @@ endif()
 # ---------------------------------------------------- #
 
 add_library(maras_foundation STATIC
+    modules/foundation/src/EnumUtils.cpp
     modules/foundation/src/Logging.cpp
 )
 target_compile_features(maras_foundation PUBLIC cxx_std_23)
-target_include_directories(maras_foundation PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/foundation/include
+target_include_directories(maras_foundation
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/foundation/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/foundation/src
 )
 
 add_library(maras_state STATIC
@@ -78,10 +80,12 @@ add_library(maras_state STATIC
     modules/state/src/CoSaveCodec.cpp
     modules/state/src/SpatialActorSnapshot.cpp
     modules/state/src/EngineSyncPlan.cpp
+    modules/state/src/SessionEpoch.cpp
 )
 target_compile_features(maras_state PUBLIC cxx_std_23)
-target_include_directories(maras_state PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/state/include
+target_include_directories(maras_state
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/state/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/state/src
 )
 target_link_libraries(maras_state PUBLIC maras_foundation)
 
@@ -95,16 +99,83 @@ target_include_directories(maras_projection
 )
 target_link_libraries(maras_projection PUBLIC maras_state)
 
+add_library(maras_domain_relationships STATIC
+    modules/domain_relationships/src/RelationshipRules.cpp
+    modules/domain_relationships/src/InfidelityRules.cpp
+    modules/domain_relationships/src/AffectionRules.cpp
+    modules/domain_relationships/src/SpouseHierarchyRules.cpp
+    modules/domain_relationships/src/MarriageDifficultyRules.cpp
+    modules/domain_relationships/src/NpcTypeRules.cpp
+    modules/domain_relationships/src/BonusesDomain.cpp
+)
+target_compile_features(maras_domain_relationships PUBLIC cxx_std_23)
+target_include_directories(maras_domain_relationships
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_relationships/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_relationships/src
+)
+target_link_libraries(maras_domain_relationships PUBLIC maras_state)
+
+add_library(maras_domain_lineage STATIC
+    modules/domain_lineage/src/LineageRules.cpp
+    modules/domain_lineage/src/FertilityRules.cpp
+    modules/domain_lineage/src/ChildGrowthRules.cpp
+    modules/domain_lineage/src/TrainingCatalog.cpp
+    modules/domain_lineage/src/NamePool.cpp
+)
+target_compile_features(maras_domain_lineage PUBLIC cxx_std_23)
+target_include_directories(maras_domain_lineage
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_lineage/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_lineage/src
+)
+target_link_libraries(maras_domain_lineage PUBLIC maras_projection maras_state)
+
+add_library(maras_domain_household STATIC
+    modules/domain_household/src/HouseholdRules.cpp
+    modules/domain_household/src/SpouseAssetRules.cpp
+    modules/domain_household/src/DeceasedQueries.cpp
+    modules/domain_household/src/TravelRules.cpp
+    modules/domain_household/src/SpouseBuffRules.cpp
+)
+target_compile_features(maras_domain_household PUBLIC cxx_std_23)
+target_include_directories(maras_domain_household
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_household/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_household/src
+)
+target_link_libraries(maras_domain_household PUBLIC maras_projection maras_state maras_domain_relationships)
+
+add_library(maras_domain_agency STATIC
+    modules/domain_agency/src/MatchmakingRules.cpp
+    modules/domain_agency/src/NpcMatchmaker.cpp
+    modules/domain_agency/src/PartnerAgencyEvaluator.cpp
+    modules/domain_agency/src/EncounterTemplate.cpp
+    modules/domain_agency/src/BanterPlanner.cpp
+)
+target_compile_features(maras_domain_agency PUBLIC cxx_std_23)
+target_include_directories(maras_domain_agency
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_agency/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_agency/src
+)
+target_link_libraries(maras_domain_agency PUBLIC maras_projection maras_state maras_domain_relationships maras_domain_lineage)
+
 if(MSVC)
     set_property(TARGET maras_foundation PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET maras_state PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET maras_projection PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET maras_domain_relationships PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET maras_domain_lineage PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET maras_domain_household PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET maras_domain_agency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 # Collect all source files
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
-    "plugin.cpp"
-    "src/*.cpp"
+    "plugin/plugin.cpp"
+    "modules/engine/src/*.cpp"
+    "modules/app/src/*.cpp"
+    "modules/bridge_c_api/src/*.cpp"
+    "modules/bridge_papyrus/src/*.cpp"
+    "modules/bridge_ui/src/*.cpp"
+    "modules/bridge_skyrimnet/src/*.cpp"
     "version.rc"
 )
 
@@ -114,6 +185,10 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 sta
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
+    maras_domain_agency
+    maras_domain_household
+    maras_domain_lineage
+    maras_domain_relationships
     maras_projection
     maras_state
     nlohmann_json::nlohmann_json
@@ -123,7 +198,12 @@ target_link_libraries(${PROJECT_NAME}
 
 # Add include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/engine/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/app/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_c_api/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_papyrus/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_ui/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_skyrimnet/include
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -192,13 +272,21 @@ if(MARAS_BUILD_TESTS)
         tests/test_world_store.cpp
         tests/test_perspective_lens.cpp
         tests/test_reconcilers.cpp
+        tests/test_domain_relationships.cpp
+        tests/test_domain_lineage.cpp
+        tests/test_domain_household.cpp
+        tests/test_domain_agency.cpp
     )
     target_compile_features(maras_tests PRIVATE cxx_std_23)
     target_include_directories(maras_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
-    # Physical LNK2019 link gate: maras_tests links ONLY maras_projection, maras_state, and maras_foundation
+    # Physical LNK2019 link gate: maras_tests links ONLY pure STATIC domain/projection/state/foundation targets
     target_link_libraries(maras_tests PRIVATE
+        maras_domain_agency
+        maras_domain_household
+        maras_domain_lineage
+        maras_domain_relationships
         maras_projection
         maras_state
         maras_foundation

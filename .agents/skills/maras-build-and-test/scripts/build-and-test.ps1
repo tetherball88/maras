@@ -37,27 +37,77 @@ if (-not $env:VCPKG_ROOT) {
     $env:VCPKG_ROOT = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\vcpkg"
 }
 
-# 1. Pure-module header hygiene check (zero engine / JSON / YAML / spdlog leaks in modules/ & tests/)
+# 1. Pure-module header hygiene & Layer-DAG check
 if (-not $SkipHeaderCheck) {
     $PurePaths = @(
-        (Join-Path $SkseDir "modules"),
+        (Join-Path $SkseDir "modules\foundation"),
+        (Join-Path $SkseDir "modules\state"),
+        (Join-Path $SkseDir "modules\projection"),
+        (Join-Path $SkseDir "modules\domain_relationships"),
+        (Join-Path $SkseDir "modules\domain_lineage"),
+        (Join-Path $SkseDir "modules\domain_household"),
+        (Join-Path $SkseDir "modules\domain_agency"),
         (Join-Path $SkseDir "tests")
     ) | Where-Object { Test-Path $_ }
 
     if ($PurePaths.Count -gt 0) {
         $PureFiles = Get-ChildItem -Path $PurePaths -Recurse -Include "*.h","*.hpp","*.cpp"
-        $Forbidden = $PureFiles | Select-String -Pattern '^\s*#\s*include\s*[<"](RE/|SKSE/|PCH\.h|nlohmann/|yaml-cpp/|spdlog/)'
+        $Forbidden = $PureFiles | Select-String -Pattern '^\s*#\s*include\s*[<"](RE/|SKSE/|PCH\.h|nlohmann/|yaml-cpp/|spdlog/|maras/(engine|app|bridge_[^/]+)/)'
         if ($Forbidden) {
-            Write-Host "[FAIL] Forbidden engine/third-party #include detected in pure modules/tests:" -ForegroundColor Red
+            Write-Host "[FAIL] Forbidden engine/third-party/upward-layer #include detected in pure modules/tests:" -ForegroundColor Red
             $Forbidden | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
             exit 1
         }
-        $PureHeaders = Get-ChildItem -Path $PurePaths -Recurse -Include "*.h","*.hpp"
-        $UsingNs = $PureHeaders | Select-String -Pattern '^\s*using\s+namespace\s+'
+    }
+
+    $AllModuleAndTestHeaders = @(
+        (Join-Path $SkseDir "modules"),
+        (Join-Path $SkseDir "tests")
+    ) | Where-Object { Test-Path $_ } | Get-ChildItem -Recurse -Include "*.h","*.hpp"
+    if ($AllModuleAndTestHeaders) {
+        $UsingNs = $AllModuleAndTestHeaders | Select-String -Pattern '^\s*using\s+namespace\s+'
         if ($UsingNs) {
-            Write-Host "[FAIL] 'using namespace' detected in pure header:" -ForegroundColor Red
+            Write-Host "[FAIL] 'using namespace' detected in module/test header:" -ForegroundColor Red
             $UsingNs | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
             exit 1
+        }
+    }
+
+    $EngineDir = Join-Path $SkseDir "modules\engine"
+    if (Test-Path $EngineDir) {
+        $EngineFiles = Get-ChildItem -Path $EngineDir -Recurse -Include "*.h","*.hpp","*.cpp"
+        $EngineLeaks = $EngineFiles | Select-String -Pattern '^\s*#\s*include\s*[<"]maras/(app|bridge_[^/]+)/'
+        if ($EngineLeaks) {
+            Write-Host "[FAIL] Forbidden Layer-DAG #include in modules/engine:" -ForegroundColor Red
+            $EngineLeaks | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
+            exit 1
+        }
+    }
+
+    $AppDir = Join-Path $SkseDir "modules\app"
+    if (Test-Path $AppDir) {
+        $AppFiles = Get-ChildItem -Path $AppDir -Recurse -Include "*.h","*.hpp","*.cpp"
+        $AppLeaks = $AppFiles | Select-String -Pattern '^\s*#\s*include\s*[<"]maras/bridge_[^/]+/'
+        if ($AppLeaks) {
+            Write-Host "[FAIL] Forbidden Layer-DAG #include in modules/app:" -ForegroundColor Red
+            $AppLeaks | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
+            exit 1
+        }
+    }
+
+    $ModulesRoot = Join-Path $SkseDir "modules"
+    if (Test-Path $ModulesRoot) {
+        Get-ChildItem -Path $ModulesRoot -Directory -Filter "bridge_*" | ForEach-Object {
+            $bridgeName = $_.Name
+            $bridgeFiles = Get-ChildItem -Path $_.FullName -Recurse -Include "*.h","*.hpp","*.cpp"
+            $bridgeIncludes = $bridgeFiles | Select-String -Pattern '^\s*#\s*include\s*[<"]maras/(bridge_[^/]+)/'
+            foreach ($match in $bridgeIncludes) {
+                $targetBridge = $match.Matches[0].Groups[1].Value
+                if ($targetBridge -ne $bridgeName) {
+                    Write-Host ("[FAIL] Forbidden cross-bridge #include in modules/{0}: {1}:{2}: {3}" -f $bridgeName, $match.Path, $match.LineNumber, $match.Line.Trim()) -ForegroundColor Red
+                    exit 1
+                }
+            }
         }
     }
 }

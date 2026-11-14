@@ -1,0 +1,110 @@
+#pragma once
+
+#include "maras/engine/EngineLogging.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace MARAS {
+
+    // Represents a single command to execute
+    struct QuestCommand {
+        std::string commandType;   // e.g., "promoteToStatus", "setAffection", "changeAffection"
+        std::string npcSpecifier;  // Either alias name (e.g., "LoveInterest") or form key (e.g., "__formData|...")
+        std::string argument;      // The argument for the command (e.g., keyword, value)
+
+        QuestCommand() = default;
+        QuestCommand(std::string type, std::string npc, std::string arg)
+            : commandType(std::move(type)), npcSpecifier(std::move(npc)), argument(std::move(arg)) {}
+    };
+
+    // Configuration for a single quest's event handlers
+    struct QuestEventConfig {
+        RE::FormID questFormID{ 0 };
+
+        std::vector<QuestCommand> onStartCommands;
+        std::vector<QuestCommand> onStopCommands;
+
+        // Map stage ID to commands
+        std::unordered_map<std::uint16_t, std::vector<QuestCommand>> onStageChangeCommands;
+    };
+
+    // Manages quest event configurations and command execution
+    class QuestEventManager {
+    public:
+        static QuestEventManager& GetSingleton();
+
+        // Load configuration from JSON files in a folder
+        bool LoadConfigFromFolder(const std::string& folderPath);
+
+        // Clear all configurations
+        void ClearConfig();
+
+        // Get configuration for a specific quest (for debugging)
+        const QuestEventConfig* GetConfigForQuest(RE::FormID questFormID) const;
+
+        // Get statistics
+        std::size_t GetConfigCount() const { return questConfigs_.size(); }
+
+        // Execute commands for quest events (called by event sink)
+        void ExecuteQuestStartCommands(RE::TESQuest* quest);
+        void ExecuteQuestStopCommands(RE::TESQuest* quest);
+        void ExecuteQuestStageCommands(RE::TESQuest* quest, std::uint16_t stage);
+
+    private:
+        QuestEventManager() = default;
+
+        // Execute a list of commands
+        void ExecuteCommands(const std::vector<QuestCommand>& commands,
+                             RE::TESQuest* quest,
+                             const std::string& context);
+
+        // Execute a single command via IEngineEventHooks
+        bool ExecuteCommand(const QuestCommand& command,
+                            RE::TESQuest* quest,
+                            const std::string& context);
+
+        // Helper to resolve NPC FormID from specifier (alias name, form key, or NPC name)
+        RE::FormID ResolveNPC(const std::string& npcSpecifier, RE::TESQuest* quest) const;
+
+        // Configuration storage: quest FormID -> config
+        std::unordered_map<RE::FormID, QuestEventConfig> questConfigs_;
+    };
+
+    // Event sink for quest start/stop events
+    class QuestStartStopEventSink : public RE::BSTEventSink<RE::TESQuestStartStopEvent> {
+    public:
+        static QuestStartStopEventSink* GetSingleton();
+
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESQuestStartStopEvent* event,
+                                              RE::BSTEventSource<RE::TESQuestStartStopEvent>* source) override;
+
+    private:
+        QuestStartStopEventSink() = default;
+        QuestStartStopEventSink(const QuestStartStopEventSink&) = delete;
+        QuestStartStopEventSink(QuestStartStopEventSink&&) = delete;
+        QuestStartStopEventSink& operator=(const QuestStartStopEventSink&) = delete;
+        QuestStartStopEventSink& operator=(QuestStartStopEventSink&&) = delete;
+    };
+
+    // Event sink for quest stage change events
+    class QuestStageEventSink : public RE::BSTEventSink<RE::TESQuestStageEvent> {
+    public:
+        static QuestStageEventSink* GetSingleton();
+
+        RE::BSEventNotifyControl ProcessEvent(const RE::TESQuestStageEvent* event,
+                                              RE::BSTEventSource<RE::TESQuestStageEvent>* source) override;
+
+    private:
+        QuestStageEventSink() = default;
+        QuestStageEventSink(const QuestStageEventSink&) = delete;
+        QuestStageEventSink(QuestStageEventSink&&) = delete;
+        QuestStageEventSink& operator=(const QuestStageEventSink&) = delete;
+        QuestStageEventSink& operator=(QuestStageEventSink&&) = delete;
+    };
+
+}  // namespace MARAS
