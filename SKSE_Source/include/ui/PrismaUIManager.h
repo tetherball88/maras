@@ -81,6 +81,7 @@ namespace MARAS {
         bool m_dashboardOpen = false;
         bool m_dashboardPaused = false;
         bool m_modalFocusLocked = false;
+        bool m_openDashboardAfterJournalClose = false;
         bool m_deferModalsUntilRaceMenuClosed = false;
         bool m_pendingNewGameRelationshipScan = false;
         std::vector<std::function<void()>> m_postUnfocusCallbacks;

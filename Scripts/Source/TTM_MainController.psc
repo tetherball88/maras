@@ -32,8 +32,6 @@ Function Maintenance()
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
     TTM_Conditions conditions = _self as TTM_Conditions
     TTM_ServiceIntimateMoments intimateMoments = _self as TTM_ServiceIntimateMoments
-    TTM_MCM mcmScript = _self as TTM_MCM
-    mcmScript.OnConfigInit()
     MigrateOldNpcHomeMarkers()
     MigrateSettingsToCpp()
     TTM_ServicePlayerHouse.CleanPapyrusUtilPackages()
@@ -57,7 +55,7 @@ Function Maintenance()
     RegisterForModEvent("maras_status_changed_full", "OnRelationshipChangedFull")
     RegisterForModEvent("maras_hierarchy_changed", "OnChangeHierarchyRank")
     RegisterForModEvent("maras_change_affection", "OnSpouseAffectionChanged")
-    RegisterForModEvent("maras_teammate_change", "OnTeammateChange")
+    UnregisterForModEvent("maras_teammate_change")
     RegisterForModEvent("maras_teammate_added", "OnTeammateAdded")
     RegisterForModEvent("maras_teammate_removed", "OnTeammateRemoved")
     RegisterForModEvent("maras_dialogue_opened", "OnDialogueOpened")
@@ -111,7 +109,6 @@ Function Maintenance()
     endif
 
     TTM_ServiceMarriageQuest.CheckOngoingMarriage()
-    TTM_ServiceBuff.Maintenance()
     questTracker.Maintenance()
     conditions.Maintenance()
     intimateMoments.Maintenance()
@@ -123,10 +120,8 @@ Function Maintenance()
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
     ; it does check inside to see if spouse alias is empty and quest is running
     TTM_Utils.ReinforceEnablePolygamySpouseAlias()
-    if(enablePolygamyQst.IsCompleted())
-        Quest mcmQ = self as Quest
-        TTM_MCM mcm = mcmQ as TTM_MCM
-        mcm.TTM_EnablePolygamyToggle.SetValue(1)
+    if(enablePolygamyQst.IsCompleted() && !MARAS.GetEnablePolygamy())
+        MARAS.SetEnablePolygamy(true)
     endif
 
     if(MARAS.GetDisablePolygamyQuest())
@@ -144,6 +139,7 @@ Function Maintenance()
 
     ; clean outdated StorageUtil data which was moved to SKSE plugin
     StorageUtil.ClearAllPrefix("TTM_Household_")
+    StorageUtil.ClearAllPrefix("TTM_MCMState")
 EndFunction
 
 Event OnMarasCheatingCaught(string eventName, string jsonPayload, float threadID, Form victimSender)
@@ -488,8 +484,6 @@ Event OnRelationshipChangedFull(String EventName, String jsonPayload, Float stat
             elseif(status == "exlover")
                 TTM_ServiceRelationships.MakeNpcExLover(nonPlayerPartner)
             endif
-        elseif(status == "married" || status == "divorced" || status == "candidate")
-            TTM_ServiceBuff.Maintenance()
         endif
     endif
 
@@ -621,10 +615,6 @@ Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDi
     TTM_ServiceSkyrimNet.RegisterMariatalAffectionChangeEvent(spouseA, level, direction)
 
     TTM_Messages.AffectionChangeMsg(spouseName, level, affectionDiff > 0)
-EndEvent
-
-Event OnTeammateChange(String eventName, string strArg, float fltArg, Form sender)
-    TTM_ServiceBuff.CalculateFollowerMultipliers()
 EndEvent
 
 Event OnMenuOpen(string menuName)

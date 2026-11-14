@@ -134,6 +134,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     void SetGlobalPetBanned(RE::StaticFunctionTag*, bool banned) {
+        std::lock_guard lock(GetPapyrusMutex());
         Settings::GetSingleton().SetBoolByKey("bGlobalBanPet", banned);
     }
 
@@ -211,6 +212,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     void SetGlobalCritterBanned(RE::StaticFunctionTag*, bool banned) {
+        std::lock_guard lock(GetPapyrusMutex());
         Settings::GetSingleton().SetBoolByKey("bGlobalBanCritter", banned);
     }
 

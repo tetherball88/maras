@@ -1,6 +1,7 @@
 #include "ui/PrismaUIDataBridge.h"
 #include "core/AdultChildProgression.h"
 #include "core/AdultChildTravelService.h"
+#include "core/DeferredActorResolver.h"
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/AffectionService.h"
@@ -259,6 +260,8 @@ namespace MARAS {
                 }
             } catch (const std::exception& e) {
                 MARAS_LOG_ERROR("PrismaUIDataBridge: Exception in task for action '{}': {}", action, e.what());
+            } catch (...) {
+                MARAS_LOG_ERROR("PrismaUIDataBridge: Unknown exception in task for action '{}'", action);
             }
         });
     }
@@ -619,6 +622,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendSettingsData() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendSettingsData", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendSettingsData();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json data;
         data["settings"] = BuildSettingsJson();
         data["isGamePaused"] = PrismaUIManager::GetSingleton().IsDashboardPaused();
@@ -718,6 +731,16 @@ namespace MARAS {
     }  // namespace
 
     void PrismaUIDataBridge::SendOverviewData() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendOverviewData", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendOverviewData();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         const auto view = MakeDashboardView();
         auto& affSvc = AffectionService::GetSingleton();
 
@@ -867,12 +890,32 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendHouseholdBuffs() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendHouseholdBuffs", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendHouseholdBuffs();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json buffsData = SpouseBuffService::GetHouseholdBuffsSnapshot();
         std::string jsonStr = buffsData.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         PrismaUIManager::GetSingleton().InteropCall("receiveMARASBuffs", jsonStr.c_str());
     }
 
     void PrismaUIDataBridge::SendNPCList() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendNPCList", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendNPCList();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         const auto view = MakeDashboardView();
         const auto visibleChildren = view.GetVisibleChildren();
         nlohmann::json list = BuildVisibleProfilesArray(
@@ -885,6 +928,16 @@ namespace MARAS {
     void PrismaUIDataBridge::SendNPCDetail(RE::FormID npcFormID) {
         if (npcFormID == 0) return;
         lastRequestedDetailNpcID_.store(npcFormID, std::memory_order_relaxed);
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendNPCDetail", [npcFormID]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendNPCDetail(npcFormID);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         const auto view = MakeDashboardView();
         auto& affSvc = AffectionService::GetSingleton();
 
@@ -919,11 +972,31 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendMatchmakingData() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendMatchmakingData", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendMatchmakingData();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         SendNPCList();
         SendMatchmakingSettings();
     }
 
     void PrismaUIDataBridge::SendMatchmakingResults(const std::vector<MatchmakingResult>& results, bool isGlobal) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendMatchmakingResults", [results, isGlobal]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendMatchmakingResults(results, isGlobal);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json arr = nlohmann::json::array();
         for (const auto& r : results) {
             nlohmann::json item;
@@ -951,6 +1024,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendGeneratedMemories(RE::FormID partnerFormId, const nlohmann::json& memoriesArray) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendGeneratedMemories", [partnerFormId, memoriesArray]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(partnerFormId, memoriesArray);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json data;
         data["partnerFormId"] = FormIDToString(partnerFormId);
         data["memories"] = memoriesArray;
@@ -959,6 +1042,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendMatchmakingSettings() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendMatchmakingSettings", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendMatchmakingSettings();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json j;
         {
             const auto sSnap = Settings::GetSingleton().Snapshot();
@@ -1108,9 +1201,20 @@ namespace MARAS {
             if (payload.contains("multSuggestOpenNeglectMin")) s.multSuggestOpenNeglectMin = std::clamp(GetJsonFloat(payload, "multSuggestOpenNeglectMin", s.multSuggestOpenNeglectMin), 0.1f, 10.0f);
         });
         SendMatchmakingSettings();
+        SendSettingsData();
     }
 
     void PrismaUIDataBridge::OnAffectionChanged(RE::FormID npcFormID, int value) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::OnAffectionChanged", [npcFormID, value]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().OnAffectionChanged(npcFormID, value);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json data;
         data["formId"] = FormIDToString(npcFormID);
         data["value"] = value;
@@ -1119,6 +1223,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnStatusChanged(RE::FormID actorA, RE::FormID actorB, uint8_t status) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::OnStatusChanged", [actorA, actorB, status]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().OnStatusChanged(actorA, actorB, status);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
         const auto view = Projection::PerspectiveView::ForDashboard(
             worldSnap,
@@ -1154,6 +1268,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnHierarchyChanged() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::OnHierarchyChanged", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().OnHierarchyChanged();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
         nlohmann::json ranks = nlohmann::json::array();
         for (std::size_t i = 0; i < State::SpouseHierarchyTable::kSlotCount; ++i) {
@@ -1270,6 +1394,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnChildUpdated(const ChildRegistryEntry& entry) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::OnChildUpdated", [entry]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().OnChildUpdated(entry);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         const auto view = MakeDashboardView();
         const auto perceivedChild = view.GetPerceivedChild(State::ChildId{ entry.childID });
         if (!perceivedChild.has_value()) {
@@ -1281,6 +1415,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnChildRemoved(RE::FormID childID) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::OnChildRemoved", [childID]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().OnChildRemoved(childID);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         std::string formStr = FormIDToString(childID);
         nlohmann::json payload;
         payload["childId"] = formStr;
@@ -1289,6 +1433,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::OnChildPromoted(RE::FormID oldID, RE::FormID newID) {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::OnChildPromoted", [oldID, newID]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().OnChildPromoted(oldID, newID);
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json payload;
         payload["oldId"] = FormIDToString(oldID);
         payload["newId"] = FormIDToString(newID);
@@ -1301,6 +1455,9 @@ namespace MARAS {
         int value = GetJsonInt(payload, "value", 0);
         if (id != 0) {
             AffectionService::GetSingleton().SetPermanentAffection(id, value);
+            if (NPCRelationshipManager::GetSingleton().GetRelationshipStatus(id, kPlayerFormID) == RelationshipStatus::Married) {
+                SendHouseholdBuffs();
+            }
             MARAS_LOG_INFO("PrismaUIDataBridge: Set affection for {:08X} to {}", id, value);
         }
     }
@@ -1310,6 +1467,9 @@ namespace MARAS {
         int val = GetJsonInt(payload, "socialClass", 0);
         if (id != 0) {
             NPCRelationshipManager::GetSingleton().SetSocialClass(id, static_cast<int8_t>(val));
+            SendOverviewData();
+            SendNPCDetail(id);
+            SendHouseholdBuffs();
         }
     }
 
@@ -1318,6 +1478,9 @@ namespace MARAS {
         int val = GetJsonInt(payload, "skillType", 0);
         if (id != 0) {
             NPCRelationshipManager::GetSingleton().SetSkillType(id, static_cast<int8_t>(val));
+            SendOverviewData();
+            SendNPCDetail(id);
+            SendHouseholdBuffs();
         }
     }
 
@@ -1326,6 +1489,8 @@ namespace MARAS {
         int val = GetJsonInt(payload, "temperament", 0);
         if (id != 0) {
             NPCRelationshipManager::GetSingleton().SetTemperament(id, static_cast<int8_t>(val));
+            SendOverviewData();
+            SendNPCDetail(id);
         }
     }
 
@@ -1373,6 +1538,12 @@ namespace MARAS {
                 MatchmakingService::GetSingleton().RecordNpcCooldown(actorB, today);
             }
             SendOverviewData();
+            if (actorA != kPlayerFormID) {
+                SendNPCDetail(actorA);
+            }
+            if (actorB != kPlayerFormID) {
+                SendNPCDetail(actorB);
+            }
         }
     }
 
@@ -1382,6 +1553,9 @@ namespace MARAS {
         if (id != 0) {
             SpouseHierarchyManager::GetSingleton().SetRank(id, rank);
             OnHierarchyChanged();
+            SendOverviewData();
+            SendNPCDetail(id);
+            SendHouseholdBuffs();
         }
     }
 
@@ -1475,8 +1649,15 @@ namespace MARAS {
             }
         }
         SendOverviewData();
-        SendNPCDetail(actorA);
-        SendNPCDetail(actorB);
+        if (actorA != kPlayerFormID) {
+            SendNPCDetail(actorA);
+        }
+        if (actorB != kPlayerFormID) {
+            SendNPCDetail(actorB);
+        }
+        if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
+            SendHouseholdBuffs();
+        }
     }
 
     void PrismaUIDataBridge::ProcessRemoveRelationship(const nlohmann::json& payload) {
@@ -1493,6 +1674,9 @@ namespace MARAS {
             SendOverviewData();
             if (actorA != 0x14) SendNPCDetail(actorA);
             if (actorB != 0x14) SendNPCDetail(actorB);
+            if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
+                SendHouseholdBuffs();
+            }
         }
     }
 
@@ -1548,6 +1732,17 @@ namespace MARAS {
         }
         if (updated && key == "revealSecretsInUI") {
             SendOverviewData();
+            SendNPCList();
+            const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
+            if (detailNpcId != 0) {
+                SendNPCDetail(detailNpcId);
+            }
+        } else if (updated && (key == "affectionDecayMult" || key == "affectionDecayMultiplier" ||
+                               key == "childTrainingDurationDays" || key == "childTrainingCost" ||
+                               key == "childTrainingRequireFaction" || key == "bGlobalBanCritter" ||
+                               key == "globalBanCritter" || key == "bGlobalBanPet" ||
+                               key == "globalBanPet")) {
+            SendOverviewData();
             const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
             if (detailNpcId != 0) {
                 SendNPCDetail(detailNpcId);
@@ -1558,6 +1753,16 @@ namespace MARAS {
     }
 
     void PrismaUIDataBridge::SendAllSkyrimNPCs() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIDataBridge::SendAllSkyrimNPCs", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIDataBridge::GetSingleton().SendAllSkyrimNPCs();
+            });
+            return;
+        }
+        if (!PrismaUIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
         nlohmann::json npcs = nlohmann::json::array();
         auto allEntries = NPCIndex::GetSingleton().GetAllEntries();
 
@@ -1938,6 +2143,7 @@ namespace MARAS {
             NPCRelationshipManager::GetSingleton().SetPaternitySecretEdges(childID, secretBio, secretPartner, pregSecretPartner);
             MARAS_LOG_INFO("PrismaUIDataBridge: SetPaternitySecretEdges child {:08X} -> secretBio: {}, secretPartner: {}",
                            childID, secretBio, secretPartner);
+            SendOverviewData();
             SendNPCDetail(childID);
         }
     }
@@ -2017,6 +2223,7 @@ namespace MARAS {
         PlayerHouseService::GetSingleton().SetTenantStayAtHome(npcFormID, stayAtHome);
         MARAS_LOG_INFO("PrismaUIDataBridge: ProcessSetNPCStayAtHome tenant {:08X} stayAtHome = {}", npcFormID, stayAtHome);
 
+        SendOverviewData();
         SendNPCDetail(npcFormID);
     }
 

@@ -72,8 +72,8 @@ When C++ state changes (via Prisma UI actions, background services, or C++ hooks
 | ModEvent Name | Arguments (`string strArg`, `float numArg`, `Form sender`) | Handled By |
 | :--- | :--- | :--- |
 | `MARAS_StatusChanged` | `strArg = newStatus`, `numArg = partnerFormID`, `sender = Actor` | `TTM_MainController` $\rightarrow$ `TTM_ServiceRelationships` / `TTM_ServiceSkyrimNet` |
-| `MARAS_AffectionChanged` | `strArg = tierName`, `numArg = newScore`, `sender = Actor` | `TTM_MainController` $\rightarrow$ `TTM_ServiceAffection` / `TTM_ServiceBuff` |
-| `MARAS_HierarchyChanged` | `strArg = "updated"`, `numArg = newRank`, `sender = Actor` | `TTM_MainController` $\rightarrow$ `TTM_ServiceBuff` |
+| `MARAS_AffectionChanged` | `strArg = tierName`, `numArg = newScore`, `sender = Actor` | `TTM_MainController` $\rightarrow$ `TTM_ServiceAffection` / C++ `BuffReconciler` |
+| `MARAS_HierarchyChanged` | `strArg = "updated"`, `numArg = newRank`, `sender = Actor` | C++ `BuffReconciler` (player perks/spells) |
 | `MARAS_HouseAssigned` | `strArg = houseName`, `numArg = houseIndex`, `sender = Actor` | `TTM_MainController` $\rightarrow$ `TTM_ServicePlayerHouse` |
 | `MARAS_CaughtCheating` | `strArg = witnessType`, `numArg = paramourFormID`, `sender = CheaterActor` | `TTM_MainController` $\rightarrow$ `TTM_NpcsScenes` / `TTM_ServiceSkyrimNet` |
 | `MARAS_ActionDeclined` | `strArg = declinedActionType`, `numArg = 0`, `sender = TargetActor` | `TTM_MainController` $\rightarrow$ `TTM_ServiceSkyrimNet.RegisterActionDeclined` |

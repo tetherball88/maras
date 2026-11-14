@@ -89,14 +89,10 @@ EndFunction
 /;
 Function MakeNpcMarried(Actor npc) global
     if(!npc)
-        TTM_ServiceBuff.Maintenance()
         return
     endif
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, 4)
-    ;re-evaluate spouses bonuses on each spouse added
-    TTM_ServiceBuff.CalculatePermanentMultipliers()
-    TTM_ServiceBuff.CalculateFollowerMultipliers()
 
     ; it will check if npc who becomes spouse actually is current fiance with wedding about to happen
     TTM_ServiceMarriageQuest.SkipWedding(npc)
@@ -119,15 +115,11 @@ EndFunction
 /;
 Function MakeNpcDivorced(Actor npc) global
     if(!npc)
-        TTM_ServiceBuff.Maintenance()
         return
     endif
     bool res = TTM_Data.GetDivorceKeyword().SendStoryEventAndWait(akRef1 = npc)
     Actor player = TTM_Data.GetPlayer()
     npc.SetRelationshipRank(player, -2)
-    ;re-evaluate spouses bonuses on each spouse removed
-    TTM_ServiceBuff.CalculatePermanentMultipliers()
-    TTM_ServiceBuff.CalculateFollowerMultipliers()
 
     TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(npc, "divorce")
     TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(npc)
@@ -208,12 +200,6 @@ Function HandleSpouseDeath(Actor npc, bool isPlayerKiller) global
     bool engaged = MARAS.IsNPCStatus(npc, "engaged") || MARAS.WasEngagedTo(npc, player)
 
     if(spouse || engaged)
-        if(spouse)
-            ; re-evaluate spouse bonuses on each spouse removed
-            TTM_ServiceBuff.CalculatePermanentMultipliers()
-            TTM_ServiceBuff.CalculateFollowerMultipliers()
-        endif
-
         if(isPlayerKiller)
             TTM_Data.SetPlayerKiller(isPlayerKiller)
             SetKilledByPlayer(npc)

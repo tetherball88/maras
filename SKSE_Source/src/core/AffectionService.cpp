@@ -84,6 +84,7 @@ namespace MARAS {
 
     void AffectionService::ResetDefaultMinMax() {
         // Default per-type daily clamp bounds
+        std::unique_lock lock(minMaxMutex_);
         minMaxByType_ = {
             {"intimacy", {-22, 22}},
             {"gift", {0, 15}},
@@ -173,17 +174,22 @@ namespace MARAS {
 
     void AffectionService::SetAffectionMinMax(const std::string& type, int minVal, int maxVal) {
         auto key = NormalizeType(type);
-        minMaxByType_[key] = {minVal, maxVal};
+        {
+            std::unique_lock lock(minMaxMutex_);
+            minMaxByType_[key] = {minVal, maxVal};
+        }
         MARAS_LOG_INFO("SetAffectionMinMax: {} -> [{}, {}]", key, minVal, maxVal);
     }
 
     bool AffectionService::HasMinMaxForType(const std::string& type) const {
         auto key = NormalizeType(type);
+        std::shared_lock lock(minMaxMutex_);
         return minMaxByType_.find(key) != minMaxByType_.end();
     }
 
     std::pair<int, int> AffectionService::GetMinMaxForType(const std::string& type) const {
         auto key = NormalizeType(type);
+        std::shared_lock lock(minMaxMutex_);
         auto it = minMaxByType_.find(key);
         if (it == minMaxByType_.end()) return {INT_MIN, INT_MAX};
         return it->second;
@@ -454,13 +460,18 @@ namespace MARAS {
 
     int AffectionService::CalculateTotalDailyDelta(const std::unordered_map<std::string, float>& dailyByType) const {
         int deltaTotal = 0;
+        std::unordered_map<std::string, std::pair<int, int>> minMaxCopy;
+        {
+            std::shared_lock lock(minMaxMutex_);
+            minMaxCopy = minMaxByType_;
+        }
 
         for (const auto& [type, value] : dailyByType) {
             int applied = static_cast<int>(std::lround(value));
 
             // Clamp if min/max configured for this type
-            auto mmIt = minMaxByType_.find(type);
-            if (mmIt != minMaxByType_.end()) {
+            auto mmIt = minMaxCopy.find(type);
+            if (mmIt != minMaxCopy.end()) {
                 applied = std::clamp(applied, mmIt->second.first, mmIt->second.second);
             }
 
@@ -657,8 +668,11 @@ namespace MARAS {
         j["dailyAffection"] = dailyArray;
 
         nlohmann::json minMaxObj = nlohmann::json::object();
-        for (const auto& [tName, range] : minMaxByType_) {
-            minMaxObj[tName] = { {"min", range.first}, {"max", range.second} };
+        {
+            std::shared_lock lock(minMaxMutex_);
+            for (const auto& [tName, range] : minMaxByType_) {
+                minMaxObj[tName] = { {"min", range.first}, {"max", range.second} };
+            }
         }
         j["minMaxByType"] = minMaxObj;
 

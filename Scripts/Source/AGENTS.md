@@ -16,7 +16,7 @@ Applies to all Papyrus scripts (`.psc`) in `Scripts/Source/` (compiled via `skyr
 
 - **`MARAS.psc` $\leftrightarrow$ C++ Parity**: Every `global native` signature in `Scripts/Source/MARAS.psc` must match `SKSE_Source/include/papyrus/PapyrusInterface.h` and `RegisterPapyrusFunctions` (`src/papyrus/PapyrusInterface.cpp`) with zero duplicate alias wrappers.
 - **Event-Driven (No Polling)**: Do not add `RegisterForUpdate` / `OnUpdate` loops (background polling belongs in C++ `PollingService`). Route SKSE `ModCallbackEvent`s (`maras_status_changed`, `maras_affection_changed`, `maras_hierarchy_changed`, `maras_house_assigned`, `maras_caught_cheating`, `maras_action_declined`, `maras_child_updated`) via `TTM_MainController.psc`.
-- **Unloaded Actor Sender Fallback**: When an NPC's `RE::Actor*` is unloaded, C++ sends `maras_status_changed` with `PlayerRef` as `akSender`—always resolve the NPC via the passed FormID parameter rather than `akSender`. (`OnRelationshipChangedFull` already triggers `TTM_ServiceBuff.Maintenance()` when `sendEvent == true`.)
+- **Unloaded Actor Sender Fallback**: When an NPC's `RE::Actor*` is unloaded, C++ sends `maras_status_changed` with `PlayerRef` as `akSender`—always resolve the NPC via the passed FormID parameter rather than `akSender`. Player spouse/follower buff reconciliation is handled natively by C++ `BuffReconciler` (`TTM_ServiceBuff.psc` and the `OnTeammateChange` listener are retired).
 
 ---
 
@@ -36,4 +36,4 @@ Applies to all Papyrus scripts (`.psc`) in `Scripts/Source/` (compiled via `skyr
   - **`Variable07` (ForceGreet Queue)**: `0` = none, `1` = allowance, `2` = gift, `3` = chest, `4` = critter, `5` = stray pet, `6` = game invite, `10` = scared of pet.
   - Always call `akChild.EvaluatePackage()` immediately after changing `Variable06` or `Variable07`.
 - **CK Fragment Safety**: In CK-generated scripts (`TTM_DialogueManager*.psc`, `TTM_Quest*.psc`, `TTM_ChildrenPackages.psc`), never alter `;BEGIN FRAGMENT` / `;END FRAGMENT`, `;NEXT FRAGMENT INDEX`, or `;BEGIN AUTOCAST`; edit strictly inside `;BEGIN CODE` ... `;END CODE`.
-- **MCM & Fertility**: MCM (`TTM_MCM_SettingsPage.psc`) is **deprecated** (Prisma UI only for new settings). Keep **both** **Fertility Mode Reloaded** (`TTM_ServiceFertilityFMR.psc`) and **Beeing Female NG** (`TTM_ServiceFertilityBF.psc`) synchronized via `TTM_ServiceFertility.psc`.
+- **MCM & Fertility**: Legacy SkyUI MCM pages (`TTM_MCM_*.psc`) and `TTM_ServiceBuff.psc` are **retired** (all settings live in the Prisma UI Dashboard; only the self-gating `TTM_MCM.psc` ongoing-save Dashboard launcher stub remains on Quest `000800` for `.ess` save safety). Keep **both** **Fertility Mode Reloaded** (`TTM_ServiceFertilityFMR.psc`) and **Beeing Female NG** (`TTM_ServiceFertilityBF.psc`) synchronized via `TTM_ServiceFertility.psc`.

@@ -3,6 +3,7 @@
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "utils/Common.h"
 #include "utils/ProcessUtils.h"
@@ -85,6 +86,7 @@ namespace MARAS {
     void ChildrenFleeService::FleeFromPlayerCell() {
         monitoring_.store(true, std::memory_order_release);
         AddCurrentEpochTask("ChildrenFleeService::FleeFromPlayerCell", []() {
+            std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
             auto* player = RE::PlayerCharacter::GetSingleton();
             auto* cell = player ? player->GetParentCell() : nullptr;
             if (!cell) {
@@ -118,6 +120,7 @@ namespace MARAS {
     void ChildrenFleeService::QueueRefresh() {
         monitoring_.store(true, std::memory_order_release);
         AddCurrentEpochTask("ChildrenFleeService::QueueRefresh", []() {
+            std::lock_guard papyrusLock(PapyrusInterface::GetPapyrusMutex());
             GetSingleton().Refresh();
         });
     }

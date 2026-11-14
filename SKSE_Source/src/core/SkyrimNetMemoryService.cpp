@@ -1323,6 +1323,7 @@ namespace MARAS {
                     expectedEpoch,
                     "SkyrimNetMemoryService::PreviewMemoriesResult",
                     [expectedEpoch, actorA, actorB, targetStatus, action, success, respStr = std::move(respStr), targets = std::move(targets)]() {
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                         auto& svc = SkyrimNetMemoryService::GetSingleton();
                         if (!success || respStr.empty()) {
                             ShowLLMRetryModal(
@@ -1331,10 +1332,12 @@ namespace MARAS {
                                             ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)),
                                 LLMFailureType::RequestFailed,
                                 [expectedEpoch, actorA, actorB, targetStatus, action]() {
+                                    std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(actorA, actorB, targetStatus, action);
                                 },
                                 [expectedEpoch, actorB]() {
+                                    std::lock_guard cancelLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
                                 },
@@ -1353,10 +1356,12 @@ namespace MARAS {
                                             ActorSvc::GetName(actorA), ActorSvc::GetName(actorB)),
                                 LLMFailureType::InvalidJson,
                                 [expectedEpoch, actorA, actorB, targetStatus, action]() {
+                                    std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     SkyrimNetMemoryService::GetSingleton().PreviewRelationshipMemories(actorA, actorB, targetStatus, action);
                                 },
                                 [expectedEpoch, actorB]() {
+                                    std::lock_guard cancelLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     PrismaUIDataBridge::GetSingleton().SendGeneratedMemories(actorB, nlohmann::json::array());
                                 },

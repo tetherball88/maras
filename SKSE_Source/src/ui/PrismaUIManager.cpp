@@ -1,6 +1,8 @@
 #include "ui/PrismaUIManager.h"
+#include "core/DeferredActorResolver.h"
 #include "core/NPCRelationshipManager.h"
 #include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "utils/Settings.h"
@@ -25,6 +27,7 @@ namespace MARAS {
         m_dashboardOpen = false;
         m_dashboardPaused = false;
         m_modalFocusLocked = false;
+        m_openDashboardAfterJournalClose = false;
         m_postUnfocusCallbacks.clear();
 
         if (IsViewValid()) {
@@ -99,45 +102,62 @@ namespace MARAS {
         }
 
         if (!a_event->opening && a_event->menuName == "PrismaUI_FocusMenu") {
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([]() {
-                    try {
-                        auto& mgr = PrismaUIManager::GetSingleton();
-                        mgr.TryFlushPostUnfocusCallbacks();
-                        mgr.SyncViewVisibilityAndFocus();
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(FocusMenu) exception: {}", e.what());
-                    }
-                });
-            }
+            AddCurrentEpochTask("PrismaUIManager::FocusMenuClosed", []() {
+                try {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    auto& mgr = PrismaUIManager::GetSingleton();
+                    mgr.TryFlushPostUnfocusCallbacks();
+                    mgr.SyncViewVisibilityAndFocus();
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(FocusMenu) exception: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(FocusMenu) unknown exception");
+                }
+            });
         }
 
+        if (!a_event->opening && a_event->menuName == RE::JournalMenu::MENU_NAME) {
+            AddCurrentEpochTask("PrismaUIManager::JournalMenuClosed", []() {
+                try {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    auto& mgr = PrismaUIManager::GetSingleton();
+                    if (mgr.m_openDashboardAfterJournalClose) {
+                        mgr.m_openDashboardAfterJournalClose = false;
+                        mgr.Show();
+                    }
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(JournalMenu) exception: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(JournalMenu) unknown exception");
+                }
+            });
+        }
+
+        const bool isRaceSexClosed = (!a_event->opening && a_event->menuName == RE::RaceSexMenu::MENU_NAME);
         const bool isBlockingMenu = (a_event->menuName == RE::RaceSexMenu::MENU_NAME ||
                                      a_event->menuName == RE::LoadingMenu::MENU_NAME ||
                                      a_event->menuName == RE::MainMenu::MENU_NAME);
 
-        if (!a_event->opening && a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
-            if (m_deferModalsUntilRaceMenuClosed) {
-                MARAS_LOG_INFO("PrismaUIManager: RaceSex Menu closed — lifting new-game modal deferral");
-                m_deferModalsUntilRaceMenuClosed = false;
-            }
-        }
-
         if (isBlockingMenu) {
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([]() {
-                    try {
-                        auto& mgr = PrismaUIManager::GetSingleton();
-                        mgr.TryRunPendingNewGameScan();
-                        if (!mgr.IsModalDisplayBlocked() && PrismaModalManager::GetSingleton().HasActiveModal()) {
-                            PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
-                        }
-                        mgr.SyncViewVisibilityAndFocus();
-                    } catch (const std::exception& e) {
-                        MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(BlockingMenu) exception: {}", e.what());
+            AddCurrentEpochTask("PrismaUIManager::BlockingMenuChanged", [isRaceSexClosed]() {
+                try {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    auto& mgr = PrismaUIManager::GetSingleton();
+                    if (isRaceSexClosed && mgr.m_deferModalsUntilRaceMenuClosed) {
+                        MARAS_LOG_INFO("PrismaUIManager: RaceSex Menu closed — lifting new-game modal deferral");
+                        mgr.m_deferModalsUntilRaceMenuClosed = false;
                     }
-                });
-            }
+                    mgr.TryRunPendingNewGameScan();
+                    if (!mgr.IsModalDisplayBlocked() && PrismaModalManager::GetSingleton().HasActiveModal()) {
+                        PrismaModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
+                    }
+                    mgr.SyncViewVisibilityAndFocus();
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(BlockingMenu) exception: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(BlockingMenu) unknown exception");
+                }
+            });
         }
 
         return RE::BSEventNotifyControl::kContinue;
@@ -410,6 +430,14 @@ namespace MARAS {
     }
 
     void PrismaUIManager::Show() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIManager::Show", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIManager::GetSingleton().Show();
+            });
+            return;
+        }
+
         if (!prismaUI) {
             MARAS_LOG_WARN("PrismaUIManager::Show called but PrismaUI API is not available");
             return;
@@ -417,6 +445,18 @@ namespace MARAS {
 
         if (IsBlockingNativeMenuOpen()) {
             MARAS_LOG_INFO("PrismaUIManager::Show() ignored while blocking native menu is open");
+            return;
+        }
+
+        if (auto* ui = RE::UI::GetSingleton(); ui && ui->IsMenuOpen(RE::JournalMenu::MENU_NAME)) {
+            MARAS_LOG_INFO("PrismaUIManager::Show() closing Journal Menu before opening Dashboard");
+            m_openDashboardAfterJournalClose = true;
+            if (auto* queue = RE::UIMessageQueue::GetSingleton()) {
+                queue->AddMessage(RE::JournalMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+                if (ui->IsMenuOpen(RE::TweenMenu::MENU_NAME)) {
+                    queue->AddMessage(RE::TweenMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+                }
+            }
             return;
         }
 
@@ -448,15 +488,25 @@ namespace MARAS {
     }
 
     void PrismaUIManager::Hide() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("PrismaUIManager::Hide", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                PrismaUIManager::GetSingleton().Hide();
+            });
+            return;
+        }
+
         if (!prismaUI || !view) {
             m_dashboardOpen = false;
             m_dashboardPaused = false;
+            m_openDashboardAfterJournalClose = false;
             return;
         }
 
         MARAS_LOG_INFO("PrismaUIManager::Hide() called for view {}", view);
         m_dashboardOpen = false;
         m_dashboardPaused = false;
+        m_openDashboardAfterJournalClose = false;
 
         if (prismaUI->IsValid(view)) {
             if (m_domReady) {

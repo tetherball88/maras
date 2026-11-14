@@ -131,6 +131,7 @@ namespace MARAS::PapyrusInterface {
 
     std::vector<RE::TESObjectREFR*> GetCellDoors(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell) {
         if (!currentCell) return {};
+        std::lock_guard lock(GetPapyrusMutex());
         std::vector<RE::TESObjectREFR*> result;
         auto doorIDs = MARAS::HomeCellService::GetSingleton().GetCellDoors(currentCell->GetFormID());
         result.reserve(doorIDs.size());
@@ -144,6 +145,7 @@ namespace MARAS::PapyrusInterface {
 
     RE::TESObjectCELL* GetNpcOriginalHouse(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) return nullptr;
+        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID cellId = MARAS::HomeCellService::GetSingleton().GetNpcHome(npc);
         if (cellId == 0) return nullptr;
         if (auto form = RE::TESForm::LookupByID(cellId)) {
@@ -157,6 +159,7 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetNpcOriginalHouseCenterMarker: null NPC provided");
             return nullptr;
         }
+        std::lock_guard lock(GetPapyrusMutex());
 
         RE::FormID markerId = MARAS::HomeCellService::GetSingleton().GetNpcOriginalHouseCenterMarker(npc);
         MARAS_LOG_INFO("GetNpcOriginalHouseCenterMarker (Papyrus): NPC {:08X} -> Marker {:08X}", npc->GetFormID(),
@@ -186,6 +189,7 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::TESObjectREFR*> GetNpcBeds(RE::StaticFunctionTag*, RE::Actor* npc) {
         std::vector<RE::TESObjectREFR*> result;
         if (!npc) return result;
+        std::lock_guard lock(GetPapyrusMutex());
 
         auto bedIDs = MARAS::HomeCellService::GetSingleton().GetNpcBeds(npc);
         result.reserve(bedIDs.size());
@@ -217,6 +221,7 @@ namespace MARAS::PapyrusInterface {
 
     bool IsHouseSharedWithPlayer(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell) {
         if (!currentCell) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseAssetsService::GetSingleton().IsHouseSharedWithPlayer(currentCell->GetFormID());
     }
 
@@ -225,6 +230,7 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("HasSpouseSharedHouseWithPlayer: null spouse provided");
             return false;
         }
+        std::lock_guard lock(GetPapyrusMutex());
 
         RE::FormID houseId = MARAS::HomeCellService::GetSingleton().GetNpcHome(spouse);
         if (houseId == 0) return false;

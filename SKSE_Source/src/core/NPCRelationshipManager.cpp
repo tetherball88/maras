@@ -4,6 +4,7 @@
 #include "core/AffectionService.h"
 #include "core/BuffReconciler.h"
 #include "core/DeceasedRegistry.h"
+#include "core/DeferredActorResolver.h"
 #include "core/FactionReconciler.h"
 #include "core/FactionService.h"
 #include "core/FormCache.h"
@@ -15,6 +16,8 @@
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
 #include "core/Serialization.h"
+#include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 #include "core/SkyrimNetIntegration.h"
 #include "core/SkyrimNetMemoryService.h"
 #include "core/SkyrimNetProfileService.h"
@@ -605,6 +608,31 @@ namespace MARAS {
         return true;
     }
 
+    namespace {
+        void StripVanillaMarriageFactionsOnMainThread(RE::FormID npcFormID) {
+            if (npcFormID == 0 || IsSyntheticChildID(npcFormID)) {
+                return;
+            }
+            auto strip = [npcFormID]() {
+                FactionReconciler::InternalFactionScope scope;
+                auto& cache = FormCache::GetSingleton();
+                Utils::RemoveFromFaction(npcFormID, cache.GetMarriageAskedFaction());
+                Utils::RemoveFromFaction(npcFormID, cache.GetCourtingFaction());
+                Utils::RemoveFromFaction(npcFormID, cache.GetMarriedFaction());
+                Utils::RemoveFromFaction(npcFormID, cache.GetPlayerFaction());
+                Utils::RemoveFromFaction(npcFormID, cache.GetPlayerBedOwnershipFaction());
+            };
+            if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+                strip();
+            } else {
+                AddCurrentEpochTask("NPCRelationshipManager::StripVanillaMarriageFactions", [strip]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    strip();
+                });
+            }
+        }
+    }  // namespace
+
     // Registration and unregistration
     bool NPCRelationshipManager::RegisterAsCandidate(RE::FormID inputFormID) {
         MARAS_LOG_INFO("RegisterAsCandidate entered: inputFormID={:08X}", inputFormID);
@@ -686,23 +714,12 @@ namespace MARAS {
             }
         });
 
-        // Clean up engine factions on the unregistered NPC
-        {
-            FactionService::InternalFactionScope scope;
-            auto& cache = FormCache::GetSingleton();
-            Utils::RemoveFromFaction(npcFormID, cache.GetTrackedFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseSocialClassFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseSkillTypeFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseTemperamentFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseCheatingFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseOpenRelationshipFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetCanFormNonCheatingMainFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetSpouseChildrenFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetMarriageAskedFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetCourtingFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetMarriedFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetPlayerFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetPlayerBedOwnershipFaction());
+        // Clean up MARAS factions/packages and vanilla marriage factions on the unregistered NPC
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        PackageReconciler::GetSingleton().ReconcileActor(npcFormID);
+        StripVanillaMarriageFactionsOnMainThread(npcFormID);
+        if (wasMarriedToPlayer) {
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         }
 
         for (RE::FormID partnerID : survivingPartners) {
@@ -768,15 +785,7 @@ namespace MARAS {
         // Clean up MARAS factions/packages and vanilla marriage factions on the deceased NPC
         FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
         PackageReconciler::GetSingleton().ReconcileActor(npcFormID);
-        {
-            FactionService::InternalFactionScope scope;
-            auto& cache = FormCache::GetSingleton();
-            Utils::RemoveFromFaction(npcFormID, cache.GetMarriageAskedFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetCourtingFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetMarriedFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetPlayerFaction());
-            Utils::RemoveFromFaction(npcFormID, cache.GetPlayerBedOwnershipFaction());
-        }
+        StripVanillaMarriageFactionsOnMainThread(npcFormID);
 
         for (RE::FormID partnerID : survivingPartners) {
             RefreshPartnerRelationshipFactions(partnerID);

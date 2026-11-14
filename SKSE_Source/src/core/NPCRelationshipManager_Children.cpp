@@ -3,6 +3,7 @@
 #include "core/AdultChildProgression.h"
 #include "core/AdultChildTravelService.h"
 #include "core/DeceasedRegistry.h"
+#include "core/DeferredActorResolver.h"
 #include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
@@ -18,6 +19,7 @@
 #include "core/SpouseHierarchyManager.h"
 #include "core/WorldStateLegacyAdapters.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaUIDataBridge.h"
 #include "ui/PrismaUIManager.h"
@@ -639,9 +641,19 @@ namespace MARAS {
         if (!IsSyntheticChildID(childID)) {
             AdultChildProgression::GetSingleton().ReleaseRuntimeBaseForActor(childID);
             if ((childID >> 24) == 0xFF) {
-                if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
-                    FactionReconciler::InternalFactionScope scope;
-                    Utils::RemoveFromFaction(childID, adoptableFaction);
+                auto clearAdoptable = [childID]() {
+                    if (auto* adoptableFaction = FormCache::GetSingleton().GetBYOHRelationshipAdoptableFaction()) {
+                        FactionReconciler::InternalFactionScope scope;
+                        Utils::RemoveFromFaction(childID, adoptableFaction);
+                    }
+                };
+                if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+                    clearAdoptable();
+                } else {
+                    AddCurrentEpochTask("NPCRelationshipManager::ClearAdoptableOnRemove", [clearAdoptable]() {
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                        clearAdoptable();
+                    });
                 }
             }
             FactionReconciler::GetSingleton().ReconcileActor(childID);
@@ -1769,6 +1781,9 @@ namespace MARAS {
         if (!found) return false;
 
         MARAS_LOG_INFO("[Lineage] Set child {:08X} bio mother to {:08X} (hasBeastblood={})", childID, motherID, updated.hasBeastblood);
+        if (!IsSyntheticChildID(childID)) {
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+        }
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(updated);
         return true;
     }
@@ -1846,6 +1861,9 @@ namespace MARAS {
         if (!found) return false;
 
         MARAS_LOG_INFO("[Lineage] Set child {:08X} bio father to {:08X}", childID, fatherID);
+        if (!IsSyntheticChildID(childID)) {
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+        }
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(updated);
         return true;
     }
@@ -2069,6 +2087,9 @@ namespace MARAS {
             }
         });
         if (!updatedEntry) return false;
+        if (!IsSyntheticChildID(childID)) {
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+        }
         PrismaUIDataBridge::GetSingleton().OnChildUpdated(*updatedEntry);
         return true;
     }

@@ -38,7 +38,7 @@ Every **15 seconds** of unpaused real time:
 - **Active Follower Scan**: Iterates through the engine's `highActorHandles` (loaded actors near the player), filters for M.A.R.A.S-registered NPCs, and checks whether each actor is currently following the player (`Utils::IsPlayerFollower`).
 - **Delta Detection & ModEvent Dispatch**: Compares the current follower set against the previous snapshot. If any registered NPC joined or left the player's party:
   - Fires a summary `maras_teammate_change` SKSE ModEvent.
-  - Fires individual `maras_teammate_added` (with the joining `Actor` as sender) and `maras_teammate_removed` (with the departing `Actor` as sender) ModEvents. These drive [SpouseBuffService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SpouseBuffService.md) (toggling Lover's Radiance and follower multiplier buffs) and [AffectionService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/AffectionService.md) (awarding daily adventure affection).
+  - Fires individual `maras_teammate_added` (with the joining `Actor` as sender) and `maras_teammate_removed` (with the departing `Actor` as sender) ModEvents. These drive [SpouseBuffService / BuffReconciler](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SpouseBuffService.md) (toggling Lover's Radiance and follower multiplier buffs natively in C++) and [AffectionService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/AffectionService.md) (awarding daily adventure affection).
 - **Periodic Player Faction Sanitization**: Re-verifies that the player has not been added to `PlayerMarriedFaction` by vanilla scripts or third-party mods.
 
 ### 5-Second Interval: Child Order Expiration Tick

@@ -7,8 +7,11 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/FactionReconciler.h"
 #include "core/FactionService.h"
+#include "core/DeferredActorResolver.h"
 #include "core/FormCache.h"
 #include "core/GlobalVarReconciler.h"
+#include "core/SessionEpoch.h"
+#include "papyrus/PapyrusInterface.h"
 #include "utils/ActorUtils.h"
 #include <Windows.h>
 
@@ -303,9 +306,6 @@ namespace MARAS {
     }
 
     bool Settings::GetEnablePolygamy() const {
-        if (auto* g = FormCache::GetSingleton().GetEnablePolygamyGlobal()) {
-            return g->value != 0.0f;
-        }
         return Snapshot()->enablePlayerPolygamy;
     }
 
@@ -318,8 +318,7 @@ namespace MARAS {
             NPCRelationshipManager::GetSingleton().MarkPlayerCheatingAllowedOnPolygamy();
         }
         GlobalVarReconciler::GetSingleton().ReconcileGlobals();
-        FactionReconciler::GetSingleton().ReconcilePlayer();
-        NPCRelationshipManager::GetSingleton().UpdateAllSpousesCheatingAndOpenFactions();
+        FactionReconciler::GetSingleton().ReconcileAllOnLoad();
     }
 
     void Settings::SetDisablePolygamyQuest(bool value) {
@@ -327,9 +326,19 @@ namespace MARAS {
             ws.settings.Write().disablePolygamyQuest = value;
         });
         if (value) {
-            if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
-                SKSE::ModCallbackEvent modEvent("maras_stop_polygamy_quest", "", 0.0f, nullptr);
-                eventSource->SendEvent(&modEvent);
+            auto dispatchEvent = []() {
+                if (auto* eventSource = SKSE::GetModCallbackEventSource()) {
+                    SKSE::ModCallbackEvent modEvent("maras_stop_polygamy_quest", "", 0.0f, nullptr);
+                    eventSource->SendEvent(&modEvent);
+                }
+            };
+            if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+                dispatchEvent();
+            } else {
+                AddCurrentEpochTask("Settings::StopPolygamyQuestEvent", [dispatchEvent]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    dispatchEvent();
+                });
             }
         }
         MARAS_LOG_INFO("Settings::SetDisablePolygamyQuest - disablePolygamyQuest set to {}", value);
@@ -409,7 +418,6 @@ namespace MARAS {
         auto& store = State::WorldStore::GetSingleton();
         State::SettingsData reverted = store.GetIniBaselineSettings();
         reverted.logLevel = reverted.defaultLogLevel;
-        reverted.enablePlayerPolygamy = GetEnablePolygamy();
 
         store.Modify([&reverted](State::WorldState& ws) {
             ws.settings.Reset(reverted);
