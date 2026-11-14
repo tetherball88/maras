@@ -1,7 +1,14 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
+#include "SKSE/SKSE.h"
 #include "maras/foundation/Logging.h"
+
+#include <spdlog/spdlog.h>
+
+#include <cstdint>
+#include <memory>
+#include <random>
 
 #include <cstdint>
 #include <memory>
@@ -33,12 +40,8 @@ namespace MARAS {
         return id != 0 && !IsSyntheticChildID(id);
     }
 
-    // Defined in EngineLogging.cpp; shared across engine, app, and bridge TUs.
-    extern std::shared_ptr<spdlog::logger> g_Logger;
-
-    [[nodiscard]] inline const std::shared_ptr<spdlog::logger>& GetLogger() noexcept {
-        return g_Logger;
-    }
+    // Defined in EngineLogging.cpp via function-local storage to avoid startup dynamic initializers.
+    [[nodiscard]] const std::shared_ptr<spdlog::logger>& GetLogger() noexcept;
 
     namespace Utils {
         [[nodiscard]] inline float RandomFloat(float min = 0.0f, float max = 1.0f) {

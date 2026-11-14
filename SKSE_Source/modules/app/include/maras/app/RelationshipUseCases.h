@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
 #include "maras/domain/relationships/MarriageDifficultyRules.h"
 #include "maras/domain/relationships/RelationshipRules.h"
 #include "maras/engine/JsonOverrideLoader.h"

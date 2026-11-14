@@ -179,27 +179,38 @@ namespace MARAS::App {
             std::unordered_map<RE::FormID, Entry> entries_{};
         };
 
-        std::mutex g_pendingMarriageAdoptionsMutex;
-        std::unordered_set<RE::FormID> g_pendingMarriageAdoptions;
+        struct PendingMarriageAdoptionsState {
+            std::mutex mutex;
+            std::unordered_set<RE::FormID> childIDs;
+        };
+
+        PendingMarriageAdoptionsState& GetPendingMarriageAdoptionsState() {
+            static PendingMarriageAdoptionsState instance;
+            return instance;
+        }
 
         void MarkMarriageAdoptionPending(RE::FormID childID) {
-            std::lock_guard lock(g_pendingMarriageAdoptionsMutex);
-            g_pendingMarriageAdoptions.insert(childID);
+            auto& state = GetPendingMarriageAdoptionsState();
+            std::lock_guard lock(state.mutex);
+            state.childIDs.insert(childID);
         }
 
         void ClearMarriageAdoptionPending(RE::FormID childID) {
-            std::lock_guard lock(g_pendingMarriageAdoptionsMutex);
-            g_pendingMarriageAdoptions.erase(childID);
+            auto& state = GetPendingMarriageAdoptionsState();
+            std::lock_guard lock(state.mutex);
+            state.childIDs.erase(childID);
         }
 
         bool IsMarriageAdoptionPending(RE::FormID childID) {
-            std::lock_guard lock(g_pendingMarriageAdoptionsMutex);
-            return g_pendingMarriageAdoptions.contains(childID);
+            auto& state = GetPendingMarriageAdoptionsState();
+            std::lock_guard lock(state.mutex);
+            return state.childIDs.contains(childID);
         }
 
         void ClearAllPendingMarriageAdoptions() {
-            std::lock_guard lock(g_pendingMarriageAdoptionsMutex);
-            g_pendingMarriageAdoptions.clear();
+            auto& state = GetPendingMarriageAdoptionsState();
+            std::lock_guard lock(state.mutex);
+            state.childIDs.clear();
         }
 
         class MarriageAdoptionCallback final : public RE::BSScript::IStackCallbackFunctor {

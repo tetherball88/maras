@@ -18,9 +18,12 @@ namespace MARAS {
         thread_local std::uint32_t s_mainThreadTaskDepth = 0;
         thread_local std::uint32_t s_syncedVmCallDepth = 0;
         thread_local std::uint32_t s_papyrusLockDepth = 0;
-        thread_local std::vector<PostLockTask> s_postLockOutbox;
+        [[nodiscard]] std::vector<PostLockTask>& PostLockOutbox() noexcept {
+            thread_local std::vector<PostLockTask> s_outbox;
+            return s_outbox;
+        }
 
-        std::atomic<void (*)() noexcept> g_pluginEventSinksResetter{ nullptr };
+        constinit std::atomic<void (*)() noexcept> g_pluginEventSinksResetter{ nullptr };
 
         void RunPostLockItem(PostLockTask& item) noexcept {
             if (!IsSessionEpochCurrent(item.expectedEpoch)) {
@@ -104,12 +107,13 @@ namespace MARAS {
             return;
         }
         --s_papyrusLockDepth;
-        if (s_papyrusLockDepth > 0 || s_postLockOutbox.empty()) {
+        auto& outbox = PostLockOutbox();
+        if (s_papyrusLockDepth > 0 || outbox.empty()) {
             return;
         }
 
-        auto queued = std::move(s_postLockOutbox);
-        s_postLockOutbox.clear();
+        auto queued = std::move(outbox);
+        outbox.clear();
         for (auto& item : queued) {
             RunPostLockItem(item);
         }
@@ -125,7 +129,7 @@ namespace MARAS {
         }
 
         if (IsPapyrusDomainLockedOnCurrentThread()) {
-            s_postLockOutbox.push_back(PostLockTask{ expectedEpoch, contextTag, std::move(fn) });
+            PostLockOutbox().push_back(PostLockTask{ expectedEpoch, contextTag, std::move(fn) });
             return;
         }
 
@@ -198,7 +202,7 @@ namespace MARAS {
 namespace MARAS::Engine {
 
     namespace {
-        std::atomic<IEngineEventHooks*> g_engineEventHooks{ nullptr };
+        constinit std::atomic<IEngineEventHooks*> g_engineEventHooks{ nullptr };
     }
 
     void SetEngineEventHooks(IEngineEventHooks* hooks) noexcept {

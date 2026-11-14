@@ -52,7 +52,7 @@ if (-not $SkipHeaderCheck) {
 
     if ($PurePaths.Count -gt 0) {
         $PureFiles = Get-ChildItem -Path $PurePaths -Recurse -Include "*.h","*.hpp","*.cpp"
-        $Forbidden = $PureFiles | Select-String -Pattern '^\s*#\s*include\s*[<"](RE/|SKSE/|PCH\.h|nlohmann/|yaml-cpp/|spdlog/|maras/(engine|app|bridge_[^/]+)/)'
+        $Forbidden = $PureFiles | Select-String -Pattern '^\s*#\s*include\s*[<"](RE/|SKSE/|PCH\.h|pch_engine\.h|nlohmann/|yaml-cpp/|spdlog/|maras/(engine|app|bridge_[^/]+)/)'
         if ($Forbidden) {
             Write-Host "[FAIL] Forbidden engine/third-party/upward-layer #include detected in pure modules/tests:" -ForegroundColor Red
             $Forbidden | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
@@ -60,14 +60,38 @@ if (-not $SkipHeaderCheck) {
         }
     }
 
+    $AllCodeFiles = @(
+        (Join-Path $SkseDir "modules"),
+        (Join-Path $SkseDir "plugin"),
+        (Join-Path $SkseDir "tests")
+    ) | Where-Object { Test-Path $_ } | Get-ChildItem -Recurse -Include "*.h","*.hpp","*.cpp"
+    $LegacyPchRefs = $AllCodeFiles | Select-String -Pattern '^\s*#\s*include\s*[<"]PCH\.h[>"]'
+    if ($LegacyPchRefs) {
+        Write-Host "[FAIL] Legacy #include ""PCH.h"" detected:" -ForegroundColor Red
+        $LegacyPchRefs | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
+        exit 1
+    }
+
+    $NonEngineFiles = $AllCodeFiles | Where-Object { $_.FullName -notmatch '[\\/]modules[\\/]engine[\\/]' }
+    $YamlLeaks = $NonEngineFiles | Select-String -Pattern '^\s*#\s*include\s*[<"]yaml-cpp/'
+    if ($YamlLeaks) {
+        Write-Host "[FAIL] Forbidden #include <yaml-cpp/...> outside modules/engine:" -ForegroundColor Red
+        $YamlLeaks | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
+        exit 1
+    }
+
     $AllModuleAndTestHeaders = @(
         (Join-Path $SkseDir "modules"),
         (Join-Path $SkseDir "tests")
     ) | Where-Object { Test-Path $_ } | Get-ChildItem -Recurse -Include "*.h","*.hpp"
-    if ($AllModuleAndTestHeaders) {
-        $UsingNs = $AllModuleAndTestHeaders | Select-String -Pattern '^\s*using\s+namespace\s+'
+    $RootPchHeaders = @("pch_core.h", "pch_engine.h") | ForEach-Object { Join-Path $SkseDir $_ } | Where-Object { Test-Path $_ } | Get-Item
+    $HeadersToCheckUsing = @()
+    if ($AllModuleAndTestHeaders) { $HeadersToCheckUsing += $AllModuleAndTestHeaders }
+    if ($RootPchHeaders) { $HeadersToCheckUsing += $RootPchHeaders }
+    if ($HeadersToCheckUsing.Count -gt 0) {
+        $UsingNs = $HeadersToCheckUsing | Select-String -Pattern '^\s*using\s+namespace\s+'
         if ($UsingNs) {
-            Write-Host "[FAIL] 'using namespace' detected in module/test header:" -ForegroundColor Red
+            Write-Host "[FAIL] 'using namespace' detected in module/test/PCH header:" -ForegroundColor Red
             $UsingNs | ForEach-Object { Write-Host ("  {0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim()) -ForegroundColor Red }
             exit 1
         }

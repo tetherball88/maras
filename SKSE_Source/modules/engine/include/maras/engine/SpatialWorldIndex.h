@@ -3,6 +3,8 @@
 #include "maras/domain/household/TravelRules.h"
 #include "maras/engine/EngineLogging.h"
 
+#include <nlohmann/json_fwd.hpp>
+
 #include <atomic>
 #include <cstdint>
 #include <map>

@@ -27,6 +27,8 @@
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <format>

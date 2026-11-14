@@ -1,6 +1,5 @@
 #pragma once
 
-#include "PCH.h"
 #include "maras/app/AppContext.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/TaskDispatcher.h"

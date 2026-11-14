@@ -1,6 +1,5 @@
 #include "maras/bridge_skyrimnet/SkyrimNetApiLoader.h"
 
-#include "PCH.h"
 #include "maras/app/AppContext.h"
 #include "maras/bridge_skyrimnet/SkyrimNetDecisions.h"
 #include "maras/bridge_skyrimnet/SkyrimNetDecorators.h"
@@ -11,6 +10,8 @@
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
+
+#include <nlohmann/json.hpp>
 
 #include <Windows.h>
 #include <algorithm>

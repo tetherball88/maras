@@ -1,4 +1,7 @@
-#include "PCH.h"
+#include "RE/Skyrim.h"
+#include "SKSE/SKSE.h"
+
+#include <spdlog/spdlog.h>
 
 #include "maras/app/AppContext.h"
 #include "maras/app/AppLifecycleCoordinator.h"
@@ -275,6 +278,16 @@ namespace {
     }
 
 }  // namespace
+
+SKSEPluginInfo(
+    .Version = REL::Version{ 0, 0, 1, 0 },
+    .Name = "MARAS",
+    .Author = "",
+    .SupportEmail = "",
+    .StructCompatibility = SKSE::StructCompatibility::Independent,
+    .RuntimeCompatibility = SKSE::VersionIndependence::AddressLibrary,
+    .MinimumSKSEVersion = REL::Version{ 0, 0, 0, 0 }
+)
 
 SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::Init(skse);

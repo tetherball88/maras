@@ -30,6 +30,7 @@
 #include "maras/state/WorldStore.h"
 
 #include <SKSE/SKSE.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
@@ -1045,7 +1046,7 @@ namespace MARAS::Bridge::Ui {
         }
         data["cheatingRecords"] = std::move(cheatingArray);
 
-        const float decayMult = RoundFloat(relUses.GetAffectionDecayMultiplier());
+        const double decayMult = RoundFloat(relUses.GetAffectionDecayMultiplier());
         nlohmann::json affArray = nlohmann::json::array();
         for (const auto& [refId, actorProfile] : view.Actors().AllProfiles()) {
             (void)actorProfile;

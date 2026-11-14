@@ -147,38 +147,58 @@ namespace MARAS::App {
             }
         };
 
-        NullUiBridgeGateway g_nullUiBridge;
-        NullModalGateway g_nullModal;
-        NullSkyrimNetGateway g_nullSkyrimNet;
+        IUiBridgeGateway& GetDefaultUiBridgeGateway() noexcept {
+            static NullUiBridgeGateway instance;
+            return instance;
+        }
 
-        std::atomic<IUiBridgeGateway*> g_uiBridge{ &g_nullUiBridge };
-        std::atomic<IModalGateway*> g_modal{ &g_nullModal };
-        std::atomic<ISkyrimNetGateway*> g_skyrimNet{ &g_nullSkyrimNet };
+        IModalGateway& GetDefaultModalGateway() noexcept {
+            static NullModalGateway instance;
+            return instance;
+        }
+
+        ISkyrimNetGateway& GetDefaultSkyrimNetGateway() noexcept {
+            static NullSkyrimNetGateway instance;
+            return instance;
+        }
+
+        constinit std::atomic<IUiBridgeGateway*> g_uiBridge{ nullptr };
+        constinit std::atomic<IModalGateway*> g_modal{ nullptr };
+        constinit std::atomic<ISkyrimNetGateway*> g_skyrimNet{ nullptr };
 
     }  // namespace
 
     void SetUiBridgeGateway(IUiBridgeGateway* gateway) noexcept {
-        g_uiBridge.store(gateway ? gateway : &g_nullUiBridge, std::memory_order_release);
+        g_uiBridge.store(gateway, std::memory_order_release);
     }
 
     void SetModalGateway(IModalGateway* gateway) noexcept {
-        g_modal.store(gateway ? gateway : &g_nullModal, std::memory_order_release);
+        g_modal.store(gateway, std::memory_order_release);
     }
 
     void SetSkyrimNetGateway(ISkyrimNetGateway* gateway) noexcept {
-        g_skyrimNet.store(gateway ? gateway : &g_nullSkyrimNet, std::memory_order_release);
+        g_skyrimNet.store(gateway, std::memory_order_release);
     }
 
     IUiBridgeGateway& GetUiBridgeGateway() noexcept {
-        return *g_uiBridge.load(std::memory_order_acquire);
+        if (auto* gateway = g_uiBridge.load(std::memory_order_acquire)) {
+            return *gateway;
+        }
+        return GetDefaultUiBridgeGateway();
     }
 
     IModalGateway& GetModalGateway() noexcept {
-        return *g_modal.load(std::memory_order_acquire);
+        if (auto* gateway = g_modal.load(std::memory_order_acquire)) {
+            return *gateway;
+        }
+        return GetDefaultModalGateway();
     }
 
     ISkyrimNetGateway& GetSkyrimNetGateway() noexcept {
-        return *g_skyrimNet.load(std::memory_order_acquire);
+        if (auto* gateway = g_skyrimNet.load(std::memory_order_acquire)) {
+            return *gateway;
+        }
+        return GetDefaultSkyrimNetGateway();
     }
 
     void ShowLLMRetryModal(const std::string& evaluationType,

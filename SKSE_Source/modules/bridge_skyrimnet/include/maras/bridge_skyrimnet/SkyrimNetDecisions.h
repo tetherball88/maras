@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/app/SkyrimNetGateway.h"
 

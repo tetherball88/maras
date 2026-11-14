@@ -55,9 +55,16 @@ namespace MARAS::Bridge::Ui {
             MARAS::SessionEpoch epoch{ 0 };
         };
 
-        std::mutex g_cooldownMutex;
-        std::unordered_map<std::string, CooldownRecord> g_actionCooldowns;
-        std::unordered_map<std::string, CooldownRecord> g_declineCooldowns;
+        struct ConfirmationCooldownState {
+            std::mutex mutex;
+            std::unordered_map<std::string, CooldownRecord> actionCooldowns;
+            std::unordered_map<std::string, CooldownRecord> declineCooldowns;
+        };
+
+        ConfirmationCooldownState& GetConfirmationCooldownState() {
+            static ConfirmationCooldownState instance;
+            return instance;
+        }
 
         [[nodiscard]] std::string NormalizeAction(const char* actionType) {
             if (!actionType) {
@@ -140,11 +147,13 @@ namespace MARAS::Bridge::Ui {
         }
 
         void RecordCooldownTimestamp(
-            std::unordered_map<std::string, CooldownRecord>& table,
+            std::unordered_map<std::string, CooldownRecord> ConfirmationCooldownState::* field,
             const std::string& key) {
             const auto epoch = MARAS::GetSessionEpoch();
             const auto now = std::chrono::steady_clock::now();
-            std::lock_guard lock(g_cooldownMutex);
+            auto& state = GetConfirmationCooldownState();
+            std::lock_guard lock(state.mutex);
+            auto& table = state.*field;
             PruneStaleEpochEntries(table, epoch);
             table[key] = CooldownRecord{ now, epoch };
         }
@@ -208,8 +217,8 @@ namespace MARAS::Bridge::Ui {
 
         [[nodiscard]] ActionDisplayMeta DescribeAction(
             std::string_view action,
-            const std::string& actorAName,
-            const std::string& actorBName) {
+            [[maybe_unused]] const std::string& actorAName,
+            [[maybe_unused]] const std::string& actorBName) {
             if (action == "dating") {
                 return { "Confirm Relationship: Dating", "dating", ModalTone::Default, false };
             }
@@ -323,11 +332,12 @@ namespace MARAS::Bridge::Ui {
         const auto epoch = MARAS::GetSessionEpoch();
         const auto now = std::chrono::steady_clock::now();
 
-        std::lock_guard lock(g_cooldownMutex);
-        PruneStaleEpochEntries(g_actionCooldowns, epoch);
-        PruneStaleEpochEntries(g_declineCooldowns, epoch);
-        return IsWithinWindow(g_actionCooldowns, key, actionSecs, epoch, now) ||
-               IsWithinWindow(g_declineCooldowns, key, declineSecs, epoch, now);
+        auto& state = GetConfirmationCooldownState();
+        std::lock_guard lock(state.mutex);
+        PruneStaleEpochEntries(state.actionCooldowns, epoch);
+        PruneStaleEpochEntries(state.declineCooldowns, epoch);
+        return IsWithinWindow(state.actionCooldowns, key, actionSecs, epoch, now) ||
+               IsWithinWindow(state.declineCooldowns, key, declineSecs, epoch, now);
     }
 
     std::int32_t ConfirmationModal::CheckAndSet(const char* actionType, const std::vector<RE::Actor*>& actors) {
@@ -342,14 +352,15 @@ namespace MARAS::Bridge::Ui {
         const auto epoch = MARAS::GetSessionEpoch();
         const auto now = std::chrono::steady_clock::now();
 
-        std::lock_guard lock(g_cooldownMutex);
-        PruneStaleEpochEntries(g_actionCooldowns, epoch);
-        PruneStaleEpochEntries(g_declineCooldowns, epoch);
-        if (IsWithinWindow(g_actionCooldowns, key, actionSecs, epoch, now) ||
-            IsWithinWindow(g_declineCooldowns, key, declineSecs, epoch, now)) {
+        auto& state = GetConfirmationCooldownState();
+        std::lock_guard lock(state.mutex);
+        PruneStaleEpochEntries(state.actionCooldowns, epoch);
+        PruneStaleEpochEntries(state.declineCooldowns, epoch);
+        if (IsWithinWindow(state.actionCooldowns, key, actionSecs, epoch, now) ||
+            IsWithinWindow(state.declineCooldowns, key, declineSecs, epoch, now)) {
             return kCooldownBlocked;
         }
-        g_actionCooldowns[key] = CooldownRecord{ now, epoch };
+        state.actionCooldowns[key] = CooldownRecord{ now, epoch };
         return kCooldownEligible;
     }
 
@@ -413,11 +424,12 @@ namespace MARAS::Bridge::Ui {
             const std::int32_t declineSecs = settingsSnap ? settingsSnap->actionsDeclineCooldown : 60;
             const auto now = std::chrono::steady_clock::now();
 
-            std::lock_guard lock(g_cooldownMutex);
-            PruneStaleEpochEntries(g_actionCooldowns, expectedEpoch);
-            PruneStaleEpochEntries(g_declineCooldowns, expectedEpoch);
-            if (IsWithinWindow(g_actionCooldowns, cooldownKey, actionSecs, expectedEpoch, now) ||
-                IsWithinWindow(g_declineCooldowns, cooldownKey, declineSecs, expectedEpoch, now)) {
+            auto& state = GetConfirmationCooldownState();
+            std::lock_guard lock(state.mutex);
+            PruneStaleEpochEntries(state.actionCooldowns, expectedEpoch);
+            PruneStaleEpochEntries(state.declineCooldowns, expectedEpoch);
+            if (IsWithinWindow(state.actionCooldowns, cooldownKey, actionSecs, expectedEpoch, now) ||
+                IsWithinWindow(state.declineCooldowns, cooldownKey, declineSecs, expectedEpoch, now)) {
                 MARAS_LOG_DEBUG("[ConfirmationModal] Action '{}' blocked by active cooldown for key '{}'",
                                 action,
                                 cooldownKey);
@@ -503,7 +515,7 @@ namespace MARAS::Bridge::Ui {
                 }
 
                 if (resp.aborted) {
-                    RecordCooldownTimestamp(g_declineCooldowns, cooldownKey);
+                    RecordCooldownTimestamp(&ConfirmationCooldownState::declineCooldowns, cooldownKey);
                     ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultCancel);
                     return;
                 }
@@ -530,13 +542,13 @@ namespace MARAS::Bridge::Ui {
                         return;
                     }
 
-                    RecordCooldownTimestamp(g_actionCooldowns, cooldownKey);
+                    RecordCooldownTimestamp(&ConfirmationCooldownState::actionCooldowns, cooldownKey);
                     ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultAccept);
                     return;
                 }
 
                 if (resp.buttonId == "decline_explain") {
-                    RecordCooldownTimestamp(g_declineCooldowns, cooldownKey);
+                    RecordCooldownTimestamp(&ConfirmationCooldownState::declineCooldowns, cooldownKey);
 
                     if (App::GetSkyrimNetGateway().IsAvailable()) {
                         const RE::FormID speakerId = (actorAId != MARAS::kPlayerFormID) ? actorAId : actorBId;
@@ -586,7 +598,7 @@ namespace MARAS::Bridge::Ui {
                 }
 
                 // Cancel or fallback button
-                RecordCooldownTimestamp(g_declineCooldowns, cooldownKey);
+                RecordCooldownTimestamp(&ConfirmationCooldownState::declineCooldowns, cooldownKey);
                 ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultCancel);
             });
 
