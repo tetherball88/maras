@@ -26,7 +26,7 @@ flowchart TD
     subgraph Papyrus["Layer 2: Papyrus Scripts (Scripts/Source/)"]
         NativeBind["MARAS.psc\n(Native Function Bindings & ModEvents)"]
         MainCtrl["TTM_MainController.psc\n(Central Event Router & Polling Loop)"]
-        Services["Domain Services\nTTM_ServiceRelationships | TTM_ServiceAffection\nTTM_ServicePlayerHouse | TTM_ServiceBuff\nTTM_ServiceChildrenLogic | TTM_ServiceFertility (FMR)\nTTM_ServiceIntimateMoments | TTM_ServiceSkyrimNet"]
+        Services["Domain Services\nTTM_ServiceRelationships | TTM_ServiceAffection\nTTM_ServicePlayerHouse | TTM_ServiceChildrenLogic\nTTM_ServiceFertility (FMR) | TTM_ServiceIntimateMoments\nTTM_ServiceSkyrimNet | TTM_MCM (Ongoing-Save Stub)"]
         ScenesDial["Quests, Scenes & Dialogues\nTTM_Actions | TTM_NpcsScenes | TTM_DialogueManager*\nTTM_QuestDivorce | TTM_QuestTrackKilledSpouses"]
     end
 

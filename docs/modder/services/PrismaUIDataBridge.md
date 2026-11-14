@@ -15,6 +15,7 @@ The manager registers as an `RE::BSInputDeviceManager` input event sink and list
 ### Independent Dashboard & Modal Roots (`SyncViewVisibilityAndFocus`)
 - **Single Shared Web View, Independent React Roots**: Both `<DashboardLayout>` (`useMarasStore.isOpen`) and `<PrismaModalHost />` (`useModalStore.activeModal`) share a single `MARAS/index.html` `PrismaView` instance to minimize VRAM overhead while mounting and unmounting independently.
 - **Lazy View Creation & Readiness Handshake**: The `MARAS/index.html` browser view is created lazily on first dashboard open or first modal request (`EnsureViewCreated()`). When the DOM and React tree finish mounting (`OnDomReady` / `"uiReady"` action), `OnUIReady()` synchronizes whichever root (`openMARAS` + overview data and/or `showMARASModal`) is currently active.
+- **Main-Thread Marshaling & Journal Menu Handoff**: `Show()` and `Hide()` marshal off-main-thread calls onto the main game thread via `SessionEpoch`-guarded task dispatch (`AddCurrentEpochTask` + `PapyrusInterface::GetPapyrusMutex()`). If Skyrim's `Journal Menu` is open when `Show()` is called (such as clicking "Open M.A.R.A.S Dashboard" from the `TTM_MCM` stub), `Show()` closes `Journal Menu` (and `Tween Menu` if open) and waits for `Journal Menu` to finish closing before opening the Dashboard.
 - **Locked Modal Focus & Game Pause**:
   - When a modal is active, `SyncViewVisibilityAndFocus()` focuses the view with `prismaUI->Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/true)` so the game is paused and the user cannot unfocus or dismiss the popup via `Escape` or PrismaUI's focus key until a modal control button is selected.
   - When the modal queue empties, if the dashboard is closed, the view unfocuses and hides (unpausing the game); if the dashboard is open, focus transitions back to standard non-paused dashboard mode (`Focus(view, false, false)`).
@@ -42,7 +43,7 @@ Rather than forcing the React frontend to make dozens of granular queries, `Pris
 7. **Affection & Settings Snapshot**: Permanent affection scores, days since last interaction, registered player homes, and all live configuration toggles (including `hasSkyrimNet`, `simulateNoSkyrimNet`, and `revealSecretsInUI`).
 
 ### Targeted & Real-Time Event Pushes
-In addition to full overview refreshes, C++ services push lightweight incremental updates to the UI whenever state changes during gameplay:
+In addition to full overview refreshes, C++ services push lightweight incremental updates to the UI whenever state changes during gameplay. Every outbound `Send*` and `On*` push method marshals off-main-thread callers onto the main game thread via `AddCurrentEpochTask` + `PapyrusInterface::GetPapyrusMutex()` and no-ops cleanly when `!PrismaUIManager::IsDomReady()`. Mutating `Process*` handlers push the updated UI slices (overview, NPC detail, and/or household buffs) immediately after committing state changes:
 - **Live Mutations**: `OnAffectionChanged`, `OnStatusChanged`, `OnHierarchyChanged`, `OnChildUpdated`, `OnChildRemoved`, and `OnChildPromoted` (when a synthetic child ID is replaced by a spawned actor FormID).
 - **Household Buff Breakdown**: `SendHouseholdBuffs` serializes the complete [SpouseBuffService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SpouseBuffService.md) calculation breakdown (`window.receiveMARASBuffs`).
 - **Matchmaking & Memory Streams**: Pushes autonomous/manual matchmaking suggestions (`window.receiveMatchmakingResults`) and LLM-generated partner memories (`window.receiveGeneratedMemories`).
@@ -52,7 +53,7 @@ In addition to full overview refreshes, C++ services push lightweight incrementa
 
 ## 3. Inbound Action Dispatcher (`HandleAction`)
 
-All user interactions in the React dashboard are sent as JSON `{ "action": "...", "payload": { ... } }` messages to `OnMarasAction`. `PrismaUIDataBridge` parses the request and schedules execution on the **Skyrim main game thread** via `SKSE::GetTaskInterface()->AddTask`:
+All user interactions in the React dashboard are sent as JSON `{ "action": "...", "payload": { ... } }` messages to `OnMarasAction`. `PrismaUIDataBridge` parses the request and schedules execution on the **Skyrim main game thread** via `SessionEpoch`-guarded `AddCurrentEpochTask`, acquiring `PapyrusInterface::GetPapyrusMutex()` inside a `try / catch` guard:
 
 ### Relationship & Hierarchy Controls
 - **Relationship Assignment & Removal**: Auto-resolves any base `TESNPC` FormIDs to placed `Actor` reference FormIDs via `ActorSvc` / `NPCIndex`. If `PromoteToStatusWith` fails validation (e.g., child actor, deceased actor, or invalid state), it queries `CanFormRelationship` for the exact failure reason and fires `window.onActionRejected` back to the UI. If dual LLM memories are attached to a matchmaking assignment, it ingests them via [MatchmakingService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/MatchmakingService.md) and records NPC matchmaking cooldowns.

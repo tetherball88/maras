@@ -215,7 +215,7 @@ An actor is guilty of cheating if they engage in intimacy or start a secondary (
 ### 2.5 Player Polygamy
 
 - **Player Exclusive**:
-  - Toggled via the `enablePolygamy` setting (granted via the Mara's Blessing quest, Prisma UI, or MCM).
+  - Toggled via the `enablePolygamy` setting (granted via the Mara's Blessing quest or Prisma UI).
   - **Does NOT apply to NPCs**: NPCs remain strictly monogamous for committed relationships.
 - **Mechanics**:
   - The player can date, engage, and marry unlimited NPCs simultaneously.

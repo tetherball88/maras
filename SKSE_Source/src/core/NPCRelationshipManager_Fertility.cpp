@@ -1,9 +1,13 @@
 #include "core/NPCRelationshipManager.h"
 
 #include "core/AdultChildProgression.h"
+#include "core/DeceasedRegistry.h"
+#include "core/DeferredActorResolver.h"
+#include "core/FactionReconciler.h"
 #include "core/FormCache.h"
 #include "core/NPCIndex.h"
 #include "core/PackageOverrideService.h"
+#include "core/PackageReconciler.h"
 #include "core/PerspectiveEngineAdapters.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
@@ -16,6 +20,7 @@
 #include "maras/projection/PerspectiveView.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -45,9 +50,47 @@ namespace MARAS {
     bool NPCRelationshipManager::ApplyBioFatherStepIn(RE::FormID motherID, RE::FormID bioFatherID) {
         if (motherID == 0 || bioFatherID == 0) return false;
 
+        auto isActorDeadOrInvalid = [](RE::FormID actorID) -> bool {
+            if (DeceasedRegistry::GetSingleton().IsDeceased(actorID)) {
+                return true;
+            }
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
+                return actor->IsDead() || actor->IsDeleted() || actor->IsDisabled();
+            }
+            return false;
+        };
+        if (isActorDeadOrInvalid(motherID) || isActorDeadOrInvalid(bioFatherID)) {
+            MARAS_LOG_INFO("[Fertility] Skipping bio-father step-in: mother {:08X} or bio father {:08X} is deceased/dead/disabled",
+                           motherID, bioFatherID);
+            return false;
+        }
+
+        // Verify a live unborn or child record still links this mother and bioFather
+        bool hasMatchingChild = false;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            for (const auto& [childKey, rec] : snap->lineage->AllChildren()) {
+                (void)childKey;
+                if (rec.bioMother.raw() == motherID && rec.bioFather.raw() == bioFatherID) {
+                    hasMatchingChild = true;
+                    break;
+                }
+            }
+        }
+        if (!hasMatchingChild) {
+            MARAS_LOG_INFO("[Fertility] Skipping bio-father step-in: no child record still links mother {:08X} and bio father {:08X}",
+                           motherID, bioFatherID);
+            return false;
+        }
+
         // Ensure relationship can be formed / already married
         bool alreadyMarried = (GetRelationshipStatus(motherID, bioFatherID) == RelationshipStatus::Married);
         if (!alreadyMarried) {
+            if (GetPrimaryPartner(motherID) != 0 || GetPrimaryPartner(bioFatherID) != 0) {
+                MARAS_LOG_INFO("[Fertility] Mother {:08X} or bio father {:08X} already has a primary partner, skipping step-in.",
+                               motherID, bioFatherID);
+                return false;
+            }
             if (IsMostRecentRelationshipDivorced(motherID, bioFatherID)) {
                 MARAS_LOG_INFO("[Fertility] Bio father {:08X} has divorced relationship with mother {:08X}, skipping step-in.", bioFatherID, motherID);
                 return false;
@@ -144,6 +187,7 @@ namespace MARAS {
                     }
                     AddEpochTask(queue->epoch, "EvaluateBioFatherStepIn::OnResult",
                         [queue, index, motherID, motherName, bioFatherName, cand, res]() {
+                            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                             auto& relMgr = NPCRelationshipManager::GetSingleton();
                             if (res.success) {
                                 MARAS_LOG_INFO("[SkyrimNet] Step-in evaluation for bio father {:08X} with mother {:08X} (usedDecisions={}): steppedIn={}, reason='{}'",
@@ -186,6 +230,7 @@ namespace MARAS {
                             PrismaModalManager::GetSingleton().ShowModal(
                                 std::move(req),
                                 [queue, index, motherID, cand](const ModalResponse& modalResp) {
+                                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(queue->epoch) || modalResp.aborted) {
                                         return;
                                     }
@@ -219,6 +264,7 @@ namespace MARAS {
                 MARAS_LOG_WARN("[SkyrimNet] Failed to dispatch bio-father step-in evaluation for {:08X} & {:08X}; advancing queue",
                                cand.bioFatherID, motherID);
                 AddEpochTask(queue->epoch, "EvaluateBioFatherStepIn::AdvanceOnDispatchFailure", [queue, index]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     RunStepInCandidateAtIndex(queue, index + 1);
                 });
             }
@@ -657,6 +703,10 @@ namespace MARAS {
         ChildRegistryEntry entry(childID, gA, gB, childName, 0, false, bioM, bioF, true, cTime, 0.0f, pSec, ChildStage::Unborn, "", 2, recordedPresumedFatherID);
         EvaluateChildBeastbloodInheritance(entry);
         UpsertChildEntry(entry);
+        UpdateSpouseChildrenFaction(motherID);
+        if (gB != 0 && gB != motherID) {
+            UpdateSpouseChildrenFaction(gB);
+        }
 
         MARAS_LOG_INFO("[Fertility] Registered Unborn child {:08X} ('{}') for mother {:08X}. Presumed: {:08X}, GuardianB: {:08X}, Bio: {:08X}, Secret: {}",
                        childID, childName, motherID, recordedPresumedFatherID, gB, bioF, pSec.isSecret);
@@ -790,12 +840,16 @@ namespace MARAS {
 
         if (bioFatherID != 0) {
             RE::FormID targetID = 0;
+            std::unordered_set<RE::FormID> affectedGuardians;
             {
                 const auto snap = State::WorldStore::GetSingleton().Snapshot();
                 for (RE::FormID uID : unbornIDs) {
                     const auto* rec = snap->lineage->FindChild(State::ChildId{ uID });
                     if (rec && MatchesActor(rec->bioFather.raw(), bioFatherID)) {
                         targetID = uID;
+                        if (!rec->guardians.slotA.IsNull()) affectedGuardians.insert(rec->guardians.slotA.raw());
+                        if (!rec->guardians.slotB.IsNull()) affectedGuardians.insert(rec->guardians.slotB.raw());
+                        if (!rec->bioMother.IsNull()) affectedGuardians.insert(rec->bioMother.raw());
                         break;
                     }
                 }
@@ -809,6 +863,9 @@ namespace MARAS {
                 erased = ws.lineage.Write().EraseChild(State::ChildId{ targetID });
             });
             if (erased) {
+                for (RE::FormID gid : affectedGuardians) {
+                    if (gid != 0) UpdateSpouseChildrenFaction(gid);
+                }
                 MARAS_LOG_INFO("[Fertility] Removed Unborn child {:08X} fathered by {:08X} for mother {:08X} (stillbirth)", targetID, bioFatherID, motherID);
                 PrismaUIDataBridge::GetSingleton().OnChildRemoved(targetID);
                 return true;
@@ -816,6 +873,17 @@ namespace MARAS {
             return false;
         }
 
+        std::unordered_set<RE::FormID> affectedGuardians{ motherID };
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            for (RE::FormID uID : unbornIDs) {
+                if (const auto* rec = snap->lineage->FindChild(State::ChildId{ uID })) {
+                    if (!rec->guardians.slotA.IsNull()) affectedGuardians.insert(rec->guardians.slotA.raw());
+                    if (!rec->guardians.slotB.IsNull()) affectedGuardians.insert(rec->guardians.slotB.raw());
+                    if (!rec->bioMother.IsNull()) affectedGuardians.insert(rec->bioMother.raw());
+                }
+            }
+        }
         std::vector<RE::FormID> removedIDs;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             for (RE::FormID uID : unbornIDs) {
@@ -824,6 +892,9 @@ namespace MARAS {
                 }
             }
         });
+        for (RE::FormID gid : affectedGuardians) {
+            if (gid != 0) UpdateSpouseChildrenFaction(gid);
+        }
         for (RE::FormID uID : removedIDs) {
             MARAS_LOG_INFO("[Fertility] Removed Unborn child {:08X} for mother {:08X} (pregnancy cleared/miscarried)", uID, motherID);
             PrismaUIDataBridge::GetSingleton().OnChildRemoved(uID);
@@ -2078,6 +2149,7 @@ namespace MARAS {
 
         // 4. Refresh Prisma UI
         AddCurrentEpochTask("ResolvePaternitySecretFallback::RefreshUI", [childID]() {
+            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
             PrismaUIDataBridge::GetSingleton().SendNPCDetail(childID);
         });
@@ -2146,6 +2218,10 @@ namespace MARAS {
         if (updated.has_value()) {
             MARAS_LOG_INFO("[Fertility] Set child {:08X} stage to {}", childID, static_cast<int>(stage));
             UpdateNonPlayerChildPackageOverride(childID);
+            if (!IsSyntheticChildID(childID)) {
+                FactionReconciler::GetSingleton().ReconcileActor(childID);
+                PackageReconciler::GetSingleton().ReconcileActor(childID);
+            }
             PrismaUIDataBridge::GetSingleton().OnChildUpdated(*updated);
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
             return true;
@@ -2181,6 +2257,10 @@ namespace MARAS {
         if (updated.has_value()) {
             MARAS_LOG_INFO("[Fertility] Set child {:08X} training location to '{}'", childID, location);
             UpdateNonPlayerChildPackageOverride(childID);
+            if (!IsSyntheticChildID(childID)) {
+                FactionReconciler::GetSingleton().ReconcileActor(childID);
+                PackageReconciler::GetSingleton().ReconcileActor(childID);
+            }
             PrismaUIDataBridge::GetSingleton().OnChildUpdated(*updated);
             PrismaUIDataBridge::GetSingleton().SendOverviewData();
             return true;
@@ -2501,15 +2581,16 @@ namespace MARAS {
     }
 
     bool NPCRelationshipManager::SetChildGender(RE::FormID childID, uint8_t gender) {
-        bool updated = false;
+        std::optional<ChildRegistryEntry> updatedEntry;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* rec = ws.lineage.Write().FindChildMutable(State::ChildId{ childID })) {
                 rec->gender = gender;
-                updated = true;
+                updatedEntry = LegacyAdapters::ToLegacyChildEntry(*rec);
             }
         });
-        if (updated) {
+        if (updatedEntry.has_value()) {
             MARAS_LOG_INFO("[Fertility] Set child {:08X} gender to {}", childID, gender == 1 ? "female" : "male");
+            PrismaUIDataBridge::GetSingleton().OnChildUpdated(*updatedEntry);
             return true;
         }
         return false;

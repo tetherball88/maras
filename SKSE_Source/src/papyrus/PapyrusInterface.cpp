@@ -2,6 +2,7 @@
 
 #include "core/BanterCoordinatorService.h"
 #include "core/ChildrenFleeService.h"
+#include "core/DeferredActorResolver.h"
 #include "core/IntimateThreadService.h"
 #include "core/LoggingService.h"
 #include "core/PerspectiveEngineAdapters.h"
@@ -59,6 +60,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     void SetLogLevel(RE::StaticFunctionTag*, std::int32_t logLevel) {
+        std::lock_guard lock(GetPapyrusMutex());
         MARAS::LoggingService::GetSingleton().SetLogLevel(static_cast<int32_t>(logLevel));
     }
 
@@ -83,17 +85,33 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("AddNpcKeyword: null argument(s) provided");
             return false;
         }
+        std::lock_guard lock(GetPapyrusMutex());
         auto formID = npc->GetFormID();
         auto base = ActorSvc::GetActorBase(formID);
         if (!base) {
             MARAS_LOG_WARN("AddNpcKeyword: actor has no base data for form {:08X}", formID);
             return false;
         }
-        std::lock_guard lock(GetPapyrusMutex());
-        if (!base->AddKeyword(keyword)) {
+        if (base->HasKeyword(keyword)) {
             return false;
         }
-        NPCRelationshipManager::GetSingleton().AddTrackedKeyword(formID, keyword->GetFormID());
+        const auto keywordID = keyword->GetFormID();
+        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            if (!base->AddKeyword(keyword)) {
+                return false;
+            }
+            NPCRelationshipManager::GetSingleton().AddTrackedKeyword(formID, keywordID);
+            return true;
+        }
+        NPCRelationshipManager::GetSingleton().AddTrackedKeyword(formID, keywordID);
+        AddCurrentEpochTask("PapyrusInterface::AddNpcKeyword", [formID, keywordID]() {
+            std::lock_guard taskLock(GetPapyrusMutex());
+            auto* mainBase = ActorSvc::GetActorBase(formID);
+            auto* kw = RE::TESForm::LookupByID<RE::BGSKeyword>(keywordID);
+            if (mainBase && kw && !mainBase->HasKeyword(kw)) {
+                mainBase->AddKeyword(kw);
+            }
+        });
         return true;
     }
 
@@ -102,17 +120,33 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("RemoveNpcKeyword: null argument(s) provided");
             return false;
         }
+        std::lock_guard lock(GetPapyrusMutex());
         auto formID = npc->GetFormID();
         auto base = ActorSvc::GetActorBase(formID);
         if (!base) {
             MARAS_LOG_WARN("RemoveNpcKeyword: actor has no base data for form {:08X}", formID);
             return false;
         }
-        std::lock_guard lock(GetPapyrusMutex());
-        if (!base->RemoveKeyword(keyword)) {
+        if (!base->HasKeyword(keyword)) {
             return false;
         }
-        NPCRelationshipManager::GetSingleton().RemoveTrackedKeyword(formID, keyword->GetFormID());
+        const auto keywordID = keyword->GetFormID();
+        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            if (!base->RemoveKeyword(keyword)) {
+                return false;
+            }
+            NPCRelationshipManager::GetSingleton().RemoveTrackedKeyword(formID, keywordID);
+            return true;
+        }
+        NPCRelationshipManager::GetSingleton().RemoveTrackedKeyword(formID, keywordID);
+        AddCurrentEpochTask("PapyrusInterface::RemoveNpcKeyword", [formID, keywordID]() {
+            std::lock_guard taskLock(GetPapyrusMutex());
+            auto* mainBase = ActorSvc::GetActorBase(formID);
+            auto* kw = RE::TESForm::LookupByID<RE::BGSKeyword>(keywordID);
+            if (mainBase && kw && mainBase->HasKeyword(kw)) {
+                mainBase->RemoveKeyword(kw);
+            }
+        });
         return true;
     }
 
@@ -215,6 +249,7 @@ namespace MARAS::PapyrusInterface {
                 const bool dontAskAgain = resp.GetBool("dont_ask_again", false);
                 if (resp.buttonIndex == 0 || resp.buttonId == "skip_wedding") {
                     if (dontAskAgain) {
+                        std::lock_guard lock(GetPapyrusMutex());
                         Settings::GetSingleton().SetBoolByKey("skipWedding", true);
                         PrismaUIDataBridge::GetSingleton().SendSettingsData();
                         MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal - persisted skipWedding=true");
@@ -826,16 +861,19 @@ namespace MARAS::PapyrusInterface {
     }
 
     void ShowUI(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         MARAS_LOG_INFO("Papyrus::ShowUI called");
         PrismaUIManager::GetSingleton().Show();
     }
 
     void HideUI(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         MARAS_LOG_INFO("Papyrus::HideUI called");
         PrismaUIManager::GetSingleton().Hide();
     }
 
     bool IsUIVisible(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         bool visible = PrismaUIManager::GetSingleton().IsVisible();
         MARAS_LOG_INFO("Papyrus::IsUIVisible called -> {}", visible);
         return visible;
@@ -871,39 +909,48 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::vector<RE::Actor*> FindBanterCoupleCandidates(RE::StaticFunctionTag*, float afScanRadius) {
+        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().FindBanterCoupleCandidates(afScanRadius);
     }
 
     bool IsBanterPartnerPresent(RE::StaticFunctionTag*, RE::Actor* akPartner, float afScanRadius) {
+        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().IsBanterPartnerPresent(akPartner, afScanRadius);
     }
 
     void ResetBanterCoupleCooldown(RE::StaticFunctionTag*, RE::Actor* akActorA, RE::Actor* akActorB) {
         if (!akActorA || !akActorB) return;
+        std::lock_guard lock(GetPapyrusMutex());
         BanterCoordinatorService::GetSingleton().ResetCooldown(akActorA->GetFormID(), akActorB->GetFormID());
     }
 
     void ClearAllBanterCooldowns(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         BanterCoordinatorService::GetSingleton().ClearAllCooldowns();
     }
 
     float GetBanterCoupleCooldownHours(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().GetCooldownHours();
     }
 
     void SetBanterCoupleCooldownHours(RE::StaticFunctionTag*, float afHours) {
+        std::lock_guard lock(GetPapyrusMutex());
         BanterCoordinatorService::GetSingleton().SetCooldownHours(afHours);
     }
 
     void RecordScenePlayed(RE::StaticFunctionTag*, RE::Actor* akActorA, RE::Actor* akActorB) {
+        std::lock_guard lock(GetPapyrusMutex());
         BanterCoordinatorService::GetSingleton().RecordScenePlayed(akActorA, akActorB);
     }
 
     bool IsLocationAllowedForScenes(RE::StaticFunctionTag*, RE::BGSLocation* akLocation) {
+        std::lock_guard lock(GetPapyrusMutex());
         return BanterCoordinatorService::GetSingleton().IsLocationAllowedForScenes(akLocation);
     }
 
     bool ShouldTriggerSkyrimNetNarration(RE::StaticFunctionTag*, RE::Actor* speaker, RE::Actor* target) {
+        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::ShouldTriggerSkyrimNetNarration(speaker, target);
     }
 
@@ -914,6 +961,7 @@ namespace MARAS::PapyrusInterface {
                                 RE::Actor* targetActor,
                                 bool exactAudience,
                                 std::vector<RE::Actor*> audience) {
+        std::lock_guard lock(GetPapyrusMutex());
         RE::FormID origID = originatorActor ? originatorActor->GetFormID() : 0;
         RE::FormID targID = targetActor ? targetActor->GetFormID() : 0;
         std::vector<RE::FormID> audienceIDs;

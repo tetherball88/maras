@@ -63,7 +63,7 @@ Each child can independently own **one Follower Pet** (e.g., a dog brought home 
   - Replacing or removing a pet/critter cleanly strips its factions and unregisters its package override (as long as no other child in the house is still linked to that same animal).
 - **3-Tier Pet & Critter Ban / Cooldown Rules**:
   - A child is blocked from bringing home a new pet or critter if **any** of three conditions apply:
-    1. **Global MCM/Settings Ban**: Pets or critters are disabled globally in M.A.R.A.S settings.
+    1. **Global Settings Ban**: Pets or critters are disabled globally in M.A.R.A.S settings.
     2. **Per-Child Permanent Ban**: The player told that specific child they are never allowed to have a pet/critter (`petBanned` / `critterBanned`).
     3. **15-Day Rejection / Death Cooldown**: Whenever the player rejects a pet/critter request (or one dies), a retry timestamp is recorded for that child. The child cannot ask for another pet/critter until **15 in-game days** have elapsed.
 - **Automatic Death Cleanup ([`DeathEventHandler`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/DeathEventHandler.cpp))**:

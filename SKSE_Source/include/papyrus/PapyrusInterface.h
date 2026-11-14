@@ -375,6 +375,9 @@ namespace MARAS::PapyrusInterface {
     void ReportIntimateInteraction(RE::StaticFunctionTag*, RE::BSFixedString framework, int32_t threadID, RE::Actor* actorA, RE::Actor* actorB);
     void ClearIntimateThread(RE::StaticFunctionTag*, RE::BSFixedString framework, int32_t threadID);
 
+    void FleeChildrenFromPlayerCell(RE::StaticFunctionTag*);
+    void StopChildrenFleeing(RE::StaticFunctionTag*);
+
     std::vector<RE::Actor*> FindBanterCoupleCandidates(RE::StaticFunctionTag*, float afScanRadius = 3000.0f);
     bool IsBanterPartnerPresent(RE::StaticFunctionTag*, RE::Actor* akPartner, float afScanRadius = 3000.0f);
     void ResetBanterCoupleCooldown(RE::StaticFunctionTag*, RE::Actor* akActorA, RE::Actor* akActorB);

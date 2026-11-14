@@ -12,6 +12,7 @@
 #include "maras/projection/PerspectiveView.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "ui/PrismaModalManager.h"
 #include "ui/PrismaUIDataBridge.h"
@@ -1434,6 +1435,7 @@ namespace MARAS {
                         b->sessionEpoch,
                         "MatchmakingService::OnPartnerAgencyResult",
                         [service, b, idx, res]() {
+                            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                             if (idx >= b->tasks.size()) return;
                             auto& t = b->tasks[idx];
                             if (!res.success) {
@@ -2788,12 +2790,14 @@ namespace MARAS {
                 expectedEpoch,
                 "MatchmakingService::RunLLMScheduledMatchmakingResult",
                 [this, expectedEpoch, success, respStr = std::move(respStr), currentGameDay]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     if (!success || respStr.empty()) {
                         MARAS_LOG_WARN("[Matchmaking:RunLLMScheduledMatchmaking] Scheduled matchmaking request failed or returned empty response");
                         ShowInGameFailedLLMModal(
                             "MARAS: Matchmaking Scan Failed",
                             { "The scheduled matchmaking scan request failed or returned an empty response." },
                             [this, expectedEpoch, currentGameDay]() {
+                                std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                 if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                 SetLastMatchmakingDay(-1.0f);
                                 TryScheduledMatchmaking(currentGameDay);
@@ -2811,6 +2815,7 @@ namespace MARAS {
                             "MARAS: Matchmaking Scan Failed",
                             { "The scheduled matchmaking scan returned malformed or unreadable JSON data." },
                             [this, expectedEpoch, currentGameDay]() {
+                                std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                 if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                 SetLastMatchmakingDay(-1.0f);
                                 TryScheduledMatchmaking(currentGameDay);
@@ -3319,6 +3324,7 @@ namespace MARAS {
                 expectedEpoch,
                 "MatchmakingService::RunManualMatchmakingResult",
                 [this, expectedEpoch, success, respStr = std::move(respStr), targetNpcFormID]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     try {
                         if (!success || respStr.empty()) {
                             MARAS_LOG_WARN("[Matchmaking:RunManualMatchmaking] Manual matchmaking request failed or returned empty response (success: {})", success);
@@ -3327,10 +3333,12 @@ namespace MARAS {
                                 "MARAS: Manual Matchmaking Failed",
                                 { std::format("• Target NPC: {} — The matchmaking request failed or returned an empty response.", targetName) },
                                 [this, expectedEpoch, targetNpcFormID]() {
+                                    std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     RunManualMatchmaking(targetNpcFormID);
                                 },
                                 [expectedEpoch]() {
+                                    std::lock_guard cancelLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
                                 }
@@ -3345,10 +3353,12 @@ namespace MARAS {
                                 "MARAS: Manual Matchmaking Failed",
                                 { std::format("• Target NPC: {} — The matchmaking scan returned malformed or unreadable JSON data.", targetName) },
                                 [this, expectedEpoch, targetNpcFormID]() {
+                                    std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     RunManualMatchmaking(targetNpcFormID);
                                 },
                                 [expectedEpoch]() {
+                                    std::lock_guard cancelLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, false);
                                 },
@@ -3396,6 +3406,7 @@ namespace MARAS {
                 expectedEpoch,
                 "MatchmakingService::RunGlobalMatchmakingResult",
                 [this, expectedEpoch, success, respStr = std::move(respStr), autoApply]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     try {
                         if (!success || respStr.empty()) {
                             MARAS_LOG_WARN("[Matchmaking:RunGlobalMatchmaking] Global matchmaking request failed or returned empty response (success: {})", success);
@@ -3403,10 +3414,12 @@ namespace MARAS {
                                 "MARAS: Global Matchmaking Scan Failed",
                                 { "The global matchmaking scan request failed or returned an empty response." },
                                 [this, expectedEpoch, autoApply]() {
+                                    std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     RunGlobalMatchmaking(autoApply);
                                 },
                                 [expectedEpoch, autoApply]() {
+                                    std::lock_guard cancelLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     if (!autoApply) {
                                         PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
@@ -3422,10 +3435,12 @@ namespace MARAS {
                                 "MARAS: Global Matchmaking Scan Failed",
                                 { "The global matchmaking scan returned malformed or unreadable JSON data." },
                                 [this, expectedEpoch, autoApply]() {
+                                    std::lock_guard retryLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     RunGlobalMatchmaking(autoApply);
                                 },
                                 [expectedEpoch, autoApply]() {
+                                    std::lock_guard cancelLock(PapyrusInterface::GetPapyrusMutex());
                                     if (!IsSessionEpochCurrent(expectedEpoch)) return;
                                     if (!autoApply) {
                                         PrismaUIDataBridge::GetSingleton().SendMatchmakingResults({}, true);
@@ -3625,6 +3640,7 @@ namespace MARAS {
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
             [expectedEpoch, onRetry = std::move(onRetry), onCancel = std::move(onCancel)](const ModalResponse& resp) mutable {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
@@ -3834,6 +3850,7 @@ namespace MARAS {
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
             [expectedEpoch, candidates = std::move(candidates), onApproved = std::move(onApproved)](const ModalResponse& resp) mutable {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
@@ -3934,6 +3951,7 @@ namespace MARAS {
                     batch->sessionEpoch,
                     "MatchmakingService::OnVerifyResult",
                     [this, batch, idx, res]() {
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                         if (idx >= batch->tasks.size()) return;
                         auto& t = batch->tasks[idx];
 

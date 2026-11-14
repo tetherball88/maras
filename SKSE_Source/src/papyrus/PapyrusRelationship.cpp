@@ -870,6 +870,7 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("CalculateMarriageSuccessChance called with null NPC");
             return 0.0f;
         }
+        std::lock_guard lock(GetPapyrusMutex());
         return MarriageDifficulty::CalculateMarriageSuccessChance(npc, intimacyAdjustment, mostGold, housesOwned,
                                                                   horsesOwned, questsCompleted, dungeonsCleared,
                                                                   dragonSoulsCollected, playerKiller);
@@ -880,22 +881,27 @@ namespace MARAS::PapyrusInterface {
             MARAS_LOG_WARN("GetSpouseMultiplier called with null actor");
             return 0.0f;
         }
+        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseBuffService::GetSpouseMultiplier(spouse);
     }
 
     std::vector<float> GetFollowersMultipliers(RE::StaticFunctionTag*, std::vector<RE::Actor*> followers) {
+        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseBuffService::GetFollowersMultipliers(followers);
     }
 
     std::vector<float> GetPermanentMultipliers(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::SpouseBuffService::GetPermanentMultipliers();
     }
 
     int GetBonusCount(RE::StaticFunctionTag*, std::string type) {
+        std::lock_guard lock(GetPapyrusMutex());
         return MARAS::BonusesService::GetSingleton().GetBonusCount(StringUtils::ToLowerStd(type));
     }
 
     RE::BGSPerk* GetBonusPerk(RE::StaticFunctionTag*, std::string type, int index) {
+        std::lock_guard lock(GetPapyrusMutex());
         const auto* be = MARAS::BonusesService::GetSingleton().GetBonusEntry(StringUtils::ToLowerStd(type), index);
         if (!be || be->perk.empty()) return nullptr;
 
@@ -906,26 +912,31 @@ namespace MARAS::PapyrusInterface {
     }
 
     int GetBonusEffectIndex(RE::StaticFunctionTag*, std::string type, int index) {
+        std::lock_guard lock(GetPapyrusMutex());
         const auto* be = MARAS::BonusesService::GetSingleton().GetBonusEntry(StringUtils::ToLowerStd(type), index);
         return be ? be->effectIndex : 0;
     }
 
     float GetBonusPerkValue(RE::StaticFunctionTag*, std::string type, int index) {
+        std::lock_guard lock(GetPapyrusMutex());
         const auto* be = MARAS::BonusesService::GetSingleton().GetBonusEntry(StringUtils::ToLowerStd(type), index);
         return be ? be->value : 0.0f;
     }
 
     std::string GetBonusPerkType(RE::StaticFunctionTag*, std::string type, int index) {
+        std::lock_guard lock(GetPapyrusMutex());
         const auto* be = MARAS::BonusesService::GetSingleton().GetBonusEntry(StringUtils::ToLowerStd(type), index);
         return be ? be->type : std::string();
     }
 
     std::string GetBonusPerkUnit(RE::StaticFunctionTag*, std::string type, int index) {
+        std::lock_guard lock(GetPapyrusMutex());
         const auto* be = MARAS::BonusesService::GetSingleton().GetBonusEntry(StringUtils::ToLowerStd(type), index);
         return be ? be->unit : std::string();
     }
 
     std::string GetBonusPerkDescription(RE::StaticFunctionTag*, std::string type, int index) {
+        std::lock_guard lock(GetPapyrusMutex());
         const auto* be = MARAS::BonusesService::GetSingleton().GetBonusEntry(StringUtils::ToLowerStd(type), index);
         return be ? be->description : std::string();
     }
@@ -989,32 +1000,38 @@ namespace MARAS::PapyrusInterface {
 
     bool IsWidow(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().IsWidowOrWidower(actor->GetFormID());
     }
 
     bool IsNPCDeceased(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().IsDeceased(actor->GetFormID());
     }
 
     bool WasMarriedTo(RE::StaticFunctionTag*, RE::Actor* deceased, RE::Actor* partner) {
         if (!deceased || !partner) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().WasMarriedTo(deceased->GetFormID(), partner->GetFormID());
     }
 
     bool WasEngagedTo(RE::StaticFunctionTag*, RE::Actor* deceased, RE::Actor* partner) {
         if (!deceased || !partner) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().WasEngagedTo(deceased->GetFormID(), partner->GetFormID());
     }
 
     bool WasExOf(RE::StaticFunctionTag*, RE::Actor* deceased, RE::Actor* partner) {
         if (!deceased || !partner) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().WasExOf(deceased->GetFormID(), partner->GetFormID());
     }
 
     std::vector<std::string> GetDeceasedSpouseNames(RE::StaticFunctionTag*, RE::Actor* actor) {
         std::vector<std::string> result;
         if (!actor) return result;
+        std::lock_guard lock(GetPapyrusMutex());
         auto records = DeceasedRegistry::GetSingleton().GetDeceasedSpousesOf(actor->GetFormID());
         for (const auto& rec : records) {
             result.push_back(rec.name);
@@ -1025,6 +1042,7 @@ namespace MARAS::PapyrusInterface {
     std::vector<std::string> GetDeceasedChildrenNames(RE::StaticFunctionTag*, RE::Actor* actor) {
         std::vector<std::string> result;
         if (!actor) return result;
+        std::lock_guard lock(GetPapyrusMutex());
         auto records = DeceasedRegistry::GetSingleton().GetDeceasedChildrenOf(actor->GetFormID());
         for (const auto& rec : records) {
             result.push_back(rec.name);
@@ -1034,10 +1052,12 @@ namespace MARAS::PapyrusInterface {
 
     bool HasDeceasedChildren(RE::StaticFunctionTag*, RE::Actor* actor) {
         if (!actor) return false;
+        std::lock_guard lock(GetPapyrusMutex());
         return DeceasedRegistry::GetSingleton().HasDeceasedChildren(actor->GetFormID());
     }
 
     std::int32_t GetDeceasedCount(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         return static_cast<std::int32_t>(DeceasedRegistry::GetSingleton().GetDeceasedCount());
     }
 

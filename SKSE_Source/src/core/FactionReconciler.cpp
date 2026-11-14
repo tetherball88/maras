@@ -4,6 +4,7 @@
 #include "core/DeferredActorResolver.h"
 #include "core/FormCache.h"
 #include "core/NPCRelationshipManager.h"
+#include "core/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
 #include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
@@ -688,6 +689,18 @@ namespace MARAS {
         if (!actor) {
             return;
         }
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            const RE::FormID actorId = actor->GetFormID();
+            if (actorId != 0) {
+                AddCurrentEpochTask("FactionReconciler::ClearChildHouseholdFactions", [actorId]() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    if (auto* a = RE::TESForm::LookupByID<RE::Actor>(actorId); a && !a->IsDeleted()) {
+                        FactionReconciler::GetSingleton().ClearChildHouseholdFactions(a);
+                    }
+                });
+            }
+            return;
+        }
         auto& fc = FormCache::GetSingleton();
         (void)SyncActorFaction(actor, fc.GetPlayerChildFaction(), std::nullopt);
         (void)SyncActorFaction(actor, fc.GetBYOHRelationshipAdoptionChildOwnedFaction(), std::nullopt);
@@ -809,6 +822,13 @@ namespace MARAS {
     }
 
     void FactionReconciler::ReconcileAllOnLoad() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("FactionReconciler::ReconcileAllOnLoad", []() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                FactionReconciler::GetSingleton().ReconcileAllOnLoad();
+            });
+            return;
+        }
         ReconcilePlayer();
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();

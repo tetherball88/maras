@@ -33,10 +33,8 @@ Event OnSleepStop(bool abInterrupted)
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
     bool questDisabled = MARAS.GetDisablePolygamyQuest()
     bool questIsntTouched = !enablePolygamyQst.IsRunning() && !enablePolygamyQst.IsCompleted()
-    Quest main = self.GetOwningQuest()
-    TTM_MCM mcm = main as TTM_MCM
 
-    if(!questDisabled && questIsntTouched && player.GetActorValue("DragonSouls") >= 1 &&  MARAS.GetStatusCount("married") == 1 && mcm.TTM_EnablePolygamyToggle.GetValue() == 0)
+    if(!questDisabled && questIsntTouched && player.GetActorValue("DragonSouls") >= 1 &&  MARAS.GetStatusCount("married") == 1 && !MARAS.GetEnablePolygamy())
         enablePolygamyQst.SetStage(0)
     endif
 

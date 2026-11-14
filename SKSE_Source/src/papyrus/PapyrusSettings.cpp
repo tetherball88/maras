@@ -37,6 +37,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     void MarkSettingsMigrated(RE::StaticFunctionTag*) {
+        std::lock_guard lock(GetPapyrusMutex());
         Settings::GetSingleton().SetBoolByKey("migratedFromStorageUtil", true);
         MARAS_LOG_INFO("Marked settings as migrated from StorageUtil");
     }
@@ -46,6 +47,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     void SetStartDialGender(RE::StaticFunctionTag*, int32_t val) {
+        std::lock_guard lock(GetPapyrusMutex());
         Settings::GetSingleton().SetStartDialGender(val);
     }
 
@@ -72,6 +74,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     void SetMinRelRankForDial(RE::StaticFunctionTag*, int32_t val) {
+        std::lock_guard lock(GetPapyrusMutex());
         Settings::GetSingleton().SetMinRelRankForDial(val);
     }
 

@@ -2,6 +2,7 @@
 
 #include "PCH.h"
 #include "core/Serialization.h"
+#include <shared_mutex>
 
 namespace MARAS {
 
@@ -70,6 +71,7 @@ namespace MARAS {
         float CalculateLonelinessDecay(FormID npcFormID, bool isFollowing, size_t activePartnerCount) const;
 
         // per-type min/max clamp settings (type -> {min, max})
+        mutable std::shared_mutex minMaxMutex_;
         std::unordered_map<std::string, std::pair<int, int>> minMaxByType_;
     };
 
