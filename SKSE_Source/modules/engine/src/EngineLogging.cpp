@@ -7,7 +7,16 @@
 
 namespace MARAS {
 
-    std::shared_ptr<spdlog::logger> g_Logger;
+    namespace {
+        std::shared_ptr<spdlog::logger>& LoggerSlot() noexcept {
+            static std::shared_ptr<spdlog::logger> s_logger;
+            return s_logger;
+        }
+    }  // namespace
+
+    const std::shared_ptr<spdlog::logger>& GetLogger() noexcept {
+        return LoggerSlot();
+    }
 
     namespace {
         void ForwardFoundationLog(Foundation::LogSeverity severity, std::string_view message) noexcept {
@@ -69,7 +78,7 @@ namespace MARAS {
             logger->set_pattern("[%H:%M:%S] [%l] %v");
 
             spdlog::set_default_logger(logger);
-            MARAS::g_Logger = std::move(logger);
+            MARAS::LoggerSlot() = std::move(logger);
             InitializeFoundationLogSink();
         }
 

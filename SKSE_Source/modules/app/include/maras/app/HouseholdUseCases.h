@@ -1,6 +1,8 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
+
+#include <nlohmann/json_fwd.hpp>
 
 #include <cstdint>
 #include <shared_mutex>

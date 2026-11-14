@@ -4,6 +4,8 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/JsonOverrideLoader.h"
 
+#include <nlohmann/json.hpp>
+
 #include <array>
 #include <system_error>
 

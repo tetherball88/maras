@@ -6,6 +6,8 @@
 #include "maras/foundation/EnumUtils.h"
 #include "maras/foundation/StringUtils.h"
 
+#include <nlohmann/json.hpp>
+
 #include <array>
 #include <optional>
 #include <string>

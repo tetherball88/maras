@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
 
 namespace MARAS {
 

@@ -1,19 +1,7 @@
-# It's recommended to set a minimum CMake version.
-# If you use CMake features from higher versions, update this to match.
 cmake_minimum_required(VERSION 3.21)
 
-# Set your project name. This will be the name of your SKSE .dll file.
 project(MARAS VERSION 0.0.1 LANGUAGES CXX)
 
-# #
-# YOU DO NOT NEED TO EDIT ANYTHING BELOW HERE
-# #
-
-# If you're not using a mod manager, you probably want the SKSE plugin to go
-# inside of your Skyrim "Data" folder.
-#
-# To do this automatically, set the `SKYRIM_FOLDER` environment variable
-# to the path of your Skyrim Special Edition folder
 set(MOD_FOLDER_NAME "M.A.R.A.S Dev")
 set(SKYRIM_MODS_FOLDER "E:\\Skyrim\\development\\mods")
 set(OUTPUT_FOLDER "${SKYRIM_MODS_FOLDER}/${MOD_FOLDER_NAME}")
@@ -31,12 +19,8 @@ set(CommonLibName "CommonLibSSE")
 
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
-# Force static linking for all vcpkg dependencies
 set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
-
-add_subdirectory("${CommonLibPath}" ${CMAKE_CURRENT_BINARY_DIR}/_deps/clib-build EXCLUDE_FROM_ALL)
-get_target_property(COMMONLIB_SRC_DIR CommonLibSSE SOURCE_DIR)
 
 find_path(RAPIDCSV_INCLUDE_DIRS
     NAMES rapidcsv.h
@@ -44,13 +28,8 @@ find_path(RAPIDCSV_INCLUDE_DIRS
     REQUIRED
 )
 
-include("${COMMONLIB_SRC_DIR}/cmake/CommonLibSSE.cmake")
+add_subdirectory("${CommonLibPath}" ${CMAKE_CURRENT_BINARY_DIR}/_deps/clib-build EXCLUDE_FROM_ALL)
 
-# Otherwise, you can set OUTPUT_FOLDER to any place you'd like :)
-# set(OUTPUT_FOLDER "C:/path/to/any/folder")
-
-# Setup your SKSE plugin as an SKSE plugin!
-# find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 if(TARGET yaml-cpp::yaml-cpp)
@@ -60,7 +39,8 @@ else()
 endif()
 
 # ---------------------------------------------------- #
-#     Engine-Free Layered Modules (Phase 1+ Core)      #
+#   Layers 0-2: Pure Engine-Free STATIC Libraries      #
+#   Precompiled Header: pch_core.h                     #
 # ---------------------------------------------------- #
 
 add_library(maras_foundation STATIC
@@ -68,9 +48,16 @@ add_library(maras_foundation STATIC
     modules/foundation/src/Logging.cpp
 )
 target_compile_features(maras_foundation PUBLIC cxx_std_23)
+target_compile_definitions(maras_foundation PUBLIC _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+if(MSVC)
+    target_compile_options(maras_foundation PUBLIC /FS)
+endif()
 target_include_directories(maras_foundation
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/foundation/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/foundation/src
+)
+target_precompile_headers(maras_foundation PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/pch_core.h
 )
 
 add_library(maras_state STATIC
@@ -88,6 +75,7 @@ target_include_directories(maras_state
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/state/src
 )
 target_link_libraries(maras_state PUBLIC maras_foundation)
+target_precompile_headers(maras_state REUSE_FROM maras_foundation)
 
 add_library(maras_projection STATIC
     modules/projection/src/PerspectiveLens.cpp
@@ -98,6 +86,7 @@ target_include_directories(maras_projection
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/projection/src
 )
 target_link_libraries(maras_projection PUBLIC maras_state)
+target_precompile_headers(maras_projection REUSE_FROM maras_foundation)
 
 add_library(maras_domain_relationships STATIC
     modules/domain_relationships/src/RelationshipRules.cpp
@@ -114,6 +103,7 @@ target_include_directories(maras_domain_relationships
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_relationships/src
 )
 target_link_libraries(maras_domain_relationships PUBLIC maras_state)
+target_precompile_headers(maras_domain_relationships REUSE_FROM maras_foundation)
 
 add_library(maras_domain_lineage STATIC
     modules/domain_lineage/src/LineageRules.cpp
@@ -128,6 +118,7 @@ target_include_directories(maras_domain_lineage
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_lineage/src
 )
 target_link_libraries(maras_domain_lineage PUBLIC maras_projection maras_state)
+target_precompile_headers(maras_domain_lineage REUSE_FROM maras_foundation)
 
 add_library(maras_domain_household STATIC
     modules/domain_household/src/HouseholdRules.cpp
@@ -142,6 +133,7 @@ target_include_directories(maras_domain_household
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_household/src
 )
 target_link_libraries(maras_domain_household PUBLIC maras_projection maras_state maras_domain_relationships)
+target_precompile_headers(maras_domain_household REUSE_FROM maras_foundation)
 
 add_library(maras_domain_agency STATIC
     modules/domain_agency/src/MatchmakingRules.cpp
@@ -156,70 +148,208 @@ target_include_directories(maras_domain_agency
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_agency/src
 )
 target_link_libraries(maras_domain_agency PUBLIC maras_projection maras_state maras_domain_relationships maras_domain_lineage)
+target_precompile_headers(maras_domain_agency REUSE_FROM maras_foundation)
 
-if(MSVC)
-    set_property(TARGET maras_foundation PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET maras_state PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET maras_projection PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET maras_domain_relationships PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET maras_domain_lineage PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET maras_domain_household PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set_property(TARGET maras_domain_agency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# ---------------------------------------------------- #
+#   Layers 3-5: Engine, App & Bridge OBJECT Libraries  #
+#   Precompiled Header: pch_engine.h                   #
+# ---------------------------------------------------- #
+
+# Dedicated STATIC PCH owner in the build tree prevents CMake's VS generator from duplicating
+# cmake_pch.obj across OBJECT targets and the final SHARED link step (LNK4042).
+set(_maras_pch_anchor "${CMAKE_CURRENT_BINARY_DIR}/maras_pch_engine_anchor.cpp")
+if(NOT EXISTS "${_maras_pch_anchor}")
+    file(WRITE "${_maras_pch_anchor}" "// Anchor translation unit for CMake pch_engine.pch generation.\n")
 endif()
-
-# Collect all source files
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
-    "plugin/plugin.cpp"
-    "modules/engine/src/*.cpp"
-    "modules/app/src/*.cpp"
-    "modules/bridge_c_api/src/*.cpp"
-    "modules/bridge_papyrus/src/*.cpp"
-    "modules/bridge_ui/src/*.cpp"
-    "modules/bridge_skyrimnet/src/*.cpp"
-    "version.rc"
+add_library(maras_pch_engine STATIC
+    "${_maras_pch_anchor}"
+)
+target_compile_features(maras_pch_engine PUBLIC cxx_std_23)
+target_link_libraries(maras_pch_engine PUBLIC maras_foundation ${CommonLibName}::${CommonLibName})
+target_precompile_headers(maras_pch_engine PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/pch_engine.h
 )
 
-# add_library(${PROJECT_NAME} SHARED ${SOURCES})
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${SOURCES})
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
-target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
+add_library(maras_engine OBJECT
+    modules/engine/src/ActorEngineUtils.cpp
+    modules/engine/src/ActorService.cpp
+    modules/engine/src/BanterSceneStarter.cpp
+    modules/engine/src/BedOwnershipReconciler.cpp
+    modules/engine/src/BonusesConfigLoader.cpp
+    modules/engine/src/BuffReconciler.cpp
+    modules/engine/src/ChildrenFleeService.cpp
+    modules/engine/src/ChildSpawnService.cpp
+    modules/engine/src/ChildVisualReconciler.cpp
+    modules/engine/src/DeathEventHandler.cpp
+    modules/engine/src/DeferredActorResolver.cpp
+    modules/engine/src/DialogueEventSink.cpp
+    modules/engine/src/EncounterConfigLoader.cpp
+    modules/engine/src/EngineLogging.cpp
+    modules/engine/src/FactionReconciler.cpp
+    modules/engine/src/FormCache.cpp
+    modules/engine/src/FormUtils.cpp
+    modules/engine/src/GlobalVarReconciler.cpp
+    modules/engine/src/HouseholdEngineOps.cpp
+    modules/engine/src/IntimateThreadService.cpp
+    modules/engine/src/JsonOverrideLoader.cpp
+    modules/engine/src/MarriageDifficultyLoader.cpp
+    modules/engine/src/NamePoolLoader.cpp
+    modules/engine/src/NPCIndexReportWriter.cpp
+    modules/engine/src/NPCTypeDeterminer.cpp
+    modules/engine/src/PackageReconciler.cpp
+    modules/engine/src/PlayerChildrenEngineOps.cpp
+    modules/engine/src/PollingService.cpp
+    modules/engine/src/QuestEventConfigLoader.cpp
+    modules/engine/src/QuestEventHandler.cpp
+    modules/engine/src/SkseSerializationCallbacks.cpp
+    modules/engine/src/SpatialWorldIndex.cpp
+    modules/engine/src/TaskDispatcher.cpp
+    modules/engine/src/TrainingCatalogLoader.cpp
+)
+target_compile_features(maras_engine PUBLIC cxx_std_23)
+target_include_directories(maras_engine
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/engine/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/engine/src
+)
+target_link_libraries(maras_engine
+    PUBLIC
     maras_domain_agency
     maras_domain_household
     maras_domain_lineage
     maras_domain_relationships
     maras_projection
     maras_state
-    nlohmann_json::nlohmann_json
-    ${YAML_CPP_TARGET}
+    maras_foundation
     ${CommonLibName}::${CommonLibName}
+    nlohmann_json::nlohmann_json
+    PRIVATE
+    ${YAML_CPP_TARGET}
+)
+target_precompile_headers(maras_engine REUSE_FROM maras_pch_engine)
+
+add_library(maras_app OBJECT
+    modules/app/src/AgencyWorkflowCoordinator.cpp
+    modules/app/src/AppContext.cpp
+    modules/app/src/AppLifecycleCoordinator.cpp
+    modules/app/src/AsyncLlmBatchRunner.cpp
+    modules/app/src/HouseholdUseCases.cpp
+    modules/app/src/LineageUseCases.cpp
+    modules/app/src/ModalTypes.cpp
+    modules/app/src/PaternityWorkflowCoordinator.cpp
+    modules/app/src/RelationshipUseCases.cpp
+    modules/app/src/SettingsCoordinator.cpp
+)
+target_compile_features(maras_app PUBLIC cxx_std_23)
+target_include_directories(maras_app
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/app/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/app/src
+)
+target_link_libraries(maras_app PRIVATE maras_engine)
+target_precompile_headers(maras_app REUSE_FROM maras_pch_engine)
+
+add_library(maras_bridge_papyrus OBJECT
+    modules/bridge_papyrus/src/PapyrusChildren.cpp
+    modules/bridge_papyrus/src/PapyrusHousehold.cpp
+    modules/bridge_papyrus/src/PapyrusInterface.cpp
+    modules/bridge_papyrus/src/PapyrusRelationship.cpp
+    modules/bridge_papyrus/src/PapyrusSettings.cpp
+)
+target_compile_features(maras_bridge_papyrus PUBLIC cxx_std_23)
+target_include_directories(maras_bridge_papyrus
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_papyrus/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_papyrus/src
+)
+target_link_libraries(maras_bridge_papyrus PRIVATE maras_app maras_engine)
+target_precompile_headers(maras_bridge_papyrus REUSE_FROM maras_pch_engine)
+
+add_library(maras_bridge_ui OBJECT
+    modules/bridge_ui/src/ConfirmationModal.cpp
+    modules/bridge_ui/src/HouseholdBuffsJsonBuilder.cpp
+    modules/bridge_ui/src/PrismaModalManager.cpp
+    modules/bridge_ui/src/PrismaUIDataBridge.cpp
+    modules/bridge_ui/src/PrismaUIManager.cpp
+)
+target_compile_features(maras_bridge_ui PUBLIC cxx_std_23)
+target_include_directories(maras_bridge_ui
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_ui/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_ui/src
+)
+target_link_libraries(maras_bridge_ui PRIVATE maras_app maras_engine)
+target_precompile_headers(maras_bridge_ui REUSE_FROM maras_pch_engine)
+
+add_library(maras_bridge_skyrimnet OBJECT
+    modules/bridge_skyrimnet/src/SkyrimNetApiLoader.cpp
+    modules/bridge_skyrimnet/src/SkyrimNetDecisions.cpp
+    modules/bridge_skyrimnet/src/SkyrimNetDecorators.cpp
+    modules/bridge_skyrimnet/src/SkyrimNetMemoryService.cpp
+    modules/bridge_skyrimnet/src/SkyrimNetProfileService.cpp
+)
+target_compile_features(maras_bridge_skyrimnet PUBLIC cxx_std_23)
+target_include_directories(maras_bridge_skyrimnet
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_skyrimnet/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_skyrimnet/src
+)
+target_link_libraries(maras_bridge_skyrimnet PRIVATE maras_app maras_engine)
+target_precompile_headers(maras_bridge_skyrimnet REUSE_FROM maras_pch_engine)
+
+add_library(maras_bridge_c_api OBJECT
+    modules/bridge_c_api/src/MARAS_PublicAPI.cpp
+)
+target_compile_features(maras_bridge_c_api PUBLIC cxx_std_23)
+target_include_directories(maras_bridge_c_api
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_c_api/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_c_api/src
+)
+target_link_libraries(maras_bridge_c_api PRIVATE maras_engine)
+target_precompile_headers(maras_bridge_c_api REUSE_FROM maras_pch_engine)
+
+# ---------------------------------------------------- #
+#   Composition Root: MARAS.dll                        #
+# ---------------------------------------------------- #
+
+add_library(${PROJECT_NAME} SHARED
+    plugin/plugin.cpp
+    version.rc
+)
+set_target_properties(${PROJECT_NAME} PROPERTIES DEFINE_SYMBOL "")
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_precompile_headers(${PROJECT_NAME} REUSE_FROM maras_pch_engine)
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    maras_bridge_papyrus
+    maras_bridge_ui
+    maras_bridge_skyrimnet
+    maras_bridge_c_api
+    maras_app
+    maras_engine
+    ${YAML_CPP_TARGET}
 )
 
-# Add include directories
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/engine/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/app/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_c_api/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_papyrus/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_ui/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_skyrimnet/include
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-# Silence Microsoft STL deprecation warnings
-target_compile_definitions(${PROJECT_NAME} PRIVATE _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
-
-# Force static linking of runtime library to reduce dependencies
 if(MSVC)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    foreach(_tgt IN ITEMS
+        maras_foundation
+        maras_state
+        maras_projection
+        maras_domain_relationships
+        maras_domain_lineage
+        maras_domain_household
+        maras_domain_agency
+        maras_pch_engine
+        maras_engine
+        maras_app
+        maras_bridge_papyrus
+        maras_bridge_ui
+        maras_bridge_skyrimnet
+        maras_bridge_c_api
+        ${PROJECT_NAME}
+    )
+        set_property(TARGET ${_tgt} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endforeach()
 
-    # Also ensure CommonLibSSE uses static runtime
     if(TARGET ${CommonLibName})
         set_property(TARGET ${CommonLibName} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
 
-    # Additional linker flags to embed dependencies
     target_link_options(${PROJECT_NAME} PRIVATE
         /INCREMENTAL:NO
         /OPT:REF
@@ -227,15 +357,8 @@ if(MSVC)
     )
 endif()
 
-# When your SKSE .dll is compiled, this will automatically copy the .dll into your mods folder.
-# Only works if you configure DEPLOY_ROOT above (or set the SKYRIM_MODS_FOLDER environment variable)
 if(DEFINED OUTPUT_FOLDER)
-    # If you specify an <OUTPUT_FOLDER> (including via environment variables)
-    # then we'll copy your mod files into Skyrim or a mod manager for you!
-
-    # Copy the SKSE plugin .dll files into the SKSE/Plugins/ folder
     set(DLL_FOLDER "${OUTPUT_FOLDER}/SKSE/Plugins")
-
     message(STATUS "SKSE plugin output folder: ${DLL_FOLDER}")
 
     add_custom_command(
@@ -246,7 +369,6 @@ if(DEFINED OUTPUT_FOLDER)
         VERBATIM
     )
 
-    # If you perform a "Debug" build, also copy .pdb file (for debug symbols)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_custom_command(
             TARGET "${PROJECT_NAME}"
@@ -281,6 +403,7 @@ if(MARAS_BUILD_TESTS)
     target_include_directories(maras_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
+    target_precompile_headers(maras_tests REUSE_FROM maras_foundation)
     # Physical LNK2019 link gate: maras_tests links ONLY pure STATIC domain/projection/state/foundation targets
     target_link_libraries(maras_tests PRIVATE
         maras_domain_agency

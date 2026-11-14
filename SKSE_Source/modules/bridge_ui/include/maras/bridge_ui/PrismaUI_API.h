@@ -3,8 +3,10 @@
 */
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
+#include "SKSE/SKSE.h"
 #include <Windows.h>
+#include <cstdint>
 
 typedef uint64_t PrismaView;
 

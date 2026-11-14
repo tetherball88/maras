@@ -1,8 +1,9 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 #include <vector>
 

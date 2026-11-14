@@ -1,6 +1,5 @@
 #include "maras/bridge_skyrimnet/SkyrimNetDecorators.h"
 
-#include "PCH.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/ModalTypes.h"
@@ -18,6 +17,8 @@
 #include "maras/foundation/EnumUtils.h"
 #include "maras/foundation/StringUtils.h"
 #include "maras/foundation/StrongIds.h"
+
+#include <nlohmann/json.hpp>
 #include "maras/projection/PerspectiveView.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"

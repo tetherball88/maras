@@ -6,6 +6,8 @@
 #include "maras/foundation/StringUtils.h"
 #include "maras/state/WorldStore.h"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <array>
 #include <system_error>

@@ -1,10 +1,12 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/state/WorldState.h"
+
+#include <nlohmann/json_fwd.hpp>
 
 #include <atomic>
 #include <cstddef>

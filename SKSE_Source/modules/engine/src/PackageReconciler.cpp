@@ -105,17 +105,26 @@ namespace MARAS {
             }
         };
 
-        std::mutex s_evalMutex;
-        std::unordered_map<RE::FormID, HookEvalState> s_lastEvals;
+        struct HookEvalCache {
+            std::mutex mutex;
+            std::unordered_map<RE::FormID, HookEvalState> lastEvals;
+        };
+
+        HookEvalCache& GetHookEvalCache() {
+            static HookEvalCache instance;
+            return instance;
+        }
 
         void InvalidateHookEvalActor(RE::FormID actorID) {
-            std::lock_guard lock(s_evalMutex);
-            s_lastEvals.erase(actorID);
+            auto& cache = GetHookEvalCache();
+            std::lock_guard lock(cache.mutex);
+            cache.lastEvals.erase(actorID);
         }
 
         void ClearHookEvalCache() {
-            std::lock_guard lock(s_evalMutex);
-            s_lastEvals.clear();
+            auto& cache = GetHookEvalCache();
+            std::lock_guard lock(cache.mutex);
+            cache.lastEvals.clear();
         }
 
         template <typename LogFn>
@@ -127,12 +136,13 @@ namespace MARAS {
             }
             const HookEvalState newState{ candidateID, resultID, decision };
             {
-                std::lock_guard lock(s_evalMutex);
-                auto it = s_lastEvals.find(actorID);
-                if (it != s_lastEvals.end() && it->second == newState) {
+                auto& cache = GetHookEvalCache();
+                std::lock_guard lock(cache.mutex);
+                auto it = cache.lastEvals.find(actorID);
+                if (it != cache.lastEvals.end() && it->second == newState) {
                     return;
                 }
-                s_lastEvals[actorID] = newState;
+                cache.lastEvals[actorID] = newState;
             }
             logFn();
         }

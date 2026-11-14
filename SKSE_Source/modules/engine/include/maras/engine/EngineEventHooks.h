@@ -1,6 +1,7 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
+#include "SKSE/SKSE.h"
 
 #include <cstdint>
 #include <string_view>

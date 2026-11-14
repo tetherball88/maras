@@ -1,7 +1,8 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
 
+#include <cstdint>
 #include <vector>
 
 namespace MARAS {

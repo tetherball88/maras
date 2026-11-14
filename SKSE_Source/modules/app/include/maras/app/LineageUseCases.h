@@ -1,7 +1,6 @@
 #pragma once
 
-#include "PCH.h"
-
+#include "RE/Skyrim.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/foundation/IRng.h"
 #include "maras/projection/PerspectiveView.h"

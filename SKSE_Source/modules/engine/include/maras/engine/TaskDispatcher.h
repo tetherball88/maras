@@ -1,6 +1,7 @@
 #pragma once
 
-#include "PCH.h"
+#include "RE/Skyrim.h"
+#include "SKSE/SKSE.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/state/SessionEpoch.h"
 

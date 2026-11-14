@@ -1,7 +1,5 @@
 #include "maras/app/HouseholdUseCases.h"
 
-#include "PCH.h"
-
 #include "maras/app/AppContext.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/domain/household/DeceasedQueries.h"
@@ -22,6 +20,8 @@
 #include "maras/projection/PerspectiveView.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
+
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <format>
