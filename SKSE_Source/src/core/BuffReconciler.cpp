@@ -9,6 +9,7 @@
 #include "core/SessionEpoch.h"
 #include "maras/state/EngineSyncPlan.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 #include "utils/Common.h"
 #include "utils/FormUtils.h"
 #include "utils/StringUtils.h"
@@ -124,7 +125,8 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             if (!pendingReconcile_.exchange(true, std::memory_order_acq_rel)) {
                 if (!AddEpochTask(GetSessionEpoch(), "BuffReconciler::ReconcilePlayerBuffs", []() {
-                        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                        BuffReconciler::GetSingleton().ReconcilePlayerBuffsOnMainThread();
                     })) {
                     pendingReconcile_.store(false, std::memory_order_release);
                 }
@@ -132,6 +134,10 @@ namespace MARAS {
             return;
         }
 
+        ReconcilePlayerBuffsOnMainThread();
+    }
+
+    void BuffReconciler::ReconcilePlayerBuffsOnMainThread() {
         pendingReconcile_.store(false, std::memory_order_release);
 
         auto* player = RE::PlayerCharacter::GetSingleton();

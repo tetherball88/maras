@@ -71,6 +71,8 @@ namespace MARAS {
                                               RE::BSTEventSource<RE::MenuOpenCloseEvent>* a_source) override;
 
     private:
+        void ShowOnMainThread();
+        void HideOnMainThread();
         void TryFlushPostUnfocusCallbacks();
 
         PRISMA_UI_API::IVPrismaUI1* prismaUI = nullptr;

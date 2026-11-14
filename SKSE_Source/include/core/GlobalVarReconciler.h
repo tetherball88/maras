@@ -46,6 +46,8 @@ namespace MARAS {
         GlobalVarReconciler(const GlobalVarReconciler&) = delete;
         GlobalVarReconciler& operator=(const GlobalVarReconciler&) = delete;
 
+        void ReconcileGlobalsOnMainThread();
+
         std::atomic<bool> pendingReconcile_{ false };
     };
 

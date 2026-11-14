@@ -16,7 +16,8 @@ namespace MARAS {
      * Main-thread gate and unloaded-actor reconciliation queue (`PendingEngineSyncSet`).
      *
      * Responsibilities:
-     * 1. Tracks the Skyrim main game thread ID (`CaptureMainThread()` at `kDataLoaded`).
+     * 1. Tracks the Skyrim main game thread ID (`CaptureMainThread()` at `SKSEPluginLoad` /
+     *    `kInputLoaded` / `ScopedMainThreadTask`, never `kDataLoaded` which runs on `InitTESThread`).
      * 2. When off-thread callers request faction/package reconciliation, merges `SyncFlags`
      *    into `pendingSync_` and schedules a single coalesced `SessionEpoch`-fenced task
      *    to flush on the main thread.
@@ -73,6 +74,7 @@ namespace MARAS {
 
         std::atomic<bool> hasMainThread_{ false };
         std::atomic<std::thread::id> mainThreadId_{};
+        std::atomic<std::uint32_t> mainOsThreadId_{ 0 };
     };
 
     [[nodiscard]] constexpr DeferredActorResolver::SyncFlags operator|(

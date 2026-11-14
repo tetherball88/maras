@@ -123,7 +123,7 @@ namespace MARAS {
                     auto& mgr = PrismaUIManager::GetSingleton();
                     if (mgr.m_openDashboardAfterJournalClose) {
                         mgr.m_openDashboardAfterJournalClose = false;
-                        mgr.Show();
+                        mgr.ShowOnMainThread();
                     }
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("PrismaUIManager::ProcessEvent(JournalMenu) exception: {}", e.what());
@@ -224,11 +224,10 @@ namespace MARAS {
             if (!IsModalDisplayBlocked() && IsViewValid() && m_domReady && !prismaUI->HasFocus(view)) {
                 for (auto* event = *a_event; event; event = event->next) {
                     if (auto* button = event->AsButtonEvent(); button && button->IsDown()) {
-                        if (auto* taskIF = SKSE::GetTaskInterface()) {
-                            taskIF->AddTask([]() {
-                                PrismaUIManager::GetSingleton().SyncViewVisibilityAndFocus();
-                            });
-                        }
+                        AddCurrentEpochTask("PrismaUIManager::RestoreModalFocus", []() {
+                            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                            PrismaUIManager::GetSingleton().SyncViewVisibilityAndFocus();
+                        });
                         break;
                     }
                 }
@@ -263,11 +262,10 @@ namespace MARAS {
                 MARAS_LOG_INFO("PrismaUIManager: Hotkey 0x{:02X} matched (Ctrl={}, Shift={}, Alt={}) -> Toggling UI",
                                hotkeyCode, ctrlDown, shiftDown, altDown);
 
-                if (auto* taskIF = SKSE::GetTaskInterface()) {
-                    taskIF->AddTask([]() {
-                        PrismaUIManager::GetSingleton().Toggle();
-                    });
-                }
+                AddCurrentEpochTask("PrismaUIManager::ToggleHotkey", []() {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                    PrismaUIManager::GetSingleton().Toggle();
+                });
             }
         }
 
@@ -418,12 +416,16 @@ namespace MARAS {
         MARAS_LOG_INFO("PrismaUIManager: DOM ready callback received for view {}", readyView);
         if (auto* taskIF = SKSE::GetTaskInterface()) {
             taskIF->AddTask([readyView]() {
+                ScopedMainThreadTask mainScope;
                 try {
+                    std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                     auto& mgr = PrismaUIManager::GetSingleton();
                     if (mgr.view != readyView || !mgr.IsViewValid()) return;
                     mgr.OnUIReady();
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("PrismaUIManager::OnDomReady exception: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("PrismaUIManager::OnDomReady unknown exception");
                 }
             });
         }
@@ -433,11 +435,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIManager::Show", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIManager::GetSingleton().Show();
+                PrismaUIManager::GetSingleton().ShowOnMainThread();
             });
             return;
         }
+        ShowOnMainThread();
+    }
 
+    void PrismaUIManager::ShowOnMainThread() {
         if (!prismaUI) {
             MARAS_LOG_WARN("PrismaUIManager::Show called but PrismaUI API is not available");
             return;
@@ -491,11 +496,14 @@ namespace MARAS {
         if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
             AddCurrentEpochTask("PrismaUIManager::Hide", []() {
                 std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
-                PrismaUIManager::GetSingleton().Hide();
+                PrismaUIManager::GetSingleton().HideOnMainThread();
             });
             return;
         }
+        HideOnMainThread();
+    }
 
+    void PrismaUIManager::HideOnMainThread() {
         if (!prismaUI || !view) {
             m_dashboardOpen = false;
             m_dashboardPaused = false;
@@ -534,9 +542,9 @@ namespace MARAS {
         MARAS_LOG_INFO("PrismaUIManager::Toggle() called — currently {}", currentlyVisible ? "visible" : "hidden");
 
         if (currentlyVisible) {
-            Hide();
+            HideOnMainThread();
         } else {
-            Show();
+            ShowOnMainThread();
         }
     }
 
@@ -563,11 +571,10 @@ namespace MARAS {
 
     void PrismaUIManager::OnCloseMARAS(const char* /*argument*/) {
         MARAS_LOG_INFO("PrismaUIManager: JS 'closeMARAS' event received");
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([]() {
-                PrismaUIManager::GetSingleton().Hide();
-            });
-        }
+        AddCurrentEpochTask("PrismaUIManager::OnCloseMARAS", []() {
+            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+            PrismaUIManager::GetSingleton().HideOnMainThread();
+        });
     }
 
     void PrismaUIManager::OnLog(const char* message) {
@@ -578,14 +585,13 @@ namespace MARAS {
 
     void PrismaUIManager::OnRefocusView(const char* /*argument*/) {
         MARAS_LOG_INFO("PrismaUIManager: JS 'refocusView' event received");
-        if (auto* taskIF = SKSE::GetTaskInterface()) {
-            taskIF->AddTask([]() {
-                auto& mgr = PrismaUIManager::GetSingleton();
-                if (mgr.IsViewValid()) {
-                    mgr.SyncViewVisibilityAndFocus();
-                }
-            });
-        }
+        AddCurrentEpochTask("PrismaUIManager::OnRefocusView", []() {
+            std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+            auto& mgr = PrismaUIManager::GetSingleton();
+            if (mgr.IsViewValid()) {
+                mgr.SyncViewVisibilityAndFocus();
+            }
+        });
     }
 
     void PrismaUIManager::OnMarasAction(const char* argument) {

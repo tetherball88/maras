@@ -251,6 +251,7 @@ namespace MARAS {
         if (previousGameDay_ >= 0.0f) {
             const float day = previousGameDay_;
             AddCurrentEpochTask("PollingService::CheckAutoMarriageOnLoad", [day]() {
+                std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
                 NPCRelationshipManager::GetSingleton().CheckAutoMarriageForEngagedNPCs(day);
             });
         }

@@ -11,7 +11,9 @@
 #include "core/NPCRelationshipManager.h"
 #include "core/PlayerChildrenService.h"
 #include "core/PlayerHouseService.h"
+#include "core/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
+#include "papyrus/PapyrusInterface.h"
 #include "services/ActorService.h"
 #include "utils/ActorUtils.h"
 #include "utils/Common.h"
@@ -516,6 +518,22 @@ namespace MARAS {
     }
 
     void PackageReconciler::ReconcileWorld() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            if (!pendingWorldReconcile_.exchange(true, std::memory_order_acq_rel)) {
+                if (!AddEpochTask(GetSessionEpoch(), "PackageReconciler::ReconcileWorld", []() {
+                        std::lock_guard lock(PapyrusInterface::GetPapyrusMutex());
+                        PackageReconciler::GetSingleton().ReconcileWorldOnMainThread();
+                    })) {
+                    pendingWorldReconcile_.store(false, std::memory_order_release);
+                }
+            }
+            return;
+        }
+        ReconcileWorldOnMainThread();
+    }
+
+    void PackageReconciler::ReconcileWorldOnMainThread() {
+        pendingWorldReconcile_.store(false, std::memory_order_release);
         const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
         auto& fc = FormCache::GetSingleton();
         auto* homeKw = fc.GetHomeSandboxKeyword();
@@ -765,11 +783,23 @@ namespace MARAS {
 
         InvalidateHookEvalActor(actorID);
 
-        if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
-            if (auto* basePkg = RE::TESForm::LookupByID<RE::TESPackage>(effectivePkgID);
-                basePkg && !ShouldSkipForFollower(actor, effectivePkgID, childFollowPkgID)) {
-                ReassertBasePackage(actor, basePkg);
+        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID); actor && !actor->IsDeleted()) {
+                if (auto* basePkg = RE::TESForm::LookupByID<RE::TESPackage>(effectivePkgID);
+                    basePkg && !ShouldSkipForFollower(actor, effectivePkgID, childFollowPkgID)) {
+                    ReassertBasePackage(actor, basePkg);
+                }
             }
+        } else {
+            AddCurrentEpochTask("PackageReconciler::RegisterActorWithPackage", [actorID, effectivePkgID, childFollowPkgID]() {
+                std::lock_guard taskLock(PapyrusInterface::GetPapyrusMutex());
+                if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID); actor && !actor->IsDeleted()) {
+                    if (auto* basePkg = RE::TESForm::LookupByID<RE::TESPackage>(effectivePkgID);
+                        basePkg && !ShouldSkipForFollower(actor, effectivePkgID, childFollowPkgID)) {
+                        PackageReconciler::GetSingleton().ReassertBasePackage(actor, basePkg);
+                    }
+                }
+            });
         }
 
         MARAS_LOG_INFO("PackageReconciler: registered actor {:08X} -> base package {:08X}", actorID, effectivePkgID);
@@ -796,8 +826,17 @@ namespace MARAS {
 
         InvalidateHookEvalActor(actorID);
 
-        if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID)) {
-            actor->EvaluatePackage(false, true);
+        if (DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID); actor && !actor->IsDeleted()) {
+                actor->EvaluatePackage(false, true);
+            }
+        } else {
+            AddCurrentEpochTask("PackageReconciler::UnregisterActor", [actorID]() {
+                std::lock_guard taskLock(PapyrusInterface::GetPapyrusMutex());
+                if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorID); actor && !actor->IsDeleted()) {
+                    actor->EvaluatePackage(false, true);
+                }
+            });
         }
 
         MARAS_LOG_INFO("PackageReconciler: unregistered actor {:08X}", actorID);
@@ -822,6 +861,7 @@ namespace MARAS {
     }
 
     void PackageReconciler::Revert() {
+        pendingWorldReconcile_.store(false, std::memory_order_release);
         {
             std::lock_guard lock(writeMutex_);
             const auto current = snapshot_.load(std::memory_order_acquire);

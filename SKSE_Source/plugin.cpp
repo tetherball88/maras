@@ -115,6 +115,7 @@ namespace {
             }
             const MARAS::SessionEpoch expectedEpoch = MARAS::GetSessionEpoch();
             taskIF->AddTask([this, expectedEpoch]() {
+                MARAS::ScopedMainThreadTask mainScope;
                 pollTaskQueued_.store(false, std::memory_order_release);
                 if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
                     return;
@@ -229,6 +230,7 @@ namespace {
                 return;
             }
             taskIF->AddTask([this, expectedEpoch]() {
+                MARAS::ScopedMainThreadTask mainScope;
                 std::vector<RE::FormID> initIDs;
                 std::vector<RE::FormID> loadedIDs;
                 {
@@ -350,6 +352,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
     SetupLogging();
     MARAS::Serialization::InitializeFoundationLogSink();
+    MARAS::DeferredActorResolver::GetSingleton().CaptureMainThread();
     MARAS_LOG_INFO("MARAS plugin loading...");
 
     // Register serialization callbacks
@@ -375,6 +378,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         break;
 
                     case SKSE::MessagingInterface::kInputLoaded:
+                        MARAS::DeferredActorResolver::GetSingleton().CaptureMainThread();
                         MARAS_LOG_INFO("Input loaded — starting input listening for PrismaUIManager and PollingService");
                         MARAS::PrismaUIManager::GetSingleton().StartListeningInput();
                         if (auto* dm = RE::BSInputDeviceManager::GetSingleton()) {
@@ -389,6 +393,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                         MARAS::ResetPluginEventSinks();
                         MARAS::DeferredActorResolver::GetSingleton().Revert();
                         MARAS::GlobalVarReconciler::GetSingleton().Revert();
+                        MARAS::FactionReconciler::GetSingleton().Revert();
                         MARAS::BuffReconciler::GetSingleton().Revert();
                         MARAS::PollingService::GetSingleton().Shutdown();
                         MARAS::AdultChildProgression::GetSingleton().Revert();
@@ -447,7 +452,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
                     }
 
                     case SKSE::MessagingInterface::kDataLoaded: {
-                        MARAS::DeferredActorResolver::GetSingleton().CaptureMainThread();
+                        // Note: kDataLoaded executes on Skyrim's temporary InitTESThread, not the main game loop thread.
                         MARAS_LOG_INFO("Data loaded successfully.");
 
                         // Pre-populate cached forms once at kDataLoaded

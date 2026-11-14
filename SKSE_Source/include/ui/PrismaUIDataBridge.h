@@ -93,6 +93,24 @@ namespace MARAS {
         nlohmann::json BuildChildJson(const Projection::PerceivedChildLineage& child, const Projection::PerspectiveView& view);
         nlohmann::json BuildSettingsJson();
 
+        // Main-thread outbound push implementations (never re-check IsOnMainThread)
+        void SendOverviewDataOnMainThread();
+        void SendSettingsDataOnMainThread();
+        void SendNPCListOnMainThread();
+        void SendNPCDetailOnMainThread(RE::FormID npcFormID);
+        void SendMatchmakingDataOnMainThread();
+        void SendAllSkyrimNPCsOnMainThread();
+        void SendMatchmakingResultsOnMainThread(const std::vector<struct MatchmakingResult>& results, bool isGlobal = false);
+        void SendGeneratedMemoriesOnMainThread(RE::FormID partnerFormId, const nlohmann::json& memoriesArray);
+        void SendMatchmakingSettingsOnMainThread();
+        void SendHouseholdBuffsOnMainThread();
+        void OnAffectionChangedOnMainThread(RE::FormID npcFormID, int value);
+        void OnStatusChangedOnMainThread(RE::FormID actorA, RE::FormID actorB, uint8_t status);
+        void OnHierarchyChangedOnMainThread();
+        void OnChildUpdatedOnMainThread(const struct ChildRegistryEntry& entry);
+        void OnChildRemovedOnMainThread(RE::FormID childID);
+        void OnChildPromotedOnMainThread(RE::FormID oldID, RE::FormID newID);
+
         std::atomic<RE::FormID> lastRequestedDetailNpcID_{ 0 };
     };
 

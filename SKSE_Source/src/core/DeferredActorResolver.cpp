@@ -4,6 +4,7 @@
 #include "core/PackageReconciler.h"
 #include "core/SessionEpoch.h"
 
+#include <REX/W32/KERNEL32.h>
 #include <utility>
 #include <vector>
 
@@ -15,11 +16,25 @@ namespace MARAS {
     }
 
     void DeferredActorResolver::CaptureMainThread() noexcept {
-        mainThreadId_.store(std::this_thread::get_id(), std::memory_order_release);
-        hasMainThread_.store(true, std::memory_order_release);
+        const auto currentId = std::this_thread::get_id();
+        const std::uint32_t osTid = REX::W32::GetCurrentThreadId();
+        const bool wasCaptured = hasMainThread_.load(std::memory_order_acquire);
+        const std::uint32_t prevOsTid = mainOsThreadId_.load(std::memory_order_acquire);
+        if (!wasCaptured || prevOsTid != osTid ||
+            mainThreadId_.load(std::memory_order_acquire) != currentId) {
+            mainThreadId_.store(currentId, std::memory_order_release);
+            mainOsThreadId_.store(osTid, std::memory_order_release);
+            hasMainThread_.store(true, std::memory_order_release);
+            if (!wasCaptured || prevOsTid != osTid) {
+                MARAS_LOG_INFO("[DeferredActorResolver] Captured main game thread (OS TID={})", osTid);
+            }
+        }
     }
 
     bool DeferredActorResolver::IsOnMainThread() const noexcept {
+        if (IsInMainThreadTask()) {
+            return true;
+        }
         if (!hasMainThread_.load(std::memory_order_acquire)) {
             return false;
         }

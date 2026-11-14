@@ -58,6 +58,7 @@ namespace MARAS {
         };
 
         void RebuildCacheIfNeeded();
+        void ReconcilePlayerBuffsOnMainThread();
 
         bool cacheValid_{ false };
         std::vector<PerkGroup> perkGroups_;
