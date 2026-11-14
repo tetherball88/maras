@@ -24,7 +24,6 @@
 #include "maras/engine/HouseholdEngineOps.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/PackageReconciler.h"
-#include "maras/engine/PerspectiveEngineAdapters.h"
 #include "maras/engine/PlayerChildrenEngineOps.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"

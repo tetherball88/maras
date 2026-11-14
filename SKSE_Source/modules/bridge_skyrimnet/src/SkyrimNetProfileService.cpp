@@ -6,7 +6,6 @@
 #include "maras/domain/lineage/TrainingCatalog.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
-#include "maras/engine/PerspectiveEngineAdapters.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"
 #include "maras/foundation/EnumUtils.h"

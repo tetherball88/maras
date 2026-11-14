@@ -7,9 +7,9 @@
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/bridge_papyrus/PapyrusInterface.h"
-#include "maras/bridge_skyrimnet/SkyrimNetGatewayImpl.h"
-#include "maras/bridge_ui/ModalGatewayImpl.h"
-#include "maras/bridge_ui/UiBridgeGatewayImpl.h"
+#include "maras/bridge_skyrimnet/SkyrimNetApiLoader.h"
+#include "maras/bridge_ui/PrismaModalManager.h"
+#include "maras/bridge_ui/PrismaUIDataBridge.h"
 #include "maras/engine/BonusesConfigLoader.h"
 #include "maras/engine/BuffReconciler.h"
 #include "maras/engine/ChildVisualReconciler.h"
@@ -267,9 +267,9 @@ namespace {
     }
 
     void WireLayerGatewaysAndHooks() noexcept {
-        MARAS::App::SetUiBridgeGateway(&MARAS::Bridge::Ui::GetUiBridgeGatewayImpl());
-        MARAS::App::SetModalGateway(&MARAS::Bridge::Ui::GetModalGatewayImpl());
-        MARAS::App::SetSkyrimNetGateway(&MARAS::Bridge::SkyrimNet::GetSkyrimNetGatewayImpl());
+        MARAS::Bridge::Ui::PrismaUIDataBridge::RegisterAppGateway();
+        MARAS::Bridge::Ui::PrismaModalManager::RegisterAppGateway();
+        MARAS::Bridge::SkyrimNet::RegisterAppGateway();
         MARAS::App::AppLifecycleCoordinator::GetSingleton().RegisterWithEngine();
         MARAS::RegisterPluginEventSinksResetter(&ResetAllPluginEventSinks);
     }

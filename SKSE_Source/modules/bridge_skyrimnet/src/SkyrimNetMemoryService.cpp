@@ -8,7 +8,6 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/JsonService.h"
-#include "maras/engine/PerspectiveEngineAdapters.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/EnumUtils.h"

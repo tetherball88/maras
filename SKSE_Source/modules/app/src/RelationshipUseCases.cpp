@@ -22,7 +22,6 @@
 #include "maras/engine/MarriageDifficultyLoader.h"
 #include "maras/engine/NPCTypeDeterminer.h"
 #include "maras/engine/PackageReconciler.h"
-#include "maras/engine/PerspectiveEngineAdapters.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"

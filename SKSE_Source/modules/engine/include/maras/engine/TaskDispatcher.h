@@ -4,6 +4,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/state/SessionEpoch.h"
 
+#include <exception>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -116,7 +117,15 @@ namespace MARAS {
                                 tagStr, expectedEpoch, GetSessionEpoch());
                 return;
             }
-            fn();
+            try {
+                fn();
+            } catch (const std::exception& e) {
+                MARAS_LOG_ERROR("[TaskDispatcher] Unhandled exception in main-thread task '{}': {}",
+                                tagStr, e.what());
+            } catch (...) {
+                MARAS_LOG_ERROR("[TaskDispatcher] Unhandled unknown exception in main-thread task '{}'",
+                                tagStr);
+            }
         });
         return true;
     }
