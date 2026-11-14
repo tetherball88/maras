@@ -14,6 +14,8 @@ namespace RE {
 
 namespace MARAS::Bridge::SkyrimNet {
 
+    void RegisterAppGateway() noexcept;
+
     // Checks if SkyrimNet.dll is loaded and not simulated as disabled via SettingsData::simulateNoSkyrimNet.
     [[nodiscard]] bool IsSkyrimNetAvailable();
 

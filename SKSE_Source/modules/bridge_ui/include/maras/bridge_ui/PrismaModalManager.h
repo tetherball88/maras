@@ -30,6 +30,7 @@ namespace MARAS::Bridge::Ui {
     class PrismaModalManager {
     public:
         static PrismaModalManager& GetSingleton();
+        static void RegisterAppGateway() noexcept;
 
         PrismaModalManager(const PrismaModalManager&) = delete;
         PrismaModalManager& operator=(const PrismaModalManager&) = delete;

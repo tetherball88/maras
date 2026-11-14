@@ -21,6 +21,7 @@ namespace MARAS::Bridge::Ui {
     class PrismaUIDataBridge {
     public:
         static PrismaUIDataBridge& GetSingleton();
+        static void RegisterAppGateway() noexcept;
 
         PrismaUIDataBridge(const PrismaUIDataBridge&) = delete;
         PrismaUIDataBridge& operator=(const PrismaUIDataBridge&) = delete;

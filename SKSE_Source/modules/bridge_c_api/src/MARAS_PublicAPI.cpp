@@ -1,6 +1,6 @@
 #include "MARAS_PublicAPI.h"
 
-#include "maras/engine/PerspectiveEngineAdapters.h"
+#include "maras/engine/ActorService.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/projection/PerspectiveView.h"
 #include "maras/state/SpatialActorSnapshot.h"
