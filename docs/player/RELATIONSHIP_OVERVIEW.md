@@ -210,7 +210,7 @@ As NPCs pair up across Skyrim, you won't just see it on a menu—**you'll hear i
 
 ## 9. Death, Secrecy & Tracking the Soap Opera in the M.A.R.A.S Dashboard 🖥️🗺️
 
-Press **`Alt + B`** (default) in-game to open the **M.A.R.A.S Dashboard (`Prisma UI`)** (see the [🖥️ UI Dashboard Guide](UI_DASHBOARD_GUIDE.md)):
+Press **`Alt + B`** (default) in-game to open the **M.A.R.A.S Dashboard (`Magelight UI`)** (see the [🖥️ UI Dashboard Guide](UI_DASHBOARD_GUIDE.md)):
 - **Overview (`Dashboard`, `Activity Feed`, `Browse NPCs`, `All Pairs`)**: Track your relationship scoreboard, Top 3 Spouse Hierarchy podium, affection overview, chronological gossip feed, per-NPC relationship inspector, and the **All Pairs** master list of every couple in Skyrim (player and NPC-to-NPC alike!).
 - **My Household (`Partners`, `Children`, `Household Buffs`)**: Manage spouses, hierarchy ranks, residences, kids (including training across **22 academies, guilds, temples, Daedric shrines, and Werewolf packs**—see the [👶 Kids, Adoption & Fertility Guide](FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md)), and live buff contributors.
 - **Matchmaking (`Manual Match`, `LLM Matchmaking`, `Child Adoption`)**: Pair or split NPCs manually, run AI scans and edit dual-POV memories, or handle player and NPC-couple adoptions.

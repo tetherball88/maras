@@ -287,9 +287,9 @@ target_precompile_headers(maras_bridge_papyrus REUSE_FROM maras_pch_engine)
 add_library(maras_bridge_ui OBJECT
     modules/bridge_ui/src/ConfirmationModal.cpp
     modules/bridge_ui/src/HouseholdBuffsJsonBuilder.cpp
-    modules/bridge_ui/src/PrismaModalManager.cpp
-    modules/bridge_ui/src/PrismaUIDataBridge.cpp
-    modules/bridge_ui/src/PrismaUIManager.cpp
+    modules/bridge_ui/src/ModalManager.cpp
+    modules/bridge_ui/src/UIDataBridge.cpp
+    modules/bridge_ui/src/UIManager.cpp
 )
 target_compile_features(maras_bridge_ui PUBLIC cxx_std_23)
 target_include_directories(maras_bridge_ui

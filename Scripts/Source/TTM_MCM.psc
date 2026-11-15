@@ -7,7 +7,7 @@ GlobalVariable Property TTM_MinRelRankForDial Auto
 int _oidOpenDashboard = -1
 
 Event OnInit()
-    ; New games do not register a SkyUI MCM menu; configuration lives in the Prisma UI Dashboard.
+    ; New games do not register a SkyUI MCM menu; configuration lives in the Magelight UI Dashboard.
 EndEvent
 
 Event OnGameReload()
@@ -59,6 +59,6 @@ EndEvent
 
 Event OnOptionHighlight(int a_option)
     if (a_option == _oidOpenDashboard)
-        SetInfoText("Closes this menu and opens the M.A.R.A.S Prisma UI Dashboard.")
+        SetInfoText("Closes this menu and opens the M.A.R.A.S Magelight UI Dashboard.")
     endif
 EndEvent

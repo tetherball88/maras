@@ -34,7 +34,7 @@ namespace MARAS::App {
         std::function<void()> onIgnore;
     };
 
-    /// Displays the in-game Skyrim/Prisma retry modal for a partially or completely failed LLM batch.
+    /// Displays the in-game Skyrim/UI retry modal for a partially or completely failed LLM batch.
     /// Guards both retry and ignore callbacks with `expectedEpoch` and `GetPapyrusMutex()`.
     void ShowInGameFailedLLMModal(FailedLlmModalRequest request,
                                   SessionEpoch expectedEpoch = GetSessionEpoch());

@@ -39,4 +39,4 @@ When the Player marries an NPC with an indexed original residence (detected by [
 
 ## 4. Strict CQS Diagnostic Dumps (`DumpHousesJson`, `DumpSharedAssetsJson`)
 
-Both `DumpHousesJson()` and `DumpSharedAssetsJson()` are `const` snapshot readers reading only `WorldStore::Snapshot()` and resolving read-only display names (`GetHouseName`, `BedOwnershipReconciler::GetCellName`), consumed by `PrismaUIDataBridge::ProcessDumpData`.
+Both `DumpHousesJson()` and `DumpSharedAssetsJson()` are `const` snapshot readers reading only `WorldStore::Snapshot()` and resolving read-only display names (`GetHouseName`, `BedOwnershipReconciler::GetCellName`), consumed by `UIDataBridge::ProcessDumpData`.

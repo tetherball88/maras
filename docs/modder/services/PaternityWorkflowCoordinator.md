@@ -20,7 +20,7 @@
 A `ChildRecord` in `LineageTable` tracks independent asymmetric knowledge flags:
 - **Pregnancy Secrecy (`'PRG1'`)**: `isPregnancySecretForPartner`, `isPregnancyDiscovered`, `pregnancyDiscoveredByPartner`, enabling pregnant NPCs (or the Player) to conceal an affair-conceived pregnancy until announcement, labor/birth confrontation, or discovery.
 - **Paternity Secrecy (`PaternitySecret`)**: Distinguishes the genetic father (`bioFather`), the mother's deceived committed partner (`deceivedPartner` / `motherPartner`), `isSecretForPartner` (concealed from the deceived partner), `isSecretForBioFather` (concealed from the true biological father), `revealedToPlayer`, `hasPhenotypeMismatch`, and explicit `toldActors` witnesses.
-- **Epistemic Masking**: All read paths (`PrismaUIDataBridge`, `SkyrimNetDecorators`, `DeceasedQueries`, `TravelRules`) query through [`PerspectiveView`](PerspectiveView.md) so unaware actors—including the Player (`0x14`) in UI Intrigue Mode (`!revealSecretsInUI`)—see `perceivedBioFather == motherPartner` (or `UnknownFather`) until revealed.
+- **Epistemic Masking**: All read paths (`UIDataBridge`, `SkyrimNetDecorators`, `DeceasedQueries`, `TravelRules`) query through [`PerspectiveView`](PerspectiveView.md) so unaware actors—including the Player (`0x14`) in UI Intrigue Mode (`!revealSecretsInUI`)—see `perceivedBioFather == motherPartner` (or `UnknownFather`) until revealed.
 
 ---
 
@@ -42,7 +42,7 @@ flowchart LR
     OUT --> FALLOUT["Update ChildRecord / AffairLedger\nCustody/Step-In Marriage / Memories / UI"]
 ```
 
-- **Caller-Level SkyrimNet Gate**: `PollFertilityTick`, `ProcessDailyTick`, birth-time checks, and dialogue/dashboard secret evaluations check `GetSkyrimNetGateway().IsAvailable()` **before** invoking `EvaluatePaternitySecret` or LLM decision calls (`EvaluatePaternity` / `EvaluateStepIn`), falling back deterministically or via standalone `PrismaModalManager` confirmation prompts when SkyrimNet is absent.
+- **Caller-Level SkyrimNet Gate**: `PollFertilityTick`, `ProcessDailyTick`, birth-time checks, and dialogue/dashboard secret evaluations check `GetSkyrimNetGateway().IsAvailable()` **before** invoking `EvaluatePaternitySecret` or LLM decision calls (`EvaluatePaternity` / `EvaluateStepIn`), falling back deterministically or via standalone `ModalManager` confirmation prompts when SkyrimNet is absent.
 - **Step-In Marriage Eligibility (`CanFormStepInMarriage`)**: For NPC-to-NPC pregnancies outside Player involvement, verifies both biological parents are non-Player, living, non-related adults before evaluating whether the biological father steps in (`EvaluateStepIn`).
-- **Resolution Side Effects**: Revealing or discovering a secret updates `PaternitySecret`, marks affected `AffairRecord`s discovered as appropriate, updates custody / `GuardianSlots` if requested, reconciles factions/packages/child visuals, emits `ttm_paternity_secret_resolved` + [`SkyrimNetMemoryService`](SkyrimNetMemoryService.md) perspective-safe memories, and notifies [`PrismaUIDataBridge`](PrismaUIDataBridge.md).
+- **Resolution Side Effects**: Revealing or discovering a secret updates `PaternitySecret`, marks affected `AffairRecord`s discovered as appropriate, updates custody / `GuardianSlots` if requested, reconciles factions/packages/child visuals, emits `ttm_paternity_secret_resolved` + [`SkyrimNetMemoryService`](SkyrimNetMemoryService.md) perspective-safe memories, and notifies [`UIDataBridge`](UIDataBridge.md).
 - **Dashboard Editing Guard (`ProcessSetPaternitySecretEdges`)**: Supports direct Intrigue/Sandbox debugging overrides from the dashboard under `GetPapyrusMutex()`, re-running epistemic sync cleanly afterwards.

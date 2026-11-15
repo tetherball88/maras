@@ -7,8 +7,8 @@ Copyright (c) 2025–2026 tetherball88. All Rights Reserved, except as explicitl
 - "The Mod" refers to M.A.R.A.S across all past, present, and future versions,
   releases, tags, and git commits, including its SKSE C++ source code and
   compiled binaries (MARAS.dll), Creation Kit plugin (TT_MARAS.esp), Papyrus
-  scripts (Scripts/Source/*.psc and compiled .pex files), Prisma UI frontend
-  source and bundles (prisma-src/ and PrismaUI/), SkyrimNet bundle definitions,
+  scripts (Scripts/Source/*.psc and compiled .pex files), UI frontend
+  source and bundles (ui-src/ and Magelight/MARAS/), SkyrimNet bundle definitions,
   JSON/INI configurations, documentation, and all associated assets in this
   repository.
 - "Author" refers to tetherball88.
@@ -38,7 +38,7 @@ c) Compatibility Patches, Add-ons & Integrations:
    - Your patch or mod requires the official release of M.A.R.A.S as an external
      dependency (master/requirement); and
    - Your upload does NOT bundle, repackage, or redistribute MARAS.dll,
-     TT_MARAS.esp, M.A.R.A.S Prisma UI bundles, or M.A.R.A.S core scripts
+     TT_MARAS.esp, M.A.R.A.S UI bundles, or M.A.R.A.S core scripts
      (except for the Public API Files covered in Section 4).
 
 d) Translations:
@@ -63,7 +63,7 @@ a) Redistribute or Re-upload:
 
 b) Plagiarize or Rebrand:
    Copy substantial portions of the C++ implementation, Papyrus service scripts,
-   Prisma UI frontend, or ESP records to publish under your own name or as a
+   UI frontend, or ESP records to publish under your own name or as a
    competing/derivative standalone mod.
 
 c) Commercial Use or Paywalling:

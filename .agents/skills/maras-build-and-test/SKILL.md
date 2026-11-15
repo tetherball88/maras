@@ -1,7 +1,7 @@
 ---
 name: maras-build-and-test
 description: >-
-  Build MARAS.dll, compile and run maras_tests.exe headless C++ unit tests, or build the Prisma UI frontend without path-hunting. Activate whenever compiling C++, running C++ unit tests, adding new C++ source/test files, or building prisma-src.
+  Build MARAS.dll, compile and run maras_tests.exe headless C++ unit tests, or build the UI dashboard frontend without path-hunting. Activate whenever compiling C++, running C++ unit tests, adding new C++ source/test files, or building ui-src.
 ---
 
 # M.A.R.A.S Build & Test Runbook
@@ -41,10 +41,10 @@ When `SkyrimSE.exe` is running, Windows locks `SKSE/Plugins/MARAS.dll`.
 - `build-and-test.ps1` detects this automatically, prints a `[WARN]`, and exits `0`.
 - **Never** retry the build in a loop and **never** terminate `SkyrimSE.exe`—simply note to the user that compilation succeeded and deployment copy to `SKSE/Plugins/MARAS.dll` awaits closing Skyrim.
 
-## 2. Prisma UI Dashboard (`prisma-src/`)
+## 2. UI Dashboard (`ui-src/`)
 
 ```powershell
-Set-Location prisma-src; npm run build
+Set-Location ui-src; npm run build
 ```
 Emits production bundle (`base: './'`) with unbundled, user-editable `variables.css`.
 

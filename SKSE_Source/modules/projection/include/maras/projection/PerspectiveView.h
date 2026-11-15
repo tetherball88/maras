@@ -197,7 +197,7 @@ namespace MARAS::Projection {
 
     /**
      * Single canonical read-only projection lens enforcing secret-masking and perspective
-     * semantics across all C++ readers (SkyrimNet, Prisma UI, dumps, Papyrus modals, progression).
+     * semantics across all C++ readers (SkyrimNet, UI dashboard, dumps, Papyrus modals, progression).
      *
      * Raw LineageTable and AffairLedger remain strictly encapsulated inside PerspectiveView
      * so readers cannot accidentally bypass perspective masking.

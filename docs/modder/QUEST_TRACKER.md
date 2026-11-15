@@ -210,4 +210,4 @@ Rewards the NPC filling the quest's `FavorTarget` reference alias with daily aff
 - **Command Execution Logs**:
   Whenever a tracked quest starts, stops, or changes stage, `QuestEventManager` ([`QuestEventHandler.md`](services/QuestEventHandler.md)) logs:
   `Quest stage changed: <QuestName> (0x...) stage <N>, executing <M> commands`
-  Set the log level to **Debug** in the **Prisma UI Dashboard $\rightarrow$ Settings** tab to see individual command and NPC resolution trace lines.
+  Set the log level to **Debug** in the **UI Dashboard $\rightarrow$ Settings** tab to see individual command and NPC resolution trace lines.

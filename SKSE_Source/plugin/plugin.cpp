@@ -11,8 +11,8 @@
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/bridge_papyrus/PapyrusInterface.h"
 #include "maras/bridge_skyrimnet/SkyrimNetApiLoader.h"
-#include "maras/bridge_ui/PrismaModalManager.h"
-#include "maras/bridge_ui/PrismaUIDataBridge.h"
+#include "maras/bridge_ui/ModalManager.h"
+#include "maras/bridge_ui/UIDataBridge.h"
 #include "maras/engine/BonusesConfigLoader.h"
 #include "maras/engine/BuffReconciler.h"
 #include "maras/engine/ChildVisualReconciler.h"
@@ -274,8 +274,8 @@ namespace {
     }
 
     void WireLayerGatewaysAndHooks() noexcept {
-        MARAS::Bridge::Ui::PrismaUIDataBridge::RegisterAppGateway();
-        MARAS::Bridge::Ui::PrismaModalManager::RegisterAppGateway();
+        MARAS::Bridge::Ui::UIDataBridge::RegisterAppGateway();
+        MARAS::Bridge::Ui::ModalManager::RegisterAppGateway();
         MARAS::Bridge::SkyrimNet::RegisterAppGateway();
         MARAS::App::AppLifecycleCoordinator::GetSingleton().RegisterWithEngine();
         MARAS::RegisterPluginEventSinksResetter(&ResetAllPluginEventSinks);
@@ -348,7 +348,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::ChildVisualReconciler::GetSingleton().Revert();
                         MARAS::SpatialWorldIndex::GetSingleton().ClearLoadedActors();
                         MARAS::App::GetModalGateway().Revert();
-                        MARAS::App::GetUiBridgeGateway().DestroyDashboard();
+                        MARAS::App::GetUiBridgeGateway().Revert();
                         MARAS::IntimateThreadService::GetSingleton().ClearAll();
                         MARAS::ChildrenFleeService::GetSingleton().Reset();
                         MARAS::App::GetSkyrimNetGateway().RevertMemories();
@@ -474,7 +474,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                             MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
                         }
 
-                        // Initialize Prisma UI dashboard
+                        // Initialize UI dashboard
                         MARAS::App::GetUiBridgeGateway().InitializeDashboard();
 
                         // Load static JSON/YAML catalogs at startup

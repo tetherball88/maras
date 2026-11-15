@@ -10,7 +10,7 @@
 #   - If an entry's `id` matches an existing entry below, any fields you specify
 #     will patch/override that entry in-place while preserving its index.
 #   - If an entry's `id` is new, it will be appended as a brand-new training path
-#     and automatically appear in the Prisma UI Dashboard!
+#     and automatically appear in the UI Dashboard!
 #
 # FORM KEY SYNTAX:
 #   "__formData|<PluginName>|<0xHexFormID>"

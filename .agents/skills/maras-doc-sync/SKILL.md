@@ -1,7 +1,7 @@
 ---
 name: maras-doc-sync
 description: >-
-  Documentation synchronization map and authoring rules for docs/modder/ and docs/player/. Activate whenever completing a feature, altering gameplay mechanics/formulas, changing C++ services, updating MARAS.psc / MARAS_PublicAPI.h / Prisma bridge payloads / SkyrimNet prompts, or changing JSON/INI schemas.
+  Documentation synchronization map and authoring rules for docs/modder/ and docs/player/. Activate whenever completing a feature, altering gameplay mechanics/formulas, changing C++ services, updating MARAS.psc / MARAS_PublicAPI.h / UI bridge payloads / SkyrimNet prompts, or changing JSON/INI schemas.
 ---
 
 # Documentation Synchronization Map & Style Guide
@@ -14,13 +14,13 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
   - `docs/modder/ARCHITECTURE.md` — Layered C++/Papyrus/UI architecture, `'MARS'` v7 co-save overview, event flow.
   - `docs/modder/SKYRIMNET_AND_AI_INTEGRATION.md` — Decorators (`ttm_*`), YAML actions/triggers, Jev decisions, chat evaluations, memory service, secret isolation.
   - `docs/modder/HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md` — Houses, tenancy, shared beds, child lifecycle (`Unborn` $\to$ `Adult`), guardian slots, paternity secrets, training & travel.
-  - `docs/modder/API_AND_PRISMA_BRIDGE_REFERENCE.md` — `MARAS.psc` natives, `MARAS_PublicAPI.h` C exports, Prisma UI JS $\leftrightarrow$ C++ actions/events.
+  - `docs/modder/API_AND_UI_BRIDGE_REFERENCE.md` — `MARAS.psc` natives, `MARAS_PublicAPI.h` C exports, UI JS $\leftrightarrow$ C++ actions/events.
   - `docs/modder/RELATIONSHIP_DYNAMICS_GUIDE.md` — Pair statuses, hierarchy, affection math, loneliness, infidelity, open relationships, matchmaking & partner agency.
   - `docs/modder/FERTILITY_MODE_RELOADED_INTEGRATION.md` — FMR & Beeing Female NG hooks, conception, birth batching.
   - [INGAME_SANITY_TEST_SUITE.md](../../../docs/modder/INGAME_SANITY_TEST_SUITE.md) — `TTM_SanitySuite.psc`, console `.txt` batch scripts, `MARAS.DumpStoredData(tag)`, and `verify-maras-sanity.ps1`.
 - **C++ Service Guides (Canonical 28-File `docs/modder/services/` Roster):**
   - Update or add `<ServiceName>.md` whenever a service's mechanics, formulas, edge cases, or workflows change. Use **only** the canonical 28-file roster below (retiring pre-modular service filenames):
-    - **Kept (9):** `ChildrenFleeService.md`, `IntimateThreadService.md`, `MarriageDifficulty.md`, `PollingService.md`, `PrismaModalManager.md`, `PrismaUIDataBridge.md`, `SkyrimNetIntegration.md`, `SkyrimNetMemoryService.md`, `SkyrimNetProfileService.md`.
+    - **Kept (9):** `ChildrenFleeService.md`, `IntimateThreadService.md`, `MarriageDifficulty.md`, `ModalManager.md`, `PollingService.md`, `SkyrimNetIntegration.md`, `SkyrimNetMemoryService.md`, `SkyrimNetProfileService.md`, `UIDataBridge.md`.
     - **Canonical New / Renamed (19):** `WorldStoreAndCoSave.md`, `PerspectiveView.md`, `RelationshipUseCases.md`, `AffectionRules.md`, `TraitClassifier.md`, `BuffReconciler.md`, `AgencyWorkflowCoordinator.md`, `LineageUseCases.md`, `PaternityWorkflowCoordinator.md`, `ChildGrowthAndVisuals.md`, `NamePoolLoader.md`, `HouseholdUseCases.md`, `TravelRules.md`, `DeceasedQueries.md`, `SpatialWorldIndex.md`, `FactionReconciler.md`, `PackageReconciler.md`, `HomeCellDetector.md`, `QuestEventHandler.md`.
 - **External Modder Config Guides & Data Schemas:**
   - Guides in `docs/modder/`: [ADVANCED_CONFIGURATION_AND_MODDING.md](../../../docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md), [MARRIAGE_DIFFICULTY_CONFIG.md](../../../docs/modder/MARRIAGE_DIFFICULTY_CONFIG.md), [PACKAGE_OVERRIDE.md](../../../docs/modder/PACKAGE_OVERRIDE.md), [QUEST_TRACKER.md](../../../docs/modder/QUEST_TRACKER.md), [LOCATION_IMAGES_PROMPTS.md](../../../docs/modder/LOCATION_IMAGES_PROMPTS.md).
@@ -38,7 +38,7 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
 
 ## 2. Player-Facing Guides (`docs/player/`)
 
-Update when gameplay mechanics, thresholds, or Prisma UI workflows change:
+Update when gameplay mechanics, thresholds, or UI Dashboard workflows change:
 - [PLAYER_GUIDE.md](../../../docs/player/PLAYER_GUIDE.md)
 - [RELATIONSHIP_OVERVIEW.md](../../../docs/player/RELATIONSHIP_OVERVIEW.md)
 - [AFFECTION_SYSTEM.md](../../../docs/player/AFFECTION_SYSTEM.md)

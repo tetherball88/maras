@@ -7,7 +7,7 @@ This document contains the self-contained image generation prompts used to creat
 ## Target Image Specifications
 
 - **Directory**: [`SKSE/Plugins/MARAS/childTraining/images/`](../../SKSE/Plugins/MARAS/childTraining/images) (`Data/SKSE/Plugins/MARAS/childTraining/images/` in-game)
-- **Target Resolution**: **`688 × 384`** (`16:9` / `43:24` landscape, rendered in a `9rem × 5rem` frame in [`ChildTrainingModal.tsx`](../../prisma-src/src/components/npcDetail/ChildTrainingModal.tsx))
+- **Target Resolution**: **`688 × 384`** (`16:9` / `43:24` landscape, rendered in a `9rem × 5rem` frame in [`ChildTrainingModal.tsx`](../../ui-src/src/components/npcDetail/ChildTrainingModal.tsx))
 - **Format**: `.webp` (`85–88%` quality, Lanczos downscaling from native `2752 × 1536` Gemini output)
 - **Visual Style**: Flat 2D medieval woodcut and etched brass line-art illustration on a solid matte warm-black background (`#100c07`), using only muted antique gold (`#c8a84b`) and warm cream parchment (`#f0e6d2`) ink lines with crosshatching to match the M.A.R.A.S **"Candlelit Amber"** dashboard theme.
 

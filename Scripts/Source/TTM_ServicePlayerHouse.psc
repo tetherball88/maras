@@ -38,7 +38,7 @@ Function RegisterPlayerHouseLocation(Location akLocation, ObjectReference akHous
 EndFunction
 
 ;/
-  Shows the Prisma UI modal to choose a player house (and schedule for spouses) for a spouse or child.
+  Shows the UI modal to choose a player house (and schedule for spouses) for a spouse or child.
   @param spouse    The spouse or child actor to assign a house
   @param page      Unused (kept for signature compatibility)
   @param isChild   True when choosing a house for a child, false for a spouse

@@ -23,7 +23,7 @@ M.A.R.A.S hooks the Skyrim engine's AI package selection call site (`PackageStar
 1. **Housed Tenants (`0x6A` — Home Sandbox Package, `0x6B` LinkedRef)**:
    - Any spouse, partner, or child assigned as a tenant in a player home via `HouseholdUseCases` whose **Stay at Home** setting is enabled (`stayAtHome = true`).
    - Makes the actor eat, sleep, sit, and sandbox naturally around the home's sandbox marker (`0x6B`).
-   - **Toggling Per-NPC**: Players can toggle **Stay at Home** on or off at any time in the **Prisma UI Dashboard** (`NPC Detail` or `My Household` page) or by telling the NPC through dialogue that they are free to return to their normal routine. When `Stay at Home` is disabled, the actor is unregistered from the override and resumes their vanilla/quest AI packages.
+   - **Toggling Per-NPC**: Players can toggle **Stay at Home** on or off at any time in the **UI Dashboard** (`NPC Detail` or `My Household` page) or by telling the NPC through dialogue that they are free to return to their normal routine. When `Stay at Home` is disabled, the actor is unregistered from the override and resumes their vanilla/quest AI packages.
 2. **Household Pets & Critters (`0xC0` — Pet/Critter Home Sandbox Package, `0x6B` LinkedRef)**:
    - Keeps adopted child pets and wild critters sandboxing inside the family's assigned player home rather than wandering back to their original wild spawn cells.
 3. **Dynamic Non-Player Children (`0x376` — Follow/Sandbox Around Parent Package, `0x377` LinkedRef)**:
@@ -136,8 +136,8 @@ QuestWhitelist=TTM_ChildrenSandbox,TTM_DialoguesChildrenScenes,TTM_NpcsScenes
 ## 7. Troubleshooting
 
 ### An NPC needs to travel somewhere for a quest
-- **Quick In-Game Fix**: Open the **Prisma UI Dashboard $\rightarrow$ NPC Detail** (or `My Household`) for that NPC and toggle **Stay at Home** off (or tell them in dialogue they don't need to stay at home). Once the quest is done, toggle **Stay at Home** back on.
+- **Quick In-Game Fix**: Open the **UI Dashboard $\rightarrow$ NPC Detail** (or `My Household`) for that NPC and toggle **Stay at Home** off (or tell them in dialogue they don't need to stay at home). Once the quest is done, toggle **Stay at Home** back on.
 - **Permanent Mod Patch**: Add the quest's EditorID pattern to `QuestWhitelist` (e.g., `QuestWhitelist = TTM_ChildrenSandbox, TTM_DialoguesChildrenScenes, TTM_NpcsScenes, MyCustomQuest*`) or add the mod's `.esp` to `AllowedPlugins`.
 
 ### Inspecting Package Decisions in `MARAS.log`
-Set the log level to **Debug** in the **Prisma UI Dashboard $\rightarrow$ Settings** tab. `PackageReconciler` deduplicates log messages per actor (`CheckAndLog`) so `MARAS.log` cleanly records state transitions starting with `PackageStartHook:`, showing the exact candidate package EditorID, FormID, owning quest, and which rule allowed or suppressed it.
+Set the log level to **Debug** in the **UI Dashboard $\rightarrow$ Settings** tab. `PackageReconciler` deduplicates log messages per actor (`CheckAndLog`) so `MARAS.log` cleanly records state transitions starting with `PackageStartHook:`, showing the exact candidate package EditorID, FormID, owning quest, and which rule allowed or suppressed it.

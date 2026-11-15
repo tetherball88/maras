@@ -4,7 +4,7 @@
 
 namespace MARAS::Bridge::Ui {
 
-    /// Builds the read-only `HouseholdBuffs` snapshot JSON payload for the Prisma dashboard.
+    /// Builds the read-only `HouseholdBuffs` snapshot JSON payload for the UI dashboard.
     [[nodiscard]] nlohmann::json BuildHouseholdBuffsJson();
 
 }  // namespace MARAS::Bridge::Ui

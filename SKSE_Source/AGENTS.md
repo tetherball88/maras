@@ -34,14 +34,14 @@ flowchart TD
     Q1 -->|"3. Gameplay rule, math, or daily tick"| R3["maras_domain_* pure function: (WorldState, SpatialActorSnapshot, IRng) -> MutationResult. Zero RE::*, UI, or HTTP."]
     Q1 -->|"4. Hook, ESP faction, package, 3D, Buff, Spatial"| R4["maras_engine ONLY. Sinks/Hooks enqueue Epoch tasks; main-thread Reconcilers converge from DirtyActorSet."]
     Q1 -->|"5. Cross-domain command / coordinator"| R5["maras_app ONLY (UseCases / Coordinators). Commits WorldStore::Modify then runs main-thread Reconcilers."]
-    Q1 -->|"6. Prisma UI view, modal, or action"| R6["maras_bridge_ui ONLY. Reads PerspectiveView::ForDashboard; writes post SessionEpoch-guarded commands to maras_app."]
+    Q1 -->|"6. UI view, modal, or action"| R6["maras_bridge_ui ONLY. Reads PerspectiveView::ForDashboard; writes post SessionEpoch-guarded commands to maras_app."]
     Q1 -->|"7. SkyrimNet decorator or async LLM"| R7["maras_bridge_skyrimnet (+ maras_app). Decorators read lock-free PerspectiveView::ForActor; callbacks check SessionEpoch."]
     Q1 -->|"8. Papyrus native, C export, or ModCallbackEvent"| R8["maras_bridge_papyrus / bridge_c_api thin adapter ONLY. Reads snapshot/PerspectiveView; writes via maras_app under GetPapyrusMutex()."]
 ```
 
 ### File Granularity & Anti-God-File Rule
 
-- **Legacy Large Hubs Are Extraction Targets, Never Dumping Grounds**: Do **not** append new subsystems, pure rules, JSON payload builders, or unrelated helpers into multi-thousand-line files (`RelationshipUseCases.cpp`, `LineageUseCases.cpp`, `PaternityWorkflowCoordinator.cpp`, `AgencyWorkflowCoordinator.cpp`, `PrismaUIDataBridge.cpp`, `SkyrimNetDecorators.cpp`, `SkyrimNetMemoryService.cpp`).
+- **Legacy Large Hubs Are Extraction Targets, Never Dumping Grounds**: Do **not** append new subsystems, pure rules, JSON payload builders, or unrelated helpers into multi-thousand-line files (`RelationshipUseCases.cpp`, `LineageUseCases.cpp`, `PaternityWorkflowCoordinator.cpp`, `AgencyWorkflowCoordinator.cpp`, `UIDataBridge.cpp`, `SkyrimNetDecorators.cpp`, `SkyrimNetMemoryService.cpp`).
 - **Required Decomposition for New Features & Refactors**:
   1. **Pure rules, scoring, eligibility, or transitions** $\to$ focused `.h`/`.cpp` in `modules/domain_{relationships,lineage,household,agency}/` + headless unit tests in `tests/test_domain_*.cpp`.
   2. **Secret/observer visibility** $\to$ `modules/projection/` (`PerspectiveView`).
@@ -65,11 +65,11 @@ flowchart TD
    - Preserve `v1`–`v7` load compatibility across all 12 chunks (`NPCR`, `SPHR`, `AFCT`, `PHOU`, `SPAS`, `PLCH`, `CFSN`, `MKMK`, `DCSD`, `BNTR`, `ACTR`, `CNFG`) in `modules/state/src/CoSaveCodec.cpp`, plus optional trailing extensions (each omitted when empty): `'FRT1'` (`kExtFertilityBatchFRT1` inside `'NPCR'`), `'PLC1'` (`kExtPlayerChildrenStatePLC1` inside `'PLCH'`), `'REL1'` (`kExtRelationshipStateREL1` inside `'MKMK'`), `'DCS1'` (`kExtDeceasedSecrecyDCS1` inside `'DCSD'`), and `'BNT1'` (`kExtBanterSceneStateBNT1` inside `'BNTR'`).
    - Enforce `kMaxEntries`, check every read (immediately `Revert()` and `return false` on truncation—never `break;`), preserve `0` sentinels, and strictly isolate two-phase load (`SkseSerializationCallbacks::LoadCallback` $\to$ `State::LoadWorldState` $\to$ `WorldStore::ReplaceState` $\to$ `AppLifecycleCoordinator::FinalizeCoSaveLoad` $\to$ reconcilers; `Revert()` clears C++ containers without mutating torn-down engine forms).
 6. **Strict Command-Query Separation (CQS)**:
-   - Snapshots (`WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`), UI JSON builders (`PrismaUIDataBridge`), SkyrimNet `ttm_*` decorators (`23` decorators in `SkyrimNetDecorators.cpp`), and Papyrus read queries—including `GetTrackedNpcHomeMarker` and `GetChildHomeMarker` in `PapyrusHousehold.cpp`—**must** stay pure read-only, never mutating state, syncing custody, lazy-registering actors, or recording memories.
+   - Snapshots (`WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`), UI JSON builders (`UIDataBridge`), SkyrimNet `ttm_*` decorators (`23` decorators in `SkyrimNetDecorators.cpp`), and Papyrus read queries—including `GetTrackedNpcHomeMarker` and `GetChildHomeMarker` in `PapyrusHousehold.cpp`—**must** stay pure read-only, never mutating state, syncing custody, lazy-registering actors, or recording memories.
 7. **`PerspectiveView` Single Secret-Masking Choke Point (`modules/projection/{include/maras/projection/PerspectiveView.h,src/PerspectiveLens.cpp}`)**:
    - All UI and SkyrimNet queries must pass through `PerspectiveView::ForDashboard`, `PerspectiveView::ForActor`, or `PerspectiveView::ForDialogueTarget` (`ViewerMode::{DashboardIntrigue, ActorSelf, DialogueTargetPublic, Omniscient}`). Never read raw `AffairLedger`/`LineageTable` secrets directly in bridges, and **never** add `0x14` Player exemptions in `DashboardIntrigue`.
 8. **Lock Ordering & Snapshot-Before-Lookup**:
-   - `MARAS::GetPapyrusMutex()` (`PapyrusDomainMutex`, recursive) is **always outermost**, acquired before any leaf/service mutex (`WorldStore`'s internal `writeMutex_`, `SpatialWorldIndex::m_mutex`, `RelationshipUseCases::overridesMutex_` / `childScanMutex_`, `HouseholdUseCases::travelMutex_`, `ChildrenFleeService::sourceMutex_` / `fleeMutex_`, `DeferredActorResolver::mutex_`, `PackageReconciler::writeMutex_`, `PrismaModalManager::mutex_`, `PrismaUIDataBridge::mutex_`, `SkyrimNetMemoryService::mutex_`, `SkyrimNetProfileService::mutex_`). Leaf mutexes must never acquire `GetPapyrusMutex()`.
+   - `MARAS::GetPapyrusMutex()` (`PapyrusDomainMutex`, recursive) is **always outermost**, acquired before any leaf/service mutex (`WorldStore`'s internal `writeMutex_`, `SpatialWorldIndex::m_mutex`, `RelationshipUseCases::overridesMutex_` / `childScanMutex_`, `HouseholdUseCases::travelMutex_`, `ChildrenFleeService::sourceMutex_` / `fleeMutex_`, `DeferredActorResolver::mutex_`, `PackageReconciler::writeMutex_`, `ModalManager::mutex_`, `UIDataBridge::mutex_`, `SkyrimNetMemoryService::mutex_`, `SkyrimNetProfileService::mutex_`). Leaf mutexes must never acquire `GetPapyrusMutex()`.
    - **Never** call `RE::TESForm::LookupByID` (or engine/UI/Papyrus/`SpatialWorldIndex` APIs) while holding `m_mutex`, `overridesMutex_`, `travelMutex_`, `sourceMutex_`, `writeMutex_`, etc.—snapshot FormIDs/data inside a tight lock scope, unlock first, then resolve `TESForm::LookupByID`.
 
 ---
@@ -88,7 +88,7 @@ flowchart TD
 - **Runtime-Cloned Forms (`ChildVisualReconciler`)**:
   - Deep-clone raw pointer sub-arrays (`TESNPC::keywords` via `RE::calloc<RE::BGSKeyword*>`) when cloning `RE::TESNPC` via `RE::malloc`.
   - Verify `!actor->IsDeleted() && actor->GetObjectReference() == cloneNpc` before reverting `SetObjectReference(origNpc)`, and retire unlinked clones via `FlushRetiredForms()` post-load instead of calling `RE::free` inside `RevertCallback`.
-- **Prisma UI Focus (`PrismaUIManager`)**: Coordinate view visibility/focus solely via `PrismaUIManager::SyncViewVisibilityAndFocus()` (`IsAvailable()` / `IsViewValid()`); modals pause with `Focus(view_, /*pauseGame=*/true, /*disableFocusMenu=*/false)`, and raw `Hide`/`Unfocus` must never run while `PrismaModalManager::HasActiveModal()` is true.
+- **UI Focus (`UIManager`)**: Coordinate view visibility/focus solely via `UIManager::SyncViewVisibilityAndFocus()` (`IsInitialized()`), using Magelight UI `RequestUIMode(..., kUIModeFlagPause)` for pause/modals and `PostToGameThread()` for render-thread JS callbacks; raw hide/release must never run while `ModalManager::HasActiveModal()` is true.
 
 ---
 

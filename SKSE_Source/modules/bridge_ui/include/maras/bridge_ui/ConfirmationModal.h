@@ -8,7 +8,7 @@
 
 namespace MARAS::Bridge::Ui {
 
-    /// Papyrus-facing non-blocking confirmation modal helper backed by PrismaModalManager.
+    /// Papyrus-facing non-blocking confirmation modal helper backed by ModalManager.
     class ConfirmationModal {
     public:
         /// Checks confirmation cooldown and marks the timestamp on accept; returns 0=eligible, 4=on-cooldown.

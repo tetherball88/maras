@@ -1,6 +1,6 @@
 # M.A.R.A.S — System Architecture & Technical Reference
 
-**More Appropriate Relationships And Spouses (M.A.R.A.S)** is built on a four-layer hybrid architecture that combines native SKSE64 C++ services, an embedded React/Vite web dashboard via Prisma UI, event-driven Papyrus quest/dialogue controllers, and an optional SkyrimNet AI narrative integration layer, backed by the `TT_MARAS.esp` plugin.
+**More Appropriate Relationships And Spouses (M.A.R.A.S)** is built on a four-layer hybrid architecture that combines native SKSE64 C++ services, an embedded React/Vite web dashboard via Magelight UI, event-driven Papyrus quest/dialogue controllers, and an optional SkyrimNet AI narrative integration layer, backed by the `TT_MARAS.esp` plugin.
 
 ---
 
@@ -18,7 +18,7 @@ flowchart TD
     subgraph SKSE["Layer 1: SKSE C++ Plugin (MARAS.dll & maras_tests.exe — SKSE_Source/)"]
         CoreDomain["Layers 0-2: Pure C++23 Static Libraries (pch_core.h)\nmaras_foundation (StrongIds, DomainEnums, IRng)\nmaras_state (WorldStore, 10 CowTables, SpatialActorSnapshot,\nEngineSyncPlan, SessionEpoch, 'MARS' v1-v7 CoSaveCodec)\nmaras_projection (PerspectiveView & EventDispatchPlan Lens)\nmaras_domain_* (relationships, lineage, household, agency)"]
         EngineApp["Layers 3-4: Engine & App OBJECT Modules (pch_engine.h)\nmaras_engine (FormCache, SpatialWorldIndex, BuffReconciler,\nFactionReconciler, PackageReconciler, PollingService, PlayerMiscStatsTracker,\nGiftMenuEventSink, SleepEventSink, PromptStringsLoader, HouseholdEngineOps,\nBedOwnershipReconciler, RelationshipEngineReconciler, QuestEventHandler,\nChildrenFleeService, IntimateThreadService)\nmaras_app (AppLifecycleCoordinator, RelationshipUseCases, RelationshipInteractionCoordinator,\nDialogueOutcomeCoordinator, SkyrimNetActionCoordinator, AffectionEventCoordinator,\nHouseholdUseCases, ChildInteractionCoordinator, LineageUseCases,\nFertilityLifecycleCoordinator, PaternityWorkflowCoordinator, AgencyWorkflowCoordinator,\nBanterSceneCoordinator, SettingsCoordinator)"]
-        Bridges["Layer 5: External Bridge OBJECT Modules & Composition Root\nmaras_bridge_papyrus (7 Papyrus TUs) | maras_bridge_ui (PrismaUI)\nmaras_bridge_skyrimnet (EventService/Payloads, 23 Decorators, Decisions, Profiles, Memories)\nmaras_bridge_c_api (MARAS_PublicAPI.h)\nplugin/plugin.cpp -> MARAS.dll | tests/ -> maras_tests.exe"]
+        Bridges["Layer 5: External Bridge OBJECT Modules & Composition Root\nmaras_bridge_papyrus (7 Papyrus TUs) | maras_bridge_ui (Magelight UI)\nmaras_bridge_skyrimnet (EventService/Payloads, 23 Decorators, Decisions, Profiles, Memories)\nmaras_bridge_c_api (MARAS_PublicAPI.h)\nplugin/plugin.cpp -> MARAS.dll | tests/ -> maras_tests.exe"]
     end
 
     subgraph Papyrus["Layer 2: Papyrus Scripts (Scripts/Source/)"]
@@ -28,9 +28,9 @@ flowchart TD
         ScenesDial["Quests, Scenes & Dialogues\nTTM_Actions | TTM_NpcsScenes | TTM_DialogueManager*\nTTM_QuestDivorce | TTM_QuestTrackKilledSpouses"]
     end
 
-    subgraph Prisma["Layer 3: Prisma UI Dashboard & Modals (prisma-src/ -> PrismaUI/views/MARAS/)"]
-        Zustand["Zustand State Stores\n(useMarasStore.ts, useModalStore.ts & prismaBridge.ts)"]
-        Pages["React Dashboard & Modal Host\nOverview | My Household | Matchmaking\nNPC Detail | Settings | PrismaModalHost"]
+    subgraph UI["Layer 3: UI Dashboard & Modals (ui-src/ -> Magelight/MARAS/views/MARAS/)"]
+        Zustand["Zustand State Stores\n(useMarasStore.ts, useModalStore.ts & uiBridge.ts)"]
+        Pages["React Dashboard & Modal Host\nOverview | My Household | Matchmaking\nNPC Detail | Settings | ModalHost"]
     end
 
     subgraph SkyrimNet["Layer 4: SkyrimNet External Bundle (tetherball88.maras)"]
@@ -48,7 +48,7 @@ flowchart TD
     MainCtrl <--> Services
     Services <--> ScenesDial
     ScenesDial <--> Quests
-    Bridges <-->|"InvokeScript / window.marasAction"| Zustand
+    Bridges <-->|"InteropCall / window.marasAction"| Zustand
     Zustand <--> Pages
     Bridges <-->|"GetProcAddress(SkyrimNet.dll)"| Decorators
     YAMLActions -->|"Papyrus Action Executor"| ScenesDial
@@ -59,7 +59,7 @@ flowchart TD
 ### Related Architecture Documents
 - [SKYRIMNET_AND_AI_INTEGRATION.md](SKYRIMNET_AND_AI_INTEGRATION.md) — Deep dive into `SkyrimNetIntegration`, 23 C++ decorators, `PerspectiveView` bio masking, `AgencyWorkflowCoordinator` matchmaking/banter, `IntimateThreadService` (OStim), and the `tetherball88.maras` bundle.
 - [HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md](HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md) — Deep dive into `SpouseHierarchyTable`, `HouseholdUseCases`, `SpatialWorldIndex` home-cell detection, `BuffReconciler`, `LineageUseCases`, `ChildGrowthRules`, and `TravelRules`.
-- [API_AND_PRISMA_BRIDGE_REFERENCE.md](API_AND_PRISMA_BRIDGE_REFERENCE.md) — Complete reference for `MARAS_PublicAPI.h`, `MARAS.psc` native functions/events, CQS read-only guarantees, and the Prisma UI JSON bridge.
+- [API_AND_UI_BRIDGE_REFERENCE.md](API_AND_UI_BRIDGE_REFERENCE.md) — Complete reference for `MARAS_PublicAPI.h`, `MARAS.psc` native functions/events, CQS read-only guarantees, and the Magelight UI JSON bridge.
 - [RELATIONSHIP_DYNAMICS_GUIDE.md](RELATIONSHIP_DYNAMICS_GUIDE.md) — Guide to the unified pair-keyed relationship engine (`RelationshipUseCases`, `RelationshipEdgeTable`), cheating/affair tracking (`AffairLedger`), and paternity secrecy (`PaternityWorkflowCoordinator`).
 - [FERTILITY_MODE_RELOADED_INTEGRATION.md](FERTILITY_MODE_RELOADED_INTEGRATION.md) — Integration architecture for Fertility Mode Reloaded (FMR) and adolescent child training (`ChildGrowthRules`, `ChildVisualReconciler`).
 
@@ -94,8 +94,8 @@ flowchart TD
   - [IntimateThreadService.md](services/IntimateThreadService.md) — Main-thread (`PollingService` / `UpdateEventSink` `1500ms`) OStim Standalone thread monitoring, bed-search heuristics, pregnancy/affair hooks, and post-scene pillow talk.
   - [ChildrenFleeService.md](services/ChildrenFleeService.md) — Children running from threatened cells (intimate scenes or manual request), highest-priority package override (`0x5DE`), sticky per-cell fleeing, and blocked-path teleport.
   - [QuestEventHandler.md](services/QuestEventHandler.md) — Data-driven JSON quest event triggers (`questEvents/*.json`) for relationship promotions, affection changes, archetype updates, and scripted deaths.
-  - [PrismaUIDataBridge.md](services/PrismaUIDataBridge.md) — Prisma UI view lifecycle (`PrismaUIManager`), hotkey handling, uniform Intrigue Mode JSON snapshots (`PerspectiveView::ForDashboard`), and main-thread action dispatching.
-  - [PrismaModalManager.md](services/PrismaModalManager.md) — Standalone/blocking Prisma UI modal queue, locked focus (`Focus(view, true, false)`) and game pause coordination, and declarative interactive controls.
+  - [UIDataBridge.md](services/UIDataBridge.md) — Persistent Magelight UI view lifecycle (`UIManager`), `PostToGameThread` marshaling, hotkey handling, uniform Intrigue Mode JSON snapshots (`PerspectiveView::ForDashboard`), and main-thread action dispatching.
+  - [ModalManager.md](services/ModalManager.md) — Standalone/blocking UI modal queue, pause-locked `RequestUIMode` (`kUIModeFlagPause`) coordination, and declarative interactive controls.
 
 ---
 
@@ -115,7 +115,7 @@ sequenceDiagram
     participant Plugin as MARAS.dll (plugin/plugin.cpp)
     participant Engine as Skyrim Engine / DataHandler
     participant CoSave as SKSE Co-Save ('MARS' v7)
-    participant UI as PrismaUI.dll / SkyrimNet.dll
+    participant UI as MagelightUI.dll / SkyrimNet.dll
 
     SKSE->>Plugin: SKSEPluginLoad()
     Plugin->>Plugin: SetupLoggingAndSettings() & WireLayerGatewaysAndHooks()
@@ -197,7 +197,7 @@ Coalesced main-game-thread periodic scheduler driven via `UpdateEventSink` (`RE:
 
 ### 3.7 `SessionEpoch` & Concurrency Perimeter ([SessionEpoch.h](../../SKSE_Source/modules/state/include/maras/state/SessionEpoch.h))
 Monotonic `std::atomic<uint64_t>` session generation counter incremented on every save transition (`Serialization::RevertCallback`, `kPreLoadGame`):
-- **Cross-Save Isolation (`AddEpochTask` / `AddCurrentEpochTask`)**: Every deferred main-thread task, asynchronous SkyrimNet LLM/Decisions HTTP callback, `PrismaModalManager` modal entry, and latent Papyrus `ReturnLatentResult` callback stamps the originating `SessionEpoch` and silently drops execution if the player loaded another save or started a new game while the task or HTTP request was in flight.
+- **Cross-Save Isolation (`AddEpochTask` / `AddCurrentEpochTask`)**: Every deferred main-thread task, asynchronous SkyrimNet LLM/Decisions HTTP callback, `ModalManager` modal entry, and latent Papyrus `ReturnLatentResult` callback stamps the originating `SessionEpoch` and silently drops execution if the player loaded another save or started a new game while the task or HTTP request was in flight.
 - **Main-Thread Engine Invariant**: Off-thread engine event sinks (`TESInitScriptEvent`, `TESObjectLoadedEvent`, `TESDeathEvent`, `TESQuestStartStopEvent`, `TESQuestStageEvent`, `BSInputDeviceManager` poll trigger) capture value `RE::FormID`s only and marshal all `RE::Actor*` / `TESNPC*` / engine mutations onto the SKSE main game thread.
 - **Zero Unmanaged Threads**: Gameplay services run deterministically on the main thread; `SkyrimNetProfileService` isolates blocking localhost HTTP/file I/O inside a single bounded, joinable `std::jthread` worker queue that performs zero `RE::*` or `SkyrimNet.dll` calls off-thread.
 
