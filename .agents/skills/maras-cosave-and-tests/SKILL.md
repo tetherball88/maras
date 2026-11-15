@@ -39,17 +39,17 @@ All persistent mod state lives under SKSE serialization UID `'MARS'` (implemente
 
 ## 3. Writing & Updating Headless Unit Tests (`SKSE_Source/tests/`)
 
-1. **Where Tests Live (`maras_tests.exe` — 10 Suites, 59 Test Cases, 1131 Assertions):**
+1. **Where Tests Live (`maras_tests.exe` — 10 Suites, 82 Test Cases, 1404 Assertions):**
    - `tests/test_cosave_migrations.cpp` (9) — Legacy `v1`–`v7` migrations, full 12-chunk lossless round-trip, `'DCS1'` deceased secrecy extension round-trip & omission when absent, reversed chunk arrival order parity, synthetic pool bounds, truncated-stream rollback, `Revert()` zero-bleed, `CowTable` structural sharing.
    - `tests/test_custody_and_death.cpp` (6) — `GuardianSlots` neutrality, `ResolveSingleCustodian` policies, marriage/divorce cleanup, spouse/child/adult-child death cascades, FMR dynamic `0xFF` sibling isolation, deceased secret affair/paternity preservation.
    - `tests/test_affair_ledger.cpp` (5) — Directional infidelity, `Talking` $\to$ `Physical` escalation, open/polygamy exemptions, perspective-bound secret visibility, $O(1)$ 3-participant closure.
    - `tests/test_world_store.cpp` (4) — `WorldStore` snapshot immutability, non-void & reentrant `Modify`, INI baseline revert, concurrent reader consistency.
    - `tests/test_perspective_lens.cpp` (11) — `SpatialSnapshot` (3) & `PerspectiveView`/`PerspectiveLens` (8) secrecy matrices (`IsSecretForPartner`, `IsSecretForBioFather`, beastblood/siblings, zero `0x14` UI exemption).
    - `tests/test_reconcilers.cpp` (9) — `EngineSyncPlan` desired globals, factions, package precedence, buff formulas, fresh/reverted store defaults.
-   - `tests/test_domain_relationships.cpp` (5) — Family guards, formation, auto-marriage backfill, infidelity/open-close, affection, hierarchy, difficulty/classification/bonuses.
-   - `tests/test_domain_lineage.cpp` (3) — Adoption blocks, beastblood/guardian inheritance, fertility phenotype & paternity secret lifecycle, growth, training catalog, `NamePool`.
-   - `tests/test_domain_household.cpp` (3) — Houses, tenants, relocation/shared assets, `DeceasedQueries`, adult-child travel, household buff evaluation.
-   - `tests/test_domain_agency.cpp` (4) — Matchmaking rules, partner agency, encounter templates, banter planning.
+   - `tests/test_domain_relationships.cpp` (10) — Family guards, formation, auto-marriage backfill, infidelity escalation/discovery/open-close cleanup, intent cleanup, engagement/auto-open propagation, affection, hierarchy, difficulty/classification/bonuses.
+   - `tests/test_domain_lineage.cpp` (9) — Adoption blocks, beastblood/guardian inheritance, unborn twin promotion/removal, fertility phenotype & paternity secret lifecycle (`ResolveForBioFather`, cooldown bypass, bio-father step-in, fallback breakup, visual discrepancies), growth, training catalog, `NamePool`.
+   - `tests/test_domain_household.cpp` (7) — Houses, tenants, relocation/divorce eviction/shared assets, `DeceasedQueries` & dynamic isolation + secret masking, adult-child travel destination/timeout/cleanup, household buff evaluation.
+   - `tests/test_domain_agency.cpp` (12) — Matchmaking orientation/slots/caps/gates, partner agency cheating immunities, temperament/stage chance caps, intent expiry, home-arrival branching, encounter templates, banter planning.
    - Register any additional `tests/test_<module>.cpp` inside `add_executable(maras_tests ...)` in [SKSE_Source/CMakeLists.txt](../../../SKSE_Source/CMakeLists.txt).
 2. **Authoring Rules (`tests/TestHarness.h`) & Physical `LNK2019` Link Gate:**
    - Reuses `pch_core.h` from `maras_foundation` and links **only** the 7 pure `STATIC` targets (`maras_foundation`, `maras_state`, `maras_projection`, `maras_domain_*`).

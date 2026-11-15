@@ -47,3 +47,17 @@ When `SkyrimSE.exe` is running, Windows locks `SKSE/Plugins/MARAS.dll`.
 Set-Location prisma-src; npm run build
 ```
 Emits production bundle (`base: './'`) with unbundled, user-editable `variables.css`.
+
+## 3. In-Game Sanity & Shipped Config Verifier (`tools/ingame_sanity/`)
+
+```powershell
+# Verifier self-test (temp synthetic fixtures + fault injection + shipped configs)
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" -SelfTest
+
+# Validate all shipped JSON/INI/YAML config files offline
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" -Scenario configs
+
+# Verify real in-game S1-S4 dumps + MARAS.log and emit Markdown digest
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" -Scenario all -DumpsDir "<Path\To\Data\SKSE\Plugins\MARAS\dumps>" -LogPath "<Path\To\MARAS.log>" -ReportPath "sanity_digest.md"
+```
+See [INGAME_SANITY_TEST_SUITE.md](../../../docs/modder/INGAME_SANITY_TEST_SUITE.md) for the console `bat` workflow (`TTM_SanitySuite.psc`).

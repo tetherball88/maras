@@ -428,6 +428,7 @@ namespace MARAS::PapyrusInterface {
     int32_t GetMinRelRankForDial(RE::StaticFunctionTag*);
     void SetMinRelRankForDial(RE::StaticFunctionTag*, int32_t value);
     bool GetShouldUseSkyrimNetDecisions(RE::StaticFunctionTag*);
+    std::string DumpStoredData(RE::StaticFunctionTag*, std::string tag = "");
 
     // ========================================
     // Banter & SkyrimNet Coordination

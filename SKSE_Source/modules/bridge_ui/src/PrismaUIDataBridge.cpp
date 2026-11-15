@@ -2764,8 +2764,41 @@ namespace MARAS::Bridge::Ui {
         }
     }
 
-    void PrismaUIDataBridge::ProcessDumpData(const nlohmann::json& /*payload*/) {
+    namespace {
+
+        std::string SanitizeDumpTag(std::string_view tag) {
+            std::string out;
+            out.reserve(std::min<std::size_t>(tag.size(), 48));
+            for (const unsigned char ch : tag) {
+                if (out.size() >= 48) {
+                    break;
+                }
+                const bool isAlnum =
+                    (ch >= 'A' && ch <= 'Z') ||
+                    (ch >= 'a' && ch <= 'z') ||
+                    (ch >= '0' && ch <= '9');
+                if (isAlnum || ch == '_' || ch == '-') {
+                    out.push_back(static_cast<char>(ch));
+                }
+            }
+            return out;
+        }
+
+    }  // namespace
+
+    std::string PrismaUIDataBridge::DumpStoredData(std::string_view tag) {
+        return DumpStoredDataImpl(tag, /*notifyUi=*/false);
+    }
+
+    void PrismaUIDataBridge::ProcessDumpData(const nlohmann::json& payload) {
+        const std::string tag = GetJsonString(payload, "tag");
+        (void)DumpStoredDataImpl(tag, /*notifyUi=*/true);
+    }
+
+    std::string PrismaUIDataBridge::DumpStoredDataImpl(std::string_view tag, bool notifyUi) {
         try {
+            const std::string sanitizedTag = SanitizeDumpTag(tag);
+
             nlohmann::json root;
             const auto now = std::chrono::system_clock::now();
             const auto inTimeT = std::chrono::system_clock::to_time_t(now);
@@ -2784,6 +2817,9 @@ namespace MARAS::Bridge::Ui {
 
             nlohmann::json meta;
             meta["dumpTimestamp"] = timeStr;
+            if (!sanitizedTag.empty()) {
+                meta["dumpTag"] = sanitizedTag;
+            }
             meta["serializationVersion"] = MARAS::State::CoSaveConstants::kDataVersion;
             meta["hasSkyrimNet"] = MARAS::App::GetSkyrimNetGateway().IsAvailable();
             meta["simulateNoSkyrimNet"] = view.Settings().simulateNoSkyrimNet;
@@ -2817,7 +2853,9 @@ namespace MARAS::Bridge::Ui {
             std::error_code ec;
             std::filesystem::create_directories(dumpsDir, ec);
 
-            const std::string fileName = "maras_dump_" + fileTimeStr + ".json";
+            const std::string fileName = sanitizedTag.empty()
+                ? ("maras_dump_" + fileTimeStr + ".json")
+                : ("maras_dump_" + sanitizedTag + "_" + fileTimeStr + ".json");
             const std::filesystem::path fullPath = dumpsDir / fileName;
             std::ofstream outFile(fullPath);
             if (outFile.is_open()) {
@@ -2836,7 +2874,13 @@ namespace MARAS::Bridge::Ui {
                 res["filePath"] = fullPath.string();
                 res["absolutePath"] = absolutePathStr;
                 res["timestamp"] = timeStr;
-                PrismaUIManager::GetSingleton().SendToUI("onDataDumpCompleted", DumpJsonSafe(res));
+                if (!sanitizedTag.empty()) {
+                    res["dumpTag"] = sanitizedTag;
+                }
+                if (notifyUi) {
+                    PrismaUIManager::GetSingleton().SendToUI("onDataDumpCompleted", DumpJsonSafe(res));
+                }
+                return absolutePathStr;
             } else {
                 MARAS_LOG_ERROR("[PrismaUIDataBridge] Failed to create dump file '{}'", fullPath.string());
                 if (auto* console = RE::ConsoleLog::GetSingleton()) {
@@ -2846,15 +2890,20 @@ namespace MARAS::Bridge::Ui {
                 nlohmann::json res;
                 res["success"] = false;
                 res["error"] = "Failed to create dump file at " + fullPath.string();
-                PrismaUIManager::GetSingleton().SendToUI("onDataDumpCompleted", DumpJsonSafe(res));
+                if (notifyUi) {
+                    PrismaUIManager::GetSingleton().SendToUI("onDataDumpCompleted", DumpJsonSafe(res));
+                }
             }
         } catch (const std::exception& e) {
             MARAS_LOG_ERROR("[PrismaUIDataBridge] Exception while dumping data: {}", e.what());
             nlohmann::json res;
             res["success"] = false;
             res["error"] = std::string("Exception: ") + e.what();
-            PrismaUIManager::GetSingleton().SendToUI("onDataDumpCompleted", DumpJsonSafe(res));
+            if (notifyUi) {
+                PrismaUIManager::GetSingleton().SendToUI("onDataDumpCompleted", DumpJsonSafe(res));
+            }
         }
+        return {};
     }
 
     void PrismaUIDataBridge::ProcessDumpNPCIndex(const nlohmann::json& /*payload*/) {
@@ -3026,6 +3075,10 @@ namespace MARAS::Bridge::Ui {
 
             void OnChildPromoted(std::uint32_t oldID, std::uint32_t newID) override {
                 PrismaUIDataBridge::GetSingleton().OnChildPromoted(oldID, newID);
+            }
+
+            std::string DumpStoredData(std::string_view tag) override {
+                return PrismaUIDataBridge::GetSingleton().DumpStoredData(tag);
             }
         };
 
