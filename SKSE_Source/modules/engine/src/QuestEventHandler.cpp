@@ -270,10 +270,14 @@ namespace MARAS {
 
         const RE::FormID questFormID = event->formID;
         const bool started = event->started;
-        AddCurrentEpochTask("QuestStartStopEventSink::ProcessEvent", [questFormID, started]() {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        AddEpochTask(expectedEpoch, "QuestStartStopEventSink::ProcessEvent", [questFormID, started, expectedEpoch]() {
             std::lock_guard papyrusLock(GetPapyrusMutex());
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
             auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(questFormID);
-            if (!quest) {
+            if (!quest || quest->IsDeleted()) {
                 return;
             }
             auto& mgr = QuestEventManager::GetSingleton();
@@ -315,10 +319,14 @@ namespace MARAS {
 
         const RE::FormID questFormID = event->formID;
         const std::uint16_t stage = event->stage;
-        AddCurrentEpochTask("QuestStageEventSink::ProcessEvent", [questFormID, stage]() {
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        AddEpochTask(expectedEpoch, "QuestStageEventSink::ProcessEvent", [questFormID, stage, expectedEpoch]() {
             std::lock_guard papyrusLock(GetPapyrusMutex());
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
             auto* quest = RE::TESForm::LookupByID<RE::TESQuest>(questFormID);
-            if (!quest) {
+            if (!quest || quest->IsDeleted()) {
                 return;
             }
             QuestEventManager::GetSingleton().ExecuteQuestStageCommands(quest, stage);

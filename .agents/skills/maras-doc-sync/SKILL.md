@@ -17,21 +17,33 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
   - `docs/modder/API_AND_PRISMA_BRIDGE_REFERENCE.md` — `MARAS.psc` natives, `MARAS_PublicAPI.h` C exports, Prisma UI JS $\leftrightarrow$ C++ actions/events.
   - `docs/modder/RELATIONSHIP_DYNAMICS_GUIDE.md` — Pair statuses, hierarchy, affection math, loneliness, infidelity, open relationships, matchmaking & partner agency.
   - `docs/modder/FERTILITY_MODE_RELOADED_INTEGRATION.md` — FMR & Beeing Female NG hooks, conception, birth batching.
-- **C++ Service Guides (`docs/modder/services/<ServiceName>.md`):**
-  - Update or add `<ServiceName>.md` whenever a service's mechanics, formulas, edge cases, or workflows change (e.g., `PrismaModalManager.md`, `MatchmakingService.md`, `AdultChildTravelService.md`).
-- **External Modder Config Guides:**
-  - `docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md`, `MarriageDifficultyConfig.md`, `PACKAGE_OVERRIDE.md`, `QUEST_TRACKER.md`, `ARCHETYPES_AND_BUFFS.md`.
+- **C++ Service Guides (Canonical 28-File `docs/modder/services/` Roster):**
+  - Update or add `<ServiceName>.md` whenever a service's mechanics, formulas, edge cases, or workflows change. Use **only** the canonical 28-file roster below (retiring pre-modular service filenames):
+    - **Kept (9):** `ChildrenFleeService.md`, `IntimateThreadService.md`, `MarriageDifficulty.md`, `PollingService.md`, `PrismaModalManager.md`, `PrismaUIDataBridge.md`, `SkyrimNetIntegration.md`, `SkyrimNetMemoryService.md`, `SkyrimNetProfileService.md`.
+    - **Canonical New / Renamed (19):** `WorldStoreAndCoSave.md`, `PerspectiveView.md`, `RelationshipUseCases.md`, `AffectionRules.md`, `TraitClassifier.md`, `BuffReconciler.md`, `AgencyWorkflowCoordinator.md`, `LineageUseCases.md`, `PaternityWorkflowCoordinator.md`, `ChildGrowthAndVisuals.md`, `NamePoolLoader.md`, `HouseholdUseCases.md`, `TravelRules.md`, `DeceasedQueries.md`, `SpatialWorldIndex.md`, `FactionReconciler.md`, `PackageReconciler.md`, `HomeCellDetector.md`, `QuestEventHandler.md`.
+- **External Modder Config Guides & Data Schemas:**
+  - Guides in `docs/modder/`: [ADVANCED_CONFIGURATION_AND_MODDING.md](../../../docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md), [MARRIAGE_DIFFICULTY_CONFIG.md](../../../docs/modder/MARRIAGE_DIFFICULTY_CONFIG.md), [PACKAGE_OVERRIDE.md](../../../docs/modder/PACKAGE_OVERRIDE.md), [QUEST_TRACKER.md](../../../docs/modder/QUEST_TRACKER.md), [LOCATION_IMAGES_PROMPTS.md](../../../docs/modder/LOCATION_IMAGES_PROMPTS.md).
+  - External config paths loaded under `(Data/)SKSE/Plugins/`:
+    - `MARAS/encounters/*.json` (+ optional `MARAS/encounters/overrides/*.json`) — Encounter templates (`EncounterConfigLoader`).
+    - `MARAS/spousesTypes/*.json` — NPC trait overrides (`JsonOverrideLoader`).
+    - `MARAS/questEvents/*.json` — Quest trigger event configs (`QuestEventConfigLoader` via `plugin.cpp`).
+    - `MARAS/childTraining.yaml` + `MARAS/childTraining/*.yaml` — Child training catalog & Daedric blessings (`TrainingCatalogLoader`).
+    - `MARAS/childrenNames.json` & `MARAS/critterNames.json` — Child & critter name pools (`NamePoolLoader`).
+    - `MARAS/marriageDifficultyConfig.json` (fallback `MARAS/marriage_difficulty.json`) — Marriage difficulty params (`MarriageDifficultyLoader`).
+    - `MARAS/bonuses.json` — Spouse archetype bonuses (`BonusesConfigLoader`).
+    - `MARAS/npc_index_overrides.ini` — NPC spatial index include/exclude overrides (`SpatialWorldIndex`).
+    - `PackageOverrides.ini` & `MARAS.ini` — AI package whitelist (`PackageReconciler`) and hotkey/log-level baseline (`SettingsCoordinator`).
 
 ## 2. Player-Facing Guides (`docs/player/`)
 
 Update when gameplay mechanics, thresholds, or Prisma UI workflows change:
-- `docs/player/PLAYER_GUIDE.md`
-- `docs/player/RELATIONSHIP_OVERVIEW.md`
-- `docs/player/AFFECTION_SYSTEM.md`
-- `docs/player/ARCHETYPES_AND_BUFFS.md`
-- `docs/player/FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md`
-- `docs/player/SKYRIMNET_INTEGRATION_USER_GUIDE.md` / `SKYRIMNET_INTEGRATION_GUIDE.md`
-- `docs/player/UI_DASHBOARD_GUIDE.md`
+- [PLAYER_GUIDE.md](../../../docs/player/PLAYER_GUIDE.md)
+- [RELATIONSHIP_OVERVIEW.md](../../../docs/player/RELATIONSHIP_OVERVIEW.md)
+- [AFFECTION_SYSTEM.md](../../../docs/player/AFFECTION_SYSTEM.md)
+- [ARCHETYPES_AND_BUFFS.md](../../../docs/player/ARCHETYPES_AND_BUFFS.md)
+- [FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md](../../../docs/player/FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md)
+- [SKYRIMNET_INTEGRATION_GUIDE.md](../../../docs/player/SKYRIMNET_INTEGRATION_GUIDE.md)
+- [UI_DASHBOARD_GUIDE.md](../../../docs/player/UI_DASHBOARD_GUIDE.md)
 
 ## 3. Authoring Rule (No Header Copy-Pasting)
 

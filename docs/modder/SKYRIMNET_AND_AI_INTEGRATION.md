@@ -7,7 +7,7 @@ M.A.R.A.S integrates deeply with **SkyrimNet** to transform NPC relationships, m
 ## 1. Runtime Gating & Non-SkyrimNet Fallbacks
 
 ### 1.1 Mandatory Availability Checks
-- **C++ (`SKSE_Source/`)**: All callers check `MARAS::IsSkyrimNetAvailable()` (`SkyrimNetIntegration.h`), which verifies both `GetModuleHandleW(L"SkyrimNet.dll") != nullptr` and `!Settings::GetSingleton().GetSimulateNoSkyrimNet()`.
+- **C++ (`SKSE_Source/`)**: All callers check `MARAS::App::GetSkyrimNetGateway().IsAvailable()` (`MARAS::Bridge::SkyrimNet::IsSkyrimNetAvailable()` in [SkyrimNetApiLoader.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetApiLoader.h)), which verifies both `GetModuleHandleW(L"SkyrimNet.dll") != nullptr` and `!SettingsCoordinator::GetSingleton().GetSimulateNoSkyrimNet()`.
 - **Papyrus (`Scripts/Source/`)**: All callers check `TTM_Data.GetHasSkyrimNet()` before formatting strings or invoking `MARAS.RegisterSkyrimNetEvent`.
 - **Prisma UI (`prisma-src/`)**: Reads `settings.hasSkyrimNet` from the C++ data bridge to hide SkyrimNet-only tabs/sections or disable AI buttons with explanatory tooltips.
 
@@ -15,48 +15,48 @@ M.A.R.A.S integrates deeply with **SkyrimNet** to transform NPC relationships, m
 
 | Subsystem | With SkyrimNet Active | Without SkyrimNet (Fallback) |
 | :--- | :--- | :--- |
-| **Confirmation Modal** (`ConfirmationModal.h`) | 3-button layout: `[Accept]`, `[Cancel]`, `[Decline (Explain)]` (triggers `ttm_action_declined` event so player can explain why in dialogue). | 2-button layout: `[Accept]`, `[Cancel]`. |
-| **Global/Manual Matchmaking** (`MatchmakingService`) | Sends candidate profiles & relationship context to SkyrimNet LLM (`matchmaking_global` / `matchmaking_manual`), followed by verification & memory ingestion. | Runs deterministic/weighted `RunDiceRollMatchmaking()` using archetype compatibility, temperament, and proximity scores. |
-| **Paternity Secret Creation** (`NPCRelationshipManager`) | Evaluates `EvaluatePaternitySecret()` via LLM (`paternity_secret_eval`) to decide if the mother hides true paternity from a cheated partner. | Uses configurable dice-roll probability (`paternitySecretChance`) when a child is conceived during an affair. |
-| **Couple Banter** (`BanterCoordinatorService`) | Tier 1 (nearby real-time) can dispatch SkyrimNet dialogue triggers (`ttm_npc_couple_banter`) or vanilla scenes; Tier 2 runs background checks. | Runs vanilla/MARAS quest scenes (`TTM_NpcsScenes`) for nearby couples. |
+| **Confirmation Modal** ([ConfirmationModal.h](../../SKSE_Source/modules/bridge_ui/include/maras/bridge_ui/ConfirmationModal.h)) | 3-button layout: `[Accept]`, `[Decline (Explain)]` (triggers `maras_decline` / `ttm_action_decline` event so player can explain why in dialogue), `[Cancel]`. | 2-button layout: `[Accept]`, `[Cancel]`. |
+| **Global/Manual Matchmaking** ([AgencyWorkflowCoordinator.h](../../SKSE_Source/modules/app/include/maras/app/AgencyWorkflowCoordinator.h)) | Sends candidate profiles & relationship context to SkyrimNet LLM (`maras_matchmaking_scheduled` / `maras_matchmaking_manual`), followed by `maras_matchmaking_verify` & memory ingestion. | Runs deterministic/weighted `RunDiceRollMatchmaking()` (`MatchmakingRules` / `NpcMatchmaker`) using archetype compatibility, temperament, and proximity scores. |
+| **Paternity Secret Creation** ([PaternityWorkflowCoordinator.h](../../SKSE_Source/modules/app/include/maras/app/PaternityWorkflowCoordinator.h)) | Evaluates `EvaluatePaternitySecret()` via LLM (`maras_paternity_evaluation`) to decide if the mother hides true paternity from a cheated partner. | Uses `EvaluatePaternitySecretFallback()` with configurable dice-roll probability (`paternitySecretChance`) when a child is conceived during an affair. |
+| **Couple Banter** ([AgencyWorkflowCoordinator.h](../../SKSE_Source/modules/app/include/maras/app/AgencyWorkflowCoordinator.h)) | Gated by `GetSkyrimNetGateway().IsAvailable()` and `enableScenes`; fires `maras_banter_scene_trigger` (`TryScheduledBanter()` / `TryTriggerBanter()`) for loaded couples via `BanterPlanner` & `BanterSceneStarter` (`TTM_NpcsScenes`). | No autonomous `TryScheduledBanter()` dispatch (`GetSkyrimNetGateway().IsAvailable()` gate returns early); CK scenes remain script-accessible if invoked directly. |
 | **Papyrus Event Registration** (`TTM_ServiceSkyrimNet.psc`) | Formats structured JSON payloads (`BuildJson`) and calls `MARAS.RegisterSkyrimNetEvent("ttm_event", ...)` with audience control (`EventAudience::Exact` vs `EventAudience::Nearby`). | Early returns immediately (`no-op`). |
 
 ---
 
-## 2. Low-Level C++ Bridge (`SkyrimNetIntegration`)
+## 2. Low-Level C++ Bridge (`bridge_skyrimnet` & `PerspectiveView`)
 
-Located in `SKSE_Source/include/core/SkyrimNetIntegration.h` and `src/core/SkyrimNetIntegration.cpp`, this layer uses dynamic `GetProcAddress` lookups against `SkyrimNet.dll` so `MARAS.dll` has zero hard link dependencies on SkyrimNet.
+Located in `SKSE_Source/modules/bridge_skyrimnet/` ([SkyrimNetApiLoader.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetApiLoader.h), [SkyrimNetDecorators.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetDecorators.h), [SkyrimNetDecisions.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetDecisions.h), [SkyrimNetMemoryService.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetMemoryService.h), [SkyrimNetProfileService.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetProfileService.h)) and abstracted behind [SkyrimNetGateway.h](../../SKSE_Source/modules/app/include/maras/app/SkyrimNetGateway.h), this layer uses dynamic `GetProcAddress` lookups against `SkyrimNet.dll` so `MARAS.dll` has zero hard link dependencies on SkyrimNet. See [SkyrimNetIntegration.md](services/SkyrimNetIntegration.md), [SkyrimNetMemoryService.md](services/SkyrimNetMemoryService.md), and [SkyrimNetProfileService.md](services/SkyrimNetProfileService.md).
 
 ### 2.1 Resolved DLL Exports from `SkyrimNet.dll`
-- `PublicRegisterDecorator`: Registers C++ callbacks exposed to SkyrimNet Jinja/Inja prompt templates.
+- `PublicRegisterDecorator`: Registers C++ callbacks exposed to SkyrimNet Inja prompt templates (`23` MARAS decorators).
 - `PublicRenderTemplate`: Renders a named prompt template in `external/tetherball88.maras/prompts/` with a JSON context object.
 - `PublicSendCustomPromptToLLM`: Dispatches an asynchronous Chat LLM completion request (`gamemaster_evaluation` or `memory` variant) and returns the response to a C++ callback.
 - `PublicSendCustomDecisionToLLM` (SkyrimNet Public API v12+): Dispatches a structured Jev decision evaluation (`decisions/*.prompt`) against SkyrimNet's `decisions` model slot and returns typed per-decision JSON (`{"decisions": {"<key>": {"selected": "...", "value": ...}}}`) to `SkyrimNetDecisions`. When `skyrimnetUseDecisions` is disabled or SkyrimNet returns `"error": "no_decisions_route"`, `SkyrimNetDecisions` automatically falls back to `PublicSendCustomPromptToLLM` (`maras_evaluations/*.prompt`).
 - `PublicCalculateActorUUID`: Resolves an `RE::Actor*` FormID into SkyrimNet's internal 64-bit Actor UUID.
 - `PublicCreateMemory`: Injects a first-person narrative memory directly into an NPC's SkyrimNet long-term memory database (complete with importance score, emotion tag, location, and participant UUIDs).
-- `PublicRequestProfileUpdate` (SkyrimNet Public API v13+): Queues an asynchronous dynamic character profile generation/update on SkyrimNet's internal worker thread pool with caller-provided `additionalInstructions` and `updatableBlocksCSV` overrides (used by [`SkyrimNetProfileService`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetProfileService.md), with legacy fallback for SkyrimNet `< v13`).
-- `PublicRegisterEvent` (SkyrimNet Public API v11+): Registers an event (`"ttm_event"`, `"direct_narration"`, etc.) with either `EventAudience::Nearby` (`audienceCount == 0`) or `EventAudience::Exact` (`audienceCount > 0`), exposed to C++ via `MARAS::RegisterSkyrimNetEvent` and to Papyrus via `MARAS.RegisterSkyrimNetEvent`.
+- `PublicRequestProfileUpdate` (SkyrimNet Public API v13+): Queues an asynchronous dynamic character profile generation/update on SkyrimNet's internal worker thread pool with caller-provided `additionalInstructions` and `updatableBlocksCSV` overrides (used by [SkyrimNetProfileService](services/SkyrimNetProfileService.md), with legacy fallback for SkyrimNet `< v13`).
+- `PublicRegisterEvent` (SkyrimNet Public API v11+): Registers an event (`"ttm_event"`, `"direct_narration"`, etc.) with either `EventAudience::Nearby` (`audienceCount == 0`) or `EventAudience::Exact` (`audienceCount > 0`), exposed to C++ via `Bridge::SkyrimNet::RegisterSkyrimNetEvent` and to Papyrus via `MARAS.RegisterSkyrimNetEvent`.
 
 ### 2.1.1 Audience Control & Paternity Secret Masking (`MARAS.RegisterSkyrimNetEvent`)
 - **Exact Audience vs. Nearby Audience**:
-  - When `exactAudience == true` (or `audience` is non-empty), `MARAS::RegisterSkyrimNetEvent` populates `audienceFormIds` (including `originatorActor`, `targetActor`, and all valid `audience` elements, filtering out synthetic child IDs) and passes `audienceCount > 0` to `PublicRegisterEvent`. This activates `EventAudience::Exact` in SkyrimNet—excluding nearby bystanders, virtual NPCs, and the Player (unless `0x14` is explicitly in the audience) and bypassing SkyrimNet's `2 * maxInteractionDistance` player-distance filter.
+  - When `exactAudience == true` (or `audience` is non-empty), `RegisterSkyrimNetEvent` populates `audienceFormIds` (including `originatorActor`, `targetActor`, and all valid `audience` elements, filtering out synthetic child IDs) and passes `audienceCount > 0` to `PublicRegisterEvent`. This activates `EventAudience::Exact` in SkyrimNet—excluding nearby bystanders, virtual NPCs, and the Player (unless `0x14` is explicitly in the audience) and bypassing SkyrimNet's `2 * maxInteractionDistance` player-distance filter.
   - Normal interpersonal, relationship, household, and public events use `exactAudience = false` (`EventAudience::Nearby`) so nearby actors can naturally overhear them.
   - `exactAudience = true` (`EventAudience::Exact`) is used **only** for:
     1. `RegisterPregnancyAnnounced` (the mother's private internal discovery/thoughts — delivered exclusively to `mother`).
     2. `RegisterPaternitySecretEvent` when one of the fathers (`stillSecretAssumed` or `stillSecretBio`) still does not know the truth.
-    3. Child lifecycle events (`RegisterChildBirthBatch`, `RegisterChildBirth`, `RegisterChildGrewUp`, `RegisterChildSentToTraining`, `RegisterChildBecameAdult`) **only** when an undiscovered paternity secret is present in the message text (when no secret exists, they use `exactAudience = false`).
+    3. Child lifecycle events (`RegisterChildBirthBatch`, `RegisterChildBirth`, `RegisterChildGrewUp`, `RegisterChildSentToTraining`, `RegisterChildBecameAdult`) whenever `IsSecretForPartner(childID)` (`isSecretForAssumed`) OR `IsSecretForBioFather(childID)` (`isSecretForBio`) is active (when neither flag is set, they use `exactAudience = false`).
 - **Perspective-Bound Secret Event Splitting**:
-  - When a child lifecycle or pregnancy-reveal event carries an undiscovered paternity secret (`isSecretForPartner` / `isSecretForAssumed`), `TTM_ServiceSkyrimNet.psc` splits event delivery by perspective:
-    1. **Privy Audience (`exactAudience = true`)**: Receives the true secret-aware text/JSON (`mother`, plus `bioFather` when `!isSecretForBio`, plus `partner` when `!isSecretForPartner`).
-    2. **Deceived Partner / Child Audience (`exactAudience = true`)**: Receives a secret-masked text/JSON (e.g., via `MARAS.BuildChildBirthMessage(..., maskSecrets = true)` / `MARAS.BuildChildBirthJson(..., maskSecrets = true)`) presenting the deceived partner as the biological father, with `targetActor = None` and `audience = [presumedFather]` (or `[presumedFather, child]`) so neither the privy mother nor nearby bystanders receive the masked event.
+  - Whenever a pregnancy-reveal or child milestone event carries `IsSecretForPartner(childID)` or `IsSecretForBioFather(childID)`, `TTM_ServiceSkyrimNet.psc` splits delivery via `EventAudience::Exact`:
+    1. **Privy Audience (`exactAudience = true`)**: Receives secret-aware narration only for privy adults (`mother`, plus `bioFather` only if `!IsSecretForBioFather(childID)`, plus `presumedPartner` only if `!IsSecretForPartner(childID)`).
+    2. **Deceived Partner / Child Audience (`exactAudience = true`)**: Receives secret-masked text/JSON (e.g., via `MARAS.BuildChildBirthMessage(..., maskSecrets = true)` / `MARAS.BuildChildBirthJson(..., maskSecrets = true)`) omitting true bio-father identity when masked for the presumed partner (`presumedFather`) and shielding child actors when `IsSecretForBioFather(childID)` or `IsSecretForPartner(childID)` would otherwise expose hidden paternity.
 
-### 2.2 Registered C++ Prompt Decorators (`SkyrimNetIntegration.cpp`)
-Registered at `kDataLoaded` and invoked automatically by SkyrimNet's prompt engine when constructing NPC context. All decorator callbacks execute lock-free against `WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`, and `PerspectiveView`:
+### 2.2 Registered C++ Prompt Decorators ([SkyrimNetDecorators.cpp](../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetDecorators.cpp))
+All **23 decorators** are registered at `kPostLoad` (`GetSkyrimNetGateway().RegisterDecorators()`) and invoked automatically by SkyrimNet's prompt engine when constructing NPC context. Every callback executes lock-free against `WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`, and [PerspectiveView](services/PerspectiveView.md):
 
 | Decorator Name | Arguments | Returned JSON / Context |
 | :--- | :--- | :--- |
 | `ttm_is_registered` | `actor` | Boolean JSON indicating whether `actor` is tracked in M.A.R.A.S (Player, tracked NPC, registered child, or pregnant mother). |
-| `ttm_npc_relationship_profile` | `actor` *(optional render mode)* | Schema-v2 JSON relationship, pregnancy, family, and infidelity profile projected through `PerspectiveView::ForActor` (`ActorSelf` epistemic filtering) or `PerspectiveView::ForDialogueTarget` when `render_mode == "dialogue_target"` (public knowledge only; hides undiscovered affairs, secret paternity, `siblings`, and `has_beastblood`). |
+| `ttm_npc_relationship_profile` | `actor` *(optional render mode)* | Schema-v2 JSON relationship, pregnancy, family, and infidelity profile projected through `PerspectiveView::ForActor` (`ActorSelf` epistemic filtering) or `PerspectiveView::ForDialogueTarget` when `render_mode == "dialogue_target"` (public knowledge only; hides undiscovered affairs, secret paternity, `siblings`, and `has_beastblood`—even when the target personally knows). |
 | `ttm_get_nearby_actors` | `actor` | JSON `{ "actorIds": [...] }` of nearby valid NPCs/Player queried off-thread from `SpatialActorSnapshot`. |
 | `ttm_get_ex_partner` | `actor` | Backstory sentence describing prior vanilla relationship (`Spouse`, `Courting`, `Lover`) ties to a player household member. |
 | `ttm_get_available_actions` | `actor` | Composite explanation list of relationship and drama actions currently valid for `actor` with nearby targets. |
@@ -69,76 +69,76 @@ Registered at `kDataLoaded` and invoked automatically by SkyrimNet's prompt engi
 
 ---
 
-## 3. AI Matchmaking Pipeline (`MatchmakingService`)
+## 3. AI Matchmaking Pipeline (`AgencyWorkflowCoordinator`)
 
-`MatchmakingService` (`SKSE_Source/include/core/MatchmakingService.h`) autonomous evolves NPC-to-NPC relationships (`Dating` $\rightarrow$ `Lover` $\rightarrow$ `Engaged` $\rightarrow$ `Married`, plus breakups, divorces, and affairs).
+[`AgencyWorkflowCoordinator`](services/AgencyWorkflowCoordinator.md) ([AgencyWorkflowCoordinator.h](../../SKSE_Source/modules/app/include/maras/app/AgencyWorkflowCoordinator.h)) paired with `MatchmakingRules` and `NpcMatchmaker` (`maras_domain_agency`) autonomously evolves NPC-to-NPC relationships (`Dating` $\rightarrow$ `Lover` $\rightarrow$ `Engaged` $\rightarrow$ `Married`, plus breakups, divorces, open/close changes, and affairs).
 
 ```mermaid
 sequenceDiagram
     participant Scheduler as PollingService / Prisma UI
-    participant MM as MatchmakingService (C++)
-    participant Rel as NPCRelationshipManager
+    participant Coord as AgencyWorkflowCoordinator (C++)
+    participant Rel as RelationshipUseCases
     participant SNet as SkyrimNetIntegration (LLM)
     participant Mem as SkyrimNet Memory DB
 
-    Scheduler->>MM: Trigger Global or Manual Matchmaking
-    MM->>Rel: Gather eligible NPC candidates, locations & existing pairs
-    alt SkyrimNet Available & AI Matchmaking Enabled
-        MM->>SNet: Render maras_evaluations/matchmaking_global (or _manual)
-        SNet-->>MM: JSON decisions (pair, action, reason, secretAffair)
+    Scheduler->>Coord: TryScheduledMatchmaking / RunManualMatchmaking
+    Coord->>Rel: Gather eligible NPC candidates, locations & existing pairs
+    alt SkyrimNet Available & matchmakingUseLLM Enabled
+        Coord->>SNet: Render maras_evaluations/maras_matchmaking_scheduled (or _manual)
+        SNet-->>Coord: JSON decisions (pair, action, reason, secretAffair)
         loop For each proposed relationship change
-            MM->>SNet: Render maras_evaluations/maras_matchmaking_verify
-            SNet-->>MM: Verified / Rejected (prevents lore/orientation/family conflicts)
+            Coord->>SNet: Evaluate decisions/maras_matchmaking_verify (or fallback evaluation)
+            SNet-->>Coord: Verified / Rejected (prevents lore/orientation/family conflicts)
             alt Approved
-                MM->>Rel: Apply transition (within SkyrimNetMemoryService::MatchmakingApplyScope)
+                Coord->>Rel: Apply transition (within SkyrimNetMemoryService::MatchmakingApplyScope)
                 Rel->>Mem: RecordEvent into 90s MemoryEpisode -> maras_event_memories -> PublicAddMemory()
             end
         end
-    else No SkyrimNet (Fallback)
-        MM->>MM: RunDiceRollMatchmaking() (Archetype + Temperament + Cell weights)
-        MM->>Rel: Apply transition directly
+    else No SkyrimNet / LLM Disabled (Fallback)
+        Coord->>Coord: RunDiceRollMatchmaking() (MatchmakingRules weights)
+        Coord->>Rel: Apply transition directly
     end
 ```
 
 ---
 
-## 4. Couple Banter Coordinator (`BanterCoordinatorService`)
+## 4. Couple Banter & Partner Agency Coordination (`AgencyWorkflowCoordinator`)
 
-`BanterCoordinatorService` (`SKSE_Source/include/core/BanterCoordinatorService.h`) manages ambient interactions between NPC-to-NPC couples using a two-tier architecture:
+[`AgencyWorkflowCoordinator`](services/AgencyWorkflowCoordinator.md) also manages ambient couple interactions (`BanterPlanner`, `BanterSceneStarter`) and Tier 2 Player-Partner Agency (`PartnerAgencyEvaluator`, `EncounterConfigLoader`):
 
-1. **Tier 1 — Nearby Real-Time Banter**:
-   - Scans couples loaded in the player's current cell or within configurable proximity radius.
-   - Respects per-couple and global cooldown timers (`BNTR` co-save chunk) and location filters (skipping combat cells, dungeons, or restricted worldspaces).
-   - When triggered, dispatches either a SkyrimNet multi-actor dialogue trigger (`ttm_npc_couple_banter`) or a `TTM_NpcsScenes` interaction scene.
-2. **Tier 2 — Background Global Progression**:
-   - Periodically samples unloaded/distant NPC couples across Skyrim to advance or test their relationship stability and feed into `MatchmakingService`.
+1. **Tier 1 — Nearby Real-Time Banter (`TryScheduledBanter` / `TryTriggerBanter`)**:
+   - Gated on `GetSkyrimNetGateway().IsAvailable()` and `SettingsData::enableScenes`. Scans couples loaded in the player's current cell or within `skyrimnetActionRadius` (`3000.0`).
+   - Respects per-couple and global cooldown timers (`'BNTR'` co-save chunk) and location filters via `BanterSceneStarter::IsLocationAllowedForScenes` (skipping restricted cells).
+   - Emits `maras_banter_scene_trigger` so `TTM_NpcsScenes` runs a contextual interaction scene between nearby partners.
+2. **Tier 2 — Player-Partner Agency (`TryScheduledPlayerPartnerInfidelity` & `EvaluatePartnerHomeArrival`)**:
+   - Periodically samples unhappy/neglected/non-closed player partners via `PartnerAgencyEvaluator` and evaluates open-relationship suggestions, breakups, or affair escalation via `decisions/maras_player_partner_cheating.prompt` (or dice fallback), queuing pending `PartnerIntentType` prompts and `encounters/*.json` courier/home-arrival modals when returning home.
 
 ---
 
 ## 5. OStim Intimate Scene & Infidelity Detection (`IntimateThreadService`)
 
-`IntimateThreadService` (`SKSE_Source/include/core/IntimateThreadService.h`) runs a dedicated background worker thread during active OStim scenes (`TTM_ServiceIntimateMoments.psc`) to detect realistic walk-ins and infidelity exposure:
+[`IntimateThreadService`](services/IntimateThreadService.md) ([IntimateThreadService.h](../../SKSE_Source/modules/engine/include/maras/engine/IntimateThreadService.h)) runs deterministically on the **SKSE main game thread** via `PollingService` / `UpdateEventSink` (`1500ms` periodic ticks — zero detached background threads) during active OStim/SexLab scenes (`TTM_ServiceIntimateMoments.psc`), alongside [`ChildrenFleeService`](services/ChildrenFleeService.md) (`0x5DE`):
 
 ```mermaid
 flowchart LR
-    OStimStart["OStim Scene Starts\n(TTM_ServiceIntimateMoments)"] --> Worker["IntimateThreadService\nBackground Poll Loop"]
-    Worker --> CheckConsent{"Is Pair Cheating?\n(Not Open Rel & Has Other Partner)"}
-    CheckConsent -- "No (Consensual / Faithful)" --> EndCheck["Apply Affection / Lover's Radiance\non Scene End"]
-    CheckConsent -- "Yes (Infidelity)" --> ScanNearby["Scan Nearby Loaded Actors\nin Cell / Radius"]
-    ScanNearby --> LOS["Game-Thread Task:\nLine-of-Sight Raycast &\nDoor Portal / Distance Check"]
-    LOS -- "Partner or Witness Spots Pair" --> Caught["Mark Caught Cheating\n(NPCRelationshipManager +\nFactions 0x5A3/0x5A4/0x5C4)"]
-    Caught --> Interrupt["Stop OStim Thread &\nTrigger Confrontation Scene /\nttm_caught_cheating Event"]
+    OStimStart["OStim Scene Starts\n(TTM_ServiceIntimateMoments)"] --> Tick["PollingService / UpdateEventSink\nMain-Thread 1500ms Tick"]
+    Tick --> CheckConsent{"Is Pair Cheating?\n(Not Open Rel & Has Other Partner)"}
+    CheckConsent -- "No (Consensual / Open / Faithful)" --> EndCheck["Apply Affection / Lover's Radiance\non Scene End"]
+    CheckConsent -- "Yes (Infidelity)" --> ScanNearby["Scan Nearby Loaded Actors\nvia SpatialActorSnapshot"]
+    ScanNearby --> LOS["Main-Thread LOS Raycast &\nDoor Portal / Distance Check"]
+    LOS -- "Partner or Witness Spots Pair" --> Caught["RecordCheating\n(RelationshipUseCases +\nFactions 0x5A3/0x5A4/0x5C4)"]
+    Caught --> Interrupt["Stop OStim Thread & Emit\nmaras_cheating_caught / ttm_cheating_caught"]
 ```
 
 ---
 
 ## 6. External SkyrimNet Bundle (`SKSE/Plugins/SkyrimNet/external/tetherball88.maras/`)
 
-Compliant with the SkyrimNet Beta 25+ external plugin specification (`manifest.json`), the bundle is divided into three directories:
+Compliant with the SkyrimNet Beta 25+ external plugin specification (`manifest.json`), the bundle is divided into actions, triggers, dialogue actions (`dialogue_actions/user_lists.yaml`), and prompts:
 
-### 6.1 Actions (`actions/*.yaml` — 19 Actions)
+### 6.1 Actions (`actions/*.yaml` — 18 Actions)
 Every action file's filename strictly matches its internal `name:` attribute and invokes `TTM_Actions.psc` or `TTM_ServiceRelationships.psc`:
-- **Relationship Progression**: `ProposeDating`, `ConsiderDating`, `ProposeLover`, `ConsiderLover`, `ProposeMarriage`, `ConsiderMarriage`.
+- **Relationship Progression**: `ProposeDating`, `ConsiderDatingProposal`, `ProposeLover`, `ConsiderLoverProposal`, `ProposeEngagement`, `ConsiderEngagementProposal`.
 - **Breakups & Terminations**: `BreakupDating`, `BreakupLover`, `CallOffEngagement`, `Divorce`.
 - **Open Relationships**: `OpenRelationship`, `CloseRelationship`.
 - **Infidelity & Affairs**: `ConfessAffair`, `ExposeAffair`, `ResolveAffair`.
@@ -146,28 +146,28 @@ Every action file's filename strictly matches its internal `name:` attribute and
 - **General Management**: `ManageRelationships`.
 
 ### 6.2 Triggers (`triggers/*.yaml` — 25 Triggers)
-Listen for `ttm_event` dispatches from `TTM_ServiceSkyrimNet.psc` (matched via `event_json.type`). All event builders and `DirectNarration` calls evaluate `MARAS::ShouldTriggerSkyrimNetNarration(speaker, target)` (`SkyrimNetIntegration.cpp` / `MARAS.psc`) to verify that participating actors are 3D-loaded, alive/enabled, in the same interior cell or exterior worldspace as the Player, and within `skyrimNetActionRadius` (default `2000.0` units)—setting `skipTrigger = true` whenever actors are off-screen so distant/unloaded events still record in history without firing live `direct_narration` in the Player's scene. Background matchmaking (`MatchmakingService::ApplyMatch`) passes `sendEvent = false` when applying autonomous NPC–NPC status or open-relationship transitions while wrapping the batch in `SkyrimNetMemoryService::MatchmakingApplyScope` so `SkyrimNetMemoryService` records and flushes first-person memories via `maras_event_memories.prompt`. Because `ttm_event` already records `event_json.msg` in the event history (`recent_events`), active `direct_narration` triggers use template variables (`{{originator}}` and `event_json.*` fields) to instruct NPCs on how to react and roleplay the moment rather than duplicating the raw event message:
+Listen for `ttm_event` dispatches from `TTM_ServiceSkyrimNet.psc` (matched via `event_json.type`; `ttm_became_lovers` and `ttm_became_engaged` match `type = "ttm_marital_status_change"` filtered on `newStatus = "lover"` / `"engaged"`). All event builders and `DirectNarration` calls evaluate `MARAS::ShouldTriggerSkyrimNetNarration(speaker, target)` ([SkyrimNetApiLoader.cpp](../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetApiLoader.cpp) / `MARAS.psc`) to verify that participating actors are 3D-loaded, alive/enabled, in the same interior cell or exterior worldspace as the Player, and within `skyrimnetActionRadius` (default `3000.0` units)—setting `skipTrigger = true` whenever actors are off-screen so distant/unloaded events still record in history without firing live `direct_narration` in the Player's scene. Background matchmaking (`AgencyWorkflowCoordinator`) passes `sendEvent = false` when applying autonomous NPC–NPC status or open-relationship transitions while wrapping the batch in `SkyrimNetMemoryService::MatchmakingApplyScope` so `SkyrimNetMemoryService` records and flushes first-person memories via `maras_event_memories.prompt`. Because `ttm_event` already records `event_json.msg` in the event history (`recent_events`), active `direct_narration` triggers use template variables (`{{originator}}` and `event_json.*` fields) to instruct NPCs on how to react rather than duplicating raw event text:
 - **Proposals & Declines**: `ttm_action_decline`, `ttm_dating_proposal`, `ttm_polygamy_blessing`
 - **Relationship & Household Changes**: `ttm_became_lovers`, `ttm_became_engaged`, `ttm_marital_status_change`, `ttm_open_relationship_change`, `ttm_spouse_affection_change`, `ttm_spouse_hierarchy_change`
 - **Infidelity, Affairs & Walk-Ins**: `ttm_cheating_caught`, `ttm_affair_confessed`, `ttm_affair_exposed`, `ttm_affair_resolved`, `ttm_open_relationship_walkin`
 - **Pregnancy, Birth & Children**: `ttm_pregnancy_announced`, `ttm_pregnancy_lost`, `ttm_labor_started`, `ttm_child_birth`, `ttm_child_grew_up`, `ttm_child_sent_to_training`, `ttm_child_became_adult`, `ttm_child_adopted`, `ttm_child_inherited`, `ttm_child_parents_changed`, `ttm_paternity_secret_resolved`
-- **Action-Initiated & Cascade Narration Suppression (`SuppressNextActionNarration` / `IsActionNarrationSuppressed`)**: When a state change is initiated by a SkyrimNet dialogue action in `TTM_Actions.psc` (such as `RevealChildSecret`, `DiscoverChildPaternity`, `ConfessAffair`, `ExposeAffair`, `ResolveAffair`, `ConsiderRelationshipChange`, `BreakupRelationship`, or `SetOpenRelationshipChange`) or a Creation Kit banter scene (`TTM_NpcsScenes.psc` / `TTM_NpcsScenesEnd.psc`), the speaker has already performed the speech act in dialogue. `TTM_ServiceSkyrimNet.SuppressNextActionNarration()` sets a short suppression window so the resulting `ModCallbackEvent`s still log to `recent_events` (and record in `SkyrimNetMemoryService`) with `skipTrigger = true`, preventing a redundant second `direct_narration` from firing. Likewise, secondary cascading events (such as `ttm_child_parents_changed` on marriage/divorce, or status/open-relationship transitions firing alongside `ttm_affair_resolved` / `ttm_paternity_secret_resolved`) automatically set `skipTrigger = true` so only a single primary trigger narrates per burst.
+- **Action-Initiated & Cascade Narration Suppression (`SuppressNextActionNarration` / `IsActionNarrationSuppressed`)**: When a state change is initiated by a SkyrimNet dialogue action in `TTM_Actions.psc` (such as `RevealChildSecret`, `DiscoverChildPaternity`, `ConfessAffair`, `ExposeAffair`, `ResolveAffair`, `ConsiderRelationshipChange`, `BreakupRelationship`, or `SetOpenRelationshipChange`) or a Creation Kit scene (`TTM_NpcsScenes.psc` / `TTM_NpcsScenesEnd.psc`), the speaker has already performed the speech act in dialogue. `TTM_ServiceSkyrimNet.SuppressNextActionNarration()` sets a short suppression window so resulting `ModCallbackEvent`s still log to `recent_events` (and record in `SkyrimNetMemoryService`) with `skipTrigger = true`, preventing a redundant second `direct_narration` from firing. Likewise, secondary cascading events (`ttm_child_parents_changed` on marriage/divorce, or status/open-relationship transitions firing alongside `ttm_affair_resolved` / `ttm_paternity_secret_resolved`) automatically set `skipTrigger = true` so only a single primary trigger narrates per burst.
 
 ### 6.3 Prompt Templates (`prompts/`)
-- `submodules/character_bio/0450_maras_character_bio.prompt`: Injects the NPC's M.A.R.A.S archetype, partners, household rank, children, and any active affair/paternity secrets into their core character biography (and `submodules/maras_relations/0001_child_bio.prompt` renders child/adult parentage, stage, and `training_location`). In addition, [`SkyrimNetProfileService`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SkyrimNetProfileService.md) asynchronously generates and saves a per-save 10-block character profile (`saves/<saveId>/prompts/characters/<bioTemplateName>.prompt`) whenever a placed Young Child (`Stage 2`) or Adult Child (`Stage 4`) actor is newly spawned into the world.
-- `submodules/guidelines/0900_maras_guidelines.prompt`: Instructs the LLM on when to invoke M.A.R.A.S actions (proposals, breakups, affair confessions/exposures, paternity reveals) and how to roleplay affection tiers and temperament.
-- `decisions/*.prompt` (Typed Jev Decisions via `PublicSendCustomDecisionToLLM` / `SkyrimNetDecisions`, enabled when `skyrimnetUseDecisions = true` with automatic fallback to `maras_evaluations/*.prompt`; each `[ question <id> choice|noul ]` block includes an instruction line followed by single-line `[ criteria ]` entries):
+- `submodules/character_bio/0602_maras_relations.prompt` *(plus Gamemaster bio helpers `9999_ttm_gm.prompt` & `9999_ttm_gm_with_recent_events.prompt`)*: Calls `ttm_npc_relationship_profile(actorUUID)` and renders `submodules/maras_relations/*.prompt` (`0001_child_bio.prompt`, `0010_pregnancy.prompt`, `0020_children.prompt`, `0030_partners.prompt`, `0030_polygamy.prompt`, `0040_ex_partners.prompt`, `0050_infidelity.prompt`) using `PerspectiveView` epistemic filtering (`ActorSelf` vs. `DialogueTargetPublic`). In addition, [`SkyrimNetProfileService`](services/SkyrimNetProfileService.md) asynchronously generates and saves a per-save 10-block character profile (`saves/<saveId>/prompts/characters/<bioTemplateName>.prompt`) whenever a placed Young Child (`Stage 2`) or Adult Child (`Stage 4`) actor spawns into the world.
+- `submodules/guidelines/0501_relationship_statuses.prompt` & `submodules/user_final_instructions/0502_affection_estranged_divorce.prompt`: Instructs the LLM on M.A.R.A.S's 5-tier commitment scale (`Hookup < Lover < Dating < Engaged < Married`) and estranged divorce/affection behavior.
+- `helpers/` & `maras_actions/`: Bio helpers (`maras_actor_bio_recent_events.prompt`, `maras_child_bio_context.prompt`) and `18` per-action parameter/eligibility prompts (`prompts/maras_actions/*.prompt`).
+- `decisions/*.prompt` (4 Typed Jev Decisions via `PublicSendCustomDecisionToLLM` / `SkyrimNetDecisions`, enabled when `skyrimnetUseDecisions = true` with automatic fallback to `maras_evaluations/*.prompt`):
   1. `maras_step_in_evaluation.prompt` — `noul` question (`bio_father_steps_in`) evaluating whether a biological father steps in after a paternity-driven divorce.
   2. `maras_paternity_evaluation.prompt` — Multi-question `choice` schema (`outcome` and `partner_reaction`) resolving paternity secrets.
-  3. `maras_player_partner_cheating.prompt` — Mode-switched Jev decisions (`candidate_select` via `decision` `choice`, and `breakup_affair` / `breakup_open_lover` / `suggest_open` / `suggest_close` via `noul` questions `will_breakup`, `will_confess`, `will_suggest`) for Tier 2 Player-Partner Agency.
-  4. `maras_matchmaking_verify.prompt` — Per-actor `noul` matchmaking validator using bilateral consent (`willing_a && willing_b`) for `new`/`advance`/`open`/`close` and unilateral initiation (`wants_breakup_a || wants_breakup_b`) for `breakup`.
-- `maras_evaluations/*.prompt` (Chat LLM JSON prompts via `PublicSendCustomPromptToLLM`):
+  3. `maras_player_partner_cheating.prompt` — Mode-switched Jev decisions (`candidate_select` via `decision` `choice`, and `breakup_affair` / `breakup_open_lover` / `suggest_open` / `suggest_close` via `noul` questions) for Tier 2 Player-Partner Agency.
+  4. `maras_matchmaking_verify.prompt` — Per-actor `noul` matchmaking validator enforcing bilateral consent (`willing_a && willing_b`) for `new`/`advance`/`open`/`close` and unilateral initiation (`wants_breakup_a || wants_breakup_b`) for `breakup`.
+- `maras_evaluations/*.prompt` (7 Chat LLM JSON prompts via `PublicSendCustomPromptToLLM`):
   1. `maras_matchmaking_scheduled.prompt` — Multi-pair autonomous matchmaking evaluator.
   2. `maras_matchmaking_manual.prompt` — Targeted single-NPC or pair matchmaking evaluator.
-  3. `maras_matchmaking_verify.prompt` — Legacy/fallback sanity, lore, and relationship validator for proposed matches.
-  4. `maras_event_memories.prompt` — Unified multi-participant episode memory generator (`SkyrimNetMemoryService`, used when `skyrimnetUseLLMMemories` is enabled; when disabled, `SkyrimNetMemoryService::BuildProgrammaticMemories` constructs first-person memories in C++ without an LLM call).
-  5. `maras_paternity_evaluation.prompt` — Legacy/fallback evaluator for whether a paternity secret is exposed at birth or from the Dashboard.
-  6. `maras_step_in_evaluation.prompt` — Legacy/fallback evaluator for biological father step-in after a paternity divorce.
-  7. `maras_player_partner_cheating.prompt` — Legacy/fallback evaluator for Tier 2 Player-Partner Agency actions (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`).
-  8. `maras_npc_couple_banter.prompt` — Generates contextual conversation seeds for `BanterCoordinatorService`.
+  3. `maras_matchmaking_verify.prompt` — Fallback sanity, lore, and relationship validator for proposed matches.
+  4. `maras_event_memories.prompt` — Unified multi-participant episode memory generator (`SkyrimNetMemoryService`, used when `skyrimnetUseLLMMemories` is enabled; when disabled, `SkyrimNetMemoryService` builds programmatic first-person memories in C++ without an LLM call).
+  5. `maras_paternity_evaluation.prompt` — Fallback evaluator for whether a paternity secret is exposed at birth or from the Dashboard.
+  6. `maras_step_in_evaluation.prompt` — Fallback evaluator for biological father step-in after a paternity divorce.
+  7. `maras_player_partner_cheating.prompt` — Fallback evaluator for Tier 2 Player-Partner Agency actions.
 

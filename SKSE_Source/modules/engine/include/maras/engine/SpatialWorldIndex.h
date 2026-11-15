@@ -239,8 +239,6 @@ namespace MARAS {
         void ProcessActorHomeLocked(RE::FormID actorFormId, RE::FormID cellId);
 
         [[nodiscard]] std::string GetLocationInfo(const RE::TESObjectCELL* cell) const;
-        [[nodiscard]] std::string GetActorsInCellLocked(RE::FormID cellId) const;
-        [[nodiscard]] std::string GetBedsInCellLocked(RE::FormID cellId) const;
 
         [[nodiscard]] std::size_t GetNPCCountLocked() const noexcept { return m_entriesByRef.size(); }
 
@@ -269,8 +267,6 @@ namespace MARAS {
         [[nodiscard]] const NPCEntry* FindByNameLocked(std::string_view searchTerm, NPCFilter filter) const;
         [[nodiscard]] RE::FormID GetRefIDLocked(RE::FormID formID) const;
         [[nodiscard]] RE::FormID GetBaseIDLocked(RE::FormID formID) const;
-        [[nodiscard]] RE::Actor* GetActorFromFormIdLocked(RE::FormID formID) const;
-        [[nodiscard]] RE::FormID ResolveBaseFormIdForBedsLocked(RE::FormID actorFormID) const;
 
         mutable std::shared_mutex m_mutex{};
 

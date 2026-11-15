@@ -122,46 +122,43 @@ namespace MARAS::Domain::Household {
                 continue;
             }
 
-            auto* rec = const_cast<State::AdultChildTravelRecord*>(
-                ws.household.Read().FindAdultChildTravel(cid));
-            if (!rec) {
+            const auto* recPtr = ws.household.Read().FindAdultChildTravel(cid);
+            if (!recPtr) {
                 continue;
             }
+            State::AdultChildTravelRecord rec = *recPtr;
 
             bool justArrived = false;
-            if (rec->arrivedGameDay < 0.0f) {
+            if (rec.arrivedGameDay < 0.0f) {
                 if (const auto* actorSample = spatial.Find(RefId{ cid.raw() })) {
                     bool reached = false;
-                    if (!rec->targetLocationId.IsNull() &&
-                        actorSample->currentLocationId == rec->targetLocationId) {
+                    if (!rec.targetLocationId.IsNull() &&
+                        actorSample->currentLocationId == rec.targetLocationId) {
                         reached = true;
-                    } else if (!rec->targetCellId.IsNull() &&
-                               actorSample->parentCellId == rec->targetCellId) {
+                    } else if (!rec.targetCellId.IsNull() &&
+                               actorSample->parentCellId == rec.targetCellId) {
                         reached = true;
-                    } else if (!rec->targetMarkerId.IsNull()) {
-                        if (const auto distSq = spatial.GetDistanceSquared(RefId{ cid.raw() }, rec->targetMarkerId)) {
+                    } else if (!rec.targetMarkerId.IsNull()) {
+                        if (const auto distSq = spatial.GetDistanceSquared(RefId{ cid.raw() }, rec.targetMarkerId)) {
                             reached = (*distSq <= 300.0f * 300.0f);
                         }
                     }
                     if (reached) {
-                        State::AdultChildTravelRecord updated = *rec;
-                        updated.arrivedGameDay = currentGameDay;
-                        ws.household.Write().UpsertAdultChildTravel(cid, std::move(updated));
-                        rec = const_cast<State::AdultChildTravelRecord*>(
-                            ws.household.Read().FindAdultChildTravel(cid));
+                        rec.arrivedGameDay = currentGameDay;
+                        ws.household.Write().UpsertAdultChildTravel(cid, rec);
                         justArrived = true;
                         out.arrivedChildren.push_back(cid);
                     }
                 }
             }
 
-            if (rec) {
+            {
                 const bool stayElapsed =
-                    (rec->arrivedGameDay >= 0.0f) &&
-                    ((currentGameDay - rec->arrivedGameDay) >= rec->stayDurationDays);
+                    (rec.arrivedGameDay >= 0.0f) &&
+                    ((currentGameDay - rec.arrivedGameDay) >= rec.stayDurationDays);
                 const bool travelTimedOut =
-                    (rec->assignedGameDay >= 0.0f) &&
-                    ((currentGameDay - rec->assignedGameDay) >= kMaxTravelTimeoutDays);
+                    (rec.assignedGameDay >= 0.0f) &&
+                    ((currentGameDay - rec.assignedGameDay) >= kMaxTravelTimeoutDays);
                 if (!justArrived && (stayElapsed || travelTimedOut)) {
                     out.childrenNeedingRotation.push_back(cid);
                 }

@@ -43,6 +43,9 @@ namespace MARAS::State {
         inline constexpr std::uint32_t kExtChildBeastbloodLYC1 = MakeFourCC('L', 'Y', 'C', '1');
         inline constexpr std::uint32_t kExtChildLineageCHD2 = MakeFourCC('C', 'H', 'D', '2');
 
+        // Optional inline extension magic inside 'DCSD' (omitted when no deceased secrecy flags exist)
+        inline constexpr std::uint32_t kExtDeceasedSecrecyDCS1 = MakeFourCC('D', 'C', 'S', '1');
+
         // 'CNFG' sub-version header
         inline constexpr std::uint8_t kSettingsVersionMarker = 0xFFu;
         inline constexpr std::uint32_t kSettingsSubVersion = 4u;

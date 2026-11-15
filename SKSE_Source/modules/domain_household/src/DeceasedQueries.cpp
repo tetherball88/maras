@@ -38,6 +38,11 @@ namespace MARAS::Domain::Household {
             if (parentActor.IsNull() || parentActor.IsUnknownFather()) {
                 return false;
             }
+            const std::uint32_t visibleBioFatherRaw =
+                cInfo.hasUndiscoveredPaternitySecret
+                    ? cInfo.publicBioFatherBaseId.raw()
+                    : cInfo.bioFatherBaseId.raw();
+
             if (parentActor.IsPlayer() ||
                 parentActor.raw() == Foundation::kPlayerBaseRawId ||
                 parentBase.raw() == Foundation::kPlayerRefRawId ||
@@ -50,7 +55,7 @@ namespace MARAS::Domain::Household {
                        isPlayerStored(cInfo.guardianABaseId.raw()) ||
                        isPlayerStored(cInfo.guardianBBaseId.raw()) ||
                        isPlayerStored(cInfo.bioMotherBaseId.raw()) ||
-                       isPlayerStored(cInfo.bioFatherBaseId.raw());
+                       isPlayerStored(visibleBioFatherRaw);
             }
 
             auto matchesId = [&](std::uint32_t stored) noexcept {
@@ -68,7 +73,7 @@ namespace MARAS::Domain::Household {
                    matchesId(cInfo.guardianABaseId.raw()) ||
                    matchesId(cInfo.guardianBBaseId.raw()) ||
                    matchesId(cInfo.bioMotherBaseId.raw()) ||
-                   matchesId(cInfo.bioFatherBaseId.raw());
+                   matchesId(visibleBioFatherRaw);
         }
 
         template <typename Pred>
@@ -88,7 +93,9 @@ namespace MARAS::Domain::Household {
                 return false;
             }
             for (const auto& p : rec->partnersAtDeath) {
-                if (pred(p.statusAtDeath) && MatchesPartnerEntry(p, partnerActor, partnerBase, partnerRef)) {
+                const RelationshipStatus visibleSt =
+                    p.isSecretAffair ? p.publicStatusAtDeath : p.statusAtDeath;
+                if (pred(visibleSt) && MatchesPartnerEntry(p, partnerActor, partnerBase, partnerRef)) {
                     return true;
                 }
             }
@@ -194,7 +201,8 @@ namespace MARAS::Domain::Household {
                 continue;
             }
             for (const auto& p : rec.partnersAtDeath) {
-                if (Foundation::IsActivePartnerStatus(p.statusAtDeath) &&
+                const RelationshipStatus visibleSt = p.isSecretAffair ? p.publicStatusAtDeath : p.statusAtDeath;
+                if (Foundation::IsActivePartnerStatus(visibleSt) &&
                     MatchesPartnerEntry(p, survivingPartner, partnerBase, partnerRef)) {
                     const BaseId id = !rec.baseId.IsNull() ? rec.baseId : BaseId{ rec.refId.raw() };
                     if (!id.IsNull() && std::find(out.begin(), out.end(), id) == out.end()) {

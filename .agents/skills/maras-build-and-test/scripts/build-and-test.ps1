@@ -82,6 +82,7 @@ if (-not $SkipHeaderCheck) {
 
     $AllModuleAndTestHeaders = @(
         (Join-Path $SkseDir "modules"),
+        (Join-Path $SkseDir "plugin"),
         (Join-Path $SkseDir "tests")
     ) | Where-Object { Test-Path $_ } | Get-ChildItem -Recurse -Include "*.h","*.hpp"
     $RootPchHeaders = @("pch_core.h", "pch_engine.h") | ForEach-Object { Join-Path $SkseDir $_ } | Where-Object { Test-Path $_ } | Get-Item

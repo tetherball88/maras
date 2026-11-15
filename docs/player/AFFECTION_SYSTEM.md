@@ -93,7 +93,7 @@ If you vanish for 3+ days without visiting, daily **Loneliness Decay** kicks in 
      - 🐺 **Independent (`1.25x`)** | 🌱 **Humble (`1.35x`)** | ❤️ **Romantic (`1.50x`)** | 👑 **Proud (`1.75x`)** | 👀 **Jealous (`2.00x`)**
 
 ### 🛡️ The "Take Them With You" Hack (`+6`/day!)
-If a partner is actively **following you** as a companion, they **never** get lonely. In fact, spending the day adventuring together gives them **`+6` Affection every single day** (plus a **`1.5x` boost** to their spouse buffs!).
+If a partner is actively **following you** as a companion, they **never** get lonely. In fact, spending the day adventuring together gives them **`+6` Affection every single day**—and if you're married, activates their **Follower Combat Buff** (`1.0x × Mood Multiplier`)!
 
 ### 🏘️ Big Household Relief (Polygamy Mercy Rule)
 Running a massive household with 8 spouses across 3 castles? M.A.R.A.S won't punish you for not having a time machine. Loneliness decay is automatically softened the more partners you have:
@@ -104,7 +104,7 @@ Running a massive household with 8 spouses across 3 castles? M.A.R.A.S won't pun
 
 > [!TIP]
 > **Want to turn off decay completely (or make it twice as brutal)?**
-> Open the **[M.A.R.A.S Dashboard](UI_DASHBOARD_GUIDE.md) (`Alt + B`) $\rightarrow$ Settings** tab and adjust the **Affection Decay Multiplier** slider anywhere from **`0.0` (Zero Decay — Purely Cozy Mode)** to **`2.0` (Hardcore Relationship Simulator)**.
+> Open the **[M.A.R.A.S Dashboard](UI_DASHBOARD_GUIDE.md) (`Alt + B`) $\rightarrow$ Settings $\rightarrow$ General** and adjust the **Affection Decay Multiplier** slider anywhere from **`0.0` (Zero Decay — Purely Cozy Mode)** to **`2.0` (Hardcore Relationship Simulator)**.
 
 ---
 
@@ -117,9 +117,10 @@ Some moments are too huge for daily caps and hit your partner's **Permanent Affe
 > **Mod Requirement**: By default in base Skyrim + M.A.R.A.S, only **Vanilla Adoption** is available. Pregnancy, childbirth, and children growing up require either **Fertility Mode Reloaded (FMR)** or **BeeingFemale** installed!
 
 - **Adopting a Child Together**: **`+20` Affection** *(works out of the box with Vanilla/Hearthfire Adoption)*.
-- **Conceiving a Baby**: **`+20` Affection** *(requires Fertility Mode Reloaded or BeeingFemale)*.
+- **Conceiving a Baby**: **`+20` Affection** *(requires Fertility Mode Reloaded or BeeingFemale; skipped when the pregnancy is still hidden from the mother's partner!)*.
 - **Giving Birth**: **`+25` Affection** (plus **`+10`** for each additional twin or triplet!).
-- **Child Growing Up**: **`+10` to `+15` Affection** as your child reaches childhood and adulthood milestones.
+- **Child Growing Up**: **`+10` Affection** when growing into a child and **`+15` Affection** when graduating into adulthood.
+- **Secret-Paternity Protection**: Both daily **Quality Time with Kids** (`+1` to `+3`, capped at `+6`/day) and child growth/adulthood milestone affection go to the mother's **Presumed Father** partner when one exists, and are **never** awarded to a biological father who does not know the child is his!
 
 ### 🔓 Open Relationships (Know Your Partner First!)
 Asking a partner to open up your relationship has wildly different results depending on who you're asking:
@@ -168,6 +169,6 @@ When a spouse's affection drops into **Estranged (`0–24`)**, the quest **"Marr
 ## 7. Quick Survival Cheat Sheet 📝
 
 - **Check the Dashboard**: Open the **M.A.R.A.S Dashboard** (`Overview` or `NPC Detail`) whenever you want to see everyone's affection bar and how many days it's been since you last visited.
-- **Bring Your Favorites Along**: Making a spouse your active follower turns loneliness decay into a free **`+6`/day** affection generator *and* gives you a **`1.5x`** buff boost.
+- **Bring Your Favorites Along**: Making a spouse your active follower turns loneliness decay into a free **`+6`/day** affection generator while activating their **Follower Combat Buff** on the road.
 - **Don't Demote a Proud Spouse Without a Plan**: Dropping a **Proud** spouse from Lead (`Rank 1`) down to `Rank 3` costs `-24` Affection in a single day—have some shiny gifts ready!
 - **Tune It Your Way**: If relationship upkeep ever feels too stressful (or too easy!), slide the **Affection Decay Multiplier** in **Settings** until it fits your playthrough. 😉

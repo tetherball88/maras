@@ -374,12 +374,16 @@ namespace MARAS::State {
             ChildStage stage,
             ActorId bioMother,
             ActorId bioFather,
-            ActorId viewer) const noexcept {
-            if (stage != ChildStage::Unborn || !isPregnancySecretForPartner) {
+            ActorId viewer,
+            ActorId motherPartner = ActorId{}) const noexcept {
+            if (stage != ChildStage::Unborn || !isPregnancySecretForPartner || discovered || discoveredByPartner) {
                 return true;
             }
             if (!bioMother.IsNull() && viewer == bioMother) {
                 return true;
+            }
+            if (!motherPartner.IsNull() && !viewer.IsNull() && viewer == motherPartner) {
+                return false;
             }
             if (!bioFather.IsNull() && !bioFather.IsUnknownFather() && viewer == bioFather) {
                 return !isSecretForBioFather || discoveredByBioFather;
@@ -768,6 +772,9 @@ namespace MARAS::State {
         std::string partnerName{};
         RelationshipStatus statusAtDeath{ RelationshipStatus::Unknown };
         bool isPlayer{ false };
+        // Persisted in optional 'DCS1' extension when present:
+        bool isSecretAffair{ false };
+        RelationshipStatus publicStatusAtDeath{ RelationshipStatus::Unknown };
 
         bool operator==(const DeceasedPartnerEntry&) const = default;
     };
@@ -783,6 +790,9 @@ namespace MARAS::State {
         BaseId bioFatherBaseId{};
         bool isAdopted{ true };
         HouseId houseId{};
+        // Persisted in optional 'DCS1' extension when present:
+        BaseId publicBioFatherBaseId{};
+        bool hasUndiscoveredPaternitySecret{ false };
 
         bool operator==(const DeceasedChildMetadata&) const = default;
     };

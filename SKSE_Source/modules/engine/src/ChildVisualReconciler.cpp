@@ -622,7 +622,7 @@ namespace MARAS {
         if (cloneIt != clonedAdultBases_.end() && cloneIt->second) {
             RE::TESNPC* cloneBase = cloneIt->second;
             if (origIt != originalAdultBases_.end() && origIt->second) {
-                if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childActorId)) {
+                if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childActorId); actor && !actor->IsDeleted()) {
                     if (actor->data.objectReference == cloneBase) {
                         actor->data.objectReference = origIt->second;
                     }
@@ -673,8 +673,9 @@ namespace MARAS {
             if (!origBase) continue;
             const auto cloneIt = clonedAdultBases_.find(actorId);
             RE::TESNPC* cloneBase = (cloneIt != clonedAdultBases_.end()) ? cloneIt->second : nullptr;
-            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorId)) {
-                if (!cloneBase || actor->data.objectReference == cloneBase) {
+            if (!cloneBase) continue;
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorId); actor && !actor->IsDeleted()) {
+                if (actor->data.objectReference == cloneBase) {
                     actor->data.objectReference = origBase;
                 }
             }

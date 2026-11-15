@@ -1,6 +1,7 @@
 #pragma once
 
 #include "maras/engine/EngineLogging.h"
+#include "maras/state/SessionEpoch.h"
 
 #include <atomic>
 #include <cstdint>
@@ -66,13 +67,14 @@ namespace MARAS {
         DeferredActorResolver(const DeferredActorResolver&) = delete;
         DeferredActorResolver& operator=(const DeferredActorResolver&) = delete;
 
-        void DrainPending();
+        void DrainPending(State::SessionEpoch expectedEpoch);
         static void ExecuteSync(RE::Actor* actor, std::uint8_t flagMask);
 
         mutable std::mutex mutex_{};
         std::unordered_map<RE::FormID, std::uint8_t> pendingSync_{};
         std::unordered_map<RE::FormID, std::uint8_t> unloadedActors_{};
         bool drainScheduled_{ false };
+        State::SessionEpoch queuedEpoch_{ 0 };
 
         std::atomic<bool> hasMainThread_{ false };
         std::atomic<std::thread::id> mainThreadId_{};

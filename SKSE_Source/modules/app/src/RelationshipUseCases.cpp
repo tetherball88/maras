@@ -2242,6 +2242,25 @@ namespace MARAS::App {
         const float gameDay = GetCurrentGameDays();
         Foundation::DeterministicRng rng(static_cast<std::uint32_t>(actorA ^ actorB ^ 0x517CC1B7u));
 
+        struct ParentChildLinkFlags {
+            bool aLink{ false };
+            bool bLink{ false };
+        };
+        std::unordered_map<RE::FormID, ParentChildLinkFlags> parentChildLinks;
+        if (preSnap->lineage) {
+            for (const auto& [cId, childRec] : preSnap->lineage->AllChildren()) {
+                if (cId.HasPhysicalActor() &&
+                    (childRec.bioMother.raw() == actorA || childRec.bioMother.raw() == actorB ||
+                     childRec.bioFather.raw() == actorA || childRec.bioFather.raw() == actorB)) {
+                    parentChildLinks.emplace(
+                        cId.raw(),
+                        ParentChildLinkFlags{
+                            HasEngineParentChildLink(cId.raw(), actorA),
+                            HasEngineParentChildLink(cId.raw(), actorB) });
+                }
+            }
+        }
+
         std::unordered_set<RE::FormID> affectedActors{ actorA, actorB };
         State::WorldMutationResult custodyMut;
 
@@ -2339,17 +2358,19 @@ namespace MARAS::App {
                 if (child->bioMother.raw() == actorA || child->bioMother.raw() == actorB ||
                     child->bioFather.raw() == actorA || child->bioFather.raw() == actorB) {
                     if (cId.HasPhysicalActor()) {
-                        const bool aLink = HasEngineParentChildLink(cId.raw(), actorA);
-                        const bool bLink = HasEngineParentChildLink(cId.raw(), actorB);
-                        if (aLink && !bLink) {
-                            if (auto* mutChild = ws.lineage.Write().FindChildMutable(cId)) {
-                                if (mutChild->bioMother.raw() == actorB) mutChild->bioMother = State::ActorId{};
-                                if (mutChild->bioFather.raw() == actorB) mutChild->bioFather = State::ActorId{};
-                            }
-                        } else if (bLink && !aLink) {
-                            if (auto* mutChild = ws.lineage.Write().FindChildMutable(cId)) {
-                                if (mutChild->bioMother.raw() == actorA) mutChild->bioMother = State::ActorId{};
-                                if (mutChild->bioFather.raw() == actorA) mutChild->bioFather = State::ActorId{};
+                        if (const auto linkIt = parentChildLinks.find(cId.raw()); linkIt != parentChildLinks.end()) {
+                            const bool aLink = linkIt->second.aLink;
+                            const bool bLink = linkIt->second.bLink;
+                            if (aLink && !bLink) {
+                                if (auto* mutChild = ws.lineage.Write().FindChildMutable(cId)) {
+                                    if (mutChild->bioMother.raw() == actorB) mutChild->bioMother = State::ActorId{};
+                                    if (mutChild->bioFather.raw() == actorB) mutChild->bioFather = State::ActorId{};
+                                }
+                            } else if (bLink && !aLink) {
+                                if (auto* mutChild = ws.lineage.Write().FindChildMutable(cId)) {
+                                    if (mutChild->bioMother.raw() == actorA) mutChild->bioMother = State::ActorId{};
+                                    if (mutChild->bioFather.raw() == actorA) mutChild->bioFather = State::ActorId{};
+                                }
                             }
                         }
                     }
@@ -2726,13 +2747,13 @@ namespace MARAS::App {
     // Classification, Overrides, Factions, Home Markers & Keywords
     // =========================================================================
 
-    const Engine::NPCOverrideData* RelationshipUseCases::FindOverrideData(RE::FormID npcFormID) const {
+    const Engine::NPCOverrideData* RelationshipUseCases::FindOverrideData(RE::FormID npcFormID,
+                                                                          RE::FormID resolvedBaseID) const {
         if (auto it = npcOverrides_.find(npcFormID); it != npcOverrides_.end()) {
             return &it->second;
         }
-        if (const RE::FormID baseId = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
-            baseId != 0 && baseId != npcFormID) {
-            if (auto it = npcOverrides_.find(baseId); it != npcOverrides_.end()) {
+        if (resolvedBaseID != 0 && resolvedBaseID != npcFormID) {
+            if (auto it = npcOverrides_.find(resolvedBaseID); it != npcOverrides_.end()) {
                 return &it->second;
             }
         }
@@ -2885,24 +2906,27 @@ namespace MARAS::App {
     }
 
     std::optional<std::string> RelationshipUseCases::GetSocialClassOverride(RE::FormID npcFormID) const {
+        const RE::FormID baseId = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
         std::shared_lock lock(overridesMutex_);
-        if (const auto* ov = FindOverrideData(npcFormID)) {
+        if (const auto* ov = FindOverrideData(npcFormID, baseId)) {
             return ov->socialClass;
         }
         return std::nullopt;
     }
 
     std::optional<std::string> RelationshipUseCases::GetSkillTypeOverride(RE::FormID npcFormID) const {
+        const RE::FormID baseId = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
         std::shared_lock lock(overridesMutex_);
-        if (const auto* ov = FindOverrideData(npcFormID)) {
+        if (const auto* ov = FindOverrideData(npcFormID, baseId)) {
             return ov->skillType;
         }
         return std::nullopt;
     }
 
     std::optional<std::string> RelationshipUseCases::GetTemperamentOverride(RE::FormID npcFormID) const {
+        const RE::FormID baseId = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
         std::shared_lock lock(overridesMutex_);
-        if (const auto* ov = FindOverrideData(npcFormID)) {
+        if (const auto* ov = FindOverrideData(npcFormID, baseId)) {
             return ov->temperament;
         }
         return std::nullopt;

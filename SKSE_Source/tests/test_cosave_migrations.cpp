@@ -890,4 +890,133 @@ namespace MARAS::Tests {
         MARAS_CHECK(!loaded.household->GetTenantStayAtHome(gradSpouseChild.raw()));
     }
 
+    MARAS_TEST(CoSaveMigrations, DeceasedSecrecyExtensionRoundTripsAndOmitsWhenAbsent) {
+        class ShiftResolver final : public IFormIdResolver {
+        public:
+            bool ResolveFormId(std::uint32_t oldRawId, std::uint32_t& outNewRawId) const noexcept override {
+                if (oldRawId == 0) {
+                    outNewRawId = 0;
+                    return false;
+                }
+                if ((oldRawId & 0xFF000000u) == 0x05000000u) {
+                    outNewRawId = (oldRawId & 0x00FFFFFFu) | 0x06000000u;
+                    return true;
+                }
+                outNewRawId = oldRawId;
+                return true;
+            }
+        };
+
+        auto findDcsdPayload = [](const std::vector<CoSaveRecordChunk>& chunks) -> std::vector<std::uint8_t> {
+            for (const auto& c : chunks) {
+                if (c.type == CoSaveConstants::kChunkDCSD) {
+                    return c.payload;
+                }
+            }
+            return {};
+        };
+
+        // 1. Plain deceased record with NO secrecy flags omits 'DCS1' completely
+        {
+            WorldState plain{};
+            DeceasedActorRecord rec{};
+            rec.baseId = BaseId{ 0x05001000u };
+            rec.refId = RefId{ 0x05001001u };
+            rec.name = "PlainDeceased";
+            rec.isChild = false;
+            rec.partnersAtDeath.push_back(DeceasedPartnerEntry{
+                .partnerBaseId = BaseId{ 0x05002000u },
+                .partnerRefId = RefId{ 0x05002001u },
+                .partnerName = "PublicSpouse",
+                .statusAtDeath = RelationshipStatus::Married,
+                .isPlayer = false,
+            });
+            plain.deceased.Write().UpsertRecord(rec);
+
+            InMemoryCoSaveWriter wPlain{};
+            MARAS_REQUIRE(SaveWorldState(plain, wPlain));
+            const auto dcsdBytes = findDcsdPayload(wPlain.Records());
+            MARAS_REQUIRE(!dcsdBytes.empty());
+            std::uint32_t tailMagic = 0;
+            if (dcsdBytes.size() >= sizeof(std::uint32_t)) {
+                std::memcpy(&tailMagic, dcsdBytes.data() + dcsdBytes.size() - sizeof(std::uint32_t), sizeof(std::uint32_t));
+            }
+            MARAS_CHECK(tailMagic != CoSaveConstants::kExtDeceasedSecrecyDCS1);
+        }
+
+        // 2. Secret affair & secret paternity metadata round-trip cleanly with FormID remapping
+        WorldState src{};
+        {
+            DeceasedActorRecord adult{};
+            adult.baseId = BaseId{ 0x05001000u };
+            adult.refId = RefId{ 0x05001001u };
+            adult.name = "CheatingDeceased";
+            adult.isChild = false;
+            adult.partnersAtDeath.push_back(DeceasedPartnerEntry{
+                .partnerBaseId = BaseId{ 0x05002000u },
+                .partnerRefId = RefId{ 0x05002001u },
+                .partnerName = "ExDivorcedAffair",
+                .statusAtDeath = RelationshipStatus::Lover,
+                .isPlayer = false,
+                .isSecretAffair = true,
+                .publicStatusAtDeath = RelationshipStatus::Divorced,
+            });
+            adult.partnersAtDeath.push_back(DeceasedPartnerEntry{
+                .partnerBaseId = BaseId{ Foundation::kPlayerRefRawId },
+                .partnerRefId = RefId::Player(),
+                .partnerName = "PlayerParamour",
+                .statusAtDeath = RelationshipStatus::Lover,
+                .isPlayer = true,
+                .isSecretAffair = true,
+                .publicStatusAtDeath = RelationshipStatus::Unknown,
+            });
+            src.deceased.Write().UpsertRecord(adult);
+
+            DeceasedActorRecord child{};
+            child.baseId = BaseId{ 0x05003000u };
+            child.refId = RefId{ 0x05003001u };
+            child.name = "SecretFatherChild";
+            child.isChild = true;
+            child.childInfo = DeceasedChildMetadata{
+                .guardianABaseId = BaseId{ 0x05001000u },
+                .guardianARefId = RefId{ 0x05001001u },
+                .guardianAName = "Mother",
+                .guardianBBaseId = BaseId{ 0x05002000u },
+                .guardianBRefId = RefId{ 0x05002001u },
+                .guardianBName = "PresumedDad",
+                .bioMotherBaseId = BaseId{ 0x05001000u },
+                .bioFatherBaseId = BaseId{ 0x05004000u },
+                .isAdopted = false,
+                .houseId = HouseId{ 0x05005000u },
+                .publicBioFatherBaseId = BaseId{ 0x05002000u },
+                .hasUndiscoveredPaternitySecret = true,
+            };
+            src.deceased.Write().UpsertRecord(child);
+        }
+
+        InMemoryCoSaveWriter writer{};
+        MARAS_REQUIRE(SaveWorldState(src, writer));
+
+        WorldState loaded{};
+        ShiftResolver shift{};
+        InMemoryCoSaveReader reader(writer.Records());
+        const CoSaveLoadReport report = LoadWorldState(loaded, reader, shift);
+        MARAS_REQUIRE(report.allChunksSucceeded);
+
+        const DeceasedActorRecord* loadedAdult = loaded.deceased->FindByActor(ActorId{ 0x06001001u }, BaseId{ 0x06001000u });
+        MARAS_REQUIRE(loadedAdult != nullptr);
+        MARAS_REQUIRE_EQ(loadedAdult->partnersAtDeath.size(), std::size_t{ 2 });
+        MARAS_CHECK(loadedAdult->partnersAtDeath[0].isSecretAffair);
+        MARAS_CHECK_EQ(loadedAdult->partnersAtDeath[0].publicStatusAtDeath, RelationshipStatus::Divorced);
+        MARAS_CHECK(loadedAdult->partnersAtDeath[1].isSecretAffair);
+        MARAS_CHECK_EQ(loadedAdult->partnersAtDeath[1].publicStatusAtDeath, RelationshipStatus::Unknown);
+
+        const DeceasedActorRecord* loadedChild = loaded.deceased->FindByActor(ActorId{ 0x06003001u }, BaseId{ 0x06003000u });
+        MARAS_REQUIRE(loadedChild != nullptr);
+        MARAS_REQUIRE(loadedChild->childInfo.has_value());
+        MARAS_CHECK(loadedChild->childInfo->hasUndiscoveredPaternitySecret);
+        MARAS_CHECK_EQ(loadedChild->childInfo->bioFatherBaseId, BaseId{ 0x06004000u });
+        MARAS_CHECK_EQ(loadedChild->childInfo->publicBioFatherBaseId, BaseId{ 0x06002000u });
+    }
+
 }  // namespace MARAS::Tests

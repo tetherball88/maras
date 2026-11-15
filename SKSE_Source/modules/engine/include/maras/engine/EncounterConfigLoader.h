@@ -4,6 +4,9 @@
 
 #include <atomic>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <string_view>
 
 namespace MARAS::Engine {
@@ -28,20 +31,31 @@ namespace MARAS::Engine {
 
         [[nodiscard]] bool IsLoaded() const noexcept { return loaded_.load(std::memory_order_acquire); }
 
-        [[nodiscard]] const MARAS::Domain::Agency::EncounterTemplateCatalog& GetCatalog() const noexcept {
+        [[nodiscard]] std::shared_ptr<const MARAS::Domain::Agency::EncounterTemplateCatalog> GetCatalog() const noexcept {
+            std::lock_guard lock(mutex_);
             return catalog_;
         }
 
-        [[nodiscard]] const MARAS::Domain::Agency::EncounterTemplateSpec* FindTemplate(
-            std::string_view id) const noexcept {
-            return catalog_.FindTemplate(id);
+        [[nodiscard]] std::optional<MARAS::Domain::Agency::EncounterTemplateSpec> FindTemplate(
+            std::string_view id) const {
+            const auto catalog = GetCatalog();
+            if (!catalog) {
+                return std::nullopt;
+            }
+            if (const auto* spec = catalog->FindTemplate(id)) {
+                return *spec;
+            }
+            return std::nullopt;
         }
 
     private:
         EncounterConfigLoader() = default;
         ~EncounterConfigLoader() = default;
 
-        MARAS::Domain::Agency::EncounterTemplateCatalog catalog_;
+        mutable std::mutex mutex_;
+        std::shared_ptr<const MARAS::Domain::Agency::EncounterTemplateCatalog> catalog_{
+            std::make_shared<MARAS::Domain::Agency::EncounterTemplateCatalog>()
+        };
         std::atomic<bool> loaded_{ false };
     };
 

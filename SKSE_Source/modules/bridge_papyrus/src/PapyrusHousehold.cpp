@@ -3,8 +3,8 @@
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/engine/EngineLogging.h"
-#include "maras/engine/PlayerChildrenEngineOps.h"
 #include "maras/engine/SpatialWorldIndex.h"
+#include "maras/state/WorldStore.h"
 
 namespace MARAS::PapyrusInterface {
 
@@ -233,7 +233,15 @@ namespace MARAS::PapyrusInterface {
         }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::RelationshipUseCases::GetSingleton().GetOrCreateHomeMarker(npc);
+        const auto markerId = App::RelationshipUseCases::GetSingleton().GetHomeMarker(npc->GetFormID());
+        if (!markerId || *markerId == 0) {
+            return nullptr;
+        }
+        if (auto* marker = RE::TESForm::LookupByID<RE::TESObjectREFR>(*markerId);
+            marker && !marker->IsDeleted()) {
+            return marker;
+        }
+        return nullptr;
     }
 
     bool SetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc, RE::TESObjectREFR* marker) {
@@ -253,7 +261,16 @@ namespace MARAS::PapyrusInterface {
         }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return PlayerChildrenEngineOps::GetSingleton().GetOrCreateChildHomeMarker(child);
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* st = snap->household ? snap->household->FindChildState(State::ChildId{ child->GetFormID() }) : nullptr;
+        if (!st || st->homeMarkerId.IsNull()) {
+            return nullptr;
+        }
+        if (auto* marker = RE::TESForm::LookupByID<RE::TESObjectREFR>(st->homeMarkerId.raw());
+            marker && !marker->IsDeleted()) {
+            return marker;
+        }
+        return nullptr;
     }
 
 }  // namespace MARAS::PapyrusInterface

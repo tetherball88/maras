@@ -52,12 +52,20 @@ namespace MARAS {
         }
 
         bool shouldSchedule = false;
+        SessionEpoch scheduleEpoch = 0;
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            const SessionEpoch curEpoch = GetSessionEpoch();
+            if (queuedEpoch_ != curEpoch) {
+                pendingSync_.clear();
+                drainScheduled_ = false;
+                queuedEpoch_ = curEpoch;
+            }
             pendingSync_[actorId] |= mask;
             if (!drainScheduled_) {
                 drainScheduled_ = true;
                 shouldSchedule = true;
+                scheduleEpoch = curEpoch;
             }
         }
 
@@ -65,13 +73,14 @@ namespace MARAS {
             return;
         }
 
-        const SessionEpoch epoch = GetSessionEpoch();
-        if (!AddEpochTask(epoch, "DeferredActorResolver::DrainPending", []() {
+        if (!AddEpochTask(scheduleEpoch, "DeferredActorResolver::DrainPending", [scheduleEpoch]() {
                 std::lock_guard lock(GetPapyrusMutex());
-                DeferredActorResolver::GetSingleton().DrainPending();
+                DeferredActorResolver::GetSingleton().DrainPending(scheduleEpoch);
             })) {
             std::lock_guard<std::mutex> lock(mutex_);
-            drainScheduled_ = false;
+            if (queuedEpoch_ == scheduleEpoch) {
+                drainScheduled_ = false;
+            }
         }
     }
 
@@ -139,6 +148,7 @@ namespace MARAS {
             pendingSync_.clear();
             unloadedActors_.clear();
             drainScheduled_ = false;
+            queuedEpoch_ = GetSessionEpoch();
         }
         if (clearedPending > 0 || clearedUnloaded > 0) {
             MARAS_LOG_DEBUG("[DeferredActorResolver] Revert cleared {} pending and {} unloaded actor entries",
@@ -156,10 +166,13 @@ namespace MARAS {
         return pendingSync_.size();
     }
 
-    void DeferredActorResolver::DrainPending() {
+    void DeferredActorResolver::DrainPending(SessionEpoch expectedEpoch) {
         std::vector<std::pair<RE::FormID, std::uint8_t>> batch;
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            if (queuedEpoch_ != expectedEpoch || !IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
             drainScheduled_ = false;
             batch.reserve(pendingSync_.size());
             for (const auto& [actorId, mask] : pendingSync_) {

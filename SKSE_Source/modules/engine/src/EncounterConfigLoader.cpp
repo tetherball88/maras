@@ -181,12 +181,12 @@ namespace MARAS::Engine {
     }
 
     bool EncounterConfigLoader::LoadFromFolder(const std::filesystem::path& folderPath) {
-        catalog_.Clear();
-        loaded_.store(false, std::memory_order_release);
+        auto nextCatalog = std::make_shared<MARAS::Domain::Agency::EncounterTemplateCatalog>();
 
         std::error_code ec;
         if (!std::filesystem::exists(folderPath, ec) || !std::filesystem::is_directory(folderPath, ec)) {
             MARAS_LOG_WARN("[EncounterConfigLoader] Folder does not exist: {}", folderPath.string());
+            Clear();
             return false;
         }
 
@@ -205,20 +205,29 @@ namespace MARAS::Engine {
             if (!JsonOverrideLoader::LoadJsonFile(file, root, "EncounterConfigLoader")) {
                 continue;
             }
-            if (ApplyTemplateObject(root, file, catalog_)) {
+            if (ApplyTemplateObject(root, file, *nextCatalog)) {
                 ++loadedFiles;
             }
         }
 
-        const bool anyLoaded = catalog_.Size() > 0;
+        const std::size_t templateCount = nextCatalog->Size();
+        const bool anyLoaded = templateCount > 0;
+        {
+            std::lock_guard lock(mutex_);
+            catalog_ = std::move(nextCatalog);
+        }
         loaded_.store(anyLoaded, std::memory_order_release);
         MARAS_LOG_INFO("[EncounterConfigLoader] Loaded {} encounter template(s) from {}/{} file(s) in '{}'",
-                       catalog_.Size(), loadedFiles, files.size(), folderPath.string());
+                       templateCount, loadedFiles, files.size(), folderPath.string());
         return anyLoaded;
     }
 
     void EncounterConfigLoader::Clear() noexcept {
-        catalog_.Clear();
+        auto emptyCatalog = std::make_shared<MARAS::Domain::Agency::EncounterTemplateCatalog>();
+        {
+            std::lock_guard lock(mutex_);
+            catalog_ = std::move(emptyCatalog);
+        }
         loaded_.store(false, std::memory_order_release);
     }
 

@@ -665,9 +665,12 @@ namespace MARAS::Bridge::SkyrimNet {
                         5000);
                     if (resp.statusCode == 200 && !resp.body.empty()) {
                         nlohmann::json parsed = nlohmann::json::parse(resp.body, nullptr, false);
-                        if (parsed.is_object() && parsed.value("success", false)) {
+                        if (parsed.is_object() &&
+                            parsed.contains("success") && parsed["success"].is_boolean() &&
+                            parsed["success"].get<bool>() &&
+                            parsed.contains("renderedContent") && parsed["renderedContent"].is_string()) {
                             std::string rendered = MARAS::Foundation::StringUtils::TrimStd(
-                                parsed.value("renderedContent", ""));
+                                parsed["renderedContent"].get<std::string>());
                             if (!rendered.empty()) {
                                 return rendered;
                             }
@@ -1196,12 +1199,13 @@ namespace MARAS::Bridge::SkyrimNet {
 
     SkyrimNetProfileService::~SkyrimNetProfileService() {
         if (queueState_) {
+            queueState_->shuttingDown.store(true, std::memory_order_release);
             std::lock_guard<std::mutex> lock(queueState_->queueMutex);
             queueState_->pendingQueue.clear();
         }
         workerThread_.request_stop();
         if (workerThread_.joinable()) {
-            workerThread_.join();
+            workerThread_.detach();
         }
     }
 
@@ -1249,7 +1253,8 @@ namespace MARAS::Bridge::SkyrimNet {
         std::optional<std::uint64_t> evictedStageKey;
         {
             std::lock_guard<std::mutex> lock(queueState_->queueMutex);
-            if (!MARAS::IsSessionEpochCurrent(taskData->sessionEpoch)) {
+            if (queueState_->shuttingDown.load(std::memory_order_acquire) ||
+                !MARAS::IsSessionEpochCurrent(taskData->sessionEpoch)) {
                 return;
             }
             constexpr std::size_t kMaxPendingTasks = 32;
@@ -1291,7 +1296,9 @@ namespace MARAS::Bridge::SkyrimNet {
             std::unique_ptr<ChildProfileContextData> taskData;
             {
                 std::lock_guard<std::mutex> lock(queueState->queueMutex);
-                if (stopToken.stop_requested() || queueState->pendingQueue.empty()) {
+                if (stopToken.stop_requested() ||
+                    queueState->shuttingDown.load(std::memory_order_acquire) ||
+                    queueState->pendingQueue.empty()) {
                     queueState->workerActive = false;
                     return;
                 }
@@ -1301,12 +1308,29 @@ namespace MARAS::Bridge::SkyrimNet {
             if (!taskData) {
                 continue;
             }
+            if (stopToken.stop_requested() || queueState->shuttingDown.load(std::memory_order_acquire)) {
+                std::lock_guard<std::mutex> lock(queueState->queueMutex);
+                queueState->workerActive = false;
+                return;
+            }
             if (!MARAS::IsSessionEpochCurrent(taskData->sessionEpoch)) {
                 MARAS_LOG_DEBUG("[SkyrimNetProfile] Dropping queued profile task for {:08X} ('{}'): stale session epoch",
                                 taskData->childID, taskData->childName);
                 continue;
             }
-            ExecuteAsyncChildProfileFlow(*taskData, stopToken);
+            try {
+                ExecuteAsyncChildProfileFlow(*taskData, stopToken);
+            } catch (const std::exception& e) {
+                if (!queueState->shuttingDown.load(std::memory_order_acquire) && !stopToken.stop_requested()) {
+                    MARAS_LOG_ERROR("[SkyrimNetProfile] Exception in WorkerLoop for {:08X}: {}",
+                                    taskData->childID, e.what());
+                }
+            } catch (...) {
+                if (!queueState->shuttingDown.load(std::memory_order_acquire) && !stopToken.stop_requested()) {
+                    MARAS_LOG_ERROR("[SkyrimNetProfile] Unknown exception in WorkerLoop for {:08X}",
+                                    taskData->childID);
+                }
+            }
         }
     }
 

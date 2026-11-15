@@ -19,17 +19,6 @@ namespace MARAS::State {
             }
         }
 
-        [[nodiscard]] constexpr bool IsRomanticOrExStatus(RelationshipStatus st) noexcept {
-            return st == RelationshipStatus::Married ||
-                   st == RelationshipStatus::Engaged ||
-                   st == RelationshipStatus::Dating ||
-                   st == RelationshipStatus::Lover ||
-                   st == RelationshipStatus::Divorced ||
-                   st == RelationshipStatus::Jilted ||
-                   st == RelationshipStatus::ExDating ||
-                   st == RelationshipStatus::ExLover;
-        }
-
         void ClearResolvedPaternitySecret(ChildRecord& child, bool discoveredByPartner) noexcept {
             child.paternitySecret.discovered = true;
             if (discoveredByPartner) {
@@ -1467,6 +1456,51 @@ namespace MARAS::State {
             cMeta.bioFatherBaseId = resolveStorageBase(c.bioFather);
             cMeta.isAdopted = c.isAdopted;
 
+            {
+                ActorId motherPartner = c.presumedFather;
+                if (motherPartner.IsNull()) {
+                    motherPartner = c.guardians.OtherGuardian(c.bioMother);
+                }
+                if (motherPartner.IsNull() && !c.bioMother.IsNull()) {
+                    motherPartner = relationships->GetPrimaryPartner(c.bioMother);
+                }
+                if (!motherPartner.IsNull() &&
+                    !c.bioMother.IsNull() &&
+                    c.presumedFather.IsNull() &&
+                    !c.paternitySecret.isSecretForPartner &&
+                    !c.guardians.HasGuardian(motherPartner) &&
+                    IsBreakupStatus(relationships->GetStatus(c.bioMother, motherPartner))) {
+                    motherPartner = ActorId{};
+                }
+                const ActorId effectivePresumedFather = !c.presumedFather.IsNull() ? c.presumedFather : motherPartner;
+                const bool isBioSameAsPresumed =
+                    !effectivePresumedFather.IsNull() &&
+                    !c.bioFather.IsNull() &&
+                    effectivePresumedFather == c.bioFather;
+                const bool hasPresumedFather =
+                    !effectivePresumedFather.IsNull() &&
+                    !isBioSameAsPresumed &&
+                    (c.bioMother.IsNull() || effectivePresumedFather != c.bioMother);
+                const auto& sec = c.paternitySecret;
+                const bool secretFromPartnerActive =
+                    !sec.discovered &&
+                    (sec.isSecretForPartner || (c.stage == ChildStage::Unborn && sec.isPregnancySecretForPartner)) &&
+                    !sec.discoveredByPartner;
+                const bool secretFromBioFatherActive =
+                    !sec.discovered &&
+                    sec.isSecretForBioFather &&
+                    !sec.discoveredByBioFather;
+                const bool rawHasUndiscoveredSecret =
+                    sec.HasActiveSecret() && (secretFromPartnerActive || secretFromBioFatherActive);
+                if (!isBioSameAsPresumed && rawHasUndiscoveredSecret) {
+                    cMeta.hasUndiscoveredPaternitySecret = true;
+                    cMeta.publicBioFatherBaseId =
+                        (!c.isAdopted && secretFromPartnerActive && hasPresumedFather)
+                            ? resolveStorageBase(effectivePresumedFather)
+                            : BaseId{};
+                }
+            }
+
             if (const auto* cState = household->FindChildState(c.childId); cState && !cState->currentHouseId.IsNull()) {
                 cMeta.houseId = cState->currentHouseId;
             } else {
@@ -1553,7 +1587,7 @@ namespace MARAS::State {
             std::sort(sortedPairs.begin(), sortedPairs.end());
             for (const CanonicalPairKey& pair : sortedPairs) {
                 const auto* edge = relationships->FindEdge(pair);
-                if (!edge || !IsRomanticOrExStatus(edge->status)) {
+                if (!edge || !Foundation::IsRomanticOrExStatus(edge->status)) {
                     continue;
                 }
                 const ActorId partner = pair.Other(deceasedActor);
@@ -1566,6 +1600,43 @@ namespace MARAS::State {
                 pEntry.partnerBaseId = resolveStorageBase(partner);
                 pEntry.partnerName = meta.GetActorName(partner);
                 pEntry.statusAtDeath = edge->status;
+
+                std::uint32_t secretCount = 0;
+                std::uint32_t publicCount = 0;
+                auto tallyAffairs = [&](const std::vector<AffairRecord>& recs, ActorId expectedParamour) {
+                    for (const auto& ar : recs) {
+                        if (ar.paramour != expectedParamour) {
+                            continue;
+                        }
+                        if (ar.isSecret &&
+                            ar.affairStatus != AffairStatus::Allowed &&
+                            ar.affairStatus != AffairStatus::EndedConfronted) {
+                            ++secretCount;
+                        } else {
+                            ++publicCount;
+                        }
+                    }
+                };
+                tallyAffairs(affairs->GetByCheater(deceasedActor), partner);
+                tallyAffairs(affairs->GetByCheater(partner), deceasedActor);
+                const bool isSecretAffairPair = (secretCount > 0 && publicCount == 0);
+                const bool isMaskEligible =
+                    edge->status == RelationshipStatus::Lover ||
+                    edge->status == RelationshipStatus::Dating ||
+                    edge->status == RelationshipStatus::ExLover ||
+                    edge->status == RelationshipStatus::ExDating ||
+                    edge->status == RelationshipStatus::Candidate;
+                if (isSecretAffairPair && isMaskEligible) {
+                    pEntry.isSecretAffair = true;
+                    for (auto it = edge->statusHistory.rbegin(); it != edge->statusHistory.rend(); ++it) {
+                        if (it->toStatus == RelationshipStatus::Divorced ||
+                            it->toStatus == RelationshipStatus::Jilted) {
+                            pEntry.publicStatusAtDeath = it->toStatus;
+                            break;
+                        }
+                    }
+                }
+
                 rec.partnersAtDeath.push_back(std::move(pEntry));
             }
 

@@ -782,14 +782,11 @@ namespace MARAS::App {
             return false;
         }
 
-        std::unique_lock lock(travelMutex_);
-
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!IsTravelEligibleAdultChild(*snap, childID)) {
             const bool hadTravel =
                 snap->household &&
                 snap->household->FindAdultChildTravel(State::ChildId{ childID }) != nullptr;
-            lock.unlock();
             if (hadTravel) {
                 State::WorldStore::GetSingleton().Modify([childID](State::WorldState& ws) {
                     ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
@@ -809,7 +806,6 @@ namespace MARAS::App {
 
         const auto* existing = snap->household->FindAdultChildTravel(State::ChildId{ childID });
         if (existing && !forceRotate && !existing->targetMarkerId.IsNull()) {
-            lock.unlock();
             PackageReconciler::GetSingleton().ReconcileActor(childID);
             return true;
         }
@@ -838,11 +834,30 @@ namespace MARAS::App {
             rec.arrivedGameDay = currentDay;
         }
 
+        bool upserted = false;
+        bool alreadyAssigned = false;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            const auto* childRec = ws.lineage->FindChild(State::ChildId{ childID });
+            if (!childRec || childRec->stage != Foundation::ChildStage::Adult ||
+                !ws.household->GetTenantHouse(childID).IsNull()) {
+                return;
+            }
+            const auto* cur = ws.household->FindAdultChildTravel(State::ChildId{ childID });
+            if (cur && !forceRotate && !cur->targetMarkerId.IsNull()) {
+                alreadyAssigned = true;
+                return;
+            }
             ws.household.Write().UpsertAdultChildTravel(State::ChildId{ childID }, rec);
+            upserted = true;
         });
 
-        lock.unlock();
+        if (!upserted) {
+            if (alreadyAssigned) {
+                PackageReconciler::GetSingleton().ReconcileActor(childID);
+                return true;
+            }
+            return false;
+        }
 
         // Ensure independent Stage 4 travelers clear stale player-household child custody flags/tenancy.
         LineageUseCases::GetSingleton().OnChildRemovedFromHousehold(childID);
@@ -864,12 +879,9 @@ namespace MARAS::App {
         }
 
         bool erased = false;
-        {
-            std::unique_lock lock(travelMutex_);
-            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                erased = ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
-            });
-        }
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            erased = ws.household.Write().EraseAdultChildTravel(State::ChildId{ childID });
+        });
 
         if (erased && !Foundation::IsSyntheticChildRawId(childID)) {
             PackageReconciler::GetSingleton().ReconcileActor(childID);
@@ -886,30 +898,38 @@ namespace MARAS::App {
         }
 
         Domain::Household::TravelTickOutcome outcome{};
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            outcome = Domain::Household::EvaluateTravelTick(ws, currentGameDay, *spatial);
+        });
+
+        // Evaluate live actor/marker cell arrival outside WorldStore::Modify and locks
+        // for static inn markers not indexed in SpatialActorSnapshot.
+        std::vector<State::ChildId> fallbackArrivedIds;
+        if (const auto snap = State::WorldStore::GetSingleton().Snapshot(); snap && snap->household) {
+            for (const auto& [cid, rec] : snap->household->AllAdultChildTravel()) {
+                if (rec.arrivedGameDay >= 0.0f) {
+                    continue;
+                }
+                auto* actor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(cid.raw());
+                if (!actor) {
+                    actor = RE::TESForm::LookupByID<RE::Actor>(cid.raw());
+                }
+                if (HasActorReachedTravelDestination(actor, rec)) {
+                    fallbackArrivedIds.push_back(cid);
+                }
+            }
+        }
+
         std::vector<RE::FormID> fallbackArrivedChildren;
-
-        {
-            std::unique_lock lock(travelMutex_);
+        if (!fallbackArrivedIds.empty()) {
             State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                outcome = Domain::Household::EvaluateTravelTick(ws, currentGameDay, *spatial);
-
-                // Also evaluate live actor/marker cell arrival for static inn markers not indexed in SpatialActorSnapshot.
-                std::vector<std::pair<State::ChildId, State::AdultChildTravelRecord>> arrivalUpdates;
-                for (const auto& [cid, rec] : ws.household.Read().AllAdultChildTravel()) {
-                    if (rec.arrivedGameDay >= 0.0f) {
+                for (const State::ChildId cid : fallbackArrivedIds) {
+                    const auto* existing = ws.household->FindAdultChildTravel(cid);
+                    if (!existing || existing->arrivedGameDay >= 0.0f) {
                         continue;
                     }
-                    auto* actor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(cid.raw());
-                    if (!actor) {
-                        actor = RE::TESForm::LookupByID<RE::Actor>(cid.raw());
-                    }
-                    if (HasActorReachedTravelDestination(actor, rec)) {
-                        State::AdultChildTravelRecord updated = rec;
-                        updated.arrivedGameDay = currentGameDay;
-                        arrivalUpdates.emplace_back(cid, std::move(updated));
-                    }
-                }
-                for (auto& [cid, updated] : arrivalUpdates) {
+                    State::AdultChildTravelRecord updated = *existing;
+                    updated.arrivedGameDay = currentGameDay;
                     ws.household.Write().UpsertAdultChildTravel(cid, std::move(updated));
                     fallbackArrivedChildren.push_back(cid.raw());
                 }
@@ -1085,9 +1105,26 @@ namespace MARAS::App {
             cellsArr.push_back(std::move(cj));
         }
 
+        nlohmann::json bedOwnersArr = nlohmann::json::array();
+        std::vector<std::pair<RE::FormID, RE::FormID>> sortedBedOwners;
+        sortedBedOwners.reserve(snap->household->AllOriginalBedOwners().size());
+        for (const auto& [bedRef, origOwner] : snap->household->AllOriginalBedOwners()) {
+            sortedBedOwners.emplace_back(bedRef.raw(), origOwner.raw());
+        }
+        std::sort(sortedBedOwners.begin(), sortedBedOwners.end());
+        for (const auto& [bedRaw, ownerRaw] : sortedBedOwners) {
+            nlohmann::json bj = nlohmann::json::object();
+            bj["bedFormID"] = bedRaw;
+            bj["bedHex"] = std::format("{:08X}", bedRaw);
+            bj["originalOwnerFormID"] = ownerRaw;
+            bj["originalOwnerHex"] = std::format("{:08X}", ownerRaw);
+            bedOwnersArr.push_back(std::move(bj));
+        }
+
         root["count"] = cellsArr.size();
         root["sharedCells"] = std::move(cellsArr);
-        root["originalBedOwnerCount"] = snap->household->AllOriginalBedOwners().size();
+        root["originalBedOwnerCount"] = sortedBedOwners.size();
+        root["originalBedOwners"] = std::move(bedOwnersArr);
         return root;
     }
 

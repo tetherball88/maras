@@ -33,15 +33,17 @@ Whenever you talk to an NPC (or two NPCs talk to each other), M.A.R.A.S feeds th
 - **Talking to Your Kids**: If you talk directly to a child (or a grown-up biological son/daughter), *their* AI knows who their biological parents, step-parents, adoptive guardians, and siblings are!
 
 ### 🕵️‍♂️ Strict "No Psychic Spouses" Rule (Secret Filtering!)
-Nothing ruins a good soap opera faster than an AI spouse magically knowing you cheated on them in Riften while they were asleep in Whiterun. M.A.R.A.S prevents AI metagaming:
+Nothing ruins a good soap opera faster than an AI spouse magically knowing you cheated on them in Riften while they were asleep in Whiterun. M.A.R.A.S prevents AI metagaming across both personal awareness and third-party conversation context:
 - **Secret Affairs Stay Secret**: If you (or an NPC) have a **Secret Affair**, the betrayed partner's AI prompt has **zero idea** it's happening—until they catch you, someone confesses, or the affair partner exposes it!
 - **Secret Babies Stay Secret**: If a wife is hiding a **Paternity Secret**, her deceived husband genuinely believes the baby is his own biological child (calling them *"my son/daughter"*) until the truth comes out! And if she hid the pregnancy from the real biological father too, he won't know that kid is his until someone tells him!
+- **Public Target Masking**: When another speaker talks *about* a third NPC (target bio), SkyrimNet shares **public knowledge only**—undiscovered affairs, hidden paternity, unannounced pregnancies, secret siblings, and inherited **Beastblood** are never leaked into someone else's prompt, even if that target personally knows their own secret!
+- **Protected Child Growth & Adulthood Notifications**: When a child with hidden paternity is born, grows from infancy to childhood, departs for training, or graduates into adulthood, M.A.R.A.S splits the event by exact audience—so the **child (both as a kid and as an adult)** and any **unaware presumed father** only see the masked public family story, while unaware biological fathers are excluded completely!
 
 ---
 
 ## 2. Conversational AI Actions: What NPCs Can Do in Chat 🗣️⚡
 
-With SkyrimNet, you don't have to click dialogue menus to change relationships. Based on how your conversation goes, **NPCs can decide to trigger real M.A.R.A.S actions on their own**—both with **you** and with **other nearby NPCs**!
+With SkyrimNet, you don't have to click dialogue menus to change relationships. Based on how your conversation goes, **NPCs can trigger 18 real M.A.R.A.S actions on their own** (17 individual relationship/drama actions plus the `ManageRelationships` multi-action dispatcher)—both with **you** and with **other nearby NPCs**!
 
 ### 💘 Starting & Advancing Romance (Two-Way Proposals!)
 - **When *You* Make a Move**: Flirt with an NPC, ask them out on a date, suggest becoming casual lovers, or propose marriage in voice/text chat! The NPC runs **`ConsiderLoverProposal`**, **`ConsiderDatingProposal`**, or **`ConsiderEngagementProposal`**, weighing their feelings, personality, and your Prestige before saying yes or turning you down!
@@ -90,24 +92,24 @@ Behind the scenes, M.A.R.A.S uses SkyrimNet's Game Master and **Jev Decisions** 
 
 ## 4. Live World Events & Instant Voice Reactions 🎬📢
 
-Whenever a big relationship or family moment happens in gameplay, M.A.R.A.S fires one of **23 live triggers** into SkyrimNet so NPCs remember the moment and **react out loud on the spot**:
+Whenever a big relationship or family moment happens in gameplay, M.A.R.A.S fires one of **25 live triggers** into SkyrimNet so NPCs remember the moment and **react out loud on the spot**:
 
-- 💍 **Romance, Weddings & Polygamy**:
-  - `ttm_dating_proposal` & `ttm_marital_status_change` — Reacting to new courtships, engagements, weddings, breakups, jiltings, and divorces.
+- 💍 **Romance, Weddings & Polygamy (8 Triggers)**:
+  - `ttm_dating_proposal`, `ttm_became_lovers`, `ttm_became_engaged`, & `ttm_marital_status_change` — Reacting to new courtships, becoming official lovers, getting engaged, weddings, breakups, jiltings, and divorces.
   - `ttm_polygamy_blessing` — When Mara blesses your polygamous household!
   - `ttm_spouse_hierarchy_change` — When you promote or demote a spouse in your household ranks *(expect a **Proud** spouse to gloat when promoted—or fume when demoted!)*.
   - `ttm_spouse_affection_change` — When a partner's mood tier shifts (like dropping into *Troubled* or *Estranged*).
   - `ttm_action_decline` — When you turn down an NPC's proposal using **Decline (Explain)**.
-- 🔥 **Open Relationships & Infidelity Caught Live**:
+- 🔥 **Open Relationships & Infidelity Caught Live (6 Triggers)**:
   - `ttm_open_relationship_change` — Opening or closing a relationship.
   - `ttm_open_relationship_walkin` — When your open-relationship partner physically walks into the room while you're getting intimate with a side lover! (They permitted it, so no breakup—though they might still make a comment!)
   - `ttm_cheating_caught` — **Bedroom Walk-Ins!** If a partner walks in on you (or an NPC) cheating in an OStim/SexLab scene, the scene stops and the betrayed partner immediately confronts the cheater! 💥
   - `ttm_affair_confessed`, `ttm_affair_exposed`, & `ttm_affair_resolved` — Immediate reactions to confessions, third-party exposures, and affair showdowns.
-- 👶 **Pregnancy, Birth & Growing Up**:
+- 👶 **Pregnancy, Birth & Growing Up (11 Triggers)**:
   - `ttm_pregnancy_announced`, `ttm_pregnancy_lost`, & `ttm_labor_started` — Discovering a pregnancy, grieving a lost pregnancy, or going into labor!
   - `ttm_child_birth` *(supports single births plus twin/triplet batches!)* & `ttm_child_adopted`.
   - `ttm_child_grew_up`, `ttm_child_sent_to_training`, & `ttm_child_became_adult` — Celebrating your kids growing from infants into children, heading off to guild training, and becoming adult followers!
-  - `ttm_child_parents_changed`, `ttm_child_inherited` *(when a new spouse becomes step-parent to your kids or vice versa)*, & `ttm_paternity_secret_resolved`.
+  - `ttm_child_parents_changed`, `ttm_child_inherited` *(when a new spouse becomes step-parent to your kids or custody shifts after a parent's death)*, & `ttm_paternity_secret_resolved`.
 
 ---
 
@@ -123,8 +125,10 @@ When two NPCs get together, get married, or break up through Matchmaking while y
 ## 6. Customizing SkyrimNet Features in the Dashboard ⚙️🎛️
 
 Open the **M.A.R.A.S Dashboard (`Alt + B`) $\rightarrow$ Settings** to tune how chatty, dramatic, or autonomous your AI world is:
-- **Settings $\rightarrow$ AI Dialogues**: Toggle which AI actions NPCs are allowed to initiate on their own (proposals, breakups, affair confessions/exposures, paternity reveals).
 - **Settings $\rightarrow$ Confirmations**: Turn on the **Accept / Cancel / Decline (Explain)** pop-up for any relationship change involving you.
-- **Settings $\rightarrow$ Matchmaking**: Toggle **AI Matchmaker (LLM Mode)**, **Evaluation Step**, and **LLM-Generated Memories** (whether matchmaking memories are generated by the LLM or built programmatically).
-- **Settings $\rightarrow$ SkyrimNet**: Adjust the proximity radius for nearby NPC actions, toggle **Use SkyrimNet Decisions (Jev)** (uses SkyrimNet's fast structured Jev decision engine for matchmaking verification, partner agency, paternity secrets, and bio-father step-in, with automatic fallback to Chat LLM prompts), toggle **LLM-Generated Memories** (whether life-event memories are written by SkyrimNet's `memory` LLM or built programmatically without an LLM request), or toggle **Simulate No SkyrimNet** if you ever want to test standard non-AI fallback mechanics! 😉
+- **Settings $\rightarrow$ Matchmaking**: Toggle **AI Matchmaker (LLM Mode)**, **Evaluation Step**, **LLM-Generated Memories**, and modal review for world-wide NPC matchmaking.
+- **Settings $\rightarrow$ Partner Agency**: Toggle **Use SkyrimNet AI Evaluation (Stage 2)**, modal review, force-greet intents, and home-arrival events for player-partner infidelity and open-relationship agency.
+- **Settings $\rightarrow$ Fertility**: Toggle SkyrimNet AI evaluation vs. **Opt Out of LLM (Use Dice Rolls)** for paternity secret reveals, presumed-father breakups, and biological-father step-in checks.
+- **Settings $\rightarrow$ AI Dialogues**: Filter **Allowed Dialogue Target Gender** and **Minimum Relationship Rank for Dialogue** (`-4` to `4`) for built-in dynamic romance dialogue initiation.
+- **Settings $\rightarrow$ SkyrimNet**: Adjust the proximity radius for nearby AI relationship actions, toggle **Use SkyrimNet Decisions (Jev)** (uses SkyrimNet's fast structured Jev decision engine for matchmaking verification, partner agency, paternity secrets, and bio-father step-in, with automatic fallback to Chat LLM prompts), toggle **LLM-Generated Memories** (whether life-event memories are written by SkyrimNet's `memory` LLM or built programmatically without an LLM request), or toggle **Simulate No SkyrimNet** if you ever want to test standard non-AI fallback mechanics! 😉
 

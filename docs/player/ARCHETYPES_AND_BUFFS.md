@@ -76,7 +76,7 @@ Unless an NPC has a custom personality override, their **Temperament** is born f
 
 ### What Does Temperament Actually Do?
 Temperament is the heartbeat of how your partner behaves in a relationship:
-- ❤️ **Romantic** — Loves gifts, intimacy, and sleeping side-by-side (`1.5x` bonus!), gets heartbroken if ignored for days (`-4`/day decay), and stays fiercely loyal.
+- ❤️ **Romantic** — Loves gifts and intimacy (**`1.5x`** bonus!) plus sleeping side-by-side (`+5` vs base `+3`), gets heartbroken if ignored for days (`-4`/day decay), and stays fiercely loyal.
 - 👀 **Jealous** — Craves reassurance and intimacy, **hates** open relationships (`-35` Affection just for asking!), and will lose their mind if they catch you with someone else.
 - 👑 **Proud** — Cares deeply about status! Promoting them to **Lead Spouse** makes their day (`+24`), while demoting them down the household hierarchy is a personal insult (`-24`).
 - 🌱 **Humble** — Easygoing, patient when you're away (`-2`/day decay), and doesn't throw a fit over household rank changes.
@@ -144,8 +144,11 @@ For **Permanent Household Buffs** (and daily store gold!), M.A.R.A.S balances fa
   - **Fourth+ Spouses (4th, 5th, 10th...)**: **`0.10x` each**
 
 - 🚶 **What About Follower Combat Buffs?**
-  Follower buffs **ignore household rank**! Whether your follower spouse is Rank 1 or Rank 12, if they are fighting beside you in a dungeon, you get their full **`1.0x` × Mood Multiplier** combat buff.
+  Follower buffs **ignore household rank**! Whether your follower spouse is Rank 1 or Rank 12, if they are fighting beside you in a dungeon, you get their full **`1.00x` × Mood Multiplier** (`0.00x` to `1.25x`) combat buff.
   *(Plus, if you use a multi-follower mod and bring **multiple** spouses along at the same time, all of their Follower Buffs stack!)*
+
+- ⚰️ **Living Spouses Only**:
+  If a spouse passes away, their Permanent Household Buffs and Follower Buffs automatically shut off, and remaining living spouses fill open hierarchy slots cleanly *(including triggering the **`2.00x` Monogamy Bonus** if only one living spouse remains)*.
 
 ---
 

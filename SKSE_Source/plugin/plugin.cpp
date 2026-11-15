@@ -330,6 +330,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
 
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
+                        MARAS::ResetPluginEventSinks();
                         MARAS::BumpSessionEpoch("MessagingInterface::kPreLoadGame");
                         MARAS::ResetPluginEventSinks();
                         MARAS::DialogueEventSink::GetSingleton()->Revert();
@@ -339,11 +340,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::BuffReconciler::GetSingleton().Revert();
                         MARAS::PackageReconciler::GetSingleton().Revert();
                         MARAS::PollingService::GetSingleton().Shutdown();
-                        {
-                            auto& visualReconciler = MARAS::ChildVisualReconciler::GetSingleton();
-                            visualReconciler.Revert();
-                            visualReconciler.FlushRetiredForms();
-                        }
+                        MARAS::ChildVisualReconciler::GetSingleton().Revert();
                         MARAS::SpatialWorldIndex::GetSingleton().ClearLoadedActors();
                         MARAS::App::GetModalGateway().Revert();
                         MARAS::App::GetUiBridgeGateway().DestroyDashboard();
@@ -373,8 +370,12 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         // Converge child packages, adult travel, child visuals, globals, factions, and buffs
                         MARAS::PlayerChildrenEngineOps::GetSingleton().ReassertChildPackagesOnLoad();
                         MARAS::App::HouseholdUseCases::GetSingleton().ReassertAllTravelOnLoad();
+                        MARAS::ChildVisualReconciler::GetSingleton().FlushRetiredForms();
                         MARAS::ChildVisualReconciler::GetSingleton().ReassertAllChildVisualsOnLoad();
 
+                        if (isNewGame) {
+                            MARAS::GlobalVarReconciler::GetSingleton().ResetSessionGlobalsToDefaults();
+                        }
                         MARAS::GlobalVarReconciler::GetSingleton().ReconcileGlobals();
                         MARAS::FactionReconciler::GetSingleton().ReconcilePlayer();
                         MARAS::BuffReconciler::GetSingleton().ReconcilePlayerBuffs();

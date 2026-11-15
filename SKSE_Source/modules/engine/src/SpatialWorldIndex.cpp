@@ -1194,28 +1194,40 @@ namespace MARAS {
     }
 
     RE::Actor* SpatialWorldIndex::FindActorByName(std::string_view searchTerm, NPCFilter filter) const {
-        std::shared_lock lock(m_mutex);
         if (searchTerm.empty()) return nullptr;
 
         const std::string lowerSearch = Foundation::StringUtils::ToLowerStd(searchTerm);
+        std::vector<RE::FormID> loadedExactCandidates;
+        RE::FormID fallbackRefID = 0;
 
-        if (const auto exactIt = m_nameToRefMap.find(lowerSearch); exactIt != m_nameToRefMap.end()) {
-            for (const RE::FormID refID : exactIt->second) {
-                const auto loadedIt = m_loadedActors.find(refID);
-                if (loadedIt != m_loadedActors.end()) {
-                    if (auto* valid = ValidateCachedActor(loadedIt->second)) {
-                        const auto entryIt = m_entriesByRef.find(refID);
-                        if (entryIt != m_entriesByRef.end() && PassesFilter(entryIt->second, filter)) {
-                            return valid;
-                        }
+        {
+            std::shared_lock lock(m_mutex);
+            if (const auto exactIt = m_nameToRefMap.find(lowerSearch); exactIt != m_nameToRefMap.end()) {
+                for (const RE::FormID refID : exactIt->second) {
+                    if (!m_loadedActors.contains(refID)) {
+                        continue;
+                    }
+                    const auto entryIt = m_entriesByRef.find(refID);
+                    if (entryIt != m_entriesByRef.end() && PassesFilter(entryIt->second, filter)) {
+                        loadedExactCandidates.push_back(refID);
                     }
                 }
             }
+
+            if (const auto* entry = FindByNameLocked(searchTerm, filter)) {
+                fallbackRefID = entry->refFormID;
+            }
         }
 
-        const auto* entry = FindByNameLocked(searchTerm, filter);
-        if (entry) {
-            return GetActorFromFormIdLocked(entry->refFormID);
+        for (const RE::FormID refID : loadedExactCandidates) {
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(refID);
+                actor && !actor->IsDeleted() && !actor->IsDead()) {
+                return actor;
+            }
+        }
+
+        if (fallbackRefID != 0) {
+            return GetActorFromFormId(fallbackRefID);
         }
 
         return nullptr;
@@ -1239,7 +1251,6 @@ namespace MARAS {
             return FindActorByName(searchTerm, filter);
         }
 
-        std::shared_lock lock(m_mutex);
         if (searchTerm.empty() || !spatialSnap) return nullptr;
 
         const std::string lowerSearch = Foundation::StringUtils::ToLowerStd(searchTerm);
@@ -1308,7 +1319,7 @@ namespace MARAS {
         });
 
         for (const auto& c : candidates) {
-            if (auto* actor = GetActorFromFormIdLocked(c.refID)) {
+            if (auto* actor = GetActorFromFormId(c.refID)) {
                 return actor;
             }
         }
@@ -1345,6 +1356,21 @@ namespace MARAS {
             return mapIt->second;
         }
 
+        return 0;
+    }
+
+    RE::FormID SpatialWorldIndex::GetRefID(RE::FormID formID) const {
+        if (formID == 0) return 0;
+        if (formID == kPlayerBaseID || formID == kPlayerRefID) return kPlayerRefID;
+        if (IsSyntheticChildID(formID)) return formID;
+
+        {
+            std::shared_lock lock(m_mutex);
+            if (const RE::FormID mapped = GetRefIDLocked(formID); mapped != 0) {
+                return mapped;
+            }
+        }
+
         if (auto* form = RE::TESForm::LookupByID(formID)) {
             if (form->As<RE::TESObjectREFR>()) {
                 return formID;
@@ -1355,12 +1381,6 @@ namespace MARAS {
         }
 
         return 0;
-    }
-
-    RE::FormID SpatialWorldIndex::GetRefID(RE::FormID formID) const {
-        if (formID == 0) return 0;
-        std::shared_lock lock(m_mutex);
-        return GetRefIDLocked(formID);
     }
 
     RE::FormID SpatialWorldIndex::GetBaseIDLocked(RE::FormID formID) const {
@@ -1376,6 +1396,21 @@ namespace MARAS {
             return formID;
         }
 
+        return 0;
+    }
+
+    RE::FormID SpatialWorldIndex::GetBaseID(RE::FormID formID) const {
+        if (formID == 0) return 0;
+        if (formID == kPlayerRefID || formID == kPlayerBaseID) return kPlayerBaseID;
+        if (IsSyntheticChildID(formID)) return 0;
+
+        {
+            std::shared_lock lock(m_mutex);
+            if (const RE::FormID mapped = GetBaseIDLocked(formID); mapped != 0) {
+                return mapped;
+            }
+        }
+
         if (auto* form = RE::TESForm::LookupByID(formID)) {
             if (form->As<RE::TESNPC>()) {
                 return formID;
@@ -1388,12 +1423,6 @@ namespace MARAS {
         }
 
         return 0;
-    }
-
-    RE::FormID SpatialWorldIndex::GetBaseID(RE::FormID formID) const {
-        if (formID == 0) return 0;
-        std::shared_lock lock(m_mutex);
-        return GetBaseIDLocked(formID);
     }
 
     std::string SpatialWorldIndex::GetName(RE::FormID formID) const {
@@ -1427,30 +1456,34 @@ namespace MARAS {
         return {};
     }
 
-    RE::Actor* SpatialWorldIndex::GetActorFromFormIdLocked(RE::FormID formID) const {
+    RE::Actor* SpatialWorldIndex::GetActorFromFormId(RE::FormID formID) const {
         if (formID == 0 || IsSyntheticChildID(formID)) return nullptr;
 
-        if (const auto loadedIt = m_loadedActors.find(formID); loadedIt != m_loadedActors.end()) {
-            if (auto* valid = ValidateCachedActor(loadedIt->second)) {
-                return valid;
+        RE::FormID mappedRefID = 0;
+        bool hasLoadedRef = false;
+        {
+            std::shared_lock lock(m_mutex);
+            hasLoadedRef = m_loadedActors.contains(formID);
+            mappedRefID = GetRefIDLocked(formID);
+        }
+
+        if (hasLoadedRef) {
+            if (auto* loadedActor = RE::TESForm::LookupByID<RE::Actor>(formID);
+                loadedActor && !loadedActor->IsDeleted() && !loadedActor->IsDead()) {
+                return loadedActor;
             }
         }
 
         auto* form = RE::TESForm::LookupByID(formID);
-        if (!form) {
-            const RE::FormID mappedRefID = GetRefIDLocked(formID);
-            if (mappedRefID != 0 && mappedRefID != formID && !IsSyntheticChildID(mappedRefID)) {
-                form = RE::TESForm::LookupByID(mappedRefID);
-            }
+        if (!form && mappedRefID != 0 && mappedRefID != formID && !IsSyntheticChildID(mappedRefID)) {
+            form = RE::TESForm::LookupByID(mappedRefID);
         }
 
         if (!form || form->IsDeleted()) return nullptr;
 
         if (auto* actor = form->As<RE::Actor>()) return actor;
 
-        if (auto* npc = form->As<RE::TESNPC>()) {
-            (void)npc;
-            const RE::FormID mappedRefID = GetRefIDLocked(formID);
+        if (form->As<RE::TESNPC>()) {
             if (mappedRefID != 0 && mappedRefID != formID && !IsSyntheticChildID(mappedRefID)) {
                 if (auto* refForm = RE::TESForm::LookupByID<RE::Actor>(mappedRefID); refForm && !refForm->IsDeleted()) {
                     return refForm;
@@ -1471,12 +1504,6 @@ namespace MARAS {
         }
 
         return nullptr;
-    }
-
-    RE::Actor* SpatialWorldIndex::GetActorFromFormId(RE::FormID formID) const {
-        if (formID == 0) return nullptr;
-        std::shared_lock lock(m_mutex);
-        return GetActorFromFormIdLocked(formID);
     }
 
     std::vector<NPCEntry> SpatialWorldIndex::SearchBySubstring(
@@ -1687,57 +1714,63 @@ namespace MARAS {
         return markerId;
     }
 
-    RE::FormID SpatialWorldIndex::ResolveBaseFormIdForBedsLocked(RE::FormID actorFormID) const {
-        if (actorFormID == 0 || actorFormID == kUnknownFatherFormID || IsSyntheticChildID(actorFormID)) {
-            return 0;
-        }
-
-        if (const auto it = m_entriesByRef.find(actorFormID); it != m_entriesByRef.end() && it->second.baseFormID != 0) {
-            return it->second.baseFormID;
-        }
-        if (m_baseToRefMap.contains(actorFormID)) {
-            return actorFormID;
-        }
-
-        if (auto* form = RE::TESForm::LookupByID(actorFormID); form && !form->IsDeleted()) {
-            if (form->As<RE::TESNPC>()) {
-                return form->GetFormID();
-            }
-            if (auto* actor = form->As<RE::Actor>()) {
-                if (auto* base = actor->GetActorBase(); base && !base->IsDeleted()) {
-                    return base->GetFormID();
-                }
-            }
-            if (auto* refr = form->As<RE::TESObjectREFR>()) {
-                if (auto* baseObj = refr->GetBaseObject(); baseObj && !baseObj->IsDeleted()) {
-                    if (auto* npc = baseObj->As<RE::TESNPC>()) {
-                        return npc->GetFormID();
-                    }
-                }
-            }
-        }
-
-        if ((actorFormID & 0xFF000000u) != 0xFF000000u) {
-            const RE::FormID baseID = GetBaseIDLocked(actorFormID);
-            if (baseID != 0 && baseID != actorFormID && HasPhysicalActor(baseID)) {
-                return baseID;
-            }
-        }
-
-        return 0;
-    }
-
     std::vector<RE::FormID> SpatialWorldIndex::GetNpcBeds(RE::Actor* npc) const {
         return npc ? GetNpcBeds(npc->GetFormID()) : std::vector<RE::FormID>{};
     }
 
     std::vector<RE::FormID> SpatialWorldIndex::GetNpcBeds(RE::FormID actorFormID) const {
-        if (actorFormID == 0) return {};
-        std::shared_lock lock(m_mutex);
-        const RE::FormID baseFormID = ResolveBaseFormIdForBedsLocked(actorFormID);
-        if (baseFormID == 0) return {};
+        if (actorFormID == 0 || actorFormID == kUnknownFatherFormID || IsSyntheticChildID(actorFormID)) {
+            return {};
+        }
 
-        if (const auto it = m_bedsWithOwners.find(baseFormID); it != m_bedsWithOwners.end()) {
+        RE::FormID indexedBaseID = 0;
+        {
+            std::shared_lock lock(m_mutex);
+            if (const auto it = m_entriesByRef.find(actorFormID); it != m_entriesByRef.end() && it->second.baseFormID != 0) {
+                indexedBaseID = it->second.baseFormID;
+            } else if (m_baseToRefMap.contains(actorFormID)) {
+                indexedBaseID = actorFormID;
+            } else {
+                indexedBaseID = GetBaseIDLocked(actorFormID);
+            }
+            if (indexedBaseID != 0) {
+                if (const auto bedIt = m_bedsWithOwners.find(indexedBaseID); bedIt != m_bedsWithOwners.end()) {
+                    return bedIt->second;
+                }
+                return {};
+            }
+        }
+
+        RE::FormID resolvedBaseID = 0;
+        if (auto* form = RE::TESForm::LookupByID(actorFormID); form && !form->IsDeleted()) {
+            if (form->As<RE::TESNPC>()) {
+                resolvedBaseID = form->GetFormID();
+            } else if (auto* actor = form->As<RE::Actor>()) {
+                if (auto* base = actor->GetActorBase(); base && !base->IsDeleted()) {
+                    resolvedBaseID = base->GetFormID();
+                }
+            } else if (auto* refr = form->As<RE::TESObjectREFR>()) {
+                if (auto* baseObj = refr->GetBaseObject(); baseObj && !baseObj->IsDeleted()) {
+                    if (auto* npc = baseObj->As<RE::TESNPC>()) {
+                        resolvedBaseID = npc->GetFormID();
+                    }
+                }
+            }
+        }
+
+        if (resolvedBaseID == 0 && (actorFormID & 0xFF000000u) != 0xFF000000u) {
+            const RE::FormID fallbackBaseID = GetBaseID(actorFormID);
+            if (fallbackBaseID != 0 && fallbackBaseID != actorFormID && HasPhysicalActor(fallbackBaseID)) {
+                resolvedBaseID = fallbackBaseID;
+            }
+        }
+
+        if (resolvedBaseID == 0) {
+            return {};
+        }
+
+        std::shared_lock lock(m_mutex);
+        if (const auto it = m_bedsWithOwners.find(resolvedBaseID); it != m_bedsWithOwners.end()) {
             return it->second;
         }
         return {};
@@ -1752,28 +1785,52 @@ namespace MARAS {
     }
 
     void SpatialWorldIndex::LogIndex() const {
-        std::shared_lock lock(m_mutex);
-        MARAS_LOG_INFO("SpatialWorldIndex: home cell index ({} cells, {} actors, {} bed owners)",
-                       m_homeCells.size(), m_actorsWithHome.size(), m_bedsWithOwners.size());
+        std::map<RE::FormID, HomeCellData> homeCellsCopy;
+        std::unordered_map<RE::FormID, std::vector<RE::FormID>> actorsByCell;
+        std::map<RE::FormID, std::vector<RE::FormID>> bedsWithOwnersCopy;
 
-        for (const auto& [cellId, cellData] : m_homeCells) {
+        {
+            std::shared_lock lock(m_mutex);
+            homeCellsCopy = m_homeCells;
+            for (const auto& [actorId, homeData] : m_actorsWithHome) {
+                actorsByCell[homeData.homeCell].push_back(actorId);
+            }
+            bedsWithOwnersCopy = m_bedsWithOwners;
+        }
+
+        MARAS_LOG_INFO("SpatialWorldIndex: home cell index ({} cells, {} actors, {} bed owners)",
+                       homeCellsCopy.size(), actorsByCell.size(), bedsWithOwnersCopy.size());
+
+        std::unordered_map<RE::FormID, std::vector<RE::FormID>> bedsByCell;
+        for (const auto& [ownerId, bedList] : bedsWithOwnersCopy) {
+            (void)ownerId;
+            for (const auto bedRefId : bedList) {
+                if (auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(bedRefId)) {
+                    if (auto* parentCell = ref->GetParentCell()) {
+                        bedsByCell[parentCell->GetFormID()].push_back(bedRefId);
+                    }
+                }
+            }
+        }
+
+        for (const auto& [cellId, cellData] : homeCellsCopy) {
             auto* cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(cellId);
             const std::string cellName = GetFormNameForLog(cell);
             const std::string locStr = GetLocationInfo(cell);
             const std::string doorsStr = FormatFormIDList(cellData.doors);
-            const std::string actorsStr = GetActorsInCellLocked(cellId);
-            const std::string bedsStr = GetBedsInCellLocked(cellId);
+            const std::string actorsStr = actorsByCell.contains(cellId) ? FormatFormIDList(actorsByCell.at(cellId)) : "";
+            const std::string bedsStr = bedsByCell.contains(cellId) ? FormatFormIDList(bedsByCell.at(cellId)) : "";
             const std::string markerStr = cellData.centerMarker ? FormatFormID(cellData.centerMarker) : "(none)";
 
             MARAS_LOG_INFO("Cell {:08X} '{}' loc={} marker={} doors=[{}] actors=[{}] beds=[{}]",
                            cellId, cellName, locStr, markerStr, doorsStr, actorsStr, bedsStr);
         }
 
-        MARAS_LOG_INFO("SpatialWorldIndex: actor to beds mapping ({} actors with beds):", m_bedsWithOwners.size());
-        for (const auto& [actorId, bedList] : m_bedsWithOwners) {
+        MARAS_LOG_INFO("SpatialWorldIndex: actor to beds mapping ({} actors with beds):", bedsWithOwnersCopy.size());
+        for (const auto& [actorId, bedList] : bedsWithOwnersCopy) {
             MARAS_LOG_INFO("  Actor {:08X} has beds=[{}]", actorId, FormatFormIDList(bedList));
         }
-        if (m_bedsWithOwners.empty()) {
+        if (bedsWithOwnersCopy.empty()) {
             MARAS_LOG_INFO("  (no beds with owners found)");
         }
     }
@@ -1789,31 +1846,6 @@ namespace MARAS {
         std::ostringstream ss;
         ss << "name='" << lname << "' edid='" << (ledid ? ledid : "(no edid)") << "'";
         return ss.str();
-    }
-
-    std::string SpatialWorldIndex::GetActorsInCellLocked(RE::FormID cellId) const {
-        std::vector<RE::FormID> actors;
-        for (const auto& [actorId, homeData] : m_actorsWithHome) {
-            if (homeData.homeCell == cellId) {
-                actors.push_back(actorId);
-            }
-        }
-        return FormatFormIDList(actors);
-    }
-
-    std::string SpatialWorldIndex::GetBedsInCellLocked(RE::FormID cellId) const {
-        std::vector<RE::FormID> beds;
-        for (const auto& [ownerId, bedList] : m_bedsWithOwners) {
-            (void)ownerId;
-            for (const auto bedRefId : bedList) {
-                if (auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(bedRefId)) {
-                    if (auto* parentCell = ref->GetParentCell(); parentCell && parentCell->GetFormID() == cellId) {
-                        beds.push_back(bedRefId);
-                    }
-                }
-            }
-        }
-        return FormatFormIDList(beds);
     }
 
     std::vector<Domain::Household::TravelDestinationCandidate> SpatialWorldIndex::GetInnDestinations() const {

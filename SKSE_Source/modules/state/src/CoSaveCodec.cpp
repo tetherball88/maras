@@ -896,6 +896,60 @@ namespace MARAS::State {
                     }
                 }
             }
+
+            // Optional trailing 'DCS1' secrecy extension — omitted when no deceased secrecy flags exist
+            std::vector<std::uint32_t> secretKeys;
+            for (const std::uint32_t k : keys) {
+                const DeceasedActorRecord& rec = records.at(k);
+                const bool hasSecretPartner = std::any_of(
+                    rec.partnersAtDeath.begin(),
+                    rec.partnersAtDeath.end(),
+                    [](const DeceasedPartnerEntry& p) { return p.isSecretAffair; });
+                const bool hasSecretPaternity =
+                    rec.childInfo.has_value() && rec.childInfo->hasUndiscoveredPaternitySecret;
+                if (hasSecretPartner || hasSecretPaternity) {
+                    secretKeys.push_back(k);
+                }
+            }
+
+            if (!secretKeys.empty()) {
+                if (!writer.WritePod(CoSaveConstants::kExtDeceasedSecrecyDCS1) ||
+                    !writer.WritePod(static_cast<std::uint32_t>(secretKeys.size()))) {
+                    return false;
+                }
+                for (const std::uint32_t k : secretKeys) {
+                    const DeceasedActorRecord& rec = records.at(k);
+                    std::vector<const DeceasedPartnerEntry*> secretPartners;
+                    for (const auto& p : rec.partnersAtDeath) {
+                        if (p.isSecretAffair) {
+                            secretPartners.push_back(&p);
+                        }
+                    }
+                    const bool hasSecretPaternity =
+                        rec.childInfo.has_value() && rec.childInfo->hasUndiscoveredPaternitySecret;
+                    if (!writer.WritePod(rec.baseId.raw()) ||
+                        !writer.WritePod(rec.refId.raw()) ||
+                        !writer.WritePod(static_cast<std::uint32_t>(secretPartners.size()))) {
+                        return false;
+                    }
+                    for (const DeceasedPartnerEntry* p : secretPartners) {
+                        if (!writer.WritePod(p->partnerBaseId.raw()) ||
+                            !writer.WritePod(p->partnerRefId.raw()) ||
+                            !writer.WritePod(static_cast<std::uint8_t>(p->publicStatusAtDeath))) {
+                            return false;
+                        }
+                    }
+                    if (!writer.WritePod(hasSecretPaternity)) {
+                        return false;
+                    }
+                    if (hasSecretPaternity) {
+                        if (!writer.WritePod(rec.childInfo->publicBioFatherBaseId.raw())) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
             return true;
         }
 
@@ -2428,7 +2482,9 @@ namespace MARAS::State {
                 return true;
             };
 
-            DeceasedTable staged{};
+            std::vector<DeceasedActorRecord> loadedRecords;
+            loadedRecords.reserve(count);
+            std::unordered_map<std::uint32_t, std::size_t> keyToIndex;
             for (std::uint32_t i = 0; i < count; ++i) {
                 std::uint32_t oldBase = 0;
                 std::uint32_t oldRef = 0;
@@ -2510,8 +2566,96 @@ namespace MARAS::State {
                 }
 
                 if (!rec.baseId.IsNull() || !rec.refId.IsNull()) {
-                    staged.UpsertRecord(std::move(rec));
+                    const std::uint32_t pKey = DeceasedTable::ComputePrimaryKey(rec.baseId, rec.refId);
+                    keyToIndex[pKey] = loadedRecords.size();
+                    loadedRecords.push_back(std::move(rec));
                 }
+            }
+
+            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                std::uint32_t dcsMagic = 0;
+                if (!chunk.ReadValue(dcsMagic)) {
+                    return false;
+                }
+                if (dcsMagic == CoSaveConstants::kExtDeceasedSecrecyDCS1) {
+                    std::uint32_t secretCount = 0;
+                    if (!chunk.ReadValue(secretCount) || secretCount > kMaxSerializedEntries) {
+                        return false;
+                    }
+                    for (std::uint32_t sIdx = 0; sIdx < secretCount; ++sIdx) {
+                        std::uint32_t oldBase = 0;
+                        std::uint32_t oldRef = 0;
+                        std::uint32_t secPartnerCount = 0;
+                        if (!chunk.ReadValue(oldBase) ||
+                            !chunk.ReadValue(oldRef) ||
+                            !chunk.ReadValue(secPartnerCount) ||
+                            secPartnerCount > kMaxTenants) {
+                            return false;
+                        }
+                        const RefId resRef{ resolveOrDrop(oldRef) };
+                        const BaseId resBase = resRef.IsDynamicRuntimeRef()
+                                                   ? BaseId{ resRef.raw() }
+                                                   : BaseId{ resolveOrDrop(oldBase) };
+                        DeceasedActorRecord* targetRec = nullptr;
+                        if (!resBase.IsNull() || !resRef.IsNull()) {
+                            const std::uint32_t pKey = DeceasedTable::ComputePrimaryKey(resBase, resRef);
+                            if (const auto idxIt = keyToIndex.find(pKey); idxIt != keyToIndex.end()) {
+                                targetRec = &loadedRecords[idxIt->second];
+                            }
+                        }
+
+                        for (std::uint32_t sp = 0; sp < secPartnerCount; ++sp) {
+                            std::uint32_t oldPBase = 0;
+                            std::uint32_t oldPRef = 0;
+                            std::uint8_t rawPubStatus = 0;
+                            if (!chunk.ReadValue(oldPBase) ||
+                                !chunk.ReadValue(oldPRef) ||
+                                !chunk.ReadValue(rawPubStatus)) {
+                                return false;
+                            }
+                            if (!targetRec) {
+                                continue;
+                            }
+                            const RefId pRef{ resolveOrDrop(oldPRef) };
+                            const BaseId pBase = pRef.IsDynamicRuntimeRef()
+                                                     ? BaseId{ pRef.raw() }
+                                                     : BaseId{ resolveOrDrop(oldPBase) };
+                            const auto pubStatus =
+                                rawPubStatus <= static_cast<std::uint8_t>(RelationshipStatus::ExLover)
+                                    ? static_cast<RelationshipStatus>(rawPubStatus)
+                                    : RelationshipStatus::Unknown;
+                            for (auto& pEntry : targetRec->partnersAtDeath) {
+                                if ((!pRef.IsNull() && pEntry.partnerRefId == pRef) ||
+                                    (!pBase.IsNull() && pEntry.partnerBaseId == pBase)) {
+                                    pEntry.isSecretAffair = true;
+                                    pEntry.publicStatusAtDeath = pubStatus;
+                                    break;
+                                }
+                            }
+                        }
+
+                        bool hasSecretPaternity = false;
+                        if (!chunk.ReadValue(hasSecretPaternity)) {
+                            return false;
+                        }
+                        if (hasSecretPaternity) {
+                            std::uint32_t oldPubFatherBase = 0;
+                            if (!chunk.ReadValue(oldPubFatherBase)) {
+                                return false;
+                            }
+                            if (targetRec && targetRec->childInfo.has_value()) {
+                                targetRec->childInfo->hasUndiscoveredPaternitySecret = true;
+                                targetRec->childInfo->publicBioFatherBaseId =
+                                    BaseId{ resolveOrDrop(oldPubFatherBase) };
+                            }
+                        }
+                    }
+                }
+            }
+
+            DeceasedTable staged{};
+            for (auto& rec : loadedRecords) {
+                staged.UpsertRecord(std::move(rec));
             }
 
             state.deceased.Reset(std::move(staged));

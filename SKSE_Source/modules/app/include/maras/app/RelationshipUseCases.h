@@ -545,7 +545,8 @@ namespace MARAS::App {
 
         [[nodiscard]] std::size_t CountPartnersWithStatus(RE::FormID npcFormID,
                                                           Foundation::RelationshipStatus status) const;
-        [[nodiscard]] const Engine::NPCOverrideData* FindOverrideData(RE::FormID npcFormID) const;
+        [[nodiscard]] const Engine::NPCOverrideData* FindOverrideData(RE::FormID npcFormID,
+                                                                      RE::FormID resolvedBaseID) const;
 
         void ReconcileBreakupOrDivorceEngineState(RE::FormID actorA,
                                                   RE::FormID actorB,
