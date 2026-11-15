@@ -10,7 +10,7 @@
 
 ## 1. Purpose & Responsibility
 
-`PerspectiveView` is M.A.R.A.S.'s centralized epistemic projection boundary over immutable `WorldStateSnapshot` and `SpatialActorSnapshot` views. Every read consumer that must respect **who knows what**—SkyrimNet self-perspectives, SkyrimNet dialogue-target public bios, Prisma UI dashboard/JSON dumps, C API status history queries, and adult-child travel parent lookups—queries `PerspectiveView` instead of reading secret fields directly from raw tables.
+`PerspectiveView` is M.A.R.A.S.'s centralized epistemic projection boundary over immutable `WorldStateSnapshot` and `SpatialActorSnapshot` views. Every read consumer that must respect **who knows what**—SkyrimNet self-perspectives, SkyrimNet dialogue-target public bios, UI Dashboard/JSON dumps, C API status history queries, and adult-child travel parent lookups—queries `PerspectiveView` instead of reading secret fields directly from raw tables.
 
 ---
 
@@ -20,7 +20,7 @@
 | :--- | :--- | :--- |
 | **`ActorSelf`** | `PerspectiveView::ForActor(world, spatial, viewerActorId, werewolfProvider)` | First-person LLM actor bios (`ttm_npc_relationship_profile` when `render_mode != "dialogue_target"`), action candidate lists, memory restrictions, self-aware travel checks. |
 | **`DialogueTargetPublic`** | `PerspectiveView::ForDialogueTarget(world, spatial, werewolfProvider)` | Public knowledge view (`render_mode == "dialogue_target"`): hides all personal secrets even when the target NPC personally knows them. |
-| **`DashboardIntrigue`** | `PerspectiveView::ForDashboard(world, spatial, revealSecretsOverride, werewolfProvider)` | Prisma UI dashboard, full JSON dumps (`ProcessDumpData`, `DumpJson`, `DumpDeceasedJson`), and exported C API status history (`MARAS_PublicAPI`). Active whenever `!revealSecretsInUI`. |
+| **`DashboardIntrigue`** | `PerspectiveView::ForDashboard(world, spatial, revealSecretsOverride, werewolfProvider)` | UI Dashboard, full JSON dumps (`ProcessDumpData`, `DumpJson`, `DumpDeceasedJson`), and exported C API status history (`MARAS_PublicAPI`). Active whenever `!revealSecretsInUI`. |
 | **`Omniscient`** | `PerspectiveView::ForDashboard(..., /*revealSecretsOverride=*/true, ...)` (or default omniscient) | Reveal-all mode (`revealSecretsInUI == true`) and internal game-master candidate eligibility checks where unmasked world state is required. |
 
 > [!IMPORTANT]

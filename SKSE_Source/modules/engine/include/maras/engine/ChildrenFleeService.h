@@ -14,7 +14,7 @@ namespace MARAS {
 
     // Makes children run away (TTM_ChildrenFleeIntimateScene package, via the package override
     // hook) from cells that contain a "threat": intimate-scene participants (supplied by
-    // IntimateThreadService through a provider) or a manual request (Papyrus / Prisma UI).
+    // IntimateThreadService through a provider) or a manual request (Papyrus / UI dashboard).
     //
     // A child flees from the cell it was in when it started and keeps fleeing for as long as a threat
     // remains in that cell, even if the flee package carries it out of the cell. A child that is still

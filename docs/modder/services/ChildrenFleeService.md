@@ -10,7 +10,7 @@
 
 ## 1. Purpose & Responsibility
 
-`ChildrenFleeService` automatically clears child actors out of cells hosting active threats—most commonly intimate adult scenes registered by [`IntimateThreadService`](IntimateThreadService.md), plus manual cell-clear requests triggered from the Prisma UI dashboard or scripts. While an adult scene or manual threat is active in a cell, loaded awake children are temporarily relocated outside (interiors) or to distant walkable navmesh points (exteriors) and remain tracked until the threat ends.
+`ChildrenFleeService` automatically clears child actors out of cells hosting active threats—most commonly intimate adult scenes registered by [`IntimateThreadService`](IntimateThreadService.md), plus manual cell-clear requests triggered from the UI Dashboard or scripts. While an adult scene or manual threat is active in a cell, loaded awake children are temporarily relocated outside (interiors) or to distant walkable navmesh points (exteriors) and remain tracked until the threat ends.
 
 ---
 
@@ -21,7 +21,7 @@
 ```mermaid
 flowchart LR
     ITS["IntimateThreadService\n(ThreatProvider callback)"] --> CFS["ChildrenFleeService::Refresh()"]
-    UI["PrismaUIDataBridge\n(fleeChildrenFromCell action)"] --> CFS
+    UI["UIDataBridge\n(fleeChildrenFromCell action)"] --> CFS
     PS["PollingService (2 Hz loop)\n-> Tick() every 1000 ms"] --> CFS
     CFS -->|"Interior"| EXIT["Nearest load door destination\n(cached per cell)"]
     CFS -->|"Exterior"| NAV["Navmesh triangle center >= minThreatDistance"]

@@ -4,8 +4,8 @@
 #include "maras/app/ModalTypes.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
-#include "maras/bridge_ui/PrismaModalManager.h"
-#include "maras/bridge_ui/PrismaUIManager.h"
+#include "maras/bridge_ui/ModalManager.h"
+#include "maras/bridge_ui/UIManager.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
@@ -40,7 +40,7 @@ namespace MARAS::Bridge::Ui {
         //   2 = Declined with explain (decline + SkyrimNet TriggerTextInput + maras_decline)
         //   3 = Blocked (on cooldown, invalid actors, or relationship state changed)
         //   4 = Disabled by settings (auto-accept)
-        //   5 = Prisma UI unavailable (auto-accept)
+        //   5 = UI unavailable (auto-accept)
         constexpr std::int32_t kResultAccept = 0;
         constexpr std::int32_t kResultCancel = 1;
         constexpr std::int32_t kResultDeclineExplain = 2;
@@ -441,8 +441,8 @@ namespace MARAS::Bridge::Ui {
             }
         }
 
-        if (!PrismaUIManager::GetSingleton().IsInitialized()) {
-            MARAS_LOG_WARN("[ConfirmationModal] PrismaUI unavailable for '{}'; auto-accepting (5)", action);
+        if (!UIManager::GetSingleton().IsInitialized()) {
+            MARAS_LOG_WARN("[ConfirmationModal] UI unavailable for '{}'; auto-accepting (5)", action);
             if (onResult) {
                 onResult(kResultUiUnavailableAutoAccept);
             }
@@ -521,7 +521,7 @@ namespace MARAS::Bridge::Ui {
             }
         };
 
-        PrismaModalManager::GetSingleton().ShowModal(
+        ModalManager::GetSingleton().ShowModal(
             std::move(req),
             [expectedEpoch,
              action,
@@ -593,7 +593,10 @@ namespace MARAS::Bridge::Ui {
                             msg,
                             /*skipTrigger=*/true);
 
-                        PrismaUIManager::GetSingleton().RunAfterFocusReleased([expectedEpoch]() {
+                        if (UIManager::GetSingleton().IsVisible()) {
+                            UIManager::GetSingleton().Hide();
+                        }
+                        UIManager::GetSingleton().RunAfterFocusReleased([expectedEpoch]() {
                             MARAS::DispatchPostLock(
                                 expectedEpoch,
                                 []() {

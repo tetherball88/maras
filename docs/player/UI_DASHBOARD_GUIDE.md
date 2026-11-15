@@ -2,7 +2,7 @@
 
 Remember the dark ages of Skyrim modding, when checking on your spouses meant scrolling through 47 laggy SkyUI MCM pages while waiting three seconds for each slider to load? 🐢
 
-Say goodbye to all of that! **M.A.R.A.S** features a fast, modern, interactive **In-Game Dashboard** powered by **Prisma UI**. Whether you want to check why your spouse is grumpy, move your family to a new manor, play Cupid with two townsfolk in Whiterun, or inspect the entire province's soap-opera gossip, it's all one keypress away.
+Say goodbye to all of that! **M.A.R.A.S** features a fast, modern, interactive **In-Game Dashboard** powered by **Magelight UI**. Whether you want to check why your spouse is grumpy, move your family to a new manor, play Cupid with two townsfolk in Whiterun, or inspect the entire province's soap-opera gossip, it's all one keypress away.
 
 ---
 
@@ -19,7 +19,7 @@ Say goodbye to all of that! **M.A.R.A.S** features a fast, modern, interactive *
 
 - **Open / Close Hotkey**: Press **`Alt + B`** during gameplay (default) to pop open the M.A.R.A.S Dashboard right over your game!
   - *Want a different key?* You can toggle **`Ctrl`**, **`Shift`**, or **`Alt`** modifiers in **Settings $\rightarrow$ General** inside the Dashboard, or set any custom key combo in `Data/SKSE/Plugins/MARAS.ini` (`ToggleUI = Alt+B`) so it never clashes with your other mods!
-  - *What happened to SkyUI MCM?* On new games, M.A.R.A.S **does not register** a SkyUI MCM menu—every setting lives right here in the Prisma UI Dashboard. *(Legacy saves where `TTM_MCM` was already registered keep a minimal stub displaying your current hotkey and an **Open M.A.R.A.S Dashboard** button.)*
+  - *What happened to SkyUI MCM?* On new games, M.A.R.A.S **does not register** a SkyUI MCM menu—every setting lives right here in the M.A.R.A.S Dashboard. *(Legacy saves where `TTM_MCM` was already registered keep a minimal stub displaying your current hotkey and an **Open M.A.R.A.S Dashboard** button.)*
 - **Pause / Unpause Game (`⏸️ Pause` / `Paused` Button in Top-Right Header & Auto-Pause Setting)**: In the top-right header bar is a **Pause / Paused** button. Click it anytime to pause or unpause Skyrim while browsing the Dashboard (`Paused` badge lights up in gold when active). Prefer the game to pause automatically every time you open the Dashboard? Enable **Auto-Pause Game on Dashboard Open** in **Settings $\rightarrow$ General**!
 - **Full Screen Mode (`⛶` Button & Setting)**: Want the Dashboard to fill your entire monitor instead of floating as a centered window? Click the **Full Screen Mode** toggle button in the top-right header bar (or toggle **Full Screen Mode** in **Settings $\rightarrow$ General**). Your preference is saved automatically with your game!
 - **Accessibility — UI & Font Scaling (`- 100% +` Header Control & Slider)**: Playing on a 4K TV, ultrawide monitor, or Steam Deck? Use the quick **`- / 100% / +`** scale buttons in the top-right header bar (or the **UI & Font Scale (Accessibility)** slider in **Settings $\rightarrow$ General**) to scale all fonts, icons, cards, and UI elements proportionally from **75% to 150%**! (Click the percentage readout in the header at any time to reset to `100%`.)
@@ -139,5 +139,5 @@ The **Settings** tab replaces traditional MCM pages with **10 organized sub-page
 
 Playing on a massive 4K TV from the couch and want bigger text? Or playing on a compact laptop screen and want the Dashboard smaller?
 - Every single panel, font, icon, and button in the M.A.R.A.S Dashboard scales proportionally from **one single setting**!
-- Open `Data/PrismaUI/views/MARAS/variables.css` in any text editor (like Notepad) and change `--ui-font-size: 16px;` to `20px` (bigger) or `14px` (smaller)—the entire window and every icon inside it will scale up or down automatically! You can even tweak the accent colors and panel transparency right in that same file. ✨
+- Open `Data/Magelight/MARAS/views/MARAS/variables.css` in any text editor (like Notepad) and change `--ui-font-size: 16px;` to `20px` (bigger) or `14px` (smaller)—the entire window and every icon inside it will scale up or down automatically! You can even tweak the accent colors and panel transparency right in that same file. ✨
 

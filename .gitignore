@@ -25,10 +25,11 @@ cmake-build*/
 *.7z
 tag-push.bat
 patches/scripts
-/prisma-src/node_modules
+/ui-src/node_modules
 SKSE/Plugins/MARAS.ini
 /Icons work
 1.json
 run_request.js
 /TT_MARAS_yaml
 dotnet-install.ps1
+/ui-src/node_modules

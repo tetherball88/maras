@@ -1360,7 +1360,7 @@ namespace MARAS::Bridge::SkyrimNet {
                             tryBreakupIfActive();
                         }
 
-                        // 3. Notify Prisma UI
+                        // 3. Notify UI dashboard
                         uiBridge.SendOverviewData();
                         uiBridge.SendNPCDetail(childID);
                     });

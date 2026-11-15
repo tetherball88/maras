@@ -207,7 +207,7 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
-    // Prisma UI & Confirmation Modal bindings
+    // UI & Confirmation Modal bindings
     // ========================================
 
     RE::BSScript::LatentStatus ShowConfirmationModal(RE::BSScript::Internal::VirtualMachine* vm,
@@ -1174,7 +1174,7 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<AddNpcKeyword>(vm, "AddNpcKeyword");
         RegisterSynced<RemoveNpcKeyword>(vm, "RemoveNpcKeyword");
 
-        // Prisma UI functions
+        // UI dashboard functions
         RegisterSynced<ShowUI>(vm, "ShowUI");
         RegisterSynced<HideUI>(vm, "HideUI");
         RegisterSynced<IsUIVisible>(vm, "IsUIVisible");

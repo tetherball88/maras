@@ -9,7 +9,7 @@ M.A.R.A.S integrates deeply with **SkyrimNet** to transform NPC relationships, m
 ### 1.1 Mandatory Availability Checks
 - **C++ (`SKSE_Source/`)**: All callers check `MARAS::App::GetSkyrimNetGateway().IsAvailable()` (`MARAS::Bridge::SkyrimNet::IsSkyrimNetAvailable()` in [SkyrimNetApiLoader.h](../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetApiLoader.h)), which verifies both `GetModuleHandleW(L"SkyrimNet.dll") != nullptr` and `!SettingsCoordinator::GetSingleton().GetSimulateNoSkyrimNet()`.
 - **Papyrus (`Scripts/Source/`)**: All callers check `TTM_Data.GetHasSkyrimNet()` before formatting strings or invoking `MARAS.RegisterSkyrimNetEvent`.
-- **Prisma UI (`prisma-src/`)**: Reads `settings.hasSkyrimNet` from the C++ data bridge to hide SkyrimNet-only tabs/sections or disable AI buttons with explanatory tooltips.
+- **UI Dashboard (`ui-src/`)**: Reads `settings.hasSkyrimNet` from the C++ data bridge to hide SkyrimNet-only tabs/sections or disable AI buttons with explanatory tooltips.
 
 ### 1.2 Subsystem Behavior Matrix (SkyrimNet Active vs. Absent)
 
@@ -75,7 +75,7 @@ All **23 decorators** are registered at `kPostLoad` (`GetSkyrimNetGateway().Regi
 
 ```mermaid
 sequenceDiagram
-    participant Scheduler as PollingService / Prisma UI
+    participant Scheduler as PollingService / UI Dashboard
     participant Coord as AgencyWorkflowCoordinator (C++)
     participant Rel as RelationshipUseCases
     participant SNet as SkyrimNetIntegration (LLM)

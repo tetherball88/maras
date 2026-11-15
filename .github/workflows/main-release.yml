@@ -27,7 +27,7 @@ jobs:
           # quote paths in case
           zip -r "out/MARAS_${TAG}.zip" \
             interface/ \
-            PrismaUI/ \
+            Magelight/ \
             Scripts/ \
             SKSE/ \
             Seq/ \

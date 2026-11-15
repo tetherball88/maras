@@ -23,7 +23,6 @@ namespace MARAS::App {
         virtual void StartListeningInput() = 0;
         virtual void OnNewGameStarted(bool deferInitialScan) = 0;
         virtual void ResetNewGameDeferral() = 0;
-        virtual void DestroyDashboard() = 0;
         virtual void ShowDashboard() = 0;
         virtual void HideDashboard() = 0;
         virtual bool IsDashboardVisible() const = 0;

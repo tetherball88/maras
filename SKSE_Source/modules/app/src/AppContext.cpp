@@ -16,7 +16,6 @@ namespace MARAS::App {
             void StartListeningInput() override {}
             void OnNewGameStarted(bool) override {}
             void ResetNewGameDeferral() override {}
-            void DestroyDashboard() override {}
             void ShowDashboard() override {}
             void HideDashboard() override {}
             bool IsDashboardVisible() const override { return false; }

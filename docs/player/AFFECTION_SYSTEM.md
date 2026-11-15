@@ -20,7 +20,7 @@ Under the hood, M.A.R.A.S runs a living **Affection System (0–100)** for every
 
 ## 1. What Does Affection Actually Do? 🤔
 
-Every NPC you've registered in M.A.R.A.S has an **Affection score from `0` to `100`** (starting around `50`—neutral *"you seem alright, I guess"* territory). You can check anyone's current score and mood at any time by pressing **`Alt + B`** (default) to open the **M.A.R.A.S Dashboard** (`Prisma UI`).
+Every NPC you've registered in M.A.R.A.S has an **Affection score from `0` to `100`** (starting around `50`—neutral *"you seem alright, I guess"* territory). You can check anyone's current score and mood at any time by pressing **`Alt + B`** (default) to open the **M.A.R.A.S Dashboard** (`Magelight UI`).
 
 Your affection score directly controls:
 - 💍 **Proposal Odds**: Asking someone to marry you at `20` Affection is basically asking for public humiliation. Asking at `85` Affection makes them much more likely to say *"Yes!"*

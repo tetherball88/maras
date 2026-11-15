@@ -5,7 +5,7 @@ This document explains all parameters in `Data/SKSE/Plugins/MARAS/marriageDiffic
 > [!NOTE]
 > **SkyrimNet vs. Standard Dialogue Proposals**
 > This configuration applies when proposing marriage through standard M.A.R.A.S dialogue options (or when SkyrimNet is not used). When proposing organically through **SkyrimNet** AI conversation, the NPC's LLM persona and prompt context (`SkyrimNetIntegration`) determine whether they accept or decline.
-> You can also bypass the difficulty roll entirely per save by enabling **Always Succeed Proposals** in the **Prisma UI Dashboard $\rightarrow$ Settings** tab.
+> You can also bypass the difficulty roll entirely per save by enabling **Always Succeed Proposals** in the **UI Dashboard $\rightarrow$ Settings** tab.
 
 ---
 
@@ -15,7 +15,7 @@ This document explains all parameters in `Data/SKSE/Plugins/MARAS/marriageDiffic
 - [AffectionRules Mechanics](services/AffectionRules.md) — How permanent affection is accumulated and affects proposal difficulty.
 - [Archetypes & Buffs](../player/ARCHETYPES_AND_BUFFS.md) — Social class definitions referenced in this config.
 - [Advanced Configuration and Modding](ADVANCED_CONFIGURATION_AND_MODDING.md) — Overview of all external JSON/INI/YAML files (`bonuses.json`, `encounters/`, `spousesTypes/`, `questEvents/`).
-- [Player Guide](../player/PLAYER_GUIDE.md) — Player-facing guide to courting, proposals, and the Prisma UI Dashboard.
+- [Player Guide](../player/PLAYER_GUIDE.md) — Player-facing guide to courting, proposals, and the UI Dashboard.
 
 ---
 
@@ -193,5 +193,5 @@ Starting from `basePct = clamp(round(rawChance * 100), 0, 100)` (or immediate `1
 ## Troubleshooting & Logging
 
 - **Live Reloading**: `marriageDifficultyConfig.json` is reloaded on every save load and new game (`MarriageDifficulty::LoadConfig()`). You do not need to exit to desktop after editing the file—simply reload your save.
-- **Detailed Breakdown in Logs**: Set `logLevel` to `Debug` (`1`) or `Trace` (`0`) in the Prisma UI Dashboard Settings (or `MARAS.ini`) to see the exact microsecond breakdown of every factor (`Target prestige`, `Player prestige`, `Married count`, `Speechcraft`, `Guild alignment`, `Permanent affection`, `Final complexity`, and `chance`) in `MARAS.log`.
+- **Detailed Breakdown in Logs**: Set `logLevel` to `Debug` (`1`) or `Trace` (`0`) in the UI Dashboard Settings (or `MARAS.ini`) to see the exact microsecond breakdown of every factor (`Target prestige`, `Player prestige`, `Married count`, `Speechcraft`, `Guild alignment`, `Permanent affection`, `Final complexity`, and `chance`) in `MARAS.log`.
 

@@ -134,7 +134,6 @@ namespace MARAS::App {
         GetSkyrimNetGateway().RevertEvents();
         GetModalGateway().Revert();
         GetUiBridgeGateway().Revert();
-        GetUiBridgeGateway().DestroyDashboard();
 
         SettingsCoordinator::GetSingleton().RevertGameSettings();
         RelationshipUseCases::GetSingleton().Revert();

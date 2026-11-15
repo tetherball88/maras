@@ -1059,31 +1059,31 @@ string Function DumpStoredData(string tag = "") global native
 
 
 ; ── UI Modals & Action Cooldowns ──────────────────────────────────────
-;/ Show the Prisma UI dashboard /;
+;/ Show the UI dashboard /;
 Function ShowUI() global native
 
-;/ Hide the Prisma UI dashboard /;
+;/ Hide the UI dashboard /;
 Function HideUI() global native
 
-;/ Check if the Prisma UI dashboard is currently visible /;
+;/ Check if the UI dashboard is currently visible /;
 bool Function IsUIVisible() global native
 
 ;/ Show a non-blocking confirmation modal dialog (returns 0=accept, 1=cancel, 2=decline with explain) /;
 int Function ShowConfirmationModal(string actionType, Actor[] mainActors, Actor[] secondaryActors, string paramsJson = "") global native
 
-;/ Show the Prisma UI skip-wedding ceremony prompt (returns 0=skip ceremony, 1=hold ceremony, 2=hold ceremony & don't ask again) /;
+;/ Show the UI skip-wedding ceremony prompt (returns 0=skip ceremony, 1=hold ceremony, 2=hold ceremony & don't ask again) /;
 int Function ShowSkipWeddingModal(Actor fiance) global native
 
-;/ Show the Prisma UI residence & schedule selector modal for a spouse or child (returns selected Location or None on cancel) /;
+;/ Show the UI residence & schedule selector modal for a spouse or child (returns selected Location or None on cancel) /;
 Location Function ShowChooseHomeModal(Actor targetActor, bool isChild = false) global native
 
-;/ Show the Prisma UI co-parent spouse selector modal during child adoption (returns selected spouse Actor or None for single parent) /;
+;/ Show the UI co-parent spouse selector modal during child adoption (returns selected spouse Actor or None for single parent) /;
 Actor Function ShowChooseAdoptionSpouseModal(Actor child = None) global native
 
-;/ Show the Prisma UI debug status selector modal for an NPC (returns status name string or "" on cancel) /;
+;/ Show the UI debug status selector modal for an NPC (returns status name string or "" on cancel) /;
 string Function ShowDebugStatusModal(Actor target) global native
 
-;/ Show the Prisma UI first-time child & fertility migration audit modal (returns number of kept migrated entries) /;
+;/ Show the UI first-time child & fertility migration audit modal (returns number of kept migrated entries) /;
 int Function ShowChildMigrationAuditModal() global native
 
 ;/ Check if an action is on cooldown for given actors, and set cooldown if ready /;

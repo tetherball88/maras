@@ -1,7 +1,7 @@
 ---
 name: maras-add-setting
 description: >-
-  End-to-end cross-layer synchronization checklist for adding, renaming, or removing a configuration setting in M.A.R.A.S. Activate whenever modifying SettingsCoordinator, SettingsData, or Prisma UI / Papyrus settings endpoints.
+  End-to-end cross-layer synchronization checklist for adding, renaming, or removing a configuration setting in M.A.R.A.S. Activate whenever modifying SettingsCoordinator, SettingsData, or UI / Papyrus settings endpoints.
 ---
 
 # Cross-Layer Settings Synchronization Checklist
@@ -18,16 +18,16 @@ Whenever adding, removing, or renaming a configuration setting, update **all** a
    - Update `SettingsCoordinator.cpp`: INI `Load` (updates `WorldStore::SetIniBaselineSettings` + live state), `ApplyPostLoadEngineSideEffects`, `DumpJson` (if non-persisted or custom formatted), and key-lookup maps (`GetBoolSettingMap` / `GetIntSettingMap` / `GetFloatSettingMap` using `State::SettingsData::*` member pointers).
    - If mirrored to an `ESP` Global or `EngineSyncPlan`, also update [EngineSyncPlan.h](../../../SKSE_Source/modules/state/include/maras/state/EngineSyncPlan.h) / [EngineSyncPlan.cpp](../../../SKSE_Source/modules/state/src/EngineSyncPlan.cpp) and [GlobalVarReconciler.cpp](../../../SKSE_Source/modules/engine/src/GlobalVarReconciler.cpp).
 
-3. **Prisma UI C++ Bridge ([PrismaUIDataBridge.cpp](../../../SKSE_Source/modules/bridge_ui/src/PrismaUIDataBridge.cpp)):**
+3. **UI C++ Bridge ([UIDataBridge.cpp](../../../SKSE_Source/modules/bridge_ui/src/UIDataBridge.cpp)):**
    - Include in outgoing payloads (`SendOverviewData` and/or `SendMatchmakingSettings`).
    - Handle incoming updates (`ProcessUpdateSetting` and/or `ProcessUpdateMatchmakingSettings`, ensuring `SettingsCoordinator` updates `WorldStore` cleanly and checking `.is_boolean()` / `.is_number()` / `.is_string()` before extracting from `nlohmann::json`).
 
-4. **Prisma UI React Frontend (`prisma-src/`):**
-   - Update TypeScript interfaces (`prisma-src/src/types/`), Zustand store defaults/handlers (`prisma-src/src/store/useMarasStore.ts`), browser mock defaults (`prisma-src/src/store/prismaBridge.ts`), and settings tab UI controls.
+4. **UI Dashboard React Frontend (`ui-src/`):**
+   - Update TypeScript interfaces (`ui-src/src/types/`), Zustand store defaults/handlers (`ui-src/src/store/useMarasStore.ts`), browser mock defaults (`ui-src/src/store/uiBridge.ts`), and settings tab UI controls.
    - Note: Legacy MCM (`TTM_MCM_*.psc`) is **retired**—never add new settings to MCM.
 
 5. **Papyrus Native API (if exposed to `.psc` scripts):**
    - [PapyrusInterface.h](../../../SKSE_Source/modules/bridge_papyrus/include/maras/bridge_papyrus/PapyrusInterface.h), [PapyrusSettings.cpp](../../../SKSE_Source/modules/bridge_papyrus/src/PapyrusSettings.cpp), [PapyrusInterface.cpp](../../../SKSE_Source/modules/bridge_papyrus/src/PapyrusInterface.cpp) (`RegisterPapyrusFunctions`), and [MARAS.psc](../../../Scripts/Source/MARAS.psc) (exact signature parity).
 
 6. **Verification:**
-   - Run `.agents/skills/maras-build-and-test/scripts/build-and-test.ps1 -Target all` and `npm run build` in `prisma-src/` (if UI changed).
+   - Run `.agents/skills/maras-build-and-test/scripts/build-and-test.ps1 -Target all` and `npm run build` in `ui-src/` (if UI changed).

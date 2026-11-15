@@ -4,14 +4,14 @@ This guide is for mod authors, patch creators, and advanced users who want to cu
 
 > [!NOTE]
 > **Looking for in-game per-save configuration?**
-> Real-time per-save settings, NPC archetype editing, relationship assignment, household management, and matchmaking controls are available directly in-game via the **Prisma UI Dashboard** (see the [Player Guide](../player/PLAYER_GUIDE.md)). This document covers **permanent, external configuration files** and **modder integration APIs**.
+> Real-time per-save settings, NPC archetype editing, relationship assignment, household management, and matchmaking controls are available directly in-game via the **UI Dashboard** (see the [Player Guide](../player/PLAYER_GUIDE.md)). This document covers **permanent, external configuration files** and **modder integration APIs**.
 
 ---
 
 ## Related Modder Documentation
 
 - [System Architecture & Technical Reference](ARCHITECTURE.md) — High-level 4-layer architecture, 13-module C++ DAG, SKSE co-save `'MARS'` v7 format, and links to all 28 C++ service & module guides.
-- [API & Prisma Bridge Reference](API_AND_PRISMA_BRIDGE_REFERENCE.md) — Complete reference for `MARAS_PublicAPI.h`, `MARAS.psc` native functions, SKSE ModEvents, and the Prisma UI JSON bridge.
+- [API & UI Bridge Reference](API_AND_UI_BRIDGE_REFERENCE.md) — Complete reference for `MARAS_PublicAPI.h`, `MARAS.psc` native functions, SKSE ModEvents, and the UI JSON bridge.
 - [Relationship Dynamics Guide](RELATIONSHIP_DYNAMICS_GUIDE.md) — Unified pair-keyed relationship engine (`Player <-> NPC` and `NPC <-> NPC`), cheating/affairs, and paternity secrets.
 - [SkyrimNet & AI Integration](SKYRIMNET_AND_AI_INTEGRATION.md) — C++ prompt decorators, YAML actions/triggers, and LLM evaluation pipelines.
 - [Household & Children Architecture](HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md) — Multi-home management, spouse hierarchy, store income, buffs, and dual-layer child system.
@@ -82,7 +82,7 @@ Each `.json` file contains a root JSON object mapping `__formData|<PluginName>|<
 | `comment` | Any descriptive string (ignored by parser) |
 
 > [!TIP]
-> **When Overrides Apply**: JSON overrides in `spousesTypes/` are applied when an NPC is first registered into M.A.R.A.S. If an NPC is already registered in an existing save, change their archetype live in the **Prisma UI Dashboard $\rightarrow$ NPC Detail** view (or via a `questEvents` command / Papyrus call).
+> **When Overrides Apply**: JSON overrides in `spousesTypes/` are applied when an NPC is first registered into M.A.R.A.S. If an NPC is already registered in an existing save, change their archetype live in the **UI Dashboard $\rightarrow$ NPC Detail** view (or via a `questEvents` command / Papyrus call).
 
 ---
 
@@ -131,7 +131,7 @@ Contains species-keyed name arrays (`fox`, `arctic_fox`, `hare`, `mudcrab`, `ske
 
 ### Override vs. Extension Behavior
 - If an entry in `childTraining/*.yaml` has an `id` matching an existing training location (e.g., `warrior` or `mage`), any fields provided in the override file **patch/replace** that entry in-place while preserving its index.
-- If an entry in `childTraining/*.yaml` has a new `id` (e.g., `morag_tong` or `psijic_monk`), it is **appended** as a new training path and automatically appears in the Prisma UI Dashboard's Adolescent Training modal!
+- If an entry in `childTraining/*.yaml` has a new `id` (e.g., `morag_tong` or `psijic_monk`), it is **appended** as a new training path and automatically appears in the UI Dashboard's Adolescent Training modal!
 - **Location Images (`image`)**: Each training location specifies an `image` path (e.g., `"Data/SKSE/Plugins/MARAS/childTraining/images/College of Winterhold.webp"`). When the image file exists on disk in `Data/SKSE/Plugins/MARAS/childTraining/images/`, C++ caches it for rendering in `ChildTrainingModal.tsx`, falling back cleanly to a styled emblem placeholder if missing.
 - Every form reference (`npcClass`, `combatStyle`, `outfit`, `requirements.faction`, `requirements.quest`, `affiliation.*`, `spells[]`, `perks[]`, `items[].form`) uses standard `"__formData|<PluginName>|<0xHexFormID>"` syntax (supporting both 24-bit `.esp`/`.esm` and 12-bit light `.esl` plugins) and supports inline `#` comments to document EditorIDs and form names.
 - **Skill-Gated Perk Distribution**: `ChildVisualReconciler::ApplyAdultChildPerks` evaluates only the explicit `perks:` listed on the child's training location and Daedric blessing against each `RE::BGSPerk`'s native `data.level` and `perkConditions`, deduplicates multi-rank `BGSPerk::nextPerk` chains so only the highest qualified rank is active, and upgrades ranks automatically as the Player/child scales from Lv 10 to Lv 50.
@@ -210,7 +210,7 @@ daedricBlessings:
 | `modalTone`, `modalSize`, `defaultCancelButtonIndex` | Presentation style (`"default"`, `"warning"`, `"danger"`), modal width (`"md"`), and cancel button index. |
 | `allowLoverNameToken` | Whether `{lover}` substitution is revealed in text (`false` for charred/burned affair notes). |
 | `modalTitle`, `modalSubtitle`, `envelopeMessage` | Top header and arrival envelope lines (supports `{partner}`, `{player}`, `{location}`, `{lover}` tokens). |
-| `infoBoxId`, `infoBoxTitle`, `buttonId`, `buttonLabel` | Note parchment panel ID/title and confirmation close button label rendered via [`PrismaModalManager`](services/PrismaModalManager.md). |
+| `infoBoxId`, `infoBoxTitle`, `buttonId`, `buttonLabel` | Note parchment panel ID/title and confirmation close button label rendered via [`ModalManager`](services/ModalManager.md). |
 | `defaults` | Fallback `{salutation, premise, clue, signOff}` strings. |
 | `variants` | Temperament-keyed overrides (`Romantic`, `Humble`, `Independent`, `Proud`, `Jealous` — unknown temperament keys are logged and skipped). |
 
@@ -272,7 +272,7 @@ When the custom marriage quest reaches stage `100`, M.A.R.A.S automatically prom
 
 M.A.R.A.S supports both **Player $\leftrightarrow$ NPC** and **NPC $\leftrightarrow$ NPC** relationships across 9 live statuses (`Candidate` (`0`), `Engaged` (`1`), `Married` (`2`), `Divorced` (`3`), `Jilted` (`4`), `Dating` (`5`), `Lover` (`6`), `ExDating` (`7`), `ExLover` (`8`), plus `Unknown` (`255`)), while deceased partners/children are archived in `DeceasedTable` (`'DCSD'`).
 
-For complete function signatures and payloads, consult [API_AND_PRISMA_BRIDGE_REFERENCE.md](API_AND_PRISMA_BRIDGE_REFERENCE.md).
+For complete function signatures and payloads, consult [API_AND_UI_BRIDGE_REFERENCE.md](API_AND_UI_BRIDGE_REFERENCE.md).
 
 ### 7.1 Key Papyrus Functions (`MARAS.psc`)
 - **Pair-Keyed Relationship Transitions**:
@@ -291,7 +291,7 @@ For complete function signatures and payloads, consult [API_AND_PRISMA_BRIDGE_RE
   - `RegisterUnbornChild(Actor mother, Actor bioFather = None, float conceptionTime = 0.0, bool evaluateStepIn = true)` / `SetBioMother(int childID, Actor mother)` / `SetBioFather(int childID, Actor father)` — Tracks unborn/synthetic lineage and triggers automatic paternity secret evaluation when a conception involves an affair.
 
 ### 7.2 SKSE ModEvents Emitted by M.A.R.A.S
-External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<HandlerName>")` to react to M.A.R.A.S state transitions (see [API_AND_PRISMA_BRIDGE_REFERENCE.md](API_AND_PRISMA_BRIDGE_REFERENCE.md#22-skse-modevents-emitted-by-c) for detailed payload contracts):
+External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<HandlerName>")` to react to M.A.R.A.S state transitions (see [API_AND_UI_BRIDGE_REFERENCE.md](API_AND_UI_BRIDGE_REFERENCE.md#22-skse-modevents-emitted-by-c) for detailed payload contracts):
 
 | ModEvent Name | `strArg` / Key Payload | When Fired |
 | :--- | :--- | :--- |
@@ -310,4 +310,4 @@ External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<
 | `maras_actor_died` / `maras_child_died` / `maras_child_pet_died` | `""` (`numArg` `1.0` if player killer) | When a tracked adult, registered child, or household child's pet/critter dies. |
 
 ### 7.3 Native C++ DLL API (`MARAS_PublicAPI.h`)
-External SKSE C++ plugin authors can query live M.A.R.A.S relationship, household, and teammate state read-only by including [MARAS_PublicAPI.h](../../SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h) (or resolving the exported `extern "C"` functions via `GetModuleHandleW(L"MARAS.dll")` + `GetProcAddress`): `MARAS_GetPermanentAffection`, `MARAS_GetDaysSinceLastAffection`, `MARAS_GetAllMarried`, `MARAS_GetAllEngaged`, `MARAS_GetTemperament`, `MARAS_GetStatusHistoryCount`, `MARAS_GetStatusHistoryEntry`, `MARAS_GetTenantHouseFormID`, `MARAS_GetPlayerHouseTenants`, and `MARAS_GetCurrentTeammates`. See [API_AND_PRISMA_BRIDGE_REFERENCE.md#1-c-public-dll-api-maras_publich](API_AND_PRISMA_BRIDGE_REFERENCE.md#1-c-public-dll-api-maras_publich) for buffer contracts.
+External SKSE C++ plugin authors can query live M.A.R.A.S relationship, household, and teammate state read-only by including [MARAS_PublicAPI.h](../../SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h) (or resolving the exported `extern "C"` functions via `GetModuleHandleW(L"MARAS.dll")` + `GetProcAddress`): `MARAS_GetPermanentAffection`, `MARAS_GetDaysSinceLastAffection`, `MARAS_GetAllMarried`, `MARAS_GetAllEngaged`, `MARAS_GetTemperament`, `MARAS_GetStatusHistoryCount`, `MARAS_GetStatusHistoryEntry`, `MARAS_GetTenantHouseFormID`, `MARAS_GetPlayerHouseTenants`, and `MARAS_GetCurrentTeammates`. See [API_AND_UI_BRIDGE_REFERENCE.md#1-c-public-dll-api-maras_publich](API_AND_UI_BRIDGE_REFERENCE.md#1-c-public-dll-api-maras_publich) for buffer contracts.

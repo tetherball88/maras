@@ -6,7 +6,7 @@ Ever looked at a Jarl, a grumpy blacksmith, a chaotic necromancer, or that one s
 
 **M.A.R.A.S** is a full-scale, **SKSE-powered** and **ESL-flagged** romance, marriage, family, and social simulation overhaul for Skyrim. It doesn't just let you **romance and marry literally any adult NPC in the province**—it turns all of Skyrim into a living, breathing soap opera where **both you and NPCs** can date, hook up, propose, marry, build a polygamous dynasty, share houses, adopt unlimited kids, have biological babies, cheat Behind Closed Doors™, get caught red-handed, and suffer financially ruinous divorces. 😇🔥
 
-Whether you want a wholesome monogamous life with a doubled spouse buff, a carefully ranked harem of twelve spouses funding your adventures, or to play Cupid (or homewrecker) for the townsfolk of Whiterun from an in-game **Prisma UI Dashboard (`Alt + B`)**, M.A.R.A.S hands you the rings and lets you live with the consequences.
+Whether you want a wholesome monogamous life with a doubled spouse buff, a carefully ranked harem of twelve spouses funding your adventures, or to play Cupid (or homewrecker) for the townsfolk of Whiterun from an in-game **Magelight UI Dashboard (`Alt + B`)**, M.A.R.A.S hands you the rings and lets you live with the consequences.
 
 > [!NOTE]
 > **SFW Core with Optional Adult & AI Hooks:** M.A.R.A.S itself is completely **SFW** out of the box, and its `TT_MARAS.esp` plugin is **ESL-flagged** (so it takes zero full load-order slots). If you *choose* to pair it with **SkyrimNet**, **Fertility Mode Reloaded / Beeing Female**, or intimacy frameworks (**OStim / SexLab**), M.A.R.A.S seamlessly hooks into them for AI-voiced romance, pregnancies, and intimacy tracking!
@@ -16,7 +16,7 @@ Whether you want a wholesome monogamous life with a doubled spouse buff, a caref
 **Hard Requirements**
 - [SKSE64](https://skse.silverlock.org/)
 - [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444)
-- [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718) *(powers the interactive in-game `Alt + B` Dashboard)*
+- [Magelight UI](https://github.com/Severause/MagelightUI) *(powers the interactive in-game `Alt + B` Dashboard)*
 - [SkyUI](https://www.nexusmods.com/skyrimspecialedition/mods/12604)
 - [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561)
 - [PapyrusUtil SE](https://www.nexusmods.com/skyrimspecialedition/mods/13048)
@@ -125,8 +125,8 @@ This section provides technical documentation for mod authors, patch creators, a
 - **[Quest Event Tracker Configuration](docs/modder/QUEST_TRACKER.md)** — Declarative JSON quest stage hooks (`QuestEventHandler`) for triggering relationship transitions or affection changes on quest events.
 
 ### 3.2 System Architecture & Cross-Layer References
-- **[System Architecture Overview](docs/modder/ARCHITECTURE.md)** — High-level architecture across the SKSE C++23 plugin (`MARAS.dll`), `TT_MARAS.esp` engine mirrors, Papyrus event layer, and Prisma UI frontend, including `'MARS'` v4 SKSE co-save serialization.
-- **[Public API & Prisma UI Bridge Reference](docs/modder/API_AND_PRISMA_BRIDGE_REFERENCE.md)** — Complete reference for the `MARAS.psc` Papyrus native interface, `MARAS_PublicAPI.h` C/C++ interop header, SKSE `ModCallbackEvent` payloads, and Prisma UI JS-to-C++ bridge endpoints.
+- **[System Architecture Overview](docs/modder/ARCHITECTURE.md)** — High-level architecture across the SKSE C++23 plugin (`MARAS.dll`), `TT_MARAS.esp` engine mirrors, Papyrus event layer, and Magelight UI frontend, including `'MARS'` v4 SKSE co-save serialization.
+- **[Public API & UI Bridge Reference](docs/modder/API_AND_UI_BRIDGE_REFERENCE.md)** — Complete reference for the `MARAS.psc` Papyrus native interface, `MARAS_PublicAPI.h` C/C++ interop header, SKSE `ModCallbackEvent` payloads, and UI JS-to-C++ bridge endpoints.
 - **[Relationship Dynamics Technical Guide](docs/modder/RELATIONSHIP_DYNAMICS_GUIDE.md)** — Canonical `PairKey` state machine, exclusivity/polygamy rules, directional `CheatingRecord` tracking, and autonomous NPC matchmaking pipelines.
 - **[Household & Children Architecture](docs/modder/HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md)** — Player house registration, tenant sandboxing, guardian vs. biological lineage slot neutrality, and marriage/divorce/death custody resolution.
 - **[Fertility Mode Reloaded Integration Architecture](docs/modder/FERTILITY_MODE_RELOADED_INTEGRATION.md)** — FMR StorageUtil polling, synthetic child ID lifecycle (`0xFF700001+`), racial phenotype tier classification, and dual-edge paternity secrecy (`isSecretForPartner` / `isSecretForBioFather`).
@@ -161,5 +161,5 @@ This section provides technical documentation for mod authors, patch creators, a
 - ✅ **Contributions Welcome:** You are welcome and encouraged to fork this repository on GitHub, inspect the code, and submit **Pull Requests** or bug reports.
 - ✅ **Patches & Third-Party Integrations:** You may freely create and publish compatibility patches, JSON configs, SkyrimNet extensions, and add-on mods that require the official M.A.R.A.S release as a dependency. The public interop files (`SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h` and `Scripts/Source/MARAS.psc`) are explicitly provided under the **MIT License** so third-party mods can compile against them freely.
 - ✅ **Translations:** Community translations may be published as standalone translation patches that require the original M.A.R.A.S mod and credit the original page.
-- ❌ **No Standalone Redistribution or Re-uploading:** You may **not** copy, repackage, re-upload, or publish M.A.R.A.S (or modified standalone forks of its DLL, ESP, scripts, or Prisma UI) as your own mod on Nexus Mods or any other platform without explicit written permission from the author.
+- ❌ **No Standalone Redistribution or Re-uploading:** You may **not** copy, repackage, re-upload, or publish M.A.R.A.S (or modified standalone forks of its DLL, ESP, scripts, or Magelight UI views) as your own mod on Nexus Mods or any other platform without explicit written permission from the author.
 

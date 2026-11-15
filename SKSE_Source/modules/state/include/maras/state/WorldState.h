@@ -59,7 +59,7 @@ namespace MARAS::State {
 
     /**
      * Deltas produced by a canonical WorldState mutation so downstream engine adapters
-     * (factions, AI packages, Prisma UI push notifications) can reconcile strictly
+     * (factions, AI packages, UI dashboard push notifications) can reconcile strictly
      * what changed without mutating domain state inside queries.
      */
     struct RestoredSharedCellDelta {
