@@ -31,6 +31,26 @@ Event OnOStimStart(string eventName, string strArg, float numArg, Form sender)
     Actor[] actors = OThread.GetActors(threadID)
     TTM_Debug.info("TTM_ServiceIntimateMoments: OnOStimStart: thread=" + threadID + " actors=" + actors.Length)
     bool hasCheaters = MARAS.RegisterIntimateThread("OStim", threadID, actors)
+    bool hasPlayer = MARAS.HasIntimateThreadPlayerParticipants("OStim", threadID)
+    if (hasCheaters || hasPlayer)
+        string sceneId = OThread.GetScene(threadID)
+        int[] actions = OMetadata.FindActionsSuperloadCSVv2(sceneId, AnyActionTag = "sexual")
+        if (actions.Length > 0 && hasPlayer)
+            MARAS.MarkIntimateThreadSexual("OStim", threadID)
+        endif
+        if (hasCheaters)
+            int j = 0
+            while j < actions.Length
+                int actionIndex = actions[j]
+                Actor osActor = OThread.GetActor(threadID, OMetadata.GetActionActor(sceneId, actionIndex))
+                Actor osTarget = OThread.GetActor(threadID, OMetadata.GetActionTarget(sceneId, actionIndex))
+                if (osActor && osTarget && osActor != osTarget)
+                    MARAS.ReportIntimateInteraction("OStim", threadID, osActor, osTarget)
+                endif
+                j += 1
+            endwhile
+        endif
+    endif
     TTM_Debug.info("TTM_ServiceIntimateMoments: OnOStimStart: registered thread=" + threadID + " hasCheaters=" + hasCheaters)
 EndEvent
 
@@ -127,7 +147,7 @@ Function CleanupSexLabThread(int threadID)
 EndFunction
 
 Function RefreshDialogueLoversLedger(Actor npc) global
-    if(!npc || !TTM_Data.GetHasTTLL())
+    if(!npc || Game.GetFormFromFile(0x800, "TT_LoversLedger.esp") == None)
         return
     endif
 

@@ -658,4 +658,105 @@ namespace MARAS::Tests {
         MARAS_CHECK(refillWithBonus.bonusGoldDeduction >= 250 && refillWithBonus.bonusGoldDeduction <= 500);
     }
 
+    MARAS_TEST(DomainHousehold, MultiSpouseSharedCellDeltasSleepAdultGuardAndForcegreetTenantFallback) {
+        struct ZeroRng final : public IRng {
+            float NextFloat(float minVal = 0.0f, float = 1.0f) override { return minVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t) override { return minVal; }
+        };
+
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+        const HouseId breezehome{ 0x0003C001u };
+        const CellId sharedCell{ 0x0003C010u };
+        const ActorId spouse1{ 0x0003C101u };
+        const ActorId spouse2{ 0x0003C102u };
+        const ChildId adultChild{ 0x0003C201u };
+        const ChildId tenantChild{ 0x0003C202u };
+
+        ws.settings.Write().enablePlayerPolygamy = true;
+        for (ActorId id : { spouse1, spouse2 }) {
+            ActorProfileRecord p{};
+            p.refId = id.AsRefId();
+            p.baseId = BaseId{ id.raw() + 0x100u };
+            p.isRegisteredAdult = true;
+            ws.actors.Write().Upsert(p);
+            (void)ws.PromoteToMarried(ActorId::Player(), id, 1.0f, ActorId::Player(), meta);
+        }
+
+        // 1. StopSharingForSpouseWithDeltas ref-counts multiple spouses on the same shared cell
+        {
+            SharedCellRecord cellRec{};
+            cellRec.sharedWithPlayer = true;
+            cellRec.originalPublicRecorded = true;
+            cellRec.originalPublicState = false;
+            cellRec.sharingSpouses.insert(spouse1);
+            cellRec.sharingSpouses.insert(spouse2);
+            ws.household.Write().UpsertSharedCell(sharedCell, cellRec);
+
+            const auto firstStop = ws.StopSharingForSpouseWithDeltas(spouse1);
+            MARAS_CHECK(firstStop.changed);
+            MARAS_REQUIRE_EQ(firstStop.stoppedSharingSpouses.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(firstStop.stoppedSharingSpouses[0], spouse1);
+            MARAS_CHECK(firstStop.restoredSharedCells.empty());
+            MARAS_CHECK(ws.household->IsCellSharedWithPlayer(sharedCell));
+
+            const auto secondStop = ws.StopSharingForSpouseWithDeltas(spouse2);
+            MARAS_CHECK(secondStop.changed);
+            MARAS_REQUIRE_EQ(secondStop.stoppedSharingSpouses.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(secondStop.stoppedSharingSpouses[0], spouse2);
+            MARAS_REQUIRE_EQ(secondStop.restoredSharedCells.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(secondStop.restoredSharedCells[0].cellId, sharedCell);
+            MARAS_CHECK(!ws.household->IsCellSharedWithPlayer(sharedCell));
+        }
+
+        // 2. ComputeSpouseMultiplier excludes deceased spouse from livingMarriedCount
+        {
+            const float twoLivingMult = ComputeSpouseMultiplier(ws.Snapshot(), spouse1);
+            (void)ws.RecordActorDeath(spouse2, 5.0f, false, ActorId{}, meta);
+            const float oneLivingMult = ComputeSpouseMultiplier(ws.Snapshot(), spouse1);
+            MARAS_CHECK(twoLivingMult > 0.0f);
+            MARAS_CHECK(oneLivingMult > twoLivingMult);
+        }
+
+        // 3. EvaluateSleepRestedPlan ignores ChildStage::Adult without ChildHouseholdRecord & handles null house
+        {
+            (void)ApplyRegisterHouse(ws, breezehome, RefId{ 0x0003C002u }, true);
+            ChildRecord adultRec{};
+            adultRec.childId = adultChild;
+            adultRec.stage = ChildStage::Adult;
+            adultRec.guardians.Assign(ActorId::Player(), spouse1);
+            ws.lineage.Write().UpsertChild(adultRec);
+            (void)ApplyRegisterTenant(ws, adultChild.raw(), breezehome, true, false);
+
+            const std::vector<std::uint32_t> onlyAdultChild{ adultChild.raw() };
+            const auto adultPlan = EvaluateSleepRestedPlan(
+                ws.Snapshot(), breezehome, onlyAdultChild, ActorSex::Male);
+            MARAS_CHECK_EQ(adultPlan.partnerBuff, PartnerSleepBuff::None);
+            MARAS_CHECK_EQ(adultPlan.childBuff, ChildSleepBuff::None);
+            MARAS_CHECK_EQ(
+                EvaluateSleepRestedPlan(ws.Snapshot(), HouseId{}, onlyAdultChild, ActorSex::Male),
+                SleepRestedPlan{});
+        }
+
+        // 4. PlanReadyForcegreetEvent falls back to GetTenantHouse when currentHouseId is null
+        {
+            ChildHouseholdRecord chRec{};
+            chRec.childId = tenantChild;
+            chRec.isNewlyAdopted = true;
+            ws.household.Write().UpsertChildState(chRec);
+            (void)ApplyRegisterTenant(ws, tenantChild.raw(), breezehome, true, true);
+
+            ZeroRng rng{};
+            ForcegreetSelectionInput fgIn{};
+            fgIn.houseId = breezehome;
+            fgIn.currentGameDays = 20.0f;
+
+            const auto plan = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+            MARAS_CHECK_EQ(plan.eventNumber, 2);
+            MARAS_CHECK_EQ(plan.eventChild, tenantChild);
+            MARAS_CHECK(plan.markChestIntroduced);
+            MARAS_CHECK(plan.clearNewlyAdoptedForHouse);
+        }
+    }
+
 }  // namespace MARAS::Tests

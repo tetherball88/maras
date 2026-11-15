@@ -879,6 +879,10 @@ namespace MARAS::PapyrusInterface {
         if (childID == 0) {
             return false;
         }
+        if (slot < 0 || slot > 1) {
+            MARAS_LOG_WARN("SetChildGuardian: invalid slot {} for child {:08X}", slot, static_cast<RE::FormID>(childID));
+            return false;
+        }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         auto& lineage = App::LineageUseCases::GetSingleton();
@@ -1344,9 +1348,10 @@ namespace MARAS::PapyrusInterface {
                                             std::string childName,
                                             std::string trainingLocation,
                                             std::string className) {
+        (void)trainingLocation;
+        (void)className;
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        App::FertilityLifecycleCoordinator::GetSingleton().OnChildFinishedTraining(
-            childName, trainingLocation, className);
+        App::FertilityLifecycleCoordinator::GetSingleton().OnChildFinishedTraining(childName);
     }
 
     void OnFertilityAdultChildSpawned(RE::StaticFunctionTag*,

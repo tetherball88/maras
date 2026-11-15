@@ -2,6 +2,7 @@
 
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
+#include "maras/app/BanterSceneCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
@@ -1912,7 +1913,7 @@ namespace MARAS::App {
                 GetSkyrimNetGateway().EmitChildAdopted(childID, guardianAID, guardianBID);
             } else if (eventType == "inherited") {
                 GetSkyrimNetGateway().EmitChildInherited(childID, otherID, guardianAID, guardianBID);
-            } else if (eventType == "guardians_changed") {
+            } else if (eventType == "guardians_changed" || eventType == "custody_divorce") {
                 GetSkyrimNetGateway().EmitChildParentsChanged(childID, guardianAID, guardianBID, reason);
             } else if (eventType == "sent_to_training") {
                 GetSkyrimNetGateway().EmitChildSentToTraining(childID, GetChildName(childID), reason);
@@ -2167,13 +2168,21 @@ namespace MARAS::App {
             return false;
         }
         bool hadState = false;
+        Foundation::RefId transientCritterId{};
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& hh = ws.household.Write();
             const State::ChildId cid{ childID };
-            hadState = (hh.FindChildState(cid) != nullptr);
+            if (const auto* st = hh.FindChildState(cid)) {
+                hadState = true;
+                transientCritterId = st->transientCritterId;
+            }
             hh.EvictTenant(childID);
             hh.EraseChildState(cid);
         });
+
+        if (!transientCritterId.IsNull()) {
+            (void)ChildSpawnService::GetSingleton().DisableAndDeleteActor(transientCritterId.raw());
+        }
 
         auto& ops = PlayerChildrenEngineOps::GetSingleton();
         ops.RestoreChildFactions(childID);
@@ -3355,7 +3364,9 @@ namespace MARAS::App {
         }
 
         if (wasTrackedAdult || wasAdultChild) {
-            BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(canonicalVictimId, "deceased");
+            BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(
+                canonicalVictimId, mut, "deceased");
+            BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(mut.retiredSceneMarkers);
             HouseholdEngineOps::GetSingleton().ClearHomeMarkerLinkedRef(canonicalVictimId);
             FactionReconciler::GetSingleton().ReconcileActor(canonicalVictimId);
             PackageReconciler::GetSingleton().UnregisterActor(canonicalVictimId);

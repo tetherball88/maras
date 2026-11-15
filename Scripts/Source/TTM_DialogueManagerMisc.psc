@@ -31,10 +31,18 @@ Actor akSpeaker = akSpeakerRef as Actor
     int fx = MARAS.ApplyDialoguePromptBegin(akSpeaker, PromptKey)
     int speechOp = fx / 100
     int sceneOp = fx % 100
-    if(speechOp == 1)
-        pFDS.Persuade(akSpeaker)
-    elseif(speechOp == 2)
-        pFDS.Intimidate(akSpeaker)
+    if(speechOp == 1 || speechOp == 2)
+        FavorDialogueScript fds = pFDS
+        if(!fds)
+            fds = TTM_Data.GetDialogueFavorQuest() as FavorDialogueScript
+        endif
+        if(fds)
+            if(speechOp == 1)
+                fds.Persuade(akSpeaker)
+            else
+                fds.Intimidate(akSpeaker)
+            endif
+        endif
     endif
     if(sceneOp > 0)
         if(sceneOp == 8)

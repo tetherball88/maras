@@ -51,11 +51,11 @@ Next, M.A.R.A.S checks the NPC's combat class and their highest skills to assign
 
 *(Fun fact: If an NPC's highest skill is **Light Armor**, M.A.R.A.S checks whether they're better with a bow or with lockpicks/pickpocketing to decide if they're a **Ranger** or a **Rogue**!)*
 
-### 🛒 Bonus Perks of Skill Type: Home Shopkeepers & Guild Respect!
-Your spouse's Skill Type does **three** cool things in gameplay:
+### 🛒 Bonus Perks of Skill Type: Home Shopkeepers!
+Your spouse's Skill Type does **two** cool things in gameplay:
 1. **Follower Combat Buffs**: Gives you a combat bonus whenever they travel with you as an active follower.
 2. **Specialized Home Merchant**: When a spouse moves into one of your registered **Player Houses**, they set up a small merchant stall matching their Skill Type! Marry a **Mage** and buy spell tomes and soul gems at home; marry a **Craftsman** for ingots and smithing gear; marry a **Ranger** to restock arrows before heading out!
-3. **Guild Bonding**: When you're courting an NPC, sharing their specialty helps win them over—**Warriors** respect the Companions, **Mages** respect the College of Winterhold, and **Rogues** respect the Thieves Guild!
+*(Meanwhile, how impressed—or appalled—an NPC is by your faction memberships like the Companions, College of Winterhold, Thieves Guild, or Dark Brotherhood depends on their **Social Class** rather than their Skill Type!)*
 
 ---
 
@@ -130,7 +130,7 @@ Your spouse's current **Affection Mood Tier** multiplies both their Permanent Ho
 - 💔 **Estranged (`0–24`)**: **`0.00x`** *(Zero! You get nothing until you fix your marriage)*
 
 ### Step 2: Monogamy Bonus vs. Polygamy Rank (Permanent Buffs Only)
-For **Permanent Household Buffs** (and daily store gold!), M.A.R.A.S balances faithful monogamy against sprawling multi-spouse households:
+For **Permanent Household Buffs**, M.A.R.A.S balances faithful monogamy against sprawling multi-spouse households:
 
 - 💍 **The Monogamy Devotion Bonus (`2.0x`!)**:
   If you are married to **only one spouse**, their Permanent Household Buff is **DOUBLED (`2.0x`)**!

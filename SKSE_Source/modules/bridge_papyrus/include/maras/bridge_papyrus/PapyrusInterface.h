@@ -392,6 +392,13 @@ namespace MARAS::PapyrusInterface {
     void NotifyEngagementCeremonyStarted(RE::StaticFunctionTag*, RE::Actor* fiance);
     void ApplyDialogueLoversLedgerBonus(RE::StaticFunctionTag*, RE::Actor* npc, int32_t exclusiveSex, int32_t groupSex, int32_t playerTopLoverRank);
     void PacifyFianceOrSpouse(RE::StaticFunctionTag*, RE::Actor* npc, bool enable = true);
+    void SeedLegacyUpgradeState(
+        RE::StaticFunctionTag*,
+        float lastPaidDivorceFee,
+        int32_t childPoorCounter,
+        std::vector<RE::Actor*> npcs,
+        std::vector<float> brokeupTimes,
+        std::vector<float> sharedIncomeTimes);
 
     // ========================================
     // Buffs & Multipliers
@@ -520,7 +527,6 @@ namespace MARAS::PapyrusInterface {
     void SetDisablePolygamyQuest(RE::StaticFunctionTag*, bool value);
     int32_t GetMinRelRankForDial(RE::StaticFunctionTag*);
     void SetMinRelRankForDial(RE::StaticFunctionTag*, int32_t value);
-    bool GetShouldUseSkyrimNetDecisions(RE::StaticFunctionTag*);
     std::string DumpStoredData(RE::StaticFunctionTag*, std::string tag = "");
 
     // ========================================

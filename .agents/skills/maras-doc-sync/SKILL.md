@@ -33,6 +33,7 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
     - `MARAS/marriageDifficultyConfig.json` (fallback `MARAS/marriage_difficulty.json`) — Marriage difficulty params (`MarriageDifficultyLoader`).
     - `MARAS/bonuses.json` — Spouse archetype bonuses (`BonusesConfigLoader`).
     - `MARAS/npc_index_overrides.ini` — NPC spatial index include/exclude overrides (`SpatialWorldIndex`).
+    - `MARAS/promptStrings.json` — Localized Papyrus/dialogue/modal strings (`PromptStringsLoader`).
     - `PackageOverrides.ini` & `MARAS.ini` — AI package whitelist (`PackageReconciler`) and hotkey/log-level baseline (`SettingsCoordinator`).
 
 ## 2. Player-Facing Guides (`docs/player/`)

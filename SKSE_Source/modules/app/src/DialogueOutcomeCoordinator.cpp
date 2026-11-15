@@ -1,6 +1,7 @@
 #include "maras/app/DialogueOutcomeCoordinator.h"
 
 #include "maras/app/AffectionEventCoordinator.h"
+#include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/domain/relationships/DialogueAndActionRules.h"
 #include "maras/engine/FormCache.h"
@@ -27,6 +28,7 @@ namespace MARAS::App {
 
         if (outcome.registerCandidate) {
             (void)relSvc.RegisterAsCandidate(speakerId);
+            RelationshipInteractionCoordinator::GetSingleton().OnDialogueOpened(speakerId);
         }
         if (outcome.clearPartnerIntent) {
             relSvc.ClearPartnerIntent(speakerId);

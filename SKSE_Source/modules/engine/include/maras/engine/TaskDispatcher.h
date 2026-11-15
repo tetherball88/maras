@@ -145,12 +145,14 @@ namespace MARAS {
         if (!vm || stackID == 0) {
             return;
         }
-        DispatchPostLock(
+        // Always queue through AddEpochTask so vm->ReturnLatentResult never runs synchronously
+        // before LockedLatentWrapper::Call returns LatentStatus::kStarted to the Papyrus VM.
+        AddEpochTask(
             expectedEpoch,
+            contextTag ? contextTag : "LatentResult",
             [vm, stackID, value = std::move(value)]() mutable {
                 vm->ReturnLatentResult<R>(stackID, std::move(value));
-            },
-            contextTag);
+            });
     }
 
     template <class FormT>
@@ -162,13 +164,15 @@ namespace MARAS {
         if (!vm || stackID == 0) {
             return;
         }
-        DispatchPostLock(
+        // Always queue through AddEpochTask so vm->ReturnLatentResult never runs synchronously
+        // before LockedLatentWrapper::Call returns LatentStatus::kStarted to the Papyrus VM.
+        AddEpochTask(
             expectedEpoch,
+            contextTag ? contextTag : "LatentFormResult",
             [vm, stackID, formID]() {
                 FormT* resolved = formID != 0 ? RE::TESForm::LookupByID<FormT>(formID) : nullptr;
                 vm->ReturnLatentResult<FormT*>(stackID, resolved);
-            },
-            contextTag);
+            });
     }
 
 }  // namespace MARAS

@@ -1018,6 +1018,42 @@ namespace MARAS::PapyrusInterface {
         RelationshipEngineReconciler::GetSingleton().PacifyFianceOrSpouse(npc->GetFormID(), enable);
     }
 
+    void SeedLegacyUpgradeState(
+        RE::StaticFunctionTag*,
+        float lastPaidDivorceFee,
+        int32_t childPoorCounter,
+        std::vector<RE::Actor*> npcs,
+        std::vector<float> brokeupTimes,
+        std::vector<float> sharedIncomeTimes) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            if (lastPaidDivorceFee >= 0.0f && ws.cooldowns->lastTimePaidDivorceFee < 0.0f) {
+                ws.cooldowns.Write().lastTimePaidDivorceFee = lastPaidDivorceFee;
+            }
+            if (childPoorCounter > 0 && ws.household->GetPoorCounter() == 0) {
+                ws.household.Write().SetPoorCounter(childPoorCounter);
+            }
+            for (std::size_t i = 0; i < npcs.size(); ++i) {
+                auto* npc = npcs[i];
+                if (!npc) {
+                    continue;
+                }
+                const State::ActorId aid{ npc->GetFormID() };
+                if (aid.IsNull()) {
+                    continue;
+                }
+                if (i < brokeupTimes.size() && brokeupTimes[i] >= 0.0f &&
+                    ws.cooldowns->GetBrokeupTime(aid) < 0.0f) {
+                    ws.cooldowns.Write().SetBrokeupTime(aid, brokeupTimes[i]);
+                }
+                if (i < sharedIncomeTimes.size() && sharedIncomeTimes[i] >= 0.0f &&
+                    ws.cooldowns->GetLastTimeSharedIncome(aid) < 0.0f) {
+                    ws.cooldowns.Write().SetLastTimeSharedIncome(aid, sharedIncomeTimes[i]);
+                }
+            }
+        });
+    }
+
     // ========================================
     // Buffs & Multipliers
     // ========================================

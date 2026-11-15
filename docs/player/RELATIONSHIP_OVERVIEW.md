@@ -73,7 +73,7 @@ Depending on your mod setup, you have two ways to romance anyone in Skyrim:
 1. **Register & Court**: Talk to an eligible NPC (wearing an **Amulet of Mara** helps open romantic topics!).
 2. **Pass Their Standards (Romance & Marriage Difficulty)**:
    - Asking someone to become your **Lover**, start **Dating**, or **Marry** you isn't always an automatic *"Yes!"*—with casual Lover proposals being the easiest, Dating in the middle, and Marriage requiring the highest commitment, and progressing step-by-step (`Lover` $\rightarrow$ `Dating` $\rightarrow$ `Engaged`) improving your odds along the way.
-   - Depending on their **Social Class** and **Skill Type**, they'll evaluate your **Prestige**—how much they like you, whether you own houses, how much gold you have, how many quests you've completed, and whether you lead a guild they respect (like the Companions for a Warrior or the College for a Mage).
+   - Depending on their **Social Class**, they'll evaluate your **Prestige**—how much they like you, whether you own houses, how much gold you have, how many quests you've completed, and whether you lead a guild their social stratum respects or looks down upon (e.g., Nobles and Religious folk vs. Thieves Guild or Dark Brotherhood ties).
    - **History & Exclusivity Matter**: Winning back an ex (`Ex-Lover`, `Ex-Dating`, or `Jilted`) or proposing when either of you would be **cheating** on a closed partner significantly lowers your chances!
    - *(Want easier or harder proposals? You can tweak or turn off proposal requirements anytime in the **M.A.R.A.S Dashboard $\rightarrow$ Settings**!)*
 3. **Tie the Knot**: Once engaged, head to Maramal in Riften for a traditional wedding—or use the quick-marriage option if you'd rather skip the church pews and get straight to the honeymoon.
@@ -146,11 +146,11 @@ While regular NPCs in Skyrim practice one-at-a-time committed relationships, the
 - **Menu Shortcut**: Toggle Polygamy directly in the **M.A.R.A.S Dashboard $\rightarrow$ Settings** tab.
 
 ### 🏆 The Household Hierarchy (`1st`, `2nd`, `3rd`, `4th+`)
-When you have multiple spouses, your partners recognize Mara's blessing (so marrying Spouse #2 doesn't count as cheating on Spouse #1!), and your spouses are organized into a **Household Hierarchy** that scales their **Permanent Household Buffs** and **Daily Store Gold**:
-- 🥇 **Lead Spouse (`1st Rank` — `1.00x`)**: The head of your household! Receives full baseline buff and gold scaling.
-- 🥈 **Second Spouse (`2nd Rank` — `0.50x`)**: Senior partner (`50%` permanent buff & gold share).
-- 🥉 **Third Spouse (`3rd Rank` — `0.25x`)**: Honored partner (`25%` permanent buff & gold share).
-- 🏅 **Fourth+ Spouses (`4th+ Rank` — `0.10x` each)**: Additional spouses (`10%` permanent buff & gold share each).
+When you have multiple spouses, your partners recognize Mara's blessing (so marrying Spouse #2 doesn't count as cheating on Spouse #1!), and your spouses are organized into a **Household Hierarchy** that scales their **Permanent Household Buffs** *(daily store income remains a flat `100` gold/day up to `500` gold once Affection exceeds `50`)*:
+- 🥇 **Lead Spouse (`1st Rank` — `1.00x`)**: The head of your household! Receives full baseline permanent buff scaling.
+- 🥈 **Second Spouse (`2nd Rank` — `0.50x`)**: Senior partner (`50%` permanent buff scaling).
+- 🥉 **Third Spouse (`3rd Rank` — `0.25x`)**: Honored partner (`25%` permanent buff scaling).
+- 🏅 **Fourth+ Spouses (`4th+ Rank` — `0.10x` each)**: Additional spouses (`10%` permanent buff scaling each).
 
 > [!WARNING]
 > **Careful Who You Demote!**
@@ -166,8 +166,8 @@ Not every love story lasts forever. When you (or your partner) end a relationshi
 - ⛪ **Left at the Altar (`Jilted`)**: Calling off an engagement breaks your fiancé(e)'s heart—expect them to be furious and unwilling to jump right back into dating.
 - 📜 **Divorce (`Divorced`)**: Ending a marriage is serious business in M.A.R.A.S:
   1. **Moving Out & Losing Perks**: Your ex-spouse moves out of your Player House (or kicks you out of theirs!), and you immediately lose their buffs and daily store income.
-  2. **The Divorce Settlement (Alimony!)**: Your ex-spouse won't walk away empty-handed! A courier will track you down with a **Divorce Settlement** demand scaled to your gold, houses, and their Social Class.
-  3. **Pay Up or Talk to the Guards**: If you refuse or dodge the settlement for **3 in-game days**, your ex reports you to the jarl's men and the entire unpaid settlement is slapped onto your **Hold Bounty**! 🚓💰
+  2. **The Divorce Settlement (Alimony!)**: Your ex-spouse won't walk away empty-handed! A **Divorce Settlement Notice** assesses a fee based on a **`100` base fee**, **`30%` of your carried gold** *(up to `1,000` gold)*, plus your owned houses (`700` each), horses (`500` each), completed quests (`100` each, up to `1,000`), and cleared dungeons (`100` each, up to `1,000`).
+  3. **Pay Up or Take the Hold Bounty**: When the settlement prompt appears, you can pay immediately or refuse and let the unpaid balance be added directly to your **Hold Bounty** in your ex-spouse's hold! *(Divorce settlements share a **7-day cooldown** across spouses.)* 🚓💰
   4. **Child Custody**: If you share adopted or biological children, custody is decided automatically based on your **Settings $\rightarrow$ Children & Pets** rules (*Prioritize Biological Parent*, *Always / Never with Player*, and *Stay with Mother / Father*, with a fair 50/50 coin flip for same-sex ties).
 
 ---

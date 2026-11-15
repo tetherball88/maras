@@ -4,14 +4,14 @@
 **Sources**:
 - [RelationshipUseCases.h](../../../SKSE_Source/modules/app/include/maras/app/RelationshipUseCases.h) / [RelationshipUseCases.cpp](../../../SKSE_Source/modules/app/src/RelationshipUseCases.cpp)
 - [RelationshipRules.h](../../../SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/RelationshipRules.h) / [InfidelityRules.h](../../../SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/InfidelityRules.h) / [SpouseHierarchyRules.h](../../../SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/SpouseHierarchyRules.h)
-- [JsonOverrideLoader.h](../../../SKSE_Source/modules/engine/include/maras/engine/JsonOverrideLoader.h)
+- [DialogueOutcomeCoordinator.h](../../../SKSE_Source/modules/app/include/maras/app/DialogueOutcomeCoordinator.h) / [PromptStringsLoader.h](../../../SKSE_Source/modules/engine/include/maras/engine/PromptStringsLoader.h) / [JsonOverrideLoader.h](../../../SKSE_Source/modules/engine/include/maras/engine/JsonOverrideLoader.h)
 - [Architecture Overview](../ARCHITECTURE.md)
 
 ---
 
 ## 1. Purpose & Responsibility
 
-`RelationshipUseCases` is the Layer-4 application coordinator governing M.A.R.A.S.'s romantic, marital, hierarchy, infidelity, affection mutation, and NPC trait classification workflows. It bridges pure domain validators (`RelationshipRules`, `InfidelityRules`, `AffectionRules`, `SpouseHierarchyRules`) with [`WorldStore`](WorldStoreAndCoSave.md) transactions, precomputes engine metadata safely outside locks, and triggers downstream engine reconciliation and cross-layer notifications.
+`RelationshipUseCases` is the Layer-4 application coordinator governing M.A.R.A.S.'s romantic, marital, hierarchy, infidelity, affection mutation, and NPC trait classification workflows. It bridges pure domain validators (`RelationshipRules`, `InfidelityRules`, `AffectionRules`, `SpouseHierarchyRules`) with [`WorldStore`](WorldStoreAndCoSave.md) transactions, precomputes engine metadata safely outside locks, and triggers downstream engine reconciliation and cross-layer notifications. Vanilla topic-info prompt lookups and conversational dialogue outcomes are coordinated alongside it by `DialogueOutcomeCoordinator` using `PromptStringsLoader` (`SKSE/Plugins/MARAS/promptStrings.json`).
 
 ---
 

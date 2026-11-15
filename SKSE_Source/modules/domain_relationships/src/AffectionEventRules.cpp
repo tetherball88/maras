@@ -245,19 +245,21 @@ namespace MARAS::Domain::Relationships {
             return false;
         }
         const auto unborn = snap.lineage->GetUnbornOfMother(mother);
-        if (unborn.empty()) {
-            return false;
+        for (const State::ChildId cid : unborn) {
+            const auto* rec = snap.lineage->FindChild(cid);
+            if (!rec || rec->stage != Foundation::ChildStage::Unborn) {
+                continue;
+            }
+            const State::ActorId partner = ResolveChildMotherPartner(snap, *rec);
+            if (partner.IsNull()) {
+                continue;
+            }
+            if (!rec->paternitySecret.CanObserverKnowPregnancy(
+                    rec->stage, rec->bioMother, rec->bioFather, partner, partner)) {
+                return true;
+            }
         }
-        const auto* rec = snap.lineage->FindChild(unborn.front());
-        if (!rec || rec->stage != Foundation::ChildStage::Unborn || !rec->paternitySecret.isSecretForPartner) {
-            return false;
-        }
-        const State::ActorId partner = ResolveChildMotherPartner(snap, *rec);
-        if (partner.IsNull()) {
-            return false;
-        }
-        return !rec->paternitySecret.CanObserverKnowPregnancy(
-            rec->stage, rec->bioMother, rec->bioFather, partner, partner);
+        return false;
     }
 
     bool IsChildSecretForBioFather(
@@ -527,10 +529,6 @@ namespace MARAS::Domain::Relationships {
             AppendSingleIfPresent(
                 out,
                 PlanPlayerPartnerAffectionAdjustment(snap, cheater, delta, reason));
-        } else {
-            std::unordered_map<State::ActorId, int> sequentialScores;
-            AppendPlannedAdjustment(snap, sequentialScores, out, cheater, delta, reason);
-            AppendPlannedAdjustment(snap, sequentialScores, out, victim, delta, reason);
         }
         return out;
     }

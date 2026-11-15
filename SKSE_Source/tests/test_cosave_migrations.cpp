@@ -1516,4 +1516,268 @@ namespace MARAS::Tests {
         MARAS_CHECK_EQ(loaded.cooldowns->skyrimNetMutedActors[0], remappedLiveMovedNpc);
     }
 
+    MARAS_TEST(CoSaveMigrations, BoundarySafetyTruncationOverflowAndInvalidMagic) {
+        auto writeLe32 = [](std::vector<std::uint8_t>& out, std::size_t offset, std::uint32_t val) {
+            out[offset + 0] = static_cast<std::uint8_t>(val & 0xFFu);
+            out[offset + 1] = static_cast<std::uint8_t>((val >> 8) & 0xFFu);
+            out[offset + 2] = static_cast<std::uint8_t>((val >> 16) & 0xFFu);
+            out[offset + 3] = static_cast<std::uint8_t>((val >> 24) & 0xFFu);
+        };
+        auto findTagOffset = [](const std::vector<std::uint8_t>& buf, std::uint32_t tag) -> std::optional<std::size_t> {
+            std::array<std::uint8_t, 4> needle{
+                static_cast<std::uint8_t>(tag & 0xFFu),
+                static_cast<std::uint8_t>((tag >> 8) & 0xFFu),
+                static_cast<std::uint8_t>((tag >> 16) & 0xFFu),
+                static_cast<std::uint8_t>((tag >> 24) & 0xFFu),
+            };
+            const auto it = std::search(buf.begin(), buf.end(), needle.begin(), needle.end());
+            if (it == buf.end()) {
+                return std::nullopt;
+            }
+            return static_cast<std::size_t>(std::distance(buf.begin(), it));
+        };
+        auto seedTarget = []() {
+            WorldState ws{};
+            (void)ws.household.Write().RegisterHouse(HouseId{ 0x00090001u }, RefId{ 0x00090002u }, true);
+            ws.household.Write().SetPoorCounter(7);
+            ws.affection.Write().SetPermanent(ActorId{ 0x00090010u }, 88);
+            ActorProfileRecord p{};
+            p.refId = RefId{ 0x00090020u };
+            p.baseId = BaseId{ 0x00090021u };
+            p.isRegisteredAdult = true;
+            ws.actors.Write().Upsert(p);
+            DeceasedActorRecord d{};
+            d.baseId = BaseId{ 0x00090031u };
+            d.refId = RefId{ 0x00090032u };
+            d.name = "KeepDead";
+            ws.deceased.Write().UpsertRecord(std::move(d));
+            ws.cooldowns.Write().playerKiller = true;
+            ws.cooldowns.Write().savedBanterCooldownHours = 12.0f;
+            ws.settings.Write().enablePlayerPolygamy = true;
+            return ws;
+        };
+        auto verifyFailsAtomically = [&](const std::vector<CoSaveRecordChunk>& chunks) {
+            WorldState target = seedTarget();
+            const WorldState expected = target;
+            IdentityFormIdResolver resolver{};
+            InMemoryCoSaveReader reader(chunks);
+            const CoSaveLoadReport rep = LoadWorldState(target, reader, resolver);
+            MARAS_CHECK(!rep.allChunksSucceeded);
+            MARAS_CHECK_EQ(rep.loadedChunkCount, 0u);
+            MARAS_CHECK_EQ(rep.failedChunkCount, 1u);
+            MARAS_CHECK(target == expected);
+        };
+
+        // 1. 0-byte empty payloads across mandatory/versioned chunks fail cleanly with rollback
+        for (const std::uint32_t chunkType : {
+                 CoSaveConstants::kChunkNPCR,
+                 CoSaveConstants::kChunkAFCT,
+                 CoSaveConstants::kChunkPLCH,
+                 CoSaveConstants::kChunkMKMK,
+                 CoSaveConstants::kChunkDCSD,
+                 CoSaveConstants::kChunkBNTR,
+                 CoSaveConstants::kChunkACTR,
+                 CoSaveConstants::kChunkCNFG,
+             }) {
+            verifyFailsAtomically({ CoSaveRecordChunk{ chunkType, CoSaveConstants::kDataVersion, {} } });
+        }
+
+        // 2. Build valid WorldState containing all 5 optional extensions ('FRT1', 'DCS1', 'REL1', 'PLC1', 'BNT1')
+        WorldState fullSrc{};
+        const ActorId liveNpc{ 0x00081001u };
+        const ActorId deadPartner{ 0x00081002u };
+        const ChildId bornChild{ 0xFF700801u };
+        {
+            ActorProfileRecord p{};
+            p.refId = liveNpc.AsRefId();
+            p.baseId = BaseId{ 0x00081011u };
+            p.socialClass = SocialClass::Working;
+            p.isRegisteredAdult = true;
+            fullSrc.actors.Write().Upsert(p);
+
+            ChildRecord c{};
+            c.childId = bornChild;
+            c.bioMother = liveNpc;
+            c.bioFather = ActorId::Player();
+            c.stage = ChildStage::Infant;
+            c.name = "BatchBaby";
+            fullSrc.lineage.Write().UpsertChild(c);
+
+            ActiveDeliveryBatch batch{};
+            batch.laborTotal = 2;
+            batch.laborStartGameDay = 12.0f;
+            batch.bornChildIds = { bornChild };
+            fullSrc.lineage.Write().UpsertActiveDeliveryBatch(liveNpc, batch);
+
+            DeceasedActorRecord dead{};
+            dead.baseId = BaseId{ 0x00081021u };
+            dead.refId = RefId{ 0x00081022u };
+            dead.name = "DeadSecret";
+            DeceasedPartnerEntry pe{};
+            pe.partnerBaseId = BaseId{ 0x00081023u };
+            pe.partnerRefId = deadPartner.AsRefId();
+            pe.partnerName = "SecretLover";
+            pe.statusAtDeath = RelationshipStatus::Lover;
+            pe.isSecretAffair = true;
+            dead.partnersAtDeath.push_back(std::move(pe));
+            fullSrc.deceased.Write().UpsertRecord(std::move(dead));
+
+            fullSrc.household.Write().SetChildChestIntroduced(true);
+            fullSrc.household.Write().SetPoorCounter(3);
+            fullSrc.household.Write().SetNameCallingUsedLast(true);
+            fullSrc.cooldowns.Write().playerKiller = true;
+            fullSrc.cooldowns.Write().skyrimNetMutedActors = { liveNpc };
+        }
+        InMemoryCoSaveWriter fullWriter{};
+        MARAS_REQUIRE(SaveWorldState(fullSrc, fullWriter));
+
+        // 3. Unknown 'XXXX' trailing extension magic and 1..3 byte extension truncations fail & roll back
+        const std::array<std::pair<std::uint32_t, std::uint32_t>, 5> extPairs{ {
+            { CoSaveConstants::kChunkNPCR, CoSaveConstants::kExtFertilityBatchFRT1 },
+            { CoSaveConstants::kChunkDCSD, CoSaveConstants::kExtDeceasedSecrecyDCS1 },
+            { CoSaveConstants::kChunkMKMK, CoSaveConstants::kExtRelationshipStateREL1 },
+            { CoSaveConstants::kChunkPLCH, CoSaveConstants::kExtPlayerChildrenStatePLC1 },
+            { CoSaveConstants::kChunkBNTR, CoSaveConstants::kExtBanterSceneStateBNT1 },
+        } };
+        const std::uint32_t badMagic = MakeFourCC('X', 'X', 'X', 'X');
+        for (const auto& [chunkType, extTag] : extPairs) {
+            bool tested = false;
+            for (const auto& rec : fullWriter.Records()) {
+                if (rec.type != chunkType) {
+                    continue;
+                }
+                const auto off = findTagOffset(rec.payload, extTag);
+                MARAS_REQUIRE(off.has_value());
+
+                CoSaveRecordChunk corruptedChunk = rec;
+                writeLe32(corruptedChunk.payload, *off, badMagic);
+                verifyFailsAtomically({ corruptedChunk });
+
+                for (const std::size_t extra : { std::size_t{ 2 }, std::size_t{ 6 } }) {
+                    if (rec.payload.size() > *off + extra) {
+                        CoSaveRecordChunk truncatedChunk = rec;
+                        truncatedChunk.payload.resize(*off + extra);
+                        verifyFailsAtomically({ truncatedChunk });
+                    }
+                }
+                tested = true;
+            }
+            MARAS_CHECK(tested);
+        }
+
+        // 4. Bounds overflow rejection (kMaxSerializedEntries + 1 = 100001u, kMaxTenants + 1 = 10001u)
+        {
+            const std::uint32_t kOverEntries = 100001u;
+            const std::uint32_t kOverTenants = 10001u;
+
+            {
+                InMemoryCoSaveWriter w{};
+                MARAS_REQUIRE(w.OpenRecord(CoSaveConstants::kChunkAFCT, CoSaveConstants::kDataVersion));
+                MARAS_REQUIRE(w.WritePod(kOverEntries));
+                verifyFailsAtomically(w.Records());
+            }
+            {
+                InMemoryCoSaveWriter w{};
+                MARAS_REQUIRE(w.OpenRecord(CoSaveConstants::kChunkBNTR, CoSaveConstants::kDataVersion));
+                const float cdHours = 24.0f;
+                MARAS_REQUIRE(w.WritePod(cdHours));
+                MARAS_REQUIRE(w.WritePod(kOverEntries));
+                verifyFailsAtomically(w.Records());
+            }
+            {
+                InMemoryCoSaveWriter w{};
+                MARAS_REQUIRE(w.OpenRecord(CoSaveConstants::kChunkPLCH, CoSaveConstants::kDataVersion));
+                const bool chestIntro = false;
+                MARAS_REQUIRE(w.WritePod(chestIntro));
+                MARAS_REQUIRE(w.WritePod(kOverTenants));
+                verifyFailsAtomically(w.Records());
+            }
+            {
+                InMemoryCoSaveWriter w{};
+                MARAS_REQUIRE(w.OpenRecord(CoSaveConstants::kChunkCFSN, CoSaveConstants::kDataVersion));
+                MARAS_REQUIRE(w.WritePod(kOverTenants));
+                verifyFailsAtomically(w.Records());
+            }
+            {
+                InMemoryCoSaveWriter w{};
+                MARAS_REQUIRE(w.OpenRecord(CoSaveConstants::kChunkACTR, CoSaveConstants::kDataVersion));
+                MARAS_REQUIRE(w.WritePod(CoSaveConstants::kMagicNumber));
+                MARAS_REQUIRE(w.WritePod(kOverTenants));
+                verifyFailsAtomically(w.Records());
+            }
+        }
+    }
+
+    MARAS_TEST(CoSaveMigrations, AffectionOrphanPruningAndWidowSceneMarkerReconciliation) {
+        const ActorId savedLive{ 0x02006001u };
+        const ActorId remappedLive{ 0x05006001u };
+        const ActorId savedOrphan{ 0x02006002u };
+        const ActorId deadSpouse{ 0x00082001u };
+        const ActorId deadSceneNpc{ 0x00082002u };
+        const CellId sharedCell{ 0x00083001u };
+        const RefId dynMarker{ 0xFF00D111u };
+
+        MockFormIdResolver resolver{};
+        resolver.remapTable[savedLive.raw()] = remappedLive.raw();
+        resolver.unresolvedRawIds.insert(savedOrphan.raw());
+        resolver.baseIds[remappedLive] = BaseId{ 0x05006011u };
+        resolver.baseIds[deadSpouse] = BaseId{ 0x00082011u };
+        resolver.baseIds[deadSceneNpc] = BaseId{ 0x00082012u };
+        resolver.names[deadSpouse] = "DeadSpouse";
+        resolver.names[deadSceneNpc] = "DeadSceneNpc";
+        resolver.deadOrInvalidActors.insert(deadSpouse);
+        resolver.deadOrInvalidActors.insert(deadSceneNpc);
+
+        WorldState src{};
+        DefaultActorMetadataProvider saveMeta{};
+        for (ActorId id : { savedLive, deadSpouse, deadSceneNpc }) {
+            ActorProfileRecord p{};
+            p.refId = id.AsRefId();
+            p.baseId = BaseId{ id.raw() + 0x10u };
+            p.isRegisteredAdult = true;
+            src.actors.Write().Upsert(p);
+        }
+        (void)src.PromoteToMarried(ActorId::Player(), deadSpouse, 1.0f, ActorId::Player(), saveMeta);
+
+        SharedCellRecord cellRec{};
+        cellRec.sharedWithPlayer = true;
+        cellRec.originalPublicRecorded = true;
+        cellRec.originalPublicState = false;
+        cellRec.sharingSpouses.insert(deadSpouse);
+        src.household.Write().UpsertSharedCell(sharedCell, cellRec);
+
+        src.cooldowns.Write().movedSceneActors[deadSceneNpc] = dynMarker;
+
+        src.affection.Write().SetPermanent(savedLive, 77);
+        src.affection.Write().SetLastInteractionDay(savedLive, 14.5f);
+        src.affection.Write().SetDailyAccumulation(savedLive, "gift", 4.0f);
+
+        src.affection.Write().SetPermanent(savedOrphan, 66);
+        src.affection.Write().SetLastInteractionDay(savedOrphan, 9.0f);
+        src.affection.Write().SetDailyAccumulation(savedOrphan, "gift", 3.0f);
+
+        InMemoryCoSaveWriter w{};
+        MARAS_REQUIRE(SaveWorldState(src, w));
+
+        WorldState loaded{};
+        InMemoryCoSaveReader reader(w.Records());
+        const CoSaveLoadReport rep = LoadWorldState(loaded, reader, resolver);
+        MARAS_REQUIRE(rep.allChunksSucceeded);
+
+        // AffectionTable preserves live remapped actor and prunes unresolved/dead actors across all 3 maps
+        MARAS_CHECK(loaded.affection->HasPermanent(remappedLive));
+        MARAS_CHECK_EQ(loaded.affection->GetPermanent(remappedLive), 77);
+        MARAS_REQUIRE(loaded.affection->GetLastInteractionDay(remappedLive).has_value());
+        MARAS_CHECK_EQ(loaded.affection->AllDaily().size(), std::size_t{ 1 });
+        MARAS_CHECK(loaded.affection->AllDaily().contains(remappedLive));
+        MARAS_CHECK(!loaded.affection->HasPermanent(savedOrphan));
+        MARAS_CHECK(!loaded.affection->GetLastInteractionDay(savedOrphan).has_value());
+
+        // 'BNT1' dead actor returns retired scene marker; widowed spouse preserves SharedCellRecord
+        MARAS_REQUIRE_EQ(rep.retiredSceneMarkers.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(rep.retiredSceneMarkers[0], dynMarker);
+        MARAS_CHECK(loaded.cooldowns->movedSceneActors.empty());
+        MARAS_CHECK(loaded.household->IsCellSharedWithPlayer(sharedCell));
+    }
+
 }  // namespace MARAS::Tests

@@ -43,6 +43,19 @@ namespace MARAS {
             }
         }
 
+        void QueueStoppedSharingHudMessage(RE::FormID npcFormId, std::string_view reason) {
+            const std::string spouseName = ActorSvc::GetName(npcFormId);
+            if (reason == "divorce") {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDivorce{{{}}}", spouseName));
+            } else if (reason == "deceased") {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDeceased{{{}}}", spouseName));
+            } else if (reason == "affection") {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedAffection{{{}}}", spouseName));
+            } else {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedOther{{{}}}", spouseName));
+            }
+        }
+
     }  // namespace
 
     BedOwnershipReconciler& BedOwnershipReconciler::GetSingleton() {
@@ -261,22 +274,43 @@ namespace MARAS {
         if (found) {
             RestoreFurniture(npcFormId);
             FactionReconciler::GetSingleton().ReconcileActor(npcFormId);
-
-            const std::string spouseName = ActorSvc::GetName(npcFormId);
-            if (reason == "divorce") {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDivorce{{{}}}", spouseName));
-            } else if (reason == "deceased") {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDeceased{{{}}}", spouseName));
-            } else if (reason == "affection") {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedAffection{{{}}}", spouseName));
-            } else {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedOther{{{}}}", spouseName));
-            }
+            QueueStoppedSharingHudMessage(npcFormId, reason);
         }
         RestoreUnsharedCells(cellsToRestore);
 
         MARAS_LOG_INFO("BedOwnershipReconciler::StopShareHomeWithPlayer: stopped sharing for NPC {:08X} (found: {}, reason: '{}')",
                        npcFormId, found, reason);
+        return found;
+    }
+
+    bool BedOwnershipReconciler::ReconcileStoppedSharingFromMutation(
+        RE::FormID npcFormId,
+        const State::WorldMutationResult& mut,
+        std::string_view reason) {
+        if (!HasPhysicalActor(npcFormId)) {
+            return false;
+        }
+
+        const State::ActorId targetId{ npcFormId };
+        const bool found =
+            std::find(mut.stoppedSharingSpouses.begin(), mut.stoppedSharingSpouses.end(), targetId) !=
+            mut.stoppedSharingSpouses.end();
+
+        std::vector<std::pair<RE::FormID, State::SharedCellRecord>> cellsToRestore;
+        cellsToRestore.reserve(mut.restoredSharedCells.size());
+        for (const auto& delta : mut.restoredSharedCells) {
+            cellsToRestore.emplace_back(delta.cellId.raw(), delta.previousRecord);
+        }
+        RestoreUnsharedCells(cellsToRestore);
+
+        if (found) {
+            RestoreFurniture(npcFormId);
+            FactionReconciler::GetSingleton().ReconcileActor(npcFormId);
+            QueueStoppedSharingHudMessage(npcFormId, reason);
+            MARAS_LOG_INFO(
+                "BedOwnershipReconciler::ReconcileStoppedSharingFromMutation: reconciled stopped sharing for NPC {:08X} (cells={}, reason='{}')",
+                npcFormId, cellsToRestore.size(), reason);
+        }
         return found;
     }
 

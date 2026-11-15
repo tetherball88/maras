@@ -2372,7 +2372,7 @@ namespace MARAS::Bridge::SkyrimNet {
             if (otherID != 0) {
                 ev.participants.push_back(MakeParticipant(otherID, "deceased_parent", "", /*allowGenerateMemory=*/false));
             }
-        } else if (eventType == "guardians_changed") {
+        } else if (eventType == "guardians_changed" || eventType == "custody_divorce") {
             if (reason == "marriage" && guardianAID != 0 && guardianBID != 0) {
                 ev.eventHeadline = std::format("Through marriage, {} and {} now share joint guardianship of {}{}.",
                                                nameGA, nameGB, childName,

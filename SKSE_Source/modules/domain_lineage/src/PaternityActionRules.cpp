@@ -25,7 +25,14 @@ namespace MARAS::Domain::Lineage {
             StringUtils::Contains(trimmedFather, "pregnancy_only");
         directive.resolveAllMatches =
             !directive.isPregnancyOnly && StringUtils::CaseInsensitiveEquals(trimmedChild, "all");
-        if (!directive.isBoth && !trimmedFather.empty()) {
+        const bool isRoleKeyword =
+            StringUtils::CaseInsensitiveEquals(trimmedFather, "bio") ||
+            StringUtils::CaseInsensitiveEquals(trimmedFather, "biological") ||
+            StringUtils::CaseInsensitiveEquals(trimmedFather, "presumed") ||
+            StringUtils::CaseInsensitiveEquals(trimmedFather, "assumed") ||
+            StringUtils::CaseInsensitiveEquals(trimmedFather, "partner") ||
+            StringUtils::CaseInsensitiveEquals(trimmedFather, "both");
+        if (!directive.isBoth && !isRoleKeyword && !trimmedFather.empty()) {
             directive.fatherLookupQuery = std::string(trimmedFather);
         }
         return directive;

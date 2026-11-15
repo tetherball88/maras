@@ -4,6 +4,7 @@
 #include "SKSE/SKSE.h"
 #include "maras/domain/household/SpouseBuffRules.h"
 #include "maras/domain/relationships/GiftAndIntimacyRules.h"
+#include "maras/foundation/StrongIds.h"
 
 #include <cstdint>
 #include <span>
@@ -23,14 +24,22 @@ namespace MARAS::Engine {
 
         // SKSE Co-Save Lifecycle
         virtual void BeginCoSaveLoad() {}
-        virtual void FinalizeCoSaveLoad(bool loadedAny) { (void)loadedAny; }
+        virtual void FinalizeCoSaveLoad(
+            bool loadedAny,
+            std::span<const Foundation::RefId> retiredSceneMarkers = {}) {
+            (void)loadedAny;
+            (void)retiredSceneMarkers;
+        }
         virtual void OnCoSaveRevert() {}
 
         // PollingService Timers (Main Thread)
+        virtual void OnPollingFastTick(float deltaSeconds) { (void)deltaSeconds; }
         virtual void OnPollingUpdate(float currentGameDay) { (void)currentGameDay; }
         virtual void OnPollingAutoMarriageTick(float currentGameDay) { (void)currentGameDay; }
         virtual void OnPollingDayChanged(float currentGameDay) { (void)currentGameDay; }
         virtual void OnPollingRefreshChildVisuals() {}
+
+        virtual void EnsureActorRegistered(RE::FormID actorId) { (void)actorId; }
 
         // Engine Event Sinks & Faction Hooks (Main Thread)
         virtual void OnActorLoadedBatch(const std::vector<RE::FormID>& initActors,

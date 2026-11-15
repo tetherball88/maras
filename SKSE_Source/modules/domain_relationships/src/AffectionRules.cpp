@@ -259,7 +259,7 @@ namespace MARAS::Domain::Relationships {
 
         auto& aff = ws.affection.Write();
         for (const auto& item : pending) {
-            const int original = aff.GetPermanent(item.actorId, 0);
+            const int original = aff.GetPermanent(item.actorId, 50);
             const int unclamped = original + item.deltaTotal;
             const int updated = State::AffectionTable::ClampScore(unclamped);
             aff.SetPermanent(item.actorId, updated);

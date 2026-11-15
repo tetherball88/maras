@@ -16,7 +16,7 @@ namespace MARAS::App {
 
     void AffectionEventCoordinator::ApplyAdjustments(
         const std::vector<Domain::Relationships::PartnerAffectionAdjustment>& adjustments) {
-        if (adjustments.empty()) {
+        if (State::IsLegacyMigrationActive() || adjustments.empty()) {
             return;
         }
         auto& relUseCases = RelationshipUseCases::GetSingleton();
@@ -40,7 +40,7 @@ namespace MARAS::App {
     // ── Daily Affection Entry Points ─────────────────────────────────────────
 
     void AffectionEventCoordinator::AddIntimacyAffection(RE::FormID spouseId, float baseAffection) {
-        if (spouseId == 0 || spouseId == RelationshipUseCases::kPlayerFormID) {
+        if (State::IsLegacyMigrationActive() || spouseId == 0 || spouseId == RelationshipUseCases::kPlayerFormID) {
             return;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -52,7 +52,7 @@ namespace MARAS::App {
     }
 
     void AffectionEventCoordinator::AddGiftAffection(RE::FormID spouseId, float goldValue) {
-        if (spouseId == 0 || spouseId == RelationshipUseCases::kPlayerFormID) {
+        if (State::IsLegacyMigrationActive() || spouseId == 0 || spouseId == RelationshipUseCases::kPlayerFormID) {
             return;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -65,7 +65,7 @@ namespace MARAS::App {
     }
 
     void AffectionEventCoordinator::AddSleptAffection(RE::FormID spouseId) {
-        if (spouseId == 0 || spouseId == RelationshipUseCases::kPlayerFormID) {
+        if (State::IsLegacyMigrationActive() || spouseId == 0 || spouseId == RelationshipUseCases::kPlayerFormID) {
             return;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -107,7 +107,7 @@ namespace MARAS::App {
         RE::FormID partnerId,
         float baseDelta,
         std::string_view contextReason) {
-        if (partnerId == 0 || partnerId == RelationshipUseCases::kPlayerFormID) {
+        if (State::IsLegacyMigrationActive() || partnerId == 0 || partnerId == RelationshipUseCases::kPlayerFormID) {
             return;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -120,6 +120,9 @@ namespace MARAS::App {
     void AffectionEventCoordinator::ApplyPregnancyConceivedAffection(
         RE::FormID partnerId,
         bool isPlayerPregnant) {
+        if (State::IsLegacyMigrationActive()) {
+            return;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         ApplyAdjustments(Domain::Relationships::PlanPregnancyConceivedAffection(
             *snap, State::ActorId{ partnerId }, isPlayerPregnant));
@@ -128,6 +131,9 @@ namespace MARAS::App {
     void AffectionEventCoordinator::ApplyPregnancyLostAffection(
         RE::FormID partnerId,
         std::string_view reason) {
+        if (State::IsLegacyMigrationActive()) {
+            return;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         ApplyAdjustments(Domain::Relationships::PlanPregnancyLostAffection(
             *snap, State::ActorId{ partnerId }, reason));
@@ -136,6 +142,9 @@ namespace MARAS::App {
     void AffectionEventCoordinator::ApplyChildBirthAffection(
         RE::FormID partnerId,
         std::int32_t childCount) {
+        if (State::IsLegacyMigrationActive()) {
+            return;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         ApplyAdjustments(Domain::Relationships::PlanChildBirthAffection(
             *snap, State::ActorId{ partnerId }, childCount));
@@ -144,7 +153,7 @@ namespace MARAS::App {
     void AffectionEventCoordinator::ApplyChildMilestoneForParents(
         RE::FormID childId,
         std::string_view milestone) {
-        if (childId == 0) {
+        if (State::IsLegacyMigrationActive() || childId == 0) {
             return;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();

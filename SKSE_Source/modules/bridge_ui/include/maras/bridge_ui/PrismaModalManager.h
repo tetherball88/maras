@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace MARAS::Bridge::Ui {
 
@@ -65,11 +66,15 @@ namespace MARAS::Bridge::Ui {
         struct ModalEntry {
             std::string modalId;
             std::string specJson;
+            std::vector<std::string> buttonIds{};
             ModalCallback callback;
             MARAS::State::SessionEpoch expectedEpoch{ 0 };
         };
 
-        std::string EnqueueEntry(std::string modalId, std::string specJson, ModalCallback callback);
+        std::string EnqueueEntry(std::string modalId,
+                                 std::string specJson,
+                                 std::vector<std::string> buttonIds,
+                                 ModalCallback callback);
         void ScheduleProcessQueue();
 
         mutable std::mutex mutex_;

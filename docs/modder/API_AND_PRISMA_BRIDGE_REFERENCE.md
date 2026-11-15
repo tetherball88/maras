@@ -48,7 +48,7 @@ All exported queries are strictly read-only (`WorldStore::Snapshot()`, `SpatialS
 
 ## 2. Papyrus Native API (`MARAS.psc`)
 
-All native functions are global methods on `Scriptname MARAS Hidden` declared in [PapyrusInterface.h](../../SKSE_Source/modules/bridge_papyrus/include/maras/bridge_papyrus/PapyrusInterface.h), registered in `MARAS::PapyrusInterface::RegisterPapyrusFunctions` ([PapyrusInterface.cpp](../../SKSE_Source/modules/bridge_papyrus/src/PapyrusInterface.cpp)), and implemented across seven translation units in `SKSE_Source/modules/bridge_papyrus/src/`: `PapyrusInterface.cpp`, `PapyrusRelationship.cpp`, `PapyrusHousehold.cpp`, `PapyrusChildren.cpp`, `PapyrusChildInteractions.cpp`, `PapyrusSettings.cpp`, and `PapyrusSkyrimNet.cpp`.
+All native functions are global methods on `Scriptname MARAS` declared in [PapyrusInterface.h](../../SKSE_Source/modules/bridge_papyrus/include/maras/bridge_papyrus/PapyrusInterface.h), registered in `MARAS::PapyrusInterface::RegisterPapyrusFunctions` ([PapyrusInterface.cpp](../../SKSE_Source/modules/bridge_papyrus/src/PapyrusInterface.cpp)), and implemented across seven translation units in `SKSE_Source/modules/bridge_papyrus/src/`: `PapyrusInterface.cpp`, `PapyrusRelationship.cpp`, `PapyrusHousehold.cpp`, `PapyrusChildren.cpp`, `PapyrusChildInteractions.cpp`, `PapyrusSettings.cpp`, and `PapyrusSkyrimNet.cpp`.
 
 > [!IMPORTANT]
 > **Strict CQS Read-Only Semantics**: Query natives (including `GetTrackedNpcHomeMarker`, `GetChildHomeMarker`, `GetNpcStatusName*`, `GetPermanentAffection`, `GetGuardians`, `IsSecretForBioFather`, `IsSecretForPartner`, and status/hierarchy queries) read `WorldStore::Snapshot()` / `SpatialSnapshotStore::Snapshot()` / `PerspectiveView` purely read-only without mutating persistent tables, syncing custody, lazy-registering actors, or placing missing markers. Mutating natives serialize writes through `GetPapyrusMutex()`.
@@ -76,7 +76,7 @@ When C++ state changes (via Prisma UI actions, `PollingService` / `IntimateThrea
 
 | ModEvent Name | Arguments (`strArg`, `numArg`, `sender`) | Primary Emitter / Purpose |
 | :--- | :--- | :--- |
-| `maras_status_changed` | `strArg = lowerStatus`, `numArg = statusEnum`, `sender = partnerActor` | `RelationshipUseCases` — mirrors relationship changes to `TTM_MainController` & quests. |
+| `maras_status_changed` | `strArg = lowerStatus`, `numArg = statusEnum`, `sender = partnerActor` | `RelationshipUseCases` — notifies external Papyrus quests/mods of Player $\leftrightarrow$ NPC relationship changes (`TTM_MainController` subscribes to `maras_status_changed_full`). |
 | `maras_status_changed_full` | `strArg = jsonPayload` (`initiator`, `acceptor`, `initiatorName`, `acceptorName`, `status`), `numArg = statusEnum`, `sender = actor` | `RelationshipUseCases` — rich NPC-NPC / Player relationship change notification. |
 | `maras_change_affection` | `strArg = tierOrThreshold`, `numArg = delta`, `sender = npcActor` | `RelationshipUseCases` — notifies affection threshold/score changes. |
 | `maras_hierarchy_changed` | `strArg = action` (`"promote"`, `"demote"`, etc.), `numArg = rankDelta`, `sender = npcActor` | `RelationshipUseCases` — syncs spouse hierarchy changes (`C++ BuffReconciler` runs automatically). |

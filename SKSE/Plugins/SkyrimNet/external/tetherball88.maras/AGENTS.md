@@ -7,7 +7,7 @@ Applies to `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/` (`manifest.json
 ## 1. Bundle Structure & YAML Parity (SkyrimNet Beta 25+)
 
 - **`manifest.json`**: Must remain valid JSON at the bundle root.
-- **`actions/*.yaml` (18 files)**: Filename **must** match internal `name:` (case-sensitive, e.g., `ProposeLover.yaml` $\to$ `name: ProposeLover`), pointing `scriptName`/`functionName` to valid functions in `TTM_Actions.psc` / `TTM_ServiceRelationships.psc`.
+- **`actions/*.yaml` (18 files)**: Filename **must** match internal `name:` (case-sensitive, e.g., `ProposeLover.yaml` $\to$ `name: ProposeLover`), pointing `scriptName` + `executionFunctionName` to valid `TTM_Actions.psc` handlers (which delegate to `MARAS.Execute*Action`; `ManageRelationships.yaml` uses `dynamic`).
 - **`triggers/*.yaml` (25 files)**: Filename **must** match internal `name:` (e.g., `ttm_cheating_caught.yaml` $\to$ `name: ttm_cheating_caught`), listening on `eventType: ttm_event` and filtering `event_json.type` serialized in C++ by `SkyrimNetEventPayloads`.
 - **Event-Side Secrecy Parity**: Child birth (`ChildBirth`), growth (`ChildGrewUp`), training (`ChildSentToTraining`), adulthood (`ChildBecameAdult`), and paternity-resolution (`PaternitySecretResolved`) events planned in C++ by `Projection::EventDispatchPlan` and dispatched by `SkyrimNetEventService` check both `isSecretForPartner` and `isSecretForBioFather` using `exactAudience = true` and `DispatchMaskMode` (`MaskForPartner` / `MaskForChildOnly`) splits—never weaken prompt isolation assuming all targets are `Nearby`.
 

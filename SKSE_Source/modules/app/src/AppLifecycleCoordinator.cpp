@@ -14,6 +14,7 @@
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/GlobalVarReconciler.h"
+#include "maras/engine/RelationshipEngineReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -73,10 +74,13 @@ namespace MARAS::App {
         MARAS_LOG_DEBUG("[AppLifecycleCoordinator] BeginCoSaveLoad: active memory/profile suppression scopes acquired");
     }
 
-    void AppLifecycleCoordinator::FinalizeCoSaveLoad(bool loadedAny) {
+    void AppLifecycleCoordinator::FinalizeCoSaveLoad(
+        bool loadedAny,
+        std::span<const Foundation::RefId> retiredSceneMarkers) {
         ScopedSuppressionGuard releaseOnExit(*this, &AppLifecycleCoordinator::ReleaseCoSaveLoadSuppressions);
 
         ChildVisualReconciler::GetSingleton().FlushRetiredForms();
+        BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(retiredSceneMarkers);
 
         if (!loadedAny) {
             GlobalVarReconciler::GetSingleton().ResetSessionGlobalsToDefaults();
@@ -130,6 +134,7 @@ namespace MARAS::App {
         GetSkyrimNetGateway().RevertEvents();
         GetModalGateway().Revert();
         GetUiBridgeGateway().Revert();
+        GetUiBridgeGateway().DestroyDashboard();
 
         SettingsCoordinator::GetSingleton().RevertGameSettings();
         RelationshipUseCases::GetSingleton().Revert();
@@ -146,11 +151,14 @@ namespace MARAS::App {
     // PollingService Timers (Main Thread)
     // =========================================================================
 
+    void AppLifecycleCoordinator::OnPollingFastTick(float deltaSeconds) {
+        SkyrimNetActionCoordinator::GetSingleton().TickPendingNarrations(deltaSeconds);
+    }
+
     void AppLifecycleCoordinator::OnPollingUpdate(float currentGameDay) {
         if (GetSkyrimNetGateway().IsAvailable()) {
             GetSkyrimNetGateway().TickMemories();
         }
-        SkyrimNetActionCoordinator::GetSingleton().TickPendingNarrations();
 
         std::lock_guard lock(GetPapyrusMutex());
         PaternityWorkflowCoordinator::GetSingleton().PollFertilityTick(currentGameDay);
@@ -287,6 +295,11 @@ namespace MARAS::App {
         RelationshipUseCases::GetSingleton().HandleExternalMarriageFactionRemoved(actorId);
     }
 
+    void AppLifecycleCoordinator::EnsureActorRegistered(RE::FormID actorId) {
+        std::lock_guard lock(GetPapyrusMutex());
+        (void)RelationshipUseCases::GetSingleton().RegisterAsCandidate(actorId);
+    }
+
     void AppLifecycleCoordinator::OnDialogueOpened(RE::FormID npcId) {
         std::lock_guard lock(GetPapyrusMutex());
         if (npcId == 0 || npcId == RelationshipUseCases::kPlayerFormID) {
@@ -294,6 +307,7 @@ namespace MARAS::App {
         }
         if (RelationshipUseCases::GetSingleton().GetRelationshipStatus(
                 npcId, RelationshipUseCases::kPlayerFormID) == Foundation::RelationshipStatus::Unknown) {
+            RelationshipEngineReconciler::GetSingleton().ApplyNoAiDialogueChanceGlobals({});
             return;
         }
         AffectionEventCoordinator::GetSingleton().OnDialogueOpened(npcId);

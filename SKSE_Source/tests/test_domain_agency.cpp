@@ -1104,4 +1104,75 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainAgency, DualOpenBanterSetupDisabledGuardAndCooldownEraseActor) {
+        struct ZeroRng final : public IRng {
+            float NextFloat(float minVal = 0.0f, float = 1.0f) override { return minVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t) override { return minVal; }
+        };
+
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+        const ActorId openA{ 0x00046001u };
+        const ActorId openAMain{ 0x00046002u };
+        const ActorId openB{ 0x00046003u };
+        const ActorId openBMain{ 0x00046004u };
+        for (ActorId id : { openA, openAMain, openB, openBMain }) {
+            AddAdult(ws, id);
+        }
+
+        (void)ws.TransitionRelationship(openA, openAMain, RelationshipStatus::Married, 1.0f, openA, meta);
+        (void)ws.SetPairOpen(openA, openAMain, true, 1.0f);
+        (void)ws.TransitionRelationship(openB, openBMain, RelationshipStatus::Married, 1.0f, openB, meta);
+        (void)ws.SetPairOpen(openB, openBMain, true, 1.0f);
+        (void)ws.TransitionRelationship(openA, openB, RelationshipStatus::Lover, 2.0f, openA, meta);
+
+        ZeroRng rng{};
+        const auto dualOpenPlan = PlanBanterSceneSetup(
+            ws.Snapshot(),
+            BanterSceneSetupInput{ openA, openB, "", CheatingSceneEnvironment{} },
+            rng);
+        MARAS_REQUIRE(dualOpenPlan.valid);
+        MARAS_CHECK_EQ(dualOpenPlan.sceneKind, BanterSceneKind::OpenRelationship);
+        MARAS_CHECK_EQ(dualOpenPlan.npc1, openB);
+        MARAS_CHECK_EQ(dualOpenPlan.npc2, openA);
+        MARAS_CHECK_EQ(dualOpenPlan.npc1MainPartner, openBMain);
+        MARAS_CHECK_EQ(dualOpenPlan.npc2MainPartner, openAMain);
+        MARAS_CHECK_EQ(dualOpenPlan.sceneIdx, 4);
+
+        ws.settings.Write().enableScenes_OpenRelationship = false;
+        const auto disabledOpen = PlanBanterSceneSetup(
+            ws.Snapshot(),
+            BanterSceneSetupInput{ openA, openB, "", CheatingSceneEnvironment{} },
+            rng);
+        MARAS_CHECK(!disabledOpen.valid);
+
+        // CooldownTable::EraseActor strips target across moved/muted/relationship/couple maps while keeping others
+        CooldownTable cd{};
+        cd.movedSceneActors[openA] = RefId{ 0xFF00E101u };
+        cd.movedSceneActors[openB] = RefId{ 0xFF00E102u };
+        cd.skyrimNetMutedActors = { openA, openB, openA };
+        cd.npcBrokeupTime[openA] = 10.0f;
+        cd.npcBrokeupTime[openB] = 11.0f;
+        cd.npcLastTimeSharedIncome[openA] = 12.0f;
+        cd.npcLastTimeSharedIncome[openB] = 13.0f;
+        cd.npcLastMatchmakingChangeDay[openA] = 14.0f;
+        cd.npcLastMatchmakingChangeDay[openB] = 15.0f;
+        cd.banterCoupleCooldowns[CanonicalPairKey(openA, openB)] = 20.0f;
+        cd.banterCoupleCooldowns[CanonicalPairKey(openB, openBMain)] = 21.0f;
+
+        cd.EraseActor(openA);
+        MARAS_CHECK(!cd.movedSceneActors.contains(openA));
+        MARAS_CHECK(cd.movedSceneActors.contains(openB));
+        MARAS_REQUIRE_EQ(cd.skyrimNetMutedActors.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(cd.skyrimNetMutedActors[0], openB);
+        MARAS_CHECK(!cd.npcBrokeupTime.contains(openA));
+        MARAS_CHECK(cd.npcBrokeupTime.contains(openB));
+        MARAS_CHECK(!cd.npcLastTimeSharedIncome.contains(openA));
+        MARAS_CHECK(cd.npcLastTimeSharedIncome.contains(openB));
+        MARAS_CHECK(!cd.npcLastMatchmakingChangeDay.contains(openA));
+        MARAS_CHECK(cd.npcLastMatchmakingChangeDay.contains(openB));
+        MARAS_CHECK(!cd.banterCoupleCooldowns.contains(CanonicalPairKey(openA, openB)));
+        MARAS_CHECK(cd.banterCoupleCooldowns.contains(CanonicalPairKey(openB, openBMain)));
+    }
+
 }  // namespace MARAS::Tests

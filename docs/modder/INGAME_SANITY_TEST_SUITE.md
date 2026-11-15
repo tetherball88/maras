@@ -1,6 +1,6 @@
 # M.A.R.A.S — In-Game Sanity & Config Verification Suite
 
-The in-game sanity suite verifies live Skyrim SE engine integration, Papyrus $\leftrightarrow$ C++ bindings, UI Intrigue Mode masking, and `'MARS'` v7 SKSE co-save serialization round-trips end-to-end inside a real game session—complementing the **82** hermetic pure-C++ unit tests (**1404** assertions) in `maras_tests.exe` ([SKSE_Source/tests/AGENTS.md](../../SKSE_Source/tests/AGENTS.md)).
+The in-game sanity suite verifies live Skyrim SE engine integration, Papyrus $\leftrightarrow$ C++ bindings, UI Intrigue Mode masking, and `'MARS'` v7 SKSE co-save serialization round-trips end-to-end inside a real game session—complementing the **113** hermetic pure-C++ unit tests (**2451** assertions) in `maras_tests.exe` ([SKSE_Source/tests/AGENTS.md](../../SKSE_Source/tests/AGENTS.md)).
 
 ---
 

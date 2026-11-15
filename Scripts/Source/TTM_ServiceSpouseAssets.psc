@@ -11,7 +11,10 @@ Function StartShareHomeWithPlayer(Actor spouse) global
         StartQuest(spouse)
         TTM_ServiceSpouseAssets.CheckCell(spouse)
     else
-        TTM_Debug.err("StartShareHomeWithPlayer:ShareFailed")
+        Faction noHomeFac = Game.GetFormFromFile(0x7F, "TT_MARAS.esp") as Faction
+        if(!noHomeFac || !spouse.IsInFaction(noHomeFac))
+            TTM_Debug.err("StartShareHomeWithPlayer:ShareFailed")
+        endif
     endif
 EndFunction
 
@@ -29,7 +32,7 @@ EndFunction
 
 Function StopShareHouseWithPlayer(Actor spouse, string reason = "") global
     MARAS.StopShareHouseWithPlayer(spouse, reason)
-    StopQuest()
+    StopQuest(spouse)
 EndFunction
 
 Function StartQuest(Actor spouse) global
@@ -50,9 +53,12 @@ Function StartQuest(Actor spouse) global
     endif
 EndFunction
 
-Function StopQuest() global
+Function StopQuest(Actor spouse = none) global
     Quest checkSpouseHomeQst = TTM_Data.GetMarasCheckSpouseHomeQuest()
     if(checkSpouseHomeQst.IsRunning())
+        if(spouse && TTM_Utils.GetActorAlias(checkSpouseHomeQst, "Spouse") != spouse)
+            return
+        endif
         checkSpouseHomeQst.SetObjectiveCompleted(0)
         checkSpouseHomeQst.SetObjectiveDisplayed(0, false)
         checkSpouseHomeQst.Reset()

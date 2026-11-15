@@ -35,8 +35,8 @@ Located across [`WorldTables.h`](../../SKSE_Source/modules/state/include/maras/s
   - **Permanent Social-Class Multiplier**: Sums $\text{ComputeAffectionMultiplier}(\text{PermAff}_i) \times \text{ComputeHierarchyRankMultiplier}(\text{Rank}_i, N_{\text{spouses}})$ across all living married spouses $i$.
   - **Follower Skill-Type Multiplier**: Sums $\text{ComputeAffectionMultiplier}(\text{PermAff}_j)$ across active married teammates $j$ tracked by [`PollingService::GetCurrentTeammates()`](services/PollingService.md).
 - `BuffReconciler` evaluates `ComputeBonusTargetValue` on the main thread and updates `PlayerCharacter` perks (`0x35`–`0x42`) directly in C++ (removing inactive perks and performing at most one `RemovePerk` / `AddPerk` refresh cycle per changed perk).
-- **Additional Household Abilities (Papyrus)**:
-  - **Lover's Radiance (`TTM_LoversRadianceAbility`)**: Applied by `TTM_PlayerScript.psc` when the player rests/sleeps indoors with a lover or spouse at home.
+- **Additional Household Abilities (C++ `SleepEventSink` & `BuffReconciler`)**:
+  - **Lover's Radiance (`TTM_LoversRadianceAbility`) & Rested Bonuses**: When the player wakes from sleep, `SleepEventSink` (`RE::TESSleepStopEvent`) delegates to `HouseholdUseCases::OnPlayerSlept` and `SpouseBuffRules::EvaluateSleepRestedPlan`, awarding `AddSleptAffection` to nearby partners and applying/removing `TTM_LoversRadianceAbility` / rested spells directly via `BuffReconciler` (`TTM_PlayerScript.psc` retains spell property definitions only for ongoing `.ess` save compatibility).
 
 ---
 
@@ -55,7 +55,7 @@ Located across [`HouseholdUseCases.h`](../../SKSE_Source/modules/app/include/mar
 ### 2.2 Shared Spouse Assets (`SpouseAssetRules` & `TTM_ServiceSpouseAssets.psc`)
 Persisted in co-save chunk `'SPAS'` (domain rules in [`SpouseAssetRules.h`](../../SKSE_Source/modules/domain_household/include/maras/domain/household/SpouseAssetRules.h), orchestrated by [`HouseholdUseCases`](services/HouseholdUseCases.md)):
 - **`ShareHouseWithPlayer` / `StopShareHouseWithPlayer`**: Grants player co-residence access to a spouse's original home cell (`'SPAS'`, interior cell tracking via `IsHouseSharedWithPlayer`). Missing-home detection (`0x7F` `NoInitialHouseFaction`), `0x7B` (`SharedHouseFaction`) reconciliation, lockable door unlocking, house-key granting (`HouseholdEngineOps::UnlockAndGrantSpouseHomeAccess`), and `$TTM_MSG_*` localized HUD notifications (`"divorce"`, `"deceased"`, `"affection"`, or generic stop reasons) execute natively in `BedOwnershipReconciler` / `FactionReconciler`.
-- **Spouse Store Gold & Assets**: `TTM_ServiceRelationships.ShareIncome` awards elapsed daily spouse income (`ClampInt(diffInt * 100, 0, 500)` gold per share interval), while `TTM_ServiceSpouseAssets.psc` coordinates only the `TTM_CheckSpouseHomeQst` quest objectives and aliases.
+- **Spouse Store Gold & Assets**: `MARAS.ShareSpouseIncome` (`RelationshipInteractionCoordinator` & `RelationshipSettlementRules`) awards elapsed daily spouse income (`Clamp(elapsedDays * 100, 0, 500)` gold per share interval), while `TTM_ServiceSpouseAssets.psc` coordinates only the `TTM_CheckSpouseHomeQst` quest objectives and aliases.
 
 ---
 

@@ -1052,6 +1052,7 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<NotifyEngagementCeremonyStarted>(vm, "NotifyEngagementCeremonyStarted");
         RegisterSynced<ApplyDialogueLoversLedgerBonus>(vm, "ApplyDialogueLoversLedgerBonus");
         RegisterSynced<PacifyFianceOrSpouse>(vm, "PacifyFianceOrSpouse");
+        RegisterSynced<SeedLegacyUpgradeState>(vm, "SeedLegacyUpgradeState");
 
         // Spouse hierarchy
         RegisterSynced<SetHierarchyRank>(vm, "SetHierarchyRank");

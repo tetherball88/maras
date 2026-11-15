@@ -72,7 +72,7 @@ namespace MARAS::PapyrusInterface {
         RE::Actor* akActor,
         RE::Actor* partner,
         std::string suggestedStatus) {
-        if (!vm) {
+        if (!vm || !SKSE::GetTaskInterface()) {
             return RE::BSScript::LatentStatus::kFailed;
         }
         const auto expectedEpoch = MARAS::GetSessionEpoch();
@@ -96,7 +96,7 @@ namespace MARAS::PapyrusInterface {
         std::string decision,
         std::string status,
         std::string reasoning) {
-        if (!vm) {
+        if (!vm || !SKSE::GetTaskInterface()) {
             return RE::BSScript::LatentStatus::kFailed;
         }
         const auto expectedEpoch = MARAS::GetSessionEpoch();
@@ -121,7 +121,7 @@ namespace MARAS::PapyrusInterface {
         std::string partnerName,
         std::string status,
         std::string reasoning) {
-        if (!vm) {
+        if (!vm || !SKSE::GetTaskInterface()) {
             return RE::BSScript::LatentStatus::kFailed;
         }
         const auto expectedEpoch = MARAS::GetSessionEpoch();
@@ -145,7 +145,7 @@ namespace MARAS::PapyrusInterface {
         RE::Actor* partner,
         bool isOpen,
         std::string reasoning) {
-        if (!vm) {
+        if (!vm || !SKSE::GetTaskInterface()) {
             return RE::BSScript::LatentStatus::kFailed;
         }
         const auto expectedEpoch = MARAS::GetSessionEpoch();
@@ -250,8 +250,8 @@ namespace MARAS::PapyrusInterface {
             akNpc1, akNpc2, akPartner, abShouldMutePartner);
     }
 
-    void UnMuteBanterSceneParticipants(RE::StaticFunctionTag*) {
-        App::BanterSceneCoordinator::GetSingleton().UnMuteBanterSceneParticipants();
+    bool UnMuteBanterSceneParticipants(RE::StaticFunctionTag*) {
+        return App::BanterSceneCoordinator::GetSingleton().UnMuteBanterSceneParticipants();
     }
 
     void RestoreMovedBanterSceneNpcs(RE::StaticFunctionTag*) {

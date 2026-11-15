@@ -61,7 +61,7 @@ namespace MARAS {
 
         bool IsShareableHouseDoor(RE::TESObjectREFR& doorRef) {
             const auto lock = doorRef.GetLock();
-            if (!lock || !lock->key) {
+            if (!lock || (!lock->key && !lock->IsLocked())) {
                 return false;
             }
             const auto lvl = lock->GetLockLevel(&doorRef);

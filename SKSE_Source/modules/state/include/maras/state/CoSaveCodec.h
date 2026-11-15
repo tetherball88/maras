@@ -15,6 +15,7 @@ namespace MARAS::State {
         std::uint32_t failedChunkCount{ 0 };
         std::uint32_t skippedChunkCount{ 0 };
         std::vector<std::uint32_t> failedChunkTypes{};
+        std::vector<RefId> retiredSceneMarkers{};
     };
 
     /**

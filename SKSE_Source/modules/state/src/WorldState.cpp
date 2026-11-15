@@ -66,6 +66,64 @@ namespace MARAS::State {
         for (const ChildId child : other.dirtyChildren) {
             MarkChildDirty(child);
         }
+        for (const ActorId spouse : other.stoppedSharingSpouses) {
+            if (!spouse.IsNull() &&
+                std::find(stoppedSharingSpouses.begin(), stoppedSharingSpouses.end(), spouse) ==
+                    stoppedSharingSpouses.end()) {
+                stoppedSharingSpouses.push_back(spouse);
+            }
+        }
+        for (const auto& cellDelta : other.restoredSharedCells) {
+            if (cellDelta.cellId.IsNull()) {
+                continue;
+            }
+            const bool alreadyPresent = std::any_of(
+                restoredSharedCells.begin(),
+                restoredSharedCells.end(),
+                [&](const RestoredSharedCellDelta& existing) {
+                    return existing.cellId == cellDelta.cellId;
+                });
+            if (!alreadyPresent) {
+                restoredSharedCells.push_back(cellDelta);
+            }
+        }
+        for (const RefId marker : other.retiredSceneMarkers) {
+            if (!marker.IsNull() &&
+                std::find(retiredSceneMarkers.begin(), retiredSceneMarkers.end(), marker) ==
+                    retiredSceneMarkers.end()) {
+                retiredSceneMarkers.push_back(marker);
+            }
+        }
+    }
+
+    WorldMutationResult WorldState::StopSharingForSpouseWithDeltas(ActorId spouse) {
+        WorldMutationResult result{};
+        if (spouse.IsNull()) {
+            return result;
+        }
+
+        std::vector<std::pair<CellId, SharedCellRecord>> prevShared;
+        for (const auto& [cellId, cellRecord] : household->AllSharedCells()) {
+            if (cellRecord.sharedWithPlayer && cellRecord.sharingSpouses.contains(spouse)) {
+                prevShared.emplace_back(cellId, cellRecord);
+            }
+        }
+
+        if (!household.Write().StopSharingForSpouse(spouse)) {
+            return result;
+        }
+
+        result.changed = true;
+        result.stoppedSharingSpouses.push_back(spouse);
+        for (const auto& [cellId, prevRecord] : prevShared) {
+            if (!household->IsCellSharedWithPlayer(cellId)) {
+                result.restoredSharedCells.push_back(RestoredSharedCellDelta{
+                    .cellId = cellId,
+                    .previousRecord = prevRecord,
+                });
+            }
+        }
+        return result;
     }
 
     // =========================================================================
@@ -502,9 +560,7 @@ namespace MARAS::State {
             if (household.Write().EvictTenant(exSpouse.raw())) {
                 result.changed = true;
             }
-            if (household.Write().StopSharingForSpouse(exSpouse)) {
-                result.changed = true;
-            }
+            result.Merge(StopSharingForSpouseWithDeltas(exSpouse));
         } else {
             if (relationships->GetPendingIntent(actorA).relatedLover == actorB) {
                 relationships.Write().ClearPendingIntent(actorA);
@@ -575,9 +631,7 @@ namespace MARAS::State {
             if (household.Write().EvictTenant(exPartner.raw())) {
                 result.changed = true;
             }
-            if (household.Write().StopSharingForSpouse(exPartner)) {
-                result.changed = true;
-            }
+            result.Merge(StopSharingForSpouseWithDeltas(exPartner));
             if (breakupStatus == RelationshipStatus::ExLover) {
                 relationships.Write().ClearIntentsInvolving(exPartner);
             }
@@ -1688,6 +1742,10 @@ namespace MARAS::State {
             result.changed = true;
         }
 
+        // Preserve whether the deceased actor was currently married to the Player BEFORE erasing edges
+        const bool wasMarriedToPlayer =
+            relationships->GetStatus(ActorId::Player(), deceasedActor) == RelationshipStatus::Married;
+
         // Remove active/historical relationship edges & partner intents involving the deceased actor
         {
             const std::vector<CanonicalPairKey> pairsCopy = relationships->GetAdjacentPairs(deceasedActor);
@@ -1707,10 +1765,15 @@ namespace MARAS::State {
         if (household.Write().EvictTenant(deceasedActor.raw())) {
             result.changed = true;
         }
-        if (household.Write().StopSharingForSpouse(deceasedActor)) {
-            result.changed = true;
+        if (!wasMarriedToPlayer || killedByPlayer) {
+            result.Merge(StopSharingForSpouseWithDeltas(deceasedActor));
         }
         affection.Write().EraseActor(deceasedActor);
+        if (const auto markerIt = cooldowns->movedSceneActors.find(deceasedActor);
+            markerIt != cooldowns->movedSceneActors.end() && !markerIt->second.IsNull()) {
+            result.retiredSceneMarkers.push_back(markerIt->second);
+            result.changed = true;
+        }
         cooldowns.Write().EraseActor(deceasedActor);
         lineage.Write().EraseActiveDeliveryBatch(deceasedActor);
         if (!deceasedRef.IsNull() && actors.Write().Erase(deceasedRef)) {
@@ -1744,9 +1807,16 @@ namespace MARAS::State {
         relationships.Write().ClearIntentsInvolving(actor);
 
         hierarchy.Write().OnSpouseRemoved(actor, GetPlayerSpousesInMarriageOrder());
-        household.Write().EvictTenant(actor.raw());
-        household.Write().StopSharingForSpouse(actor);
+        if (household.Write().EvictTenant(actor.raw())) {
+            result.changed = true;
+        }
+        result.Merge(StopSharingForSpouseWithDeltas(actor));
         affection.Write().EraseActor(actor);
+        if (const auto markerIt = cooldowns->movedSceneActors.find(actor);
+            markerIt != cooldowns->movedSceneActors.end() && !markerIt->second.IsNull()) {
+            result.retiredSceneMarkers.push_back(markerIt->second);
+            result.changed = true;
+        }
         cooldowns.Write().EraseActor(actor);
         lineage.Write().EraseActiveDeliveryBatch(actor);
 

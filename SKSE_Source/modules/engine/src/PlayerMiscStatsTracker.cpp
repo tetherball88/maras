@@ -1,5 +1,7 @@
 #include "maras/engine/PlayerMiscStatsTracker.h"
 
+#include "RE/G/GameSettingCollection.h"
+#include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/state/SessionEpoch.h"
 
@@ -10,19 +12,14 @@
 namespace MARAS {
 
     namespace {
-        struct TrackedStatSpec {
-            std::string_view name;
-            std::size_t slotIndex;
+        constexpr std::array<const char*, 6> kStatGmstNames = {
+            "sMostGoldCarried",
+            "sHousesOwned",
+            "sHorsesOwned",
+            "sQuestsCompleted",
+            "sDungeonsCleared",
+            "sDragonSoulsCollected",
         };
-
-        constexpr std::array<TrackedStatSpec, 6> kTrackedStats = {{
-            { "Most Gold Carried", 0 },
-            { "Houses Owned", 1 },
-            { "Horses Owned", 2 },
-            { "Quests Completed", 3 },
-            { "Dungeons Cleared", 4 },
-            { "Dragon Souls Collected", 5 },
-        }};
 
         [[nodiscard]] int* SlotPtr(PlayerTrackedMiscStats& stats, std::size_t idx) noexcept {
             switch (idx) {
@@ -71,6 +68,25 @@ namespace MARAS {
         return &instance;
     }
 
+    void PlayerMiscStatsTracker::Initialize() {
+        auto* gsCol = RE::GameSettingCollection::GetSingleton();
+        if (!gsCol) {
+            MARAS_LOG_WARN("[PlayerMiscStatsTracker] GameSettingCollection unavailable; using default stat names");
+            return;
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (std::size_t i = 0; i < kStatGmstNames.size(); ++i) {
+            if (auto* setting = gsCol->GetSetting(kStatGmstNames[i]);
+                setting && setting->GetType() == RE::Setting::Type::kString) {
+                const char* val = setting->GetString();
+                if (val && val[0] != '\0') {
+                    statNames_[i] = val;
+                }
+            }
+        }
+        MARAS_LOG_DEBUG("[PlayerMiscStatsTracker] Resolved {} stat GMST names", statNames_.size());
+    }
+
     RE::BSEventNotifyControl PlayerMiscStatsTracker::ProcessEvent(
         const RE::TESTrackedStatsEvent* a_event,
         RE::BSTEventSource<RE::TESTrackedStatsEvent>*) {
@@ -83,13 +99,13 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        for (const auto& spec : kTrackedStats) {
-            if (statName == spec.name) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                if (int* target = SlotPtr(stats_, spec.slotIndex)) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (std::size_t i = 0; i < statNames_.size(); ++i) {
+            if (statName == statNames_[i]) {
+                if (int* target = SlotPtr(stats_, i)) {
                     *target = std::max(0, static_cast<int>(a_event->value));
                 }
-                liveUpdated_[spec.slotIndex] = true;
+                liveUpdated_[i] = true;
                 break;
             }
         }
@@ -108,14 +124,14 @@ namespace MARAS {
         std::uint64_t expectedEpoch,
         StatSlot slot,
         std::int32_t value) noexcept {
-        if (!IsSessionEpochCurrent(static_cast<SessionEpoch>(expectedEpoch))) {
-            return;
-        }
         const auto idx = static_cast<std::size_t>(slot);
         if (idx >= static_cast<std::size_t>(StatSlot::_Count)) {
             return;
         }
         std::lock_guard<std::mutex> lock(mutex_);
+        if (!IsSessionEpochCurrent(static_cast<SessionEpoch>(expectedEpoch))) {
+            return;
+        }
         if (!liveUpdated_[idx]) {
             if (int* target = SlotPtr(stats_, idx)) {
                 *target = std::max(0, static_cast<int>(value));
@@ -125,7 +141,7 @@ namespace MARAS {
 
     void PlayerMiscStatsTracker::SeedFromVmAsync() {
         const SessionEpoch expectedEpoch = GetSessionEpoch();
-        AddEpochTask(expectedEpoch, "PlayerMiscStatsTracker::SeedFromVmAsync", [expectedEpoch]() {
+        AddEpochTask(expectedEpoch, "PlayerMiscStatsTracker::SeedFromVmAsync", [this, expectedEpoch]() {
             if (!IsSessionEpochCurrent(expectedEpoch)) {
                 return;
             }
@@ -135,18 +151,24 @@ namespace MARAS {
                 return;
             }
 
-            for (const auto& spec : kTrackedStats) {
-                RE::BSFixedString statName(spec.name.data());
+            std::array<std::string, static_cast<std::size_t>(StatSlot::_Count)> namesCopy;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                namesCopy = statNames_;
+            }
+
+            for (std::size_t i = 0; i < namesCopy.size(); ++i) {
+                RE::BSFixedString statName(namesCopy[i].c_str());
                 auto* args = RE::MakeFunctionArguments(std::move(statName));
                 RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(
-                    new QueryStatCallback(expectedEpoch, static_cast<StatSlot>(spec.slotIndex)));
+                    new QueryStatCallback(expectedEpoch, static_cast<StatSlot>(i)));
                 if (!vm->DispatchStaticCall(
                         RE::BSFixedString("Game"),
                         RE::BSFixedString("QueryStat"),
                         args,
                         callback)) {
                     MARAS_LOG_WARN("[PlayerMiscStatsTracker] DispatchStaticCall(Game.QueryStat, '{}') failed",
-                                   spec.name);
+                                   namesCopy[i]);
                 }
             }
         });
@@ -158,8 +180,10 @@ namespace MARAS {
             std::lock_guard<std::mutex> lock(mutex_);
             copy = stats_;
         }
-        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-            copy.mostGold = std::max(copy.mostGold, static_cast<int>(player->GetGoldAmount()));
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+                copy.mostGold = std::max(copy.mostGold, static_cast<int>(player->GetGoldAmount()));
+            }
         }
         return copy;
     }

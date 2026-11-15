@@ -3,7 +3,6 @@
 #include "RE/Skyrim.h"
 #include "maras/state/SessionEpoch.h"
 
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -31,8 +30,8 @@ namespace MARAS::App {
         /// Clears pending delayed narrations on co-save revert/load.
         void Revert() noexcept;
 
-        /// Emits any NPC-to-NPC proposal narrations whose 5-second delay has elapsed.
-        void TickPendingNarrations();
+        /// Advances and emits any NPC-to-NPC proposal narrations whose 5-second unpaused delay has elapsed.
+        void TickPendingNarrations(float deltaSeconds);
 
         /// Resolves a player alias ("Player", "Dragonborn", player display name) or unique loaded/world NPC by name.
         [[nodiscard]] static RE::Actor* ResolveActorByName(std::string_view name);
@@ -103,7 +102,7 @@ namespace MARAS::App {
             RE::FormID proposerId{ 0 };
             RE::FormID partnerId{ 0 };
             std::string message{};
-            std::chrono::steady_clock::time_point readyAt{};
+            float remainingSeconds{ 5.0f };
             State::SessionEpoch epoch{ 0 };
         };
 

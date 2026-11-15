@@ -1,8 +1,10 @@
 #pragma once
 
 #include "RE/Skyrim.h"
+#include "maras/foundation/StrongIds.h"
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -60,8 +62,9 @@ namespace MARAS::App {
 
         /**
          * Removes all recorded banter SkyrimNet filter faction mutes and clears 'BNT1' muted list.
+         * Returns true if at least one actor's mute faction was removed.
          */
-        void UnMuteBanterSceneParticipants();
+        [[nodiscard]] bool UnMuteBanterSceneParticipants();
 
         /**
          * Removes stale banter mutes loaded from 'BNT1' when SkyrimNet is unavailable or the actor
@@ -74,6 +77,12 @@ namespace MARAS::App {
          * XMarkers, disables/deletes the markers, and erases them from 'BNT1'.
          */
         void RestoreMovedBanterSceneNpcs();
+
+        /**
+         * Disables and marks for deletion any retired dynamic 0xFF XMarkers pruned on co-save load
+         * or actor unregistration/death.
+         */
+        void CleanupRetiredSceneMarkers(std::span<const Foundation::RefId> markerIds);
 
     private:
         BanterSceneCoordinator() = default;

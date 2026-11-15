@@ -37,6 +37,11 @@ namespace MARAS::App {
             return RE::TESForm::LookupByID<RE::Actor>(actorId.raw());
         }
 
+        [[nodiscard]] bool IsValidSceneXMarker(RE::TESObjectREFR* markerRef) noexcept {
+            auto* xMarker = FormCache::GetSingleton().GetXMarkerStatic();
+            return markerRef && !markerRef->IsDeleted() && xMarker && markerRef->GetBaseObject() == xMarker;
+        }
+
         [[nodiscard]] std::string BuildInvalidPrepareJson() {
             nlohmann::json j;
             j["valid"] = false;
@@ -117,18 +122,31 @@ namespace MARAS::App {
 
         nlohmann::json movedActors = nlohmann::json::array();
         auto* xMarker = FormCache::GetSingleton().GetXMarkerStatic();
-        auto moveNpc = [&movedActors, xMarker](RE::Actor* npc, RE::Actor* target) {
+        const auto existingMovedSnap = State::WorldStore::GetSingleton().Snapshot();
+        auto moveNpc = [&movedActors, &existingMovedSnap, xMarker](RE::Actor* npc, RE::Actor* target) {
             if (!npc || !target || npc->IsPlayerRef()) {
                 return;
             }
             if (xMarker) {
-                if (auto marker = npc->PlaceObjectAtMe(xMarker, true)) {
-                    State::WorldStore::GetSingleton().Modify(
-                        [npcId = npc->GetFormID(), markerId = marker->GetFormID()](State::WorldState& ws) {
-                            ws.cooldowns.Write().movedSceneActors.try_emplace(
-                                Foundation::ActorId{ npcId },
-                                Foundation::RefId{ markerId });
-                        });
+                bool hasValidExistingMarker = false;
+                if (existingMovedSnap && existingMovedSnap->cooldowns) {
+                    const auto it =
+                        existingMovedSnap->cooldowns->movedSceneActors.find(Foundation::ActorId{ npc->GetFormID() });
+                    if (it != existingMovedSnap->cooldowns->movedSceneActors.end() && !it->second.IsNull()) {
+                        if (auto* existingRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->second.raw());
+                            IsValidSceneXMarker(existingRef)) {
+                            hasValidExistingMarker = true;
+                        }
+                    }
+                }
+                if (!hasValidExistingMarker) {
+                    if (auto marker = npc->PlaceObjectAtMe(xMarker, true)) {
+                        State::WorldStore::GetSingleton().Modify(
+                            [npcId = npc->GetFormID(), markerId = marker->GetFormID()](State::WorldState& ws) {
+                                ws.cooldowns.Write().movedSceneActors[Foundation::ActorId{ npcId }] =
+                                    Foundation::RefId{ markerId };
+                            });
+                    }
                 }
             } else {
                 MARAS_LOG_WARN("[BanterSceneCoordinator] XMarker static not cached; cannot record return marker for {:08X}",
@@ -301,7 +319,7 @@ namespace MARAS::App {
         });
     }
 
-    void BanterSceneCoordinator::UnMuteBanterSceneParticipants() {
+    bool BanterSceneCoordinator::UnMuteBanterSceneParticipants() {
         std::vector<Foundation::ActorId> toUnmute;
         State::WorldStore::GetSingleton().Modify([&toUnmute](State::WorldState& ws) {
             auto& list = ws.cooldowns.Write().skyrimNetMutedActors;
@@ -310,17 +328,20 @@ namespace MARAS::App {
         });
 
         if (toUnmute.empty()) {
-            return;
+            return false;
         }
         auto* faction = FormCache::GetSingleton().GetSkyrimNetFilterFaction();
         if (!faction) {
-            return;
+            return false;
         }
+        bool unmutedAny = false;
         for (const Foundation::ActorId aid : toUnmute) {
             if (HasPhysicalActor(aid.raw())) {
                 Utils::RemoveFromFaction(aid.raw(), faction);
+                unmutedAny = true;
             }
         }
+        return unmutedAny;
     }
 
     void BanterSceneCoordinator::RecoverStaleMutesOnLoad() {
@@ -388,12 +409,13 @@ namespace MARAS::App {
 
             RE::TESObjectREFR* markerRef =
                 (!markerId.IsNull()) ? RE::TESForm::LookupByID<RE::TESObjectREFR>(markerId.raw()) : nullptr;
+            const bool validMarker = IsValidSceneXMarker(markerRef);
 
-            if (actor && !actor->IsDeleted() && markerRef && !markerRef->IsDeleted()) {
+            if (actor && !actor->IsDeleted() && validMarker) {
                 actor->MoveTo(markerRef);
                 actor->EvaluatePackage();
             }
-            if (markerRef && !markerRef->IsDeleted()) {
+            if (validMarker && markerRef->IsDynamicForm()) {
                 markerRef->Disable();
                 markerRef->SetDelete(true);
             }
@@ -413,6 +435,28 @@ namespace MARAS::App {
 
         MARAS_LOG_DEBUG("[BanterSceneCoordinator] RestoreMovedBanterSceneNpcs restored {} actors",
                         restoredIds.size());
+    }
+
+    void BanterSceneCoordinator::CleanupRetiredSceneMarkers(std::span<const Foundation::RefId> markerIds) {
+        if (markerIds.empty()) {
+            return;
+        }
+        std::size_t cleaned = 0;
+        for (const Foundation::RefId markerId : markerIds) {
+            if (markerId.IsNull()) {
+                continue;
+            }
+            auto* markerRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(markerId.raw());
+            if (IsValidSceneXMarker(markerRef) && markerRef->IsDynamicForm()) {
+                markerRef->Disable();
+                markerRef->SetDelete(true);
+                ++cleaned;
+            }
+        }
+        if (cleaned > 0) {
+            MARAS_LOG_DEBUG("[BanterSceneCoordinator] CleanupRetiredSceneMarkers cleaned {} retired XMarkers",
+                            cleaned);
+        }
     }
 
 }  // namespace MARAS::App

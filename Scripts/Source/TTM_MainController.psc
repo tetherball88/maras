@@ -136,6 +136,8 @@ Function Maintenance()
         TTM_Data.SetIsMigrating(false)
     endif
 
+    MigrateLegacyRuntimeStorage(childrenLogicQst)
+
     ; clean outdated StorageUtil data which was moved to SKSE plugin
     StorageUtil.ClearAllPrefix("TTM_Household_")
     StorageUtil.ClearAllPrefix("TTM_MCMState")
@@ -154,6 +156,130 @@ Function Maintenance()
     StorageUtil.ClearAllPrefix("TmpActorNames")
     StorageUtil.ClearAllPrefix("TTM_PartnerResentment")
     StorageUtil.ClearAllPrefix("TTM_PartnerUpset")
+    StorageUtil.ClearAllPrefix("BrokeupTime")
+    StorageUtil.ClearAllPrefix("LastTimeSharedIncome")
+    StorageUtil.ClearAllPrefix("KilledByPlayer")
+    StorageUtil.ClearAllPrefix("TTM_LastTimePayedDivorceFee")
+    StorageUtil.ClearAllPrefix("TTM_DivorceLetter_")
+    StorageUtil.ClearAllPrefix("TTM_SkyrimNet_SuppressActionNarrationUntil")
+EndFunction
+
+Function MigrateLegacyRuntimeStorage(TTM_ServiceChildrenLogic childrenLogicQst)
+    if(StorageUtil.GetIntValue(none, "PlayerKiller", 0) == 1)
+        MARAS.SetPlayerKiller(true)
+        StorageUtil.UnsetIntValue(none, "PlayerKiller")
+    endif
+    if(StorageUtil.GetIntValue(none, "PlayerHadWedding", 0) == 1)
+        MARAS.SetPlayerHadWedding(true)
+        StorageUtil.UnsetIntValue(none, "PlayerHadWedding")
+    endif
+    if(StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 1)
+        MARAS.SetDontShowSkipWeddingMessage(true)
+        StorageUtil.UnsetIntValue(none, "TTM_DontShowSkipWeddingMessage")
+    endif
+
+    Form[] mutedForms = StorageUtil.FormListToArray(none, "SkyrimNet_Blacklisted_Actors")
+    if(mutedForms.Length > 0)
+        if(Game.GetModByName("SkyrimNet.esp") != 255)
+            Faction filterFac = Game.GetFormFromFile(0x12DB, "SkyrimNet.esp") as Faction
+            if(filterFac)
+                int i = 0
+                while(i < mutedForms.Length)
+                    Actor mutedActor = mutedForms[i] as Actor
+                    if(mutedActor)
+                        mutedActor.RemoveFromFaction(filterFac)
+                    endif
+                    i += 1
+                endwhile
+            endif
+        endif
+        StorageUtil.FormListClear(none, "SkyrimNet_Blacklisted_Actors")
+    endif
+
+    Form[] movedForms = StorageUtil.FormListToArray(none, "TTM_MovedNpcs")
+    if(movedForms.Length > 0)
+        int i = 0
+        while(i < movedForms.Length)
+            Actor movedNpc = movedForms[i] as Actor
+            if(movedNpc)
+                ObjectReference marker = StorageUtil.GetFormValue(movedNpc, "TTM_NpcOriginalLocation") as ObjectReference
+                if(marker)
+                    movedNpc.MoveTo(marker)
+                    marker.Disable()
+                    marker.Delete()
+                    StorageUtil.UnsetFormValue(movedNpc, "TTM_NpcOriginalLocation")
+                endif
+            endif
+            i += 1
+        endwhile
+        StorageUtil.FormListClear(none, "TTM_MovedNpcs")
+    endif
+
+    Actor[] pChildren = MARAS.GetAllPlayerChildren()
+    int cIdx = 0
+    while(cIdx < pChildren.Length)
+        Actor child = pChildren[cIdx]
+        if(child)
+            Actor legacyCritter = StorageUtil.GetFormValue(child, "TransientCritter") as Actor
+            if(legacyCritter)
+                legacyCritter.Disable()
+                legacyCritter.Delete()
+                StorageUtil.UnsetFormValue(child, "TransientCritter")
+                if(child.GetActorValue("Variable07") == 5)
+                    child.SetActorValue("Variable07", 0)
+                    child.EvaluatePackage()
+                endif
+            endif
+        endif
+        cIdx += 1
+    endwhile
+
+    float legacyDivorceFeeDay = StorageUtil.GetFloatValue(none, "TTM_LastTimePayedDivorceFee", -1.0)
+    int legacyPoor = 0
+    if(childrenLogicQst)
+        legacyPoor = childrenLogicQst.PoorCounter
+    endif
+
+    Actor[] allNpcs = MARAS.GetNPCsByStatus("all")
+    int matchedCount = 0
+    int nIdx = 0
+    while(nIdx < allNpcs.Length)
+        Actor npc = allNpcs[nIdx]
+        if(npc)
+            float brokeDay = StorageUtil.GetFloatValue(npc, "BrokeupTime", -1.0)
+            float incomeDay = StorageUtil.GetFloatValue(npc, "LastTimeSharedIncome", -1.0)
+            if(brokeDay >= 0.0 || incomeDay >= 0.0)
+                matchedCount += 1
+            endif
+        endif
+        nIdx += 1
+    endwhile
+
+    if(legacyDivorceFeeDay >= 0.0 || legacyPoor > 0 || matchedCount > 0)
+        Actor[] seedNpcs = PapyrusUtil.ActorArray(matchedCount)
+        float[] brokeupTimes = PapyrusUtil.FloatArray(matchedCount)
+        float[] sharedIncomeTimes = PapyrusUtil.FloatArray(matchedCount)
+        int writeIdx = 0
+        nIdx = 0
+        while(nIdx < allNpcs.Length && writeIdx < matchedCount)
+            Actor npc = allNpcs[nIdx]
+            if(npc)
+                float brokeDay = StorageUtil.GetFloatValue(npc, "BrokeupTime", -1.0)
+                float incomeDay = StorageUtil.GetFloatValue(npc, "LastTimeSharedIncome", -1.0)
+                if(brokeDay >= 0.0 || incomeDay >= 0.0)
+                    seedNpcs[writeIdx] = npc
+                    brokeupTimes[writeIdx] = brokeDay
+                    sharedIncomeTimes[writeIdx] = incomeDay
+                    writeIdx += 1
+                endif
+            endif
+            nIdx += 1
+        endwhile
+        MARAS.SeedLegacyUpgradeState(legacyDivorceFeeDay, legacyPoor, seedNpcs, brokeupTimes, sharedIncomeTimes)
+        if(childrenLogicQst)
+            childrenLogicQst.PoorCounter = MARAS.GetChildPoorCounter()
+        endif
+    endif
 EndFunction
 
 Event OnMarasCheatingCaught(string eventName, string jsonPayload, float threadID, Form victimSender)
@@ -383,15 +509,22 @@ Event OnRelationshipChangedFull(String EventName, String jsonPayload, Float stat
                         MARAS.DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(nonPlayerPartner) + " got married!", nonPlayerPartner, player)
                     endif
                 else
-                    TTM_ServiceMarriageQuest.StartEngagement(nonPlayerPartner)
-                    MARAS.NotifyEngagementCeremonyStarted(nonPlayerPartner)
+                    if(TTM_ServiceMarriageQuest.StartEngagement(nonPlayerPartner))
+                        MARAS.NotifyEngagementCeremonyStarted(nonPlayerPartner)
+                    endif
                 endif
             elseif(status == "married")
                 TTM_ServiceMarriageQuest.SkipWedding(nonPlayerPartner)
             elseif(status == "divorced")
                 bool res = TTM_Data.GetDivorceKeyword().SendStoryEventAndWait(akRef1 = nonPlayerPartner)
-                TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(nonPlayerPartner, "divorce")
-                TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(nonPlayerPartner)
+                TTM_ServiceSpouseAssets.StopQuest(nonPlayerPartner)
+                Quest affectionEstrangedDivorce = TTM_Data.GetMarasAffectionEstrangedDivorceQuest()
+                if(affectionEstrangedDivorce && affectionEstrangedDivorce.IsRunning())
+                    Actor questSpouse = TTM_Utils.GetActorAlias(affectionEstrangedDivorce, "Spouse")
+                    if(questSpouse == nonPlayerPartner)
+                        (affectionEstrangedDivorce as TTM_QuestAffectionEstrangedDivorce).FinishQuest(false)
+                    endif
+                endif
             endif
         endif
     endif
@@ -494,16 +627,6 @@ Function MigrateSettingsToCpp()
         MARAS.SetSettingBool("confirmDivorceDuringLowAffectionQuest", valLowAffDivorce == 1)
     endif
 
-    if(StorageUtil.GetIntValue(none, "PlayerKiller", 0) == 1)
-        MARAS.SetPlayerKiller(true)
-    endif
-    if(StorageUtil.GetIntValue(none, "PlayerHadWedding", 0) == 1)
-        MARAS.SetPlayerHadWedding(true)
-    endif
-    if(StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 1)
-        MARAS.SetDontShowSkipWeddingMessage(true)
-    endif
-
     MARAS.MarkSettingsMigrated()
     Debug.Notification("MARAS: Settings migrated to native storage.")
 EndFunction
@@ -540,7 +663,10 @@ Function RegisterSkyrimNetEventSchema()
         + "{\"name\": \"isOpen\", \"type\": 2, \"required\": false, \"description\": \"Whether open relationship is active.\"}," \
         + "{\"name\": \"isWalkIn\", \"type\": 2, \"required\": false, \"description\": \"Whether event was a walk-in discovery.\"}," \
         + "{\"name\": \"mother\", \"type\": 0, \"required\": false, \"description\": \"Mother actor name.\"}," \
-        + "{\"name\": \"partner\", \"type\": 0, \"required\": false, \"description\": \"Partner actor name.\"}" \
+        + "{\"name\": \"partner\", \"type\": 0, \"required\": false, \"description\": \"Partner actor name.\"}," \
+        + "{\"name\": \"speaker\", \"type\": 0, \"required\": false, \"description\": \"Speaker actor name.\"}," \
+        + "{\"name\": \"initiator\", \"type\": 0, \"required\": false, \"description\": \"Initiator actor name.\"}," \
+        + "{\"name\": \"target\", \"type\": 0, \"required\": false, \"description\": \"Target actor name.\"}" \
         + "]"
     string renderParams = "{\"recent_events\":\"{{msg}}\",\"raw\":\"{{msg}}\",\"compact\":\"{{msg}}\",\"verbose\":\"{{msg}}\"}"
     SkyrimnetApi.RegisterEventSchema("ttm_event", name, description, jsonParams, renderParams, false, 0)

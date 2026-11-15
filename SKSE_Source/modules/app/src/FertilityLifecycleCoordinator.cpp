@@ -299,33 +299,32 @@ namespace MARAS::App {
                 break;
             }
             case Domain::Lineage::BfCycleStateAction::RecoveryDelivery: {
-                if (pw.GetUnbornChildren(motherId).empty()) {
-                    return;
-                }
-                auto& pool = Engine::NamePoolLoader::GetSingleton();
-                if (!pool.IsChildLoaded()) {
-                    (void)pool.LoadChildNamesFromFile();
-                }
-                const bool femaleMother = IsFemaleActor(mother);
+                if (!pw.GetUnbornChildren(motherId).empty()) {
+                    auto& pool = Engine::NamePoolLoader::GetSingleton();
+                    if (!pool.IsChildLoaded()) {
+                        (void)pool.LoadChildNamesFromFile();
+                    }
+                    const bool femaleMother = IsFemaleActor(mother);
 
-                auto& lineage = LineageUseCases::GetSingleton();
-                while (!pw.GetUnbornChildren(motherId).empty()) {
-                    std::string childName = pool.GetRandomChildName(mother, femaleMother, true);
-                    if (childName.empty()) {
-                        childName = "Newborn";
+                    auto& lineage = LineageUseCases::GetSingleton();
+                    while (!pw.GetUnbornChildren(motherId).empty()) {
+                        std::string childName = pool.GetRandomChildName(mother, femaleMother, true);
+                        if (childName.empty()) {
+                            childName = "Newborn";
+                        }
+                        const RE::FormID childId = pw.PromoteUnbornToInfant(motherId, currentGameDay, childName);
+                        if (childId == 0) {
+                            break;
+                        }
+                        lineage.SetChildGender(childId, 2);
+                        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                            (void)Domain::Lineage::ApplyAppendBornToDeliveryBatch(
+                                ws.lineage.Write(), State::ActorId{ motherId }, State::ChildId{ childId });
+                        });
+                        MARAS_LOG_INFO(
+                            "[Fertility][BF] {} ({:08X}) gave birth without spawned baby item (ID {:08X}, name='{}')",
+                            ActorSvc::GetName(motherId), motherId, childId, childName);
                     }
-                    const RE::FormID childId = pw.PromoteUnbornToInfant(motherId, currentGameDay, childName);
-                    if (childId == 0) {
-                        break;
-                    }
-                    lineage.SetChildGender(childId, 2);
-                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                        (void)Domain::Lineage::ApplyAppendBornToDeliveryBatch(
-                            ws.lineage.Write(), State::ActorId{ motherId }, State::ChildId{ childId });
-                    });
-                    MARAS_LOG_INFO(
-                        "[Fertility][BF] {} ({:08X}) gave birth without spawned baby item (ID {:08X}, name='{}')",
-                        ActorSvc::GetName(motherId), motherId, childId, childName);
                 }
 
                 std::optional<State::ActiveDeliveryBatch> completed{};
@@ -573,7 +572,7 @@ namespace MARAS::App {
             }
         }
 
-        if (prov == Domain::Lineage::FertilityProvider::BeeingFemale && lossReason == "stillbirth" &&
+        if (prov == Domain::Lineage::FertilityProvider::BeeingFemale &&
             pw.GetUnbornChildren(motherId).empty()) {
             std::optional<State::ActiveDeliveryBatch> completed{};
             State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
@@ -677,18 +676,15 @@ namespace MARAS::App {
             "[Fertility][FMR] Child '{}' ({:08X}) sent to training at '{}' ({}).",
             childName, childId, trainingLocation, className);
 
+        AffectionEventCoordinator::GetSingleton().ApplyChildMilestoneForParents(childId, "training");
+
         auto& sn = GetSkyrimNetGateway();
         if (sn.IsAvailable()) {
             sn.EmitChildSentToTraining(childId, childName, trainingLocation);
         }
     }
 
-    void FertilityLifecycleCoordinator::OnChildFinishedTraining(
-        const std::string& childName,
-        const std::string& trainingLocation,
-        const std::string& className) {
-        (void)trainingLocation;
-        (void)className;
+    void FertilityLifecycleCoordinator::OnChildFinishedTraining(const std::string& childName) {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!snap || !snap->lineage) {
             return;
@@ -770,13 +766,11 @@ namespace MARAS::App {
             std::nullopt,
             true);
 
-        if (plan.previousStage != Foundation::ChildStage::Adult) {
+        if (fireEvent && plan.previousStage != Foundation::ChildStage::Adult) {
             AffectionEventCoordinator::GetSingleton().ApplyChildMilestoneForParents(adultId, "adult");
-            if (fireEvent) {
-                auto& sn = GetSkyrimNetGateway();
-                if (sn.IsAvailable()) {
-                    sn.EmitChildBecameAdult(adultId, resolvedName);
-                }
+            auto& sn = GetSkyrimNetGateway();
+            if (sn.IsAvailable()) {
+                sn.EmitChildBecameAdult(adultId, resolvedName);
             }
         }
     }
@@ -845,11 +839,18 @@ namespace MARAS::App {
             return false;
         }
 
+        const auto clampedStageVal = std::clamp<std::int32_t>(
+            stage,
+            static_cast<std::int32_t>(Foundation::ChildStage::Infant),
+            static_cast<std::int32_t>(Foundation::ChildStage::Adult));
+        const auto childStage = static_cast<Foundation::ChildStage>(clampedStageVal);
+
         const auto plan = Domain::Lineage::PlanSpawnedChildLineage(
             *snap,
             State::ChildId{ static_cast<RE::FormID>(childId) },
             State::ActorId{ bioMother ? bioMother->GetFormID() : 0 },
-            State::ActorId{ bioFather ? bioFather->GetFormID() : 0 });
+            State::ActorId{ bioFather ? bioFather->GetFormID() : 0 },
+            childStage);
 
         if (plan.isPlayerChild) {
             return false;
@@ -858,7 +859,7 @@ namespace MARAS::App {
         const RE::FormID houseLoc = (stage < 4 && !plan.tenantHouseLookupActor.IsNull())
             ? HouseholdUseCases::GetSingleton().GetTenantHouseFormID(plan.tenantHouseLookupActor.raw())
             : 0;
-        const auto clampedStage = static_cast<std::uint8_t>(std::clamp<std::int32_t>(stage, 1, 4));
+        const auto clampedStage = static_cast<std::uint8_t>(clampedStageVal);
 
         LineageUseCases::GetSingleton().RegisterChildActor(
             childActor->GetFormID(),

@@ -2,6 +2,7 @@
 
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
+#include "maras/app/BanterSceneCoordinator.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/domain/relationships/AffectionRules.h"
@@ -1035,8 +1036,6 @@ namespace MARAS::App {
             Foundation::RelationshipStatus::Married;
 
         const auto activePartners = GetAllPartners(npcFormID);
-        BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcFormID);
-        ClearCurrentHome(npcFormID);
 
         State::WorldMutationResult mut;
         Domain::Relationships::CleanupAffairsOutcome affairCleanup;
@@ -1045,6 +1044,10 @@ namespace MARAS::App {
             affairCleanup = Domain::Relationships::ApplyCleanupActorIntentsAndThirdPartyAffairs(
                 ws, State::ActorId{ npcFormID }, /*eraseRecords=*/true);
         });
+
+        BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(npcFormID, mut, "");
+        ClearCurrentHome(npcFormID);
+        BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(mut.retiredSceneMarkers);
 
         FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
         PackageReconciler::GetSingleton().UnregisterActor(npcFormID);
@@ -1093,9 +1096,6 @@ namespace MARAS::App {
             snap->relationships->GetStatus(State::ActorId{ npcFormID }, State::ActorId::Player()) ==
             Foundation::RelationshipStatus::Married;
 
-        BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcFormID, "deceased");
-        ClearCurrentHome(npcFormID);
-
         State::WorldMutationResult mut;
         Domain::Relationships::CleanupAffairsOutcome cleanup;
         const float currentDay = GetCurrentGameDays();
@@ -1104,6 +1104,10 @@ namespace MARAS::App {
             cleanup = Domain::Relationships::ApplyCleanupActorIntentsAndThirdPartyAffairs(
                 ws, State::ActorId{ npcFormID }, /*eraseRecords=*/false);
         });
+
+        BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(npcFormID, mut, "deceased");
+        ClearCurrentHome(npcFormID);
+        BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(mut.retiredSceneMarkers);
 
         ReconcileDirtyActorsAndChildren(mut, /*reconcilePackages=*/true);
         for (const auto affId : cleanup.affectedActors) {
@@ -1974,7 +1978,8 @@ namespace MARAS::App {
     void RelationshipUseCases::ReconcileBreakupOrDivorceEngineState(RE::FormID actorA,
                                                                      RE::FormID actorB,
                                                                      Foundation::RelationshipStatus oldStatus,
-                                                                     Foundation::RelationshipStatus newStatus) {
+                                                                     Foundation::RelationshipStatus newStatus,
+                                                                     const State::WorldMutationResult& mut) {
         const bool isPlayerPair = (actorA == kPlayerFormID || actorB == kPlayerFormID);
         if (isPlayerPair) {
             const RE::FormID npcID = (actorA == kPlayerFormID) ? actorB : actorA;
@@ -1985,7 +1990,8 @@ namespace MARAS::App {
                 newStatus == Foundation::RelationshipStatus::Candidate) {
                 const std::string_view stopReason =
                     (newStatus == Foundation::RelationshipStatus::Divorced) ? "divorce" : "";
-                BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcID, stopReason);
+                BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(
+                    npcID, mut, stopReason);
                 ClearCurrentHome(npcID);
                 PackageReconciler::GetSingleton().ReconcileActor(npcID);
             }
@@ -2031,8 +2037,6 @@ namespace MARAS::App {
         const RE::FormID playerPartnerID = isPlayerPair
                                                ? ((npcFormID == kPlayerFormID) ? targetFormID : npcFormID)
                                                : 0;
-        const bool playerPartnerLoadedInEngine =
-            isPlayerPair && (RE::TESForm::LookupByID<RE::Actor>(playerPartnerID) != nullptr);
 
         Foundation::DeterministicRng rng(
             static_cast<std::uint32_t>(npcFormID ^ (targetFormID * 0x9E3779B9u) ^
@@ -2048,8 +2052,6 @@ namespace MARAS::App {
                 currentGameDay,
                 State::ActorId{ initiator },
                 checkData.meta,
-                sendEvent,
-                playerPartnerLoadedInEngine,
                 checkData.ctx,
                 &rng);
         });
@@ -2086,7 +2088,8 @@ namespace MARAS::App {
 
         if (IsBreakupStatus(status) ||
             (status == Foundation::RelationshipStatus::Candidate && IsActivePartnerStatus(outcome.oldStatus))) {
-            ReconcileBreakupOrDivorceEngineState(npcFormID, targetFormID, outcome.oldStatus, status);
+            ReconcileBreakupOrDivorceEngineState(
+                npcFormID, targetFormID, outcome.oldStatus, status, outcome.mutations);
         }
 
         // Reconcile all affected actors, children, factions, packages, globals, and player buffs
@@ -2417,17 +2420,22 @@ namespace MARAS::App {
             }
 
             custodyMut = ws.EvaluateCustodyOnDivorce(State::ActorId{ actorA }, State::ActorId{ actorB }, meta, rng);
+            if (isPlayerPair) {
+                custodyMut.Merge(ws.StopSharingForSpouseWithDeltas(State::ActorId{ playerPartnerID }));
+            }
             (void)gameDay;
         });
 
         if (isPlayerPair) {
-            BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(playerPartnerID, "divorce");
+            BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(
+                playerPartnerID, custodyMut, "divorce");
             ClearCurrentHome(playerPartnerID);
             PackageReconciler::GetSingleton().ReconcileActor(playerPartnerID);
         } else {
             PackageReconciler::GetSingleton().ReconcileActor(actorA);
             PackageReconciler::GetSingleton().ReconcileActor(actorB);
         }
+        BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(custodyMut.retiredSceneMarkers);
 
         ReconcileDirtyActorsAndChildren(custodyMut, /*reconcilePackages=*/true);
         for (const RE::FormID id : affectedActors) {
@@ -2804,6 +2812,11 @@ namespace MARAS::App {
         if (const auto* prof = snap->actors->Find(State::RefId{ npcFormID })) {
             return prof->socialClass;
         }
+        if (const auto* dec = snap->deceased->FindByActor(
+                State::ActorId{ npcFormID },
+                State::BaseId{ SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID) })) {
+            return dec->socialClass;
+        }
         return Foundation::SocialClass::Outcast;
     }
 
@@ -2812,6 +2825,11 @@ namespace MARAS::App {
         if (const auto* prof = snap->actors->Find(State::RefId{ npcFormID })) {
             return prof->skillType;
         }
+        if (const auto* dec = snap->deceased->FindByActor(
+                State::ActorId{ npcFormID },
+                State::BaseId{ SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID) })) {
+            return dec->skillType;
+        }
         return Foundation::SkillType::Warrior;
     }
 
@@ -2819,6 +2837,11 @@ namespace MARAS::App {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (const auto* prof = snap->actors->Find(State::RefId{ npcFormID })) {
             return prof->temperament;
+        }
+        if (const auto* dec = snap->deceased->FindByActor(
+                State::ActorId{ npcFormID },
+                State::BaseId{ SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID) })) {
+            return dec->temperament;
         }
         return Foundation::Temperament::Proud;
     }
@@ -3669,7 +3692,7 @@ namespace MARAS::App {
             auto& aff = ws.affection.Write();
             const float prev = aff.GetDailyAccumulation(State::ActorId{ npcFormID }, normType);
             aff.SetDailyAccumulation(State::ActorId{ npcFormID }, normType, prev + amount);
-            if (amount > 0.0f && normType != "loneliness") {
+            if (amount > 0.0f) {
                 aff.SetLastInteractionDay(State::ActorId{ npcFormID }, currentDay);
             }
         });
@@ -3720,9 +3743,12 @@ namespace MARAS::App {
             BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
         }
         GetUiBridgeGateway().OnAffectionChanged(npcFormID, clamped);
-        if (sendEvent && oldVal != clamped) {
-            const auto threshold = Domain::Relationships::GetAffectionThreshold(clamped);
-            EmitAffectionChangeModEvent(npcFormID, threshold, clamped - oldVal);
+        if (sendEvent) {
+            const auto oldThreshold = Domain::Relationships::GetAffectionThreshold(oldVal);
+            const auto newThreshold = Domain::Relationships::GetAffectionThreshold(clamped);
+            if (oldThreshold != newThreshold) {
+                EmitAffectionChangeModEvent(npcFormID, newThreshold, clamped - oldVal);
+            }
         }
     }
 
@@ -3773,6 +3799,8 @@ namespace MARAS::App {
             }
             if (change.newScore != change.oldScore) {
                 GetUiBridgeGateway().OnAffectionChanged(id, change.newScore);
+            }
+            if (change.newThreshold != change.oldThreshold) {
                 EmitAffectionChangeModEvent(id, change.newThreshold, change.newScore - change.oldScore);
             }
         }

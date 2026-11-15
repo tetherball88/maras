@@ -116,7 +116,7 @@ namespace MARAS::Tests {
         // Monogamy block vs polygamy allowance for Player
         ws.settings.Write().enablePlayerPolygamy = false;
         const auto m1 = ApplyRelationshipTransition(
-            ws, ActorId::Player(), mother, RelationshipStatus::Married, 10.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), mother, RelationshipStatus::Married, 10.0f, ActorId::Player(), meta);
         MARAS_CHECK(m1.allowed);
         MARAS_CHECK_EQ(m1.offlineSyncedAffection, 100);
         MARAS_CHECK(!IsAvailableForStatus(ws.Snapshot(), ActorId::Player(), RelationshipStatus::Dating));
@@ -127,7 +127,7 @@ namespace MARAS::Tests {
         (void)ws.SetPairOpen(ActorId::Player(), mother, true, 11.0f);
         MARAS_CHECK(IsAvailableForStatus(ws.Snapshot(), ActorId::Player(), RelationshipStatus::Married));
         const auto m2 = ApplyRelationshipTransition(
-            ws, ActorId::Player(), thirdNpc, RelationshipStatus::Married, 12.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), thirdNpc, RelationshipStatus::Married, 12.0f, ActorId::Player(), meta);
         MARAS_CHECK(m2.allowed);
         MARAS_CHECK(m2.appliedAutoOpen);
         MARAS_CHECK(m2.reconcilePlayerBuffs);
@@ -135,7 +135,7 @@ namespace MARAS::Tests {
 
         // Divorce resets isOpen & offline affection
         const auto div = ApplyRelationshipTransition(
-            ws, ActorId::Player(), thirdNpc, RelationshipStatus::Divorced, 15.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), thirdNpc, RelationshipStatus::Divorced, 15.0f, ActorId::Player(), meta);
         MARAS_CHECK(div.allowed);
         MARAS_CHECK(div.resetOpenOnBreakup);
         MARAS_CHECK_EQ(div.offlineSyncedAffection, 0);
@@ -177,9 +177,9 @@ namespace MARAS::Tests {
         RegisterAdult(ws, npcParamour);
 
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), spouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), spouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, npcSpouse, npcParamour, RelationshipStatus::Married, 1.0f, npcSpouse, meta, false, false);
+            ws, npcSpouse, npcParamour, RelationshipStatus::Married, 1.0f, npcSpouse, meta);
 
         // Set pending ConfessTalking intent before recording physical cheating to test upgrade
         ws.relationships.Write().SetPendingIntent(spouse, PendingPartnerIntentRecord{
@@ -217,7 +217,7 @@ namespace MARAS::Tests {
         RegisterAdult(ws, coSpouse);
         ws.settings.Write().enablePlayerPolygamy = true;
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), coSpouse, RelationshipStatus::Married, 5.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), coSpouse, RelationshipStatus::Married, 5.0f, ActorId::Player(), meta);
         MARAS_CHECK(!IsRelationshipCheating(ws.Snapshot(), spouse, coSpouse));
 
         // Discovery clears secret & marks victims, resolution breaks paramour on Confronted
@@ -237,7 +237,7 @@ namespace MARAS::Tests {
         RegisterAdult(ws, openSpouse);
         RegisterAdult(ws, openLover);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), openSpouse, RelationshipStatus::Married, 6.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), openSpouse, RelationshipStatus::Married, 6.0f, ActorId::Player(), meta);
         (void)ApplyRecordCheating(
             ws, openSpouse, ActorId::Player(), openLover, true,
             AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 7.0f);
@@ -255,9 +255,9 @@ namespace MARAS::Tests {
         RegisterAdult(ws, indepSpouse, Temperament::Independent);
 
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), romanticSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), romanticSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), indepSpouse, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), indepSpouse, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta);
 
         MARAS_CHECK_EQ(GetAffectionThreshold(80), "happy");
         MARAS_CHECK_EQ(GetAffectionThreshold(60), "content");
@@ -293,7 +293,7 @@ namespace MARAS::Tests {
         for (ActorId id : { s1, s2, s3 }) {
             RegisterAdult(ws, id);
             (void)ApplyRelationshipTransition(
-                ws, ActorId::Player(), id, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), id, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         }
 
         const auto a1 = ApplyOnSpouseAdded(ws, s1);
@@ -377,20 +377,20 @@ namespace MARAS::Tests {
         }
 
         // Non-main Lover pair cannot be opened/closed
-        (void)ApplyRelationshipTransition(ws, c, sideLover, RelationshipStatus::Lover, 1.0f, c, meta, false, false);
+        (void)ApplyRelationshipTransition(ws, c, sideLover, RelationshipStatus::Lover, 1.0f, c, meta);
         MARAS_CHECK(!CanOpenRelationship(ws.Snapshot(), c, sideLover));
         MARAS_CHECK(!CanCloseRelationship(ws.Snapshot(), c, sideLover));
 
         // Open Married NPC pair (a, b) with side lovers (a, c) & (b, d)
-        (void)ApplyRelationshipTransition(ws, a, b, RelationshipStatus::Married, 1.0f, a, meta, false, false);
+        (void)ApplyRelationshipTransition(ws, a, b, RelationshipStatus::Married, 1.0f, a, meta);
         MARAS_CHECK(CanOpenRelationship(ws.Snapshot(), a, b));
         const auto opened = ApplySetPairOpen(ws, a, b, true, 2.0f);
         MARAS_CHECK(opened.changed);
         MARAS_CHECK(!opened.wasOpen);
         MARAS_CHECK(CanCloseRelationship(ws.Snapshot(), a, b));
 
-        (void)ApplyRelationshipTransition(ws, a, c, RelationshipStatus::Lover, 3.0f, a, meta, false, false);
-        (void)ApplyRelationshipTransition(ws, b, d, RelationshipStatus::Lover, 3.0f, b, meta, false, false);
+        (void)ApplyRelationshipTransition(ws, a, c, RelationshipStatus::Lover, 3.0f, a, meta);
+        (void)ApplyRelationshipTransition(ws, b, d, RelationshipStatus::Lover, 3.0f, b, meta);
         ws.relationships.Write().SetPendingIntent(c, PendingPartnerIntentRecord{
             .type = PartnerIntentType::ConfessTalking,
             .createdGameDay = 4.0f,
@@ -410,7 +410,7 @@ namespace MARAS::Tests {
         // Player-partner SetPairOpen clears Player-partner SuggestClose intent directly
         const ActorId pSpouse{ 0x00016006u };
         RegisterAdult(ws, pSpouse);
-        const auto mPl = ApplyRelationshipTransition(ws, ActorId::Player(), pSpouse, RelationshipStatus::Married, 6.0f, ActorId::Player(), meta, false, false);
+        const auto mPl = ApplyRelationshipTransition(ws, ActorId::Player(), pSpouse, RelationshipStatus::Married, 6.0f, ActorId::Player(), meta);
         MARAS_REQUIRE(mPl.allowed);
         (void)ApplySetPairOpen(ws, ActorId::Player(), pSpouse, true, 6.0f);
         ws.relationships.Write().SetPendingIntent(pSpouse, PendingPartnerIntentRecord{
@@ -435,8 +435,8 @@ namespace MARAS::Tests {
         }
 
         ws.settings.Write().enablePlayerPolygamy = true;
-        (void)ApplyRelationshipTransition(ws, ActorId::Player(), sp1, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
-        (void)ApplyRelationshipTransition(ws, ActorId::Player(), sp2, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+        (void)ApplyRelationshipTransition(ws, ActorId::Player(), sp1, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)ApplyRelationshipTransition(ws, ActorId::Player(), sp2, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
 
         // sp1 cheats secretly and holds ConfessTalking -> "Allowed" clears confess intent & queues victim to open
         ws.relationships.Write().SetPendingIntent(sp1, PendingPartnerIntentRecord{
@@ -483,8 +483,8 @@ namespace MARAS::Tests {
         }
 
         // Player has ongoing affair before enabling polygamy
-        (void)ApplyRelationshipTransition(ws, ActorId::Player(), sp, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
-        (void)ApplyRelationshipTransition(ws, sp, paramour, RelationshipStatus::Lover, 2.0f, sp, meta, false, false);
+        (void)ApplyRelationshipTransition(ws, ActorId::Player(), sp, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)ApplyRelationshipTransition(ws, sp, paramour, RelationshipStatus::Lover, 2.0f, sp, meta);
         (void)ApplyRecordCheating(
             ws, sp, ActorId::Player(), paramour, true, AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 3.0f);
         (void)ApplyRecordCheating(
@@ -538,10 +538,10 @@ namespace MARAS::Tests {
         }
 
         // Duplicate same-status transition reports skippedDuplicate == true
-        const auto d1 = ApplyRelationshipTransition(ws, ActorId::Player(), npcA, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta, false, false);
+        const auto d1 = ApplyRelationshipTransition(ws, ActorId::Player(), npcA, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
         MARAS_CHECK(d1.allowed);
         MARAS_CHECK_EQ(d1.offlineSyncedAffection, 80);
-        const auto dup = ApplyRelationshipTransition(ws, ActorId::Player(), npcA, RelationshipStatus::Dating, 2.0f, ActorId::Player(), meta, false, false);
+        const auto dup = ApplyRelationshipTransition(ws, ActorId::Player(), npcA, RelationshipStatus::Dating, 2.0f, ActorId::Player(), meta);
         MARAS_CHECK(dup.skippedDuplicate);
         MARAS_CHECK(!dup.allowed);
 
@@ -550,17 +550,17 @@ namespace MARAS::Tests {
         ws.settings.Write().enablePlayerPolygamy = false;
         MARAS_CHECK(!CanFormRelationship(ws.Snapshot(), meta, ActorId::Player(), npcB, RelationshipStatus::Engaged, {}, &reason));
         MARAS_CHECK(reason.find("dating") != std::string::npos);
-        (void)ApplyRelationshipTransition(ws, npcB, npcC, RelationshipStatus::Dating, 1.0f, npcB, meta, false, false);
+        (void)ApplyRelationshipTransition(ws, npcB, npcC, RelationshipStatus::Dating, 1.0f, npcB, meta);
         MARAS_CHECK(!CanFormRelationship(ws.Snapshot(), meta, npcB, ActorId::Player(), RelationshipStatus::Engaged, {}, &reason));
 
         // Offline affection sync rules for Lover (>=70, not lowering higher) and Candidate (50)
         ws.affection.Write().SetPermanent(npcB, 90);
-        const auto lovHigh = ApplyRelationshipTransition(ws, ActorId::Player(), npcB, RelationshipStatus::Lover, 3.0f, ActorId::Player(), meta, false, false);
+        const auto lovHigh = ApplyRelationshipTransition(ws, ActorId::Player(), npcB, RelationshipStatus::Lover, 3.0f, ActorId::Player(), meta);
         MARAS_CHECK(lovHigh.allowed);
         MARAS_CHECK(!lovHigh.offlineSyncedAffection.has_value());
         MARAS_CHECK_EQ(ws.affection.Read().GetPermanent(npcB, 0), 90);
 
-        const auto candReset = ApplyRelationshipTransition(ws, ActorId::Player(), npcB, RelationshipStatus::Candidate, 4.0f, ActorId::Player(), meta, false, false);
+        const auto candReset = ApplyRelationshipTransition(ws, ActorId::Player(), npcB, RelationshipStatus::Candidate, 4.0f, ActorId::Player(), meta);
         MARAS_CHECK(candReset.allowed);
         MARAS_CHECK_EQ(candReset.offlineSyncedAffection, 50);
     }
@@ -694,11 +694,11 @@ namespace MARAS::Tests {
         RegisterAdult(ws, candidateOnly, Temperament::Humble);
 
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), spouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), spouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), exLover, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), exLover, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), exLover, RelationshipStatus::ExLover, 2.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), exLover, RelationshipStatus::ExLover, 2.0f, ActorId::Player(), meta);
         ws.affection.Write().SetPermanent(spouse, 95);
 
         const auto snap = ws.Snapshot();
@@ -732,11 +732,11 @@ namespace MARAS::Tests {
         RegisterAdult(ws, paramour, Temperament::Proud);
         ws.settings.Write().enablePlayerPolygamy = true;
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), indepSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), indepSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), jealousSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), jealousSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), paramour, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), paramour, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta);
 
         const auto snap = ws.Snapshot();
 
@@ -773,7 +773,7 @@ namespace MARAS::Tests {
         const auto resolvedNpcAllowed = PlanAffairResolvedAffection(snap, indepSpouse, jealousSpouse, "allowed");
         MARAS_CHECK(resolvedNpcAllowed.empty());
         const auto resolvedNpcConfronted = PlanAffairResolvedAffection(snap, indepSpouse, jealousSpouse, "confronted");
-        MARAS_CHECK_EQ(resolvedNpcConfronted.size(), 2u);
+        MARAS_CHECK(resolvedNpcConfronted.empty());
     }
 
     MARAS_TEST(DomainRelationships, AffectionPregnancyPaternityAndChildPlanners) {
@@ -784,9 +784,9 @@ namespace MARAS::Tests {
         RegisterAdult(ws, motherSpouse, Temperament::Proud);
         RegisterAdult(ws, bioFatherLover, Temperament::Humble);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), motherSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), motherSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), bioFatherLover, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), bioFatherLover, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta);
 
         // Secret unborn pregnancy suppresses conceived affection until partner knows
         const ChildId unbornId{ 0xFF001234u };
@@ -1001,32 +1001,32 @@ namespace MARAS::Tests {
             RelationshipCheckContext rank3Ctx{};
             rank3Ctx.playerRelationshipRank = 3;
             const auto candOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), cand, RelationshipStatus::Candidate, 1.0f, ActorId::Player(), meta, false, false, rank3Ctx);
+                ws, ActorId::Player(), cand, RelationshipStatus::Candidate, 1.0f, ActorId::Player(), meta, rank3Ctx);
             MARAS_CHECK(candOut.allowed);
             MARAS_CHECK_EQ(candOut.offlineSyncedAffection, 80);
             MARAS_CHECK_EQ(ws.affection->GetPermanent(cand), 80);
 
             ws.affection.Write().SetPermanent(cleanEx, 15);
             const auto dateOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), cleanEx, RelationshipStatus::Dating, 2.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), cleanEx, RelationshipStatus::Dating, 2.0f, ActorId::Player(), meta);
             MARAS_CHECK(dateOut.allowed);
             MARAS_CHECK_EQ(dateOut.offlineSyncedAffection, 80);
             MARAS_CHECK_EQ(ws.affection->GetPermanent(cleanEx), 80);
 
             // Clean ExDating does NOT apply breakup cooldown
             const auto cleanExOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), cleanEx, RelationshipStatus::ExDating, 3.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), cleanEx, RelationshipStatus::ExDating, 3.0f, ActorId::Player(), meta);
             MARAS_CHECK(cleanExOut.allowed);
             MARAS_CHECK(!cleanExOut.appliedBreakupCooldown);
             MARAS_CHECK_EQ(ws.cooldowns->GetBrokeupTime(cleanEx), -1.0f);
 
             // Cheating Dating -> ExDating DOES apply breakup cooldown
             (void)ApplyRelationshipTransition(
-                ws, ActorId::Player(), cheatEx, RelationshipStatus::Dating, 4.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), cheatEx, RelationshipStatus::Dating, 4.0f, ActorId::Player(), meta);
             (void)ApplyRecordCheating(
                 ws, cheatEx, ActorId::Player(), paramour, true, AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 4.5f);
             const auto cheatExOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), cheatEx, RelationshipStatus::ExDating, 5.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), cheatEx, RelationshipStatus::ExDating, 5.0f, ActorId::Player(), meta);
             MARAS_CHECK(cheatExOut.allowed);
             MARAS_CHECK(cheatExOut.appliedBreakupCooldown);
             MARAS_CHECK(approx(ws.cooldowns->GetBrokeupTime(cheatEx), 5.0f));
@@ -1034,10 +1034,10 @@ namespace MARAS::Tests {
             // Engaged sets permanent 100 and Jilted applies breakup cooldown
             ws.affection.Write().SetPermanent(jiltedNpc, 20);
             const auto engOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), jiltedNpc, RelationshipStatus::Engaged, 6.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), jiltedNpc, RelationshipStatus::Engaged, 6.0f, ActorId::Player(), meta);
             MARAS_CHECK_EQ(engOut.offlineSyncedAffection, 100);
             const auto jiltOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), jiltedNpc, RelationshipStatus::Jilted, 7.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), jiltedNpc, RelationshipStatus::Jilted, 7.0f, ActorId::Player(), meta);
             MARAS_CHECK(jiltOut.appliedBreakupCooldown);
             MARAS_CHECK(approx(ws.cooldowns->GetBrokeupTime(jiltedNpc), 7.0f));
 
@@ -1046,7 +1046,7 @@ namespace MARAS::Tests {
             RegisterAdult(ws, loverNpc);
             ws.affection.Write().SetPermanent(loverNpc, 25);
             const auto loverOut = ApplyRelationshipTransition(
-                ws, ActorId::Player(), loverNpc, RelationshipStatus::Lover, 8.0f, ActorId::Player(), meta, false, false);
+                ws, ActorId::Player(), loverNpc, RelationshipStatus::Lover, 8.0f, ActorId::Player(), meta);
             MARAS_CHECK(loverOut.allowed);
             MARAS_CHECK_EQ(loverOut.offlineSyncedAffection, 70);
             MARAS_CHECK_EQ(ws.affection->GetPermanent(loverNpc), 70);
@@ -1095,9 +1095,9 @@ namespace MARAS::Tests {
         RegisterAdult(ws, faithfulDating);
 
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), cheaterSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), cheaterSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
         (void)ApplyRelationshipTransition(
-            ws, ActorId::Player(), faithfulDating, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta, false, false);
+            ws, ActorId::Player(), faithfulDating, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
         (void)ApplyRecordCheating(
             ws, cheaterSpouse, ActorId::Player(), paramour, true, AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 2.0f);
 
@@ -1216,6 +1216,200 @@ namespace MARAS::Tests {
 
         const auto quickSex = EvaluateDialogueTopicBeginOutcome("maras_no_ai_initiate_sex", RelationshipStatus::Dating);
         MARAS_CHECK_EQ(quickSex.PackPapyrusEffectCode(), 8);
+    }
+
+    MARAS_TEST(DomainRelationships, PostAuditEdgeCasesAffectionDailyChancesSettlementAndIntimacy) {
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+        const ActorId spouse{ 0x00019301u };
+        const ActorId datingNpc{ 0x00019302u };
+        const ActorId bioDad{ 0x00019303u };
+        const ActorId paramour{ 0x00019304u };
+        RegisterAdult(ws, spouse, Temperament::Humble);
+        RegisterAdult(ws, datingNpc, Temperament::Independent);
+        RegisterAdult(ws, bioDad, Temperament::Proud);
+        RegisterAdult(ws, paramour, Temperament::Romantic);
+        ws.settings.Write().enablePlayerPolygamy = true;
+
+        (void)ApplyRelationshipTransition(
+            ws, ActorId::Player(), spouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)ApplyRelationshipTransition(
+            ws, ActorId::Player(), datingNpc, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
+        (void)ApplyRelationshipTransition(
+            ws, ActorId::Player(), bioDad, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta);
+
+        // 1. AffectionEventRules: NPC-NPC isolation, remaining paternity outcomes, confession & resolved outcomes
+        {
+            const auto snap = ws.Snapshot();
+            MARAS_CHECK(PlanAffairConfessedAffection(snap, datingNpc, paramour).empty());
+            MARAS_CHECK(PlanAffairExposedAffection(snap, datingNpc, paramour, bioDad).empty());
+
+            const auto confessedByPlayer = PlanAffairConfessedAffection(snap, ActorId::Player(), spouse);
+            MARAS_REQUIRE_EQ(confessedByPlayer.size(), 1u);
+            MARAS_CHECK_EQ(confessedByPlayer[0].appliedDelta, -25);  // int(-30 * 0.85)
+
+            const auto confessedToPlayer = PlanAffairConfessedAffection(snap, spouse, ActorId::Player());
+            MARAS_REQUIRE_EQ(confessedToPlayer.size(), 1u);
+            MARAS_CHECK_EQ(confessedToPlayer[0].appliedDelta, -17);  // int(-20 * 0.85)
+
+            const auto caughtPlayer = PlanCheatingCaughtAffection(snap, ActorId::Player(), datingNpc);
+            MARAS_REQUIRE_EQ(caughtPlayer.size(), 1u);
+            MARAS_CHECK_EQ(caughtPlayer[0].appliedDelta, -24);  // int(-35 * 0.7)
+
+            const auto resolvedBreakup = PlanAffairResolvedAffection(snap, ActorId::Player(), spouse, "breakup");
+            MARAS_REQUIRE_EQ(resolvedBreakup.size(), 1u);
+            MARAS_CHECK_EQ(resolvedBreakup[0].appliedDelta, -17);
+            const auto resolvedConfront = PlanAffairResolvedAffection(snap, bioDad, ActorId::Player(), "confronted");
+            MARAS_REQUIRE_EQ(resolvedConfront.size(), 1u);
+            MARAS_CHECK_EQ(resolvedConfront[0].appliedDelta, 12);  // int(10 * 1.2)
+            MARAS_CHECK(PlanAffairResolvedAffection(snap, ActorId::Player(), spouse, "unknown").empty());
+
+            MARAS_CHECK_EQ(PlanChildBirthAffection(snap, spouse, 1)[0].appliedDelta, 25);
+            MARAS_CHECK_EQ(PlanChildBirthAffection(snap, spouse, 3)[0].appliedDelta, 45);
+
+            ChildRecord c{};
+            const ChildId cid{ 0x00019350u };
+            c.childId = cid;
+            c.stage = ChildStage::Child;
+            c.bioMother = spouse;
+            c.bioFather = bioDad;
+            c.presumedFather = ActorId::Player();
+            c.paternitySecret.isSecret = true;
+            c.paternitySecret.isSecretForPartner = true;
+            ws.lineage.Write().UpsertChild(c);
+            const auto lSnap = ws.Snapshot();
+
+            MARAS_CHECK(PlanPaternitySecretAffection(lSnap, cid, "none").empty());
+            MARAS_CHECK(PlanPaternitySecretAffection(lSnap, cid, "mother_confessed_bio").empty());
+            MARAS_CHECK(PlanPaternitySecretAffection(lSnap, cid, "bio_father_learnt").empty());
+            MARAS_CHECK_EQ(PlanPaternitySecretAffection(lSnap, cid, "mother_confessed_presumed")[0].appliedDelta, -25);
+            MARAS_CHECK_EQ(PlanPaternitySecretAffection(lSnap, cid, "mother_confessed_presumed_unannounced")[0].appliedDelta, -25);
+            MARAS_CHECK_EQ(PlanPaternitySecretAffection(lSnap, cid, "presumed_father_learnt")[0].appliedDelta, -34);
+            MARAS_CHECK_EQ(PlanPaternitySecretAffection(lSnap, cid, "mother_confessed_both")[0].appliedDelta, -25);
+            MARAS_CHECK_EQ(PlanPaternitySecretAffection(lSnap, cid, "unexpected_outcome")[0].appliedDelta, -29);  // int(-35 * 0.85)
+
+            // bioFather == Player receiving bio revelation
+            ChildRecord pBioChild{};
+            const ChildId pBioCid{ 0x00019351u };
+            pBioChild.childId = pBioCid;
+            pBioChild.stage = ChildStage::Unborn;
+            pBioChild.bioMother = spouse;
+            pBioChild.bioFather = ActorId::Player();
+            pBioChild.presumedFather = paramour;
+            pBioChild.paternitySecret.isPregnancySecretForPartner = false;
+            ws.lineage.Write().UpsertChild(pBioChild);
+            const auto bioLearnt = PlanPaternitySecretAffection(ws.Snapshot(), pBioCid, "bio_father_learnt");
+            MARAS_REQUIRE_EQ(bioLearnt.size(), 1u);
+            MARAS_CHECK_EQ(bioLearnt[0].appliedDelta, 15);
+            MARAS_CHECK_EQ(
+                PlanPaternitySecretAffection(ws.Snapshot(), pBioCid, "mother_confessed_both")[0].appliedDelta,
+                15);
+
+            // mother_shared_pregnancy_presumed when pregnancy is not hidden for partner
+            MARAS_CHECK_EQ(
+                PlanPaternitySecretAffection(ws.Snapshot(), cid, "pregnancy_visible_presumed")[0].appliedDelta,
+                20);
+        }
+
+        // 2. ApplyDailyAffections 50-baseline for uninitialized actor & non-married spouse flag
+        {
+            WorldState dailyWs{};
+            const ActorId baselineDating{ 0x00019310u };
+            RegisterAdult(dailyWs, baselineDating, Temperament::Humble);
+            (void)dailyWs.TransitionRelationship(
+                ActorId::Player(), baselineDating, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
+            MARAS_CHECK(!dailyWs.affection->HasPermanent(baselineDating));
+            dailyWs.affection.Write().SetDailyAccumulation(baselineDating, "talk", 4.0f);
+            const auto changes = ApplyDailyAffections(dailyWs, meta);
+            MARAS_REQUIRE_EQ(changes.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(changes[0].oldScore, 50);
+            MARAS_CHECK_EQ(changes[0].newScore, 54);
+            MARAS_CHECK(!changes[0].marriedSpouseChanged);
+            MARAS_CHECK(dailyWs.affection->AllDaily().empty());
+        }
+
+        // 3. ComputeNoAiDialogueChances playerHasClosedMainPair & negative raw clamping
+        {
+            auto approx = [](float a, float b) { return std::fabs(a - b) < 1e-4f; };
+            const auto playerClosed = ComputeNoAiDialogueChances(
+                0.5f, false, RelationshipStatus::Candidate, false, true);
+            MARAS_CHECK(approx(playerClosed.marriageChance, 30.0f));
+            const auto clampedZero = ComputeNoAiDialogueChances(
+                -0.5f, false, RelationshipStatus::Divorced, false, false);
+            MARAS_CHECK(approx(clampedZero.datingChance, 0.0f));
+            MARAS_CHECK(approx(clampedZero.marriageChance, 0.0f));
+        }
+
+        // 4. ComputeSpouseIncomeShare & ComputeDivorceSettlement exact boundaries
+        {
+            const auto firstShare = ComputeSpouseIncomeShare(5.0f, -1.0f);
+            MARAS_CHECK(firstShare.awarded);
+            MARAS_CHECK_EQ(firstShare.goldAmount, 100);
+            const auto tooSoon = ComputeSpouseIncomeShare(5.99f, 5.0f);
+            MARAS_CHECK(!tooSoon.awarded);
+
+            const auto exactPay = ComputeDivorceSettlement(20.0f, -1.0f, 142, 0, 0, 0, 0);
+            MARAS_CHECK_EQ(exactPay.totalFee, 142);
+            MARAS_CHECK(exactPay.canPayDirectly);
+            const auto oneShort = ComputeDivorceSettlement(20.0f, -1.0f, 141, 0, 0, 0, 0);
+            MARAS_CHECK_EQ(oneShort.totalFee, 142);
+            MARAS_CHECK(!oneShort.canPayDirectly);
+            const auto negativeInputs = ComputeDivorceSettlement(20.0f, -1.0f, -500, -2, -1, -3, -4);
+            MARAS_CHECK_EQ(negativeInputs.totalFee, 100);
+            MARAS_CHECK(!negativeInputs.canPayDirectly);
+        }
+
+        // 5. ApplyRelationshipTransition duplicate / high-score preservation / open-rel immunity / dialogue end rule
+        {
+            const auto dupOut = ApplyRelationshipTransition(
+                ws, ActorId::Player(), spouse, RelationshipStatus::Married, 2.0f, ActorId::Player(), meta);
+            MARAS_CHECK(dupOut.skippedDuplicate);
+
+            const auto blockedMainToLover = ApplyRelationshipTransition(
+                ws, ActorId::Player(), datingNpc, RelationshipStatus::Lover, 2.0f, ActorId::Player(), meta);
+            MARAS_CHECK(!blockedMainToLover.allowed);
+
+            ws.affection.Write().SetPermanent(datingNpc, 92);
+            const auto engagedKeep = ApplyRelationshipTransition(
+                ws, ActorId::Player(), datingNpc, RelationshipStatus::Engaged, 2.0f, ActorId::Player(), meta);
+            MARAS_CHECK(engagedKeep.allowed);
+            MARAS_CHECK_EQ(ws.affection->GetPermanent(datingNpc), 100);
+
+            const ActorId highScoreDating{ 0x00019306u };
+            RegisterAdult(ws, highScoreDating, Temperament::Humble);
+            ws.affection.Write().SetPermanent(highScoreDating, 92);
+            const auto datingKeep = ApplyRelationshipTransition(
+                ws, ActorId::Player(), highScoreDating, RelationshipStatus::Dating, 2.0f, ActorId::Player(), meta);
+            MARAS_CHECK(datingKeep.allowed);
+            MARAS_CHECK_EQ(ws.affection->GetPermanent(highScoreDating), 92);
+
+            const ActorId highScoreLover{ 0x00019305u };
+            RegisterAdult(ws, highScoreLover, Temperament::Humble);
+            ws.affection.Write().SetPermanent(highScoreLover, 92);
+            const auto loverKeep = ApplyRelationshipTransition(
+                ws, ActorId::Player(), highScoreLover, RelationshipStatus::Lover, 2.0f, ActorId::Player(), meta);
+            MARAS_CHECK(loverKeep.allowed);
+            MARAS_CHECK_EQ(ws.affection->GetPermanent(highScoreLover), 92);
+
+            // Open married spouse with side Lover is immune from mid-act cheater detection
+            (void)ws.SetPairOpen(ActorId::Player(), spouse, true, 3.0f);
+            (void)ws.TransitionRelationship(spouse, paramour, RelationshipStatus::Lover, 3.0f, spouse, meta);
+            const std::vector<ActorId> openParticipants{ spouse, paramour };
+            const auto openEval = EvaluateIntimateThreadParticipants(ws.Snapshot(), openParticipants, true);
+            MARAS_CHECK(openEval.cheatersCaughtMidAct.empty());
+
+            // Divorced sets permanent affection to 0, applies breakup cooldown, and triggers buff sync
+            const auto divOut = ApplyRelationshipTransition(
+                ws, ActorId::Player(), spouse, RelationshipStatus::Divorced, 4.0f, ActorId::Player(), meta);
+            MARAS_CHECK(divOut.allowed);
+            MARAS_CHECK(divOut.appliedBreakupCooldown);
+            MARAS_CHECK(divOut.reconcilePlayerBuffs);
+            MARAS_CHECK_EQ(ws.affection->GetPermanent(spouse), 0);
+
+            const auto didntForgive = EvaluateDialogueTopicEndOutcome(
+                "maras_sex_walkin_cheating_sorry_didnt_forgave_persuade_failure");
+            MARAS_CHECK(didntForgive.breakupWithSpeaker);
+        }
     }
 
 }  // namespace MARAS::Tests

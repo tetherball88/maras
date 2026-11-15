@@ -25,7 +25,7 @@ Every NPC you've registered in M.A.R.A.S has an **Affection score from `0` to `1
 Your affection score directly controls:
 - 💍 **Proposal Odds**: Asking someone to marry you at `20` Affection is basically asking for public humiliation. Asking at `85` Affection makes them much more likely to say *"Yes!"*
 - 💪 **Spouse Buff Strength**: Happy spouses literally make you stronger (`1.25x` buff power!). Neglected spouses nerf your buffs down to `0.25x` or shut them off completely (`0x`).
-- 💰 **Store Gold & Home Perks**: Happy spouses generate **25% more daily gold** from their businesses and are eager to cook meals and share their homes with you.
+- 💰 **Store Income & Home Perks**: Keeping a spouse above **`50` Affection** unlocks daily store profits from your Player House (`100` gold/day, up to `500` gold saved up) and keeps them eager to cook meals and share their home with you.
 - 🗣️ **SkyrimNet AI Attitude**: If you use SkyrimNet, your partner's exact affection mood is fed directly into their AI personality—so an Estranged spouse will *sound* fed up with your excuses.
 
 ---
@@ -139,14 +139,14 @@ Asking a partner to open up your relationship has wildly different results depen
 
 ## 6. The Four Mood Tiers & *"Marriage: The Last Word"* ⚖️
 
-Your partner's Permanent Affection (`0–100`) places them into one of four emotional moods, which directly multiplies the **Spouse Buffs** and **Daily Store Gold** they give you:
+Your partner's Permanent Affection (`0–100`) places them into one of four emotional moods, which directly multiplies the **Spouse Buffs** they give you *(daily store profits unlock once Affection stays above `50`, paying a flat `100` gold/day up to `500` gold)*:
 
-| Mood Tier | Affection Score | Buff & Gold Multiplier | How Things Are Going |
+| Mood Tier | Affection Score | Buff Multiplier | How Things Are Going |
 | :--- | :---: | :---: | :--- |
-| 😀 **Happy** | **`75 – 100`** | **`1.25x` (+25% Bonus!)** | Peak marital bliss! Extra strong buffs, extra store gold, and glowing greetings. |
-| 🙂 **Content** | **`50 – 74`** | **`1.00x` (Normal)** | Solid, comfortable relationship. Everything works at full baseline strength. |
-| 😕 **Troubled** | **`25 – 49`** | **`0.25x` (-75% Penalty)** | Uh-oh. They feel neglected or hurt. Your buffs and store income drop by three-quarters! |
-| 💔 **Estranged** | **`0 – 24`** | **`0.00x` (Shut Off!)** | **Crisis Mode!** Zero buffs, zero gold, and the marriage is about to implode. |
+| 😀 **Happy** | **`75 – 100`** | **`1.25x` (+25% Bonus!)** | Peak marital bliss! Extra strong buffs, open store profits, and glowing greetings. |
+| 🙂 **Content** | **`50 – 74`** | **`1.00x` (Normal)** | Solid, comfortable relationship. Full baseline buffs and store profits enabled. |
+| 😕 **Troubled** | **`25 – 49`** | **`0.25x` (-75% Penalty)** | Uh-oh. They feel neglected or hurt. Your buffs drop by three-quarters and store profits pause! |
+| 💔 **Estranged** | **`0 – 24`** | **`0.00x` (Shut Off!)** | **Crisis Mode!** Zero buffs, zero store profits, and the marriage is about to implode. |
 
 ### 🗣️ How Affection Shapes Vanilla Dialogue Negotiations & Confrontations
 Even before a marriage hits rock bottom, your partner's Affection directly tips the scales whenever you navigate tense relationship talks using **standard (vanilla) dialogue options**:

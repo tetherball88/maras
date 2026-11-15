@@ -432,8 +432,6 @@ namespace MARAS::Domain::Relationships {
         float currentGameDay,
         ActorId initiator,
         const State::IActorMetadataProvider& meta,
-        bool sendEvent,
-        bool playerPartnerLoadedInEngine,
         const RelationshipCheckContext& ctx,
         Foundation::IRng* optionalRng) {
         RelationshipTransitionOutcome outcome;
@@ -503,8 +501,6 @@ namespace MARAS::Domain::Relationships {
             }
         }
 
-        (void)sendEvent;
-        (void)playerPartnerLoadedInEngine;
         if (involvesPlayer && !partnerId.IsNull() && !partnerId.IsPlayer() && outcome.recordedTransition) {
             if (Foundation::IsActivePartnerStatus(targetStatus)) {
                 ws.affection.Write().SetLastInteractionDay(partnerId, currentGameDay);

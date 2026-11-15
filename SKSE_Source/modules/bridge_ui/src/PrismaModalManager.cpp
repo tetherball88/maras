@@ -22,9 +22,15 @@ namespace MARAS::Bridge::Ui {
             modalId = std::format("modal_{}", nextId_.fetch_add(1, std::memory_order_relaxed));
         }
 
+        std::vector<std::string> buttonIds;
+        buttonIds.reserve(request.buttons.size());
+        for (const auto& btn : request.buttons) {
+            buttonIds.push_back(btn.id);
+        }
+
         const nlohmann::json spec = request.ToJson(modalId);
         std::string specJson = spec.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        return EnqueueEntry(std::move(modalId), std::move(specJson), std::move(callback));
+        return EnqueueEntry(std::move(modalId), std::move(specJson), std::move(buttonIds), std::move(callback));
     }
 
     std::string PrismaModalManager::ShowRawJsonModal(
@@ -50,17 +56,33 @@ namespace MARAS::Bridge::Ui {
             parsed["modalId"] = modalId;
         }
 
+        std::vector<std::string> buttonIds;
+        if (auto it = parsed.find("buttons"); it != parsed.end() && it->is_array()) {
+            buttonIds.reserve(it->size());
+            for (const auto& btn : *it) {
+                if (btn.is_object()) {
+                    if (auto idIt = btn.find("id"); idIt != btn.end() && idIt->is_string()) {
+                        buttonIds.push_back(idIt->get<std::string>());
+                    } else {
+                        buttonIds.emplace_back();
+                    }
+                }
+            }
+        }
+
         std::string dumped = parsed.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        return EnqueueEntry(std::move(modalId), std::move(dumped), std::move(callback));
+        return EnqueueEntry(std::move(modalId), std::move(dumped), std::move(buttonIds), std::move(callback));
     }
 
     std::string PrismaModalManager::EnqueueEntry(
         std::string modalId,
         std::string specJson,
+        std::vector<std::string> buttonIds,
         ModalCallback callback) {
         ModalEntry entry;
         entry.modalId = modalId;
         entry.specJson = std::move(specJson);
+        entry.buttonIds = std::move(buttonIds);
         entry.callback = std::move(callback);
         entry.expectedEpoch = MARAS::State::GetSessionEpoch();
 
@@ -169,6 +191,11 @@ namespace MARAS::Bridge::Ui {
             buttonId = it->get<std::string>();
         }
 
+        std::int32_t buttonIndex = -1;
+        if (auto it = payload.find("buttonIndex"); it != payload.end() && it->is_number_integer()) {
+            buttonIndex = it->get<std::int32_t>();
+        }
+
         bool aborted = false;
         if (auto it = payload.find("aborted"); it != payload.end() && it->is_boolean()) {
             aborted = it->get<bool>();
@@ -202,9 +229,18 @@ namespace MARAS::Bridge::Ui {
 
         if (resolved.callback) {
             if (MARAS::State::IsSessionEpochCurrent(resolved.expectedEpoch)) {
+                if (buttonIndex < 0 && !buttonId.empty()) {
+                    for (std::size_t i = 0; i < resolved.buttonIds.size(); ++i) {
+                        if (resolved.buttonIds[i] == buttonId) {
+                            buttonIndex = static_cast<std::int32_t>(i);
+                            break;
+                        }
+                    }
+                }
                 ModalResponse response;
                 response.modalId = std::move(resolved.modalId);
                 response.buttonId = std::move(buttonId);
+                response.buttonIndex = buttonIndex;
                 response.aborted = aborted;
                 response.values = std::move(values);
                 response.rawPayload = payload;

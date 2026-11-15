@@ -2,8 +2,10 @@
 
 #include "maras/engine/EngineLogging.h"
 
+#include <array>
 #include <cstdint>
 #include <mutex>
+#include <string>
 
 namespace MARAS {
 
@@ -31,6 +33,7 @@ namespace MARAS {
             const RE::TESTrackedStatsEvent* a_event,
             RE::BSTEventSource<RE::TESTrackedStatsEvent>*) override;
 
+        void Initialize();
         void Revert() noexcept;
         void SeedFromVmAsync();
 
@@ -62,6 +65,14 @@ namespace MARAS {
         mutable std::mutex mutex_{};
         PlayerTrackedMiscStats stats_{};
         bool liveUpdated_[static_cast<std::size_t>(StatSlot::_Count)]{};
+        std::array<std::string, static_cast<std::size_t>(StatSlot::_Count)> statNames_{
+            "Most Gold Carried",
+            "Houses Owned",
+            "Horses Owned",
+            "Quests Completed",
+            "Dungeons Cleared",
+            "Dragon Souls Collected"
+        };
     };
 
 }  // namespace MARAS
