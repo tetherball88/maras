@@ -43,7 +43,7 @@ namespace MARAS::Engine {
             if (arg.is_number_float()) {
                 return std::to_string(arg.get<double>());
             }
-            return arg.dump();
+            return arg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         }
 
     }  // namespace

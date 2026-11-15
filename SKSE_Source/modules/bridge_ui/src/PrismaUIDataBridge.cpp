@@ -485,9 +485,15 @@ namespace MARAS::Bridge::Ui {
                 return;
             }
             taskIF->AddTask([this]() {
-                MARAS::ScopedMainThreadTask mainScope;
-                std::lock_guard papyrusLock(MARAS::GetPapyrusMutex());
-                PrismaUIManager::GetSingleton().OnUIReady();
+                try {
+                    MARAS::ScopedMainThreadTask mainScope;
+                    std::lock_guard papyrusLock(MARAS::GetPapyrusMutex());
+                    PrismaUIManager::GetSingleton().OnUIReady();
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("[PrismaUIDataBridge] Exception for action 'uiReady': {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("[PrismaUIDataBridge] Unknown exception for action 'uiReady'");
+                }
             });
             return;
         }

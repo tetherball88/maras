@@ -118,7 +118,7 @@ namespace MARAS::Utils {
 
         auto* srcRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_sourceID);
         auto* tgtRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_targetID);
-        if (!srcRef || !tgtRef) {
+        if (!srcRef || srcRef->IsDeleted() || !tgtRef || tgtRef->IsDeleted()) {
             return false;
         }
 
@@ -144,7 +144,7 @@ namespace MARAS::Utils {
         }
 
         auto* srcRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_sourceID);
-        if (!srcRef) {
+        if (!srcRef || srcRef->IsDeleted()) {
             return false;
         }
 
@@ -168,7 +168,7 @@ namespace MARAS::Utils {
         }
 
         auto* srcRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_sourceID);
-        if (!srcRef) {
+        if (!srcRef || srcRef->IsDeleted()) {
             return 0;
         }
 
@@ -195,7 +195,7 @@ namespace MARAS::Utils {
             PackageReconciler::GetSingleton().RegisterActor(a_actorID);
         }
 
-        if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(a_actorID)) {
+        if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(a_actorID); actor && !actor->IsDeleted()) {
             actor->EvaluatePackage();
         }
 
@@ -227,7 +227,7 @@ namespace MARAS::Utils {
         }
 
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(a_formID);
-        if (!actor) {
+        if (!actor || actor->IsDeleted()) {
             return false;
         }
 
@@ -250,7 +250,7 @@ namespace MARAS::Utils {
         }
 
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(a_formID);
-        if (!actor) {
+        if (!actor || actor->IsDeleted()) {
             return false;
         }
 
@@ -275,6 +275,7 @@ namespace MARAS::Utils {
     bool SetCrimeFaction(RE::FormID a_formID, RE::TESFaction* a_crimeFaction) {
         if (!HasPhysicalActor(a_formID)) return false;
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(a_formID);
+        if (!actor || actor->IsDeleted()) return false;
         return SetCrimeFaction(actor, a_crimeFaction);
     }
 

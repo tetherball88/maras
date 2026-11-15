@@ -98,7 +98,7 @@ When two people enter a **Committed Relationship** (`Dating`, `Engaged`, or `Mar
 What happens when someone in a closed, committed relationship (`Dating`, `Engaged`, or `Married`) decides to stray? **Chaos.**
 
 ### 🙈 How Cheating Works (For Both You *and* NPCs!)
-Yes—**both you AND your partners have their own romantic agency!** M.A.R.A.S features a dedicated **Player Partner Agency & Infidelity Engine** (configurable in **Dashboard $\rightarrow$ Settings $\rightarrow$ Matchmaking**) that manages all of your active Main Partners (`Dating`, `Engaged`, `Married` — both Closed and Open) separately from generic world matchmaking:
+Yes—**both you AND your partners have their own romantic agency!** M.A.R.A.S features a dedicated **Player Partner Agency & Infidelity Engine** (configurable in **Dashboard $\rightarrow$ Settings $\rightarrow$ Partner Agency**) that manages all of your active Main Partners (`Dating`, `Engaged`, `Married` — both Closed and Open) separately from generic world matchmaking:
 - **Two-Stage Affairs (`Talking Stage` $\rightarrow$ `Physical Affair`)**: When a closed partner strays, it doesn't jump straight into bed—it starts at the **Talking Stage** (secret letters, lingering conversations, stolen glances). If you catch or confront it early during the Talking Stage, it's much easier to resolve! If left unchecked for **`2.0x` your Loneliness Threshold** (`4` days by default), the affair escalates to a **Physical Affair**.
 - **Open-Relationship Lovers & Side Breakups**: Partners in an **Open Relationship** use the same localized candidate engine to pursue consensual side lovers—and partners can also **break up** with their side lovers or secret paramours on their own when guilt sets in, when you start spending time at home again, or when the novelty wears off!
 - **Partner Force-Greet Conversations & Home-Arrival Letters**: Your partners can actively approach you when you come home to **suggest opening** a closed relationship, **ask to close** an open relationship, or **confess guilt** after ending a fling. When you walk into your home, you might even discover a **handwritten note on the table** (an open partner letting you know they're having dinner at the local inn with their lover, or a suspicious unsigned letter from a secret paramour!) or walk in on them talking or getting intimate at home.
@@ -168,7 +168,7 @@ Not every love story lasts forever. When you (or your partner) end a relationshi
   1. **Moving Out & Losing Perks**: Your ex-spouse moves out of your Player House (or kicks you out of theirs!), and you immediately lose their buffs and daily store income.
   2. **The Divorce Settlement (Alimony!)**: Your ex-spouse won't walk away empty-handed! A courier will track you down with a **Divorce Settlement** demand scaled to your gold, houses, and their Social Class.
   3. **Pay Up or Talk to the Guards**: If you refuse or dodge the settlement for **3 in-game days**, your ex reports you to the jarl's men and the entire unpaid settlement is slapped onto your **Hold Bounty**! 🚓💰
-  4. **Child Custody**: If you share adopted or biological children, custody is decided automatically based on the **Custody Policy** in your Dashboard Settings (*Stay with Player*, *Stay with Mother*, *Stay with Father*, or *Split*).
+  4. **Child Custody**: If you share adopted or biological children, custody is decided automatically based on your **Settings $\rightarrow$ Children & Pets** rules (*Prioritize Biological Parent*, *Always / Never with Player*, and *Stay with Mother / Father*, with a fair 50/50 coin flip for same-sex ties).
 
 ---
 
@@ -197,7 +197,7 @@ Want to pair up your favorite followers or break up a couple you can't stand? Op
 - **Per-NPC Matchmaker**: Select any NPC to generate tailored romantic suggestions specifically for them—review the proposed partners, read or edit their generated backstory memories, and click **Apply** to make it official!
 - **Global Matchmaking Scan**: Trigger a world-wide matchmaking scan on demand whenever you want fresh town gossip, and either review the proposals yourself or let them auto-apply.
 - **Your World, Your Rules**:
-  - 🛡️ **Your Partners Are Protected**: The generic NPC Matchmaker automatically leaves your active spouses, fiancés, and dating partners alone—whether a neglected or vengeful partner ever strays is controlled purely by your **Player-Partner Agency & Infidelity** settings!
+  - 🛡️ **Your Partners Are Protected**: The generic NPC Matchmaker automatically leaves your active spouses, fiancés, and dating partners alone—whether a neglected or vengeful partner ever strays is controlled purely by your **Settings $\rightarrow$ Partner Agency** configuration!
   - 🌈 **Orientation Rules**: Choose which pairings the Matchmaker can create (*Any*, *Heterosexual*, *Homosexual*, *Gay*, *Lesbian*, *Heterosexual & Gay*, or *Heterosexual & Lesbian*).
   - ⏳ **Cooldowns**: Set how many in-game days an NPC must wait after a relationship change before the Matchmaker can pick them again.
 
@@ -208,11 +208,12 @@ As NPCs pair up across Skyrim, you won't just see it on a menu—**you'll hear i
 
 ---
 
-## 9. Tracking the Soap Opera in the M.A.R.A.S Dashboard 🖥️🗺️
+## 9. Death, Secrecy & Tracking the Soap Opera in the M.A.R.A.S Dashboard 🖥️🗺️
 
 Press **`Alt + B`** (default) in-game to open the **M.A.R.A.S Dashboard (`Prisma UI`)** (see the [🖥️ UI Dashboard Guide](UI_DASHBOARD_GUIDE.md)):
-- **Overview & My Household**: Manage all of your spouses, fiancés, dating partners, and lovers, reorder spouse ranks, assign homes, and check active buffs.
-- **Matchmaking**: Run manual per-NPC or world-wide matchmaking scans, review AI relationship proposals, and customize generated memories.
-- **Relationship Graph**: View an interactive visual web of **every romantic relationship, affair, and breakup happening across Skyrim**—including NPC-to-NPC couples!
-- **Settings**: Customize polygamy, affection decay, matchmaking engines and weights, ambient banter scenes, marriage difficulty, and child custody rules whenever you want. 😉
+- **Overview (`Dashboard`, `Activity Feed`, `Browse NPCs`, `All Pairs`)**: Track your relationship scoreboard, Top 3 Spouse Hierarchy podium, affection overview, chronological gossip feed, per-NPC relationship inspector, and the **All Pairs** master list of every couple in Skyrim (player and NPC-to-NPC alike!).
+- **My Household (`Partners`, `Children`, `Household Buffs`)**: Manage spouses, hierarchy ranks, residences, kids (including training across **22 academies, guilds, temples, Daedric shrines, and Werewolf packs**—see the [👶 Kids, Adoption & Fertility Guide](FERTILITY_MODE_RELOADED_INTEGRATION_USER_GUIDE.md)), and live buff contributors.
+- **Matchmaking (`Manual Match`, `LLM Matchmaking`, `Child Adoption`)**: Pair or split NPCs manually, run AI scans and edit dual-POV memories, or handle player and NPC-couple adoptions.
+- **Settings (`10` Sub-Pages)**: Customize **General**, **Confirmations**, **Matchmaking**, **Partner Agency**, **NPC Scenes**, **Children & Pets**, **Fertility**, **AI Dialogues**, **SkyrimNet**, and **Cheats & Debug** whenever you want!
+- **Intrigue Mode (`Secrets` Toggle) & Deceased Secrecy**: By default, the Dashboard launches in **Intrigue Mode**, hiding undiscovered affairs, unannounced NPC pregnancies, hidden paternity, and secret Beastblood inheritance unless discovered in-game—or until you click **`Secrets`** in the top-left header toolbar. Even after a partner or child **dies**, their archived history preserves secrecy: deceased partners' undiscovered secret affairs and deceased children's undiscovered biological fathers remain masked in Intrigue Mode and public checks until revealed! 😉
 

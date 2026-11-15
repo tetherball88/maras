@@ -161,6 +161,10 @@ namespace MARAS::Foundation {
                status == RelationshipStatus::ExLover;
     }
 
+    [[nodiscard]] constexpr bool IsRomanticOrExStatus(RelationshipStatus status) noexcept {
+        return IsActivePartnerStatus(status) || IsBreakupStatus(status);
+    }
+
     static_assert(static_cast<std::uint8_t>(SocialClass::_Count) <= 255,
                   "SocialClass enum exceeds uint8_t range");
     static_assert(static_cast<std::uint8_t>(SkillType::_Count) <= 255,

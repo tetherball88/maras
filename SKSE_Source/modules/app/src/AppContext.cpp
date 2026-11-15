@@ -4,6 +4,7 @@
 #include "maras/engine/TaskDispatcher.h"
 
 #include <atomic>
+#include <mutex>
 
 namespace MARAS::App {
 
@@ -238,7 +239,11 @@ namespace MARAS::App {
         GetModalGateway().ShowModal(
             std::move(req),
             [expectedEpoch, onRetry = std::move(onRetry), onIgnore = std::move(onIgnore)](const ModalResponse& resp) mutable {
-                if (!IsSessionEpochCurrent(expectedEpoch) || resp.aborted) {
+                if (resp.aborted || !IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
+                std::lock_guard lock(GetPapyrusMutex());
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
                 if (resp.buttonIndex == 0 || resp.buttonId == "retry") {

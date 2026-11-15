@@ -220,11 +220,18 @@ namespace MARAS::App {
             ~MarriageAdoptionCallback() override = default;
 
             void operator()(RE::BSScript::Variable /*a_result*/) override {
+                if (!IsSessionEpochCurrent(epoch_)) {
+                    return;
+                }
                 ClearMarriageAdoptionPending(childID_);
                 const RE::FormID cID = childID_;
                 const RE::FormID spID = spouseID_;
-                AddEpochTask(epoch_, "MarriageAdoptionCallback::CompleteAdoption", [cID, spID]() {
+                const SessionEpoch expectedEpoch = epoch_;
+                AddEpochTask(expectedEpoch, "MarriageAdoptionCallback::CompleteAdoption", [cID, spID, expectedEpoch]() {
                     std::lock_guard lock(GetPapyrusMutex());
+                    if (!IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
                     const auto snap = State::WorldStore::GetSingleton().Snapshot();
                     const auto* edge = snap->relationships->FindEdge(
                         State::CanonicalPairKey{ State::ActorId::Player(), State::ActorId{ spID } });
@@ -562,7 +569,6 @@ namespace MARAS::App {
             ws.household.Write().SetChildChestIntroduced(false);
         });
         ChildVisualReconciler::GetSingleton().Revert();
-        ChildVisualReconciler::GetSingleton().FlushRetiredForms();
         MARAS_LOG_INFO("LineageUseCases reverted to clean state");
     }
 
@@ -855,7 +861,6 @@ namespace MARAS::App {
         if (!IsSyntheticId(childID)) {
             PackageReconciler::GetSingleton().UnregisterActor(childID);
             ChildVisualReconciler::GetSingleton().ReleaseRuntimeBaseForActor(childID);
-            ChildVisualReconciler::GetSingleton().FlushRetiredForms();
             FactionReconciler::GetSingleton().ReconcileActor(childID);
         }
 
@@ -3290,7 +3295,6 @@ namespace MARAS::App {
             if (!IsSyntheticId(victimId)) {
                 PackageReconciler::GetSingleton().UnregisterActor(victimId);
                 ChildVisualReconciler::GetSingleton().ReleaseRuntimeBaseForActor(victimId);
-                ChildVisualReconciler::GetSingleton().FlushRetiredForms();
                 FactionReconciler::GetSingleton().ReconcileActor(victimId);
             }
             if (preChild && !preChild->guardians.slotA.IsNull()) {
@@ -3313,7 +3317,6 @@ namespace MARAS::App {
             HouseholdUseCases::GetSingleton().UnregisterAdultChild(victimId);
             if (!IsSyntheticId(victimId)) {
                 ChildVisualReconciler::GetSingleton().ReleaseRuntimeBaseForActor(victimId);
-                ChildVisualReconciler::GetSingleton().FlushRetiredForms();
             }
             GetUiBridgeGateway().OnChildRemoved(victimId);
         }
@@ -3530,13 +3533,20 @@ namespace MARAS::App {
 
                 nlohmann::json partnersArr = nlohmann::json::array();
                 for (const auto& p : rec.partnersAtDeath) {
+                    State::RelationshipStatus visibleStatus = p.statusAtDeath;
+                    if (!view.IsOmniscient() && p.isSecretAffair) {
+                        if (!Foundation::IsRomanticOrExStatus(p.publicStatusAtDeath)) {
+                            continue;
+                        }
+                        visibleStatus = p.publicStatusAtDeath;
+                    }
                     nlohmann::json pObj;
                     pObj["partnerBaseId"] = std::format("{:08X}", p.partnerBaseId.raw());
                     pObj["partnerRefId"] = std::format("{:08X}", p.partnerRefId.raw());
                     pObj["name"] = p.partnerName;
                     pObj["statusAtDeath"] = {
-                        {"id", static_cast<std::uint8_t>(p.statusAtDeath)},
-                        {"name", Foundation::RelationshipStatusToString(p.statusAtDeath)}
+                        {"id", static_cast<std::uint8_t>(visibleStatus)},
+                        {"name", Foundation::RelationshipStatusToString(visibleStatus)}
                     };
                     pObj["isPlayer"] = p.isPlayer;
                     partnersArr.push_back(std::move(pObj));
@@ -3548,13 +3558,17 @@ namespace MARAS::App {
                 const auto& ci = *rec.childInfo;
                 RE::FormID visibleBioFatherBaseId = ci.bioFatherBaseId.raw();
                 if (!view.IsOmniscient()) {
-                    const RE::FormID lookupId = !rec.refId.IsNull() ? rec.refId.raw() : rec.baseId.raw();
-                    if (const auto perceivedChild = view.GetPerceivedChild(State::ChildId{ lookupId })) {
-                        const RE::FormID perceivedFatherRaw = perceivedChild->perceivedBioFather.raw();
-                        visibleBioFatherBaseId =
-                            (perceivedFatherRaw != 0 && perceivedFatherRaw != kUnknownFatherFormID)
-                            ? ResolveBaseFormIDSafe(perceivedFatherRaw, view.Spatial())
-                            : 0;
+                    if (ci.hasUndiscoveredPaternitySecret) {
+                        visibleBioFatherBaseId = ci.publicBioFatherBaseId.raw();
+                    } else {
+                        const RE::FormID lookupId = !rec.refId.IsNull() ? rec.refId.raw() : rec.baseId.raw();
+                        if (const auto perceivedChild = view.GetPerceivedChild(State::ChildId{ lookupId })) {
+                            const RE::FormID perceivedFatherRaw = perceivedChild->perceivedBioFather.raw();
+                            visibleBioFatherBaseId =
+                                (perceivedFatherRaw != 0 && perceivedFatherRaw != kUnknownFatherFormID)
+                                ? ResolveBaseFormIDSafe(perceivedFatherRaw, view.Spatial())
+                                : 0;
+                        }
                     }
                 }
                 nlohmann::json cInfo;
@@ -3596,6 +3610,34 @@ namespace MARAS::App {
             arr.push_back(SerializeChildHouseholdState(cid.raw(), st));
         }
         j["children"] = std::move(arr);
+
+        nlohmann::json factionSnapshotsArr = nlohmann::json::array();
+        std::vector<State::ChildId> snapshotIds;
+        snapshotIds.reserve(snap->household->AllChildFactionSnapshots().size());
+        for (const auto& [cid, _] : snap->household->AllChildFactionSnapshots()) {
+            snapshotIds.push_back(cid);
+        }
+        std::sort(snapshotIds.begin(), snapshotIds.end(),
+                  [](State::ChildId a, State::ChildId b) { return a.raw() < b.raw(); });
+        for (const State::ChildId cid : snapshotIds) {
+            const auto& fs = snap->household->AllChildFactionSnapshots().at(cid);
+            nlohmann::json sj = nlohmann::json::object();
+            sj["childFormID"] = cid.raw();
+            sj["childHex"] = std::format("{:08X}", cid.raw());
+            sj["crimeFactionFormID"] = fs.crimeFactionId.raw();
+            sj["crimeFactionHex"] = std::format("{:08X}", fs.crimeFactionId.raw());
+            nlohmann::json factionsArr = nlohmann::json::array();
+            for (const auto& entry : fs.factions) {
+                nlohmann::json fj = nlohmann::json::object();
+                fj["factionFormID"] = entry.factionId.raw();
+                fj["factionHex"] = std::format("{:08X}", entry.factionId.raw());
+                fj["rank"] = entry.rank;
+                factionsArr.push_back(std::move(fj));
+            }
+            sj["factions"] = std::move(factionsArr);
+            factionSnapshotsArr.push_back(std::move(sj));
+        }
+        j["childFactionSnapshots"] = std::move(factionSnapshotsArr);
         return j;
     }
 

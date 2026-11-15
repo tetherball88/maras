@@ -658,7 +658,11 @@ Function RegisterChildGrewUp(int childID, string childName = "") global
         speaker = presumedFather
     endif
     if(speaker == none)
-        speaker = TTM_Data.GetPlayer()
+        speaker = childActor
+    endif
+    Actor playerRef = TTM_Data.GetPlayer()
+    if(speaker == none && !(isSecretForBio && bioFather == playerRef))
+        speaker = playerRef
     endif
     Actor awareBio = bioFather
     if(isSecretForBio)
@@ -677,7 +681,31 @@ Function RegisterChildGrewUp(int childID, string childName = "") global
         string maskedJson = BuildJson("ttm_child_grew_up", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
         MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, childActor))
     elseif(isSecretForBio)
-        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience3(mother, presumedFather, childActor))
+        if(mother != none || presumedFather != none)
+            Actor secretBioSpeaker = mother
+            if(secretBioSpeaker == none)
+                secretBioSpeaker = presumedFather
+            endif
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, secretBioSpeaker, none, true, MakeAudience2(mother, presumedFather))
+        endif
+        if(childActor != none)
+            string childMaskedMsg = ""
+            if(motherName != "" && presumedFatherName != "")
+                childMaskedMsg = motherName + " and " + presumedFatherName + "'s " + childRelation + ", " + childName + ", has grown from infancy into a young child."
+            elseif(motherName != "")
+                childMaskedMsg = motherName + "'s " + childRelation + ", " + childName + ", has grown from infancy into a young child."
+            elseif(presumedFatherName != "")
+                childMaskedMsg = presumedFatherName + "'s " + childRelation + ", " + childName + ", has grown from infancy into a young child."
+            else
+                childMaskedMsg = childName + " has grown from infancy into a young " + childRelation + "."
+            endif
+            string childMaskedJson = BuildJson("ttm_child_grew_up", childMaskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+            Actor childSpeaker = mother
+            if(childSpeaker == none)
+                childSpeaker = childActor
+            endif
+            MARAS.RegisterSkyrimNetEvent("ttm_event", childMaskedJson, childSpeaker, none, true, MakeAudience2(childActor, none))
+        endif
     else
         MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, childActor, false)
     endif
@@ -745,8 +773,9 @@ Function RegisterChildSentToTraining(int childID, string childName = "", string 
     if(speaker == none)
         speaker = presumedFather
     endif
-    if(speaker == none)
-        speaker = TTM_Data.GetPlayer()
+    Actor playerRef = TTM_Data.GetPlayer()
+    if(speaker == none && !(isSecretForBio && bioFather == playerRef))
+        speaker = playerRef
     endif
     Actor awareBio = bioFather
     if(isSecretForBio)
@@ -767,7 +796,9 @@ Function RegisterChildSentToTraining(int childID, string childName = "", string 
         string maskedJson = BuildJson("ttm_child_sent_to_training", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, trainingLocation = trainingLocation, gender = childGenderStr, relation = childRelation)
         MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, none))
     elseif(isSecretForBio)
-        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, presumedFather))
+        if(mother != none || presumedFather != none)
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience2(mother, presumedFather))
+        endif
     else
         MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, presumedFather, false)
     endif
@@ -834,7 +865,11 @@ Function RegisterChildBecameAdult(int childID, string childName = "") global
         speaker = presumedFather
     endif
     if(speaker == none)
-        speaker = TTM_Data.GetPlayer()
+        speaker = adultActor
+    endif
+    Actor playerRef = TTM_Data.GetPlayer()
+    if(speaker == none && !(isSecretForBio && bioFather == playerRef))
+        speaker = playerRef
     endif
     Actor awareBio = bioFather
     if(isSecretForBio)
@@ -855,7 +890,31 @@ Function RegisterChildBecameAdult(int childID, string childName = "") global
         string maskedJson = BuildJson("ttm_child_became_adult", maskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
         MARAS.RegisterSkyrimNetEvent("ttm_event", maskedJson, presumedFather, none, true, MakeAudience2(presumedFather, adultActor))
     elseif(isSecretForBio)
-        MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, none, true, MakeAudience3(mother, presumedFather, adultActor))
+        if(mother != none || presumedFather != none)
+            Actor secretBioSpeaker = mother
+            if(secretBioSpeaker == none)
+                secretBioSpeaker = presumedFather
+            endif
+            MARAS.RegisterSkyrimNetEvent("ttm_event", json, secretBioSpeaker, none, true, MakeAudience2(mother, presumedFather))
+        endif
+        if(adultActor != none)
+            string adultMaskedMsg = ""
+            if(motherName != "" && presumedFatherName != "")
+                adultMaskedMsg = motherName + " and " + presumedFatherName + "'s " + childRelation + ", " + childName + ", has completed " + possPronoun + " training and come of age as an adult."
+            elseif(motherName != "")
+                adultMaskedMsg = motherName + "'s " + childRelation + ", " + childName + ", has completed " + possPronoun + " training and come of age as an adult."
+            elseif(presumedFatherName != "")
+                adultMaskedMsg = presumedFatherName + "'s " + childRelation + ", " + childName + ", has completed " + possPronoun + " training and come of age as an adult."
+            else
+                adultMaskedMsg = childName + " has completed " + possPronoun + " training and come of age as an adult."
+            endif
+            string adultMaskedJson = BuildJson("ttm_child_became_adult", adultMaskedMsg, skipTrigger = true, child = childName, parentA = motherName, parentB = presumedFatherName, bioFather = presumedFatherName, presumedFather = presumedFatherName, gender = childGenderStr, relation = childRelation)
+            Actor adultSpeaker = mother
+            if(adultSpeaker == none)
+                adultSpeaker = adultActor
+            endif
+            MARAS.RegisterSkyrimNetEvent("ttm_event", adultMaskedJson, adultSpeaker, none, true, MakeAudience2(adultActor, none))
+        endif
     else
         MARAS.RegisterSkyrimNetEvent("ttm_event", json, speaker, adultActor, false)
     endif

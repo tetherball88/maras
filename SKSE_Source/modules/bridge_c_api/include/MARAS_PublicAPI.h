@@ -28,7 +28,7 @@ enum class MARAS_Temperament : std::uint8_t {
 extern "C" {
 
 // ============================================================
-// AffectionService
+// Affection Queries
 // ============================================================
 
 // Returns permanent affection [0-100] for the given NPC, or 50 if not found.
@@ -39,7 +39,7 @@ __declspec(dllexport) int MARAS_GetPermanentAffection(std::uint32_t npcFormID);
 __declspec(dllexport) float MARAS_GetDaysSinceLastAffection(std::uint32_t npcFormID);
 
 // ============================================================
-// NPCRelationshipManager
+// Relationship & History Queries (Dashboard Perspective-Masked)
 // ============================================================
 
 // Fills buf with up to maxCount married spouse FormIDs.
@@ -51,14 +51,17 @@ __declspec(dllexport) std::uint32_t MARAS_GetAllMarried(std::uint32_t* buf, std:
 __declspec(dllexport) std::uint32_t MARAS_GetAllEngaged(std::uint32_t* buf, std::uint32_t maxCount);
 
 // Returns the Temperament [Proud(0)..Independent(4)] for the given NPC.
-// Falls back to DeceasedRegistry if the NPC is deceased, or MARAS_Temperament::Proud (0)
-// if the NPC is neither registered nor in DeceasedRegistry.
+// Reads WorldStore::Snapshot() ActorProfileTable, falling back to DeceasedTable
+// if the NPC is deceased, or MARAS_Temperament::Proud (0) if neither holds them.
 __declspec(dllexport) MARAS_Temperament MARAS_GetTemperament(std::uint32_t npcFormID);
 
 // Returns the count of status history entries for the given pair (targetFormID = 0x14 for player).
+// Filtered through PerspectiveView::ForDashboard so undiscovered secret affairs are masked
+// when Intrigue Mode (!revealSecretsInUI) is active.
 __declspec(dllexport) std::uint32_t MARAS_GetStatusHistoryCount(std::uint32_t npcFormID, std::uint32_t targetFormID);
 
 // Fills out parameters for the status history entry at index for the given pair.
+// Filtered through PerspectiveView::ForDashboard alongside MARAS_GetStatusHistoryCount.
 // outTimestamp receives fractional game days passed (or -1.0f for pre-existing relationships).
 // Returns true if index is valid, false otherwise.
 __declspec(dllexport) bool MARAS_GetStatusHistoryEntry(std::uint32_t npcFormID,
@@ -70,7 +73,7 @@ __declspec(dllexport) bool MARAS_GetStatusHistoryEntry(std::uint32_t npcFormID,
                                                        std::uint32_t* outInitiatorFormID);
 
 // ============================================================
-// PlayerHouseService
+// Household Queries
 // ============================================================
 
 // Returns the FormID of the player house the given tenant is assigned to, or 0.
@@ -83,10 +86,11 @@ __declspec(dllexport) std::uint32_t MARAS_GetPlayerHouseTenants(std::uint32_t ho
                                                                  std::uint32_t maxCount);
 
 // ============================================================
-// PollingService
+// Spatial Teammate Queries
 // ============================================================
 
-// Fills buf with up to maxCount FormIDs of the player's current teammates.
+// Fills buf with up to maxCount FormIDs of the player's current teammates from
+// SpatialSnapshotStore::Snapshot() (refreshed by PollingService).
 // Returns the actual total count of teammates (may exceed maxCount).
 __declspec(dllexport) std::uint32_t MARAS_GetCurrentTeammates(std::uint32_t* buf, std::uint32_t maxCount);
 

@@ -9,6 +9,7 @@
 #include "maras/engine/ChildVisualReconciler.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/GlobalVarReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -74,6 +75,8 @@ namespace MARAS::App {
         ChildVisualReconciler::GetSingleton().FlushRetiredForms();
 
         if (!loadedAny) {
+            GlobalVarReconciler::GetSingleton().ResetSessionGlobalsToDefaults();
+            GlobalVarReconciler::GetSingleton().ReconcileGlobals();
             LineageUseCases::GetSingleton().FinalizeCoSaveLoad(false);
             MARAS_LOG_INFO("[AppLifecycleCoordinator] FinalizeCoSaveLoad: no prior co-save chunks loaded");
             return;
@@ -116,7 +119,6 @@ namespace MARAS::App {
 
         auto& visualReconciler = ChildVisualReconciler::GetSingleton();
         visualReconciler.Revert();
-        visualReconciler.FlushRetiredForms();
 
         GetSkyrimNetGateway().RevertMemories();
         GetSkyrimNetGateway().RevertProfiles();

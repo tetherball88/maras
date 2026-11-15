@@ -1,6 +1,6 @@
 # Marriage Difficulty Configuration Guide
 
-This document explains all parameters in `Data/SKSE/Plugins/MARAS/marriageDifficultyConfig.json`, which governs the non-AI marriage proposal difficulty calculation in [MarriageDifficulty.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/MarriageDifficulty.cpp).
+This document explains all parameters in `Data/SKSE/Plugins/MARAS/marriageDifficultyConfig.json` (and optional `marriage_difficulty.json` override loaded first by [MarriageDifficultyLoader.cpp](../../SKSE_Source/modules/engine/src/MarriageDifficultyLoader.cpp)), which govern the non-AI marriage proposal difficulty calculation in [MarriageDifficultyRules.cpp](../../SKSE_Source/modules/domain_relationships/src/MarriageDifficultyRules.cpp).
 
 > [!NOTE]
 > **SkyrimNet vs. Standard Dialogue Proposals**
@@ -11,11 +11,11 @@ This document explains all parameters in `Data/SKSE/Plugins/MARAS/marriageDiffic
 
 ## Related Documentation
 
-- [MarriageDifficulty Service Mechanics](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/MarriageDifficulty.md) — Architectural breakdown of the proposal complexity and prestige pipeline.
-- [AffectionService Mechanics](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/AffectionService.md) — How permanent affection is accumulated and affects proposal difficulty.
-- [Archetypes & Buffs](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/ARCHETYPES_AND_BUFFS.md) — Social class definitions referenced in this config.
-- [Advanced Configuration and Modding](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md) — Overview of all external JSON/INI files (`bonuses.json`, `spousesTypes/`, `questEvents/`).
-- [User Guide](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/player/USER_GUIDE.md) — Player-facing guide to courting, proposals, and the Prisma UI Dashboard.
+- [MarriageDifficulty Service Mechanics](services/MarriageDifficulty.md) — Architectural breakdown of the proposal complexity and prestige pipeline.
+- [AffectionRules Mechanics](services/AffectionRules.md) — How permanent affection is accumulated and affects proposal difficulty.
+- [Archetypes & Buffs](../player/ARCHETYPES_AND_BUFFS.md) — Social class definitions referenced in this config.
+- [Advanced Configuration and Modding](ADVANCED_CONFIGURATION_AND_MODDING.md) — Overview of all external JSON/INI/YAML files (`bonuses.json`, `encounters/`, `spousesTypes/`, `questEvents/`).
+- [Player Guide](../player/PLAYER_GUIDE.md) — Player-facing guide to courting, proposals, and the Prisma UI Dashboard.
 
 ---
 
@@ -23,7 +23,7 @@ This document explains all parameters in `Data/SKSE/Plugins/MARAS/marriageDiffic
 
 When the player proposes to an NPC, M.A.R.A.S computes a **Proposal Complexity** score starting from `initialComplexity`. Positive modifiers make the proposal harder; negative modifiers (bonuses) make the proposal easier. The final clamped difficulty is converted into a `[0.0, 1.0]` acceptance probability using a logistic sigmoid curve.
 
-`Data/SKSE/Plugins/MARAS/marriageDifficultyConfig.json` is automatically reloaded **every time you load a save or start a new game** (`kPostLoadGame` / `kNewGame`), so you can tweak values and reload your save without restarting Skyrim.
+`Data/SKSE/Plugins/MARAS/marriageDifficultyConfig.json` (with priority check for `Data/SKSE/Plugins/MARAS/marriage_difficulty.json`) is automatically reloaded **every time you load a save or start a new game** (`kPostLoadGame` / `kNewGame`), so you can tweak values and reload your save without restarting Skyrim.
 
 ---
 
@@ -170,7 +170,7 @@ Evaluates five factions: **The Companions** (`companions`), **Thieves Guild** (`
 
 ## 7. Papyrus Dialogue Globals & Tier Multipliers (`TTM_Data.SetGameNoAIChancesGlobals`)
 
-When standard (non-SkyrimNet) dialogue opens with a tracked NPC who is not yet `engaged` or `married`, [`TTM_Data.SetGameNoAIChancesGlobals`](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/TTM_Data.psc#L111-L156) takes the C++ `CalculateMarriageSuccessChance` output (scaled to `0–100`), applies relationship-state modifiers, and writes the resulting values to three `TT_MARAS.esp` `GlobalVariable` records used by Creation Kit dialogue conditions:
+When standard (non-SkyrimNet) dialogue opens with a tracked NPC who is not yet `engaged` or `married`, [`TTM_Data.SetGameNoAIChancesGlobals`](../../Scripts/Source/TTM_Data.psc#L111-L156) takes the C++ `CalculateMarriageSuccessChance` output (scaled to `0–100`), applies relationship-state modifiers, and writes the resulting values to three `TT_MARAS.esp` `GlobalVariable` records used by Creation Kit dialogue conditions:
 
 - **`GetLoverChanceGV()` (`0x5D1`)**: Lover proposal chance global.
 - **`GetDatingChanceGV()` (`0x5D0`)**: Dating proposal chance global.

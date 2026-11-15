@@ -227,10 +227,12 @@ namespace MARAS::Bridge::SkyrimNet {
             if (selfPregOpt.has_value()) {
                 const auto& selfPreg = *selfPregOpt;
                 RE::FormID motherPartnerID = selfPreg.motherPartner.raw();
+                const auto motherPartnerPair = selfView.GetPerceivedPair(
+                    MARAS::State::ActorId{ actorFormID }, selfPreg.motherPartner);
                 if (motherPartnerID != 0 &&
                     (MARAS::MatchesActor(motherPartnerID, actorFormID) ||
                      MARAS::ResolveActorSexSafe(motherPartnerID, *worldSnap, *spatialSnap) == MARAS::State::ActorSex::Female ||
-                     worldSnap->relationships->GetStatus(MARAS::State::ActorId{ actorFormID }, selfPreg.motherPartner) == MARAS::State::RelationshipStatus::Divorced)) {
+                     (motherPartnerPair && motherPartnerPair->status == MARAS::State::RelationshipStatus::Divorced))) {
                     motherPartnerID = 0;
                 }
 
@@ -1139,13 +1141,14 @@ namespace MARAS::Bridge::SkyrimNet {
             const auto fid = actor->GetFormID();
             const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
             const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
-            const auto partners = worldSnap->relationships->GetPartnersWithStatus(
-                MARAS::State::ActorId{ fid }, status);
-            if (partners.empty()) return "";
+            const auto selfActorId = MARAS::State::ActorId{ fid };
+            const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
 
             std::string result;
-            for (const auto pActorId : partners) {
-                const RE::FormID pFid = pActorId.raw();
+            for (const auto& edge : selfView.GetPerceivedRelationshipsOf(selfActorId)) {
+                if (edge.status != status) continue;
+                const RE::FormID pFid = edge.Other(selfActorId).raw();
                 if (!pairCheck(fid, pFid)) continue;
                 const std::string name = GetCandidateDisplayName(pFid, *worldSnap, *spatialSnap);
                 if (!name.empty() && name != "None") {
@@ -1377,12 +1380,18 @@ namespace MARAS::Bridge::SkyrimNet {
                 const std::uint32_t actorFormId = actor->GetFormID();
                 const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
                 const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
+                const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                    worldSnap,
+                    spatialSnap,
+                    MARAS::State::ActorId{ actorFormId },
+                    &MARAS::GetEngineWerewolfStateProvider());
                 const auto* player = RE::PlayerCharacter::GetSingleton();
                 const std::string playerName = player ? player->GetName() : "the Dragonborn";
 
-                auto getPlayerRel = [&worldSnap](RE::FormID fid) -> std::string {
-                    switch (worldSnap->relationships->GetStatus(
-                        MARAS::State::ActorId{ fid }, MARAS::State::ActorId::Player())) {
+                auto getPlayerRel = [&selfView](RE::FormID fid) -> std::string {
+                    const auto pair = selfView.GetPerceivedPair(
+                        MARAS::State::ActorId{ fid }, MARAS::State::ActorId::Player());
+                    switch (pair ? pair->status : MARAS::State::RelationshipStatus::Unknown) {
                         case MARAS::State::RelationshipStatus::Engaged:  return "became engaged to";
                         case MARAS::State::RelationshipStatus::Married:  return "married";
                         case MARAS::State::RelationshipStatus::Jilted:   return "had a brief engagement with";
@@ -1470,14 +1479,14 @@ namespace MARAS::Bridge::SkyrimNet {
 
                 if (exPartner2Base) {
                     const RE::FormID targetBaseId = exPartner2Base->GetFormID();
-                    const auto adjPairs = worldSnap->relationships->GetAdjacentPairs(MARAS::State::ActorId::Player());
+                    const auto playerRelationships =
+                        selfView.GetPerceivedRelationshipsOf(MARAS::State::ActorId::Player());
                     RE::FormID matchedFormID = 0;
                     auto findByStatus = [&](MARAS::State::RelationshipStatus status) {
                         if (matchedFormID != 0) return;
-                        for (const auto& key : adjPairs) {
-                            const auto* edge = worldSnap->relationships->FindEdge(key);
-                            if (!edge || edge->status != status) continue;
-                            const RE::FormID fid = key.Other(MARAS::State::ActorId::Player()).raw();
+                        for (const auto& edge : playerRelationships) {
+                            if (edge.status != status) continue;
+                            const RE::FormID fid = edge.Other(MARAS::State::ActorId::Player()).raw();
                             if (fid == 0) continue;
                             RE::FormID candidateBaseId = MARAS::ResolveBaseFormIDSafe(fid, *spatialSnap);
                             if (candidateBaseId == 0) {
@@ -1572,12 +1581,19 @@ namespace MARAS::Bridge::SkyrimNet {
                 const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
                 const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
                 const float radius = GetNearbyActorsRadius();
+                const auto selfActorId = MARAS::State::ActorId{ fid };
+                const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                    worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
 
                 // If the actor is currently dating someone, that specific partner is the only valid target
-                const auto datingPartners = worldSnap->relationships->GetPartnersWithStatus(
-                    MARAS::State::ActorId{ fid }, MARAS::State::RelationshipStatus::Dating);
+                std::vector<RE::FormID> datingPartners;
+                for (const auto& edge : selfView.GetPerceivedRelationshipsOf(selfActorId)) {
+                    if (edge.status == MARAS::State::RelationshipStatus::Dating) {
+                        datingPartners.push_back(edge.Other(selfActorId).raw());
+                    }
+                }
                 if (!datingPartners.empty()) {
-                    const auto datingPartnerFid = datingPartners[0].raw();
+                    const auto datingPartnerFid = datingPartners[0];
                     std::string matchResult;
                     spatialSnap->ForEachNearbyCandidate(MARAS::State::RefId{ fid }, radius,
                         [&](const MARAS::State::LoadedActorSample& sample) {
@@ -1590,15 +1606,17 @@ namespace MARAS::Bridge::SkyrimNet {
                     return matchResult;
                 }
 
-                // If single, find all nearby eligible candidates
+                // If single, find all nearby eligible candidates without leaking third-party secret Dating edges
                 std::string result;
                 spatialSnap->ForEachNearbyCandidate(MARAS::State::RefId{ fid }, radius,
                     [&](const MARAS::State::LoadedActorSample& sample) {
                         const auto targetFid = sample.refId.raw();
-                        const auto targetDating = worldSnap->relationships->GetPartnersWithStatus(
-                            MARAS::State::ActorId{ targetFid }, MARAS::State::RelationshipStatus::Dating);
-                        if (!targetDating.empty() && targetDating[0].raw() != fid) {
-                            return;
+                        const MARAS::State::ActorId targetActorId{ targetFid };
+                        for (const auto& edge : selfView.GetPerceivedRelationshipsOf(targetActorId)) {
+                            if (edge.status == MARAS::State::RelationshipStatus::Dating &&
+                                edge.Other(targetActorId).raw() != fid) {
+                                return;
+                            }
                         }
                         if (mgr.IsAvailableForEngaged(fid, targetFid)) {
                             const std::string name = GetCandidateDisplayName(targetFid, *worldSnap, *spatialSnap);
@@ -1697,14 +1715,16 @@ namespace MARAS::Bridge::SkyrimNet {
 
                 const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
                 const MARAS::State::ActorId selfActorId{ fid };
+                const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                    worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
+                const auto perceived = selfView.GetPerceivedRelationshipsOf(selfActorId);
                 std::string result;
                 auto appendExclusivePartners = [&](MARAS::State::RelationshipStatus status) {
-                    for (const auto partnerActorId : worldSnap->relationships->GetPartnersWithStatus(selfActorId, status)) {
-                        const auto* edge = worldSnap->relationships->FindEdge(
-                            MARAS::State::CanonicalPairKey(selfActorId, partnerActorId));
-                        if (edge && edge->isOpen) {
+                    for (const auto& edge : perceived) {
+                        if (edge.status != status || edge.isOpen) {
                             continue;
                         }
+                        const auto partnerActorId = edge.Other(selfActorId);
                         const std::string name = MARAS::ResolveActorNameSafe(partnerActorId.raw(), *worldSnap, *spatialSnap);
                         if (!name.empty() && name != "None") {
                             if (!result.empty()) result += ", ";
@@ -1732,16 +1752,23 @@ namespace MARAS::Bridge::SkyrimNet {
                     return "";
                 }
 
+                const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
                 const MARAS::State::ActorId selfActorId{ fid };
-                if (worldSnap->relationships->HasAnyOpenMainPair(selfActorId)) {
-                    return "";
+                const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                    worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
+                const auto perceived = selfView.GetPerceivedRelationshipsOf(selfActorId);
+                for (const auto& edge : perceived) {
+                    if (MARAS::State::IsMainTierStatus(edge.status) && edge.isOpen) {
+                        return "";
+                    }
                 }
 
-                const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
-                const auto lovers = worldSnap->relationships->GetPartnersWithStatus(
-                    selfActorId, MARAS::State::RelationshipStatus::Lover);
                 std::string result;
-                for (const auto partnerActorId : lovers) {
+                for (const auto& edge : perceived) {
+                    if (edge.status != MARAS::State::RelationshipStatus::Lover) {
+                        continue;
+                    }
+                    const auto partnerActorId = edge.Other(selfActorId);
                     const std::string name = MARAS::ResolveActorNameSafe(partnerActorId.raw(), *worldSnap, *spatialSnap);
                     if (!name.empty() && name != "None") {
                         if (!result.empty()) result += ", ";
@@ -1760,11 +1787,16 @@ namespace MARAS::Bridge::SkyrimNet {
                 const auto fid = actor->GetFormID();
                 const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
                 const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
-                const auto dating = worldSnap->relationships->GetPartnersWithStatus(
-                    MARAS::State::ActorId{ fid }, MARAS::State::RelationshipStatus::Dating);
-                if (!dating.empty()) {
-                    const std::string name = MARAS::ResolveActorNameSafe(dating[0].raw(), *worldSnap, *spatialSnap);
-                    if (!name.empty() && name != "None") return name;
+                const MARAS::State::ActorId selfActorId{ fid };
+                const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                    worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
+                for (const auto& edge : selfView.GetPerceivedRelationshipsOf(selfActorId)) {
+                    if (edge.status == MARAS::State::RelationshipStatus::Dating) {
+                        const std::string name = MARAS::ResolveActorNameSafe(
+                            edge.Other(selfActorId).raw(), *worldSnap, *spatialSnap);
+                        if (!name.empty() && name != "None") return name;
+                        break;
+                    }
                 }
                 return "";
             });
@@ -1779,12 +1811,14 @@ namespace MARAS::Bridge::SkyrimNet {
                 const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
                 const auto spatialSnap = MARAS::State::SpatialSnapshotStore::GetSingleton().Snapshot();
                 const MARAS::State::ActorId selfActorId{ fid };
+                const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                    worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
+                const auto perceived = selfView.GetPerceivedRelationshipsOf(selfActorId);
                 std::string result;
                 auto appendOpenPartners = [&](MARAS::State::RelationshipStatus status) {
-                    for (const auto partnerActorId : worldSnap->relationships->GetPartnersWithStatus(selfActorId, status)) {
-                        const auto* edge = worldSnap->relationships->FindEdge(
-                            MARAS::State::CanonicalPairKey(selfActorId, partnerActorId));
-                        if (edge && edge->isOpen) {
+                    for (const auto& edge : perceived) {
+                        if (edge.status == status && edge.isOpen) {
+                            const auto partnerActorId = edge.Other(selfActorId);
                             const std::string name = MARAS::ResolveActorNameSafe(partnerActorId.raw(), *worldSnap, *spatialSnap);
                             if (!name.empty() && name != "None") {
                                 if (!result.empty()) result += ", ";
@@ -1836,11 +1870,9 @@ namespace MARAS::Bridge::SkyrimNet {
                     return "true";
                 }
 
-                for (const auto& key : worldSnap->relationships->GetAdjacentPairs(selfActorId)) {
-                    const auto* edge = worldSnap->relationships->FindEdge(key);
-                    if (edge &&
-                        edge->status != MARAS::State::RelationshipStatus::Unknown &&
-                        edge->status != MARAS::State::RelationshipStatus::Candidate) {
+                for (const auto& edge : omniscientView.GetPerceivedRelationshipsOf(selfActorId)) {
+                    if (edge.status != MARAS::State::RelationshipStatus::Unknown &&
+                        edge.status != MARAS::State::RelationshipStatus::Candidate) {
                         return "true";
                     }
                 }
@@ -1951,10 +1983,17 @@ namespace MARAS::Bridge::SkyrimNet {
                 // Engagement
                 if (mgr.IsAvailableForEngaged(actorFormId)) {
                     bool hasEngagedTarget = false;
-                    const auto datingPartners = worldSnap->relationships->GetPartnersWithStatus(
-                        MARAS::State::ActorId{ actorFormId }, MARAS::State::RelationshipStatus::Dating);
-                    if (!datingPartners.empty()) {
-                        const auto datingPartnerFid = datingPartners[0].raw();
+                    const MARAS::State::ActorId selfActorId{ actorFormId };
+                    const auto selfView = MARAS::Projection::PerspectiveView::ForActor(
+                        worldSnap, spatialSnap, selfActorId, &MARAS::GetEngineWerewolfStateProvider());
+                    RE::FormID datingPartnerFid = 0;
+                    for (const auto& edge : selfView.GetPerceivedRelationshipsOf(selfActorId)) {
+                        if (edge.status == MARAS::State::RelationshipStatus::Dating) {
+                            datingPartnerFid = edge.Other(selfActorId).raw();
+                            break;
+                        }
+                    }
+                    if (datingPartnerFid != 0) {
                         for (const RE::FormID targetFid : nearbyIds) {
                             if (MARAS::MatchesActor(targetFid, datingPartnerFid) &&
                                 mgr.IsAvailableForEngaged(actorFormId, datingPartnerFid)) {
@@ -2423,8 +2462,11 @@ namespace MARAS::Bridge::SkyrimNet {
         ctx["presumedFatherName"] = MARAS::ResolveActorNameSafe(presumedFatherID, *worldSnap, *spatialSnap);
         ctx["presumedFatherRace"] = MARAS::ResolveActorRaceSafe(presumedFatherID, *worldSnap, *spatialSnap);
         ctx["presumedFatherUUID"] = presumedFatherUUID;
-        const auto relStatus = worldSnap->relationships->GetStatus(
+        const auto partnerPair = omniscientView.GetPerceivedPair(
             MARAS::State::ActorId{ motherID }, MARAS::State::ActorId{ presumedFatherID });
+        const auto relStatus = partnerPair
+            ? partnerPair->status
+            : MARAS::Foundation::RelationshipStatus::Unknown;
         ctx["maritalStatus"] = std::string(MARAS::Foundation::RelationshipStatusToString(relStatus));
 
         ctx["bioFatherName"] = MARAS::ResolveActorNameSafe(bioFatherID, *worldSnap, *spatialSnap);

@@ -138,8 +138,12 @@ namespace MARAS {
 
     void ChildrenFleeService::FleeFromPlayerCell() {
         monitoring_.store(true, std::memory_order_release);
-        AddCurrentEpochTask("ChildrenFleeService::FleeFromPlayerCell", []() {
+        const auto expectedEpoch = GetSessionEpoch();
+        AddCurrentEpochTask("ChildrenFleeService::FleeFromPlayerCell", [expectedEpoch]() {
             std::lock_guard papyrusLock(GetPapyrusMutex());
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
             auto* player = RE::PlayerCharacter::GetSingleton();
             auto* cell = player ? player->GetParentCell() : nullptr;
             if (!cell) {
@@ -174,8 +178,12 @@ namespace MARAS {
 
     void ChildrenFleeService::QueueRefresh() {
         monitoring_.store(true, std::memory_order_release);
-        AddCurrentEpochTask("ChildrenFleeService::QueueRefresh", []() {
+        const auto expectedEpoch = GetSessionEpoch();
+        AddCurrentEpochTask("ChildrenFleeService::QueueRefresh", [expectedEpoch]() {
             std::lock_guard papyrusLock(GetPapyrusMutex());
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                return;
+            }
             GetSingleton().Refresh();
         });
     }
@@ -251,14 +259,15 @@ namespace MARAS {
     // ─── Refresh ─────────────────────────────────────────────────────────────────
 
     ChildrenFleeService::ThreatMap ChildrenFleeService::CollectThreats() {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        auto* playerCell = player ? player->GetParentCell() : nullptr;
+        const RE::FormID playerCellID = playerCell ? playerCell->GetFormID() : 0;
+
         ThreatMap threats;
         ThreatProvider provider;
         {
             std::lock_guard lock(sourceMutex_);
             // A manual flee ends once the player leaves the cell it was requested in.
-            auto* player = RE::PlayerCharacter::GetSingleton();
-            auto* playerCell = player ? player->GetParentCell() : nullptr;
-            const RE::FormID playerCellID = playerCell ? playerCell->GetFormID() : 0;
             std::erase_if(manualThreats_, [&](const auto& entry) { return entry.first != playerCellID; });
             provider = threatProvider_;
             threats = manualThreats_;
@@ -376,7 +385,7 @@ namespace MARAS {
 
         const auto notify = [](const std::vector<RE::FormID>& ids, bool fleeing) {
             for (RE::FormID id : ids) {
-                if (auto* child = RE::TESForm::LookupByID<RE::Actor>(id)) {
+                if (auto* child = RE::TESForm::LookupByID<RE::Actor>(id); child && !child->IsDeleted()) {
                     MARAS_LOG_INFO("ChildrenFleeService: child {:08X} ({}) {}", id, ActorSvc::GetName(id),
                                    fleeing ? "fleeing" : "no longer fleeing");
                     child->EvaluatePackage(false, !fleeing);

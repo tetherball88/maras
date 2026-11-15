@@ -1,91 +1,49 @@
-# SkyrimNetIntegration — Feature & Mechanics Guide
+# `SkyrimNetIntegration` (`ApiLoader`, `Decisions`, `Decorators`) — Architecture & Behavioral Guide
 
-**Implementation**: [SkyrimNetIntegration.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/SkyrimNetIntegration.cpp)
-
-`SkyrimNetIntegration` bridges M.A.R.A.S's C++ relationship, household, pregnancy, and drama state with **SkyrimNet.dll** via dynamic runtime DLL exports (`GetProcAddress`). It registers prompt decorators (`ttm_*`), builds knowledge-filtered relationship profile JSONs for NPC dialogue prompts, dispatches custom LLM evaluations (with interactive retry modals), and injects episodic memories into SkyrimNet's memory database.
-
----
-
-## 1. Zero-Dependency Runtime Detection & UUID Resolution
-
-- **Dynamic DLL Discovery (`IsSkyrimNetAvailable`)**:
-  - Checks whether `SkyrimNet.dll` is mapped into the Skyrim process (`GetModuleHandleW`) and respects the developer testing override `simulateNoSkyrimNet`.
-  - Resolves all SkyrimNet C API functions (`PublicRegisterDecorator`, `PublicFormIDToUUID`, `PublicGetPluginConfigValue`, `PublicSendCustomPromptToLLM`, `PublicSendCustomDecisionToLLM`, `PublicAddMemory`) dynamically so M.A.R.A.S runs without hard DLL dependencies when SkyrimNet is not installed.
-- **Base-First UUID Resolution**:
-  - When converting an actor's FormID to a 64-bit SkyrimNet UUID (`FormIDToUUID`), the service first attempts to resolve the actor's **Base NPC FormID (`TESNPC`)** via `PublicFormIDToUUID`, falling back to the placed Reference FormID if the base returns `0`.
-- **Action Proximity Radius**:
-  - Determines how close two NPCs must be to trigger proximity-gated relationship actions by checking M.A.R.A.S's `skyrimnetActionRadius` setting first, then querying SkyrimNet's `nearbyActors.radius` plugin config, and defaulting to `3000.0` units.
+**Layer**: Bridge SkyrimNet (`SKSE_Source/modules/bridge_skyrimnet`) & SkyrimNet Bundle (`SKSE/Plugins/SkyrimNet/external/tetherball88.maras`)  
+**Sources**:
+- [SkyrimNetApiLoader.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetApiLoader.h) / [SkyrimNetApiLoader.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetApiLoader.cpp)
+- [SkyrimNetDecisions.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetDecisions.h) / [SkyrimNetDecisions.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetDecisions.cpp)
+- [SkyrimNetDecorators.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetDecorators.h) / [SkyrimNetDecorators.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetDecorators.cpp)
+- [Architecture Overview](../ARCHITECTURE.md)
 
 ---
 
-## 2. Schema-v2 Actor-Relative Relationship Profile (`ttm_npc_relationship_profile`)
+## 1. Purpose & Responsibility
 
-The centerpiece of SkyrimNet prompt injection is `BuildRelationshipProfileJSON`, which executes lock-free over `WorldStore::Snapshot()`, `SpatialSnapshotStore::Snapshot()`, and `PerspectiveView` (`PerspectiveView::ForActor` for self-perspective or `PerspectiveView::ForDialogueTarget` when `render_mode == "dialogue_target"`) to generate an **actor-relative, knowledge-filtered** JSON profile (`schema_version: 2`):
-
-### 1. Pregnancy & Superfecundation Grouping
-- If the NPC is pregnant, groups all unborn fetuses (`0xFF` synthetic records) by biological father (`PregnancyFatherGroup`), supporting **superfecundation** (multiple fetuses fathered by different men in the same pregnancy) as well as twins/triplets.
-- Computes whether the pregnancy carries an active paternity secret from the mother's committed partner (`is_secret_for_partner`) or from the biological father (`is_secret_for_bio_father`).
-
-### 2. Current & Past Relationships with Permission Context
-- Lists all active (`married`, `engaged`, `dating`, `lover`) and past (`divorced`, `jilted`, `exdating`, `exlover`) relationships—**excluding** ongoing secret affair partners from `current_relationships` (those appear under `infidelity` instead).
-- Tags each active relationship with its **consent/permission model**:
-  - `player_polygamy`: Permitted because the actor is the Player and polygamy is enabled.
-  - `open_primary`: A secondary `lover` relationship permitted because the actor has an open primary partner (`permission_source`).
-  - `primary` / `unrestricted`: Standard primary or single-lover relationship.
-- **Player Co-Partners (`player_co_partners`)**: If the NPC is an active partner of the Player and polygamy is enabled, lists all of the Player's *other* spouses (`co_spouse`) and partners (`co_partner`) sorted by hierarchy (`Married > Engaged > Dating > Lover`) so sister-wives/co-spouses know about each other in dialogue.
-
-### 3. Strictly Knowledge-Filtered Children, Step-Children & Paternity Secrets
-- **Custodial Family Branches (`family`)**: Groups the NPC's custodial children by co-guardian (`other_parent` or `single_parent`), including each child's life stage (`infant`, `child`, `training`, `adult`), whether they are ephemeral (`0xFF` non-spawned actor), their training location, and their assigned pet or woodland critter.
-- **Non-Custodial Biological Children (`non_custodial_children`)**: Lists biological children raised by another household—**unless** the speaking NPC is the biological father and the mother is keeping his paternity a secret from him (`isSecretForBioFather && !discoveredByBioFather`), in which case the child is completely hidden from his prompt!
-- **Epistemic Paternity Secret Filtering & Public Bio Isolation (`PerspectiveView`)**:
-  - Under `PerspectiveView::ForActor`, an actor sees `paternity_secret` metadata and true biological lineage **only** when privy (with **no** blanket `0x14` Player omniscience):
-    - The biological mother always knows; the Player only sees an undiscovered secret if directly privy as biological mother, aware biological father, or aware presumed father (or once `discovered`).
-    - The deceived partner only sees the secret if `isSecretForPartner == false`, `discoveredByPartner == true`, or `discovered == true`. While deceived, `relation` and lineage reflect the child as theirs rather than `"stepson"` / `"stepdaughter"`.
-    - The biological father only sees the secret if `isSecretForBioFather == false`, `discoveredByBioFather == true`, or `discovered == true`.
-  - Under `render_mode == "dialogue_target"` (`PerspectiveView::ForDialogueTarget`), public knowledge only is emitted for another speaker's prompt—even when the target personally knows: undiscovered affairs (`is_secret_affair`), secret paternity (`has_undiscovered_paternity_secret`, `is_paternity_secret`, `is_other_parent_secret`), secret siblings (filtered via `siblings_public`), and `has_beastblood` are never exposed.
-- **Child's Own Perspective (`parents`)**: If the speaking actor is themselves a registered child (or grown child), populates their `parents` block with their perceived biological parents, current guardians, step-parents, perspective-filtered `siblings` and public `siblings_public`, pets/critters, and any visible paternity intrigue.
-
-### 4. Epistemic Infidelity Filtering (`infidelity`)
-- Lists cheating records where the actor is the `cheater`, `affair_partner`, or `victim`.
-- **Victim & Dialogue-Target Ignorance Guarantee**: If the speaking NPC (including an unaware `0x14` Player) is the **victim** of an undiscovered affair (`isSecret == true`), or if rendering public `dialogue_target` context, secret affair records are **completely omitted** from the JSON profile so speakers never leak undiscovered infidelity.
+The `bridge_skyrimnet` module cleanly isolates optional runtime linking to `SkyrimNet.dll` (`GetProcAddress` / exported plugin C APIs) behind `ISkyrimNetGateway`. M.A.R.A.S. never takes a load-time DLL import on SkyrimNet; all features check `IsSkyrimNetAvailable()` at caller sites before running SkyrimNet-only rolls, prompt construction, or event narration.
 
 ---
 
-## 3. Proximity & Eligibility Action Decorators
+## 2. Runtime API Loader & Caller-Level Gating
 
-In addition to `ttm_npc_relationship_profile` and `ttm_is_registered`, the service registers specialized decorators that dynamically compute which relationship and drama actions an NPC is currently eligible to perform using the lock-free 2 Hz `SpatialActorSnapshot` cache (`ForEachNearbyCandidate`, never scanning `RE::ProcessLists::highActorHandles` on SkyrimNet worker threads):
-
-- **Vanilla Prior-Relationship Backstory (`ttm_get_ex_partner`)**:
-  - Inspects `TESNPC` relationship records (`Spouse`, `Courting`, `kLover`) resolved via `ResolveBaseFormIDSafe` from two perspectives:
-    - **Perspective 1**: The speaking NPC left a vanilla spouse/courtship/lover to marry or date the Player.
-    - **Perspective 2**: The speaking NPC was left behind when their vanilla partner entered a relationship with the Player.
-  - Generates a natural-language backstory sentence explaining who left whom for the Dragonborn.
-- **Composite Available Actions List (`ttm_get_available_actions`)**:
-  - Scans `SpatialActorSnapshot` candidates within `GetNearbyActorsRadius()` and returns the exact list of action identifiers (`ProposeDating`, `ConsiderDatingProposal`, `ProposeLover`, `ConsiderLoverProposal`, `ProposeEngagement`, `ConsiderEngagementProposal`, `BreakupDating`, `BreakupLover`, `CallOffEngagement`, `Divorce`, `OpenRelationship`, `CloseRelationship`, `RevealChildSecret`, `DiscoverChildPaternity`, `ConfessAffair`, `ExposeAffair`, `ResolveAffair`) currently valid for the speaker.
-- **Per-Action Candidate Target Lists**:
-  - Individual decorators (`ttm_get_propose_dating_candidates`, `ttm_get_propose_lover_candidates`, `ttm_get_propose_engagement_candidates`, `ttm_get_breakup_*`, `ttm_get_divorce_candidates`, `ttm_get_open_relationship_candidates`, `ttm_get_close_relationship_candidates`) list the exact names of valid targets so YAML action prompts can constrain LLM target selection.
-  - **Consequence Warning Decorators**: `ttm_get_exclusive_main_partners` lists partners who would be betrayed if the speaker takes a new lover, and `ttm_get_lovers_becoming_ex` lists casual lovers who will automatically become ex-lovers if the speaker enters an exclusive dating/engaged relationship.
-- **Affair & Paternity Drama Candidate Lists**:
-  - `ttm_get_confess_affair_candidates` (cheater -> nearby victim), `ttm_get_expose_affair_candidates` (paramour -> nearby victim), and `ttm_get_resolve_affair_candidates` (cheater/victim -> nearby counterpart for an already-exposed affair).
-  - `ttm_get_reveal_child_secret_candidates` (mother -> nearby deceived partner, bio father, or `Both`—deduplicating unborn twins/triplets) and `ttm_get_discover_child_paternity_candidates` (deceived partner or bio father -> nearby mother or child, flagging `"noticeable physical difference"` when `hasPhenotypeMismatch` is true on a born child).
+- **Dynamic Discovery (`SkyrimNetApiLoader`)**: Resolves optional SkyrimNet exports at runtime (`PublicRegisterEvent`, `PublicRegisterDecorator`, `PublicSendCustomPromptToLLM`, `PublicSendCustomDecisionToLLM`, `PublicGetActorUUID`, `PublicAddActorMemory`, `PublicRequestProfileUpdate`, `PublicGetPluginConfigValue`, etc.).
+- **Testing Simulation Gate**: `IsSkyrimNetAvailable()` returns false when `SkyrimNet.dll` is missing **or** when `SettingsData::simulateNoSkyrimNet` is enabled—letting developers and players exercise non-SkyrimNet deterministic/dice-roll paths without uninstalling SkyrimNet.
+- **UUID Resolution**: Resolves both plugin actors (`BaseId`/`RefId`) and dynamically spawned `0xFF` actors (e.g., adult children via `ResolvePlacedActorUUID` prioritizing the live `RE::Actor` reference).
+- **Decisions API (`SkyrimNetDecisions`)**:
+  - Prefers `PublicSendCustomDecisionToLLM` (SkyrimNet API v12+) for structured boolean/categorical judgments (`EvaluateStepIn`, `EvaluatePaternity`, `EvaluatePartnerAgency`, `EvaluateMatchmakingVerify`) when `ShouldUseDecisions()` (`skyrimnetUseDecisions && IsDecisionsAvailable()`) is true.
+  - **Automatic Chat Fallback**: If a decision request returns `error == "no_decisions_route"` (`ShouldFallbackToChatOnFailure`), callers automatically fall back to `SendCustomPromptToLLM` on the standard Chat route and parse strict JSON objects (`is_object()`, typed getters with defaults).
+  - **Prompt Injection Defense**: `SanitizeSingleLine` collapses CR/LF/tabs/repeated spaces and trims bounds, while `SanitizeKey` restricts criterion keys to `[A-Za-z0-9_-]`.
 
 ---
 
-## 4. Jev Decisions (`SkyrimNetDecisions`) & LLM Evaluations
+## 3. Epistemic Prompt Decorators (23 `ttm_*` Exports)
 
-Structured classification evaluations are handled by `SkyrimNetDecisions` ([SkyrimNetDecisions.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/SkyrimNetDecisions.cpp)), which dispatches Jev decision prompts (`decisions/*.prompt`) via `PublicSendCustomDecisionToLLM` when `skyrimnetUseDecisions` is enabled (`true` by default) and automatically falls back to `PublicSendCustomPromptToLLM` (`maras_evaluations/*.prompt`) when `skyrimnetUseDecisions` is disabled or SkyrimNet returns `"error": "no_decisions_route"`:
+At `kPostLoad`, `RegisterSkyrimNetDecorators()` registers **23 `ttm_*` prompt decorators** (evaluated read-only via [`PerspectiveView`](PerspectiveView.md), never mutating state):
 
-1. **Paternity Secret Evaluation (`EvaluatePaternitySecret` / `SkyrimNetDecisions::EvaluatePaternity`)**:
-   - Triggered at birth or from the Prisma UI (`decisions/maras_paternity_evaluation` or fallback `maras_evaluations/maras_paternity_evaluation`), passing mother, presumed father, and biological father profiles plus any racial phenotype mismatch description (`GetVisualDiscrepancyDescription`).
-   - Evaluates `[ question outcome choice ]` and `[ question partner_reaction choice ]` and maps them to five canonical outcomes on the main thread:
-     - `mother_confessed_presumed` / `presumed_father_learnt`: Resolves the secret for the deceived partner and applies `partner_reaction` (`divorce` or `breakup` -> `ExDating`).
-     - `mother_confessed_bio` / `bio_father_learnt`: Resolves the secret for the biological father.
-     - `mother_confessed_both`: Resolves both edges simultaneously and applies `partner_reaction`.
-   - Fires the `maras_paternity_secret_resolved` SKSE ModCallbackEvent and refreshes the Prisma UI.
-2. **Biological Father Step-In Evaluation (`NPCRelationshipManager::EvaluateBioFatherStepIn` / `SkyrimNetDecisions::EvaluateStepIn`)**:
-   - Evaluates `decisions/maras_step_in_evaluation` (`[ question bio_father_steps_in noul ]`) when a deceived husband divorces a mother over a paternity scandal to determine whether the biological father steps in (`married`, `dating`, or `lover`).
-3. **Player-Partner Agency Evaluation (`MatchmakingService::TryScheduledPlayerPartnerInfidelity` / `SkyrimNetDecisions::EvaluatePartnerAgency`)**:
-   - Evaluates `decisions/maras_player_partner_cheating` across all 5 `evalMode`s (`candidate_select`, `breakup_affair`, `breakup_open_lover`, `suggest_open`, `suggest_close`). In `candidate_select` mode, dynamically builds `c_1`..`c_N` choice keys for each shortlisted candidate plus `none` (stay faithful).
-4. **Matchmaking Verification (`MatchmakingService::RetryVerificationTasks` / `SkyrimNetDecisions::EvaluateMatchmakingVerify`)**:
-   - Evaluates `decisions/maras_matchmaking_verify` for each proposed NPC–NPC transition using bilateral consent (`willing_a && willing_b`) for `new`, `advance`, `open`, and `close` transitions, and unilateral initiation (`wants_breakup_a || wants_breakup_b`) for `breakup` transitions.
+| Decorator Group | Registered Names (`23` total) | Perspective & Purpose |
+| :--- | :--- | :--- |
+| **Actor Profile & Nearby Context** | `ttm_is_registered`, `ttm_npc_relationship_profile`, `ttm_get_nearby_actors`, `ttm_get_available_actions` | `ActorSelf` (or `dialogue_target` public bio) schema-v2 JSON, nearby context, and eligible action list. |
+| **Relationship Proposals & Transitions** | `ttm_get_propose_dating_candidates`, `ttm_get_propose_lover_candidates`, `ttm_get_propose_engagement_candidates`, `ttm_get_breakup_dating_candidates`, `ttm_get_breakup_lover_candidates`, `ttm_get_breakup_engagement_candidates`, `ttm_get_divorce_candidates`, `ttm_get_open_relationship_candidates`, `ttm_get_close_relationship_candidates`, `ttm_get_exclusive_main_partners`, `ttm_get_lovers_becoming_ex`, `ttm_get_dating_partner`, `ttm_get_open_main_partners`, `ttm_get_ex_partner` | Filtered through `PerspectiveView::ForActor` for actor-consistent action/target suggestions. |
+| **Secrets, Paternity & Affairs** | `ttm_get_reveal_child_secret_candidates`, `ttm_get_discover_child_paternity_candidates`, `ttm_get_confess_affair_candidates`, `ttm_get_expose_affair_candidates`, `ttm_get_resolve_affair_candidates` | Enforces secret ownership: actors only see secrets they personally know (`bioMother`, true father if told, or `ForDashboard` candidate validation where appropriate). |
 
+- **Self vs. Target Masking (`ttm_npc_relationship_profile`)**: Uses `PerspectiveView::ForActor` (`render_mode != "dialogue_target"`) vs. `PerspectiveView::ForDialogueTarget` (`render_mode == "dialogue_target"`). Dialogue target renders expose public relationships (`siblings_public`, public bio parents) and strip undiscovered affairs, secret paternity flags, secret sibling links, and `has_beastblood`—even if the target NPC personally knows them.
+
+---
+
+## 4. SkyrimNet Bundle Integration (`tetherball88.maras`)
+
+Located under [SKSE/Plugins/SkyrimNet/external/tetherball88.maras](../../../SKSE/Plugins/SkyrimNet/external/tetherball88.maras):
+- **25 YAML Triggers** (`triggers/*.yaml`): React to MARAS lifecycle and relationship events (proposals, marriage/engagement/lovers, infidelity caught/confessed/exposed/resolved, open relationships & walk-ins, polygamy blessing, pregnancy/labor/birth/loss, child growth/adulthood/training/adoption/inheritance, paternity resolution, affection/hierarchy shifts, and action declines).
+- **18 YAML Actions** (`actions/*.yaml`): Expose conversational SkyrimNet actions for proposals, breakups, divorce, opening/closing relationships, confessing/exposing/resolving affairs, revealing/discovering child paternity, and managing relationships.
+- **Companion Services**: Memory narration runs through [`SkyrimNetMemoryService`](SkyrimNetMemoryService.md), and placed child bio creation runs through [`SkyrimNetProfileService`](SkyrimNetProfileService.md).

@@ -7,8 +7,9 @@ Applies to `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/` (`manifest.json
 ## 1. Bundle Structure & YAML Parity (SkyrimNet Beta 25+)
 
 - **`manifest.json`**: Must remain valid JSON at the bundle root.
-- **`actions/*.yaml`**: Filename **must** match internal `name:` (case-sensitive, e.g., `ProposeLover.yaml` $\to$ `name: ProposeLover`), pointing `scriptName`/`functionName` to valid functions in `TTM_Actions.psc` / `TTM_ServiceRelationships.psc`.
-- **`triggers/*.yaml`**: Filename **must** match internal `name:` (e.g., `ttm_caught_cheating.yaml` $\to$ `name: ttm_caught_cheating`), listening on `eventType: ttm_event` and filtering `event_json.type` emitted by `TTM_ServiceSkyrimNet.BuildJson(...)`.
+- **`actions/*.yaml` (18 files)**: Filename **must** match internal `name:` (case-sensitive, e.g., `ProposeLover.yaml` $\to$ `name: ProposeLover`), pointing `scriptName`/`functionName` to valid functions in `TTM_Actions.psc` / `TTM_ServiceRelationships.psc`.
+- **`triggers/*.yaml` (25 files)**: Filename **must** match internal `name:` (e.g., `ttm_cheating_caught.yaml` $\to$ `name: ttm_cheating_caught`), listening on `eventType: ttm_event` and filtering `event_json.type` emitted by `TTM_ServiceSkyrimNet.BuildJson(...)`.
+- **Event-Side Secrecy Parity**: Child birth, growth (`RegisterChildGrewUp`), training (`RegisterChildSentToTraining`), and adulthood (`RegisterChildBecameAdult`) events emitted by `TTM_ServiceSkyrimNet.psc` check both `IsSecretForPartner` and `IsSecretForBioFather` using `exactAudience = true` and `maskSecrets = true` splits—never weaken prompt isolation assuming all targets are `Nearby`.
 
 ---
 
@@ -26,9 +27,9 @@ Applies to `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/` (`manifest.json
 
 ## 3. Jev Decision & Chat Evaluation Prompts
 
-1. **Jev Decision Prompts (`prompts/decisions/*.prompt` $\leftrightarrow$ `SkyrimNetDecisions.cpp`)**:
+1. **Jev Decision Prompts (`prompts/decisions/*.prompt` $\leftrightarrow$ [SkyrimNetDecisions.cpp](../../../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetDecisions.cpp))**:
    - Used via `PublicSendCustomDecisionToLLM` when `skyrimnetUseDecisions` is enabled (`maras_step_in_evaluation`, `maras_paternity_evaluation`, `maras_player_partner_cheating` across all 5 `evalMode`s, `maras_matchmaking_verify`).
    - **Strict Jev Syntax**: Every `[ question <id> choice|noul ]` block **must** have a non-empty instruction line immediately before `[ criteria ]`, and every criterion (`key: Single-line description` or `true:`/`false:`) must be single-line with no colons in keys or brackets. Never rename question/option IDs without updating `SkyrimNetDecisions.cpp`.
 2. **Chat Evaluation Prompts (`prompts/maras_evaluations/*.prompt`)**:
    - Used via `PublicSendCustomPromptToLLM` (`maras_matchmaking_scheduled`, `maras_matchmaking_manual`, `maras_event_memories`, `maras_npc_couple_banter`, plus decision fallbacks on `"no_decisions_route"`).
-   - Keep JSON output keys and `{{ variable }}` inputs strictly synchronized with C++ callers/parsers (`MatchmakingService.cpp`, `SkyrimNetDecisions.cpp`, `SkyrimNetIntegration.cpp`).
+   - Keep JSON output keys and `{{ variable }}` inputs strictly synchronized with C++ callers/parsers (`modules/app/src/AgencyWorkflowCoordinator.cpp`, `modules/app/src/AsyncLlmBatchRunner.cpp`, `modules/bridge_skyrimnet/src/SkyrimNetDecisions.cpp`, `modules/bridge_skyrimnet/src/SkyrimNetDecorators.cpp`, `modules/bridge_skyrimnet/src/SkyrimNetMemoryService.cpp`).

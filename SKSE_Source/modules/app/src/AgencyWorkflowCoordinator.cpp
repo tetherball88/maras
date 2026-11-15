@@ -2291,8 +2291,9 @@ namespace MARAS::App {
                                                                           : 0);
 
         if (isLetterScenario) {
-            const auto& catalog = Engine::EncounterConfigLoader::GetSingleton().GetCatalog();
-            const Domain::Agency::EncounterTemplateSpec* tmpl = catalog.FindTemplate(scenario);
+            const auto catalog = Engine::EncounterConfigLoader::GetSingleton().GetCatalog();
+            const Domain::Agency::EncounterTemplateSpec* tmpl =
+                catalog ? catalog->FindTemplate(scenario) : nullptr;
             const std::string partnerName = ResolveActorName(partnerId);
             const std::string playerName = GetPlayerNameSafe();
             const std::string loverName = loverId != 0 ? ResolveActorName(loverId) : std::string();

@@ -1,5 +1,6 @@
 #include "TestHarness.h"
 
+#include "maras/domain/household/DeceasedQueries.h"
 #include "maras/foundation/IRng.h"
 #include "maras/state/WorldState.h"
 
@@ -404,6 +405,112 @@ namespace MARAS::Tests {
         MARAS_CHECK(state.lineage->FindChild(gradAdultChild) == nullptr);
         MARAS_CHECK(state.household->FindAdultChildTravel(gradAdultChild) == nullptr);
         MARAS_CHECK(state.relationships->FindEdge(gradAdultChild.AsActorId(), gradSpouse) == nullptr);
+    }
+
+    MARAS_TEST(CustodyAndDeath, DeceasedSecretAffairsAndPaternityPreserved) {
+        const ActorId spouse{ 0x00060010u };
+        const ActorId publicHusband{ 0x00060020u };
+        const ActorId secretEx{ 0x00060030u };
+        const ActorId secretParamour{ 0x00060040u };
+        const ActorId secretExParamour{ 0x00060050u };
+        const ChildId secretChild{ 0x00070010u };
+
+        WorldState state{};
+        MockFormIdResolver meta{};
+        meta.names[spouse] = "CheatingSpouse";
+        meta.names[publicHusband] = "PublicHusband";
+        meta.names[secretEx] = "DivorcedExParamour";
+        meta.names[secretParamour] = "SecretParamour";
+        meta.names[secretExParamour] = "PureSecretExParamour";
+        meta.names[secretChild.AsActorId()] = "SecretChild";
+        meta.baseIds[spouse] = BaseId{ 0x00060011u };
+        meta.baseIds[publicHusband] = BaseId{ 0x00060021u };
+        meta.baseIds[secretEx] = BaseId{ 0x00060031u };
+        meta.baseIds[secretParamour] = BaseId{ 0x00060041u };
+        meta.baseIds[secretExParamour] = BaseId{ 0x00060051u };
+        meta.baseIds[secretChild.AsActorId()] = BaseId{ 0x00070011u };
+
+        (void)state.PromoteToMarried(spouse, publicHusband, 1.0f, spouse, meta);
+        (void)state.TransitionRelationship(spouse, secretEx, RelationshipStatus::Divorced, 2.0f, spouse);
+        (void)state.TransitionRelationship(spouse, secretEx, RelationshipStatus::Lover, 3.0f, spouse);
+        MARAS_REQUIRE(state.RecordCheatingIncident(
+            spouse, publicHusband, secretEx, true,
+            AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 3.0f));
+        (void)state.TransitionRelationship(spouse, secretParamour, RelationshipStatus::Lover, 4.0f, spouse);
+        MARAS_REQUIRE(state.RecordCheatingIncident(
+            spouse, publicHusband, secretParamour, true,
+            AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 4.0f));
+        (void)state.TransitionRelationship(spouse, secretExParamour, RelationshipStatus::Lover, 4.2f, spouse);
+        MARAS_REQUIRE(state.RecordCheatingIncident(
+            spouse, publicHusband, secretExParamour, true,
+            AffairType::Lover, AffairStatus::EndedBreakup, AffairStage::Physical, 4.4f));
+        (void)state.TransitionRelationship(spouse, secretExParamour, RelationshipStatus::ExLover, 4.5f, spouse);
+
+        ChildRecord child{};
+        child.childId = secretChild;
+        child.name = "SecretChild";
+        child.stage = ChildStage::Child;
+        child.isBiologicalChild = true;
+        child.isAdopted = false;
+        child.bioMother = spouse;
+        child.bioFather = secretParamour;
+        child.presumedFather = publicHusband;
+        (void)child.guardians.Assign(spouse, publicHusband);
+        child.paternitySecret.isSecret = true;
+        child.paternitySecret.isSecretForPartner = true;
+        state.lineage.Write().UpsertChild(child);
+
+        (void)state.RecordActorDeath(secretChild.AsActorId(), 5.0f, false, ActorId{}, meta);
+        const DeceasedActorRecord* deadChild = state.deceased->FindByActor(secretChild.AsActorId());
+        MARAS_REQUIRE(deadChild != nullptr);
+        MARAS_REQUIRE(deadChild->childInfo.has_value());
+        MARAS_CHECK(deadChild->childInfo->hasUndiscoveredPaternitySecret);
+        MARAS_CHECK_EQ(deadChild->childInfo->bioFatherBaseId, BaseId{ 0x00060041u });
+        MARAS_CHECK_EQ(deadChild->childInfo->publicBioFatherBaseId, BaseId{ 0x00060021u });
+
+        (void)state.RecordActorDeath(spouse, 6.0f, false, ActorId{}, meta);
+        const DeceasedActorRecord* deadSpouse = state.deceased->FindByActor(spouse);
+        MARAS_REQUIRE(deadSpouse != nullptr);
+        MARAS_REQUIRE_EQ(deadSpouse->partnersAtDeath.size(), std::size_t{ 4 });
+        for (const auto& pe : deadSpouse->partnersAtDeath) {
+            if (pe.partnerRefId == publicHusband.AsRefId()) {
+                MARAS_CHECK(!pe.isSecretAffair);
+                MARAS_CHECK_EQ(pe.statusAtDeath, RelationshipStatus::Married);
+            } else if (pe.partnerRefId == secretEx.AsRefId()) {
+                MARAS_CHECK(pe.isSecretAffair);
+                MARAS_CHECK_EQ(pe.statusAtDeath, RelationshipStatus::Lover);
+                MARAS_CHECK_EQ(pe.publicStatusAtDeath, RelationshipStatus::Divorced);
+            } else if (pe.partnerRefId == secretParamour.AsRefId()) {
+                MARAS_CHECK(pe.isSecretAffair);
+                MARAS_CHECK_EQ(pe.statusAtDeath, RelationshipStatus::Lover);
+                MARAS_CHECK_EQ(pe.publicStatusAtDeath, RelationshipStatus::Unknown);
+            } else if (pe.partnerRefId == secretExParamour.AsRefId()) {
+                MARAS_CHECK(pe.isSecretAffair);
+                MARAS_CHECK_EQ(pe.statusAtDeath, RelationshipStatus::ExLover);
+                MARAS_CHECK_EQ(pe.publicStatusAtDeath, RelationshipStatus::Unknown);
+            }
+        }
+
+        // Domain::Household::DeceasedQueries public queries respect deceased secrecy metadata
+        const WorldStateSnapshot snap = state.Snapshot();
+        MARAS_CHECK(Domain::Household::WasExOf(
+            snap, spouse, secretEx, meta.baseIds[spouse], meta.baseIds[secretEx], secretEx.AsRefId()));
+        MARAS_CHECK(!Domain::Household::WasExOf(
+            snap, spouse, secretExParamour, meta.baseIds[spouse], meta.baseIds[secretExParamour], secretExParamour.AsRefId()));
+        MARAS_CHECK(!Domain::Household::WasExOf(
+            snap, spouse, secretParamour, meta.baseIds[spouse], meta.baseIds[secretParamour], secretParamour.AsRefId()));
+        MARAS_CHECK(Domain::Household::GetDeceasedPartnersOf(
+            snap, secretParamour, meta.baseIds[secretParamour], secretParamour.AsRefId()).empty());
+        MARAS_CHECK_EQ(
+            Domain::Household::GetDeceasedPartnersOf(
+                snap, publicHusband, meta.baseIds[publicHusband], publicHusband.AsRefId()).size(),
+            std::size_t{ 1 });
+        MARAS_CHECK(Domain::Household::GetDeceasedChildrenOf(
+            snap, secretParamour, meta.baseIds[secretParamour], secretParamour.AsRefId()).empty());
+        MARAS_CHECK_EQ(
+            Domain::Household::GetDeceasedChildrenOf(
+                snap, publicHusband, meta.baseIds[publicHusband], publicHusband.AsRefId()).size(),
+            std::size_t{ 1 });
     }
 
 }  // namespace MARAS::Tests

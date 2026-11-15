@@ -61,6 +61,7 @@ namespace MARAS::Bridge::SkyrimNet {
             std::mutex queueMutex;
             std::deque<std::unique_ptr<ChildProfileContextData>> pendingQueue;
             bool workerActive{ false };
+            std::atomic<bool> shuttingDown{ false };
         };
 
         SkyrimNetProfileService();

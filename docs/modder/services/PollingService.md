@@ -1,63 +1,52 @@
-# PollingService — Periodic Heartbeat & Daily Rollover Scheduler
+# `PollingService` — Architecture & Behavioral Guide
 
-[PollingService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/PollingService.cpp) acts as M.A.R.A.S's lightweight C++ heartbeat scheduler. Instead of running continuous Papyrus `OnUpdate` polling loops for follower tracking, child order timers, or midnight calendar transitions, `PollingService` runs throttled wall-clock checks while the game is unpaused and dispatches native C++ callbacks and SKSE ModEvents only when actual state transitions occur.
-
----
-
-## 1. Initialization & Save-Load Baseline
-
-When a save loads or a new game begins:
-1. **Initial Spatial Snapshot**: Publishes an immediate baseline spatial actor snapshot on the main game thread so off-thread readers never observe an unpopulated world immediately after load. When shutting down or reverting state on save reload, `PollingService::Shutdown()` resets the published spatial snapshot back to an empty snapshot so stale actor data cannot bleed across saves.
-2. **Baseline Capture**: Captures the current set of active followers (`previousTeammates_`) and the current integer game day (`previousGameDay_`) immediately so that loading into a save does not falsely fire "follower added" or "new day" events.
-3. **Player Faction Sanitization**: Runs an immediate `SanitizePlayerMarriedFaction()` pass via [FactionService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/FactionService.md) to ensure the player actor never retains the vanilla `PlayerMarriedFaction` by mistake.
-4. **Catch-Up Engagement Check**: Schedules a game-thread task to run `CheckAutoMarriageForEngagedNPCs` in [NPCRelationshipManager](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/NPCRelationshipManager.md) so any NPC-to-NPC engagements that matured past their 5-day threshold while away are promoted cleanly.
+**Layer**: Engine (`SKSE_Source/modules/engine`)  
+**Sources**:
+- [PollingService.h](../../../SKSE_Source/modules/engine/include/maras/engine/PollingService.h)
+- [PollingService.cpp](../../../SKSE_Source/modules/engine/src/PollingService.cpp)
+- [plugin.cpp](../../../SKSE_Source/plugin/plugin.cpp)
+- [AppLifecycleCoordinator.cpp](../../../SKSE_Source/modules/app/src/AppLifecycleCoordinator.cpp)
+- [Architecture Overview](../ARCHITECTURE.md)
 
 ---
 
-## 2. Throttled Real-Time Polling Loops
+## 1. Purpose & Responsibility
 
-`UpdateEventSink` (`plugin.cpp`) coalesces input ticks (every `500ms`, or immediately when `DialogueEventSink::IsWaitingForSpeaker()` is active) into at most one `SessionEpoch`-guarded SKSE main-thread task at a time. Whenever `PollingService::Update()` runs on the main game thread (skipped automatically while any pause menu is open), it evaluates independent real-time timers:
-
-### 500-Millisecond Interval (2 Hz): Lock-Free Spatial Actor Snapshot
-Every **500 milliseconds** of unpaused real time:
-- Samples the Player character and loaded `ProcessLists` high-process actors on the SKSE main thread alongside the current calendar game day.
-- Records spatial coordinates, cell/location IDs, race/base metadata, liveness/combat/scene/mannequin/keyword/follower flags, werewolf status, and bounded UTF-8 display names into a fixed-layout array sorted ascending by reference FormID for binary search lookup.
-- Reuses pre-reserved snapshot buffers from a small recycled pool whenever no off-thread reader still holds a reference, avoiding per-tick heap allocations in steady state while allowing off-thread readers to consume an immutable lock-free point-in-time view without racing live engine pointers.
-
-### 1.5-Second Interval: Intimate Scene & Children Flee Ticks
-Every **1.5 seconds** of unpaused real time (fast atomic no-op when idle):
-- Calls `IntimateThreadService::GetSingleton().Tick(now)` to run missed-end-event verification and partner walk-in/LOS exposure checks while any OStim or SexLab thread is active.
-- Calls `ChildrenFleeService::GetSingleton().Tick(now)` to refresh fleeing children and blocked-path teleports while any cell threat or fleeing child is active.
-
-### 1-Second Interval: Episodic Memory Flush
-Every **1 second** of unpaused real time:
-- Calls `SkyrimNetMemoryService::GetSingleton().Tick(now)` to flush matured episodic memory windows.
-
-### 15-Second Interval: Follower Detection & Player Faction Guard
-Every **15 seconds** of unpaused real time:
-- **Active Follower Scan**: Iterates through the engine's `highActorHandles` (loaded actors near the player), filters for M.A.R.A.S-registered NPCs, and checks whether each actor is currently following the player (`Utils::IsPlayerFollower`).
-- **Delta Detection & ModEvent Dispatch**: Compares the current follower set against the previous snapshot. If any registered NPC joined or left the player's party:
-  - Fires a summary `maras_teammate_change` SKSE ModEvent.
-  - Fires individual `maras_teammate_added` (with the joining `Actor` as sender) and `maras_teammate_removed` (with the departing `Actor` as sender) ModEvents. These drive [SpouseBuffService / BuffReconciler](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/SpouseBuffService.md) (toggling Lover's Radiance and follower multiplier buffs natively in C++) and [AffectionService](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/docs/modder/services/AffectionService.md) (awarding daily adventure affection).
-- **Periodic Player Faction Sanitization**: Re-verifies that the player has not been added to `PlayerMarriedFaction` by vanilla scripts or third-party mods.
-
-### 5-Second Interval: Child Order Expiration Tick
-Every **5 seconds** of unpaused real time:
-- Calls `PlayerChildrenService::GetSingleton().Tick(currentGameDay)` so timed child orders (`Variable06` chores, outdoor play, and hide-and-seek/tag sessions) expire promptly once their 3-in-game-hour window elapses.
-
-### 5-Second Interval: In-Game Day Rollover Detection
-Every **5 seconds** of unpaused real time, the service compares the integer part of `Calendar::GetDaysPassed()` against `previousGameDay_`.
+`PollingService` provides M.A.R.A.S.'s `2 Hz` (`500 ms`) main-thread heartbeat during active gameplay (paused while UI menus or main menu are open). It captures zero-allocation spatial snapshots of loaded actors, tracks player teammate transitions, detects in-game day changes and player level-ups, and dispatches periodic ticks into engine and Layer-4 application coordinators without requiring active Papyrus polling scripts.
 
 ---
 
-## 3. Midnight / New-Day Rollover Pipeline
+## 2. Scheduling & Frame Synchronization
 
-When the integer in-game day increments (whether through natural time passage, sleeping, waiting, or fast travel), `PollingService` orchestrates the daily household and relationship maintenance pipeline in deterministic order:
+`plugin.cpp` registers `UpdateEventSink` for `RE::MenuOpenCloseEvent` and `RE::InputEvent*` events:
 
-1. **Affection Daily Rollup & Decay**: Calls `AffectionService::OnDayChanged()` to commit yesterday's accumulated daily interactions into permanent affection, apply loneliness/jealousy decay, re-evaluate affection tiers, and decrement estranged divorce countdowns.
-2. **Household Child Forcegreet Roll**: Calls `PlayerChildrenService::RollForcegreetForHousehold()` to roll whether one housed child will greet the player with a gift request, allowance question, or found critter today.
-3. **Autonomous Matchmaking Check**: Calls `MatchmakingService::TryScheduledMatchmaking(currentDay)` to run background NPC-to-NPC pairing if the configured interval has elapsed.
-4. **Secret Paternity Discovery Roll**: Calls `NPCRelationshipManager::CheckPaternitySecretsDailyTick(currentDay)` to roll the daily discovery chance for any active unrevealed paternity secrets when SkyrimNet is active.
-5. **NPC Couple Auto-Marriage**: Calls `NPCRelationshipManager::CheckAutoMarriageForEngagedNPCs(currentDay)` to automatically wed NPC-to-NPC couples who have been engaged for at least 5 in-game days.
-6. **Papyrus Broadcast**: Dispatches the `maras_day_changed` SKSE ModEvent (passing the new game day as `numArg`) so Papyrus services can run any script-side daily tasks.
+- Whenever an input event arrives (throttled to `500 ms` intervals) or a menu closes, `UpdateEventSink` atomically swaps `pollTaskQueued_` and enqueues `PollingService::Update()` onto the SKSE main-thread task queue tagged with the current `SessionEpoch`.
+- If the game transitions across a save load/revert (`kPreLoadGame` bumps `SessionEpoch` and calls `PollingService::Shutdown()`), queued stale-epoch tasks return immediately without touching cleared state.
+- `PollingService::Update()` skips execution when `initialized_` is false, the game is in Main Menu, or `RE::UI::GameIsPaused()` is true.
 
+---
+
+## 3. `2 Hz` Tick Execution & Snapshot Publication
+
+When `500 ms` has elapsed since the previous tick:
+
+1. **Lock-Free Spatial Snapshot Publication**: Collects loaded `ProcessLists` actors + the Player into a pooled `SpatialActorSnapshot` via `SpatialSnapshotStore::Publish()`, computing cached loaded flags (dead, deleted, disabled, child, ghost, in-combat, in-scene, teammate, werewolf, tracked faction) and `FormCache` checks without heap allocations under locks. See [`SpatialWorldIndex`](SpatialWorldIndex.md) for snapshot pool mechanics.
+2. **Engine Sub-Ticks**:
+   - [`ChildrenFleeService::Tick()`](ChildrenFleeService.md) (`1000 ms` throttled while threats are monitored).
+   - [`IntimateThreadService::Tick()`](IntimateThreadService.md) (`1000 ms` throttled while active intimate threads require walk-in checks).
+3. **Teammate Delta Detection (`CheckTeammatesChanged`)**:
+   - Compares current teammates against `previousTeammates_`. When teammates join or leave:
+     - Emits `maras_teammate_change`, `maras_teammate_added`, and `maras_teammate_removed` SKSE mod events.
+     - Invokes [`BuffReconciler::ReconcilePlayerBuffs()`](BuffReconciler.md) so follower Skill Type spouse perks update immediately.
+     - Reconciles factions ([`FactionReconciler`](FactionReconciler.md)) and packages ([`PackageReconciler`](PackageReconciler.md)) for added/removed actors.
+4. **In-Game Calendar & Player Progression Checks**:
+   - `CheckDayChanged()`: When `floor(currentDay)` advances, calls `EngineEventHooks::OnPollingDayChanged(currentDay)` (firing daily affection decay, lineage/paternity/travel daily ticks, matchmaking, partner agency, and banter evaluation) and emits `maras_day_changed`.
+   - `CheckPlayerLevelChanged()`: When the Player levels up, invokes `OnPollingRefreshChildVisuals()` so graduated adult children scale cleanly to the new player level (see [`ChildGrowthAndVisuals`](ChildGrowthAndVisuals.md)).
+5. **Continuous Coordinator & Marriage Ticks**:
+   - Invokes `OnPollingUpdate(currentDay)` (SkyrimNet memory episode flush, fertility polling, expiring child orders, child training completion, adult child travel progress) and `OnPollingAutoMarriageTick(currentDay)` (automatic NPC-to-NPC marriage ceremonies after courtship).
+
+---
+
+## 4. Read-Only Teammate Queries (CQS)
+
+`PollingService::GetCurrentTeammates()` strictly follows Command-Query Separation: it acquires the lock-free `SpatialSnapshotStore::Snapshot()` and `WorldStore::Snapshot()` and returns the current teammate `FormID` set without mutating any state or touching `RE::TESForm::LookupByID`. External consumers such as [`MARAS_GetCurrentTeammates`](../../../SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h) and `HouseholdBuffsJsonBuilder` consume this read-only path directly.

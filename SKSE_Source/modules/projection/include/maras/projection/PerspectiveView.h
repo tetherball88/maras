@@ -301,6 +301,7 @@ namespace MARAS::Projection {
             bool hideSecretFromViewer{ false };
         };
 
+        [[nodiscard]] State::ActorId ResolveMotherPartner(const State::ChildRecord& child) const noexcept;
         [[nodiscard]] ResolvedPaternityContext AnalyzePaternity(const State::ChildRecord& child) const noexcept;
         [[nodiscard]] bool CanViewerKnowTrueBioFatherImpl(
             const State::ChildRecord& child,

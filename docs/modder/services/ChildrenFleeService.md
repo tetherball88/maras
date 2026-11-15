@@ -1,33 +1,44 @@
-# ChildrenFleeService - Feature & Mechanics Guide
+# `ChildrenFleeService` — Architecture & Behavioral Guide
 
-**Implementation**: [ChildrenFleeService.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/src/core/ChildrenFleeService.cpp)
+**Layer**: Engine (`SKSE_Source/modules/engine`)  
+**Sources**:
+- [ChildrenFleeService.h](../../../SKSE_Source/modules/engine/include/maras/engine/ChildrenFleeService.h)
+- [ChildrenFleeService.cpp](../../../SKSE_Source/modules/engine/src/ChildrenFleeService.cpp)
+- [Architecture Overview](../ARCHITECTURE.md)
 
-`ChildrenFleeService` makes children run away from a cell that contains a **threat**. A threat is any danger point grouped by cell. Two sources feed it:
+---
 
-- **Intimate scenes**: `IntimateThreadService` registers a provider that reports the positions of all active scene participants. Children flee automatically while a scene is running in their cell (see [IntimateThreadService](IntimateThreadService.md)).
-- **Manual request**: `MARAS.FleeChildrenFromPlayerCell()` (Papyrus) or `ChildrenFleeService::FleeFromPlayerCell()` (C++, e.g. from the Prisma UI bridge) registers the player's current cell and position as a threat until `MARAS.StopChildrenFleeing()` / `StopFleeing()` is called **or the player leaves that cell** (checked every refresh, so it ends within about 1.5 seconds of a cell change).
+## 1. Purpose & Responsibility
 
-The feature has no SkyrimNet dependency and no user setting.
+`ChildrenFleeService` automatically clears child actors out of cells hosting active threats—most commonly intimate adult scenes registered by [`IntimateThreadService`](IntimateThreadService.md), plus manual cell-clear requests triggered from the Prisma UI dashboard or scripts. While an adult scene or manual threat is active in a cell, loaded awake children are temporarily relocated outside (interiors) or to distant walkable navmesh points (exteriors) and remain tracked until the threat ends.
 
-## 1. Who Flees
+---
 
-A refresh runs on the game thread about every 1.5 seconds while there is anything to monitor, and immediately (queued task) whenever a source requests it:
+## 2. Threat Providers & State Synchronization
 
-1. **Threatened cells**: the cells reported by the sources, read live each refresh.
-2. **Fleeing children**: every loaded, living, 3D-loaded child located in a threatened cell (child race via `IsChild()` **or** a child in the MARAS child registry, which covers fertility-mod-spawned children) who is **not sleeping** (sleeping or waiting for the sleep animation are exempt).
-3. **Origin cell**: each child is registered together with the cell it flees from and the time it started. It stays registered for as long as a threat remains in that cell, even if the flee package carries it out of the cell (through a door or out of the loaded area), so it does not flip between fleeing and not fleeing. It is released when it falls asleep, dies, or no threat remains in its origin cell. A child standing in a different threatened cell flees from that cell with a fresh timer.
-4. **Application**: the set is published to `PackageStartHook`, which returns `TTM_ChildrenFleeIntimateScene` (`0x5DE`, resolved via `FormCache`) for those actors, and `EvaluatePackage` is called on actors whose state changed. On release the actor falls back to its normal stack (including the MARAS sandbox/follow packages if registered).
+`ChildrenFleeService` decouples threat detection from scene-framework storage via a registered provider callback and two explicit mutex-guarded sets:
 
-## 2. Blocked Path
+```mermaid
+flowchart LR
+    ITS["IntimateThreadService\n(ThreatProvider callback)"] --> CFS["ChildrenFleeService::Refresh()"]
+    UI["PrismaUIDataBridge\n(fleeChildrenFromCell action)"] --> CFS
+    PS["PollingService (2 Hz loop)\n-> Tick() every 1000 ms"] --> CFS
+    CFS -->|"Interior"| EXIT["Nearest load door destination\n(cached per cell)"]
+    CFS -->|"Exterior"| NAV["Navmesh triangle center >= minThreatDistance"]
+```
 
-Actors in the scene (or the player) can block a child's way out. A child that is still in its origin cell and within 800 units of a threat 12 seconds after it started fleeing is teleported away:
+- **Threat Provider Integration**: `IntimateThreadService::Initialize()` registers `CollectSceneThreats` via `SetThreatProvider`, decoupling scene storage from flee execution.
+- **Manual Cell Flee**: Dashboard/script requests call `FleeFromPlayerCell()`, queuing a `sourceMutex_`-guarded threat entry at the player's current cell and position. `StopFleeing()` clears `manualThreats_` and queues an immediate refresh.
+- **Child Eligibility (`IsFleeCandidate`)**: Alive (`!IsDead()`), awake (`!IsSleeping()`), and identified as a non-adult child via `WorldStateSnapshot::lineage` (`stage != ChildStage::Adult`), `actor->IsChild()`, `SpatialWorldIndex` child flag, child race flag, or pending child base IDs.
+- **Locking & Threading**:
+  - `sourceMutex_` guards `threatProvider_` and `manualThreats_`.
+  - `fleeMutex_` guards `fleeingChildren_` (paired with an acquire/release atomic fast-path `fleeActive_` for `IsFleeing()`).
+  - `QueueRefresh()` captures `GetSessionEpoch()`, sets `monitoring_`, and dispatches onto the SKSE task queue under `GetPapyrusMutex()` before calling `Refresh()`. No lock is held across SKSE task scheduling or world mutations.
 
-- **Indoors**: through the load door closest to the child, to the other side of that door. The load doors of each interior cell are scanned once and cached until the next session reset.
-- **Outdoors**: to a walkable navmesh spot about 2000 units directly away from the threat (the center of the navmesh triangle at least 1000 units from the threat that is closest to that target), so the child never lands inside geometry.
+---
 
-The child **keeps fleeing** (it stays in the flee set, so it does not walk back through the door) until no threat remains in its origin cell. Its timer restarts after the teleport, so a child that is still blocked is retried every 12 seconds. If an interior has no usable load door, or an exterior cell has no usable navmesh spot, the child is left alone (warning logged).
+## 3. Relocation Rules & Caching
 
-## 3. Lifecycle
-
-- Periodic refreshes are driven directly on the SKSE main game thread via `ChildrenFleeService::Tick(now)` (called every ~1.5 seconds by [PollingService](PollingService.md) while threats or fleeing children are present, and fast-path skipped via an atomic flag when idle), plus immediate `SessionEpoch`-guarded main-thread tasks (`QueueRefresh()`) whenever a threat source changes. No background worker thread is spawned.
-- Session reset (`kPreLoadGame` and co-save revert) silently clears all flee state, manual requests and the door cache. No co-save state is involved, so a manual flee request does not survive a load.
+- **Interior Cells**: On first visit to an interior cell, `FindExitDestination` scans its references once for `ExtraTeleport` load doors, caches door world positions and destination `FormID`s in `exitDoorCache_`, and moves each fleeing child to the linked exit reference of the nearest load door.
+- **Exterior Cells**: `FindWalkableSpot` walks `cell->GetRuntimeData().navMeshes`, skipping deleted triangles (`TriangleFlag::kDeleted`), and selects the nearest non-deleted triangle centroid to `childPos + awayDir * kFleeTeleportDistance` that stays at least `kFleeTeleportDistance * 0.5` away from the threat center, calling `actor->SetPosition(*spot, true)`.
+- **Periodic Monitoring & Reset**: [`PollingService`](PollingService.md) drives `ChildrenFleeService::Tick()` (throttled to `kPollInterval = 1000 ms`) whenever `monitoring_` is true, catching newly loaded children walking into an active threat cell. `Reset()` clears both threat and fleeing sets and clears `exitDoorCache_` on `kPreLoadGame` / revert (`monitoring_` and `fleeActive_` reset to `false`).

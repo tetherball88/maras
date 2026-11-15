@@ -25,7 +25,7 @@ Don't want to read a novel while a dragon is circling Whiterun? Here is how to d
 
 | What You Want to Do | Through Gameplay / Dialogue | Shortcut in the Dashboard (`Alt + B`) |
 | :--- | :--- | :--- |
-| **Open the M.A.R.A.S Menu** | Press **`Alt + B`** during gameplay *(pauses the game)* | Rebind hotkey in **Settings $\rightarrow$ General** |
+| **Open the M.A.R.A.S Menu** | Press **`Alt + B`** during gameplay *(SkyUI MCM is not registered on new games; legacy saves only keep an Open Dashboard button)* | Rebind hotkey in **Settings $\rightarrow$ General** |
 | **Start Romancing Any NPC** | Say **`(M) Ever think we could be something more?`** *(or flirt in SkyrimNet chat)* | **Matchmaking $\rightarrow$ Manual Match** |
 | **Raise a Partner's Affection** | Talk daily, give **Gifts**, sleep in the same house, bring them as a **Follower**, or be intimate | Click NPC $\rightarrow$ slide their **Affection** bar |
 | **Date, Hook Up, or Propose** | Say **`(M) May I have a word with you?`** *(or ask them out / propose in SkyrimNet chat)* | **Matchmaking $\rightarrow$ Manual Match** |
@@ -39,7 +39,7 @@ Don't want to read a novel while a dragon is circling Whiterun? Here is how to d
 | **Adopt Unlimited Kids** | Adopt urchins/orphans in dialogue *(vanilla limit removed!)* | **Matchmaking $\rightarrow$ Child Adoption** *(for you or NPC couples!)* |
 | **Pair Up Two NPCs (Play Cupid)** | Let background Matchmaking run automatically every few days | **Matchmaking $\rightarrow$ Manual Match** or **LLM Matchmaking** |
 | **Find a Lost Spouse or Kid** | Check quest markers or visit their assigned home | Click NPC $\rightarrow$ **Teleport Player To** / **Teleport NPC To Player** |
-| **Send Kids Away Before a Scene** | **Talk to your child** and pick the *run away* dialogue option, or let it happen **automatically** when an OStim/SexLab scene starts in a cell with children | Click the **baby button** in the top bar (next to the `X`) |
+| **Send Kids Away Before a Scene** | **Talk to your child** and pick the *run away* dialogue option, or let it happen **automatically** when an OStim/SexLab scene starts in a cell with children | Click the **`Send Kids` button** (`👶`) in the top-left header toolbar |
 
 ---
 
@@ -195,7 +195,7 @@ Whether *you* initiate a divorce (`(M) We need to talk about... us. (Breakup)`),
 ### ⚰️ Death, Mourning & The "Murderer Gets Nothing" Rule
 If a partner tracked by M.A.R.A.S dies:
 - **Fiancé(e), Ex-Partner, or Jilted**: A courier brings you a **Mourning Letter**.
-- **Married Spouse**: You receive a **Mourning Letter** plus an **Inheritance** scaled to their **Social Class**!
+- **Married Spouse**: You receive a **Mourning Letter** plus an **Inheritance** scaled to their **Social Class**! Active buffs and hierarchy slots from a deceased spouse automatically turn off, while their past relationship stays archived *(with any undiscovered secret affairs or secret paternity still hidden in **Intrigue Mode** unless **Secrets** is toggled on)*.
 - 💀 **Unless *You* Killed Them**: If you were the one who struck the fatal blow on your spouse or fiancé(e), M.A.R.A.S gives you **zero gold and zero mourning letter**. Just cold, judging silence. *(You know what you did.)*
 
 ---
@@ -211,7 +211,7 @@ Every few in-game days, M.A.R.A.S scans single and coupled NPCs across Skyrim an
 - **Two Matchmaking Brains (`Settings -> Matchmaking`)**:
   - 🤖 **SkyrimNet AI Matchmaker (LLM Mode)**: An AI Game Master reads NPC personalities, backgrounds, and relationship trees to propose lore-friendly pairs, verifies that the match makes sense, and **writes first-person memories for both NPCs** so they actually remember how they got together when you talk to them!
   - 🎲 **Weighted Dice-Roll Mode**: Fast, customizable background rolls that work **with or without SkyrimNet** *(and if SkyrimNet is installed, you can still use AI verification and memory generation on Dice-Roll matches!)*.
-- **Your Ground Rules**: Your own active spouses, fiancés, and dating partners are **automatically protected** from generic world matchmaking (their faithfulness is governed solely by your **Player-Partner Agency & Infidelity** settings!). In **Dashboard (`Alt + B`) $\rightarrow$ Settings $\rightarrow$ Matchmaking**, you can also pick from **7 Sexual Orientation rules** and set per-NPC cooldown days.
+- **Your Ground Rules**: Your own active spouses, fiancés, and dating partners are **automatically protected** from generic world matchmaking (their faithfulness is governed solely by your **Settings $\rightarrow$ Partner Agency** configuration!). In **Dashboard (`Alt + B`) $\rightarrow$ Settings $\rightarrow$ Matchmaking**, you can also pick from **7 Sexual Orientation rules** and set per-NPC cooldown days.
 
 ### 🎯 2. Playing Cupid Yourself (Manual & AI Matchmaking in the Dashboard)
 Want to pair up two specific followers, marry off your ex, or break up a couple in Whiterun? Press **`Alt + B`** and open the **Matchmaking** tab:
@@ -255,7 +255,7 @@ Whether you want to adopt every orphan in Skyrim or raise a biological family, M
   - Every child can have their own dog and their own woodland critter—and you can **Dismiss** or **Ban** pets/critters per-child right from their Dashboard profile.
 - 🏃 **Kids Run Away From Intimate Scenes**:
   - **Automatic**: whenever an **OStim or SexLab** scene is running in a cell with children (even an NPC-to-NPC scene), every awake child in that cell runs away. They are released as soon as the scene ends. Sleeping children are left alone.
-  - **Manual**: click the **baby button** at the top of the Dashboard (next to the `X`, available on every page) to make all children in your current cell run away right now. Hover it for a reminder. It is greyed out if you have no children.
+  - **Manual**: click the **`Send Kids` button** (`👶`) in the top-left header toolbar of the Dashboard (next to `Reload`, available on every page) to make all children in your current cell run away right now. Hover it for a reminder. It is greyed out if you have no children.
   - **Through dialogue**: your own children also have this as a **dialogue option**. Talk to one of your children and ask them to run away, and every child in the cell runs off, exactly like pressing the Dashboard button (no menu needed, handy when the game is not paused). It resets the same way when you change cell.
   - **It resets when you change cell**: a manual flee ends as soon as you leave the cell you pressed it in, and children run back to their normal routine. Press the button again in the new cell if you want them to flee there too.
   - Children flee through the nearest door. If a child gets stuck next to you for about 12 seconds (e.g. blocked by the scene), M.A.R.A.S moves them out of the way and they keep fleeing.

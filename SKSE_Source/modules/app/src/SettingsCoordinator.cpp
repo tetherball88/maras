@@ -499,8 +499,6 @@ namespace MARAS::App {
             ws.settings.Reset(reverted);
         });
 
-        GlobalVarReconciler::GetSingleton().ResetSessionGlobalsToDefaults();
-        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         Engine::ApplyLogLevel(reverted.logLevel);
         MARAS_LOG_INFO("[SettingsCoordinator] Reverted runtime game settings to INI baseline (logLevel={})",
                        reverted.logLevel);

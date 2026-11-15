@@ -221,6 +221,7 @@ namespace MARAS::Serialization {
     }
 
     void RevertCallback(SKSE::SerializationInterface*) {
+        ResetPluginEventSinks();
         BumpSessionEpoch("Serialization::RevertCallback");
         ResetPluginEventSinks();
         DeferredActorResolver::GetSingleton().Revert();

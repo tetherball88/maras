@@ -306,9 +306,34 @@ namespace MARAS::Projection {
                     // OR was discoveredByPartner, mother/partner/public can know she is pregnant.
                     return true;
                 }
-                return sec.CanObserverKnowPregnancy(child.stage, child.bioMother, child.bioFather, viewer_);
+                return sec.CanObserverKnowPregnancy(
+                    child.stage,
+                    child.bioMother,
+                    child.bioFather,
+                    viewer_,
+                    ResolveMotherPartner(child));
         }
         return false;
+    }
+
+    State::ActorId PerspectiveView::ResolveMotherPartner(const State::ChildRecord& child) const noexcept {
+        State::ActorId motherPartner = child.presumedFather;
+        if (motherPartner.IsNull()) {
+            motherPartner = child.guardians.OtherGuardian(child.bioMother);
+        }
+        if (motherPartner.IsNull() && !child.bioMother.IsNull()) {
+            motherPartner = world_->relationships->GetPrimaryPartner(child.bioMother);
+        }
+
+        if (!motherPartner.IsNull() &&
+            !child.bioMother.IsNull() &&
+            child.presumedFather.IsNull() &&
+            !child.paternitySecret.isSecretForPartner &&
+            !child.guardians.HasGuardian(motherPartner) &&
+            State::IsBreakupStatus(world_->relationships->GetStatus(child.bioMother, motherPartner))) {
+            motherPartner = State::ActorId{};
+        }
+        return motherPartner;
     }
 
     bool PerspectiveView::CanViewerKnowTrueBioFatherImpl(
@@ -346,23 +371,7 @@ namespace MARAS::Projection {
         const State::ChildRecord& child) const noexcept {
         ResolvedPaternityContext ctx{};
         const auto& sec = child.paternitySecret;
-
-        State::ActorId motherPartner = child.presumedFather;
-        if (motherPartner.IsNull()) {
-            motherPartner = child.guardians.OtherGuardian(child.bioMother);
-        }
-        if (motherPartner.IsNull() && !child.bioMother.IsNull()) {
-            motherPartner = world_->relationships->GetPrimaryPartner(child.bioMother);
-        }
-
-        if (!motherPartner.IsNull() &&
-            !child.bioMother.IsNull() &&
-            child.presumedFather.IsNull() &&
-            !sec.isSecretForPartner &&
-            !child.guardians.HasGuardian(motherPartner) &&
-            State::IsBreakupStatus(world_->relationships->GetStatus(child.bioMother, motherPartner))) {
-            motherPartner = State::ActorId{};
-        }
+        const State::ActorId motherPartner = ResolveMotherPartner(child);
 
         ctx.cleanMotherPartner = motherPartner;
         ctx.effectivePresumedFather = !child.presumedFather.IsNull()
@@ -479,7 +488,7 @@ namespace MARAS::Projection {
             out.biologicalParents.push_back(out.perceivedBioFather);
         }
 
-        if (!out.biologicalParents.empty()) {
+        if (!child.isAdopted && !out.biologicalParents.empty()) {
             for (const State::ActorId guard : child.guardians.AsArray()) {
                 if (guard.IsNull()) {
                     continue;
@@ -640,13 +649,9 @@ namespace MARAS::Projection {
                                                    : other.perceivedBioFather;
 
             const bool sameBioMother =
-                !subject.isAdopted &&
-                !other.isAdopted &&
                 IsValidBiologicalParentId(subMother) &&
                 subMother == other.bioMother;
             const bool sameBioFather =
-                !subject.isAdopted &&
-                !other.isAdopted &&
                 IsValidBiologicalParentId(subFather) &&
                 IsValidBiologicalParentId(otherFather) &&
                 subFather == otherFather;

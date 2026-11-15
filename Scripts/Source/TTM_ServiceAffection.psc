@@ -335,17 +335,18 @@ Function ApplyChildMilestoneForParents(int childID, string milestone = "child") 
     Actor bioMother = MARAS.GetBioMother(childID)
     Actor bioFather = MARAS.GetBioFather(childID)
     Actor presumedFather = MARAS.GetMotherPartner(childID)
+    bool isSecretForBio = MARAS.IsSecretForBioFather(childID)
 
     if (player == bioMother)
         if (presumedFather)
             ApplyChildMilestoneAffection(presumedFather, milestone)
-        elseif (bioFather)
+        elseif (bioFather && !isSecretForBio)
             ApplyChildMilestoneAffection(bioFather, milestone)
         endif
     else
         if (presumedFather == player)
             ApplyChildMilestoneAffection(bioMother, milestone)
-        elseif (presumedFather == none && bioFather == player)
+        elseif (presumedFather == none && bioFather == player && !isSecretForBio)
             ApplyChildMilestoneAffection(bioMother, milestone)
         endif
     endif

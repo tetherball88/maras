@@ -1,10 +1,10 @@
 # M.A.R.A.S — Cross-Layer Architecture & Project Rules
 
 Project-wide invariants across all layers of **M.A.R.A.S**. Layer-specific rules live in:
-1. **SKSE C++ Plugin**: [SKSE_Source/AGENTS.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/AGENTS.md) ([modules/](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/modules/AGENTS.md), [tests/](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/tests/AGENTS.md))
-2. **Prisma UI Dashboard**: [prisma-src/AGENTS.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/prisma-src/AGENTS.md)
-3. **Papyrus Scripts**: [Scripts/Source/AGENTS.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/AGENTS.md)
-4. **SkyrimNet Bundle**: [SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md)
+1. **SKSE C++ Plugin**: [SKSE_Source/AGENTS.md](SKSE_Source/AGENTS.md) ([modules/](SKSE_Source/modules/AGENTS.md), [tests/](SKSE_Source/tests/AGENTS.md))
+2. **Prisma UI Dashboard**: [prisma-src/AGENTS.md](prisma-src/AGENTS.md)
+3. **Papyrus Scripts**: [Scripts/Source/AGENTS.md](Scripts/Source/AGENTS.md)
+4. **SkyrimNet Bundle**: [SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md](SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md)
 
 Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_INTEGRATION.md`, `HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md`, `API_AND_PRISMA_BRIDGE_REFERENCE.md`, `RELATIONSHIP_DYNAMICS_GUIDE.md`, `FERTILITY_MODE_RELOADED_INTEGRATION.md`). Step-by-step runbooks live in `.agents/skills/` (`maras-build-and-test`, `maras-cosave-and-tests`, `maras-add-setting`, `maras-doc-sync`).
 
@@ -22,19 +22,19 @@ Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_I
 ## 1. Core Cross-Layer Domain Rules
 
 - **Single Source of Truth & Strict CQS**:
-  - Domain state (relationships, affection, hierarchy, houses, children, cooldowns, settings) is owned by C++ and persisted in the `'MARS'` v7 SKSE co-save. `TT_MARAS.esp` factions (`0x7`, `0x111`, `0x119`, `0x6C`, `0xC23`, etc.) are **engine mirrors** for CK conditions/packages—never treat faction rank alone as authoritative when C++ APIs exist.
-  - **Command-Query Separation (CQS)**: Query snapshots, UI bridge payloads (`SendOverviewData`, `SendNPCList`, `SendNPCDetail`), JSON builders (`Build*Json`, `DumpJson`), and SkyrimNet decorators (`ttm_*`) **must** be strictly read-only—never mutate state, sync custody, lazy-register actors, or record memories while reading.
+  - Domain state (relationships, affection, hierarchy, houses, children, cooldowns, settings) is owned by C++ (`WorldStore` in `modules/state/`) and persisted in the `'MARS'` v7 SKSE co-save (12 chunks, plus `'DCS1'` deceased secrecy extension inside `'DCSD'`). `TT_MARAS.esp` factions (`0x7`, `0x111`, `0x119`, `0x6C`, `0xC23`, etc.) are **engine mirrors** for CK conditions/packages—never treat faction rank alone as authoritative when C++ APIs exist.
+  - **Command-Query Separation (CQS)**: Query snapshots, UI bridge payloads (`SendOverviewData`, `SendNPCList`, `SendNPCDetail`), JSON builders (`Build*Json`, `DumpJson`), Papyrus queries (`GetTrackedNpcHomeMarker`, `GetChildHomeMarker`), and SkyrimNet decorators (`ttm_*`) **must** be strictly read-only—never mutate state, sync custody, lazy-register actors, or record memories while reading.
 - **Pair Symmetry vs. Directional Asymmetry**:
   - Romantic statuses (`Dating`, `Lover`, `Engaged`, `Married`, `ExDating`, `ExLover`, `Jilted`, `Divorced`) live on canonical `PairKey(min(A,B), max(A,B))`.
   - Cheating/infidelity flags, open-relationship consent, and paternity secrets (`trueFatherID` vs. `deceivedPartnerID`) are **directional/role-specific**—never assume symmetry across a pair.
 - **Guardian, Parental & Adoption Semantics**:
   - **Strict Slot Neutrality**: `guardianA/B`, `guardianAID/BID`, `parentA/B`, `parentAID/BID` are interchangeable neutral slots—never infer sex or maternal/paternal roles from slot position (inspect `bioMotherID`/`bioFatherID` or actor sex).
   - **Guardians vs. Bio Parents vs. Adoption**: Guardians = custodial caretakers; Bio Parents = genetic lineage (never conflate). `isAdopted` marks an explicit household adoption process—never infer `isAdopted` from guardian presence or count.
-- **Secret Masking Semantics**:
+- **Secret Masking Semantics (`PerspectiveView` in `SKSE_Source/modules/projection/`)**:
   - **SkyrimNet Self-Perspective (`render_mode != "dialogue_target"`)**: Never leak undiscovered secrets (`isSecretForPartner`, `isPregnancySecretForPartner`, `isSecretForBioFather`, secret `hasBeastblood`, undiscovered `CheatingRecord`s) when `!canActorKnow` (including to an unaware Player). Derived lineage fields (`bio_father`, `biological_parents`, `step_parents`, `siblings`, `is_actor_bio_parent`, `is_actor_step_parent`) must reflect what that actor *believes*.
   - **SkyrimNet Target Bio (`render_mode == "dialogue_target"`)**: Public knowledge only for *another* speaker's prompt. Never expose undiscovered affairs (`is_secret_affair`), secret paternity (`has_undiscovered_paternity_secret`, `is_paternity_secret`, `is_other_parent_secret`), secret `siblings` (use `siblings_public`), or `has_beastblood`—even when the target personally knows.
-  - **Prisma UI & Dumps — Intrigue Mode (`!Settings::revealSecretsInUI`)**: Uniform world-wide masking across Dashboard and JSON dumps—no undiscovered affair, secret paternity, secret werewolf inheritance, or unannounced NPC pregnancy is shown until discovered in-game or `revealSecretsInUI` is enabled. **Never add `0x14` Player exemptions to UI masking.**
-- **Cross-Layer Settings Sync**: Adding/renaming/removing any setting requires updating `DomainTypes.h` (`SettingsData`) + `CoSaveCodec.cpp` (`'CNFG'`) + `test_cosave_migrations.cpp`, `Settings.h/.cpp`, `PrismaUIDataBridge.cpp`, `prisma-src`, and `PapyrusInterface.cpp` (`MARAS.psc`) together (activate `maras-add-setting` skill).
+  - **Prisma UI & Dumps — Intrigue Mode (`!SettingsData::revealSecretsInUI`)**: Uniform world-wide masking (`PerspectiveView::ForDashboard`) across Dashboard and JSON dumps—no undiscovered affair, secret paternity, secret werewolf inheritance, or unannounced NPC pregnancy is shown until discovered in-game or `revealSecretsInUI` is enabled. **Never add `0x14` Player exemptions to UI masking.**
+- **Cross-Layer Settings Sync**: Adding/renaming/removing any setting requires updating `WorldTables.h` (`SettingsData`) + `CoSaveCodec.cpp` (`'CNFG'`) + `test_cosave_migrations.cpp`, `SettingsCoordinator.h/.cpp` (`modules/app/`), `PrismaUIDataBridge.cpp` (`modules/bridge_ui/`), `prisma-src`, and `PapyrusSettings.cpp` / `PapyrusInterface.cpp` (`MARAS.psc` in `modules/bridge_papyrus/`) together (activate `maras-add-setting` skill).
 - **Standalone Prisma UI Modals**: All confirmations, retry/cancel prompts, and interactive dialogs **must** use `PrismaModalManager` $\leftrightarrow$ `useModalStore` / `<PrismaModalHost />` (never native `RE::MessageBoxMenu`), mounted independently of `<DashboardLayout>`, pausing the game with `Focus(view, /*pauseGame=*/true, /*disableFocusMenu=*/false)`, and resolvable only via modal control buttons.
 
 ---

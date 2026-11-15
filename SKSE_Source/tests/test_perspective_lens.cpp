@@ -1081,3 +1081,102 @@ MARAS_TEST(PerspectiveLens, P2_2_RefinementsAndUnloadedWerewolfProvider) {
     MARAS_CHECK_EQ(motherAffairs[0].affairStatus, AffairStatus::EndedConfronted);
     MARAS_CHECK(!motherAffairs[0].isSecret);
 }
+
+MARAS_TEST(PerspectiveLens, PartnerBioFatherSecretPregnancyHiddenFromPartner) {
+    const ActorId wife{ 0x00021010u };
+    const ActorId husband{ 0x00021020u };
+    const ChildId unbornId{ 0xFF801001u };
+
+    WorldState ws{};
+    MARAS::Tests::MockFormIdResolver meta{};
+    (void)ws.PromoteToMarried(wife, husband, 1.0f, wife, meta);
+
+    ChildRecord unborn{};
+    unborn.childId = unbornId;
+    unborn.name = "SecretFromHusbandFather";
+    unborn.stage = ChildStage::Unborn;
+    unborn.isBiologicalChild = true;
+    unborn.isAdopted = false;
+    unborn.bioMother = wife;
+    unborn.bioFather = husband;
+    unborn.presumedFather = husband;
+    unborn.paternitySecret.isPregnancySecretForPartner = true;
+    ws.lineage.Write().UpsertChild(unborn);
+
+    auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+    auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
+
+    const auto vWife = PerspectiveView::ForActor(worldSnap, spatialSnap, wife);
+    const auto vHusband = PerspectiveView::ForActor(worldSnap, spatialSnap, husband);
+    MARAS_CHECK(vWife.IsChildVisible(unbornId));
+    MARAS_CHECK(!vHusband.IsChildVisible(unbornId));
+    MARAS_CHECK(!vHusband.CanViewerKnowPregnancy(unbornId));
+    MARAS_CHECK(vHusband.GetExpectingPregnanciesFor(husband).empty());
+
+    // Once announced/discovered by partner, husband sees both child and expecting pregnancy
+    ws.lineage.Write().FindChildMutable(unbornId)->paternitySecret.discoveredByPartner = true;
+    worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+    const auto vHusbandAfter = PerspectiveView::ForActor(worldSnap, spatialSnap, husband);
+    MARAS_CHECK(vHusbandAfter.IsChildVisible(unbornId));
+    MARAS_CHECK(vHusbandAfter.CanViewerKnowPregnancy(unbornId));
+    MARAS_REQUIRE_EQ(vHusbandAfter.GetExpectingPregnanciesFor(husband).size(), std::size_t{ 1 });
+}
+
+MARAS_TEST(PerspectiveLens, AdoptedOrphanStepParentsAndBioSiblingsSemantics) {
+    const ActorId bioMom{ 0x00022010u };
+    const ActorId bioDad{ 0x00022020u };
+    const ActorId adoptA{ 0x00022030u };
+    const ActorId adoptB{ 0x00022040u };
+    const ChildId adoptedOrphanA{ 0xFF702001u };
+    const ChildId adoptedOrphanB{ 0xFF702002u };
+    const ChildId adoptedNonBio{ 0xFF702003u };
+
+    WorldState ws{};
+
+    ChildRecord cA{};
+    cA.childId = adoptedOrphanA;
+    cA.name = "OrphanA";
+    cA.stage = ChildStage::Child;
+    cA.isAdopted = true;
+    cA.isBiologicalChild = true;
+    cA.bioMother = bioMom;
+    cA.bioFather = bioDad;
+    (void)cA.guardians.Assign(adoptA, adoptB);
+    ws.lineage.Write().UpsertChild(cA);
+
+    ChildRecord cB{};
+    cB.childId = adoptedOrphanB;
+    cB.name = "OrphanB";
+    cB.stage = ChildStage::Child;
+    cB.isAdopted = true;
+    cB.isBiologicalChild = true;
+    cB.bioMother = bioMom;
+    cB.bioFather = bioDad;
+    ws.lineage.Write().UpsertChild(cB);
+
+    ChildRecord cNonBio{};
+    cNonBio.childId = adoptedNonBio;
+    cNonBio.name = "AdoptedNonBio";
+    cNonBio.stage = ChildStage::Child;
+    cNonBio.isAdopted = true;
+    cNonBio.isBiologicalChild = false;
+    (void)cNonBio.guardians.Assign(adoptA, adoptB);
+    ws.lineage.Write().UpsertChild(cNonBio);
+
+    const auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+    const auto view = PerspectiveView::ForDashboard(worldSnap, std::make_shared<SpatialActorSnapshot>(), false);
+
+    const auto pA = view.GetPerceivedChild(adoptedOrphanA);
+    MARAS_REQUIRE(pA.has_value());
+    MARAS_CHECK(pA->stepParents.empty());
+    MARAS_CHECK(!pA->IsActorPerceivedStepParent(adoptA));
+    MARAS_CHECK(!pA->IsActorPerceivedStepParent(adoptB));
+
+    const auto sibs = view.GetPerceivedSiblingsOf(adoptedOrphanA);
+    const auto* fullSib = FindSibling(sibs, adoptedOrphanB);
+    MARAS_REQUIRE(fullSib != nullptr);
+    MARAS_CHECK_EQ(fullSib->relation, SiblingRelationKind::Full);
+    const auto* adoptSib = FindSibling(sibs, adoptedNonBio);
+    MARAS_REQUIRE(adoptSib != nullptr);
+    MARAS_CHECK_EQ(adoptSib->relation, SiblingRelationKind::AdoptiveOrStep);
+}

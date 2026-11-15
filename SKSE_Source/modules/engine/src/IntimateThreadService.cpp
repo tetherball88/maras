@@ -536,15 +536,21 @@ namespace MARAS {
     }
 
     void IntimateThreadService::CollectSceneThreats(ChildrenFleeService::ThreatMap& threats) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (const auto& [key, thread] : activeThreads_) {
-            (void)key;
-            for (RE::FormID id : thread.actorIDs) {
-                auto* participant = RE::TESForm::LookupByID<RE::Actor>(id);
-                auto* cell = participant && participant->Is3DLoaded() ? participant->GetParentCell() : nullptr;
-                if (cell) {
-                    threats[cell->GetFormID()].push_back(participant->GetPosition());
-                }
+        std::vector<RE::FormID> actorIDs;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (const auto& [key, thread] : activeThreads_) {
+                (void)key;
+                actorIDs.insert(actorIDs.end(), thread.actorIDs.begin(), thread.actorIDs.end());
+            }
+        }
+        for (RE::FormID id : actorIDs) {
+            auto* participant = RE::TESForm::LookupByID<RE::Actor>(id);
+            auto* cell = (participant && !participant->IsDeleted() && participant->Is3DLoaded())
+                             ? participant->GetParentCell()
+                             : nullptr;
+            if (cell) {
+                threats[cell->GetFormID()].push_back(participant->GetPosition());
             }
         }
     }

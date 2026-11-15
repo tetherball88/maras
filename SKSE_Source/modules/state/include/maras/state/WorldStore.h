@@ -40,6 +40,9 @@ namespace MARAS::State {
         template <std::invocable<WorldState&> Fn>
         decltype(auto) Modify(Fn&& fn) {
             using ReturnT = std::invoke_result_t<Fn, WorldState&>;
+            static_assert(
+                !std::is_reference_v<ReturnT> && !std::is_pointer_v<ReturnT>,
+                "WorldStore::Modify callbacks must not return references or pointers to live internal state.");
             std::lock_guard<std::recursive_mutex> lock(writeMutex_);
             if constexpr (std::is_void_v<ReturnT>) {
                 std::forward<Fn>(fn)(liveState_);
@@ -55,6 +58,10 @@ namespace MARAS::State {
         // Serialized read when callers require consistency against an ongoing write transaction.
         template <std::invocable<const WorldState&> Fn>
         decltype(auto) ReadLive(Fn&& fn) const {
+            using ReturnT = std::invoke_result_t<Fn, const WorldState&>;
+            static_assert(
+                !std::is_reference_v<ReturnT> && !std::is_pointer_v<ReturnT>,
+                "WorldStore::ReadLive callbacks must not return references or pointers to live internal state.");
             std::lock_guard<std::recursive_mutex> lock(writeMutex_);
             return std::forward<Fn>(fn)(static_cast<const WorldState&>(liveState_));
         }
