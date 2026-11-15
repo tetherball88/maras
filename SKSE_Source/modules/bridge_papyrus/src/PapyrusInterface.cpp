@@ -1258,6 +1258,7 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<SetDisablePolygamyQuest>(vm, "SetDisablePolygamyQuest");
         RegisterSynced<GetMinRelRankForDial>(vm, "GetMinRelRankForDial");
         RegisterSynced<SetMinRelRankForDial>(vm, "SetMinRelRankForDial");
+        RegisterSynced<DumpStoredData>(vm, "DumpStoredData");
 
         // Player children / household adoption functions
         RegisterSynced<AssignChildToHouse>(vm, "AssignChildToHouse");

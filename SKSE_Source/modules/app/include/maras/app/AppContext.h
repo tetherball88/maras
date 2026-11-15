@@ -46,6 +46,7 @@ namespace MARAS::App {
         virtual void OnChildUpdated(const State::ChildRecord& entry) = 0;
         virtual void OnChildRemoved(std::uint32_t childID) = 0;
         virtual void OnChildPromoted(std::uint32_t oldID, std::uint32_t newID) = 0;
+        virtual std::string DumpStoredData(std::string_view tag = {}) = 0;
     };
 
     class IModalGateway {

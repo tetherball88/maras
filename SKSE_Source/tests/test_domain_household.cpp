@@ -211,4 +211,238 @@ namespace MARAS::Tests {
         MARAS_CHECK(report.activeFollowerCount >= 1);
     }
 
+    MARAS_TEST(DomainHousehold, TravelSelectNextDestinationAvoidsRepeatAndHandlesEmptyPools) {
+        struct FixedZeroRng final : public IRng {
+            float NextFloat(float minVal = 0.0f, float = 1.0f) override { return minVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t) override { return minVal; }
+        } rng{};
+
+        // Empty both -> std::nullopt
+        MARAS_CHECK(!SelectNextTravelDestination({}, {}, RefId{}, rng).has_value());
+
+        const RefId innA{ 0x00037001u };
+        const RefId innB{ 0x00037002u };
+        const TravelDestinationCandidate dInnA{ innA, LocationId{ 0x00037101u }, CellId{ 0x00037201u }, "Bannered Mare", false };
+        const TravelDestinationCandidate dInnB{ innB, LocationId{ 0x00037102u }, CellId{ 0x00037202u }, "Sleeping Giant", false };
+
+        // Empty family pool falls back cleanly to inn pool and filters out previousMarkerId
+        const auto picked = SelectNextTravelDestination({}, { dInnA, dInnB }, innA, rng);
+        MARAS_REQUIRE(picked.has_value());
+        MARAS_CHECK_EQ(picked->targetMarkerId, innB);
+
+        // Sole destination still selected even when it equals previousMarkerId
+        const auto solePicked = SelectNextTravelDestination({}, { dInnA }, innA, rng);
+        MARAS_REQUIRE(solePicked.has_value());
+        MARAS_CHECK_EQ(solePicked->targetMarkerId, innA);
+
+        // Empty inn pool falls back to family pool (even if rng roll > kFamilyVisitChancePercent)
+        struct HighFloatRng final : public IRng {
+            float NextFloat(float, float maxVal = 1.0f) override { return maxVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t) override { return minVal; }
+        } highRng{};
+        const TravelDestinationCandidate dFam{ RefId{ 0x00037003u }, LocationId{}, CellId{}, "Ysolda", true };
+        const auto famFallback = SelectNextTravelDestination({ dFam }, {}, RefId{}, highRng);
+        MARAS_REQUIRE(famFallback.has_value());
+        MARAS_CHECK(famFallback->isFamilyVisit);
+    }
+
+    MARAS_TEST(DomainHousehold, TravelEvaluateTickUnregistersInvalidAdultsAndHandlesArrivalTimeout) {
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+
+        const ChildId invalidNonAdult{ 0x00038001u };
+        const ChildId invalidSynthetic{ 0xFF700001u };
+        const ChildId invalidHoused{ 0x00038002u };
+        const ChildId invalidMarriedPlayer{ 0x00038003u };
+        const ChildId validLocArrival{ 0x00038004u };
+        const ChildId validPosArrival{ 0x00038005u };
+        const ChildId validTimeout{ 0x00038006u };
+
+        auto addChild = [&](ChildId cid, ChildStage st) {
+            ChildRecord r{};
+            r.childId = cid;
+            r.stage = st;
+            ws.lineage.Write().UpsertChild(std::move(r));
+        };
+        addChild(invalidNonAdult, ChildStage::Child);
+        addChild(invalidSynthetic, ChildStage::Adult);
+        addChild(invalidHoused, ChildStage::Adult);
+        addChild(invalidMarriedPlayer, ChildStage::Adult);
+        addChild(validLocArrival, ChildStage::Adult);
+        addChild(validPosArrival, ChildStage::Adult);
+        addChild(validTimeout, ChildStage::Adult);
+
+        const HouseId house{ 0x00038100u };
+        (void)ApplyRegisterHouse(ws, house, RefId{ 0x00038101u }, true);
+        (void)ApplyRegisterTenant(ws, invalidHoused.raw(), house, true, true);
+        (void)ws.TransitionRelationship(ActorId{ invalidMarriedPlayer.raw() }, ActorId::Player(), RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+
+        for (ChildId cid : { invalidNonAdult, invalidSynthetic, invalidHoused, invalidMarriedPlayer }) {
+            ws.household.Write().UpsertAdultChildTravel(cid, AdultChildTravelRecord{
+                .targetMarkerId = RefId{ 0x00038201u },
+                .assignedGameDay = 1.0f,
+                .arrivedGameDay = -1.0f,
+                .stayDurationDays = 3.0f
+            });
+        }
+
+        // validLocArrival has assignedGameDay=0 (timeout elapsed), but arrives NOW -> must NOT rotate on arrival tick
+        ws.household.Write().UpsertAdultChildTravel(validLocArrival, AdultChildTravelRecord{
+            .targetMarkerId = RefId{ 0x00038202u },
+            .targetLocationId = LocationId{ 0x00038302u },
+            .assignedGameDay = 0.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+        // validPosArrival arrives via distance <= 300 units in same cell
+        const RefId markerPos{ 0x00038203u };
+        ws.household.Write().UpsertAdultChildTravel(validPosArrival, AdultChildTravelRecord{
+            .targetMarkerId = markerPos,
+            .assignedGameDay = 15.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+        // validTimeout has never arrived for >= 10 days -> needs rotation
+        ws.household.Write().UpsertAdultChildTravel(validTimeout, AdultChildTravelRecord{
+            .targetMarkerId = RefId{ 0x00038204u },
+            .assignedGameDay = 5.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+
+        SpatialActorSnapshot spatial{};
+        spatial.Clear();
+        spatial.SetMetadata(20.0f, 1u);
+        spatial.AddSample(LoadedActorSample{
+            .refId = RefId{ validLocArrival.raw() },
+            .currentLocationId = LocationId{ 0x00038302u }
+        });
+        spatial.AddSample(LoadedActorSample{
+            .refId = RefId{ validPosArrival.raw() },
+            .parentCellId = CellId{ 0x00038400u },
+            .x = 100.0f, .y = 100.0f, .z = 0.0f
+        });
+        spatial.AddSample(LoadedActorSample{
+            .refId = markerPos,
+            .parentCellId = CellId{ 0x00038400u },
+            .x = 250.0f, .y = 100.0f, .z = 0.0f  // dist = 150 <= 300
+        });
+        spatial.FinalizeSortAndDedupe();
+
+        const auto tick1 = EvaluateTravelTick(ws, 20.0f, spatial);
+        MARAS_CHECK_EQ(tick1.unregisteredInvalidAdults.size(), std::size_t{ 4 });
+        MARAS_CHECK_EQ(tick1.arrivedChildren.size(), std::size_t{ 2 });
+        MARAS_REQUIRE_EQ(tick1.childrenNeedingRotation.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(tick1.childrenNeedingRotation[0], validTimeout);
+
+        // Next tick after stayDurationDays (3.0) elapses for validLocArrival & validPosArrival -> both rotate
+        const auto tick2 = EvaluateTravelTick(ws, 24.0f, spatial);
+        MARAS_CHECK_EQ(tick2.childrenNeedingRotation.size(), std::size_t{ 3 });
+    }
+
+    MARAS_TEST(DomainHousehold, DeceasedQueriesMaskSecretAffairsAndUndiscoveredPaternity) {
+        WorldState ws{};
+        const ActorId camilla{ 0x00039001u };
+        const BaseId camillaBase{ 0x00039101u };
+        const ActorId sven{ 0x00039002u };
+        const BaseId svenBase{ 0x00039102u };
+        const ActorId faendal{ 0x00039003u };
+        const BaseId faendalBase{ 0x00039103u };
+
+        DeceasedActorRecord sp{};
+        sp.refId = camilla.AsRefId();
+        sp.baseId = camillaBase;
+        sp.deathTimestamp = 10.0f;
+        sp.partnersAtDeath.push_back(DeceasedPartnerEntry{
+            .partnerBaseId = svenBase,
+            .partnerRefId = sven.AsRefId(),
+            .partnerName = "Sven",
+            .statusAtDeath = RelationshipStatus::Married
+        });
+        // Undiscovered secret affair with Faendal: publicStatusAtDeath = Unknown
+        sp.partnersAtDeath.push_back(DeceasedPartnerEntry{
+            .partnerBaseId = faendalBase,
+            .partnerRefId = faendal.AsRefId(),
+            .partnerName = "Faendal",
+            .statusAtDeath = RelationshipStatus::Lover,
+            .isSecretAffair = true,
+            .publicStatusAtDeath = RelationshipStatus::Unknown
+        });
+        // Secret affair with former ex where publicStatusAtDeath = ExDating
+        const ActorId exSp{ 0x00039004u };
+        const BaseId exBase{ 0x00039104u };
+        sp.partnersAtDeath.push_back(DeceasedPartnerEntry{
+            .partnerBaseId = exBase,
+            .partnerRefId = exSp.AsRefId(),
+            .partnerName = "Ex",
+            .statusAtDeath = RelationshipStatus::Lover,
+            .isSecretAffair = true,
+            .publicStatusAtDeath = RelationshipStatus::ExDating
+        });
+        ws.deceased.Write().UpsertRecord(std::move(sp));
+
+        // Deceased child with undiscovered paternity secret pointing publicly to Player
+        const ChildId deadChild{ 0x00039201u };
+        DeceasedActorRecord dc{};
+        dc.refId = RefId{ deadChild.raw() };
+        dc.baseId = BaseId{ deadChild.raw() };
+        dc.isChild = true;
+        dc.deathTimestamp = 12.0f;
+        dc.childInfo = DeceasedChildMetadata{
+            .bioMotherBaseId = camillaBase,
+            .bioFatherBaseId = faendalBase,
+            .publicBioFatherBaseId = BaseId{ kPlayerBaseRawId },
+            .hasUndiscoveredPaternitySecret = true
+        };
+        ws.deceased.Write().UpsertRecord(std::move(dc));
+
+        const auto snap = ws.Snapshot();
+        MARAS_CHECK(WasMarriedTo(snap, camilla, sven, camillaBase, svenBase));
+        // Faendal is masked completely (Unknown public status)
+        MARAS_CHECK(GetDeceasedPartnersOf(snap, faendal, faendalBase).empty());
+        // Ex is seen only as Ex (WasExOf true), not active partner
+        MARAS_CHECK(WasExOf(snap, camilla, exSp, camillaBase, exBase));
+        MARAS_CHECK(GetDeceasedPartnersOf(snap, exSp, exBase).empty());
+
+        // Child paternity masks true bioFather (faendal) and exposes publicBioFather (Player)
+        MARAS_CHECK(GetDeceasedChildrenOf(snap, faendal, faendalBase).empty());
+        const auto playerDeadChildren = GetDeceasedChildrenOf(snap, ActorId::Player());
+        MARAS_REQUIRE_EQ(playerDeadChildren.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(playerDeadChildren[0], deadChild);
+        // UnknownFather must never match
+        MARAS_CHECK(GetDeceasedChildrenOf(snap, ActorId::UnknownFather()).empty());
+    }
+
+    MARAS_TEST(DomainHousehold, HouseholdRelocationAndDivorceTenantEviction) {
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+        const HouseId breezehome{ 0x00039501u };
+        const ActorId spouseA{ 0x00039601u };
+        const ActorId spouseB{ 0x00039602u };
+        const ChildId child{ 0x00039701u };
+
+        ws.settings.Write().enablePlayerPolygamy = true;
+        ws.settings.Write().childCustodyPlayerPolicy = ChildCustodyPlayerPolicy::AlwaysWithPlayer;
+        (void)ApplyRegisterHouse(ws, breezehome, RefId{ 0x00039502u }, true);
+        (void)ws.TransitionRelationship(ActorId::Player(), spouseA, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)ws.TransitionRelationship(ActorId::Player(), spouseB, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)ApplyRegisterTenant(ws, spouseA.raw(), breezehome, true, false);
+        (void)ApplyRegisterTenant(ws, spouseB.raw(), breezehome, true, false);
+        (void)ApplyRegisterTenant(ws, child.raw(), breezehome, true, true);
+
+        ChildRecord crec{};
+        crec.childId = child;
+        crec.stage = ChildStage::Child;
+        crec.guardians.Assign(ActorId::Player(), spouseA);
+        ws.lineage.Write().UpsertChild(std::move(crec));
+
+        // Divorcing spouseA removes spouseA from tenantOrder & clears child guardian if policy demands,
+        // while keeping Player-custodied child in breezehome
+        (void)ws.BreakupPair(ActorId::Player(), spouseA, RelationshipStatus::Divorced, 10.0f, ActorId::Player(), meta);
+        (void)ApplyRemoveTenant(ws, spouseA.raw());
+        MARAS_CHECK(ws.household.Read().GetTenantHouse(spouseA.raw()).IsNull());
+        MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(spouseB.raw()), breezehome);
+        MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(child.raw()), breezehome);
+    }
+
 }  // namespace MARAS::Tests

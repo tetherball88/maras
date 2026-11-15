@@ -35,6 +35,7 @@ namespace MARAS::App {
             void OnChildUpdated(const State::ChildRecord&) override {}
             void OnChildRemoved(std::uint32_t) override {}
             void OnChildPromoted(std::uint32_t, std::uint32_t) override {}
+            std::string DumpStoredData(std::string_view) override { return {}; }
         };
 
         class NullModalGateway final : public IModalGateway {

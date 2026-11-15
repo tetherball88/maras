@@ -993,6 +993,9 @@ Function LogNPCStatistics() global native
 ;/ Log detailed internal state for a specific NPC to SKSE log /;
 Function LogNPCDetails(Actor npc) global native
 
+;/ Dump full MARAS stored domain state to Data/SKSE/Plugins/MARAS/dumps/ (returns absolute file path, or "" on failure) /;
+string Function DumpStoredData(string tag = "") global native
+
 
 ; ── UI Modals & Action Cooldowns ──────────────────────────────────────
 ;/ Show the Prisma UI dashboard /;

@@ -45,6 +45,7 @@ namespace MARAS::Bridge::Ui {
         void SendGeneratedMemories(RE::FormID partnerFormId, const nlohmann::json& memoriesArray);
         void SendMatchmakingSettings();
         void SendHouseholdBuffs();
+        std::string DumpStoredData(std::string_view tag = {});
 
         // Real-time event notifications to frontend
         void OnAffectionChanged(RE::FormID npcFormID, int newValue);
@@ -150,6 +151,7 @@ namespace MARAS::Bridge::Ui {
         void ProcessSkyrimNetMatchSuggest(const nlohmann::json& payload);
         void ProcessSkyrimNetGlobalMatchSuggest(const nlohmann::json& payload);
         void ProcessGenerateMatchMemories(const nlohmann::json& payload);
+        std::string DumpStoredDataImpl(std::string_view tag, bool notifyUi);
         void ProcessDumpData(const nlohmann::json& payload);
         void ProcessDumpNPCIndex(const nlohmann::json& payload);
 

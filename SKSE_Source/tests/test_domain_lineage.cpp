@@ -256,4 +256,281 @@ namespace MARAS::Tests {
         MARAS_CHECK(critter == "Pumpkin" || critter == "Rusty");
     }
 
+    MARAS_TEST(DomainLineage, FertilityUnbornTwinPromotionAndTargetedRemoval) {
+        WorldState ws{};
+        StubLineageMeta meta{};
+        DeterministicRng rng{ 111u };
+
+        const ActorId mother{ 0x00024001u };
+        const ActorId sven{ 0x00024002u };
+        const ActorId faendal{ 0x00024003u };
+        meta.names[mother] = "Camilla";
+        meta.names[sven] = "Sven";
+        meta.names[faendal] = "Faendal";
+        (void)ws.TransitionRelationship(mother, sven, RelationshipStatus::Married, 1.0f, mother, meta);
+
+        // Twin 1 (legitimate with Sven) & Twin 2 (secret with Faendal + phenotype mismatch)
+        const auto regSven = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother,
+            .bioFather = sven,
+            .bioFatherName = "Sven",
+            .presumedFatherRaceEditorId = "NordRace",
+            .bioFatherRaceEditorId = "NordRace",
+            .conceptionTimestamp = 5.0f
+        }, meta);
+        MARAS_REQUIRE(!regSven.childId.IsNull());
+        MARAS_CHECK(!regSven.hasSecret);
+
+        const auto regFaendal = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother,
+            .bioFather = faendal,
+            .bioFatherName = "Faendal",
+            .presumedFatherRaceEditorId = "NordRace",
+            .bioFatherRaceEditorId = "WoodElfRace",
+            .conceptionTimestamp = 6.0f
+        }, meta);
+        MARAS_REQUIRE(!regFaendal.childId.IsNull());
+        MARAS_CHECK(regFaendal.hasSecret);
+        MARAS_CHECK(regFaendal.hasPhenotypeMismatch);
+
+        // Promote specifically Faendal's fetus while leaving Sven's twin Unborn
+        ws.settings.Write().paternityPhenotypeBirthChance = 100;
+        const auto promo = ApplyPromoteUnbornToInfant(
+            ws, mother, 20.0f, "Elvenia", faendal, false, false, meta, rng);
+        MARAS_REQUIRE(promo.promoted);
+        MARAS_CHECK_EQ(promo.childId, regFaendal.childId);
+        MARAS_CHECK(promo.evaluateAtBirth);
+        MARAS_CHECK_EQ(ws.lineage.Read().GetUnbornOfMother(mother).size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(ws.lineage.Read().FindChild(regSven.childId)->stage, ChildStage::Unborn);
+        MARAS_CHECK_EQ(ws.lineage.Read().FindChild(regFaendal.childId)->stage, ChildStage::Infant);
+
+        // Register a third unborn child (from Faendal again) alongside Sven's remaining unborn child
+        const auto regFaendal2 = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother,
+            .bioFather = faendal,
+            .bioFatherName = "Faendal",
+            .conceptionTimestamp = 25.0f
+        }, meta);
+        MARAS_CHECK_EQ(ws.lineage.Read().GetUnbornOfMother(mother).size(), std::size_t{ 2 });
+
+        // Targeted removal by bioFather removes only Faendal's unborn fetus and reports affected guardians
+        std::vector<ActorId> affected;
+        const auto removedFaendal = ApplyRemoveUnbornChild(ws, mother, faendal, &affected);
+        MARAS_REQUIRE_EQ(removedFaendal.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(removedFaendal[0], regFaendal2.childId);
+        MARAS_CHECK(std::find(affected.begin(), affected.end(), mother) != affected.end());
+        MARAS_CHECK(std::find(affected.begin(), affected.end(), sven) != affected.end());
+        MARAS_CHECK_EQ(ws.lineage.Read().GetUnbornOfMother(mother).size(), std::size_t{ 1 });
+
+        // Wildcard removal (null bioFather) removes remaining unborn children
+        const auto removedAll = ApplyRemoveUnbornChild(ws, mother, ActorId{});
+        MARAS_REQUIRE_EQ(removedAll.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(removedAll[0], regSven.childId);
+        MARAS_CHECK(ws.lineage.Read().GetUnbornOfMother(mother).empty());
+    }
+
+    MARAS_TEST(DomainLineage, FertilitySiblingSecretPropagationOnPartnerAndFullResolve) {
+        WorldState ws{};
+        StubLineageMeta meta{};
+        const ActorId mother{ 0x00024101u };
+        const ActorId sven{ 0x00024102u };
+        const ActorId faendal{ 0x00024103u };
+        const ActorId mikael{ 0x00024104u };
+        (void)ws.TransitionRelationship(mother, sven, RelationshipStatus::Married, 1.0f, mother, meta);
+
+        const auto fA = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother, .bioFather = faendal, .conceptionTimestamp = 5.0f
+        }, meta);
+        const auto fB = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother, .bioFather = faendal, .conceptionTimestamp = 5.0f
+        }, meta);
+        const auto fC = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother, .bioFather = mikael, .conceptionTimestamp = 6.0f
+        }, meta);
+
+        // Partner resolves fetus A via confession while still unborn & unannounced
+        const auto partnerReveal = ApplyResolvePaternitySecretForPartner(ws, fA.childId, "confess");
+        MARAS_CHECK(partnerReveal.updated);
+        MARAS_CHECK(partnerReveal.learnedPartner);
+        MARAS_CHECK(partnerReveal.wasPregnancySecretForPartner);
+        MARAS_CHECK_EQ(partnerReveal.modEventOutcome, "mother_confessed_presumed_unannounced");
+        MARAS_CHECK_EQ(partnerReveal.memoryOutcome, "mother_confessed_presumed");
+
+        // All 3 unborn fetuses lose isPregnancySecretForPartner; A & B lose isSecretForPartner, while C keeps it!
+        const auto* recA = ws.lineage.Read().FindChild(fA.childId);
+        const auto* recB = ws.lineage.Read().FindChild(fB.childId);
+        const auto* recC = ws.lineage.Read().FindChild(fC.childId);
+        MARAS_REQUIRE(recA && recB && recC);
+        MARAS_CHECK(!recA->paternitySecret.isPregnancySecretForPartner);
+        MARAS_CHECK(!recB->paternitySecret.isPregnancySecretForPartner);
+        MARAS_CHECK(!recC->paternitySecret.isPregnancySecretForPartner);
+        MARAS_CHECK(!recA->paternitySecret.isSecretForPartner && recA->paternitySecret.discoveredByPartner);
+        MARAS_CHECK(!recB->paternitySecret.isSecretForPartner && recB->paternitySecret.discoveredByPartner);
+        MARAS_CHECK(recC->paternitySecret.isSecretForPartner && !recC->paternitySecret.discoveredByPartner);
+
+        // Full resolve on fetus C flips all secret flags for Mikael's fetus
+        const auto fullC = ApplyResolvePaternitySecret(ws, fC.childId, "discovered");
+        MARAS_CHECK(fullC.updated);
+        MARAS_CHECK(fullC.learnedPartner);
+        MARAS_CHECK(fullC.learnedBioFather);
+        MARAS_CHECK_EQ(fullC.modEventOutcome, "presumed_father_learnt");
+        MARAS_CHECK(!ws.lineage.Read().FindChild(fC.childId)->paternitySecret.HasActiveSecret());
+    }
+
+    MARAS_TEST(DomainLineage, FertilityResolveForBioFatherAndSetSecretEdgesBypassCooldown) {
+        WorldState ws{};
+        StubLineageMeta meta{};
+        const ActorId mother{ 0x00024201u };
+        const ActorId sven{ 0x00024202u };
+        const ActorId faendal{ 0x00024203u };
+        (void)ws.TransitionRelationship(mother, sven, RelationshipStatus::Married, 1.0f, mother, meta);
+
+        const auto fA = ApplyRegisterUnbornChild(ws, UnbornChildRegistrationInput{
+            .bioMother = mother, .bioFather = faendal, .conceptionTimestamp = 12.0f
+        }, meta);
+
+        // Partial bio-father reveal clears only bioFather edge; partner & master isSecret remain true
+        const auto bioOut = ApplyResolvePaternitySecretForBioFather(ws, fA.childId, "chat");
+        MARAS_CHECK(bioOut.updated);
+        MARAS_CHECK(bioOut.learnedBioFather);
+        MARAS_CHECK(!bioOut.learnedPartner);
+        MARAS_CHECK_EQ(bioOut.modEventOutcome, "bio_father_learnt");
+        {
+            const auto* rec = ws.lineage.Read().FindChild(fA.childId);
+            MARAS_CHECK(!rec->paternitySecret.isSecretForBioFather);
+            MARAS_CHECK(rec->paternitySecret.discoveredByBioFather);
+            MARAS_CHECK(rec->paternitySecret.isSecretForPartner);
+            MARAS_CHECK(rec->paternitySecret.isSecret);
+        }
+
+        // Resolving partner edge now transitions master isSecret -> false & discovered -> true
+        const auto pOut = ApplySetPaternitySecretEdges(ws, fA.childId, std::nullopt, false, std::nullopt, true);
+        MARAS_CHECK(pOut.updated);
+        MARAS_CHECK(pOut.learnedPartner);
+        MARAS_CHECK_EQ(pOut.modEventOutcome, "presumed_father_learnt_unannounced");
+        {
+            const auto* rec = ws.lineage.Read().FindChild(fA.childId);
+            MARAS_CHECK(!rec->paternitySecret.HasActiveSecret());
+            MARAS_CHECK(rec->paternitySecret.discovered);
+            MARAS_CHECK_EQ(rec->paternitySecret.lastCheckTimestamp, 0.0f);
+        }
+    }
+
+    MARAS_TEST(DomainLineage, FertilityBioFatherStepInCandidatesFilters) {
+        WorldState ws{};
+        StubLineageMeta meta{};
+
+        const ActorId singleMother{ 0x00024301u };
+        const ActorId partneredMother{ 0x00024302u };
+        const ActorId spouse{ 0x00024303u };
+        const ActorId eligibleBioFather{ 0x00024304u };
+        const ActorId deadBioFather{ 0x00024305u };
+        const ActorId partneredBioFather{ 0x00024306u };
+        const ActorId bfSpouse{ 0x00024307u };
+        const ActorId exBioFather{ 0x00024308u };
+        const ActorId activeBioFather{ 0x00024309u };
+
+        (void)ws.TransitionRelationship(partneredMother, spouse, RelationshipStatus::Married, 1.0f, partneredMother, meta);
+        (void)ws.TransitionRelationship(partneredBioFather, bfSpouse, RelationshipStatus::Dating, 1.0f, partneredBioFather, meta);
+        (void)ws.TransitionRelationship(singleMother, exBioFather, RelationshipStatus::ExLover, 1.0f, singleMother, meta);
+        (void)ws.TransitionRelationship(singleMother, activeBioFather, RelationshipStatus::Lover, 1.0f, singleMother, meta);
+
+        // Register candidates on singleMother
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = eligibleBioFather }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = ActorId::UnknownFather() }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = ActorId::Player() }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = deadBioFather }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = partneredBioFather }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = exBioFather }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = singleMother, .bioFather = activeBioFather }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = partneredMother, .bioFather = eligibleBioFather }, meta);
+        (void)ApplyRegisterUnbornChild(ws, { .bioMother = ActorId::Player(), .bioFather = eligibleBioFather }, meta);
+
+        struct DeadAwareMeta final : public IActorMetadataProvider {
+            ActorId deadId{};
+            bool IsAliveAndValid(ActorId actorId) const noexcept override { return actorId != deadId; }
+        } deadMeta{};
+        deadMeta.deadId = deadBioFather;
+
+        // Player & partnered mothers always empty
+        MARAS_CHECK(CollectBioFatherStepInCandidates(ws.Snapshot(), ActorId::Player(), deadMeta).empty());
+        MARAS_CHECK(CollectBioFatherStepInCandidates(ws.Snapshot(), partneredMother, deadMeta).empty());
+
+        // Single mother collects ONLY eligibleBioFather (filtering UnknownFather, Player, dead, partnered, Ex, Active)
+        const auto cands = CollectBioFatherStepInCandidates(ws.Snapshot(), singleMother, deadMeta);
+        MARAS_REQUIRE_EQ(cands.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(cands[0], eligibleBioFather);
+    }
+
+    MARAS_TEST(DomainLineage, FertilityPaternitySecretFallbackBreakup) {
+        struct FixedZeroRng final : public IRng {
+            float NextFloat(float minVal = 0.0f, float = 1.0f) override { return minVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t) override { return minVal; }
+        };
+
+        StubLineageMeta meta{};
+        FixedZeroRng alwaysRollRng{};
+        const ActorId lover{ 0x00024499u };
+
+        // Closed Married / Engaged / Dating -> Divorced / Jilted / ExDating on fallback breakup roll
+        for (auto [startStatus, expectedBreakup] : std::array<std::pair<RelationshipStatus, RelationshipStatus>, 3>{ {
+                 { RelationshipStatus::Married, RelationshipStatus::Divorced },
+                 { RelationshipStatus::Engaged, RelationshipStatus::Jilted },
+                 { RelationshipStatus::Dating, RelationshipStatus::ExDating } } }) {
+            WorldState ws{};
+            ws.settings.Write().paternityNonSkyrimNetRevealChance = 100;
+            ws.settings.Write().paternityBreakupChance = 50;
+            const ActorId mother{ 0x00024401u };
+            const ActorId partner{ 0x00024402u };
+            (void)ws.TransitionRelationship(mother, partner, startStatus, 1.0f, mother, meta);
+            const auto reg = ApplyRegisterUnbornChild(ws, {
+                .bioMother = mother, .bioFather = lover, .conceptionTimestamp = 5.0f
+            }, meta);
+
+            const auto out = ApplyPaternitySecretFallback(ws, reg.childId, 25.0f, meta, alwaysRollRng);
+            MARAS_CHECK(out.evaluated);
+            MARAS_CHECK(out.revealed);
+            MARAS_CHECK(out.brokeUp);
+            MARAS_CHECK_EQ(ws.relationships.Read().GetStatus(mother, partner), expectedBreakup);
+        }
+
+        // Open Married -> revealed, but never breaks up
+        {
+            WorldState ws{};
+            ws.settings.Write().paternityNonSkyrimNetRevealChance = 100;
+            ws.settings.Write().paternityBreakupChance = 100;
+            const ActorId mother{ 0x00024411u };
+            const ActorId partner{ 0x00024412u };
+            (void)ws.TransitionRelationship(mother, partner, RelationshipStatus::Married, 1.0f, mother, meta);
+            (void)ws.SetPairOpen(mother, partner, true, 2.0f);
+            const auto reg = ApplyRegisterUnbornChild(ws, {
+                .bioMother = mother, .bioFather = lover, .conceptionTimestamp = 5.0f
+            }, meta);
+
+            const auto out = ApplyPaternitySecretFallback(ws, reg.childId, 25.0f, meta, alwaysRollRng);
+            MARAS_CHECK(out.evaluated);
+            MARAS_CHECK(out.revealed);
+            MARAS_CHECK(!out.brokeUp);
+            MARAS_CHECK_EQ(ws.relationships.Read().GetStatus(mother, partner), RelationshipStatus::Married);
+        }
+    }
+
+    MARAS_TEST(DomainLineage, FertilityVisualDiscrepancyDescriptionsAllTiers) {
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID("ArgonianRace"), PhenotypeTier::Argonian);
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID("OrcRace"), PhenotypeTier::Orc);
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID("BretonRace"), PhenotypeTier::PaleHuman);
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID("ElderRace"), PhenotypeTier::PaleHuman);
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID("DarkElfRace"), PhenotypeTier::Mer);
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID("CustomAlienRace"), PhenotypeTier::Unknown);
+        MARAS_CHECK_EQ(ClassifyPhenotypeTierFromEditorID(""), PhenotypeTier::Unknown);
+
+        MARAS_CHECK_EQ(GetVisualDiscrepancyDescription(PhenotypeTier::PaleHuman, PhenotypeTier::PaleHuman, "Elvenia"), "");
+        MARAS_CHECK_EQ(GetVisualDiscrepancyDescription(PhenotypeTier::Unknown, PhenotypeTier::Argonian, "Elvenia"), "");
+        MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Argonian, PhenotypeTier::PaleHuman, "Keshu").find("scales") != std::string::npos);
+        MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Khajiit, PhenotypeTier::PaleHuman, "J'zargo").find("fur") != std::string::npos);
+        MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Orc, PhenotypeTier::PaleHuman, "Ghorbash").find("tusks") != std::string::npos);
+        MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Mer, PhenotypeTier::PaleHuman, "Elvenia").find("Elven") != std::string::npos);
+        MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Redguard, PhenotypeTier::PaleHuman, "Amren").find("complexion") != std::string::npos);
+    }
+
 }  // namespace MARAS::Tests
