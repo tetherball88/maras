@@ -39,6 +39,15 @@ flowchart TD
     Q1 -->|"8. Papyrus native, C export, or ModCallbackEvent"| R8["maras_bridge_papyrus / bridge_c_api thin adapter ONLY. Reads snapshot/PerspectiveView; writes via maras_app under GetPapyrusMutex()."]
 ```
 
+### File Granularity & Anti-God-File Rule
+
+- **Legacy Large Hubs Are Extraction Targets, Never Dumping Grounds**: Do **not** append new subsystems, pure rules, JSON payload builders, or unrelated helpers into multi-thousand-line files (`RelationshipUseCases.cpp`, `LineageUseCases.cpp`, `PaternityWorkflowCoordinator.cpp`, `AgencyWorkflowCoordinator.cpp`, `PrismaUIDataBridge.cpp`, `SkyrimNetDecorators.cpp`, `SkyrimNetMemoryService.cpp`).
+- **Required Decomposition for New Features & Refactors**:
+  1. **Pure rules, scoring, eligibility, or transitions** $\to$ focused `.h`/`.cpp` in `modules/domain_{relationships,lineage,household,agency}/` + headless unit tests in `tests/test_domain_*.cpp`.
+  2. **Secret/observer visibility** $\to$ `modules/projection/` (`PerspectiveView`).
+  3. **Command orchestration** $\to$ focused coordinator/use-case `.h`/`.cpp` in `modules/app/` (keep methods thin: gather snapshot/inputs $\to$ pure domain call $\to$ `WorldStore::Modify` $\to$ reconcilers/events).
+  4. **Bridge serialization / native adapters** $\to$ focused `.cpp` in `modules/bridge_{papyrus,ui,skyrimnet,c_api}/`, added to [CMakeLists.txt](CMakeLists.txt) and built via `build-and-test.ps1 -Target all -Reconfigure`.
+
 ### The 8 Non-Negotiable Architectural Invariants
 
 1. **`WorldStore::Modify` Contract & Single State Owner (`modules/state/include/maras/state/WorldStore.h`)**:
