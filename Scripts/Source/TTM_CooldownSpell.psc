@@ -10,7 +10,7 @@ Event OnUpdateGameTime()
 EndEvent
 
 Event OnEffectStart(Actor akTarget, Actor akCaster)
-	float brokeupTime = TTM_ServiceRelationships.GetBrokeupTime(akTarget)
+	float brokeupTime = MARAS.GetBrokeupTime(akTarget)
     float diff = Utility.GetCurrentGameTime() - brokeupTime
     TTM_Debug.debug("TTM_CooldownSpell:" + currentSpell.GetName() + ":Start:diff" + diff)
 

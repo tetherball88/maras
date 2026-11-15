@@ -165,6 +165,122 @@ namespace MARAS::App {
         virtual bool RequestActorProfileUpdate(std::uint32_t actorFormID,
                                                const std::string& additionalInstructions = "",
                                                const std::string& updatableBlocksCSV = "") = 0;
+
+        virtual void RevertEvents() noexcept = 0;
+        virtual void SuppressNextActionNarration(float durationSeconds = 5.0f) noexcept = 0;
+        [[nodiscard]] virtual bool IsActionNarrationSuppressed() const noexcept = 0;
+
+        virtual void EmitDirectNarration(
+            std::string_view content,
+            std::uint32_t originatorFormId = 0,
+            std::uint32_t targetFormId = 0,
+            bool exactAudience = false,
+            const std::vector<std::uint32_t>& audienceFormIds = {}) = 0;
+        virtual void EmitPolygamyBlessing(std::uint32_t spouseFormId) = 0;
+        virtual void EmitAffectionGift(std::string_view msg, std::uint32_t receiverFormId) = 0;
+        virtual void EmitMaritalStatusChange(
+            std::uint32_t initiatorFormId,
+            std::uint32_t acceptorFormId,
+            std::string_view newStatus,
+            bool forceSkipTrigger = false) = 0;
+        virtual void EmitOpenRelationshipChange(
+            std::uint32_t initiatorFormId,
+            std::uint32_t partnerFormId,
+            bool isOpen,
+            bool forceSkipTrigger = false) = 0;
+        virtual void EmitSpouseHierarchyChange(std::uint32_t spouseFormId, bool isDemoted) = 0;
+        virtual void EmitSpouseAffectionChange(
+            std::uint32_t spouseFormId,
+            std::string_view affectionLevel,
+            std::string_view direction) = 0;
+        virtual void EmitProposalDecision(
+            std::uint32_t initiatorFormId,
+            std::uint32_t acceptorFormId,
+            std::string_view status,
+            std::string_view decision,
+            bool forceSkipTrigger = true) = 0;
+        virtual void EmitActionDecline(
+            std::uint32_t speakerFormId,
+            std::uint32_t targetFormId,
+            std::uint32_t initiatorFormId,
+            std::uint32_t acceptorFormId,
+            std::string_view declinedAction,
+            std::string_view msg,
+            bool skipTrigger = true) = 0;
+        virtual void EmitChildAdopted(
+            std::uint32_t childActorId,
+            std::uint32_t parentAId,
+            std::uint32_t parentBId = 0) = 0;
+        virtual void EmitChildInherited(
+            std::uint32_t childActorId,
+            std::uint32_t deceasedParentId,
+            std::uint32_t newParentId,
+            std::uint32_t coParentId = 0) = 0;
+        virtual void EmitChildParentsChanged(
+            std::uint32_t childActorId,
+            std::uint32_t parentAId,
+            std::uint32_t parentBId = 0,
+            std::string_view reason = "marriage") = 0;
+        virtual void EmitPregnancyAnnounced(
+            std::uint32_t motherId,
+            std::uint32_t partnerId = 0,
+            std::uint32_t fallbackBioId = 0,
+            std::string_view fallbackBioName = "",
+            std::int32_t childCount = 1) = 0;
+        virtual void EmitPregnancyLost(
+            std::uint32_t motherId,
+            std::uint32_t partnerId = 0,
+            std::string_view reason = "miscarriage") = 0;
+        virtual void EmitLaborStarted(
+            std::uint32_t motherId,
+            std::uint32_t partnerId = 0,
+            std::int32_t childCount = 1) = 0;
+        virtual void EmitLaborProgress(
+            std::uint32_t motherId,
+            std::int32_t bornCount,
+            std::int32_t totalCount) = 0;
+        virtual void EmitChildBirthBatch(
+            std::uint32_t motherId,
+            const std::vector<std::uint32_t>& childIds = {}) = 0;
+        virtual void EmitChildBirth(
+            std::uint32_t childId,
+            std::string_view childName = "") = 0;
+        virtual void EmitChildGrewUp(
+            std::uint32_t childId,
+            std::string_view childName = "") = 0;
+        virtual void EmitChildSentToTraining(
+            std::uint32_t childId,
+            std::string_view childName = "",
+            std::string_view trainingLocation = "") = 0;
+        virtual void EmitChildBecameAdult(
+            std::uint32_t childId,
+            std::string_view childName = "") = 0;
+        virtual void EmitPaternitySecretResolved(
+            std::uint32_t childId,
+            std::string_view rawCaseType) = 0;
+        virtual void EmitAffairConfessed(
+            std::uint32_t cheaterId,
+            std::uint32_t victimId,
+            std::uint32_t affairPartnerId = 0) = 0;
+        virtual void EmitAffairExposed(
+            std::uint32_t affairPartnerId,
+            std::uint32_t victimId,
+            std::uint32_t cheaterId = 0) = 0;
+        virtual void EmitAffairResolved(
+            std::uint32_t initiatorId,
+            std::uint32_t otherPartyId,
+            std::uint32_t affairPartnerId,
+            std::string_view resolution) = 0;
+        virtual void EmitCheatingCaught(
+            std::uint32_t victimId,
+            std::uint32_t cheaterId,
+            std::uint32_t affairPartnerId,
+            bool isWalkIn) = 0;
+        virtual void EmitOpenRelationshipWalkIn(
+            std::uint32_t witnessId,
+            std::uint32_t partnerId,
+            std::uint32_t sexPartnerId,
+            bool isWalkIn) = 0;
     };
 
 }  // namespace MARAS::App

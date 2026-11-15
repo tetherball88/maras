@@ -39,13 +39,13 @@ flowchart TD
 
 ## 3. `ConfirmationModal` — Latent Papyrus Confirmations & Cooldowns
 
-`ConfirmationModal` adapts `PrismaModalManager` to non-blocking Papyrus latent calls (`IModalGateway`) for dialogue and intimate-action prompts (such as proposing, breaking up, adopting, or declining with SkyrimNet roleplay explanations):
+`ConfirmationModal` adapts `PrismaModalManager` to non-blocking Papyrus latent calls and C++ callback-based confirmation flows (`ShowWithCallback` via `IModalGateway`, used by `SkyrimNetActionCoordinator`) for dialogue and intimate-action prompts (such as proposing, breaking up, opening/closing relationships, adopting, or declining with SkyrimNet roleplay explanations):
 
 - **Cooldown Management (`CheckAndSet` / `IsOnCooldown`)**: Normalizes action keys and sorts actor `FormID` sets cleanly under `ConfirmationCooldownState::mutex`, returning `0` (`kCooldownEligible`) when eligible or `4` (`kCooldownBlocked`) when inside `SettingsData::actionsCooldown` or `actionsDeclineCooldown` within the current `SessionEpoch`.
 - **Latent Result Codes (`ConfirmationModal::Show`)**:
   - `0`: Accepted (proceed with action).
   - `1`: Cancelled / Declined silently.
-  - `2`: Declined with roleplay explanation (when SkyrimNet is available, lets the user explain why and triggers `maras_decline`).
+  - `2`: Declined with roleplay explanation (when SkyrimNet is available, lets the user explain why and emits `ttm_action_decline` directly via `ISkyrimNetGateway::EmitActionDecline`).
   - `3`: Blocked (on cooldown, invalid actors, or relationship state changed while waiting).
   - `4`: Confirmation modals disabled by settings (auto-accept).
   - `5`: Prisma UI unavailable / not initialized (auto-accept).

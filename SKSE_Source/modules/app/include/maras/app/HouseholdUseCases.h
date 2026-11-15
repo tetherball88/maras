@@ -73,7 +73,7 @@ namespace MARAS::App {
         // ---------------------------------------------------------------------
 
         bool ShareHouseWithPlayer(RE::FormID npcFormID);
-        bool StopShareHouseWithPlayer(RE::FormID npcFormID);
+        bool StopShareHouseWithPlayer(RE::FormID npcFormID, std::string_view reason = "");
         [[nodiscard]] bool IsHouseSharedWithPlayer(RE::FormID cellFormID) const;
 
         // ---------------------------------------------------------------------

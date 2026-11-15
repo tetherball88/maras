@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RE/Skyrim.h"
+#include "maras/domain/household/SpouseBuffRules.h"
 
 #include <atomic>
 #include <cstdint>
@@ -32,6 +33,9 @@ namespace MARAS {
         // Converges Player perks & spell/entry-point magnitudes on the main game thread
         // (coalesces via SessionEpoch-fenced task if invoked off-thread).
         void ReconcilePlayerBuffs();
+
+        // Performs one-shot sleep rested ability sync after sleep stop
+        void ApplySleepRestedPlan(const Domain::Household::SleepRestedPlan& plan);
 
         // Clears cached resolved perk groups so the next reconcile re-reads BonusesConfigLoader.
         void InvalidateCache();

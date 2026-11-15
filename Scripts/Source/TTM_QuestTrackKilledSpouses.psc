@@ -74,7 +74,15 @@ TTM_QuestTrackKilledSpousesWI kmyQuest = __temp as TTM_QuestTrackKilledSpousesWI
         TTM_Debug.debug("TTM_QuestTrackKilledSpouses:VictimSpouse:"+victimName+":YouAreKiller:NoInheritance")
     endif
 
-    TTM_ServiceRelationships.MakeNpcDeceased(victim, isPlayerKiller)
+    if (isPlayerKiller)
+        bool isTrackedSpouse = MARAS.IsNPCStatus(victim, "married") || MARAS.WasMarriedTo(victim, player)
+        bool isTrackedFiance = MARAS.IsNPCStatus(victim, "engaged") || MARAS.WasEngagedTo(victim, player)
+        if (isTrackedSpouse || isTrackedFiance)
+            MARAS.SetPlayerKiller(true)
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(victim, "deceased")
+        endif
+    endif
+    TTM_ServiceMarriageQuest.ResetMarriageQuests(victim)
 
     kmyquest.SetNextEventGlobals()
     Reset()

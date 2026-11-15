@@ -43,7 +43,6 @@ ReferenceAlias property SceneChild1 Auto
 ReferenceAlias property SceneChild2 Auto
 Scene property TTM_DialoguesChildrenScenes_SceneNameCalling01 Auto
 Scene property TTM_DialoguesChildrenScenes_SceneNameCalling02 Auto
-bool NameCallingUsedLast														;Was the last forcegreet event a Name-Calling Scene? If so, don't do another one.
 int nameCallingChance = 10
 
 ReferenceAlias property AnimalCompanion Auto
@@ -85,8 +84,6 @@ DialogueFollowerScript property DialogueFollower auto
 
 int numOfChildrenPerLocation = 20
 int critterChance = 10
-
-bool ChildChestIntroduced = False										;Has one of the children mentioned the chest (enqueued Event 2 or 3)?
 
 
 float property playerLastSeen = 0.0 Auto Hidden Conditional			;Timestamp of when we last 'saw' the player.
@@ -225,10 +222,6 @@ Function AdoptChild(Actor child, Actor spouseToAdopWith = none, Location houseTo
     ; Register child with MARAS using the single authoritative ingestion pipeline
     ; C++ RegisterChildActor snapshots native factions, clears external factions, and assigns household factions
     MARAS.RegisterChildActor(child, player, spouseToAdopWith, houseToMove, bioMother, bioFather, syntheticChildID, childStage, sendEvent = !isMigrating)
-
-    if (!isMigrating && syntheticChildID == 0 && spouseToAdopWith != none && spouseToAdopWith != player)
-        TTM_ServiceAffection.ApplyChildAdoptedAffection(spouseToAdopWith)
-    endif
 
     if (!isMigrating)
         lastChildAdoptedTimestamp = Utility.GetCurrentGameTime() + 3
@@ -450,102 +443,11 @@ EndFunction
 
 ;When requested by the Scheduler, refill the child's chest. This is handled like a give player gift event, using similar formlists.
 Function RefillChest(ObjectReference childChest)
-; 	;Debug.Trace("RefillChest refills chest.")
-	;Generate 1-3 instances of 3-5 items from the Junk list.
-    Quest TTM_ChildreSandboxQst = TTM_Data.GetChildreSandboxQuest()
-	int roll = Utility.RandomInt(3, 5)
-	int random
-; 	;Debug.Trace("Level 1 Items: " + roll)
-	While (roll > 0)
-		random = Utility.RandomInt(0, BYOHRelationshipAdoptionGifts_Junk.GetSize() - 1)
-		childChest.AddItem(BYOHRelationshipAdoptionGifts_Junk.GetAt(random), Utility.RandomInt(1,3))
-		roll = roll - 1
-	EndWhile
-
-	;Generate 1-3 items from the 0025 list.
-	roll = Utility.RandomInt(1, 3)
-; 	;Debug.Trace("Level 2 Items: " + roll)
-	While (roll > 0)
-		random = Utility.RandomInt(0, BYOHRelationshipAdoptionGifts_0025.GetSize() - 1)
-		childChest.AddItem(BYOHRelationshipAdoptionGifts_0025.GetAt(random), 1)
-		roll = roll - 1
-	EndWhile
-
-    int i = 0
-    int max = 0
-    Actor child = none
-
-    while(i< numOfChildrenPerLocation)
-        int childAliasIndex = i + 1
-        string normalizedIndex = ""
-        if(childAliasIndex < 10)
-            normalizedIndex = "0" + childAliasIndex
-        else
-            normalizedIndex = "" + childAliasIndex
-        endif
-        Actor currentChild = TTM_Utils.GetActorAlias(TTM_ChildreSandboxQst, "Child0" + normalizedIndex)
-        int gold = currentChild.GetItemCount(Gold001)
-        if(gold > max)
-            max = gold
-            child = currentChild
-        endif
-        i = i + 1
-    endwhile
-
-	if (child.GetItemCount(Gold001) > 25)
-; 		;Debug.Trace("Level 3 Item Added")
-		Formlist list = PickGiftList(child.GetItemCount(Gold001))
-		roll = Utility.RandomInt(0, list.GetSize())
-		childChest.AddItem(list.GetAt(roll), 1)
-		int deduction = PickDeduction(child.GetItemCount(Gold001))
-		deduction = (deduction / 2) + Utility.RandomInt(0, deduction / 2)
-; 		;Debug.Trace("Deducting: " + deduction)
-		child.RemoveItem(Gold001, deduction)
-	EndIf
-EndFunction
-
-;Give Player Gift Event: Helper Function to select the appropriate formlist.
-FormList Function PickGiftList(int gold)
-	if (gold < 25)
-		return BYOHRelationshipAdoptionGifts_0000
-	ElseIf (gold < 50)
-; 		;Debug.Trace("Pick gift from list 0025")
-		return BYOHRelationshipAdoptionGifts_0025
-	ElseIf (gold < 100)
-; 		;Debug.Trace("Pick gift from list 050")
-		return BYOHRelationshipAdoptionGifts_0050
-	ElseIf (gold < 250)
-; 		;Debug.Trace("Pick gift from list 0100")
-		return BYOHRelationshipAdoptionGifts_0100
-	ElseIf (gold < 500)
-; 		;Debug.Trace("Pick gift from list 0250")
-		return BYOHRelationshipAdoptionGifts_0250
-	ElseIf (gold < 1000)
-; 		;Debug.Trace("Pick gift from list 500")
-		return BYOHRelationshipAdoptionGifts_0500
-	EndIf
-	;Else case...
-; 	;Debug.Trace("Pick gift from list 1000")
-	return BYOHRelationshipAdoptionGifts_1000
-EndFunction
-
-;Give Player Gift Event: Helper Function to select the appropriate deduction.
-int Function PickDeduction(int gold)
-	if (gold < 25)
-		return 1
-	ElseIf (gold < 50)
-		return 25
-	ElseIf (gold < 100)
-		return 50
-	ElseIf (gold < 250)
-		return 100
-	ElseIf (gold < 500)
-		return 250
-	ElseIf (gold < 1000)
-		return 500
-	EndIf
-	;Else case...
-	return 1000
+    Location houseLoc = CurrentHomeHouse.GetLocation()
+    if (houseLoc == None && childChest != None)
+        houseLoc = childChest.GetCurrentLocation()
+    endif
+    MARAS.RefillChildChestFromLists(childChest, houseLoc, BYOHRelationshipAdoptionGifts_Junk, BYOHRelationshipAdoptionGifts_0000, BYOHRelationshipAdoptionGifts_0025, BYOHRelationshipAdoptionGifts_0050, BYOHRelationshipAdoptionGifts_0100, BYOHRelationshipAdoptionGifts_0250, BYOHRelationshipAdoptionGifts_0500, BYOHRelationshipAdoptionGifts_1000)
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------
@@ -563,7 +465,9 @@ EndFunction
 
 ;Reject the pet under consideration for a child, recording retry timestamp (15d cooldown).
 Function RejectPetForChild(Actor child)
-	MARAS.RecordChildPetRetry(TransientPet.GetActorRef())
+	if (child)
+		MARAS.RecordChildPetRetry(child)
+	endif
 EndFunction
 
 ;Ban pet events for a specific child or globally.
@@ -577,81 +481,16 @@ EndFunction
 
 
 Function GiveAllowance(Actor child, int AllowanceAmount)
-    if(AllowanceAmount > 0)
-        Game.GetPlayer().RemoveItem(Gold001, AllowanceAmount)
-        child.AddItem(Gold001, AllowanceAmount)
-        SetPoor(AllowanceAmount)
+    PoorCounter = MARAS.ProcessChildAllowance(child, AllowanceAmount)
+    if (AllowanceAmount > 0)
         PlayerBeggarAbility()
-        MARAS.RecordChildInteraction(child)
-    else
-        SetPoor(0)
-    endif
-EndFunction
-
-Function SetPoor(int AllowanceAmount = 0)
-    Actor player = Game.GetPlayer()
-    int delta = 0
-    if(AllowanceAmount <= 0)
-        delta = 1
-    elseif(AllowanceAmount <= 25)
-        delta = -1
-    elseif(AllowanceAmount <= 100)
-        delta = -2
-    elseif(AllowanceAmount <= 500)
-        delta = -3
-    else
-        delta = -5
-    endif
-    ChangePoorCount(delta)
-EndFunction
-
-Function ChangePoorCount(int delta)
-    PoorCounter += delta
-    if(PoorCounter < 0)
-        PoorCounter = 0
     endif
 EndFunction
 
 ;Evaluate the pet in the TransientPet alias to determine whether it's suitable for adoption, and whether it's a dog.
 ;Returns the int (Faction Rank) representing the suitability. Stores the 'dog' status as AV06=1.
 int Function EvaluatePetSuitability()
-	int suitability = 1	;1=None, 2=UNUSED, 3=All Children
-
-	Race transient = TransientPet.GetActorRef().GetRace()
-	Race current
-
-	;Is this pet a dog? If so, store it as AV06=0.
-	int i = 0
-	While (i < BYOHRelationshipAdoption_PetDogsList.GetSize())
-		current = BYOHRelationshipAdoption_PetDogsList.GetAt(i) as Race
-; 		;Debug.Trace("Comparing: " + transient + " : " + current)
-		if (current == transient)
-; 			;Debug.Trace("Pet is a dog.")
-			TransientPet.GetActorRef().SetAV("Variable06", 1)
-			i = BYOHRelationshipAdoption_PetDogsList.GetSize()
-		EndIf
-		i = i + 1
-	EndWhile
-
-	;Is this pet adoptable by any child?
-	i = 0
-	While (i < BYOHRelationshipAdoption_PetAllowedRacesList.GetSize())
-		current = BYOHRelationshipAdoption_PetAllowedRacesList.GetAt(i) as Race
-; 		;Debug.Trace("Comparing: " + transient + " : " + current)
-		if (current == transient)
-; 			;Debug.Trace("EvalPetSuitability found pet in General list.")
-			suitability = 3
-			i = BYOHRelationshipAdoption_PetAllowedRacesList.GetSize()
-		EndIf
-		i = i + 1
-	EndWhile
-
-	;Update the faction rank to store this result for use as a dialogue condition.
-	TransientPet.GetActorRef().SetFactionRank(BYOHRelationshipPotentialPetFaction, suitability)
-
-	;Return the rank so we can decide which child to use for this event.
-; 	;Debug.Trace("EvalPetSuitability returns: " + suitability)
-	return suitability
+	return MARAS.EvaluateChildPetSuitability(TransientPet.GetActorRef(), BYOHRelationshipAdoption_PetDogsList, BYOHRelationshipAdoption_PetAllowedRacesList, BYOHRelationshipPotentialPetFaction)
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------
@@ -662,31 +501,20 @@ EndFunction
 
 ;Spawn a new critter the child will ask to keep.
 Function SetupCritter(Actor child)
-; 	;Debug.Trace("Now setting up the critter.")
-
-	;Pick a critter from the formlist. Anything but the last one we rejected will do.
-	Actor newCritter = SpawnTransientCritter(child)
-
-	;EVP Child and Critter, then move them to their scene locations.
-	child.EvaluatePackage()
-	child.MoveToPackageLocation()
-	newCritter.EvaluatePackage()
-	newCritter.MoveToPackageLocation()
+	Actor newCritter = MARAS.SpawnChildTransientCritter(child, BYOHRelationshipAdoption_CrittersMale, BYOHRelationshipAdoption_CrittersFemale)
+	if (child)
+		child.EvaluatePackage()
+		child.MoveToPackageLocation()
+	endif
+	if (newCritter)
+		newCritter.EvaluatePackage()
+		newCritter.MoveToPackageLocation()
+	endif
 EndFunction
 
 ;Adopt the critter under consideration into the family.
 Function AdoptCritter(Actor child)
-	if (!child)
-		return
-	endif
-    Actor critterAk = StorageUtil.GetFormValue(child, "TransientCritter") as Actor
-    StorageUtil.FormListClear(child, "TransientCritter")
-
-    if (critterAk)
-		MARAS.AssignChildCritter(child, critterAk)
-		critterAk.EvaluatePackage()
-		MARAS.RecordChildInteraction(child)
-	endif
+	MARAS.AdoptChildTransientCritter(child)
 EndFunction
 
 ;Reject the critter under consideration for a child, recording retry timestamp (15d cooldown).
@@ -695,7 +523,7 @@ Function RejectCritterForChild(Actor child)
 		return
 	endif
 	MARAS.RecordChildCritterRetry(child)
-    RemoveTransientCritter(child)
+	MARAS.DismissChildTransientCritter(child)
 EndFunction
 
 ;Ban critter events for a specific child or globally.
@@ -705,36 +533,7 @@ Function BanCritterForChild(Actor child, bool globalBan = false)
 	elseif (child)
 		MARAS.SetChildCritterBanned(child, true)
 	endif
-	RemoveTransientCritter(child)
-EndFunction
-
-Actor Function SpawnTransientCritter(Actor child)
-    ActorBase critterBase
-    If (child.GetActorBase().GetSex() == 0)
-        critterBase = 	BYOHRelationshipAdoption_CrittersMale.GetAt(Utility.RandomInt(0, BYOHRelationshipAdoption_CrittersMale.GetSize() - 1)) as ActorBase
-    Else
-        critterBase = 	BYOHRelationshipAdoption_CrittersFemale.GetAt(Utility.RandomInt(0, BYOHRelationshipAdoption_CrittersFemale.GetSize() - 1)) as ActorBase
-    EndIf
-
-	;Create the critter and force it into aliases.
-; 	;Debug.Trace("Spawning: " + critterBase)
-	Actor newCritter = child.PlaceAtMe(critterBase, 1, true) as Actor
-    string critterName = MARAS.GenerateRandomCritterNameForActor(newCritter)
-    string childName = TTM_Utils.GetActorName(child)
-    newCritter.SetDisplayName(childName + "'s " + critterName)
-
-    StorageUtil.SetFormValue(child, "TransientCritter", newCritter)
-
-    return newCritter
-EndFunction
-
-Function RemoveTransientCritter(Actor child)
-    Actor critterAk = StorageUtil.GetFormValue(child, "TransientCritter") as Actor
-    StorageUtil.FormListClear(child, "TransientCritter")
-    if (critterAk)
-        critterAk.Disable(True)
-        critterAk.Delete()
-    endif
+	MARAS.DismissChildTransientCritter(child)
 EndFunction
 
 ;When a critter dies for a child:
@@ -760,164 +559,57 @@ EndFunction
 ;Set up a Forcegreet Event when requested by a Location Change event.
 Function ReadyForcegreetEvent(Location currentLoc)
     TTM_Debug.debug("ReadyForcegreetEvent() currentLoc(" + currentLoc + "): "+ ForcegreetEventReady)
-; 	Debug.Trace("Attempting to ready Forcegreet Event")
 	if (!ForcegreetEventReady)
 		ForcegreetEventReady = True
-
-		;Make sure the children aren't in any games.
 		StopGames()
 
+		string planJson = MARAS.SelectChildForcegreetEvent(currentLoc, AnimalCompanion.GetActorRef() != None, critterChance, nameCallingChance)
+		int eventNumber = MARAS.GetJsonInt(planJson, "eventNumber", 0)
+		Actor eventChild = MARAS.GetJsonActor(planJson, "eventChild")
 
-		;Declare some local variables.
-		int eventNumber = 0
-		Actor eventChild
-
-		;Select the event.
-
-		;EVENT 1 - CHILD THANKS PLAYER FOR ADOPTION, NO CHEST INTRO
-		;Occurs if: Child newly adopted, Initial Move is a Dirty Move
-; 		Debug.Trace("New Adoption: " + (Child1NewlyAdopted || Child2NewlyAdopted) + "  Initial Move: " + initialMoveDone + "  Chest Intro'd: " + ChildChestIntroduced)
-        Actor newlyAdoptedChild = MARAS.GetNewlyAdoptedChild(currentLoc)
-        TTM_Debug.debug("ReadyForcegreetEvent() newlyAdoptedChild(" + newlyAdoptedChild + ")")
-		if (newlyAdoptedChild)
-			eventNumber = 1
-            ;EVENT 2 - CHILD THANKS PLAYER FOR ADOPTION, INCLUDES CHEST INTRO
-            if(!ChildChestIntroduced)
-                ChildChestIntroduced = True
-                eventNumber = 2
-                TTM_Debug.debug("ReadyForcegreetEvent() ThankForAdoption:ChestIntro eventChild(" + newlyAdoptedChild + ")")
-            else
-                TTM_Debug.debug("ReadyForcegreetEvent() ThankForAdoption:NoChestIntro eventChild(" + newlyAdoptedChild + ")")
-            endif
-
-            eventChild = newlyAdoptedChild
-            MARAS.SetChildIsNewlyAdopted(eventChild, false, true)
-        endif
-
-		;EVENT 3 - CHILD INTRODUCES CHEST SYSTEM
-		;Occurs if: Child previously performed
-		if(eventNumber == 0)
-            if(!ChildChestIntroduced)
-                ChildChestIntroduced = True
-                eventNumber = 3
-                eventChild = MARAS.GetWeightedRandomChild(currentLoc)
-                TTM_Debug.debug("ReadyForcegreetEvent() ChestIntro: eventChild(" + eventChild + ")")
-            endif
-        endif
-
-		;EVENT 4 - ADOPT A PET
-		;Occurs if: FamilyPet is empty, Player has an Animal Companion, time > petRetryTime
-        if (eventNumber == 0)
-            Actor childAllowedToHavePet = MARAS.GetChildWithoutPet(currentLoc)
-            TTM_Debug.debug("ReadyForcegreetEvent() GetChildWithoutPet: eventChild(" + childAllowedToHavePet + ")")
-
-            if(AnimalCompanion.GetActorRef() != None && childAllowedToHavePet)
-                TransientPet.ForceRefTo(AnimalCompanion.GetActorRef())
-                int suitability = EvaluatePetSuitability()
-                eventNumber = 4
-                eventChild = childAllowedToHavePet
-                TTM_Debug.debug("ReadyForcegreetEvent() AdoptAPet: eventChild(" + eventChild + ")")
-            endif
-        endif
-
-		;EVENT 5 - ADOPT A CRITTER
-		;Occurs if: FamilyCritter is empty, time > critterRetryTime, 10% Chance
-		if (eventNumber == 0)
-            Actor childAllowedToHaveCritter = MARAS.GetChildWithoutCritter(currentLoc)
-            TTM_Debug.debug("ReadyForcegreetEvent() GetChildWithoutCritter: eventChild(" + childAllowedToHaveCritter + ")")
-            if(childAllowedToHaveCritter && Utility.RandomInt(1, 100) < critterChance)
-                eventNumber = 5
-                eventChild = childAllowedToHaveCritter
-                SetupCritter(eventChild)
-                TTM_Debug.debug("ReadyForcegreetEvent() AdoptACritter: eventChild(" + eventChild + ")")
-            endif
-        endif
-
-
-		;EVENT 6 - NAME CALLING 1
-		;Occurs if: Player has two children, they haven't played this scene before, they didn't do a Name Calling Scene last time, 10% chance.
-        if (eventNumber == 0)
-            Actor[] scene1Children = MARAS.GetChildrenWithoutScene(currentLoc, 1)
-            TTM_Debug.debug("ReadyForcegreetEvent() GetChildrenWithoutScene: scene1Children: child1: " + scene1Children[0] + "  child2: " + scene1Children[1])
-            if(scene1Children.Length == 2 && !NameCallingUsedLast && Utility.RandomInt(1, 100) < nameCallingChance)
-                Quest sceneQst = SceneChild1.GetOwningQuest()
-                bool started = sceneQst.Start()
-                TTM_Debug.debug("ReadyForcegreetEvent() NameCalling01: sceneQst: " + sceneQst + "  started: " + started)
-                if(started)
-                    eventNumber = 6
-                    NameCallingUsedLast = True
-                    ; ResortChildrenForNameCalling()
-                    BlockGames(scene1Children[0])
-                    BlockGames(scene1Children[1])
-                    SceneChild1.ForceRefTo(scene1Children[0])
-                    SceneChild2.ForceRefTo(scene1Children[1])
-                    scene1Children[0].SetActorValue("Variable07", eventNumber)
-                    scene1Children[1].SetActorValue("Variable07", eventNumber)
-                    scene1Children[0].MoveTo(SchedulerSceneMarker1.GetReference())
-                    scene1Children[1].MoveTo(SchedulerSceneMarker2.GetReference())
-                    scene1Children[0].EvaluatePackage()
-                    scene1Children[1].EvaluatePackage()
-                    TTM_DialoguesChildrenScenes_SceneNameCalling01.Start()
-                    TTM_Debug.debug("ReadyForcegreetEvent() NameCalling01: sceneChild1: " + scene1Children[0] + "  sceneChild2: " + scene1Children[1])
-                    return
-                endif
-            endif
-        endif
-
-		;EVENT 7 - NAME CALLING 2
-		;Occurs if: Player has two children, they haven't played this scene before, they didn't do a Name Calling Scene last time, 10% chance.
-		if (eventNumber == 0)
-            Actor[] scene2Children = MARAS.GetChildrenWithoutScene(currentLoc, 2)
-            TTM_Debug.debug("ReadyForcegreetEvent() GetChildrenWithoutScene: scene2Children: child1: " + scene2Children[0] + "  child2: " + scene2Children[1])
-            if(scene2Children.Length == 2 && !NameCallingUsedLast && Utility.RandomInt(1, 100) < nameCallingChance)
-                Quest sceneQst = SceneChild1.GetOwningQuest()
-                bool started = sceneQst.Start()
-                TTM_Debug.debug("ReadyForcegreetEvent() NameCalling02: sceneQst: " + sceneQst + "  started: " + started)
-                if(started)
-                    eventNumber = 7
-                    NameCallingUsedLast = True
-                    ; ResortChildrenForNameCalling()
-                    BlockGames(scene2Children[0])
-                    BlockGames(scene2Children[1])
-                    SceneChild1.ForceRefTo(scene2Children[0])
-                    SceneChild2.ForceRefTo(scene2Children[1])
-                    scene2Children[0].SetActorValue("Variable07", eventNumber)
-                    scene2Children[1].SetActorValue("Variable07", eventNumber)
-                    scene2Children[0].MoveTo(SchedulerSceneMarker1.GetReference())
-                    scene2Children[1].MoveTo(SchedulerSceneMarker2.GetReference())
-                    scene2Children[0].EvaluatePackage()
-                    scene2Children[1].EvaluatePackage()
-                    TTM_DialoguesChildrenScenes_SceneNameCalling02.Start()
-                    TTM_Debug.debug("ReadyForcegreetEvent() NameCalling02: sceneChild1: " + scene2Children[0] + "  sceneChild2: " + scene2Children[1])
-                    return
-                endif
-            endif
-        endif
-
-		;EVENT 10-13 - GENERIC EVENTS
-		;Randomly select from one of the other events.
-		if (eventNumber == 0)
-			eventNumber = Utility.RandomInt(10, 13)
-			eventChild = MARAS.GetWeightedRandomChild(currentLoc)
-            TTM_Debug.debug("ReadyForcegreetEvent() Generic: eventChild: " + eventChild + "  eventNumber: " + eventNumber)
+		if (eventNumber == 4)
+			TransientPet.ForceRefTo(AnimalCompanion.GetActorRef())
+			EvaluatePetSuitability()
+		elseif (eventNumber == 5)
+			SetupCritter(eventChild)
+		elseif (eventNumber == 6 || eventNumber == 7)
+			Actor sc1 = MARAS.GetJsonActor(planJson, "sceneChild1")
+			Actor sc2 = MARAS.GetJsonActor(planJson, "sceneChild2")
+			Quest sceneQst = SceneChild1.GetOwningQuest()
+			bool started = (sc1 != None && sc2 != None && sceneQst != None && sceneQst.Start())
+			if (started)
+				MARAS.CommitNameCallingForcegreet(eventNumber)
+				BlockGames(sc1)
+				BlockGames(sc2)
+				SceneChild1.ForceRefTo(sc1)
+				SceneChild2.ForceRefTo(sc2)
+				sc1.SetActorValue("Variable07", eventNumber)
+				sc2.SetActorValue("Variable07", eventNumber)
+				sc1.MoveTo(SchedulerSceneMarker1.GetReference())
+				sc2.MoveTo(SchedulerSceneMarker2.GetReference())
+				sc1.EvaluatePackage()
+				sc2.EvaluatePackage()
+				if (eventNumber == 6)
+					TTM_DialoguesChildrenScenes_SceneNameCalling01.Start()
+				else
+					TTM_DialoguesChildrenScenes_SceneNameCalling02.Start()
+				endif
+				return
+			else
+				string fbJson = MARAS.SelectGenericChildForcegreetFallback(currentLoc)
+				eventNumber = MARAS.GetJsonInt(fbJson, "eventNumber", 0)
+				eventChild = MARAS.GetJsonActor(fbJson, "eventChild")
+			endif
 		endif
 
-		;For all of the non-Generic Forcegreets, block games on the selected child to prevent interference.
-		if (eventNumber < 10)
+		if (eventNumber > 0 && eventNumber < 10 && eventChild)
 			BlockGames(eventChild)
-		EndIf
+		endif
 
-		;If we used a Name Calling scene last time around, but we're doing something different this time, clear the flag.
-		if (NameCallingUsedLast && eventNumber != 6 && eventNumber != 7)
-			NameCallingUsedLast = False
-		EndIf
-
-        if(eventChild)
-            ;Trigger the selected event.
-            eventChild.SetActorValue("Variable07", eventNumber)
-            eventChild.EvaluatePackage()
-        endif
-
+		if (eventChild && eventNumber > 0)
+			eventChild.SetActorValue("Variable07", eventNumber)
+			eventChild.EvaluatePackage()
+		endif
 	EndIf
 EndFunction
 
@@ -995,27 +687,12 @@ EndFunction
 
 ;Give Player Gift Event: Roll up a poor gift if appropriate.
 Function FGReceivePoorGift(Actor child)
-	Formlist temp = BYOHRelationshipAdoptionGifts_Poor
-	int roll = Utility.RandomInt(0, temp.GetSize() - 1)
-	Game.GetPlayer().AddItem(temp.GetAt(roll), 1)
-	ChangePoorCount(2)
-	MARAS.RecordChildInteraction(child)
+	PoorCounter = MARAS.ProcessChildPoorGift(child, BYOHRelationshipAdoptionGifts_Poor)
 EndFunction
 
 ;Give Player Gift Event: Roll up a gift, give it, and deduct the cost.
 Function FGReceiveGift(Actor child)
-	Formlist list = PickGiftList(child.GetItemCount(Gold001))			;Decide which list of gifts to use.
-	int roll = Utility.RandomInt(0, list.GetSize())						;Roll for a gift on the list.
-	int luck = 1																;Small chance of giving two of an item.
-	if (Utility.RandomInt() > 90)
-		luck = 2
-	EndIf
-	Game.GetPlayer().AddItem(list.GetAt(roll), luck)						;Give the gift
-	int deduction = PickDeduction(child.GetItemCount(Gold001))			;Determine how much to 'charge' the child for the gift.
-	deduction = (deduction / 2) + Utility.RandomInt(0, deduction / 2)
-; 	;Debug.Trace("Deducting: " + deduction)
-	child.RemoveItem(Gold001, deduction * luck)
-	MARAS.RecordChildInteraction(child)
+	MARAS.ProcessChildRegularGift(child, BYOHRelationshipAdoptionGifts_0000, BYOHRelationshipAdoptionGifts_0025, BYOHRelationshipAdoptionGifts_0050, BYOHRelationshipAdoptionGifts_0100, BYOHRelationshipAdoptionGifts_0250, BYOHRelationshipAdoptionGifts_0500, BYOHRelationshipAdoptionGifts_1000)
 EndFunction
 
 ;Name-Calling Events (6 & 7)
@@ -1055,6 +732,9 @@ EndFunction
 ; - Triggering Return Home events.
 Function PlayerLocationChanged(Location newLoc, Location oldLoc, bool onGameLoad = false)
     ForcegreetEventReady = false
+    if (onGameLoad)
+        PoorCounter = MARAS.GetChildPoorCounter()
+    endif
     TTM_Debug.debug("TTM_ServiceChildrenLogic:PlayerLocationChanged:newLoc:" + newLoc + ":oldLoc:" + oldLoc + ":currLoc:"+ Game.GetPlayer().GetCurrentLocation())
     ;Determine whether to trigger a Welcome Home event.
     bool isNewLocPlayerHouse = newLoc.HasKeywordString("LocTypePlayerHouse")
@@ -1302,25 +982,6 @@ Actor Function GetChildSpawnAnchor(Actor guardianA, Actor guardianB, Actor bioMo
 EndFunction
 
 ;/
-  Helper: Determines whether a synthetic child belongs to the player's household (via player parentage, guardianship, or marriage to a parent/guardian).
-/;
-bool Function IsLineagePlayerChild(Actor guardianA, Actor guardianB, Actor bioMother, Actor bioFather, Actor player)
-    if (guardianA != None || guardianB != None)
-        if (guardianA == player || guardianB == player)
-            return true
-        elseif ((guardianA != None && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != None && MARAS.IsNPCStatus(guardianB, "married")))
-            return true
-        endif
-    elseif (player == bioMother || player == bioFather)
-        return true
-    endif
-    if (guardianA == None && guardianB == None && ((bioMother != None && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != None && MARAS.IsNPCStatus(bioFather, "married"))))
-        return true
-    endif
-    return false
-EndFunction
-
-;/
   Helper: Picks a random valid ActorBase from a single Beeing Female StorageUtil FormList holder
   (mirrors FWAddOnManager.PickRandomActorBase in Beeing-Female-NG).
 /;
@@ -1501,30 +1162,12 @@ Function SpawnSyntheticChild(int syntheticID)
         spawnedChild.SetDisplayName(childName, true)
     endif
 
-    bool isPlayerChild = IsLineagePlayerChild(guardianA, guardianB, bioMother, bioFather, player)
-    TTM_Debug.debug("TTM_ServiceChildrenLogic: SpawnSyntheticChild isPlayerChild: " + isPlayerChild)
-
-    if (isPlayerChild)
-        Actor coSpouse = None
-        if (guardianA != None && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
-            coSpouse = guardianA
-        elseif (guardianB != None && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
-            coSpouse = guardianB
-        endif
-        AdoptChild(spawnedChild, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = 2)
-    else
-        Actor gA = guardianA
-        Actor gB = guardianB
-        if (gA == None && gB == None)
-            gA = bioMother
-            gB = MARAS.GetMotherPartner(syntheticID)
-            if (gB == None)
-                gB = bioFather
-            endif
-        endif
-        MARAS.RegisterChildActor(spawnedChild, gA, gB, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, stage = 2)
+    if (MARAS.RegisterNpcFertilityChildSpawn(spawnedChild, syntheticID, bioMother, bioFather, 2, false))
         spawnedChild.EvaluatePackage()
         spawnedChild.MoveToPackageLocation()
+    else
+        Actor coSpouse = MARAS.GetFertilitySpawnCoSpouse(syntheticID, bioMother, bioFather)
+        AdoptChild(spawnedChild, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = 2)
     endif
 
     spawnedChild.EvaluatePackage()
@@ -1649,32 +1292,9 @@ Function SpawnAdultChild(int syntheticID)
         spawnedAdult.SetDisplayName(childName, true)
     endif
 
-    bool isPlayerChild = IsLineagePlayerChild(guardianA, guardianB, bioMother, bioFather, player)
-    TTM_Debug.debug("TTM_ServiceChildrenLogic: SpawnAdultChild isPlayerChild: " + isPlayerChild)
-
-    if (isPlayerChild)
-        Actor coSpouse = None
-        if (guardianA != None && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
-            coSpouse = guardianA
-        elseif (guardianB != None && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
-            coSpouse = guardianB
-        elseif (bioMother != None && bioMother != player && MARAS.IsNPCStatus(bioMother, "married"))
-            coSpouse = bioMother
-        elseif (bioFather != None && bioFather != player && MARAS.IsNPCStatus(bioFather, "married"))
-            coSpouse = bioFather
-        endif
+    if (!MARAS.RegisterNpcFertilityChildSpawn(spawnedAdult, syntheticID, bioMother, bioFather, 4, false))
+        Actor coSpouse = MARAS.GetFertilitySpawnCoSpouse(syntheticID, bioMother, bioFather)
         MARAS.RegisterChildActor(spawnedAdult, player, coSpouse, None, bioMother, bioFather, syntheticID, 4)
-    else
-        Actor gA = guardianA
-        Actor gB = guardianB
-        if (gA == None && gB == None)
-            gA = bioMother
-            gB = MARAS.GetMotherPartner(syntheticID)
-            if (gB == None)
-                gB = bioFather
-            endif
-        endif
-        MARAS.RegisterChildActor(spawnedAdult, gA, gB, None, bioMother, bioFather, syntheticID, 4)
     endif
 
     spawnedAdult.EvaluatePackage()

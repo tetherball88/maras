@@ -270,4 +270,75 @@ namespace MARAS::Domain::Relationships {
         return out;
     }
 
+    float ComputeLoversLedgerIntimacyBonus(
+        int exclusiveSexCount,
+        int partOfSameGroupSexCount,
+        int playerTopLoverRank) noexcept {
+        float res = 0.0f;
+        if (exclusiveSexCount >= 1) {
+            res += 10.0f;
+        } else if (partOfSameGroupSexCount >= 1) {
+            res += 6.0f;
+        }
+        if (playerTopLoverRank >= 0 && playerTopLoverRank < 3) {
+            res += 2.0f * static_cast<float>(3 - playerTopLoverRank);
+        }
+        return res;
+    }
+
+    float ComputeIntimacyAdjustment(
+        bool hasMarriedPartner,
+        bool isSpouseAlsoLover,
+        bool hasEngagedPartner,
+        bool isFianceAlsoLover,
+        bool hasAnyLover,
+        float ttllIntimacyBonus) noexcept {
+        float res = 0.0f;
+        if (hasMarriedPartner) {
+            res += isSpouseAlsoLover ? 30.0f : 25.0f;
+        } else if (hasEngagedPartner) {
+            res += isFianceAlsoLover ? 20.0f : 15.0f;
+        } else if (hasAnyLover) {
+            res += 10.0f;
+        }
+        return res - ttllIntimacyBonus;
+    }
+
+    NoAiDialogueChances ComputeNoAiDialogueChances(
+        float rawMarriageSuccessChance01,
+        bool alwaysSuccessMarriage,
+        Foundation::RelationshipStatus playerNpcStatus,
+        bool npcHasClosedMainPair,
+        bool playerHasClosedMainPair) noexcept {
+        if (alwaysSuccessMarriage) {
+            return NoAiDialogueChances{ 100.0f, 100.0f, 100.0f };
+        }
+
+        float basePct = std::clamp(std::round(rawMarriageSuccessChance01 * 100.0f), 0.0f, 100.0f);
+        if (npcHasClosedMainPair || playerHasClosedMainPair) {
+            basePct *= 0.6f;
+        }
+        if (Foundation::IsBreakupStatus(playerNpcStatus)) {
+            basePct *= 0.75f;
+        }
+
+        float lover = basePct * 1.3f;
+        float dating = basePct * 1.15f;
+        float marriage = basePct;
+
+        if (playerNpcStatus == Foundation::RelationshipStatus::Lover) {
+            marriage *= 1.2f;
+            dating *= 1.5f;
+        }
+        if (playerNpcStatus == Foundation::RelationshipStatus::Dating) {
+            marriage *= 1.5f;
+        }
+
+        return NoAiDialogueChances{
+            std::clamp(dating, 0.0f, 100.0f),
+            std::clamp(lover, 0.0f, 100.0f),
+            std::clamp(marriage, 0.0f, 100.0f),
+        };
+    }
+
 }  // namespace MARAS::Domain::Relationships

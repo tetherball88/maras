@@ -2,12 +2,16 @@
 
 #include "maras/app/AgencyWorkflowCoordinator.h"
 #include "maras/app/AppContext.h"
+#include "maras/app/DialogueOutcomeCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/ModalTypes.h"
+#include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
+#include "maras/app/SkyrimNetActionCoordinator.h"
 #include "maras/app/SkyrimNetGateway.h"
+#include "maras/domain/relationships/DialogueAndActionRules.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BanterSceneStarter.h"
 #include "maras/engine/ChildrenFleeService.h"
@@ -15,6 +19,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/IntimateThreadService.h"
 #include "maras/engine/JsonService.h"
+#include "maras/engine/PromptStringsLoader.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -278,87 +283,13 @@ namespace MARAS::PapyrusInterface {
                     }
                     DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 0, "ShowSkipWeddingModal");
                 } else {
+                    if (dontAskAgain) {
+                        std::lock_guard lock(GetPapyrusMutex());
+                        App::RelationshipInteractionCoordinator::GetSingleton().SetDontShowSkipWeddingMessage(true);
+                        MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal - persisted dontShowSkipWeddingMessage=true");
+                    }
                     const int32_t result = dontAskAgain ? 2 : 1;
                     DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, result, "ShowSkipWeddingModal");
-                }
-            });
-
-        return RE::BSScript::LatentStatus::kStarted;
-    }
-
-    RE::BSScript::LatentStatus ShowDivorceSettlementModal(RE::BSScript::Internal::VirtualMachine* vm,
-                                                          RE::VMStackID stackID,
-                                                          RE::StaticFunctionTag*,
-                                                          RE::Actor* exSpouse,
-                                                          int32_t totalFee,
-                                                          int32_t goldShare,
-                                                          int32_t assetsShare,
-                                                          bool canPayDirectly) {
-        if (!SKSE::GetTaskInterface()) {
-            MARAS_LOG_ERROR("PapyrusInterface: ShowDivorceSettlementModal - SKSE task interface unavailable");
-            return RE::BSScript::LatentStatus::kFailed;
-        }
-
-        const std::string spouseName = exSpouse ? ActorSvc::GetName(exSpouse->GetFormID()) : "";
-
-        App::ModalRequest req;
-        req.title = "Divorce Settlement Notice";
-        req.subtitle = !spouseName.empty() ? spouseName : "Hold Court";
-        req.message = !spouseName.empty()
-            ? ("A hold court has issued a divorce settlement ruling following your divorce from " + spouseName + ".")
-            : "A hold court has issued a divorce settlement ruling.";
-        req.tone = App::ModalTone::Danger;
-        req.size = App::ModalSize::Md;
-        req.defaultCancelButtonIndex = canPayDirectly ? 1 : 0;
-
-        const std::string breakdownText = std::format(
-            "Court Filing Fee: 100 Gold\n"
-            "Liquid Wealth Share: {} Gold\n"
-            "Property & Renown Assessment: {} Gold\n"
-            "Total Settlement Due: {} Gold",
-            goldShare, assetsShare, totalFee);
-
-        req.controls.push_back(App::ModalControl::MakeInfoBox(
-            "fee_breakdown",
-            "Settlement Breakdown",
-            breakdownText,
-            App::ModalTone::Warning));
-
-        if (canPayDirectly) {
-            req.buttons.push_back(App::ModalButton::Make(
-                "pay_now",
-                std::format("Pay Settlement Now ({} Gold)", totalFee),
-                App::ModalButtonVariant::Primary));
-            req.buttons.push_back(App::ModalButton::Make(
-                "refuse_bounty",
-                "Refuse / Add to Hold Bounty",
-                App::ModalButtonVariant::Danger));
-        } else {
-            req.buttons.push_back(App::ModalButton::Make(
-                "accept_bounty",
-                std::format("Accept Hold Bounty ({} Gold)", totalFee),
-                App::ModalButtonVariant::Danger));
-        }
-
-        MARAS_LOG_INFO("PapyrusInterface: ShowDivorceSettlementModal queuing modal for '{}' (fee={}, canPayDirectly={})",
-                       req.subtitle, totalFee, canPayDirectly);
-
-        const SessionEpoch expectedEpoch = GetSessionEpoch();
-        App::GetModalGateway().ShowModal(
-            std::move(req),
-            [expectedEpoch, vm, stackID, canPayDirectly](const App::ModalResponse& resp) {
-                if (!IsSessionEpochCurrent(expectedEpoch)) {
-                    return;
-                }
-                if (resp.aborted) {
-                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 1, "ShowDivorceSettlementModal");
-                    return;
-                }
-
-                if (canPayDirectly && (resp.buttonIndex == 0 || resp.buttonId == "pay_now")) {
-                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 0, "ShowDivorceSettlementModal");
-                } else {
-                    DispatchLatentResult<int32_t>(expectedEpoch, vm, stackID, 1, "ShowDivorceSettlementModal");
                 }
             });
 
@@ -916,32 +847,23 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     RE::Actor* FindActorByName(RE::StaticFunctionTag*, std::string name) {
-        if (name.empty()) {
-            return nullptr;
-        }
+        return App::SkyrimNetActionCoordinator::ResolveActorByName(name);
+    }
 
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (player) {
-            const std::string pName = ActorSvc::GetName(kPlayerFormID);
-            if (Foundation::StringUtils::CaseInsensitiveEquals(name, pName) ||
-                Foundation::StringUtils::CaseInsensitiveEquals(name, "Player") ||
-                Foundation::StringUtils::CaseInsensitiveEquals(name, "The Dragonborn")) {
-                return player;
-            }
-        }
+    std::string GetDialoguePrompt(RE::StaticFunctionTag*, std::string promptKey) {
+        return Engine::PromptStringsLoader::GetSingleton().GetPrompt(promptKey);
+    }
 
-        const auto entry = SpatialWorldIndex::GetSingleton().FindByName(name);
-        if (!entry) {
-            return nullptr;
-        }
+    int32_t ApplyDialoguePromptBegin(RE::StaticFunctionTag*, RE::Actor* speaker, std::string promptKey) {
+        return App::DialogueOutcomeCoordinator::GetSingleton().ApplyDialoguePromptBegin(speaker, promptKey);
+    }
 
-        if (!entry->isUnique) {
-            MARAS_LOG_INFO("[SpatialWorldIndex] FindActorByName: '{}' is non-unique NPC (guard/soldier/generic); returning none", name);
-            return nullptr;
-        }
+    int32_t ApplyDialoguePromptEnd(RE::StaticFunctionTag*, RE::Actor* speaker, std::string promptKey) {
+        return App::DialogueOutcomeCoordinator::GetSingleton().ApplyDialoguePromptEnd(speaker, promptKey);
+    }
 
-        const RE::FormID refID = entry->refFormID != 0 ? entry->refFormID : entry->baseFormID;
-        return SpatialWorldIndex::GetSingleton().GetActorFromFormId(refID);
+    int32_t GetDivorceResolutionQuestStage(RE::StaticFunctionTag*, std::string decision) {
+        return Domain::Relationships::ParseDivorceResolutionQuestStage(decision);
     }
 
     // ========================================
@@ -958,9 +880,24 @@ namespace MARAS::PapyrusInterface {
         IntimateThreadService::GetSingleton().ReportIntimateInteraction(framework, threadID, actorA, actorB);
     }
 
-    void ClearIntimateThread(RE::StaticFunctionTag*, std::string framework, int32_t threadID) {
+    bool IsIntimateThreadTracked(RE::StaticFunctionTag*, std::string framework, int32_t threadID) {
         std::lock_guard lock(GetPapyrusMutex());
-        IntimateThreadService::GetSingleton().ClearIntimateThread(framework, threadID);
+        return IntimateThreadService::GetSingleton().IsIntimateThreadTracked(framework, threadID);
+    }
+
+    bool HasIntimateThreadPlayerParticipants(RE::StaticFunctionTag*, std::string framework, int32_t threadID) {
+        std::lock_guard lock(GetPapyrusMutex());
+        return IntimateThreadService::GetSingleton().HasIntimateThreadPlayerParticipants(framework, threadID);
+    }
+
+    void MarkIntimateThreadSexual(RE::StaticFunctionTag*, std::string framework, int32_t threadID) {
+        std::lock_guard lock(GetPapyrusMutex());
+        IntimateThreadService::GetSingleton().MarkIntimateThreadSexual(framework, threadID);
+    }
+
+    void ClearIntimateThread(RE::StaticFunctionTag*, std::string framework, int32_t threadID, bool hadSex) {
+        std::lock_guard lock(GetPapyrusMutex());
+        IntimateThreadService::GetSingleton().ClearIntimateThread(framework, threadID, hadSex);
     }
 
     void FleeChildrenFromPlayerCell(RE::StaticFunctionTag*) {
@@ -1102,8 +1039,19 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<SetLogLevel>(vm, "SetLogLevel");
         RegisterSynced<GetLogLevel>(vm, "GetLogLevel");
 
-        // Marriage difficulty calculation
-        RegisterSynced<CalculateMarriageSuccessChance>(vm, "CalculateMarriageSuccessChance");
+        // Relationship interaction & cooldowns
+        RegisterSynced<ShareSpouseIncome>(vm, "ShareSpouseIncome");
+        RegisterSynced<ProcessDivorceSettlement>(vm, "ProcessDivorceSettlement");
+        RegisterSynced<GetBrokeupTime>(vm, "GetBrokeupTime");
+        RegisterSynced<GetPlayerKiller>(vm, "GetPlayerKiller");
+        RegisterSynced<SetPlayerKiller>(vm, "SetPlayerKiller");
+        RegisterSynced<GetPlayerHadWedding>(vm, "GetPlayerHadWedding");
+        RegisterSynced<SetPlayerHadWedding>(vm, "SetPlayerHadWedding");
+        RegisterSynced<ShouldPromptSkipWedding>(vm, "ShouldPromptSkipWedding");
+        RegisterSynced<SetDontShowSkipWeddingMessage>(vm, "SetDontShowSkipWeddingMessage");
+        RegisterSynced<NotifyEngagementCeremonyStarted>(vm, "NotifyEngagementCeremonyStarted");
+        RegisterSynced<ApplyDialogueLoversLedgerBonus>(vm, "ApplyDialogueLoversLedgerBonus");
+        RegisterSynced<PacifyFianceOrSpouse>(vm, "PacifyFianceOrSpouse");
 
         // Spouse hierarchy
         RegisterSynced<SetHierarchyRank>(vm, "SetHierarchyRank");
@@ -1123,14 +1071,11 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<CountPlayerHouses>(vm, "CountPlayerHouses");
 
         // Spouse assets functions
-        RegisterSynced<GetCellDoors>(vm, "GetCellDoors");
         RegisterSynced<ShareHouseWithPlayer>(vm, "ShareHouseWithPlayer");
         RegisterSynced<StopShareHouseWithPlayer>(vm, "StopShareHouseWithPlayer");
         RegisterSynced<IsHouseSharedWithPlayer>(vm, "IsHouseSharedWithPlayer");
-        RegisterSynced<HasSpouseSharedHouseWithPlayer>(vm, "HasSpouseSharedHouseWithPlayer");
 
         // Home cell helpers
-        RegisterSynced<GetNpcOriginalHouse>(vm, "GetNpcOriginalHouse");
         RegisterSynced<GetNpcBeds>(vm, "GetNpcBeds");
         RegisterSynced<GetNpcOriginalHouseCenterMarker>(vm, "GetNpcOriginalHouseCenterMarker");
 
@@ -1167,6 +1112,9 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<SetCheatingDiscovered>(vm, "SetCheatingDiscovered");
         RegisterSynced<RegisterIntimateThread>(vm, "RegisterIntimateThread");
         RegisterSynced<ReportIntimateInteraction>(vm, "ReportIntimateInteraction");
+        RegisterSynced<IsIntimateThreadTracked>(vm, "IsIntimateThreadTracked");
+        RegisterSynced<HasIntimateThreadPlayerParticipants>(vm, "HasIntimateThreadPlayerParticipants");
+        RegisterSynced<MarkIntimateThreadSexual>(vm, "MarkIntimateThreadSexual");
         RegisterSynced<ClearIntimateThread>(vm, "ClearIntimateThread");
         RegisterSynced<FleeChildrenFromPlayerCell>(vm, "FleeChildrenFromPlayerCell");
         RegisterSynced<StopChildrenFleeing>(vm, "StopChildrenFleeing");
@@ -1230,10 +1178,9 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<HideUI>(vm, "HideUI");
         RegisterSynced<IsUIVisible>(vm, "IsUIVisible");
 
-        // Confirmation modal functions (the only 7 latent bindings)
+        // Confirmation modal functions (the only 6 latent bindings)
         RegisterLatentLocked<int32_t, ShowConfirmationModal>(vm, "ShowConfirmationModal");
         RegisterLatentLocked<int32_t, ShowSkipWeddingModal>(vm, "ShowSkipWeddingModal");
-        RegisterLatentLocked<int32_t, ShowDivorceSettlementModal>(vm, "ShowDivorceSettlementModal");
         RegisterLatentLocked<RE::BGSLocation*, ShowChooseHomeModal>(vm, "ShowChooseHomeModal");
         RegisterLatentLocked<RE::Actor*, ShowChooseAdoptionSpouseModal>(vm, "ShowChooseAdoptionSpouseModal");
         RegisterLatentLocked<RE::BSFixedString, ShowDebugStatusModal>(vm, "ShowDebugStatusModal");
@@ -1249,6 +1196,8 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<GetSettingFloat>(vm, "GetSettingFloat");
         RegisterSynced<IsSettingsMigrated>(vm, "IsSettingsMigrated");
         RegisterSynced<MarkSettingsMigrated>(vm, "MarkSettingsMigrated");
+        RegisterSynced<SetIsMigrating>(vm, "SetIsMigrating");
+        RegisterSynced<IsMigrating>(vm, "IsMigrating");
 
         RegisterSynced<GetStartDialGender>(vm, "GetStartDialGender");
         RegisterSynced<SetStartDialGender>(vm, "SetStartDialGender");
@@ -1364,10 +1313,23 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<SetBioFather>(vm, "SetBioFather");
         RegisterSynced<GetChildName>(vm, "GetChildName");
         RegisterSynced<FindChildPaternitySecret>(vm, "FindChildPaternitySecret");
-        RegisterSynced<BuildPregnancyAnnouncedMessage>(vm, "BuildPregnancyAnnouncedMessage");
-        RegisterSynced<BuildPregnancyAnnouncedJson>(vm, "BuildPregnancyAnnouncedJson");
-        RegisterSynced<BuildChildBirthMessage>(vm, "BuildChildBirthMessage");
-        RegisterSynced<BuildChildBirthJson>(vm, "BuildChildBirthJson");
+
+        // Fertility lifecycle consolidation functions
+        RegisterSynced<OnFertilityConception>(vm, "OnFertilityConception");
+        RegisterSynced<OnFertilityProgressStatus>(vm, "OnFertilityProgressStatus");
+        RegisterSynced<OnFertilityLaborStarted>(vm, "OnFertilityLaborStarted");
+        RegisterSynced<OnFertilityBirth>(vm, "OnFertilityBirth");
+        RegisterSynced<OnFertilityPregnancyLoss>(vm, "OnFertilityPregnancyLoss");
+        RegisterSynced<OnFertilityChildGrewUp>(vm, "OnFertilityChildGrewUp");
+        RegisterSynced<OnFertilityChildGrewUpActor>(vm, "OnFertilityChildGrewUpActor");
+        RegisterSynced<OnFertilityChildSentToTraining>(vm, "OnFertilityChildSentToTraining");
+        RegisterSynced<OnFertilityChildFinishedTraining>(vm, "OnFertilityChildFinishedTraining");
+        RegisterSynced<OnFertilityAdultChildSpawned>(vm, "OnFertilityAdultChildSpawned");
+        RegisterSynced<FindFertilityInfantForSpawn>(vm, "FindFertilityInfantForSpawn");
+        RegisterSynced<ResolveFertilitySpawnSyntheticId>(vm, "ResolveFertilitySpawnSyntheticId");
+        RegisterSynced<RegisterNpcFertilityChildSpawn>(vm, "RegisterNpcFertilityChildSpawn");
+        RegisterSynced<GetFertilitySpawnCoSpouse>(vm, "GetFertilitySpawnCoSpouse");
+        RegisterSynced<MigrateCompletedFmrNpcChild>(vm, "MigrateCompletedFmrNpcChild");
 
         // Child name generation functions
         RegisterSynced<GenerateRandomChildName>(vm, "GenerateRandomChildName");
@@ -1394,6 +1356,12 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<IsLocationAllowedForScenes>(vm, "IsLocationAllowedForScenes");
         RegisterSynced<ShouldTriggerSkyrimNetNarration>(vm, "ShouldTriggerSkyrimNetNarration");
         RegisterSynced<RegisterSkyrimNetEvent>(vm, "RegisterSkyrimNetEvent");
+        RegisterSynced<GetDialoguePrompt>(vm, "GetDialoguePrompt");
+        RegisterSynced<ApplyDialoguePromptBegin>(vm, "ApplyDialoguePromptBegin");
+        RegisterSynced<ApplyDialoguePromptEnd>(vm, "ApplyDialoguePromptEnd");
+        RegisterSynced<GetDivorceResolutionQuestStage>(vm, "GetDivorceResolutionQuestStage");
+        RegisterPapyrusSkyrimNetFunctions(vm);
+        RegisterPapyrusChildInteractionFunctions(vm);
 
         MARAS_LOG_INFO("Registered MARAS Papyrus functions including Confirmation Modal and Settings");
         return true;

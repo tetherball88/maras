@@ -119,32 +119,6 @@ namespace MARAS::App {
             RE::FormID presumedFatherID,
             RE::FormID bioFatherID) const;
 
-        [[nodiscard]] bool ShouldTriggerNarration(RE::Actor* speaker, RE::Actor* target = nullptr) const;
-
-        [[nodiscard]] std::string BuildPregnancyAnnouncedMessage(
-            RE::FormID motherID,
-            RE::FormID partnerID = 0,
-            RE::FormID fallbackBioID = 0,
-            const std::string& fallbackBioName = "",
-            std::int32_t childCount = 1) const;
-
-        [[nodiscard]] std::string BuildPregnancyAnnouncedJson(
-            RE::FormID motherID,
-            RE::FormID partnerID = 0,
-            RE::FormID fallbackBioID = 0,
-            const std::string& fallbackBioName = "",
-            std::int32_t childCount = 1) const;
-
-        [[nodiscard]] std::string BuildChildBirthMessage(
-            RE::FormID motherID,
-            const std::vector<RE::FormID>& childIDs = {},
-            bool maskSecrets = false) const;
-
-        [[nodiscard]] std::string BuildChildBirthJson(
-            RE::FormID motherID,
-            const std::vector<RE::FormID>& childIDs = {},
-            bool maskSecrets = false) const;
-
     private:
         PaternityWorkflowCoordinator() = default;
         ~PaternityWorkflowCoordinator() = default;

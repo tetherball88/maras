@@ -55,3 +55,6 @@
 - **`DialogueTargetPublic`**: Always `false` (never exposes `has_beastblood` on another speaker's target bio).
 - **`ActorSelf` & `DashboardIntrigue`**: For children, exposes `hasBeastblood` **only** when `!hideSecretFromViewer || visibleParentHasBeastblood` (preventing a child's werewolf status from leaking secret biological parentage before paternity is known).
 - **Non-Child Actors**: Queries the injected `IWerewolfStateProvider` (`EngineWerewolfStateProvider`) except in `DialogueTargetPublic`.
+
+### Event Routing & Masking (`EventDispatchPlan`)
+- `EventDispatchPlan` (`maras_projection`) evaluates `PerspectiveView::ForActor` and `PerspectiveView::ForDashboard(..., /*revealSecretsOverride=*/true)` over immutable state snapshots to plan exact-audience splits, `MaskForPartner` / `MaskForChildOnly` legs, `0x14` Player speaker-fallback suppression, and narration suppression across all `ttm_*` SkyrimNet events cleanly off-engine.

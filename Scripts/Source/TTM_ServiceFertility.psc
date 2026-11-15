@@ -8,21 +8,6 @@
 Scriptname TTM_ServiceFertility
 
 ;/
-  Engine identifiers
-/;
-int Function GetEngineNone() global
-    return 0
-EndFunction
-
-int Function GetEngineFMR() global
-    return 1
-EndFunction
-
-int Function GetEngineBF() global
-    return 2
-EndFunction
-
-;/
   GetActiveEngine: Detects which fertility framework is active.
 /;
 int Function GetActiveEngine() global
@@ -157,43 +142,6 @@ EndFunction
 /;
 Function OnBeeingFemaleStateChange(string eventName, string strArg, float numArg, Form sender) global
     TTM_ServiceFertilityBF.OnStateChange(eventName, strArg, numArg, sender)
-EndFunction
-
-;/
-  OnPaternitySecretResolved: Fired from SKSE C++ when an LLM evaluation resolves a paternity secret.
-/;
-Function OnPaternitySecretResolved(string eventName, string strArg, float numArg, Form sender) global
-    int childID = numArg as int
-    string caseType = strArg
-
-    if (caseType == "" && sender != none)
-        Actor bioFather = MARAS.GetBioFather(childID)
-        if (sender == bioFather)
-            caseType = "bio_father_learnt"
-        else
-            caseType = "presumed_father_learnt"
-        endif
-    endif
-
-    TTM_Debug.info("TTM_ServiceFertility: OnPaternitySecretResolved child=" + childID + " case=" + caseType)
-
-    TTM_ServiceAffection.ApplyPaternitySecretForChild(childID, caseType)
-
-    if (TTM_Data.GetHasSkyrimNet() && childID != 0)
-        TTM_ServiceSkyrimNet.RegisterPaternitySecretEvent(childID, caseType)
-    endif
-EndFunction
-
-;/
-  PromoteAdultFollowerChild: Rebinds an ephemeral child to a spawned adult follower actor.
-/;
-Function PromoteAdultFollowerChild(Actor adultActor, string childName = "") global
-    int engine = GetActiveEngine()
-    if (engine == 2)
-        TTM_ServiceFertilityBF.PromoteAdultFollowerChild(adultActor, childName)
-    else
-        TTM_ServiceFertilityFMR.PromoteAdultFollowerChild(adultActor, childName)
-    endif
 EndFunction
 
 bool Function IsMigrated() global

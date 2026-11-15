@@ -24,7 +24,7 @@ Actor akSpeaker = akSpeakerRef as Actor
     elseif(PromptKey == "manage_spouse_cooking")
         TTM_Data.GetPlayer().AddItem(FoodMarriageMeal)
     elseif(PromptKey == "manage_spouse_store")
-        TTM_ServiceRelationships.ShareIncome(akSpeaker)
+        MARAS.ShareSpouseIncome(akSpeaker)
     elseif(PromptKey == "manage_spouse_promote_hierarchy_0")
         MARAS.SetHierarchyRank(akSpeaker, 0)
     elseif(PromptKey == "manage_spouse_promote_hierarchy_1" || PromptKey == "manage_spouse_demote_hierarchy_1")

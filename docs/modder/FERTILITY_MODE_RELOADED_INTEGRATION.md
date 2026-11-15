@@ -141,7 +141,7 @@ A child born naturally possesses a **Paternity Secret** whenever the biological 
 ### 4.1.1 Two-Phase Pregnancy & Paternity Secrecy Lifecycle
 1. **Phase 1 — Unannounced Affair Pregnancy (`isPregnancySecretForPartner = true`)**:
    - At conception, when `bioFatherID != presumedFatherID`, neither the mother's partner nor the biological father knows she is pregnant yet.
-   - Positive pregnancy conception affection (`ApplyPregnancyConceivedAffection`) for the partner is deferred while `isPregnancySecretForPartner` is `true`.
+   - Positive pregnancy conception affection (applied internally in C++ via `FertilityLifecycleCoordinator` / `AffectionEventCoordinator`) for the partner is deferred while `isPregnancySecretForPartner` is `true`.
    - In SkyrimNet dialogue (`RevealChildSecret`), the mother can:
      - Announce the pregnancy to her partner while letting him believe the baby is his (`revealMode = 'pregnancy_only'` $\rightarrow$ `RevealPregnancyToPartner(childID, false)`, which clears `isPregnancySecretForPartner = false`, keeps `isSecretForPartner = true`, awards the deferred pregnancy affection, and emits `maras_paternity_secret_resolved` with `"mother_shared_pregnancy_presumed"`).
      - Confess the true biological paternity to her partner (`revealMode = 'true_paternity'` $\rightarrow$ `ResolvePaternitySecretForPartner`), tell the biological father (`ResolvePaternitySecretForBioFather`), or tell `'Both'` (`ResolvePaternitySecret` with `sendEvent = true`, emitting a single unified `"mother_confessed_both"` event). When paternity is revealed while `isPregnancySecretForPartner` was still `true`, both the SkyrimNet event (`_unannounced` variant) and `SkyrimNetMemoryService::RecordPaternityReveal` explicitly record that the partner had not previously known she was pregnant and learned about both the pregnancy and the affair paternity simultaneously.
@@ -234,9 +234,9 @@ When migrating from an existing FMR installation ([`TTM_ServiceFertilityFMR.Migr
 - **FMR Storage Caps**: FMR stores only the single most recent birth (`LastBirth`, `LastFatherRef`) and active pregnancies/carried babies. Historical births from earlier in the playthrough that FMR already cleared cannot be retroactively recovered.
 - **Player Child Mother Resolution**:
   - In FMR, `PlayerChildName[]` stores child names and training statuses, but does *not* record which mother gave birth to which child.
-  - M.A.R.A.S. gathers candidate mothers from `TrackedActors` where `LastFatherRef == player` or married to the player, sorted chronologically by `LastBirth` ascending.
+  - M.A.R.A.S. gathers candidate mothers from `TrackedActors` where `LastFatherRef == player` or married to the player into local Papyrus `int[]`/`float[]` arrays, sorted chronologically by `LastBirth` ascending (legacy `MARAS_FMR_Migration_*` `StorageUtil` scratch keys are retired and cleared on maintenance).
   - Children are matched sequentially from newest to oldest against the sorted mother list. If births were interleaved (e.g. Mother A, Mother B, Mother A, Mother C), M.A.R.A.S. resolves them sequentially, grouping them by mother (`Mother A, Mother A, Mother B, Mother C`).
-- **NPC-NPC Lore Names**: Unnamed NPC babies saved from FMR receive a procedurally generated name via [`TTM_Utils.GetChildNameByParents()`](../../Scripts/Source/TTM_Utils.psc), taking race and gender into account.
+- **Completed NPC Children**: Unnamed or completed NPC children imported from FMR are finalized atomically via `MARAS.MigrateCompletedFmrNpcChild(...)`, generating lore-friendly racial names in C++ via `NamePoolLoader`.
 
 ---
 
@@ -245,7 +245,7 @@ When migrating from an existing FMR installation ([`TTM_ServiceFertilityFMR.Migr
 > [!IMPORTANT]
 > **Version Requirement:** M.A.R.A.S requires **Beeing Female NG v3.6.4 or higher**. Earlier builds do not provide the necessary ModEvents (`BeeingFemaleConception`, `BeeingFemaleLabor`, `BeeingFemaleBirth`, `BeeingFemaleChildSpawned`, `BeeingFemaleAdultChildSpawned`) or event parameter structures for clean lifecycle handoff.
 
-M.A.R.A.S. integrates [`TTM_ServiceFertilityBF`](../../Scripts/Source/TTM_ServiceFertilityBF.psc) with Beeing Female NG (BF) **purely through BF's ModEvents**. There is no polling or periodic sync: after the one-time migration (7.3) every change reaches M.A.R.A.S. as an event. Beeing Female keeps doing what it is good at (scaling and growing children, stats, adult graduation); **M.A.R.A.S. owns the child's behavior** (7.4).
+M.A.R.A.S. integrates [`TTM_ServiceFertilityBF`](../../Scripts/Source/TTM_ServiceFertilityBF.psc) with Beeing Female NG (BF) **purely through BF's ModEvents**, and [`TTM_ServiceFertilityFMR`](../../Scripts/Source/TTM_ServiceFertilityFMR.psc) with FMR in the same thin-adapter pattern: Papyrus scripts read third-party `_JSW_BB_Storage` / `FW.*` data and forward raw FormIDs and primitives to C++ (`FertilityLifecycleCoordinator` in `maras_app` + pure `FertilityLifecycleRules` in `maras_domain_lineage`). There is no polling or periodic sync: after the one-time migration (7.3) every change reaches M.A.R.A.S. as an event. Multi-fetus delivery batch tracking (`ActiveDeliveryBatch`) persists across save/load inside the `'NPCR'` co-save inline `'FRT1'` block, retiring legacy `MARAS.BF.*` `StorageUtil` scratch keys (cleared automatically during maintenance). Beeing Female keeps doing what it is good at (scaling and growing children, stats, adult graduation); **M.A.R.A.S. owns the child's behavior** (7.4).
 
 ### 7.1 Lifecycle Events
 

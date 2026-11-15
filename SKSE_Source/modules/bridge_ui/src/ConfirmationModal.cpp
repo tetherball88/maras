@@ -364,17 +364,12 @@ namespace MARAS::Bridge::Ui {
         return kCooldownEligible;
     }
 
-    RE::BSScript::LatentStatus ConfirmationModal::Show(
-        RE::BSScript::Internal::VirtualMachine* vm,
-        RE::VMStackID stackID,
+    void ConfirmationModal::ShowWithCallback(
         const char* actionType,
         const std::vector<RE::Actor*>& mainActors,
         const std::vector<RE::Actor*>& secondaryActors,
-        const char* paramsJson) {
-        if (!vm) {
-            return RE::BSScript::LatentStatus::kFailed;
-        }
-
+        const char* paramsJson,
+        std::function<void(std::int32_t)> onResult) {
         const MARAS::SessionEpoch expectedEpoch = MARAS::GetSessionEpoch();
         const std::string action = NormalizeAction(actionType);
 
@@ -389,8 +384,10 @@ namespace MARAS::Bridge::Ui {
 
         if (mainIds.empty()) {
             MARAS_LOG_WARN("[ConfirmationModal] Missing main actor(s) for action '{}'; returning blocked", action);
-            ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultBlocked);
-            return RE::BSScript::LatentStatus::kStarted;
+            if (onResult) {
+                onResult(kResultBlocked);
+            }
+            return;
         }
 
         const RE::FormID actorAId = mainIds.front();
@@ -414,8 +411,10 @@ namespace MARAS::Bridge::Ui {
             paramsObj.contains("skipModal") && paramsObj["skipModal"].is_boolean() && paramsObj["skipModal"].get<bool>();
         if (skipModalParam || (settingsSnap && !IsConfirmationEnabledForAction(*settingsSnap, action, involvesPlayer))) {
             MARAS_LOG_DEBUG("[ConfirmationModal] Action '{}' disabled by settings/param; auto-accepting (4)", action);
-            ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultDisabledAutoAccept);
-            return RE::BSScript::LatentStatus::kStarted;
+            if (onResult) {
+                onResult(kResultDisabledAutoAccept);
+            }
+            return;
         }
 
         const std::string cooldownKey = BuildCooldownKey(action, allIds);
@@ -433,15 +432,19 @@ namespace MARAS::Bridge::Ui {
                 MARAS_LOG_DEBUG("[ConfirmationModal] Action '{}' blocked by active cooldown for key '{}'",
                                 action,
                                 cooldownKey);
-                ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultBlocked);
-                return RE::BSScript::LatentStatus::kStarted;
+                if (onResult) {
+                    onResult(kResultBlocked);
+                }
+                return;
             }
         }
 
         if (!PrismaUIManager::GetSingleton().IsInitialized()) {
             MARAS_LOG_WARN("[ConfirmationModal] PrismaUI unavailable for '{}'; auto-accepting (5)", action);
-            ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultUiUnavailableAutoAccept);
-            return RE::BSScript::LatentStatus::kStarted;
+            if (onResult) {
+                onResult(kResultUiUnavailableAutoAccept);
+            }
+            return;
         }
 
         Foundation::RelationshipStatus initialStatus = Foundation::RelationshipStatus::Candidate;
@@ -494,11 +497,18 @@ namespace MARAS::Bridge::Ui {
             actorBName,
             skyrimNetAvailable);
 
+        auto dispatchOnMainThread = [expectedEpoch, onResult = std::move(onResult)](std::int32_t code) mutable {
+            if (!onResult) {
+                return;
+            }
+            MARAS::AddEpochTask(expectedEpoch, "ConfirmationModal::OnResult", [cb = std::move(onResult), code]() {
+                cb(code);
+            });
+        };
+
         PrismaModalManager::GetSingleton().ShowModal(
             std::move(req),
-            [vm,
-             stackID,
-             expectedEpoch,
+            [expectedEpoch,
              action,
              metaLabel = meta.label,
              isOpenToggle = meta.isOpenToggle,
@@ -508,7 +518,8 @@ namespace MARAS::Bridge::Ui {
              actorAName,
              actorBName,
              initialStatus,
-             initialIsOpen](const ModalResponse& resp) {
+             initialIsOpen,
+             dispatchOnMainThread = std::move(dispatchOnMainThread)](const ModalResponse& resp) mutable {
                 if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
                     MARAS_LOG_DEBUG("[ConfirmationModal] Dropped stale response for '{}' (epoch mismatch)", action);
                     return;
@@ -516,7 +527,7 @@ namespace MARAS::Bridge::Ui {
 
                 if (resp.aborted) {
                     RecordCooldownTimestamp(&ConfirmationCooldownState::declineCooldowns, cooldownKey);
-                    ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultCancel);
+                    dispatchOnMainThread(kResultCancel);
                     return;
                 }
 
@@ -538,12 +549,12 @@ namespace MARAS::Bridge::Ui {
                             actorAId,
                             actorBId,
                             action);
-                        ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultBlocked);
+                        dispatchOnMainThread(kResultBlocked);
                         return;
                     }
 
                     RecordCooldownTimestamp(&ConfirmationCooldownState::actionCooldowns, cooldownKey);
-                    ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultAccept);
+                    dispatchOnMainThread(kResultAccept);
                     return;
                 }
 
@@ -552,24 +563,20 @@ namespace MARAS::Bridge::Ui {
 
                     if (App::GetSkyrimNetGateway().IsAvailable()) {
                         const RE::FormID speakerId = (actorAId != MARAS::kPlayerFormID) ? actorAId : actorBId;
-                        const std::string speakerName = ActorSvc::GetName(speakerId);
-
-                        nlohmann::json ev;
-                        ev["type"] = "ttm_action_decline";
-                        ev["speaker"] = speakerName;
-                        ev["msg"] = std::format(
+                        const RE::FormID targetId = (actorAId != speakerId) ? actorAId : actorBId;
+                        const std::string msg = std::format(
                             "The player declined {} involving {} and {} and wishes to explain.",
                             metaLabel,
                             actorAName,
                             actorBName);
-                        ev["initiator"] = std::format("{:08X}", actorAId);
-                        ev["target"] = std::format("{:08X}", actorBId);
-                        ev["declinedAction"] = action;
-                        ev["skipTrigger"] = true;
-
-                        const std::string evJson =
-                            ev.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-                        MARAS::EmitModCallbackEvent("maras_decline", evJson, 0.0f, speakerId);
+                        App::GetSkyrimNetGateway().EmitActionDecline(
+                            speakerId,
+                            targetId,
+                            actorAId,
+                            actorBId,
+                            action,
+                            msg,
+                            /*skipTrigger=*/true);
 
                         PrismaUIManager::GetSingleton().RunAfterFocusReleased([expectedEpoch]() {
                             MARAS::DispatchPostLock(
@@ -593,15 +600,36 @@ namespace MARAS::Bridge::Ui {
                         });
                     }
 
-                    ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultDeclineExplain);
+                    dispatchOnMainThread(kResultDeclineExplain);
                     return;
                 }
 
                 // Cancel or fallback button
                 RecordCooldownTimestamp(&ConfirmationCooldownState::declineCooldowns, cooldownKey);
-                ResolveLatentOnGameThread(vm, stackID, expectedEpoch, kResultCancel);
+                dispatchOnMainThread(kResultCancel);
             });
+    }
 
+    RE::BSScript::LatentStatus ConfirmationModal::Show(
+        RE::BSScript::Internal::VirtualMachine* vm,
+        RE::VMStackID stackID,
+        const char* actionType,
+        const std::vector<RE::Actor*>& mainActors,
+        const std::vector<RE::Actor*>& secondaryActors,
+        const char* paramsJson) {
+        if (!vm) {
+            return RE::BSScript::LatentStatus::kFailed;
+        }
+
+        const MARAS::SessionEpoch expectedEpoch = MARAS::GetSessionEpoch();
+        ShowWithCallback(
+            actionType,
+            mainActors,
+            secondaryActors,
+            paramsJson,
+            [vm, stackID, expectedEpoch](std::int32_t code) {
+                ResolveLatentOnGameThread(vm, stackID, expectedEpoch, code);
+            });
         return RE::BSScript::LatentStatus::kStarted;
     }
 

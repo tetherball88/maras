@@ -151,7 +151,7 @@ Function CheckOngoingMarriage() global
             loveInterest.SetRelationshipRank(TTM_Data.GetPlayer(), 4)
             MARAS.PromoteNPCToStatus(loveInterest, "married", sendEvent = false)
             MARAS.SetPermanentAffection(loveInterest, 100, sendEvent = false)
-            TTM_ServiceRelationships.PacifyFianceOrSpouse(loveInterest)
+            MARAS.PacifyFianceOrSpouse(loveInterest)
             Location playerHouseLoc = TTM_Utils.GetSpouseMigrationPlayerHouse()
             if(playerHouseLoc)
                 TTM_ServicePlayerHouse.MoveSpouseToHouse(loveInterest, playerHouseLoc, true)
@@ -173,7 +173,7 @@ Function CheckOngoingMarriage() global
             loveInterest.SetRelationshipRank(TTM_Data.GetPlayer(), 3)
             MARAS.PromoteNPCToStatus(loveInterest, "engaged", sendEvent = false)
             MARAS.SetPermanentAffection(loveInterest, 100, sendEvent = false)
-            TTM_ServiceRelationships.PacifyFianceOrSpouse(loveInterest)
+            MARAS.PacifyFianceOrSpouse(loveInterest)
         endif
         return
     endif
@@ -194,7 +194,7 @@ EndFunction
 /;
 Function OnWeddingQstFinish() global
     Actor spouse = TTM_Utils.GetActorAlias(TTM_Data.GetMarriageWeddingQuest(), "LoveInterest")
-    TTM_Data.SetPlayerHadWedding()
+    MARAS.SetPlayerHadWedding(true)
 EndFunction
 
 ;/

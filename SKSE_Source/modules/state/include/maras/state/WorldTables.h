@@ -489,6 +489,14 @@ namespace MARAS::State {
         bool operator==(const PendingChildEntry&) const = default;
     };
 
+    struct ActiveDeliveryBatch {
+        std::int32_t laborTotal{ 0 };
+        float laborStartGameDay{ 0.0f };
+        std::vector<ChildId> bornChildIds{};
+
+        bool operator==(const ActiveDeliveryBatch&) const = default;
+    };
+
     class LineageTable {
     public:
         SyntheticChildId AllocateSyntheticChildId();
@@ -516,6 +524,15 @@ namespace MARAS::State {
         [[nodiscard]] const std::unordered_map<BaseId, PendingChildEntry>& AllPendingChildren() const noexcept {
             return pendingChildrenByBase_;
         }
+
+        [[nodiscard]] const ActiveDeliveryBatch* FindActiveDeliveryBatch(ActorId mother) const noexcept;
+        [[nodiscard]] ActiveDeliveryBatch* FindActiveDeliveryBatchMutable(ActorId mother) noexcept;
+        ActiveDeliveryBatch& UpsertActiveDeliveryBatch(ActorId mother, ActiveDeliveryBatch batch);
+        bool EraseActiveDeliveryBatch(ActorId mother) noexcept;
+        [[nodiscard]] const std::unordered_map<ActorId, ActiveDeliveryBatch>& AllActiveDeliveryBatches() const noexcept {
+            return activeDeliveryBatches_;
+        }
+
         [[nodiscard]] std::size_t Size() const noexcept { return children_.size(); }
 
         void Clear() noexcept;
@@ -525,6 +542,7 @@ namespace MARAS::State {
         std::uint32_t nextSyntheticChildRaw_{ Foundation::kSyntheticChildMinRawId + 1u };
         std::unordered_map<ChildId, ChildRecord> children_;
         std::unordered_map<BaseId, PendingChildEntry> pendingChildrenByBase_;
+        std::unordered_map<ActorId, ActiveDeliveryBatch> activeDeliveryBatches_;
     };
 
     // =========================================================================
@@ -603,6 +621,8 @@ namespace MARAS::State {
         bool playedScene1{ false };
         bool playedScene2{ false };
         float lastInteractionTimestamp{ 0.0f };
+        // Transient critter under consideration during welcome-home forcegreet (persisted in optional 'PLC1')
+        RefId transientCritterId{};
 
         bool operator==(const ChildHouseholdRecord&) const = default;
     };
@@ -665,9 +685,17 @@ namespace MARAS::State {
             return originalBedOwners_;
         }
 
-        // Player Children Runtime State ('PLCH') & Faction Snapshots ('CFSN')
+        // Player Children Runtime State ('PLCH' + optional 'PLC1') & Faction Snapshots ('CFSN')
         [[nodiscard]] bool IsChildChestIntroduced() const noexcept { return childChestIntroduced_; }
         void SetChildChestIntroduced(bool introduced) noexcept { childChestIntroduced_ = introduced; }
+
+        [[nodiscard]] std::int32_t GetPoorCounter() const noexcept { return poorCounter_; }
+        void SetPoorCounter(std::int32_t value) noexcept { poorCounter_ = std::max(0, value); }
+
+        [[nodiscard]] bool IsNameCallingUsedLast() const noexcept { return nameCallingUsedLast_; }
+        void SetNameCallingUsedLast(bool used) noexcept { nameCallingUsedLast_ = used; }
+
+        [[nodiscard]] bool HasAnyPlc1State() const noexcept;
 
         [[nodiscard]] const ChildHouseholdRecord* FindChildState(ChildId childId) const noexcept;
         [[nodiscard]] ChildHouseholdRecord* FindChildStateMutable(ChildId childId) noexcept;
@@ -705,6 +733,8 @@ namespace MARAS::State {
         std::map<CellId, SharedCellRecord> sharedCells_;
         std::unordered_map<RefId, FormRawId> originalBedOwners_;
         bool childChestIntroduced_{ false };
+        std::int32_t poorCounter_{ 0 };
+        bool nameCallingUsedLast_{ false };
         std::unordered_map<ChildId, ChildHouseholdRecord> childStates_;
         std::unordered_map<ChildId, ChildFactionSnapshotRecord> childFactionSnapshots_;
         std::unordered_map<ChildId, AdultChildTravelRecord> adultChildTravel_;
@@ -864,22 +894,78 @@ namespace MARAS::State {
         std::unordered_map<ActorId, float> npcLastMatchmakingChangeDay{};
         std::unordered_map<LocationId, float> lastHomeArrivalEventDayByLoc{};
 
-        // Banter Coordinator ('BNTR')
+        // Banter Coordinator ('BNTR' + optional 'BNT1')
         float savedBanterCooldownHours{ 24.0f };
         float lastBanterSceneDay{ -1.0f };
         std::unordered_map<CanonicalPairKey, float, CanonicalPairKeyHash> banterCoupleCooldowns{};
+        std::unordered_map<ActorId, RefId> movedSceneActors{};
+        std::vector<ActorId> skyrimNetMutedActors{};
+
+        // Relationship lifecycle & settlement ('MKMK' + 'REL1')
+        std::unordered_map<ActorId, float> npcBrokeupTime{};
+        std::unordered_map<ActorId, float> npcLastTimeSharedIncome{};
+        float lastTimePaidDivorceFee{ -1.0f };
+        bool playerKiller{ false };
+        bool playerHadWedding{ false };
+        bool dontShowSkipWeddingMessage{ false };
+
+        [[nodiscard]] float GetBrokeupTime(ActorId npc) const noexcept {
+            const auto it = npcBrokeupTime.find(npc);
+            return (it != npcBrokeupTime.end()) ? it->second : -1.0f;
+        }
+
+        void SetBrokeupTime(ActorId npc, float gameDay) {
+            if (!npc.IsNull() && !npc.IsPlayer()) {
+                npcBrokeupTime[npc] = gameDay;
+            }
+        }
+
+        [[nodiscard]] float GetLastTimeSharedIncome(ActorId npc) const noexcept {
+            const auto it = npcLastTimeSharedIncome.find(npc);
+            return (it != npcLastTimeSharedIncome.end()) ? it->second : -1.0f;
+        }
+
+        void SetLastTimeSharedIncome(ActorId npc, float gameDay) {
+            if (!npc.IsNull() && !npc.IsPlayer()) {
+                npcLastTimeSharedIncome[npc] = gameDay;
+            }
+        }
+
+        [[nodiscard]] bool HasAnyPhase3RelState() const noexcept {
+            return !npcBrokeupTime.empty() ||
+                   !npcLastTimeSharedIncome.empty() ||
+                   lastTimePaidDivorceFee >= 0.0f ||
+                   playerKiller ||
+                   playerHadWedding ||
+                   dontShowSkipWeddingMessage;
+        }
 
         void ClearMatchmaking() noexcept {
             lastMatchmakingDay = -1.0f;
             lastPlayerPartnerCheatingDay = -1.0f;
             npcLastMatchmakingChangeDay.clear();
             lastHomeArrivalEventDayByLoc.clear();
+            npcBrokeupTime.clear();
+            npcLastTimeSharedIncome.clear();
+            lastTimePaidDivorceFee = -1.0f;
+            playerKiller = false;
+            playerHadWedding = false;
+            dontShowSkipWeddingMessage = false;
         }
 
         void ClearBanter(float defaultCooldownHours = 24.0f) noexcept {
             savedBanterCooldownHours = std::max(0.0f, defaultCooldownHours);
             lastBanterSceneDay = -1.0f;
             banterCoupleCooldowns.clear();
+        }
+
+        [[nodiscard]] bool HasAnyBnt1State() const noexcept {
+            return !movedSceneActors.empty() || !skyrimNetMutedActors.empty();
+        }
+
+        void ClearBanterSceneRuntimeState() noexcept {
+            movedSceneActors.clear();
+            skyrimNetMutedActors.clear();
         }
 
         void EraseActor(ActorId actor) noexcept;

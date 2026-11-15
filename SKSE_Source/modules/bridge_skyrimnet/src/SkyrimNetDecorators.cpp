@@ -1,5 +1,6 @@
 #include "maras/bridge_skyrimnet/SkyrimNetDecorators.h"
 
+#include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/ModalTypes.h"
@@ -7,6 +8,7 @@
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/bridge_skyrimnet/SkyrimNetApiLoader.h"
 #include "maras/bridge_skyrimnet/SkyrimNetDecisions.h"
+#include "maras/bridge_skyrimnet/SkyrimNetEventService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetMemoryService.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
@@ -1315,11 +1317,12 @@ namespace MARAS::Bridge::SkyrimNet {
                         };
 
                         // 1. Resolve state based on the specific canonical outcome
+                        bool shouldTryBreakup = false;
                         if (outcome == "mother_confessed_presumed" || outcome == "presumed_father_learnt") {
                             anySecretResolved |= paternity.ResolvePaternitySecretForPartner(
                                 childID, outcome == "presumed_father_learnt", /*sendEvent=*/false);
                             if (partnerReaction == "divorce" || partnerReaction == "breakup") {
-                                tryBreakupIfActive();
+                                shouldTryBreakup = true;
                             }
                         } else if (outcome == "mother_confessed_bio" || outcome == "bio_father_learnt") {
                             anySecretResolved |= paternity.ResolvePaternitySecretForBioFather(
@@ -1330,23 +1333,31 @@ namespace MARAS::Bridge::SkyrimNet {
                             anySecretResolved |= paternity.ResolvePaternitySecretForBioFather(
                                 childID, false, /*sendEvent=*/false);
                             if (partnerReaction == "divorce" || partnerReaction == "breakup") {
-                                tryBreakupIfActive();
+                                shouldTryBreakup = true;
                             }
                         }
 
-                        // 2. Dispatch SkyrimNet mod event for the exact outcome if one occurred
+                        // 2. Dispatch SkyrimNet event & mod event before cascading breakup so 3s suppression applies
                         if (anySecretResolved && outcome != "none" && outcome != "remains_secret" && !outcome.empty()) {
-                            std::string eventOutcome =
+                            const std::string eventOutcome =
                                 (wasPregSecretPartner &&
                                  (outcome == "mother_confessed_presumed" ||
                                   outcome == "presumed_father_learnt" ||
                                   outcome == "mother_confessed_both"))
                                     ? (outcome + "_unannounced")
                                     : outcome;
+                            App::AffectionEventCoordinator::GetSingleton().OnPaternitySecretResolved(childID, eventOutcome);
                             const float childIdFloat = static_cast<float>(static_cast<std::int32_t>(childID));
-                            MARAS::EmitModCallbackEvent("maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
-                            SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(
-                                childID, outcome, partnerReaction, wasPregSecretPartner);
+                            MARAS::EmitModCallbackEvent("maras_paternity_secret_resolved", eventOutcome, childIdFloat, RE::FormID{ 0 });
+                            if (IsSkyrimNetAvailable()) {
+                                SkyrimNetEventService::GetSingleton().EmitPaternitySecretResolved(childID, eventOutcome);
+                                SkyrimNetMemoryService::GetSingleton().RecordPaternityReveal(
+                                    childID, outcome, partnerReaction, wasPregSecretPartner);
+                            }
+                        }
+
+                        if (shouldTryBreakup) {
+                            tryBreakupIfActive();
                         }
 
                         // 3. Notify Prisma UI

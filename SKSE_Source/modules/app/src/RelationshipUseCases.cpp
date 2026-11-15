@@ -1,5 +1,6 @@
 #include "maras/app/RelationshipUseCases.h"
 
+#include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/app/SettingsCoordinator.h"
@@ -7,6 +8,7 @@
 #include "maras/domain/relationships/InfidelityRules.h"
 #include "maras/domain/relationships/MarriageDifficultyRules.h"
 #include "maras/domain/relationships/RelationshipRules.h"
+#include "maras/domain/relationships/RelationshipSettlementRules.h"
 #include "maras/domain/relationships/SpouseHierarchyRules.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
@@ -22,6 +24,7 @@
 #include "maras/engine/MarriageDifficultyLoader.h"
 #include "maras/engine/NPCTypeDeterminer.h"
 #include "maras/engine/PackageReconciler.h"
+#include "maras/engine/RelationshipEngineReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"
@@ -338,6 +341,9 @@ namespace MARAS::App {
             const std::string fullJsonStr =
                 fullJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             EmitModCallbackEvent("maras_status_changed_full", fullJsonStr, static_cast<float>(statusEnum), senderID);
+            if (GetSkyrimNetGateway().IsAvailable()) {
+                GetSkyrimNetGateway().EmitMaritalStatusChange(npcFormID, targetFormID, statusString);
+            }
         }
 
         void EmitAffectionChangeModEvent(RE::FormID npcFormID, std::string_view threshold, int delta) {
@@ -348,10 +354,17 @@ namespace MARAS::App {
                 MARAS_LOG_WARN("SendAffectionChangeEvent: Form {:08X} not found", npcFormID);
                 return;
             }
+            RelationshipEngineReconciler::GetSingleton().NotifyAffectionThresholdChange(
+                npcFormID, threshold, static_cast<float>(delta));
             EmitModCallbackEvent("maras_change_affection",
                                  std::string(threshold),
                                  static_cast<float>(delta),
                                  npcFormID);
+            if (GetSkyrimNetGateway().IsAvailable()) {
+                const std::string_view direction =
+                    (delta > 0) ? "improved" : ((delta < 0) ? "worsened" : "");
+                GetSkyrimNetGateway().EmitSpouseAffectionChange(npcFormID, threshold, direction);
+            }
         }
 
         void EmitHierarchyChangedModEvent(RE::FormID npcFormID, std::string_view action, float diff) {
@@ -359,6 +372,9 @@ namespace MARAS::App {
                 return;
             }
             EmitModCallbackEvent("maras_hierarchy_changed", std::string(action), diff, npcFormID);
+            if (diff != 0.0f && GetSkyrimNetGateway().IsAvailable()) {
+                GetSkyrimNetGateway().EmitSpouseHierarchyChange(npcFormID, diff < 0.0f);
+            }
         }
 
         void ReconcileDirtyActorsAndChildren(const State::WorldMutationResult& mutations,
@@ -518,6 +534,12 @@ namespace MARAS::App {
             data.meta.CaptureActors(snap, { actorA, actorB });
             data.ctx.isChildA = self.IsChildNPC(actorA);
             data.ctx.isChildB = self.IsChildNPC(actorB);
+            if (IsPlayerFormID(actorA) || IsPlayerFormID(actorB)) {
+                const RE::FormID partnerID = IsPlayerFormID(actorA) ? actorB : actorA;
+                data.ctx.playerRelationshipRank =
+                    RelationshipEngineReconciler::GetSingleton().GetVanillaRelationshipRank(
+                        partnerID, RelationshipUseCases::kPlayerFormID);
+            }
             CheckVanillaEngineFamily(actorA, actorB, data.ctx.areEngineFamily, data.ctx.engineFamilyReason);
             return data;
         }
@@ -545,6 +567,12 @@ namespace MARAS::App {
             }
             if (emitModEvents) {
                 for (const auto& ev : outcome.events) {
+                    if (ev.rankDiff != 0.0f) {
+                        AffectionEventCoordinator::GetSingleton().OnHierarchyRankChanged(
+                            ev.spouse.raw(), static_cast<std::int32_t>(ev.rankDiff));
+                        RelationshipEngineReconciler::GetSingleton().ReconcileHierarchyRankChange(
+                            ev.spouse.raw(), ev.rankDiff);
+                    }
                     EmitHierarchyChangedModEvent(ev.spouse.raw(),
                                                  ev.isPromotion ? "promote" : "demote",
                                                  ev.rankDiff);
@@ -947,6 +975,11 @@ namespace MARAS::App {
         const auto temperament = DetermineTemperament(npcFormID);
         const RE::FormID baseIdRaw = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
         const RE::FormID origHome = SpatialWorldIndex::GetSingleton().GetNpcHome(npcFormID);
+        const int initialCandidateAffection = (npcFormID != kPlayerFormID)
+            ? Domain::Relationships::ComputeInitialCandidateAffection(
+                  RelationshipEngineReconciler::GetSingleton().GetVanillaRelationshipRank(
+                      npcFormID, kPlayerFormID))
+            : kAffectionDefault;
 
         State::ActorProfileRecord record;
         record.refId = State::RefId{ npcFormID };
@@ -970,7 +1003,7 @@ namespace MARAS::App {
             }
             ws.actors.Write().Upsert(std::move(record));
             if (npcFormID != kPlayerFormID && !ws.affection.Read().HasPermanent(State::ActorId{ npcFormID })) {
-                ws.affection.Write().SetPermanent(State::ActorId{ npcFormID }, kAffectionDefault);
+                ws.affection.Write().SetPermanent(State::ActorId{ npcFormID }, initialCandidateAffection);
             }
         });
 
@@ -1060,7 +1093,7 @@ namespace MARAS::App {
             snap->relationships->GetStatus(State::ActorId{ npcFormID }, State::ActorId::Player()) ==
             Foundation::RelationshipStatus::Married;
 
-        BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcFormID);
+        BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcFormID, "deceased");
         ClearCurrentHome(npcFormID);
 
         State::WorldMutationResult mut;
@@ -1950,7 +1983,9 @@ namespace MARAS::App {
                 newStatus == Foundation::RelationshipStatus::Jilted ||
                 IsBreakupStatus(newStatus) ||
                 newStatus == Foundation::RelationshipStatus::Candidate) {
-                BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcID);
+                const std::string_view stopReason =
+                    (newStatus == Foundation::RelationshipStatus::Divorced) ? "divorce" : "";
+                BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcID, stopReason);
                 ClearCurrentHome(npcID);
                 PackageReconciler::GetSingleton().ReconcileActor(npcID);
             }
@@ -1968,7 +2003,8 @@ namespace MARAS::App {
                                                   Foundation::RelationshipStatus status,
                                                   RE::FormID explicitInitiatorID,
                                                   bool sendEvent,
-                                                  bool breakLovers) {
+                                                  bool breakLovers,
+                                                  bool partnerCheatedOnPlayer) {
         if (npcFormID == 0 || targetFormID == 0 || npcFormID == targetFormID) {
             MARAS_LOG_WARN("ChangeStatusCommon: Invalid actor arguments (npc={:08X}, target={:08X})",
                            npcFormID, targetFormID);
@@ -1984,7 +2020,8 @@ namespace MARAS::App {
         }
 
         const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
-        const auto checkData = CaptureRelationshipCheckData(preSnap, *this, npcFormID, targetFormID);
+        auto checkData = CaptureRelationshipCheckData(preSnap, *this, npcFormID, targetFormID);
+        checkData.ctx.partnerCheatedOnPlayer = partnerCheatedOnPlayer;
         const float currentGameDay = GetCurrentGameDays();
         const RE::FormID initiator = (explicitInitiatorID != 0)
                                          ? explicitInitiatorID
@@ -2061,6 +2098,8 @@ namespace MARAS::App {
 
         if (isPlayerPair) {
             FactionReconciler::GetSingleton().ReconcilePlayer();
+            RelationshipEngineReconciler::GetSingleton().ReconcilePlayerStatusTransition(
+                playerPartnerID, status, outcome.appliedBreakupCooldown, sendEvent);
             if (status == Foundation::RelationshipStatus::Married &&
                 outcome.oldStatus != Foundation::RelationshipStatus::Married) {
                 FactionReconciler::GetSingleton().SanitizePlayerMarriedFaction();
@@ -2382,7 +2421,7 @@ namespace MARAS::App {
         });
 
         if (isPlayerPair) {
-            BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(playerPartnerID);
+            BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(playerPartnerID, "divorce");
             ClearCurrentHome(playerPartnerID);
             PackageReconciler::GetSingleton().ReconcileActor(playerPartnerID);
         } else {
@@ -3101,6 +3140,8 @@ namespace MARAS::App {
         }
 
         if (sendEvent) {
+            AffectionEventCoordinator::GetSingleton().OnOpenRelationshipToggled(actorA, actorB, isOpen);
+
             nlohmann::json payload;
             payload["actorA"] = FormatFormIdUpper(actorA);
             payload["actorB"] = FormatFormIdUpper(actorB);
@@ -3114,6 +3155,9 @@ namespace MARAS::App {
                                  jsonStr,
                                  0.0f,
                                  senderActor ? senderActor->GetFormID() : 0);
+            if (GetSkyrimNetGateway().IsAvailable()) {
+                GetSkyrimNetGateway().EmitOpenRelationshipChange(actorA, actorB, isOpen);
+            }
         }
 
         return outcome.changed || (outcome.wasOpen == isOpen);
@@ -3446,30 +3490,8 @@ namespace MARAS::App {
                 State::ActorId{ victimID });
         });
 
-        for (const auto victimOpen : outcome.victimsToOpen) {
-            (void)SetPairIsOpen(cheaterID, victimOpen.raw(), /*isOpen=*/true, /*sendEvent=*/true);
-        }
-        for (const auto victimSplit : outcome.victimsToSplit) {
-            (void)Breakup(cheaterID, victimSplit.raw(), /*sendEvent=*/true);
-        }
-        for (const auto partnerBreak : outcome.partnersToBreak) {
-            const auto st = GetRelationshipStatus(cheaterID, partnerBreak.raw());
-            if (st == Foundation::RelationshipStatus::Lover) {
-                (void)PromoteToExLover(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
-            } else if (st == Foundation::RelationshipStatus::Dating) {
-                (void)PromoteToExDating(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
-            }
-        }
-
         if (!outcome.updated) {
             return false;
-        }
-
-        UpdateSpouseCheatingFaction(cheaterID);
-        UpdateCanFormNonCheatingMainFaction(cheaterID);
-        for (const auto v : outcome.victimsToUpdate) {
-            UpdateSpouseCheatingFaction(v.raw());
-            UpdateCanFormNonCheatingMainFaction(v.raw());
         }
 
         for (const auto& ev : outcome.events) {
@@ -3482,6 +3504,8 @@ namespace MARAS::App {
             payload["affairPartnerName"] = ActorSvc::GetName(ev.paramour.raw());
 
             if (outcome.isDiscovery) {
+                AffectionEventCoordinator::GetSingleton().OnAffairDiscovered(
+                    ev.cheater.raw(), ev.victim.raw(), ev.paramour.raw(), outcome.discovery);
                 const auto discStr = Foundation::AffairDiscoveryToString(outcome.discovery);
                 payload["type"] = discStr;
                 const std::string jsonStr =
@@ -3495,16 +3519,28 @@ namespace MARAS::App {
                                      jsonStr,
                                      0.0f,
                                      senderActor ? senderActor->GetFormID() : 0);
-                if (GetSkyrimNetGateway().IsAvailable() &&
-                    (outcome.discovery == Foundation::AffairDiscovery::Confessed ||
-                     outcome.discovery == Foundation::AffairDiscovery::Exposed)) {
-                    GetSkyrimNetGateway().RecordInfidelityEvent(
-                        ev.cheater.raw(),
-                        ev.victim.raw(),
-                        ev.paramour.raw(),
-                        std::string(discStr));
+                if (GetSkyrimNetGateway().IsAvailable()) {
+                    if (outcome.discovery == Foundation::AffairDiscovery::Confessed) {
+                        GetSkyrimNetGateway().EmitAffairConfessed(
+                            ev.cheater.raw(), ev.victim.raw(), ev.paramour.raw());
+                        GetSkyrimNetGateway().RecordInfidelityEvent(
+                            ev.cheater.raw(),
+                            ev.victim.raw(),
+                            ev.paramour.raw(),
+                            std::string(discStr));
+                    } else if (outcome.discovery == Foundation::AffairDiscovery::Exposed) {
+                        GetSkyrimNetGateway().EmitAffairExposed(
+                            ev.paramour.raw(), ev.victim.raw(), ev.cheater.raw());
+                        GetSkyrimNetGateway().RecordInfidelityEvent(
+                            ev.cheater.raw(),
+                            ev.victim.raw(),
+                            ev.paramour.raw(),
+                            std::string(discStr));
+                    }
                 }
             } else if (outcome.resolution != Foundation::AffairResolution::None) {
+                AffectionEventCoordinator::GetSingleton().OnAffairResolved(
+                    ev.cheater.raw(), ev.victim.raw(), statusOrResolution);
                 payload["resolution"] = statusOrResolution;
                 const std::string jsonStr =
                     payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
@@ -3514,6 +3550,8 @@ namespace MARAS::App {
                                      0.0f,
                                      senderActor ? senderActor->GetFormID() : 0);
                 if (GetSkyrimNetGateway().IsAvailable()) {
+                    GetSkyrimNetGateway().EmitAffairResolved(
+                        ev.cheater.raw(), ev.victim.raw(), ev.paramour.raw(), statusOrResolution);
                     GetSkyrimNetGateway().RecordInfidelityEvent(
                         ev.cheater.raw(),
                         ev.victim.raw(),
@@ -3521,6 +3559,59 @@ namespace MARAS::App {
                         std::string(statusOrResolution));
                 }
             }
+        }
+
+        for (const auto victimOpen : outcome.victimsToOpen) {
+            (void)SetPairIsOpen(cheaterID, victimOpen.raw(), /*isOpen=*/true, /*sendEvent=*/true);
+        }
+        for (const auto victimSplit : outcome.victimsToSplit) {
+            if (victimSplit.raw() == kPlayerFormID) {
+                const auto st = GetRelationshipStatus(cheaterID, kPlayerFormID);
+                std::optional<Foundation::RelationshipStatus> targetBreakup;
+                switch (st) {
+                    case Foundation::RelationshipStatus::Married:
+                        targetBreakup = Foundation::RelationshipStatus::Divorced;
+                        break;
+                    case Foundation::RelationshipStatus::Engaged:
+                        targetBreakup = Foundation::RelationshipStatus::Jilted;
+                        break;
+                    case Foundation::RelationshipStatus::Dating:
+                        targetBreakup = Foundation::RelationshipStatus::ExDating;
+                        break;
+                    case Foundation::RelationshipStatus::Lover:
+                        targetBreakup = Foundation::RelationshipStatus::ExLover;
+                        break;
+                    default:
+                        break;
+                }
+                if (targetBreakup.has_value()) {
+                    (void)ChangeStatusCommon(
+                        cheaterID,
+                        kPlayerFormID,
+                        *targetBreakup,
+                        kPlayerFormID,
+                        /*sendEvent=*/true,
+                        /*breakLovers=*/false,
+                        /*partnerCheatedOnPlayer=*/true);
+                }
+            } else {
+                (void)Breakup(cheaterID, victimSplit.raw(), /*sendEvent=*/true);
+            }
+        }
+        for (const auto partnerBreak : outcome.partnersToBreak) {
+            const auto st = GetRelationshipStatus(cheaterID, partnerBreak.raw());
+            if (st == Foundation::RelationshipStatus::Lover) {
+                (void)PromoteToExLover(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
+            } else if (st == Foundation::RelationshipStatus::Dating) {
+                (void)PromoteToExDating(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
+            }
+        }
+
+        UpdateSpouseCheatingFaction(cheaterID);
+        UpdateCanFormNonCheatingMainFaction(cheaterID);
+        for (const auto v : outcome.victimsToUpdate) {
+            UpdateSpouseCheatingFaction(v.raw());
+            UpdateCanFormNonCheatingMainFaction(v.raw());
         }
 
         GetUiBridgeGateway().SendOverviewData();
@@ -3937,13 +4028,8 @@ namespace MARAS::App {
         inputs.divorcedCount = static_cast<int>(GetDivorcedCount(kPlayerFormID));
 
         if (npcID != 0) {
-            if (auto* npcBase = ActorSvc::GetActorBase(npcID)) {
-                if (auto* playerBase = ActorSvc::GetActorBase(kPlayerFormID)) {
-                    if (auto* rel = RE::BGSRelationship::GetRelationship(npcBase, playerBase)) {
-                        inputs.relationshipRank = static_cast<int>(rel->level.underlying());
-                    }
-                }
-            }
+            inputs.relationshipRank =
+                RelationshipEngineReconciler::GetSingleton().GetVanillaRelationshipRank(npcID, kPlayerFormID);
         }
 
         inputs.permanentAffection = (npcID != 0) ? GetPermanentAffection(npcID) : kAffectionDefault;
@@ -4020,21 +4106,6 @@ namespace MARAS::App {
             npc, intimacyAdjustment, mostGold, housesOwned, horsesOwned,
             questsCompleted, dungeonsCleared, dragonSoulsCollected, playerKiller);
         return Domain::Relationships::CalculateMarriageSuccessChance(loader.GetConfig(), inputs);
-    }
-
-    float RelationshipUseCases::CalculateMarriageSuccessChance(
-        RE::Actor* npc,
-        float intimacyAdjustment,
-        float mostGold,
-        float housesOwned,
-        float horsesOwned,
-        float questsCompleted,
-        float dungeonsCleared,
-        float dragonSoulsCollected,
-        bool playerKiller) const {
-        return EvaluateMarriageDifficulty(
-            npc, intimacyAdjustment, mostGold, housesOwned, horsesOwned,
-            questsCompleted, dungeonsCleared, dragonSoulsCollected, playerKiller).chance;
     }
 
     float RelationshipUseCases::CalculatePlayerPrestige(float mostGold,

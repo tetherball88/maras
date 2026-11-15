@@ -694,6 +694,7 @@ namespace MARAS {
         (void)SyncActorFaction(actor, fc.GetSpouseOpenRelationshipFaction(), plan.spouseOpenRelationshipRank);
         (void)SyncActorFaction(actor, fc.GetCanFormNonCheatingMainFaction(), plan.canFormNonCheatingMainRank);
         (void)SyncActorFaction(actor, fc.GetSpouseHousedFaction(), plan.housedRank);
+        (void)SyncActorFaction(actor, fc.GetSpouseSharedHouseFaction(), plan.spouseSharedHouseRank);
 
         // Mirrored vanilla relationship & house factions
         (void)ApplyMembershipOp(actor, fc.GetMarriedFaction(), plan.marriedFactionOp, 0, false);

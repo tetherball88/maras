@@ -6,6 +6,7 @@
 #include "maras/engine/BonusesConfigLoader.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/FormCache.h"
 #include "maras/engine/FormUtils.h"
 #include "maras/engine/PollingService.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -281,6 +282,59 @@ namespace MARAS {
         if (updatedPerkCount > 0 || removedPerkCount > 0) {
             MARAS_LOG_DEBUG("[BuffReconciler] ReconcilePlayerBuffs complete (updated={}, removed={})",
                             updatedPerkCount, removedPerkCount);
+        }
+    }
+
+    void BuffReconciler::ApplySleepRestedPlan(const Domain::Household::SleepRestedPlan& plan) {
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddCurrentEpochTask("BuffReconciler::ApplySleepRestedPlan", [plan]() {
+                BuffReconciler::GetSingleton().ApplySleepRestedPlan(plan);
+            });
+            return;
+        }
+
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            return;
+        }
+
+        auto& fc = FormCache::GetSingleton();
+        auto removeSpellIfPresent = [player](RE::SpellItem* spell) {
+            if (spell) {
+                player->RemoveSpell(spell);
+            }
+        };
+
+        if (plan.partnerBuff != Domain::Household::PartnerSleepBuff::None) {
+            removeSpellIfPresent(fc.GetRestedSpell());
+            removeSpellIfPresent(fc.GetWellRestedSpell());
+            removeSpellIfPresent(fc.GetMarriageSleepAbility());
+            removeSpellIfPresent(fc.GetLoversRadianceAbility());
+
+            RE::SpellItem* targetSpell =
+                (plan.partnerBuff == Domain::Household::PartnerSleepBuff::LoversRadiance)
+                    ? fc.GetLoversRadianceAbility()
+                    : fc.GetMarriageSleepAbility();
+            if (targetSpell) {
+                player->AddSpell(targetSpell);
+                MARAS_LOG_DEBUG("[BuffReconciler] Applied partner sleep buff {:08X}",
+                                targetSpell->GetFormID());
+            }
+        }
+
+        if (plan.childBuff != Domain::Household::ChildSleepBuff::None) {
+            removeSpellIfPresent(fc.GetAdoptionSleepAbilityMale());
+            removeSpellIfPresent(fc.GetAdoptionSleepAbilityFemale());
+
+            RE::SpellItem* targetSpell =
+                (plan.childBuff == Domain::Household::ChildSleepBuff::AdoptionMale)
+                    ? fc.GetAdoptionSleepAbilityMale()
+                    : fc.GetAdoptionSleepAbilityFemale();
+            if (targetSpell) {
+                player->AddSpell(targetSpell);
+                MARAS_LOG_DEBUG("[BuffReconciler] Applied child adoption sleep buff {:08X}",
+                                targetSpell->GetFormID());
+            }
         }
     }
 

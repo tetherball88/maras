@@ -46,65 +46,21 @@ Function RegisterBeeingFemaleChild(Actor childActor, Actor bioMother, Actor bioF
     if (!childActor)
         return
     endif
-    Actor player = TTM_Data.GetPlayer()
     TakeOverChild(childActor)
-    Actor guardianA = none
-    Actor guardianB = none
-    if (syntheticID != 0)
-        guardianA = MARAS.GetGuardianA(syntheticID)
-        guardianB = MARAS.GetGuardianB(syntheticID)
-    else
-        Actor presumedFather = none
-        if (bioMother != none)
-            presumedFather = MARAS.GetPrimaryPartner(bioMother)
-        endif
-        float dob = StorageUtil.GetFloatValue(childActor, "FW.Child.Birthday", 0.0)
-        string cName = StorageUtil.GetStringValue(childActor, "FW.Child.Name", "")
-        if (cName == "")
-            cName = childActor.GetDisplayName()
-        endif
-        syntheticID = MARAS.RegisterFertilityChild(0, bioMother, presumedFather, bioFather, dob, dob, cName)
-        if (syntheticID != 0)
-            guardianA = MARAS.GetGuardianA(syntheticID)
-            guardianB = MARAS.GetGuardianB(syntheticID)
-        endif
+    float dob = 0.0
+    string cName = ""
+    if (syntheticID == 0)
+        dob = StorageUtil.GetFloatValue(childActor, "FW.Child.Birthday", 0.0)
+        cName = StorageUtil.GetStringValue(childActor, "FW.Child.Name", "")
     endif
-    bool isPlayerChild = false
-    if (guardianA != none || guardianB != none)
-        if (guardianA == player || guardianB == player)
-            isPlayerChild = true
-        elseif ((guardianA != none && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != none && MARAS.IsNPCStatus(guardianB, "married")))
-            isPlayerChild = true
-        endif
-    elseif (player == bioMother || player == bioFather)
-        isPlayerChild = true
-    endif
-    if (guardianA == none && guardianB == none && !isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
-        isPlayerChild = true
-    endif
-
-    if (isPlayerChild)
-        TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
-        Actor coSpouse = none
-        if (guardianA != none && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
-            coSpouse = guardianA
-        elseif (guardianB != none && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
-            coSpouse = guardianB
-        endif
-        childrenLogicQst.AdoptChild(childActor, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = stage, isMigrating = isMigrating)
-    else
-        Actor gA = guardianA
-        Actor gB = guardianB
-        if (gA == none && gB == none)
-            gA = bioMother
-        endif
-        Location houseLoc = none
-        if (gA != none)
-            houseLoc = MARAS.GetTenantHouse(gA)
-        endif
-        MARAS.RegisterChildActor(childActor, gA, gB, houseLoc, bioMother, bioFather, syntheticID, stage, sendEvent = !isMigrating)
+    syntheticID = MARAS.ResolveFertilitySpawnSyntheticId(childActor, bioMother, bioFather, syntheticID, dob, cName)
+    if (MARAS.RegisterNpcFertilityChildSpawn(childActor, syntheticID, bioMother, bioFather, stage, isMigrating))
         childActor.EvaluatePackage()
         childActor.MoveToPackageLocation()
+    else
+        TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
+        Actor coSpouse = MARAS.GetFertilitySpawnCoSpouse(syntheticID, bioMother, bioFather)
+        childrenLogicQst.AdoptChild(childActor, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = syntheticID, childStage = stage, isMigrating = isMigrating)
     endif
 EndFunction
 
@@ -127,7 +83,7 @@ EndFunction
 
 ;/
   OnConception: Fired by Beeing Female NG ("BeeingFemaleConception" ModEvent) when an actor is impregnated.
-  One unborn record is registered per fetus, each with its own biological father read from FW.ChildFather.
+  Reads FW.ChildFather per fetus and delegates registration/affection/announcement to C++.
 /;
 Function OnConception(Form akMother, int childCount, Form akFather0, Form akFather1, Form akFather2) global
     Actor mother = akMother as Actor
@@ -142,18 +98,11 @@ Function OnConception(Form akMother, int childCount, Form akFather0, Form akFath
         childCount = 1
     endif
 
-    if (MARAS.GetUnbornChildCount(mother) > 0)
-        TTM_Debug.debug("TTM_ServiceFertilityBF: " + TTM_Utils.GetActorName(mother) + " already has unborn children, skipping conception.")
-        return
-    endif
-
-    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-    float conceptionTime = Utility.GetCurrentGameTime()
     int fatherListCount = StorageUtil.FormListCount(mother, "FW.ChildFather")
-
+    Actor[] bioFathers = PapyrusUtil.ActorArray(childCount)
     int i = 0
     while (i < childCount)
-        Actor bioFather = None
+        Actor bioFather = none
         if (i < fatherListCount)
             bioFather = StorageUtil.FormListGet(mother, "FW.ChildFather", i) as Actor
         endif
@@ -169,42 +118,11 @@ Function OnConception(Form akMother, int childCount, Form akFather0, Form akFath
         if (!bioFather && fatherListCount > 0)
             bioFather = StorageUtil.FormListGet(mother, "FW.ChildFather", 0) as Actor
         endif
-
-        ; The bio-father step-in is evaluated once, after the last fetus is registered, so every father is a candidate
-        int unbornID = MARAS.RegisterUnbornChild(mother, bioFather, conceptionTime, (i == childCount - 1))
-        TTM_Debug.debug("TTM_ServiceFertilityBF: " + TTM_Utils.GetActorName(mother) + " conceived unborn child #" + (i + 1) + " (ID " + unbornID + ", total " + childCount + ") bioFather=" + TTM_Utils.GetActorName(bioFather) + ", presumedFather=" + TTM_Utils.GetActorName(presumedFather))
+        bioFathers[i] = bioFather
         i += 1
     endWhile
 
-    Actor player = TTM_Data.GetPlayer()
-    Actor primaryBioFather = none
-    if (fatherListCount > 0)
-        primaryBioFather = StorageUtil.FormListGet(mother, "FW.ChildFather", 0) as Actor
-    endif
-    if (!primaryBioFather)
-        primaryBioFather = akFather0 as Actor
-    endif
-    if (mother == player)
-        if (presumedFather)
-            TTM_ServiceAffection.ApplyPregnancyConceivedAffection(presumedFather, true)
-        elseif (primaryBioFather)
-            TTM_ServiceAffection.ApplyPregnancyConceivedAffection(primaryBioFather, true)
-        endif
-    else
-        if (presumedFather == player)
-            TTM_ServiceAffection.ApplyPregnancyConceivedAffection(mother, false)
-        elseif (presumedFather == none && primaryBioFather == player)
-            TTM_ServiceAffection.ApplyPregnancyConceivedAffection(mother, false)
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        string bioFatherName = ""
-        if (primaryBioFather != none)
-            bioFatherName = TTM_Utils.GetActorName(primaryBioFather)
-        endif
-        TTM_ServiceSkyrimNet.RegisterPregnancyAnnounced(mother, presumedFather, primaryBioFather, bioFatherName, childCount)
-    endif
+    MARAS.OnFertilityConception("bf", mother, bioFathers, childCount, Utility.GetCurrentGameTime())
 EndFunction
 
 ;/
@@ -212,157 +130,23 @@ EndFunction
 /;
 Function OnLabor(Form akMother, int childCount, Form akFather0, Form akFather1, Form akFather2) global
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-
-    ; Beeing Female may fire this event again for each child of the same delivery. A labor session that was started
-    ; recently and is not finalized yet is the same labor: keep its batch and announce nothing new.
-    float now = Utility.GetCurrentGameTime()
-    int sessionTotal = StorageUtil.GetIntValue(mother, "MARAS.BF.LaborTotal", 0)
-    float sessionStart = StorageUtil.GetFloatValue(mother, "MARAS.BF.LaborStart", 0.0)
-    if (sessionTotal > 0 && (now - sessionStart) < 0.5)
-        TTM_Debug.info("TTM_ServiceFertilityBF: Mother " + TTM_Utils.GetActorName(mother) + " labor event continues ongoing labor (" + sessionTotal + " children)")
-        return
-    endif
-
-    StorageUtil.IntListClear(mother, "MARAS.BF.BirthBatch")
-    int total = MARAS.GetUnbornChildCount(mother)
-    if (total < childCount)
-        total = childCount
-    endif
-    if (total < 1)
-        total = 1
-    endif
-    StorageUtil.SetIntValue(mother, "MARAS.BF.LaborTotal", total)
-    StorageUtil.SetFloatValue(mother, "MARAS.BF.LaborStart", now)
-
-    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-    if (presumedFather == none)
-        presumedFather = akFather0 as Actor
-    endif
-
-    TTM_Debug.info("TTM_ServiceFertilityBF: Mother " + TTM_Utils.GetActorName(mother) + " entered labor (count=" + total + ")")
-    if (TTM_Data.GetHasSkyrimNet())
-        TTM_ServiceSkyrimNet.RegisterLaborStarted(mother, presumedFather, total)
+    if (mother)
+        MARAS.OnFertilityLaborStarted(mother, childCount, akFather0 as Actor, Utility.GetCurrentGameTime())
     endif
 EndFunction
 
 ;/
   OnBirth: Fired by Beeing Female NG ("BeeingFemaleBirth" ModEvent) once per child that reached the world.
-  Beeing Female delivers in reverse fetus order, so the unborn child is matched by its biological father.
-  If Baby NTR replaced the father mid-pregnancy (no event is emitted for that), the first unborn record is
-  corrected to the real father first. A physical baby actor is adopted by OnChildSpawned, which Beeing Female
-  fires right after this event; a baby item stays an Infant until it hatches.
 /;
 Function OnBirth(Form akMother, Form akFather, Form akBaby, string asBabyName, int aiBabySex) global
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    Actor bioFather = akFather as Actor
-    float birthTime = Utility.GetCurrentGameTime()
-    string childName = asBabyName
-    if (childName == "")
-        childName = "Newborn"
-    endif
-    int babySex = aiBabySex
-    if (babySex != 0 && babySex != 1)
-        babySex = 2 ; unknown
-    endif
-
-    int childID = 0
-    bool fromUnborn = false
-    int[] unbornIDs = MARAS.GetUnbornChildren(mother)
-    if (unbornIDs.Length > 0)
-        bool fatherMatched = false
-        int i = 0
-        while (i < unbornIDs.Length && !fatherMatched)
-            if (MARAS.GetBioFather(unbornIDs[i]) == bioFather)
-                fatherMatched = true
-            endif
-            i += 1
-        endWhile
-        if (!fatherMatched && bioFather != none)
-            MARAS.SetBioFather(unbornIDs[0], bioFather)
-        endif
-        childID = MARAS.PromoteUnbornToInfant(mother, birthTime, childName, bioFather)
-        fromUnborn = (childID != 0)
-    endif
-    if (childID == 0)
-        Actor presumedFatherGuess = MARAS.GetPrimaryPartner(mother)
-        childID = MARAS.RegisterFertilityChild(0, mother, presumedFatherGuess, bioFather, 0.0, birthTime, childName)
-    endif
-    if (childID == 0)
-        return
-    endif
-    MARAS.SetChildGender(childID, babySex)
-
-    if (bioFather == none)
-        bioFather = MARAS.GetBioFather(childID)
-    endif
-    TTM_Debug.info("TTM_ServiceFertilityBF: Born newborn child (ID " + childID + ", name='" + childName + "', sex=" + babySex + ") for mother " + TTM_Utils.GetActorName(mother) + " with bioFather=" + TTM_Utils.GetActorName(bioFather))
-
-    StorageUtil.IntListAdd(mother, "MARAS.BF.BirthBatch", childID)
-
-    ; Beeing Female reports every fetus of a delivery (a birth, or a stillbirth event), so the batch is complete once
-    ; no unborn record is left. Without any known unborn record each birth is announced on its own.
-    if (!fromUnborn || MARAS.GetUnbornChildCount(mother) == 0)
-        FinalizeBirthBatch(mother)
-    elseif (TTM_Data.GetHasSkyrimNet())
-        int bornSoFar = StorageUtil.IntListCount(mother, "MARAS.BF.BirthBatch")
-        int laborTotal = StorageUtil.GetIntValue(mother, "MARAS.BF.LaborTotal", 0)
-        int remaining = MARAS.GetUnbornChildCount(mother)
-        if (laborTotal < bornSoFar + remaining)
-            laborTotal = bornSoFar + remaining
-        endif
-        TTM_ServiceSkyrimNet.RegisterLaborProgress(mother, bornSoFar, laborTotal)
+    if (mother)
+        MARAS.OnFertilityBirth("bf", mother, akFather as Actor, asBabyName, aiBabySex, Utility.GetCurrentGameTime())
     endif
 EndFunction
 
 ;/
-  FinalizeBirthBatch: Called once every fetus of a delivery has been born (or lost). Applies affection and
-  announces the whole batch (twins/triplets, possibly from different fathers) as a single birth.
-/;
-Function FinalizeBirthBatch(Actor mother) global
-    int[] ids = StorageUtil.IntListToArray(mother, "MARAS.BF.BirthBatch")
-    StorageUtil.IntListClear(mother, "MARAS.BF.BirthBatch")
-    StorageUtil.UnsetIntValue(mother, "MARAS.BF.LaborTotal")
-    StorageUtil.UnsetFloatValue(mother, "MARAS.BF.LaborStart")
-    int count = ids.Length
-    if (count == 0)
-        return
-    endif
-
-    Actor bioFather = MARAS.GetBioFather(ids[0])
-    Actor presumedFather = MARAS.GetMotherPartner(ids[0])
-    Actor player = TTM_Data.GetPlayer()
-    if (mother == player)
-        if (presumedFather)
-            TTM_ServiceAffection.ApplyChildBirthAffection(presumedFather, count)
-        elseif (bioFather)
-            TTM_ServiceAffection.ApplyChildBirthAffection(bioFather, count)
-        endif
-    else
-        if (presumedFather == player)
-            TTM_ServiceAffection.ApplyChildBirthAffection(mother, count)
-        elseif (presumedFather == none && bioFather == player)
-            TTM_ServiceAffection.ApplyChildBirthAffection(mother, count)
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        if (count > 1)
-            TTM_ServiceSkyrimNet.RegisterChildBirthBatch(mother, ids)
-        else
-            TTM_ServiceSkyrimNet.RegisterChildBirth(ids[0], MARAS.GetChildName(ids[0]))
-        endif
-    endif
-EndFunction
-
-;/
-  OnChildSpawned: Fired by Beeing Female NG ("BeeingFemaleChildSpawned" ModEvent) once a child is physically in the world:
-  a carried baby that finished growing, or a baby born directly as an actor (fired right after BeeingFemaleBirth).
+  OnChildSpawned: Fired by Beeing Female NG ("BeeingFemaleChildSpawned" ModEvent) once a child is physically in the world.
   The Infant becomes a Stage 2 child bound to that actor.
 /;
 Function OnChildSpawned(Form akMother, Form akFather, Form akChild, string asChildName) global
@@ -386,10 +170,10 @@ Function OnChildSpawned(Form akMother, Form akFather, Form akChild, string asChi
     ; A baby born straight as an actor fires this event right after BeeingFemaleBirth: let the birth handler create the
     ; Infant and announce the batch before the record is re-keyed to the child actor.
     Utility.Wait(1.0)
-    int childID = FindInfant(mother, childName)
+    int childID = MARAS.FindFertilityInfantForSpawn(mother, childName)
     if (childID == 0)
         Utility.Wait(2.0)
-        childID = FindInfant(mother, childName)
+        childID = MARAS.FindFertilityInfantForSpawn(mother, childName)
     endif
 
     Actor bioMother = mother
@@ -407,178 +191,41 @@ Function OnChildSpawned(Form akMother, Form akFather, Form akChild, string asChi
 
     RegisterBeeingFemaleChild(childActor, bioMother, bioFather, childID, 2)
     TTM_Debug.info("TTM_ServiceFertilityBF: Child actor " + childName + " is in the world (FormID " + childActor.GetFormID() + ")")
-    int registeredID = childActor.GetFormID()
-    TTM_ServiceAffection.ApplyChildMilestoneForParents(registeredID, "child")
-    if (TTM_Data.GetHasSkyrimNet())
-        TTM_ServiceSkyrimNet.RegisterChildGrewUp(registeredID, childName)
-    endif
-EndFunction
-
-;/
-  FindInfant: Finds the synthetic Infant record created for a newborn of this mother by name.
-/;
-int Function FindInfant(Actor mother, string childName) global
-    int childID = 0
-    if (mother != none)
-        childID = MARAS.FindSyntheticChild(mother, childName)
-    endif
-    if (childID == 0)
-        childID = MARAS.FindSyntheticChild(none, childName)
-    endif
-    if (childID != 0 && MARAS.GetChildStage(childID) != 1)
-        childID = 0
-    endif
-    return childID
+    MARAS.OnFertilityChildGrewUpActor(childActor, childName)
 EndFunction
 
 ;/
   OnAdultChildSpawned: Fired by Beeing Female NG ("BeeingFemaleAdultChildSpawned" ModEvent) when a child reaches adulthood.
-  akChild is the child actor that was swapped out (it is the same actor as akAdult when the child graduated in place).
-  It is already queued for deletion, so it is only used to find the record and is never stored.
-  The child record moves to the adult actor at Stage 4 (Adult).
 /;
 Function OnAdultChildSpawned(Form akMother, Form akFather, Form akAdult, Form akChild, string asChildName) global
     Actor adultActor = akAdult as Actor
-    if (!adultActor)
-        return
-    endif
-    Actor mother = akMother as Actor
-    string childName = asChildName
-    if (childName == "")
-        childName = adultActor.GetDisplayName()
-    endif
-
-    int previousID = 0
-    if (akChild != none && MARAS.GetChildStage(akChild.GetFormID()) != 0)
-        previousID = akChild.GetFormID()
-    endif
-    if (previousID == 0 && MARAS.GetChildStage(adultActor.GetFormID()) != 0)
-        previousID = adultActor.GetFormID()
-    endif
-    if (previousID == 0)
-        previousID = MARAS.FindSyntheticChild(mother, childName)
-    endif
-    if (previousID == 0)
-        previousID = MARAS.FindSyntheticChild(none, childName)
-    endif
-    if (previousID == 0)
-        previousID = adultActor.GetFormID()
-    endif
-
-    if (previousID == adultActor.GetFormID() && MARAS.GetChildStage(previousID) == 4)
-        return
-    endif
-    Actor bioMother = MARAS.GetBioMother(previousID)
-    Actor bioFather = MARAS.GetBioFather(previousID)
-    if (bioMother == none)
-        bioMother = mother
-    endif
-    if (bioFather == none)
-        bioFather = akFather as Actor
-    endif
-    MARAS.RegisterChildActor(adultActor, none, none, none, bioMother, bioFather, previousID, 4)
-    TTM_Debug.info("TTM_ServiceFertilityBF: Child " + childName + " promoted to adult (FormID " + adultActor.GetFormID() + ")")
-    TTM_ServiceAffection.ApplyChildMilestoneForParents(adultActor.GetFormID(), "adult")
-    if (TTM_Data.GetHasSkyrimNet())
-        TTM_ServiceSkyrimNet.RegisterChildBecameAdult(adultActor.GetFormID(), childName)
+    if (adultActor)
+        MARAS.OnFertilityAdultChildSpawned("bf", adultActor, akChild as Actor, akMother as Actor, akFather as Actor, asChildName, true, true)
     endif
 EndFunction
 
 ;/
-  PromoteAdultFollowerChild: Rebinds a child record to a spawned adult follower actor.
-/;
-Function PromoteAdultFollowerChild(Actor adultActor, string childName = "") global
-    if (adultActor == none)
-        return
-    endif
-    if (childName == "")
-        childName = adultActor.GetDisplayName()
-    endif
-    int syntheticID = MARAS.FindSyntheticChild(none, childName)
-    if (syntheticID != 0)
-        int currentStage = MARAS.GetChildStage(syntheticID)
-        Actor bioMother = MARAS.GetBioMother(syntheticID)
-        Actor bioFather = MARAS.GetBioFather(syntheticID)
-        TTM_Debug.info("TTM_ServiceFertilityBF: Promoting synthetic child " + syntheticID + " to adult follower actor " + adultActor.GetDisplayName())
-        MARAS.RegisterChildActor(adultActor, none, none, none, bioMother, bioFather, syntheticID, 4) ; Stage 4 = Adult
-        if (currentStage != 4)
-            TTM_ServiceAffection.ApplyChildMilestoneForParents(syntheticID, "adult")
-            if (TTM_Data.GetHasSkyrimNet())
-                TTM_ServiceSkyrimNet.RegisterChildBecameAdult(adultActor.GetFormID(), childName)
-            endif
-        endif
-    endif
-EndFunction
-
-;/
-  OnAbort: Fired by Beeing Female NG ("BeeingFemaleAbort" ModEvent) once the pregnancy has actually ended in loss
-  (abortion, miscarriage or a missed-abortion stillbirth). The whole pregnancy is lost.
+  OnAbort: Fired by Beeing Female NG ("BeeingFemaleAbort" ModEvent) once the pregnancy has actually ended in loss.
 /;
 Function OnAbort(Form akMother, Form akFather, int aiAbortusState, string asReason) global
     Actor mother = akMother as Actor
-    if (!mother)
-        return
+    if (mother)
+        MARAS.OnFertilityPregnancyLoss("bf", mother, akFather as Actor, asReason, true)
     endif
-    RegisterPregnancyLoss(mother, akFather as Actor, asReason, MARAS.RemoveUnbornChild(mother))
 EndFunction
 
 ;/
-  OnStillbirth: Fired by Beeing Female NG ("BeeingFemaleStillbirth" ModEvent) once per child lost to the stillbirth
-  roll during delivery. Only the unborn child fathered by akFather is removed; the siblings are still delivered.
+  OnStillbirth: Fired by Beeing Female NG ("BeeingFemaleStillbirth" ModEvent) once per child lost to the stillbirth roll.
 /;
 Function OnStillbirth(Form akMother, Form akFather) global
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    Actor bioFather = akFather as Actor
-    RegisterPregnancyLoss(mother, bioFather, "stillbirth", MARAS.RemoveUnbornChild(mother, bioFather))
-
-    ; The stillborn child can be the last one of the delivery: announce the siblings that were born
-    if (MARAS.GetUnbornChildCount(mother) == 0)
-        FinalizeBirthBatch(mother)
+    if (mother)
+        MARAS.OnFertilityPregnancyLoss("bf", mother, akFather as Actor, "stillbirth", true)
     endif
 EndFunction
 
 ;/
-  RegisterPregnancyLoss: Affection and SkyrimNet notification for a lost pregnancy or stillborn child.
-  Only runs when a record was actually removed, so repeated events for one loss are harmless.
-/;
-Function RegisterPregnancyLoss(Actor mother, Actor bioFather, string reason, bool removed) global
-    if (!removed)
-        return
-    endif
-    TTM_Debug.info("TTM_ServiceFertilityBF: Pregnancy lost for " + TTM_Utils.GetActorName(mother) + " (" + reason + ")")
-    Actor presumed = MARAS.GetPrimaryPartner(mother)
-    Actor player = TTM_Data.GetPlayer()
-    if (mother == player)
-        if (presumed)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(presumed, reason)
-        elseif (bioFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(bioFather, reason)
-        endif
-    else
-        if (presumed == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, reason)
-        elseif (presumed == none && bioFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, reason)
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        Actor eventPartner = presumed
-        if (eventPartner == none)
-            eventPartner = bioFather
-        endif
-        TTM_ServiceSkyrimNet.RegisterPregnancyLost(mother, eventPartner, reason)
-    endif
-EndFunction
-
-;/
-  OnStateChange: Fired by Beeing Female NG ("BeeingFemale" ModEvent, strArg "stateChanged", numArg = the woman's FormID)
-  whenever a woman changes cycle state. Beeing Female emits no birth event for a child it does not spawn (baby gem,
-  NPC babies disabled), so when a woman reaches the postpartum state (8) with unborn records left, those children were
-  born without a baby: they become Infants with a generated name and unknown sex.
+  OnStateChange: Fired by Beeing Female NG ("BeeingFemale" ModEvent, strArg "stateChanged", numArg = the woman's FormID).
 /;
 Function OnStateChange(string eventName, string strArg, float numArg, Form sender) global
     if (strArg != "stateChanged")
@@ -589,36 +236,9 @@ Function OnStateChange(string eventName, string strArg, float numArg, Form sende
         return
     endif
     int currentState = StorageUtil.GetIntValue(mother, "FW.CurrentState", -1)
-    if (currentState == 5 || currentState == 6 || currentState == 7)
-        int unbornID = MARAS.FindUnbornChild(mother)
-        if (unbornID != 0 && MARAS.IsPregnancySecretForPartner(unbornID))
-            MARAS.RevealPregnancyToPartner(unbornID, true)
-        endif
-        return
+    if (currentState >= 5 && currentState <= 8)
+        MARAS.OnFertilityProgressStatus("bf", mother, currentState, Utility.GetCurrentGameTime())
     endif
-    if (currentState != 8)
-        return
-    endif
-    int leftover = MARAS.GetUnbornChildCount(mother)
-    if (leftover == 0)
-        return
-    endif
-
-    float birthTime = Utility.GetCurrentGameTime()
-    while (MARAS.GetUnbornChildCount(mother) > 0)
-        string childName = MARAS.GenerateRandomChildNameForActor(mother, true)
-        if (childName == "")
-            childName = "Newborn"
-        endif
-        int childID = MARAS.PromoteUnbornToInfant(mother, birthTime, childName)
-        if (childID == 0)
-            return
-        endif
-        MARAS.SetChildGender(childID, 2)
-        StorageUtil.IntListAdd(mother, "MARAS.BF.BirthBatch", childID)
-        TTM_Debug.info("TTM_ServiceFertilityBF: " + TTM_Utils.GetActorName(mother) + " gave birth without a spawned baby (ID " + childID + ", name='" + childName + "')")
-    endWhile
-    FinalizeBirthBatch(mother)
 EndFunction
 
 ;/

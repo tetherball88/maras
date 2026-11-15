@@ -6,6 +6,7 @@
 #include "maras/state/WorldState.h"
 
 #include <array>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@
 namespace MARAS::Domain::Household {
 
     using Foundation::ActorId;
+    using Foundation::ActorSex;
     using Foundation::RefId;
     using Foundation::SkillType;
     using Foundation::SocialClass;
@@ -53,5 +55,34 @@ namespace MARAS::Domain::Household {
         const State::WorldStateSnapshot& snap,
         std::span<const RefId> activeTeammates,
         const Relationships::BonusCatalog& catalog);
+
+    enum class PartnerSleepBuff : std::uint8_t {
+        None = 0,
+        LoversRadiance = 1,
+        MarriageSleep = 2
+    };
+
+    enum class ChildSleepBuff : std::uint8_t {
+        None = 0,
+        AdoptionMale = 1,
+        AdoptionFemale = 2
+    };
+
+    struct SleepRestedPlan {
+        PartnerSleepBuff partnerBuff{ PartnerSleepBuff::None };
+        ChildSleepBuff childBuff{ ChildSleepBuff::None };
+
+        bool operator==(const SleepRestedPlan&) const noexcept = default;
+    };
+
+    [[nodiscard]] std::vector<ActorId> EvaluateSleepPaidAffectionPartners(
+        const State::WorldStateSnapshot& snap,
+        std::span<const ActorId> sameCellActors);
+
+    [[nodiscard]] SleepRestedPlan EvaluateSleepRestedPlan(
+        const State::WorldStateSnapshot& snap,
+        State::HouseId currentLocationId,
+        std::span<const std::uint32_t> presentAtLocationRawIds,
+        ActorSex playerSex);
 
 }  // namespace MARAS::Domain::Household

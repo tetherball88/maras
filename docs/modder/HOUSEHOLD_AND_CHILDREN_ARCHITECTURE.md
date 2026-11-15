@@ -54,8 +54,8 @@ Located across [`HouseholdUseCases.h`](../../SKSE_Source/modules/app/include/mar
 
 ### 2.2 Shared Spouse Assets (`SpouseAssetRules` & `TTM_ServiceSpouseAssets.psc`)
 Persisted in co-save chunk `'SPAS'` (domain rules in [`SpouseAssetRules.h`](../../SKSE_Source/modules/domain_household/include/maras/domain/household/SpouseAssetRules.h), orchestrated by [`HouseholdUseCases`](services/HouseholdUseCases.md)):
-- **`ShareHouseWithPlayer` / `StopShareHouseWithPlayer`**: Grants player co-residence access to a spouse's original home cell (`'SPAS'`, interior cell tracking via `IsHouseSharedWithPlayer`, door unlocking/key gifting in `TTM_ServiceSpouseAssets.psc`).
-- **Spouse Store Gold & Assets**: `TTM_ServiceRelationships.ShareIncome` awards elapsed daily spouse income (`ClampInt(diffInt * 100, 0, 500)` gold per share interval), while `TTM_ServiceSpouseAssets.psc` coordinates home-sharing checks (`TTM_CheckSpouseHomeQst`).
+- **`ShareHouseWithPlayer` / `StopShareHouseWithPlayer`**: Grants player co-residence access to a spouse's original home cell (`'SPAS'`, interior cell tracking via `IsHouseSharedWithPlayer`). Missing-home detection (`0x7F` `NoInitialHouseFaction`), `0x7B` (`SharedHouseFaction`) reconciliation, lockable door unlocking, house-key granting (`HouseholdEngineOps::UnlockAndGrantSpouseHomeAccess`), and `$TTM_MSG_*` localized HUD notifications (`"divorce"`, `"deceased"`, `"affection"`, or generic stop reasons) execute natively in `BedOwnershipReconciler` / `FactionReconciler`.
+- **Spouse Store Gold & Assets**: `TTM_ServiceRelationships.ShareIncome` awards elapsed daily spouse income (`ClampInt(diffInt * 100, 0, 500)` gold per share interval), while `TTM_ServiceSpouseAssets.psc` coordinates only the `TTM_CheckSpouseHomeQst` quest objectives and aliases.
 
 ---
 
@@ -63,7 +63,7 @@ Persisted in co-save chunk `'SPAS'` (domain rules in [`SpouseAssetRules.h`](../.
 
 M.A.R.A.S implements a dual-layer child architecture:
 1. **Global Child & Lineage Registry ([`LineageUseCases`](services/LineageUseCases.md) — Chunk `'NPCR'`)**: Tracks every biological and adopted child across all NPCs and the player without hard count limits, including ephemeral/synthetic children (`0xFF700001..0xFF7FFFFF`) and paternity secrets.
-2. **Player Household Child Engine ([`PlayerChildrenEngineOps.h`](../../SKSE_Source/modules/engine/include/maras/engine/PlayerChildrenEngineOps.h) + `TTM_ServiceChildrenLogic.psc` — Chunks `'PLCH'`, `'CFSN'`)**: Manages physical household children living in player homes—including markers, beds, chests, pets, critters, orders (`Variable06`), forcegreets (`Variable07`), and up to 20 per-house `TTM_ChildrenSandboxQst` aliases (`Child001`–`Child020` on `0x2BC`) plus `ChildLogic` (`0xC25`) dialogue/chore handlers.
+2. **Player Household Child Engine ([`PlayerChildrenEngineOps.h`](../../SKSE_Source/modules/engine/include/maras/engine/PlayerChildrenEngineOps.h) + `ChildInteractionCoordinator` / `TTM_ServiceChildrenLogic.psc` — Chunks `'PLCH'`, `'PLC1'`, `'CFSN'`)**: Manages physical household children living in player homes—including markers, beds, chests, pets, critters, orders (`Variable06`), forcegreets (`Variable07`), welcome-home forcegreet/allowance/gift/chest selection (`ChildForcegreetRules`, `ChildInteractionCoordinator`), `'PLC1'` runtime state (`ChildChestIntroduced`, `PoorCounter`, `NameCallingUsedLast`, `transientCritterId`), and up to 20 per-house `TTM_ChildrenSandboxQst` aliases (`Child001`–`Child020` on `0x2BC`) plus `ChildLogic` (`0xC25`) dialogue/chore handlers.
 
 ```mermaid
 flowchart TD
@@ -120,6 +120,7 @@ To allow Creation Kit AI packages on the quest aliases to switch behaviors insta
   - `3` = Ordered outside to play (`order_outside_accept`).
   - `4` = Ordered to do chores (`order_chores_accept`).
   - `100` = Actively playing Tag or Hide-and-Seek with the player (`StartGame`).
+- **Forcegreet Selection & Chest / Pet / Critter Engine (`ChildForcegreetRules`, `ChildInteractionCoordinator`)**: `TTM_ServiceChildrenLogic.ReadyForcegreetEvent` delegates weighted child forcegreet event selection (`1`/`2` newly adopted, `3` chest intro, `4` pet adoption, `5` critter adoption, `6`/`7` two-child name-calling scenes, `10`–`13` generic fallback), pet suitability (`AV Variable06=1` for dogs and faction rank `3`/`1`), `'PLC1'` transient critter spawn/adopt/dismiss, `PoorCounter` + allowance/gift gold math, and bounds-safe child chest refills to C++. Both `ChildChestIntroduced` and `PoorCounter` persist in `'PLC1'` (with `PlayerLocationChanged(onGameLoad=true)` resyncing `TTM_ServiceChildrenLogic.PoorCounter` and fixing the legacy premature `ChildChestIntroduced` trigger during initial adoption as well as `RejectPetForChild` targeting the child).
 - **`Variable07` (ForceGreet Event Queue)**:
   - `0` = No pending forcegreet.
   - `1` = Ask for allowance (`allowance_topic`).

@@ -1,5 +1,6 @@
 #include "TestHarness.h"
 
+#include "maras/domain/household/ChildForcegreetRules.h"
 #include "maras/domain/household/DeceasedQueries.h"
 #include "maras/domain/household/HouseholdRules.h"
 #include "maras/domain/household/SpouseAssetRules.h"
@@ -443,6 +444,218 @@ namespace MARAS::Tests {
         MARAS_CHECK(ws.household.Read().GetTenantHouse(spouseA.raw()).IsNull());
         MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(spouseB.raw()), breezehome);
         MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(child.raw()), breezehome);
+    }
+
+    MARAS_TEST(DomainHousehold, SleepPaidAffectionAndRestedBuffPlan) {
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+        const HouseId breezehome{ 0x00039801u };
+        const HouseId tavernHouse{ 0x00039899u };
+        const ActorId spouse{ 0x00039901u };
+        const ActorId lover{ 0x00039902u };
+        const ActorId dating{ 0x00039903u };
+        const ActorId candidate{ 0x00039904u };
+        const ActorId exSpouse{ 0x00039905u };
+        const ChildId child{ 0x00039A01u };
+
+        ws.settings.Write().enablePlayerPolygamy = true;
+        (void)ApplyRegisterHouse(ws, breezehome, RefId{ 0x00039802u }, true);
+        (void)ws.TransitionRelationship(ActorId::Player(), spouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)ws.TransitionRelationship(ActorId::Player(), lover, RelationshipStatus::Lover, 1.0f, ActorId::Player(), meta);
+        (void)ws.TransitionRelationship(ActorId::Player(), dating, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
+        (void)ws.TransitionRelationship(ActorId::Player(), candidate, RelationshipStatus::Candidate, 1.0f, ActorId::Player(), meta);
+        (void)ws.TransitionRelationship(ActorId::Player(), exSpouse, RelationshipStatus::Divorced, 1.0f, ActorId::Player(), meta);
+
+        (void)ApplyRegisterTenant(ws, spouse.raw(), breezehome, true, false);
+        (void)ApplyRegisterTenant(ws, lover.raw(), breezehome, true, false);
+        (void)ApplyRegisterTenant(ws, child.raw(), breezehome, true, true);
+
+        ChildRecord crec{};
+        crec.childId = child;
+        crec.stage = ChildStage::Child;
+        crec.guardians.Assign(ActorId::Player(), spouse);
+        ws.lineage.Write().UpsertChild(std::move(crec));
+
+        const auto snap = ws.Snapshot();
+
+        // Same-cell affection eligibility: Married/Engaged/Dating/Lover only, deduplicated
+        const std::vector<ActorId> sameCell{
+            ActorId::Player(), spouse, spouse, dating, candidate, exSpouse
+        };
+        const auto paid = EvaluateSleepPaidAffectionPartners(snap, sameCell);
+        MARAS_REQUIRE_EQ(paid.size(), std::size_t{ 2 });
+        MARAS_CHECK_EQ(paid[0], spouse);
+        MARAS_CHECK_EQ(paid[1], dating);
+
+        // Spouse + Child present -> MarriageSleep + AdoptionMale/Female depending on player sex
+        const std::vector<std::uint32_t> spouseAndChild{ spouse.raw(), child.raw() };
+        const auto spouseMalePlan = EvaluateSleepRestedPlan(snap, breezehome, spouseAndChild, ActorSex::Male);
+        MARAS_CHECK_EQ(spouseMalePlan.partnerBuff, PartnerSleepBuff::MarriageSleep);
+        MARAS_CHECK_EQ(spouseMalePlan.childBuff, ChildSleepBuff::AdoptionMale);
+
+        const auto spouseFemalePlan = EvaluateSleepRestedPlan(snap, breezehome, spouseAndChild, ActorSex::Female);
+        MARAS_CHECK_EQ(spouseFemalePlan.partnerBuff, PartnerSleepBuff::MarriageSleep);
+        MARAS_CHECK_EQ(spouseFemalePlan.childBuff, ChildSleepBuff::AdoptionFemale);
+
+        // Lover overrides MarriageSleep to LoversRadiance when also present
+        const std::vector<std::uint32_t> spouseLoverPresent{ spouse.raw(), lover.raw() };
+        const auto loverPlan = EvaluateSleepRestedPlan(snap, breezehome, spouseLoverPresent, ActorSex::Male);
+        MARAS_CHECK_EQ(loverPlan.partnerBuff, PartnerSleepBuff::LoversRadiance);
+        MARAS_CHECK_EQ(loverPlan.childBuff, ChildSleepBuff::None);
+
+        // Non-player-house yields None even when partner IDs are present
+        const auto tavernPlan = EvaluateSleepRestedPlan(snap, tavernHouse, spouseLoverPresent, ActorSex::Male);
+        MARAS_CHECK_EQ(tavernPlan, SleepRestedPlan{});
+    }
+
+    MARAS_TEST(DomainHousehold, ChildForcegreetPetAllowanceAndChestRules) {
+        struct MinMaxRng final : public IRng {
+            bool returnMaxInt{ false };
+            float NextFloat(float minVal = 0.0f, float = 1.0f) override { return minVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t maxVal) override {
+                return returnMaxInt ? maxVal : minVal;
+            }
+        };
+
+        WorldState ws{};
+        const HouseId breezehome{ 0x0003B001u };
+        const ChildId childA{ 0x0003B101u };
+        const ChildId childB{ 0x0003B102u };
+        const ChildId synChild{ 0xFF700010u };
+
+        (void)ApplyRegisterHouse(ws, breezehome, RefId{ 0x0003B002u }, true);
+
+        ChildHouseholdRecord stA{};
+        stA.childId = childA;
+        stA.currentHouseId = breezehome;
+        stA.isNewlyAdopted = true;
+        ChildHouseholdRecord stB{};
+        stB.childId = childB;
+        stB.currentHouseId = breezehome;
+        ChildHouseholdRecord stSyn{};
+        stSyn.childId = synChild;
+        stSyn.currentHouseId = breezehome;
+        stSyn.isNewlyAdopted = true;
+
+        ws.household.Write().UpsertChildState(stA);
+        ws.household.Write().UpsertChildState(stB);
+        ws.household.Write().UpsertChildState(stSyn);
+
+        MinMaxRng rng{};
+        ForcegreetSelectionInput fgIn{};
+        fgIn.houseId = breezehome;
+        fgIn.currentGameDays = 50.0f;
+
+        // Event 2: newly adopted + chest not yet introduced
+        const auto ev2 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev2.eventNumber, 2);
+        MARAS_CHECK_EQ(ev2.eventChild, childA);
+        MARAS_CHECK(ev2.markChestIntroduced);
+        MARAS_CHECK(ev2.clearNewlyAdoptedForHouse);
+
+        // Event 1: newly adopted + chest already introduced
+        ws.household.Write().SetChildChestIntroduced(true);
+        const auto ev1 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev1.eventNumber, 1);
+        MARAS_CHECK_EQ(ev1.eventChild, childA);
+        MARAS_CHECK(!ev1.markChestIntroduced);
+
+        // Event 3: no newly adopted children, chest not introduced -> weighted chest intro
+        ws.household.Write().SetChildChestIntroduced(false);
+        ws.household.Write().FindChildStateMutable(childA)->isNewlyAdopted = false;
+        const auto ev3 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev3.eventNumber, 3);
+        MARAS_CHECK(!ev3.eventChild.IsNull());
+        MARAS_CHECK(ev3.eventChild != synChild);
+        MARAS_CHECK(ev3.markChestIntroduced);
+
+        // Event 4: pet adoption when animal companion present & childA not pet-banned
+        ws.household.Write().SetChildChestIntroduced(true);
+        fgIn.hasAnimalCompanion = true;
+        const auto ev4 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev4.eventNumber, 4);
+        MARAS_CHECK_EQ(ev4.eventChild, childA);
+
+        // Event 5: critter adoption when childA pet-banned (e.g. retry cooldown) & minVal(1) < 10
+        ws.household.Write().FindChildStateMutable(childA)->petBanned = true;
+        ws.household.Write().FindChildStateMutable(childB)->petId = RefId{ 0x0003B901u };
+        const auto ev5 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev5.eventNumber, 5);
+        MARAS_CHECK_EQ(ev5.eventChild, childA);
+
+        // Event 6 & 7: Name-calling 1 -> then after playedScene1 -> Name-calling 2 -> blocked when nameCallingUsedLast=true
+        ws.household.Write().FindChildStateMutable(childA)->critterBanned = true;
+        ws.household.Write().FindChildStateMutable(childB)->critterBanned = true;
+        const auto ev6 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev6.eventNumber, 6);
+        MARAS_CHECK_EQ(ev6.sceneChild1, childA);
+        MARAS_CHECK_EQ(ev6.sceneChild2, childB);
+
+        ws.household.Write().FindChildStateMutable(childA)->playedScene1 = true;
+        const auto ev7 = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK_EQ(ev7.eventNumber, 7);
+        MARAS_CHECK_EQ(ev7.sceneChild1, childA);
+        MARAS_CHECK_EQ(ev7.sceneChild2, childB);
+
+        // Name-calling suppressed when used last; clears flag on generic 10-13 selection
+        ws.household.Write().SetNameCallingUsedLast(true);
+        const auto evGeneric = PlanReadyForcegreetEvent(ws.Snapshot(), fgIn, rng);
+        MARAS_CHECK(evGeneric.eventNumber >= 10 && evGeneric.eventNumber <= 13);
+        MARAS_CHECK(evGeneric.clearNameCallingUsedLast);
+
+        // Fallback helper always returns 10..13 + clears nameCallingUsedLast
+        const auto fb = PlanGenericForcegreetFallback(ws.Snapshot(), breezehome, 50.0f, rng);
+        MARAS_CHECK(fb.eventNumber >= 10 && fb.eventNumber <= 13);
+        MARAS_CHECK(fb.clearNameCallingUsedLast);
+
+        // Pet race suitability
+        const std::vector<FormRawId> dogs{ FormRawId{ 0x000131F5u } };
+        const std::vector<FormRawId> allowed{ FormRawId{ 0x000131F5u }, FormRawId{ 0x00013205u } };
+        const auto dogSuit = EvaluatePetRaceSuitability(FormRawId{ 0x000131F5u }, dogs, allowed);
+        MARAS_CHECK(dogSuit.isDog);
+        MARAS_CHECK_EQ(dogSuit.suitabilityRank, 3);
+        const auto wolfSuit = EvaluatePetRaceSuitability(FormRawId{ 0x0001320Au }, dogs, allowed);
+        MARAS_CHECK(!wolfSuit.isDog);
+        MARAS_CHECK_EQ(wolfSuit.suitabilityRank, 1);
+
+        // PoorCounter deltas + floor clamping
+        MARAS_CHECK_EQ(CalculateAllowancePoorDelta(0), 1);
+        MARAS_CHECK_EQ(CalculateAllowancePoorDelta(25), -1);
+        MARAS_CHECK_EQ(CalculateAllowancePoorDelta(100), -2);
+        MARAS_CHECK_EQ(CalculateAllowancePoorDelta(500), -3);
+        MARAS_CHECK_EQ(CalculateAllowancePoorDelta(1000), -5);
+        MARAS_CHECK_EQ(ApplyPoorCounterDelta(2, -5), 0);
+        MARAS_CHECK_EQ(ApplyPoorCounterDelta(1, 2), 3);
+
+        // Gift tiers + regular gift deduction clamping + luck
+        MARAS_CHECK_EQ(SelectChildGiftTier(24).tierIndex, 0);
+        MARAS_CHECK_EQ(SelectChildGiftTier(25).tierIndex, 1);
+        MARAS_CHECK_EQ(SelectChildGiftTier(50).tierIndex, 2);
+        MARAS_CHECK_EQ(SelectChildGiftTier(100).tierIndex, 3);
+        MARAS_CHECK_EQ(SelectChildGiftTier(250).tierIndex, 4);
+        MARAS_CHECK_EQ(SelectChildGiftTier(500).tierIndex, 5);
+        MARAS_CHECK_EQ(SelectChildGiftTier(1000).tierIndex, 6);
+
+        rng.returnMaxInt = true;  // luck -> 2, max deduction clamped to childGold
+        const auto regMax = PlanChildRegularGift(60, rng);
+        MARAS_CHECK_EQ(regMax.tierIndex, 2);
+        MARAS_CHECK_EQ(regMax.count, 2);
+        MARAS_CHECK_EQ(regMax.goldDeduction, 60);
+
+        // Chest refill: poorest/<=25 children yield no bonus, richest > 25 yields bonus tier & gold deduction
+        rng.returnMaxInt = false;
+        const std::vector<std::pair<ChildId, std::int32_t>> lowGold{ { childA, 25 } };
+        const auto refillNoBonus = PlanChildChestRefill(lowGold, rng);
+        MARAS_CHECK_EQ(refillNoBonus.junkItemCounts.size(), std::size_t{ 3 });
+        MARAS_CHECK_EQ(refillNoBonus.tier0025RollCount, 1);
+        MARAS_CHECK(!refillNoBonus.hasBonusGift);
+
+        const std::vector<std::pair<ChildId, std::int32_t>> richGold{ { childA, 40 }, { childB, 600 } };
+        const auto refillWithBonus = PlanChildChestRefill(richGold, rng);
+        MARAS_CHECK(refillWithBonus.hasBonusGift);
+        MARAS_CHECK_EQ(refillWithBonus.richestChild, childB);
+        MARAS_CHECK_EQ(refillWithBonus.bonusGiftTierIndex, 5);
+        MARAS_CHECK(refillWithBonus.bonusGoldDeduction >= 250 && refillWithBonus.bonusGoldDeduction <= 500);
     }
 
 }  // namespace MARAS::Tests

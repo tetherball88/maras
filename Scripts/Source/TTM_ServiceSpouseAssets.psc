@@ -7,35 +7,7 @@ Function StartShareHomeWithPlayer(Actor spouse) global
         return
     endif
 
-    if(MARAS.GetNpcOriginalHouse(spouse) == none)
-        TTM_Debug.warn("StartShareHomeWithPlayer:NoHomeCell")
-        spouse.AddToFaction(TTM_Data.GetSpouseNoInitialHouseFaction())
-        TTM_Messages.SpouseNoHomeMsg(TTM_Utils.GetActorName(spouse))
-        return
-    endif
-
     if(MARAS.ShareHouseWithPlayer(spouse))
-        Cell spouseHomeCell = MARAS.GetNpcOriginalHouse(spouse)
-        TTM_Messages.SpouseSharedHomeMsg(TTM_Utils.GetActorName(spouse), spouseHomeCell.GetName())
-        spouse.AddToFaction(TTM_Data.GetSpouseSharedHouseFaction())
-        ObjectReference[] doors = MARAS.GetCellDoors(spouseHomeCell)
-        int i = 0
-        while(i < doors.Length)
-            key NeededKey = doors[i].GetKey()
-            if(!NeededKey)
-                ; if door can be lock picked, just unlock it
-                if(doors[i].GetLockLevel() != 5)
-                    doors[i].Lock(false)
-                endif
-            else
-                Actor player = TTM_Data.GetPlayer()
-                if player.GetItemCount(NeededKey) == 0
-                    player.AddItem(NeededKey)
-                EndIf
-            endif
-
-            i += 1
-        endwhile
         StartQuest(spouse)
         TTM_ServiceSpouseAssets.CheckCell(spouse)
     else
@@ -56,11 +28,7 @@ EndFunction
 
 
 Function StopShareHouseWithPlayer(Actor spouse, string reason = "") global
-    string spouseName = TTM_Utils.GetActorName(spouse)
-    if(MARAS.HasSpouseSharedHouseWithPlayer(spouse))
-        TTM_Messages.SpouseSharedHomeStoppedMsg(spouseName, reason)
-    endif
-    MARAS.StopShareHouseWithPlayer(spouse)
+    MARAS.StopShareHouseWithPlayer(spouse, reason)
     StopQuest()
 EndFunction
 

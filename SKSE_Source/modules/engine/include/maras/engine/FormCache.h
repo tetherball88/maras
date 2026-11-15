@@ -29,9 +29,13 @@ namespace MARAS {
         RE::TESFaction* GetSpouseCheatingFaction();
         RE::TESFaction* GetSpouseOpenRelationshipFaction();
         RE::TESFaction* GetCanFormNonCheatingMainFaction();
+        RE::TESFaction* GetSpouseSharedHouseFaction();
+        RE::TESFaction* GetSpouseNoInitialHouseFaction();
+        RE::TESFaction* GetCheatingNpcCaughtFaction();
         RE::TESFaction* GetBYOHRelationshipAdoptionChildOwnedFaction();
         RE::TESFaction* GetBYOHRelationshipAdoptionFaction();
         RE::TESFaction* GetBYOHRelationshipAdoptableFaction();
+        [[nodiscard]] RE::TESFaction* GetSkyrimNetFilterFaction();
 
         // Marriage-related faction getters
         RE::TESFaction* GetMarriagePotentialFaction();
@@ -137,6 +141,25 @@ namespace MARAS {
         RE::TESGlobal* GetMinRelRankForDialGlobal();
         RE::TESGlobal* GetPreferVanillaAudioGlobal();
         RE::TESGlobal* GetAllowAIDialGlobal();
+        RE::TESGlobal* GetDatingChanceGlobal();
+        RE::TESGlobal* GetLoverChanceGlobal();
+        RE::TESGlobal* GetMarriageChanceGlobal();
+
+        // Spell & Crime faction getters
+        RE::SpellItem* GetBreakupCooldownSpell();
+        RE::SpellItem* GetDemotedCooldownSpell();
+        RE::SpellItem* GetPacifyFianceOrSpouseSpell();
+        RE::TESFaction* GetDefaultCrimeFaction();
+
+        // Quests & sleep/rested spells (TT_MARAS.esp, Skyrim.esm, HearthFires.esm)
+        RE::TESQuest* GetChildLogicQuest();
+        RE::SpellItem* GetLoversRadianceAbility();
+        RE::TESQuest* GetPlayerSleepQuest();
+        RE::SpellItem* GetRestedSpell();
+        RE::SpellItem* GetWellRestedSpell();
+        RE::SpellItem* GetMarriageSleepAbility();
+        RE::SpellItem* GetAdoptionSleepAbilityMale();
+        RE::SpellItem* GetAdoptionSleepAbilityFemale();
 
         // Special keyword getters
         RE::BGSKeyword* GetClothingRichKeyword();
@@ -162,6 +185,7 @@ namespace MARAS {
 
         // Static object & ref type getters
         RE::TESObjectSTAT* GetHomeSandboxMarkerStatic();
+        [[nodiscard]] RE::TESObjectSTAT* GetXMarkerStatic();
         RE::BGSLocationRefType* GetLocationCenterMarkerRefType();
         RE::TESBoundObject* GetGoldBaseObject();
 
@@ -197,9 +221,13 @@ namespace MARAS {
         RE::TESFaction* spouseCheatingFaction_{ nullptr };
         RE::TESFaction* spouseOpenRelationshipFaction_{ nullptr };
         RE::TESFaction* CanFormNonCheatingMainFaction_{ nullptr };
+        RE::TESFaction* spouseSharedHouseFaction_{ nullptr };
+        RE::TESFaction* spouseNoInitialHouseFaction_{ nullptr };
+        RE::TESFaction* cheatingNpcCaughtFaction_{ nullptr };
         RE::TESFaction* byohRelationshipAdoptionChildOwnedFaction_{ nullptr };
         RE::TESFaction* byohRelationshipAdoptionFaction_{ nullptr };
         RE::TESFaction* byohRelationshipAdoptableFaction_{ nullptr };
+        RE::TESFaction* skyrimNetFilterFaction_{ nullptr };
 
         // Marriage-related factions (Skyrim.esm)
         RE::TESFaction* marriagePotentialFaction_{ nullptr };
@@ -299,6 +327,25 @@ namespace MARAS {
         RE::TESGlobal* minRelRankForDialGlobal_{ nullptr };
         RE::TESGlobal* preferVanillaAudioGlobal_{ nullptr };
         RE::TESGlobal* allowAIDialGlobal_{ nullptr };
+        RE::TESGlobal* datingChanceGlobal_{ nullptr };
+        RE::TESGlobal* loverChanceGlobal_{ nullptr };
+        RE::TESGlobal* marriageChanceGlobal_{ nullptr };
+
+        // Relationship lifecycle spells & default crime faction (cached)
+        RE::SpellItem* breakupCooldownSpell_{ nullptr };
+        RE::SpellItem* demotedCooldownSpell_{ nullptr };
+        RE::SpellItem* pacifyFianceOrSpouseSpell_{ nullptr };
+        RE::TESFaction* defaultCrimeFaction_{ nullptr };
+
+        // Quests & sleep/rested spells (cached)
+        RE::TESQuest* childLogicQuest_{ nullptr };
+        RE::SpellItem* loversRadianceAbility_{ nullptr };
+        RE::TESQuest* playerSleepQuest_{ nullptr };
+        RE::SpellItem* restedSpell_{ nullptr };
+        RE::SpellItem* wellRestedSpell_{ nullptr };
+        RE::SpellItem* marriageSleepAbility_{ nullptr };
+        RE::SpellItem* adoptionSleepAbilityMale_{ nullptr };
+        RE::SpellItem* adoptionSleepAbilityFemale_{ nullptr };
 
         // Keywords (cached)
         RE::BGSKeyword* ignoreProposeKeyword_{ nullptr };
@@ -323,6 +370,7 @@ namespace MARAS {
 
         // Static objects & refs (cached)
         RE::TESObjectSTAT* homeSandboxMarkerStatic_{ nullptr };
+        RE::TESObjectSTAT* xMarkerStatic_{ nullptr };
         RE::BGSLocationRefType* locationCenterMarkerRefType_{ nullptr };
         RE::TESBoundObject* goldBaseObject_{ nullptr };
         RE::TESObjectREFR* honorhallOrphanageCenterMarker_{ nullptr };

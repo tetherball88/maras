@@ -1,9 +1,11 @@
 #include "TestHarness.h"
 
 #include "maras/domain/lineage/ChildGrowthRules.h"
+#include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/domain/lineage/FertilityRules.h"
 #include "maras/domain/lineage/LineageRules.h"
 #include "maras/domain/lineage/NamePool.h"
+#include "maras/domain/lineage/PaternityActionRules.h"
 #include "maras/domain/lineage/TrainingCatalog.h"
 #include "maras/foundation/IRng.h"
 #include "maras/projection/PerspectiveView.h"
@@ -531,6 +533,331 @@ namespace MARAS::Tests {
         MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Orc, PhenotypeTier::PaleHuman, "Ghorbash").find("tusks") != std::string::npos);
         MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Mer, PhenotypeTier::PaleHuman, "Elvenia").find("Elven") != std::string::npos);
         MARAS_CHECK(GetVisualDiscrepancyDescription(PhenotypeTier::Redguard, PhenotypeTier::PaleHuman, "Amren").find("complexion") != std::string::npos);
+    }
+
+    MARAS_TEST(DomainLineage, PaternityActionRules_RevealDirectiveAndTargetClassification) {
+        using namespace MARAS::Domain::Lineage;
+        using MARAS::Foundation::ActorId;
+
+        const auto bothAll = ParsePaternityRevealDirective("  Both  ", "all", "true_paternity");
+        MARAS_CHECK(bothAll.isBoth);
+        MARAS_CHECK(!bothAll.isPregnancyOnly);
+        MARAS_CHECK(bothAll.resolveAllMatches);
+        MARAS_CHECK(bothAll.fatherLookupQuery.empty());
+
+        const auto pregOnly = ParsePaternityRevealDirective("Marcurio", "all", "pregnancy_only");
+        MARAS_CHECK(!pregOnly.isBoth);
+        MARAS_CHECK(pregOnly.isPregnancyOnly);
+        MARAS_CHECK(!pregOnly.resolveAllMatches);
+        MARAS_CHECK_EQ(pregOnly.fatherLookupQuery, std::string("Marcurio"));
+
+        const auto announcePreg = ParsePaternityRevealDirective("Husband", "Sven Jr", "announce_pregnancy");
+        MARAS_CHECK(announcePreg.isPregnancyOnly);
+        const auto hidePat = ParsePaternityRevealDirective("targetFather_pregnancy_only", "all", "hide_paternity");
+        MARAS_CHECK(hidePat.isPregnancyOnly);
+        MARAS_CHECK(!hidePat.resolveAllMatches);
+
+        // Exact ActorId / display-name identity overrides substring matches ("Fabio" contains "bio")
+        const auto namedDirective = ParsePaternityRevealDirective("Fabio", "Baby", "true_paternity");
+        MARAS_CHECK_EQ(
+            ClassifyPaternityRevealTarget(
+                namedDirective, ActorId{ 0x101u }, "Fabio",
+                ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x101u }, "Fabio"),
+            PaternityRevealTarget::PresumedPartner);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityRevealTarget(
+                namedDirective, ActorId{}, "Fabio",
+                ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x101u }, "Fabio"),
+            PaternityRevealTarget::PresumedPartner);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityRevealTarget(
+                namedDirective, ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x101u }, "Fabio"),
+            PaternityRevealTarget::BioFather);
+
+        // Role substring heuristics & unknown fallback
+        const auto heuristicDirective = ParsePaternityRevealDirective("bio father", "Baby", "true_paternity");
+        MARAS_CHECK_EQ(
+            ClassifyPaternityRevealTarget(
+                heuristicDirective, ActorId{}, "the biological father",
+                ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x101u }, "Fabio"),
+            PaternityRevealTarget::BioFather);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityRevealTarget(
+                heuristicDirective, ActorId{}, "presumed husband",
+                ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x101u }, "Fabio"),
+            PaternityRevealTarget::PresumedPartner);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityRevealTarget(
+                heuristicDirective, ActorId{}, "someone unknown",
+                ActorId{ 0x202u }, "Vorstag",
+                ActorId{ 0x101u }, "Fabio"),
+            PaternityRevealTarget::Both);
+
+        // Discovery target classification (BioFather must not be misclassified when partner edge is also secret)
+        MARAS_CHECK_EQ(
+            ClassifyPaternityDiscoveryTarget(ActorId{ 0x101u }, ActorId{ 0x101u }, ActorId{ 0x202u }, true),
+            PaternityDiscoveryTarget::PresumedPartner);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityDiscoveryTarget(ActorId{ 0x202u }, ActorId{ 0x101u }, ActorId{ 0x202u }, true),
+            PaternityDiscoveryTarget::BioFather);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityDiscoveryTarget(ActorId{ 0x303u }, ActorId{ 0x101u }, ActorId{ 0x202u }, true),
+            PaternityDiscoveryTarget::PresumedPartner);
+        MARAS_CHECK_EQ(
+            ClassifyPaternityDiscoveryTarget(ActorId{ 0x303u }, ActorId{ 0x101u }, ActorId{ 0x202u }, false),
+            PaternityDiscoveryTarget::BioFather);
+    }
+
+    MARAS_TEST(DomainLineage, FertilityLifecycleRules_ConceptionBatchLossAndSpawnPlans) {
+        // 1. Provider parsing, FMR visible rank window, and BF cycle state actions
+        MARAS_CHECK_EQ(ParseFertilityProvider("fmr"), FertilityProvider::Fmr);
+        MARAS_CHECK_EQ(ParseFertilityProvider("FertilityMode"), FertilityProvider::Fmr);
+        MARAS_CHECK_EQ(ParseFertilityProvider("BF"), FertilityProvider::BeeingFemale);
+        MARAS_CHECK_EQ(ParseFertilityProvider("BeeingFemale"), FertilityProvider::BeeingFemale);
+        MARAS_CHECK_EQ(ParseFertilityProvider("other"), FertilityProvider::Unknown);
+
+        MARAS_CHECK(!IsFmrVisiblePregnancyRank(0));
+        MARAS_CHECK(!IsFmrVisiblePregnancyRank(33));
+        MARAS_CHECK(IsFmrVisiblePregnancyRank(34));
+        MARAS_CHECK(IsFmrVisiblePregnancyRank(100));
+        MARAS_CHECK(!IsFmrVisiblePregnancyRank(101));
+        MARAS_CHECK(IsFmrVisiblePregnancyRank(120));
+
+        MARAS_CHECK_EQ(ClassifyBfCycleState(4), BfCycleStateAction::None);
+        MARAS_CHECK_EQ(ClassifyBfCycleState(5), BfCycleStateAction::VisibleTrimesterReveal);
+        MARAS_CHECK_EQ(ClassifyBfCycleState(6), BfCycleStateAction::VisibleTrimesterReveal);
+        MARAS_CHECK_EQ(ClassifyBfCycleState(7), BfCycleStateAction::VisibleTrimesterReveal);
+        MARAS_CHECK_EQ(ClassifyBfCycleState(8), BfCycleStateAction::RecoveryDelivery);
+        MARAS_CHECK_EQ(ClassifyBfCycleState(9), BfCycleStateAction::None);
+
+        // 2. Conception gating: Unborn blocks both; FMR also blocks on "Newborn" infant whereas BF allows it
+        const ActorId mother{ 0x00020100u };
+        const ActorId bioFather1{ 0x00020200u };
+        const ActorId bioFather2{ 0x00020300u };
+        const ActorId bioFatherNtr{ 0x00020400u };
+        const ActorId spouse{ 0x00020500u };
+        const ChildId unbornConception{ 0xFF700009u };
+        const ChildId infantNewborn{ 0xFF700010u };
+
+        WorldState ws{};
+        MARAS_CHECK(CanRegisterFertilityConception(ws.Snapshot(), mother, FertilityProvider::Fmr));
+        MARAS_CHECK(CanRegisterFertilityConception(ws.Snapshot(), mother, FertilityProvider::BeeingFemale));
+
+        {
+            ChildRecord existingUnborn{};
+            existingUnborn.childId = unbornConception;
+            existingUnborn.bioMother = mother;
+            existingUnborn.bioFather = bioFather1;
+            existingUnborn.stage = ChildStage::Unborn;
+            ws.lineage.Write().UpsertChild(existingUnborn);
+        }
+        MARAS_CHECK(!CanRegisterFertilityConception(ws.Snapshot(), mother, FertilityProvider::Fmr));
+        MARAS_CHECK(!CanRegisterFertilityConception(ws.Snapshot(), mother, FertilityProvider::BeeingFemale));
+
+        ws.lineage.Write().EraseChild(unbornConception);
+        {
+            ChildRecord newborn{};
+            newborn.childId = infantNewborn;
+            newborn.bioMother = mother;
+            newborn.bioFather = bioFather1;
+            newborn.name = "Newborn";
+            newborn.stage = ChildStage::Infant;
+            ws.lineage.Write().UpsertChild(newborn);
+        }
+        MARAS_CHECK(HasDuplicateFmrNewbornInfant(ws.lineage.Read(), mother));
+        MARAS_CHECK(!CanRegisterFertilityConception(ws.Snapshot(), mother, FertilityProvider::Fmr));
+        MARAS_CHECK(CanRegisterFertilityConception(ws.Snapshot(), mother, FertilityProvider::BeeingFemale));
+
+        // 3. Affection & SkyrimNet partner routing
+        {
+            const auto t1 = ResolveFertilityAffectionTarget(ActorId::Player(), spouse, bioFather1);
+            MARAS_CHECK_EQ(t1.targetActor, spouse);
+            MARAS_CHECK(t1.isPlayerPregnant);
+
+            const auto t2 = ResolveFertilityAffectionTarget(ActorId::Player(), ActorId{}, bioFather1);
+            MARAS_CHECK_EQ(t2.targetActor, bioFather1);
+            MARAS_CHECK(t2.isPlayerPregnant);
+
+            const auto t3 = ResolveFertilityAffectionTarget(mother, ActorId::Player(), bioFather1);
+            MARAS_CHECK_EQ(t3.targetActor, mother);
+            MARAS_CHECK(!t3.isPlayerPregnant);
+
+            const auto t4 = ResolveFertilityAffectionTarget(mother, ActorId{}, ActorId::Player());
+            MARAS_CHECK_EQ(t4.targetActor, mother);
+            MARAS_CHECK(!t4.isPlayerPregnant);
+
+            const auto t5 = ResolveFertilityAffectionTarget(mother, spouse, ActorId::Player());
+            MARAS_CHECK(t5.targetActor.IsNull());
+
+            MARAS_CHECK_EQ(ResolveFertilityEventPartner(spouse, bioFather1), spouse);
+            MARAS_CHECK_EQ(ResolveFertilityEventPartner(ActorId{}, bioFather1), bioFather1);
+            MARAS_CHECK(ResolveFertilityEventPartner(ActorId{}, ActorId::UnknownFather()).IsNull());
+        }
+
+        // 4. Multi-fetus labor session dedup, Baby NTR correction, delivery batch progress & stillbirth flush
+        {
+            LineageTable lineage{};
+            const ChildId unbornA{ 0xFF700020u };
+            const ChildId unbornB{ 0xFF700021u };
+            const ChildId bornTwinA{ 0xFF700022u };
+
+            ChildRecord u1{};
+            u1.childId = unbornA;
+            u1.bioMother = mother;
+            u1.bioFather = bioFather1;
+            u1.stage = ChildStage::Unborn;
+            lineage.UpsertChild(u1);
+
+            ChildRecord u2{};
+            u2.childId = unbornB;
+            u2.bioMother = mother;
+            u2.bioFather = bioFather2;
+            u2.stage = ChildStage::Unborn;
+            lineage.UpsertChild(u2);
+
+            const auto begin1 = ApplyBeginLaborBatch(lineage, mother, 1, 10.0f);
+            MARAS_CHECK(begin1.startedNewBatch);
+            MARAS_CHECK_EQ(begin1.totalCount, 2);
+
+            const auto begin2 = ApplyBeginLaborBatch(lineage, mother, 2, 10.2f);
+            MARAS_CHECK(!begin2.startedNewBatch);
+            MARAS_CHECK_EQ(begin2.totalCount, 2);
+
+            // BioFather matching unbornB requires no NTR correction; unmatched bioFatherNtr selects lowest unborn ID
+            MARAS_CHECK(ResolveBabyNtrCorrectionTarget(lineage, mother, bioFather2).IsNull());
+            MARAS_CHECK_EQ(ResolveBabyNtrCorrectionTarget(lineage, mother, bioFatherNtr), unbornA);
+
+            // Twin A delivered -> 1 unborn remains, batch not yet completed
+            lineage.EraseChild(unbornA);
+            ChildRecord i1{};
+            i1.childId = bornTwinA;
+            i1.bioMother = mother;
+            i1.bioFather = bioFather1;
+            i1.name = "TwinA";
+            i1.stage = ChildStage::Infant;
+            lineage.UpsertChild(i1);
+
+            const auto step1 = ApplyRecordDeliveredChild(lineage, mother, bornTwinA, true);
+            MARAS_CHECK(!step1.batchCompleted);
+            MARAS_CHECK_EQ(step1.bornSoFar, 1);
+            MARAS_CHECK_EQ(step1.laborTotal, 2);
+            MARAS_CHECK_EQ(FindSyntheticInfantForSpawn(lineage, mother, "twina"), bornTwinA);
+
+            // Second fetus lost to stillbirth -> last unborn removed -> popping batch yields TwinA and clears batch
+            lineage.EraseChild(unbornB);
+            MARAS_CHECK(lineage.GetUnbornOfMother(mother).empty());
+            const auto popped = ApplyPopDeliveryBatch(lineage, mother);
+            MARAS_REQUIRE(popped.has_value());
+            MARAS_REQUIRE_EQ(popped->bornChildIds.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(popped->bornChildIds[0], bornTwinA);
+            MARAS_CHECK(lineage.FindActiveDeliveryBatch(mother) == nullptr);
+        }
+
+        // 5. Spawn lineage plan (guardian precedence, bioFather co-spouse fallback, NPC guardian pair)
+        {
+            MockFormIdResolver resolver{};
+            resolver.sexes[ActorId::Player()] = ActorSex::Male;
+            resolver.sexes[spouse] = ActorSex::Female;
+            resolver.sexes[mother] = ActorSex::Female;
+            resolver.sexes[bioFather1] = ActorSex::Male;
+
+            WorldState planWs{};
+            (void)planWs.PromoteToMarried(ActorId::Player(), spouse, 5.0f, ActorId::Player(), resolver);
+            (void)planWs.PromoteToMarried(mother, bioFather1, 6.0f, mother, resolver);
+
+            // Case A: bioMother == spouse (married to player), no preset guardians -> player child with coSpouse = spouse
+            const ChildId playerTwin{ 0xFF700030u };
+            ChildRecord recA{};
+            recA.childId = playerTwin;
+            recA.bioMother = spouse;
+            recA.bioFather = ActorId::Player();
+            recA.stage = ChildStage::Child;
+            planWs.lineage.Write().UpsertChild(recA);
+            const auto planA = PlanSpawnedChildLineage(planWs.Snapshot(), playerTwin, spouse, ActorId::Player());
+            MARAS_CHECK(planA.isPlayerChild);
+            MARAS_CHECK_EQ(planA.coSpouse, spouse);
+
+            // Case B: guardians already cleared/unset on unborn/infant with bioFather == spouse married to player -> coSpouse = spouse
+            const auto planB = PlanSpawnedChildLineage(planWs.Snapshot(), ChildId{}, mother, spouse);
+            MARAS_CHECK(planB.isPlayerChild);
+            MARAS_CHECK_EQ(planB.coSpouse, spouse);
+
+            // Case C: NPC married couple without preset guardians -> non-player child with guardianA = mother, guardianB = bioFather1
+            const ChildId npcChild{ 0xFF700031u };
+            ChildRecord recC{};
+            recC.childId = npcChild;
+            recC.bioMother = mother;
+            recC.bioFather = bioFather1;
+            recC.stage = ChildStage::Child;
+            planWs.lineage.Write().UpsertChild(recC);
+            const auto planC = PlanSpawnedChildLineage(planWs.Snapshot(), npcChild, mother, bioFather1);
+            MARAS_CHECK(!planC.isPlayerChild);
+            MARAS_CHECK_EQ(planC.npcGuardianA, mother);
+            MARAS_CHECK_EQ(planC.npcGuardianB, bioFather1);
+            MARAS_CHECK_EQ(planC.tenantHouseLookupActor, mother);
+
+            // Case D: Preset guardians on synthetic record override bio-parent inference
+            ChildRecord recD{};
+            recD.childId = ChildId{ 0xFF700032u };
+            (void)recD.guardians.Assign(bioFather1, bioFather2);
+            recD.bioMother = spouse;
+            recD.bioFather = ActorId::Player();
+            planWs.lineage.Write().UpsertChild(recD);
+            const auto planD = PlanSpawnedChildLineage(planWs.Snapshot(), recD.childId, ActorId{}, ActorId{});
+            MARAS_CHECK(!planD.isPlayerChild);
+            MARAS_CHECK_EQ(planD.npcGuardianA, bioFather1);
+            MARAS_CHECK_EQ(planD.npcGuardianB, bioFather2);
+        }
+
+        // 6. Adult graduation source resolution
+        {
+            LineageTable lineage{};
+            const ChildId synKid{ 0xFF700040u };
+            const ActorId oldChildActor{ 0x00080010u };
+            const ActorId newAdultActor{ 0x00080020u };
+
+            ChildRecord synRec{};
+            synRec.childId = synKid;
+            synRec.bioMother = mother;
+            synRec.bioFather = bioFather1;
+            synRec.name = "Alesan";
+            synRec.stage = ChildStage::Child;
+            lineage.UpsertChild(synRec);
+
+            // Matches synthetic child by mother+name and does not overwrite with adult ID
+            const auto g1 = ResolveAdultGraduationSource(
+                lineage, newAdultActor, ActorId{}, mother, bioFather2, "Alesan", false);
+            MARAS_CHECK_EQ(g1.previousId, synKid);
+            MARAS_CHECK_EQ(g1.bioMother, mother);
+            MARAS_CHECK_EQ(g1.bioFather, bioFather1);
+            MARAS_CHECK(!g1.alreadyAdultSameActor);
+
+            // Unmatched with allowFallbackToAdultId=false stays empty; true falls back to adultActor
+            const auto gNoFallback = ResolveAdultGraduationSource(
+                lineage, newAdultActor, ActorId{}, mother, bioFather2, "Unknown", false);
+            MARAS_CHECK(gNoFallback.previousId.IsNull());
+
+            const auto gFallback = ResolveAdultGraduationSource(
+                lineage, newAdultActor, ActorId{}, mother, bioFather2, "Unknown", true);
+            MARAS_CHECK_EQ(gFallback.previousId, ChildId{ newAdultActor.raw() });
+            MARAS_CHECK(!gFallback.alreadyAdultSameActor);
+
+            // Already-graduated same adult actor sets alreadyAdultSameActor
+            ChildRecord adultRec{};
+            adultRec.childId = ChildId{ newAdultActor.raw() };
+            adultRec.stage = ChildStage::Adult;
+            lineage.UpsertChild(adultRec);
+            const auto gDup = ResolveAdultGraduationSource(
+                lineage, newAdultActor, oldChildActor, mother, ActorId{}, "Alesan", true);
+            MARAS_CHECK_EQ(gDup.previousId, ChildId{ newAdultActor.raw() });
+            MARAS_CHECK(gDup.alreadyAdultSameActor);
+        }
     }
 
 }  // namespace MARAS::Tests

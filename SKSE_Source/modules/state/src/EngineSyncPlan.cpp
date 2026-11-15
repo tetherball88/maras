@@ -191,6 +191,16 @@ namespace MARAS::State {
 
             plan.canFormNonCheatingMainRank =
                 HasAnyClosedMainPair(snap, actorId) ? std::int8_t{ 0 } : std::int8_t{ 1 };
+
+            if (snap.household) {
+                for (const auto& [cellId, rec] : snap.household->AllSharedCells()) {
+                    (void)cellId;
+                    if (rec.sharedWithPlayer && rec.sharingSpouses.contains(actorId)) {
+                        plan.spouseSharedHouseRank = std::int8_t{ 0 };
+                        break;
+                    }
+                }
+            }
         }
 
         if (isTenant) {

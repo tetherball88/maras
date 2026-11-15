@@ -16,4 +16,8 @@ namespace MARAS::State {
         return expectedEpoch != 0 && GetSessionEpoch() == expectedEpoch;
     }
 
+    /// Transient flag set during Papyrus legacy save migration to suppress side-effect handlers.
+    void SetLegacyMigrationActive(bool active) noexcept;
+    [[nodiscard]] bool IsLegacyMigrationActive() noexcept;
+
 }  // namespace MARAS::State

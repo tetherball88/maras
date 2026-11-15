@@ -1,11 +1,15 @@
 #include "maras/app/AppLifecycleCoordinator.h"
 
+#include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AgencyWorkflowCoordinator.h"
+#include "maras/app/BanterSceneCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
+#include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
+#include "maras/app/SkyrimNetActionCoordinator.h"
 #include "maras/engine/ChildVisualReconciler.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
@@ -88,6 +92,7 @@ namespace MARAS::App {
         PaternityWorkflowCoordinator::GetSingleton().FinalizeLoad();
         HouseholdUseCases::GetSingleton().FinalizeLoad();
         ChildVisualReconciler::GetSingleton().ReassertAllChildVisualsOnLoad();
+        BanterSceneCoordinator::GetSingleton().RecoverStaleMutesOnLoad();
 
         if (GetSkyrimNetGateway().IsAvailable()) {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -122,6 +127,7 @@ namespace MARAS::App {
 
         GetSkyrimNetGateway().RevertMemories();
         GetSkyrimNetGateway().RevertProfiles();
+        GetSkyrimNetGateway().RevertEvents();
         GetModalGateway().Revert();
         GetUiBridgeGateway().Revert();
 
@@ -131,6 +137,7 @@ namespace MARAS::App {
         PaternityWorkflowCoordinator::GetSingleton().Revert();
         HouseholdUseCases::GetSingleton().Revert();
         AgencyWorkflowCoordinator::GetSingleton().Revert();
+        SkyrimNetActionCoordinator::GetSingleton().Revert();
 
         MARAS_LOG_INFO("[AppLifecycleCoordinator] OnCoSaveRevert: reverted all gateways and Layer 4 coordinators");
     }
@@ -143,6 +150,7 @@ namespace MARAS::App {
         if (GetSkyrimNetGateway().IsAvailable()) {
             GetSkyrimNetGateway().TickMemories();
         }
+        SkyrimNetActionCoordinator::GetSingleton().TickPendingNarrations();
 
         std::lock_guard lock(GetPapyrusMutex());
         PaternityWorkflowCoordinator::GetSingleton().PollFertilityTick(currentGameDay);
@@ -279,6 +287,19 @@ namespace MARAS::App {
         RelationshipUseCases::GetSingleton().HandleExternalMarriageFactionRemoved(actorId);
     }
 
+    void AppLifecycleCoordinator::OnDialogueOpened(RE::FormID npcId) {
+        std::lock_guard lock(GetPapyrusMutex());
+        if (npcId == 0 || npcId == RelationshipUseCases::kPlayerFormID) {
+            return;
+        }
+        if (RelationshipUseCases::GetSingleton().GetRelationshipStatus(
+                npcId, RelationshipUseCases::kPlayerFormID) == Foundation::RelationshipStatus::Unknown) {
+            return;
+        }
+        AffectionEventCoordinator::GetSingleton().OnDialogueOpened(npcId);
+        RelationshipInteractionCoordinator::GetSingleton().OnDialogueOpened(npcId);
+    }
+
     void AppLifecycleCoordinator::OnIntimateCheatingCaught(RE::FormID cheaterId,
                                                            RE::FormID victimId,
                                                            RE::FormID affairPartnerId,
@@ -287,10 +308,13 @@ namespace MARAS::App {
                                                            bool isWalkIn) {
         std::lock_guard lock(GetPapyrusMutex());
 
+        AffectionEventCoordinator::GetSingleton().OnCheatingCaught(cheaterId, victimId);
+
         RelationshipUseCases::GetSingleton().HandleIntimateCheatingCaught(
             cheaterId, victimId, affairPartnerId, isWalkIn);
 
         if (GetSkyrimNetGateway().IsAvailable()) {
+            GetSkyrimNetGateway().EmitCheatingCaught(victimId, cheaterId, affairPartnerId, isWalkIn);
             GetSkyrimNetGateway().RecordInfidelityEvent(
                 cheaterId, victimId, affairPartnerId, "caught", isWalkIn);
         }
@@ -307,6 +331,107 @@ namespace MARAS::App {
         MARAS_LOG_INFO(
             "[AppLifecycleCoordinator] Processed intimate cheating caught (cheater={:08X}, victim={:08X}, partner={:08X}, framework='{}', thread={}, walkIn={})",
             cheaterId, victimId, affairPartnerId, framework, threadId, isWalkIn);
+    }
+
+    void AppLifecycleCoordinator::OnIntimateOpenRelationshipWalkIn(RE::FormID partnerId,
+                                                                   RE::FormID witnessId,
+                                                                   RE::FormID otherPartnerId,
+                                                                   std::string_view framework,
+                                                                   std::int32_t threadId,
+                                                                   bool isWalkIn) {
+        std::lock_guard lock(GetPapyrusMutex());
+        AffectionEventCoordinator::GetSingleton().OnOpenRelationshipWalkIn(partnerId, witnessId);
+        if (GetSkyrimNetGateway().IsAvailable()) {
+            GetSkyrimNetGateway().EmitOpenRelationshipWalkIn(witnessId, partnerId, otherPartnerId, isWalkIn);
+        }
+        MARAS_LOG_INFO(
+            "[AppLifecycleCoordinator] Processed open relationship walk-in affection check (partner={:08X}, witness={:08X}, other={:08X}, framework='{}', thread={}, walkIn={})",
+            partnerId, witnessId, otherPartnerId, framework, threadId, isWalkIn);
+    }
+
+    void AppLifecycleCoordinator::OnPlayerGiftCompleted(
+        RE::FormID receiverId,
+        std::string_view playerName,
+        std::string_view receiverName,
+        std::span<const Domain::Relationships::GiftedItemEntry> items) {
+        if (State::IsLegacyMigrationActive()) {
+            return;
+        }
+        std::lock_guard lock(GetPapyrusMutex());
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (!snap) {
+            return;
+        }
+        const auto outcome = Domain::Relationships::EvaluateGiftSession(
+            *snap, State::ActorId{ receiverId }, playerName, receiverName, items);
+        if (!outcome.valid) {
+            return;
+        }
+        if (GetSkyrimNetGateway().IsAvailable()) {
+            GetSkyrimNetGateway().EmitAffectionGift(outcome.skyrimNetMessage, receiverId);
+        }
+        AffectionEventCoordinator::GetSingleton().AddGiftAffection(
+            receiverId, static_cast<float>(outcome.totalGoldValue));
+        MARAS_LOG_DEBUG("[AppLifecycleCoordinator] Gift completed (receiver={:08X}, value={}, items='{}')",
+                        receiverId, outcome.totalGoldValue, outcome.formattedItems);
+    }
+
+    Domain::Household::SleepRestedPlan AppLifecycleCoordinator::OnPlayerSlept(
+        std::span<const RE::FormID> sameCellActorIds,
+        RE::FormID currentLocationId,
+        std::span<const RE::FormID> presentAtLocationRawIds,
+        Foundation::ActorSex playerSex) {
+        if (State::IsLegacyMigrationActive()) {
+            return {};
+        }
+        std::lock_guard lock(GetPapyrusMutex());
+        std::vector<State::ActorId> cellActors;
+        cellActors.reserve(sameCellActorIds.size());
+        for (const RE::FormID rawId : sameCellActorIds) {
+            cellActors.emplace_back(rawId);
+        }
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            if (snap) {
+                const auto partners =
+                    Domain::Household::EvaluateSleepPaidAffectionPartners(*snap, cellActors);
+                for (const auto partner : partners) {
+                    AffectionEventCoordinator::GetSingleton().AddSleptAffection(partner.raw());
+                }
+            }
+        }
+        const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+        if (!postSnap) {
+            return {};
+        }
+        return Domain::Household::EvaluateSleepRestedPlan(
+            *postSnap, State::HouseId{ currentLocationId }, presentAtLocationRawIds, playerSex);
+    }
+
+    void AppLifecycleCoordinator::OnIntimateThreadEnded(
+        std::span<const RE::FormID> recordedPartnerIds,
+        bool hadSex) {
+        if (State::IsLegacyMigrationActive()) {
+            return;
+        }
+        std::lock_guard lock(GetPapyrusMutex());
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (!snap) {
+            return;
+        }
+        std::vector<State::ActorId> partners;
+        partners.reserve(recordedPartnerIds.size());
+        for (const RE::FormID rawId : recordedPartnerIds) {
+            partners.emplace_back(rawId);
+        }
+        const auto outcome =
+            Domain::Relationships::EvaluateIntimateThreadCompletion(*snap, partners, hadSex);
+        for (const auto partner : outcome.eligiblePartners) {
+            AffectionEventCoordinator::GetSingleton().AddIntimacyAffection(
+                partner.raw(), outcome.baseAffection);
+        }
+        MARAS_LOG_DEBUG("[AppLifecycleCoordinator] Intimate thread ended (partners={}, hadSex={}, baseAffection={})",
+                        outcome.eligiblePartners.size(), hadSex, outcome.baseAffection);
     }
 
 }  // namespace MARAS::App

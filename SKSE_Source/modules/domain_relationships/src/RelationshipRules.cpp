@@ -1,5 +1,6 @@
 #include "maras/domain/relationships/RelationshipRules.h"
 
+#include "maras/domain/relationships/RelationshipSettlementRules.h"
 #include "maras/foundation/EnumUtils.h"
 #include "maras/foundation/Logging.h"
 
@@ -440,6 +441,7 @@ namespace MARAS::Domain::Relationships {
 
         const auto snap = ws.Snapshot();
         const auto* preEdge = snap.relationships ? snap.relationships->FindEdge(actorA, actorB) : nullptr;
+        const bool hadPriorEdge = (preEdge != nullptr);
         const RelationshipStatus preStatus = preEdge ? preEdge->status : RelationshipStatus::Candidate;
         const bool wasOpenBefore = (preEdge != nullptr && preEdge->isOpen);
         outcome.oldStatus = preStatus;
@@ -451,6 +453,22 @@ namespace MARAS::Domain::Relationships {
 
         if (!CanFormRelationship(snap, meta, actorA, actorB, targetStatus, ctx, &outcome.blockReason)) {
             return outcome;
+        }
+
+        const bool involvesPlayer = actorA.IsPlayer() || actorB.IsPlayer();
+        const ActorId partnerId = actorA.IsPlayer() ? actorB : (actorB.IsPlayer() ? actorA : ActorId{});
+
+        bool wasCheatingOnPlayerBeforeTransition = ctx.partnerCheatedOnPlayer;
+        if (!wasCheatingOnPlayerBeforeTransition && involvesPlayer && !partnerId.IsNull() && !partnerId.IsPlayer() &&
+            snap.affairs != nullptr) {
+            for (const auto& rec : snap.affairs->GetForCouplePair(CanonicalPairKey{ partnerId, ActorId::Player() })) {
+                if (rec.cheater == partnerId &&
+                    rec.deceivedPartner.IsPlayer() &&
+                    rec.affairStatus == Foundation::AffairStatus::Ongoing) {
+                    wasCheatingOnPlayerBeforeTransition = true;
+                    break;
+                }
+            }
         }
 
         const bool openMainExists =
@@ -468,7 +486,8 @@ namespace MARAS::Domain::Relationships {
             optionalRng);
 
         outcome.allowed = true;
-        outcome.recordedTransition = (preStatus != targetStatus);
+        outcome.recordedTransition = (!hadPriorEdge && targetStatus == RelationshipStatus::Candidate) ||
+                                     (preStatus != targetStatus);
 
         if (outcome.recordedTransition) {
             if (const auto* postEdge = ws.relationships.Read().FindEdge(actorA, actorB)) {
@@ -484,50 +503,57 @@ namespace MARAS::Domain::Relationships {
             }
         }
 
-        const bool involvesPlayer = actorA.IsPlayer() || actorB.IsPlayer();
-        const ActorId partnerId = actorA.IsPlayer() ? actorB : (actorB.IsPlayer() ? actorA : ActorId{});
-
+        (void)sendEvent;
+        (void)playerPartnerLoadedInEngine;
         if (involvesPlayer && !partnerId.IsNull() && !partnerId.IsPlayer() && outcome.recordedTransition) {
             if (Foundation::IsActivePartnerStatus(targetStatus)) {
                 ws.affection.Write().SetLastInteractionDay(partnerId, currentGameDay);
             }
 
-            if (!sendEvent || !playerPartnerLoadedInEngine) {
-                std::optional<int> targetAffection;
-                switch (targetStatus) {
-                    case RelationshipStatus::Married:
-                    case RelationshipStatus::Engaged:
-                        targetAffection = 100;
-                        break;
-                    case RelationshipStatus::Dating:
-                        if (ws.affection.Read().GetPermanent(partnerId, 0) < 80) {
-                            targetAffection = 80;
-                        }
-                        break;
-                    case RelationshipStatus::Lover:
-                        if (ws.affection.Read().GetPermanent(partnerId, 0) < 70) {
-                            targetAffection = 70;
-                        }
-                        break;
-                    case RelationshipStatus::Divorced:
-                    case RelationshipStatus::Jilted:
-                    case RelationshipStatus::ExDating:
-                    case RelationshipStatus::ExLover:
-                        targetAffection = 0;
-                        break;
-                    case RelationshipStatus::Candidate:
-                        if (preStatus != RelationshipStatus::Unknown) {
-                            targetAffection = 50;
-                        }
-                        break;
-                    default:
-                        break;
-                }
-                if (targetAffection.has_value()) {
-                    ws.affection.Write().SetPermanent(partnerId, *targetAffection);
-                    outcome.offlineSyncedAffection = *targetAffection;
-                    outcome.mutations.MarkActorDirty(partnerId);
-                }
+            std::optional<int> targetAffection;
+            switch (targetStatus) {
+                case RelationshipStatus::Married:
+                case RelationshipStatus::Engaged:
+                    targetAffection = 100;
+                    break;
+                case RelationshipStatus::Dating:
+                    if (ws.affection.Read().GetPermanent(partnerId, 0) < 80) {
+                        targetAffection = 80;
+                    }
+                    break;
+                case RelationshipStatus::Lover:
+                    if (ws.affection.Read().GetPermanent(partnerId, 0) < 70) {
+                        targetAffection = 70;
+                    }
+                    break;
+                case RelationshipStatus::Divorced:
+                case RelationshipStatus::Jilted:
+                case RelationshipStatus::ExDating:
+                case RelationshipStatus::ExLover:
+                    targetAffection = 0;
+                    break;
+                case RelationshipStatus::Candidate:
+                    targetAffection = !hadPriorEdge
+                        ? ComputeInitialCandidateAffection(ctx.playerRelationshipRank)
+                        : 50;
+                    break;
+                default:
+                    break;
+            }
+            if (targetAffection.has_value()) {
+                ws.affection.Write().SetPermanent(partnerId, *targetAffection);
+                outcome.offlineSyncedAffection = *targetAffection;
+                outcome.mutations.MarkActorDirty(partnerId);
+            }
+
+            const bool shouldApplyBreakupCooldown =
+                targetStatus == RelationshipStatus::Divorced ||
+                targetStatus == RelationshipStatus::Jilted ||
+                ((targetStatus == RelationshipStatus::ExDating || targetStatus == RelationshipStatus::ExLover) &&
+                 wasCheatingOnPlayerBeforeTransition);
+            if (shouldApplyBreakupCooldown) {
+                ws.cooldowns.Write().SetBrokeupTime(partnerId, currentGameDay);
+                outcome.appliedBreakupCooldown = true;
             }
 
             if (preStatus == RelationshipStatus::Married || targetStatus == RelationshipStatus::Married) {

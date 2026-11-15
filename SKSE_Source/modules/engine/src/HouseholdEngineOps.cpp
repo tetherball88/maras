@@ -2,12 +2,14 @@
 
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
+#include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/GlobalVarReconciler.h"
 #include "maras/engine/NPCTypeDeterminer.h"
 #include "maras/engine/PackageReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
+#include "maras/engine/TaskDispatcher.h"
 #include "maras/state/WorldStore.h"
 
 #include <cstddef>
@@ -263,6 +265,49 @@ namespace MARAS {
 
         MARAS_LOG_INFO("HouseholdEngineOps::ReconcileTenantsOnLoad: synced {} house(s) and {} loaded adult tenant(s)",
                        hh.AllHouses().size(), syncedCount);
+    }
+
+    void HouseholdEngineOps::UnlockAndGrantSpouseHomeAccess(RE::FormID homeCellFormId) {
+        if (homeCellFormId == 0) {
+            return;
+        }
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddCurrentEpochTask("HouseholdEngineOps::UnlockAndGrantSpouseHomeAccess", [homeCellFormId]() {
+                HouseholdEngineOps::GetSingleton().UnlockAndGrantSpouseHomeAccess(homeCellFormId);
+            });
+            return;
+        }
+
+        const auto doorIds = SpatialWorldIndex::GetSingleton().GetCellDoors(homeCellFormId);
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        auto invCounts = player ? player->GetInventoryCounts() : RE::TESObjectREFR::InventoryCountMap{};
+
+        for (const RE::FormID doorId : doorIds) {
+            if (doorId == 0) {
+                continue;
+            }
+            auto* doorRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(doorId);
+            if (!doorRef || doorRef->IsDeleted()) {
+                continue;
+            }
+            auto* lockData = doorRef->GetLock();
+            if (!lockData) {
+                continue;
+            }
+            if (RE::TESKey* key = lockData->key) {
+                if (player) {
+                    const auto it = invCounts.find(key);
+                    if (it == invCounts.end() || it->second <= 0) {
+                        player->AddObjectToContainer(key, nullptr, 1, nullptr);
+                        invCounts[key] = 1;
+                    }
+                }
+            } else if (lockData->IsLocked() &&
+                       lockData->GetLockLevel(doorRef) != RE::LOCK_LEVEL::kRequiresKey) {
+                lockData->SetLocked(false);
+                doorRef->AddLockChange();
+            }
+        }
     }
 
 }  // namespace MARAS

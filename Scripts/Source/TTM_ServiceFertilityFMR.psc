@@ -24,72 +24,28 @@ EndFunction
   Provides direct biological father Form.
 /;
 Function OnConception(Form akMother, Form akFather, int iTrackingIndex) global
-    TTM_Debug.debug("TTM_ServiceFertilityFMR: Conception event received for mother " + akMother + ") bioFather=" + akFather)
     if (TTM_ServiceFertility.GetActiveEngine() != 1)
-        TTM_Debug.debug("TTM_ServiceFertilityFMR: Not active fertility provider, skipping.")
         return
     endif
     Actor mother = akMother as Actor
     if (!mother)
-        TTM_Debug.debug("TTM_ServiceFertilityFMR: Mother is not an Actor, skipping.")
         return
     endif
-    Actor bioFather = akFather as Actor
-    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-    float conceptionTime = Utility.GetCurrentGameTime()
-
-    int existingInfantID = MARAS.FindSyntheticChild(mother, "Newborn")
-    int existingUnbornID = MARAS.FindUnbornChild(mother)
-    if (!MARAS.IsNPCPregnant(mother) && existingInfantID == 0 && existingUnbornID == 0)
-        int unbornID = MARAS.RegisterUnbornChild(mother, bioFather, conceptionTime)
-        string bioFatherName = "Unknown"
-        if (bioFather != none)
-            bioFatherName = TTM_Utils.GetActorName(bioFather)
-        endif
-        TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " conceived unborn child (ID " + unbornID + ", index " + iTrackingIndex + ") bioFather=" + bioFatherName + ", presumedFather=" + TTM_Utils.GetActorName(presumedFather))
-
-        Actor player = TTM_Data.GetPlayer()
-        if (mother == player)
-            if (presumedFather)
-                TTM_ServiceAffection.ApplyPregnancyConceivedAffection(presumedFather, true)
-            elseif (bioFather)
-                TTM_ServiceAffection.ApplyPregnancyConceivedAffection(bioFather, true)
-            endif
-        else
-            if (presumedFather == player)
-                TTM_ServiceAffection.ApplyPregnancyConceivedAffection(mother, false)
-            elseif(presumedFather == none && bioFather == player)
-                TTM_ServiceAffection.ApplyPregnancyConceivedAffection(mother, false)
-            endif
-        endif
-
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterPregnancyAnnounced(mother, presumedFather, bioFather, bioFatherName)
-        endif
-    else
-        TTM_Debug.debug("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " already pregnant or has an unborn child, skipping conception.")
-    endif
+    Actor[] bioFathers = new Actor[1]
+    bioFathers[0] = akFather as Actor
+    MARAS.OnFertilityConception("fmr", mother, bioFathers, iTrackingIndex, Utility.GetCurrentGameTime())
 EndFunction
 
 ;/
   OnActorStatus: Fired by FMR via "FMR_ActorStatus" ModEvent with factionRank (1-100 = pregnancy %, 120 = labor).
-  When pregnancy enters the 2nd/3rd trimester (rank >= 34) or labor (rank == 120), the belly is visibly rounded,
-  so any unannounced pregnancy secret is revealed to the mother's partner.
 /;
 Function OnActorStatus(Form akMother, int factionRank, string fatherName, int fatherRaceId) global
     if (TTM_ServiceFertility.GetActiveEngine() != 1)
         return
     endif
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    if ((factionRank >= 34 && factionRank <= 100) || factionRank == 120)
-        int unbornID = MARAS.FindUnbornChild(mother)
-        if (unbornID != 0 && MARAS.IsPregnancySecretForPartner(unbornID))
-            TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " reached visible pregnancy stage (FMR rank=" + factionRank + "), revealing pregnancy to partner.")
-            MARAS.RevealPregnancyToPartner(unbornID, true)
-        endif
+    if (mother)
+        MARAS.OnFertilityProgressStatus("fmr", mother, factionRank, Utility.GetCurrentGameTime())
     endif
 EndFunction
 
@@ -98,56 +54,8 @@ Function OnBabyBirth(Form akMother, Form akFather, int iTrackingIndex) global
         return
     endif
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    Actor bioFather = akFather as Actor
-    float birthTime = Utility.GetCurrentGameTime()
-    string childName = "Newborn"
-
-    int unbornID = MARAS.FindUnbornChild(mother)
-    int childID = 0
-    if (unbornID != 0)
-        childID = MARAS.PromoteUnbornToInfant(mother, birthTime, childName, bioFather)
-    else
-        int existingInfantID = MARAS.FindSyntheticChild(mother, "Newborn")
-        if (existingInfantID != 0 && MARAS.GetChildStage(existingInfantID) == 1)
-            TTM_Debug.warn("TTM_ServiceFertilityFMR: Mother " + TTM_Utils.GetActorName(mother) + " already has an active infant (ID " + existingInfantID + "). Skipping duplicate birth registration.")
-            return
-        endif
-
-        Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-        childID = MARAS.RegisterFertilityChild(0, mother, presumedFather, bioFather, 0.0, birthTime, childName)
-    endif
-
-    if (childID == 0)
-        return
-    endif
-
-    if (bioFather == none)
-        bioFather = MARAS.GetBioFather(childID)
-    endif
-    Actor presumedFather = MARAS.GetMotherPartner(childID)
-
-    TTM_Debug.info("TTM_ServiceFertilityFMR: Promoted/registered newborn child (ID " + childID + ") for mother " + TTM_Utils.GetActorName(mother) + " with bioFather=" + TTM_Utils.GetActorName(bioFather) + ", presumedFather=" + TTM_Utils.GetActorName(presumedFather))
-
-    Actor player = TTM_Data.GetPlayer()
-    if (mother == player)
-        if (presumedFather)
-            TTM_ServiceAffection.ApplyChildBirthAffection(presumedFather, 1)
-        elseif (bioFather)
-            TTM_ServiceAffection.ApplyChildBirthAffection(bioFather, 1)
-        endif
-    else
-        if (presumedFather == player)
-            TTM_ServiceAffection.ApplyChildBirthAffection(mother, 1)
-        elseif (presumedFather == none && bioFather == player)
-            TTM_ServiceAffection.ApplyChildBirthAffection(mother, 1)
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        TTM_ServiceSkyrimNet.RegisterChildBirth(childID, childName)
+    if (mother)
+        MARAS.OnFertilityBirth("fmr", mother, akFather as Actor, "Newborn", 2, Utility.GetCurrentGameTime())
     endif
 EndFunction
 
@@ -156,38 +64,8 @@ Function OnAbort(Form akMother, Form akFather, int iTrackingIndex) global
         return
     endif
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    Actor bioFather = akFather as Actor
-    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-
-    if (MARAS.IsNPCPregnant(mother) || MARAS.FindUnbornChild(mother) != 0)
-        MARAS.RemoveUnbornChild(mother)
-    endif
-    TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " pregnancy aborted (FMR_Abort)")
-
-    Actor player = TTM_Data.GetPlayer()
-    if (mother == player)
-        if (presumedFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(presumedFather, "abortion")
-        elseif (bioFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(bioFather, "abortion")
-        endif
-    else
-        if (presumedFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "abortion")
-        elseif (presumedFather == none && bioFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "abortion")
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        Actor eventPartner = presumedFather
-        if (eventPartner == none)
-            eventPartner = bioFather
-        endif
-        TTM_ServiceSkyrimNet.RegisterPregnancyLost(mother, eventPartner, "abortion")
+    if (mother)
+        MARAS.OnFertilityPregnancyLoss("fmr", mother, akFather as Actor, "abortion", false)
     endif
 EndFunction
 
@@ -199,41 +77,8 @@ Function OnMiscarriage(Form akMother, string cause) global
         return
     endif
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    int unbornID = MARAS.FindUnbornChild(mother)
-    Actor bioFather = none
-    if (unbornID != 0)
-        bioFather = MARAS.GetBioFather(unbornID)
-    endif
-    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-    if (!MARAS.RemoveUnbornChild(mother))
-        return
-    endif
-    TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " had a miscarriage (FMR_BabyMiscarriage: " + cause + ")")
-
-    Actor player = TTM_Data.GetPlayer()
-    if (mother == player)
-        if (presumedFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(presumedFather, "miscarriage")
-        elseif (bioFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(bioFather, "miscarriage")
-        endif
-    else
-        if (presumedFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "miscarriage")
-        elseif (presumedFather == none && bioFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "miscarriage")
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        Actor eventPartner = presumedFather
-        if (eventPartner == none)
-            eventPartner = bioFather
-        endif
-        TTM_ServiceSkyrimNet.RegisterPregnancyLost(mother, eventPartner, "miscarriage")
+    if (mother)
+        MARAS.OnFertilityPregnancyLoss("fmr", mother, none, "miscarriage", true)
     endif
 EndFunction
 
@@ -242,79 +87,20 @@ Function OnPregnancyCancelled(Form akMother, Form akFather, int iTrackingIndex) 
         return
     endif
     Actor mother = akMother as Actor
-    if (!mother)
-        return
-    endif
-    Actor bioFather = akFather as Actor
-    Actor presumedFather = MARAS.GetPrimaryPartner(mother)
-
-    if (MARAS.IsNPCPregnant(mother) || MARAS.FindUnbornChild(mother) != 0)
-        MARAS.RemoveUnbornChild(mother)
-        TTM_Debug.info("TTM_ServiceFertilityFMR: " + TTM_Utils.GetActorName(mother) + " pregnancy cancelled (FMR_PregnancyCancelled)")
-    endif
-
-    Actor player = TTM_Data.GetPlayer()
-    if (mother == player)
-        if (presumedFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(presumedFather, "cancelled")
-        elseif (bioFather)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(bioFather, "cancelled")
-        endif
-    else
-        if (presumedFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "cancelled")
-        elseif (presumedFather == none && bioFather == player)
-            TTM_ServiceAffection.ApplyPregnancyLostAffection(mother, "cancelled")
-        endif
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        Actor eventPartner = presumedFather
-        if (eventPartner == none)
-            eventPartner = bioFather
-        endif
-        TTM_ServiceSkyrimNet.RegisterPregnancyLost(mother, eventPartner, "cancelled")
+    if (mother)
+        MARAS.OnFertilityPregnancyLoss("fmr", mother, akFather as Actor, "cancelled", false)
     endif
 EndFunction
 
 Function OnChildGrewUp(int childIndex, string childName, int gender, Actor mother) global
-    TTM_Debug.debug("TTM_ServiceFertilityFMR: Child grew up (FMR_ChildGrewUp)")
     if (TTM_ServiceFertility.GetActiveEngine() != 1)
         return
     endif
-    int childID = 0
-    if (mother != none)
-        childID = MARAS.FindSyntheticChild(mother, "Newborn")
-        if (childID == 0)
-            TTM_Debug.warn("TTM_ServiceFertilityFMR: " + mother + " child " + childName + " not found.")
-        endif
-    else
-        TTM_Debug.warn("TTM_ServiceFertilityFMR: No mother provided.")
-    endif
-    if (childID != 0)
-        GrowUpChild(childID, childName, gender)
-    endif
+    MARAS.OnFertilityChildGrewUp(mother, childName, gender, false, none)
 EndFunction
 
 Function OnChildGrewUpNpcNpc(Actor mother, Actor father) global
-    TTM_Debug.debug("TTM_ServiceFertilityFMR: Child grew up (FMR_ChildGrewUpNpcNpc)")
-    int childID = MARAS.FindSyntheticChild(mother, "Newborn")
-    if (childID != 0)
-        int gender = Utility.RandomInt(0, 1)
-        string childName = TTM_Utils.GetChildNameByParents(mother, father, gender)
-        GrowUpChild(childID, childName, gender)
-    endif
-EndFunction
-
-Function GrowUpChild(int childID, string childName, int gender) global
-    MARAS.SetChildGender(childID, gender)
-    MARAS.UpdateChildName(childID, childName)
-    MARAS.SetChildStage(childID, 2) ; Stage 2 = Child (Explicit transition to Stage 2)
-    TTM_Debug.debug("TTM_ServiceFertilityFMR: Child grew up from Newborn to '" + childName + "' (ID " + childID + ", gender=" + gender + ")")
-    TTM_ServiceAffection.ApplyChildMilestoneForParents(childID, "child")
-    if (TTM_Data.GetHasSkyrimNet())
-        TTM_ServiceSkyrimNet.RegisterChildGrewUp(childID, childName)
-    endif
+    MARAS.OnFertilityChildGrewUp(mother, "", -1, true, father)
 EndFunction
 
 Function OnChildSpawned(Form childActor, int childIndex, string childName) global
@@ -329,90 +115,34 @@ Function OnChildSpawned(Form childActor, int childIndex, string childName) globa
     if (childID == 0)
         childID = MARAS.FindSyntheticChild(none, child.GetDisplayName())
     endif
-    if (childID != 0)
-        Actor bioMother = MARAS.GetBioMother(childID)
-        Actor bioFather = MARAS.GetBioFather(childID)
-        Actor player = TTM_Data.GetPlayer()
-        Actor guardianA = MARAS.GetGuardianA(childID)
-        Actor guardianB = MARAS.GetGuardianB(childID)
-        bool isPlayerChild = false
-        if (guardianA != none || guardianB != none)
-            if (guardianA == player || guardianB == player)
-                isPlayerChild = true
-            elseif ((guardianA != none && MARAS.IsNPCStatus(guardianA, "married")) || (guardianB != none && MARAS.IsNPCStatus(guardianB, "married")))
-                isPlayerChild = true
-            endif
-        elseif (player == bioMother || player == bioFather)
-            isPlayerChild = true
-        endif
-        if (guardianA == none && guardianB == none && !isPlayerChild && ((bioMother != none && MARAS.IsNPCStatus(bioMother, "married")) || (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))))
-            isPlayerChild = true
-        endif
-        if (isPlayerChild)
-            TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
-            Actor coSpouse = none
-            if (guardianA != none && guardianA != player && MARAS.IsNPCStatus(guardianA, "married"))
-                coSpouse = guardianA
-            elseif (guardianB != none && guardianB != player && MARAS.IsNPCStatus(guardianB, "married"))
-                coSpouse = guardianB
-            endif
-            childrenLogicQst.AdoptChild(child, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = childID, childStage = 2)
-        else
-            Actor npcMother = bioMother
-            Actor npcFather = MARAS.GetMotherPartner(childID)
-            if (npcFather == none)
-                npcFather = bioFather
-            endif
-            Location houseLoc = none
-            if (npcMother != none)
-                houseLoc = MARAS.GetTenantHouse(npcMother)
-            endif
-            if (guardianA != none || guardianB != none)
-                npcMother = guardianA
-                npcFather = guardianB
-            endif
-            MARAS.RegisterChildActor(child, npcMother, npcFather, houseLoc, bioMother, bioFather, childID, 2)
-            child.EvaluatePackage()
-            child.MoveToPackageLocation()
-        endif
-        TTM_Debug.info("TTM_ServiceFertilityFMR: Spawned physical child actor " + child.GetDisplayName() + " re-keyed from synthetic ID " + childID)
+    if (childID == 0)
+        return
     endif
+    Actor bioMother = MARAS.GetBioMother(childID)
+    Actor bioFather = MARAS.GetBioFather(childID)
+    if (MARAS.RegisterNpcFertilityChildSpawn(child, childID, bioMother, bioFather, 2, false))
+        child.EvaluatePackage()
+        child.MoveToPackageLocation()
+    else
+        TTM_ServiceChildrenLogic childrenLogicQst = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
+        Actor coSpouse = MARAS.GetFertilitySpawnCoSpouse(childID, bioMother, bioFather)
+        childrenLogicQst.AdoptChild(child, spouseToAdopWith = coSpouse, bioMother = bioMother, bioFather = bioFather, syntheticID = childID, childStage = 2)
+    endif
+    TTM_Debug.info("TTM_ServiceFertilityFMR: Spawned physical child actor " + child.GetDisplayName() + " re-keyed from synthetic ID " + childID)
 EndFunction
 
 Function OnChildSentToTraining(int childIndex, string childName, string trainingLocation, string className) global
     if (TTM_ServiceFertility.GetActiveEngine() != 1)
         return
     endif
-    int childID = MARAS.FindSyntheticChild(none, childName)
-    if (childID != 0)
-        MARAS.SetChildTrainingLocation(childID, trainingLocation)
-        int currentStage = MARAS.GetChildStage(childID)
-        if (currentStage != 3)
-            MARAS.SetChildStage(childID, 3)
-        endif
-        TTM_Debug.info("TTM_ServiceFertilityFMR: Child " + childName + " (ID " + childID + ") sent to training at " + trainingLocation + " (" + className + ")")
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildSentToTraining(childID, childName, trainingLocation)
-        endif
-    endif
+    MARAS.OnFertilityChildSentToTraining(childName, trainingLocation, className)
 EndFunction
 
 Function OnChildFinishedTraining(int childIndex, string childName, string trainingLocation, string className) global
     if (TTM_ServiceFertility.GetActiveEngine() != 1)
         return
     endif
-    int childID = MARAS.FindSyntheticChild(none, childName)
-    if (childID != 0)
-        int currentStage = MARAS.GetChildStage(childID)
-        if (currentStage != 4)
-            MARAS.SetChildStage(childID, 4)
-            TTM_Debug.info("TTM_ServiceFertilityFMR: Child " + childName + " (ID " + childID + ") finished training, became adult")
-            TTM_ServiceAffection.ApplyChildMilestoneForParents(childID, "adult")
-            if (TTM_Data.GetHasSkyrimNet())
-                TTM_ServiceSkyrimNet.RegisterChildBecameAdult(childID, childName)
-            endif
-        endif
-    endif
+    MARAS.OnFertilityChildFinishedTraining(childName, trainingLocation, className)
 EndFunction
 
 Function OnAdultChildSpawned(Form adultActor, int childIndex, string childName) global
@@ -425,24 +155,9 @@ Function OnAdultChildSpawned(Form adultActor, int childIndex, string childName) 
     endif
 EndFunction
 
-
 Function PromoteAdultFollowerChild(Actor adultActor, string childName = "", bool fireEvent = true) global
-    if (adultActor == none)
-        return
-    endif
-    if (childName == "")
-        childName = adultActor.GetDisplayName()
-    endif
-    int syntheticID = MARAS.FindSyntheticChild(none, childName)
-    if (syntheticID != 0)
-        int currentStage = MARAS.GetChildStage(syntheticID)
-        Actor bioMother = MARAS.GetBioMother(syntheticID)
-        Actor bioFather = MARAS.GetBioFather(syntheticID)
-        TTM_Debug.info("TTM_ServiceFertilityFMR: Promoting synthetic child " + syntheticID + " to adult follower actor " + adultActor.GetDisplayName())
-        MARAS.RegisterChildActor(adultActor, none, none, none, bioMother, bioFather, syntheticID, 4) ; Stage 4 = Adult
-        if (fireEvent && currentStage != 4 && TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildBecameAdult(adultActor.GetFormID(), childName)
-        endif
+    if (adultActor != none)
+        MARAS.OnFertilityAdultChildSpawned("fmr", adultActor, none, none, none, childName, false, fireEvent)
     endif
 EndFunction
 
@@ -498,8 +213,9 @@ Function Migrate() global
     ; 2. Migrate from FMR TrackedActors (NPC-NPC and NPC-Player pregnancies, infants, and past births)
     int tIdx = 0
 
-    StorageUtil.IntListClear(none, "MARAS_FMR_Migration_PlayerChildrenMothers")
-    StorageUtil.FloatListClear(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime")
+    int[] motherIndices = new int[128]
+    float[] motherBirthTimes = new float[128]
+    int motherCount = 0
 
     while (tIdx < fmrStorage.TrackedActors.Length)
         Actor mother = fmrStorage.TrackedActors[tIdx] as Actor
@@ -534,34 +250,27 @@ Function Migrate() global
                 Actor father = fmrStorage.LastFatherRef[tIdx] as Actor
                 TTM_Debug.debug("TTM_ServiceFertilityFMR: Migrating NPC-NPC past birth: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Birth Time=" + birthTime + ")")
                 if(father == player || MARAS.IsNPCStatus(mother, "married"))
-                    float bTime = fmrStorage.LastBirth[tIdx]
-                    int count = StorageUtil.FloatListCount(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime")
-                    ; Find index to insert in ascending order (oldest to newest)
-                    int insertIdx = 0
-                    while (insertIdx < count && StorageUtil.FloatListGet(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime", insertIdx) < bTime)
-                        insertIdx += 1
-                    endWhile
-                    TTM_Debug.debug("TTM_ServiceFertilityFMR: Inserting player children mother at index " + insertIdx + ": " + TTM_Utils.GetActorName(mother))
-                    if(insertIdx >= count)
-                        StorageUtil.IntListAdd(none, "MARAS_FMR_Migration_PlayerChildrenMothers", tIdx)
-                        StorageUtil.FloatListAdd(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime", bTime)
-                    else
-                        StorageUtil.IntListInsert(none, "MARAS_FMR_Migration_PlayerChildrenMothers", insertIdx, tIdx)
-                        StorageUtil.FloatListInsert(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime", insertIdx, bTime)
+                    if (motherCount < 128)
+                        float bTime = fmrStorage.LastBirth[tIdx]
+                        ; Find index to insert in ascending order (oldest to newest)
+                        int insertIdx = 0
+                        while (insertIdx < motherCount && motherBirthTimes[insertIdx] < bTime)
+                            insertIdx += 1
+                        endWhile
+                        TTM_Debug.debug("TTM_ServiceFertilityFMR: Inserting player children mother at index " + insertIdx + ": " + TTM_Utils.GetActorName(mother))
+                        int shiftIdx = motherCount
+                        while (shiftIdx > insertIdx)
+                            motherIndices[shiftIdx] = motherIndices[shiftIdx - 1]
+                            motherBirthTimes[shiftIdx] = motherBirthTimes[shiftIdx - 1]
+                            shiftIdx -= 1
+                        endWhile
+                        motherIndices[insertIdx] = tIdx
+                        motherBirthTimes[insertIdx] = bTime
+                        motherCount += 1
                     endif
                 else
-                    string npcChildName = TTM_Utils.GetActorName(mother) + "'s Child"
-                    int npcChildID = MARAS.RegisterFertilityChild(0, mother, none, father, 0.0, birthTime, npcChildName)
+                    int npcChildID = MARAS.MigrateCompletedFmrNpcChild(mother, father, conceptionTime, birthTime)
                     if (npcChildID != 0)
-                        int gender = Utility.RandomInt(0, 1)
-                        Race raceForName = mother.GetRace()
-                        if(Utility.RandomInt(0,1) == 0 && father)
-                            raceForName = father.GetRace()
-                        endif
-                        string childName = TTM_Utils.GetChildNameByParents(mother, father, gender)
-                        MARAS.SetChildStage(npcChildID, 2) ; Stage 2 = Child
-                        MARAS.SetChildGender(npcChildID, gender)
-                        MARAS.UpdateChildName(npcChildID, childName)
                         TTM_Debug.info("TTM_ServiceFertilityFMR: Migrated completed NPC-NPC birth: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Child ID=" + npcChildID + ")")
                     endif
                 endif
@@ -571,35 +280,33 @@ Function Migrate() global
     endWhile
 
     ; try to resolve player's children to mothers
-    int motherIdx = StorageUtil.IntListCount(none, "MARAS_FMR_Migration_PlayerChildrenMothers") - 1
+    int motherIdx = motherCount - 1
     int childIdx = fmrStorage.PlayerChildName.Length - 1
     TTM_Debug.debug("TTM_ServiceFertilityFMR: Player child mother index: " + motherIdx + "; child index: " + childIdx)
     bool lastFatherUsed = false
     if(motherIdx >= 0 && childIdx >= 0)
         while (motherIdx >= 0 && childIdx >= 0)
-            int nIdx = StorageUtil.IntListGet(none, "MARAS_FMR_Migration_PlayerChildrenMothers", motherIdx)
+            int nIdx = motherIndices[motherIdx]
             Actor bioFather = fmrStorage.LastFatherRef[nIdx] as Actor
             if(lastFatherUsed)
                 bioFather = player
             endif
             lastFatherUsed = true
-            RegisterPlayerChild(nIdx, motherIdx, childIdx, bioFather, fmrStorage)
+            RegisterPlayerChild(nIdx, motherBirthTimes[motherIdx], childIdx, bioFather, fmrStorage)
             motherIdx -= 1
             childIdx -= 1
         endWhile
         while(childIdx >= 0)
-            int nIdx = StorageUtil.IntListGet(none, "MARAS_FMR_Migration_PlayerChildrenMothers", 0)
-            RegisterPlayerChild(nIdx, 0, childIdx, player, fmrStorage)
+            int nIdx = motherIndices[0]
+            RegisterPlayerChild(nIdx, motherBirthTimes[0], childIdx, player, fmrStorage)
             childIdx -= 1
         endWhile
     endif
-    StorageUtil.IntListClear(none, "MARAS_FMR_Migration_PlayerChildrenMothers")
-    StorageUtil.FloatListClear(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime")
 
     MarkMigrated()
 EndFunction
 
-Function RegisterPlayerChild(int nIdx, int motherIdx, int childIdx, Actor bioFather, _JSW_BB_Storage fmrStorage) global
+Function RegisterPlayerChild(int nIdx, float birthTime, int childIdx, Actor bioFather, _JSW_BB_Storage fmrStorage) global
     Actor mother = fmrStorage.TrackedActors[nIdx] as Actor
     string childName = fmrStorage.PlayerChildName[childIdx]
     Actor player = TTM_Data.GetPlayer()
@@ -615,7 +322,7 @@ Function RegisterPlayerChild(int nIdx, int motherIdx, int childIdx, Actor bioFat
             childGender = fmrStorage.PlayerChildGender[childIdx]
         endif
         TTM_Debug.debug("TTM_ServiceFertilityFMR: Resolving child record " + childIdx + ": " + childName + ": mother: " + TTM_Utils.GetActorName(mother) + ": father: " + TTM_Utils.GetActorName(player) + ": gender: " + childGender)
-        int childID = MARAS.RegisterFertilityChild(0, mother, none, bioFather, 0.0, StorageUtil.FloatListGet(none, "MARAS_FMR_Migration_PlayerChildrenMothersBirthTime", motherIdx), childName)
+        int childID = MARAS.RegisterFertilityChild(0, mother, none, bioFather, 0.0, birthTime, childName)
         if (childID != 0)
             MARAS.SetChildGender(childID, childGender)
             MARAS.UpdateChildName(childID, childName)

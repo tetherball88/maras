@@ -3,6 +3,7 @@
 #include "maras/app/AppContext.h"
 #include "maras/bridge_skyrimnet/SkyrimNetDecisions.h"
 #include "maras/bridge_skyrimnet/SkyrimNetDecorators.h"
+#include "maras/bridge_skyrimnet/SkyrimNetEventService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetMemoryService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetProfileService.h"
 #include "maras/engine/ActorService.h"
@@ -200,65 +201,6 @@ namespace MARAS::Bridge::SkyrimNet {
             targetFormID = 0;
         }
 
-        std::string payloadToSend = content;
-        if (eventType == "ttm_event") {
-            nlohmann::json parsed = nlohmann::json::parse(content, nullptr, /*allow_exceptions=*/false);
-            if (parsed.is_object() && parsed.contains("_marasMemory")) {
-                const nlohmann::json memMeta = parsed["_marasMemory"];
-                std::string ttmType;
-                if (auto itType = parsed.find("type"); itType != parsed.end() && itType->is_string()) {
-                    ttmType = itType->get<std::string>();
-                }
-                parsed.erase("_marasMemory");
-                payloadToSend = parsed.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-
-                if (memMeta.is_object()) {
-                    auto readFormId = [&](std::string_view key) -> std::uint32_t {
-                        auto it = memMeta.find(key);
-                        if (it != memMeta.end() && (it->is_number_unsigned() || it->is_number_integer())) {
-                            return static_cast<std::uint32_t>(it->get<std::uint64_t>());
-                        }
-                        return 0;
-                    };
-
-                    if (ttmType == "ttm_pregnancy_announced") {
-                        const std::uint32_t motherID = readFormId("motherId");
-                        const std::uint32_t partnerID = readFormId("partnerId");
-                        const std::uint32_t fallbackBioID = readFormId("fallbackBioId");
-                        std::string fallbackBioName;
-                        if (auto itName = memMeta.find("fallbackBioName"); itName != memMeta.end() && itName->is_string()) {
-                            fallbackBioName = itName->get<std::string>();
-                        }
-                        std::int32_t childCount = 1;
-                        if (auto itCnt = memMeta.find("childCount");
-                            itCnt != memMeta.end() && (itCnt->is_number_integer() || itCnt->is_number_unsigned())) {
-                            childCount = itCnt->get<std::int32_t>();
-                        }
-                        if (motherID != 0) {
-                            std::lock_guard lock(MARAS::GetPapyrusMutex());
-                            SkyrimNetMemoryService::GetSingleton().RecordPregnancyDiscovered(
-                                motherID, partnerID, fallbackBioID, fallbackBioName, childCount);
-                        }
-                    } else if (ttmType == "ttm_child_birth") {
-                        const std::uint32_t motherID = readFormId("motherId");
-                        std::vector<std::uint32_t> childIDs;
-                        if (auto itIds = memMeta.find("childIds"); itIds != memMeta.end() && itIds->is_array()) {
-                            childIDs.reserve(itIds->size());
-                            for (const auto& elem : *itIds) {
-                                if (elem.is_number_unsigned() || elem.is_number_integer()) {
-                                    childIDs.push_back(static_cast<std::uint32_t>(elem.get<std::uint64_t>()));
-                                }
-                            }
-                        }
-                        if (motherID != 0) {
-                            std::lock_guard lock(MARAS::GetPapyrusMutex());
-                            SkyrimNetMemoryService::GetSingleton().RecordChildBirth(motherID, childIDs);
-                        }
-                    }
-                }
-            }
-        }
-
         std::vector<std::uint32_t> exactAudienceIds;
         auto addUniqueValidActor = [&](std::uint32_t id) {
             if (id == 0 || MARAS::IsSyntheticChildID(id)) return;
@@ -286,7 +228,7 @@ namespace MARAS::Bridge::SkyrimNet {
 
         const bool ok = fnRegisterEvent(
             eventType.c_str(),
-            payloadToSend.c_str(),
+            content.c_str(),
             originatorFormID,
             targetFormID,
             audiencePtr,
@@ -852,6 +794,184 @@ namespace MARAS::Bridge::SkyrimNet {
                                            const std::string& updatableBlocksCSV = "") override {
                 return SkyrimNetProfileService::GetSingleton().RequestActorProfileUpdate(
                     actorFormID, additionalInstructions, updatableBlocksCSV);
+            }
+            void RevertEvents() noexcept override {
+                SkyrimNetEventService::GetSingleton().Revert();
+            }
+            void SuppressNextActionNarration(float durationSeconds) noexcept override {
+                SkyrimNetEventService::GetSingleton().SuppressNextActionNarration(durationSeconds);
+            }
+            bool IsActionNarrationSuppressed() const noexcept override {
+                return SkyrimNetEventService::GetSingleton().IsActionNarrationSuppressed();
+            }
+            void EmitDirectNarration(
+                std::string_view content,
+                std::uint32_t originatorFormId,
+                std::uint32_t targetFormId,
+                bool exactAudience,
+                const std::vector<std::uint32_t>& audienceFormIds) override {
+                SkyrimNetEventService::GetSingleton().EmitDirectNarration(
+                    content, originatorFormId, targetFormId, exactAudience, audienceFormIds);
+            }
+            void EmitPolygamyBlessing(std::uint32_t spouseFormId) override {
+                SkyrimNetEventService::GetSingleton().EmitPolygamyBlessing(spouseFormId);
+            }
+            void EmitAffectionGift(std::string_view msg, std::uint32_t receiverFormId) override {
+                SkyrimNetEventService::GetSingleton().EmitAffectionGift(msg, receiverFormId);
+            }
+            void EmitMaritalStatusChange(
+                std::uint32_t initiatorFormId,
+                std::uint32_t acceptorFormId,
+                std::string_view newStatus,
+                bool forceSkipTrigger) override {
+                SkyrimNetEventService::GetSingleton().EmitMaritalStatusChange(
+                    initiatorFormId, acceptorFormId, newStatus, forceSkipTrigger);
+            }
+            void EmitOpenRelationshipChange(
+                std::uint32_t initiatorFormId,
+                std::uint32_t partnerFormId,
+                bool isOpen,
+                bool forceSkipTrigger) override {
+                SkyrimNetEventService::GetSingleton().EmitOpenRelationshipChange(
+                    initiatorFormId, partnerFormId, isOpen, forceSkipTrigger);
+            }
+            void EmitSpouseHierarchyChange(std::uint32_t spouseFormId, bool isDemoted) override {
+                SkyrimNetEventService::GetSingleton().EmitSpouseHierarchyChange(spouseFormId, isDemoted);
+            }
+            void EmitSpouseAffectionChange(
+                std::uint32_t spouseFormId,
+                std::string_view affectionLevel,
+                std::string_view direction) override {
+                SkyrimNetEventService::GetSingleton().EmitSpouseAffectionChange(
+                    spouseFormId, affectionLevel, direction);
+            }
+            void EmitProposalDecision(
+                std::uint32_t initiatorFormId,
+                std::uint32_t acceptorFormId,
+                std::string_view status,
+                std::string_view decision,
+                bool forceSkipTrigger) override {
+                SkyrimNetEventService::GetSingleton().EmitProposalDecision(
+                    initiatorFormId, acceptorFormId, status, decision, forceSkipTrigger);
+            }
+            void EmitActionDecline(
+                std::uint32_t speakerFormId,
+                std::uint32_t targetFormId,
+                std::uint32_t initiatorFormId,
+                std::uint32_t acceptorFormId,
+                std::string_view declinedAction,
+                std::string_view msg,
+                bool skipTrigger) override {
+                SkyrimNetEventService::GetSingleton().EmitActionDecline(
+                    speakerFormId, targetFormId, initiatorFormId, acceptorFormId, declinedAction, msg, skipTrigger);
+            }
+            void EmitChildAdopted(
+                std::uint32_t childActorId,
+                std::uint32_t parentAId,
+                std::uint32_t parentBId) override {
+                SkyrimNetEventService::GetSingleton().EmitChildAdopted(childActorId, parentAId, parentBId);
+            }
+            void EmitChildInherited(
+                std::uint32_t childActorId,
+                std::uint32_t deceasedParentId,
+                std::uint32_t newParentId,
+                std::uint32_t coParentId) override {
+                SkyrimNetEventService::GetSingleton().EmitChildInherited(
+                    childActorId, deceasedParentId, newParentId, coParentId);
+            }
+            void EmitChildParentsChanged(
+                std::uint32_t childActorId,
+                std::uint32_t parentAId,
+                std::uint32_t parentBId,
+                std::string_view reason) override {
+                SkyrimNetEventService::GetSingleton().EmitChildParentsChanged(
+                    childActorId, parentAId, parentBId, reason);
+            }
+            void EmitPregnancyAnnounced(
+                std::uint32_t motherId,
+                std::uint32_t partnerId,
+                std::uint32_t fallbackBioId,
+                std::string_view fallbackBioName,
+                std::int32_t childCount) override {
+                SkyrimNetEventService::GetSingleton().EmitPregnancyAnnounced(
+                    motherId, partnerId, fallbackBioId, fallbackBioName, childCount);
+            }
+            void EmitPregnancyLost(
+                std::uint32_t motherId,
+                std::uint32_t partnerId,
+                std::string_view reason) override {
+                SkyrimNetEventService::GetSingleton().EmitPregnancyLost(motherId, partnerId, reason);
+            }
+            void EmitLaborStarted(
+                std::uint32_t motherId,
+                std::uint32_t partnerId,
+                std::int32_t childCount) override {
+                SkyrimNetEventService::GetSingleton().EmitLaborStarted(motherId, partnerId, childCount);
+            }
+            void EmitLaborProgress(
+                std::uint32_t motherId,
+                std::int32_t bornCount,
+                std::int32_t totalCount) override {
+                SkyrimNetEventService::GetSingleton().EmitLaborProgress(motherId, bornCount, totalCount);
+            }
+            void EmitChildBirthBatch(
+                std::uint32_t motherId,
+                const std::vector<std::uint32_t>& childIds) override {
+                SkyrimNetEventService::GetSingleton().EmitChildBirthBatch(motherId, childIds);
+            }
+            void EmitChildBirth(std::uint32_t childId, std::string_view childName) override {
+                SkyrimNetEventService::GetSingleton().EmitChildBirth(childId, childName);
+            }
+            void EmitChildGrewUp(std::uint32_t childId, std::string_view childName) override {
+                SkyrimNetEventService::GetSingleton().EmitChildGrewUp(childId, childName);
+            }
+            void EmitChildSentToTraining(
+                std::uint32_t childId,
+                std::string_view childName,
+                std::string_view trainingLocation) override {
+                SkyrimNetEventService::GetSingleton().EmitChildSentToTraining(childId, childName, trainingLocation);
+            }
+            void EmitChildBecameAdult(std::uint32_t childId, std::string_view childName) override {
+                SkyrimNetEventService::GetSingleton().EmitChildBecameAdult(childId, childName);
+            }
+            void EmitPaternitySecretResolved(std::uint32_t childId, std::string_view rawCaseType) override {
+                SkyrimNetEventService::GetSingleton().EmitPaternitySecretResolved(childId, rawCaseType);
+            }
+            void EmitAffairConfessed(
+                std::uint32_t cheaterId,
+                std::uint32_t victimId,
+                std::uint32_t affairPartnerId) override {
+                SkyrimNetEventService::GetSingleton().EmitAffairConfessed(cheaterId, victimId, affairPartnerId);
+            }
+            void EmitAffairExposed(
+                std::uint32_t affairPartnerId,
+                std::uint32_t victimId,
+                std::uint32_t cheaterId) override {
+                SkyrimNetEventService::GetSingleton().EmitAffairExposed(affairPartnerId, victimId, cheaterId);
+            }
+            void EmitAffairResolved(
+                std::uint32_t initiatorId,
+                std::uint32_t otherPartyId,
+                std::uint32_t affairPartnerId,
+                std::string_view resolution) override {
+                SkyrimNetEventService::GetSingleton().EmitAffairResolved(
+                    initiatorId, otherPartyId, affairPartnerId, resolution);
+            }
+            void EmitCheatingCaught(
+                std::uint32_t victimId,
+                std::uint32_t cheaterId,
+                std::uint32_t affairPartnerId,
+                bool isWalkIn) override {
+                SkyrimNetEventService::GetSingleton().EmitCheatingCaught(
+                    victimId, cheaterId, affairPartnerId, isWalkIn);
+            }
+            void EmitOpenRelationshipWalkIn(
+                std::uint32_t witnessId,
+                std::uint32_t partnerId,
+                std::uint32_t sexPartnerId,
+                bool isWalkIn) override {
+                SkyrimNetEventService::GetSingleton().EmitOpenRelationshipWalkIn(
+                    witnessId, partnerId, sexPartnerId, isWalkIn);
             }
         };
 

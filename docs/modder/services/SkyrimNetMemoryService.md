@@ -19,7 +19,7 @@
 
 ```mermaid
 flowchart LR
-    EVT["Domain Event / _marasMemory Intercept"] --> SUP{"IsSuppressed() or\n!IsSkyrimNetAvailable()?"}
+    EVT["Direct C++ Domain / EventService Notification"] --> SUP{"IsSuppressed() or\n!IsSkyrimNetAvailable()?"}
     SUP -- "Yes" --> DROP["Drop cleanly"]
     SUP -- "No" --> MERGE["Lock mutex_\nMerge into matching MemoryEpisode\nor create new"]
     MERGE --> WIN{"MatchmakingApplyScope?"}
@@ -31,7 +31,7 @@ flowchart LR
 
 - **Episode Grouping (`CanMergeWithEpisode`)**: Consecutive events sharing overlapping participants merge into an active `MemoryEpisode` under `mutex_`, extending `flushTime`. Live gameplay events use a `90 s` window (`kEpisodeGraceWindow`) so multi-step dialogue/confrontation sequences consolidate into one memory; programmatic dashboard matchmaking batches enter `MatchmakingApplyScope` (`s_matchmakingApplyDepth_`) to flush in `5 s` (`kProgrammaticGraceWindow`).
 - **Suppression Guard (`SuppressScope`)**: `AppLifecycleCoordinator::BeginCoSaveLoad()` holds a thread-local suppression scope during co-save deserialization and post-load reconciliation so state restoration never fabricates duplicate historical memories.
-- **Trigger Memory Intercept**: When `RegisterSkyrimNetEvent` sends an event payload containing `"_marasMemory"` metadata (`SkyrimNetApiLoader.cpp`), M.A.R.A.S. parses the participant/actor IDs and automatically feeds the event into `SkyrimNetMemoryService`.
+- **Direct C++ Integration**: C++ use-case coordinators and `SkyrimNetEventService` feed pregnancy, birth, affair, paternity, and relationship events directly into `SkyrimNetMemoryService`—never smuggling memory metadata inside `ttm_event` JSON payloads.
 
 ---
 

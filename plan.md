@@ -56,14 +56,14 @@ flowchart TD
 ### Phase 1 — Pure Affection Domain & Life-Event Multipliers
 **Primary Targets:** [TTM_ServiceAffection.psc](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/TTM_ServiceAffection.psc), affection branches in [TTM_MainController.psc](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/TTM_MainController.psc)
 
-- [ ] Add `SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/AffectionEventRules.h` and `src/AffectionEventRules.cpp` (sibling to [AffectionRules.h](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/AffectionRules.h)):
-  - [ ] Encode default daily min/max bounds (`intimacy`, `gift`, `dialogueStarted`, `slept`, `promotion`, `loneliness`, `family`) natively in C++, removing the 7 `SetAffectionMinMax` boot calls from `TTM_ServiceAffection.Maintenance()`.
-  - [ ] Implement pure `(Temperament, SocialClass, EventKind) -> delta` calculators for intimacy, gifts, dialogue start, sleep, hierarchy promotion, player-partner breakup/divorce splash, open-relationship toggles, affair exposure/resolution, paternity secrets, and child adoption/milestones.
-- [ ] Add `SKSE_Source/modules/app/include/maras/app/AffectionEventCoordinator.h` and `src/AffectionEventCoordinator.cpp`, invoked atomically inside relationship, hierarchy, infidelity, paternity, and lineage transitions.
-- [ ] Expose temporary native hooks in [PapyrusRelationship.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/modules/bridge_papyrus/src/PapyrusRelationship.cpp) and [MARAS.psc](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/MARAS.psc) only for Gift/Sleep/Intimacy/Fertility callers awaiting Phases 4–6 (clean-cut once migrated).
-- [ ] Remove `TTM_ServiceAffection.Maintenance()` from `TTM_MainController.psc` and clean-cut migrated affection `ModCallbackEvent` steps (`OnMarasOpenRelationshipChanged`, `OnMarasAffairExposed`, `OnMarasAffairResolved`, `OnPaternitySecretResolved`, `OnActionDecline` affection branches).
-- [ ] Add temperament × social-class multiplier, daily clamping, and multi-partner splash unit tests in [test_domain_relationships.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/tests/test_domain_relationships.cpp).
-- [ ] Pass Phase 1 Verification Gate (`-Target all -Reconfigure`, `.pex` compile, sanity `-SelfTest`, doc sync).
+- [x] Add `SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/AffectionEventRules.h` and `src/AffectionEventRules.cpp` (sibling to [AffectionRules.h](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/modules/domain_relationships/include/maras/domain/relationships/AffectionRules.h)):
+  - [x] Encode default daily min/max bounds (`intimacy`, `gift`, `dialogueStarted`, `slept`, `promotion`, `loneliness`, `family`) natively in C++, removing the 7 `SetAffectionMinMax` boot calls from `TTM_ServiceAffection.Maintenance()`.
+  - [x] Implement pure `(Temperament, SocialClass, EventKind) -> delta` calculators for intimacy, gifts, dialogue start, sleep, hierarchy promotion, player-partner breakup/divorce splash, open-relationship toggles, affair exposure/resolution, paternity secrets, and child adoption/milestones.
+- [x] Add `SKSE_Source/modules/app/include/maras/app/AffectionEventCoordinator.h` and `src/AffectionEventCoordinator.cpp`, invoked atomically inside relationship, hierarchy, infidelity, paternity, and lineage transitions.
+- [x] Expose temporary native hooks in [PapyrusRelationship.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/modules/bridge_papyrus/src/PapyrusRelationship.cpp) and [MARAS.psc](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/Scripts/Source/MARAS.psc) only for Gift/Sleep/Intimacy/Fertility callers awaiting Phases 4–6 (clean-cut once migrated).
+- [x] Remove `TTM_ServiceAffection.Maintenance()` from `TTM_MainController.psc` and clean-cut migrated affection `ModCallbackEvent` steps (`OnMarasOpenRelationshipChanged`, `OnMarasAffairExposed`, `OnMarasAffairResolved`, `OnPaternitySecretResolved`, `OnActionDecline` affection branches).
+- [x] Add temperament × social-class multiplier, daily clamping, and multi-partner splash unit tests in [test_domain_relationships.cpp](file:///e:/Skyrim/development/mods/M.A.R.A.S%20Dev/SKSE_Source/tests/test_domain_relationships.cpp).
+- [x] Pass Phase 1 Verification Gate (`-Target all -Reconfigure`, `.pex` compile, sanity `-SelfTest`, doc sync).
 
 ---
 

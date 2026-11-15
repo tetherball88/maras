@@ -757,8 +757,8 @@ namespace MARAS::App {
         return BedOwnershipReconciler::GetSingleton().ApplyShareHomeWithPlayer(npcFormID);
     }
 
-    bool HouseholdUseCases::StopShareHouseWithPlayer(RE::FormID npcFormID) {
-        return BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcFormID);
+    bool HouseholdUseCases::StopShareHouseWithPlayer(RE::FormID npcFormID, std::string_view reason) {
+        return BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(npcFormID, reason);
     }
 
     bool HouseholdUseCases::IsHouseSharedWithPlayer(RE::FormID cellFormID) const {

@@ -3,6 +3,7 @@
 **Layers**: App (`SKSE_Source/modules/app`), Domain Agency (`SKSE_Source/modules/domain_agency`), Engine (`SKSE_Source/modules/engine`)  
 **Sources**:
 - [AgencyWorkflowCoordinator.h](../../../SKSE_Source/modules/app/include/maras/app/AgencyWorkflowCoordinator.h) / [AgencyWorkflowCoordinator.cpp](../../../SKSE_Source/modules/app/src/AgencyWorkflowCoordinator.cpp)
+- [BanterSceneCoordinator.h](../../../SKSE_Source/modules/app/include/maras/app/BanterSceneCoordinator.h) / [BanterSceneCoordinator.cpp](../../../SKSE_Source/modules/app/src/BanterSceneCoordinator.cpp)
 - [AsyncLlmBatchRunner.h](../../../SKSE_Source/modules/app/include/maras/app/AsyncLlmBatchRunner.h) / [AsyncLlmBatchRunner.cpp](../../../SKSE_Source/modules/app/src/AsyncLlmBatchRunner.cpp)
 - [PartnerAgencyEvaluator.h](../../../SKSE_Source/modules/domain_agency/include/maras/domain/agency/PartnerAgencyEvaluator.h) / [MatchmakingRules.h](../../../SKSE_Source/modules/domain_agency/include/maras/domain/agency/MatchmakingRules.h) / [NpcMatchmaker.h](../../../SKSE_Source/modules/domain_agency/include/maras/domain/agency/NpcMatchmaker.h)
 - [BanterPlanner.h](../../../SKSE_Source/modules/domain_agency/include/maras/domain/agency/BanterPlanner.h) / [BanterSceneStarter.h](../../../SKSE_Source/modules/engine/include/maras/engine/BanterSceneStarter.h)
@@ -35,10 +36,11 @@
   - `EncounterConfigLoader` parses `Data/SKSE/Plugins/MARAS/encounters/*.json` (`cheating_physical_letter.json`, `cheating_talking_letter.json`, `open_date_away.json`) along with sorted drop-in patches in `Data/SKSE/Plugins/MARAS/encounters/overrides/*.json`, and atomically publishes a `shared_ptr<const EncounterTemplateCatalog>`.
   - `RenderEncounterTemplate` selects temperament-specific copy (`salutation`, `premise`, `clue`, `signOff`) and substitutes `{partner}`, `{player}`, `{location}`, and `{lover}` (hiding `{lover}` behind `"someone"` unless `allowLoverNameToken` is set), rendering a standalone modal via [`PrismaModalManager`](PrismaModalManager.md) and emitting `maras_partner_home_arrival_event`.
 
-### 2.3 Ambient Couple Banter (`BanterPlanner` + `BanterSceneStarter`)
+### 2.3 Ambient Couple Banter (`BanterPlanner`, `BanterSceneStarter` & `BanterSceneCoordinator`)
 - Scans loaded actors around the Player using `SpatialActorSnapshot::ForEachNearbyCandidate` (excluding children, teammates, ghosts, dead/deleted/disabled actors, actors in combat or active scenes, and deceased records).
 - Validates qualifying pair statuses (`Dating`, `Lover`, `Engaged`, `Married`), `SettingsData::enableScenes_LocType*` cell location keyword toggles, and couple cooldowns (`(scenesCooldownHours * 2.0) / 24.0` days in `CooldownTable::banterCoupleCooldowns`).
 - `BanterSceneStarter` uses a thread-local PRNG (`ThreadLocalEngineRng`) and starts the engine `TESScene` cleanly on eligible nearby pairs.
+- When `TTM_NpcsScenes` runs a banter or forced cheating/open-date scenario, `BanterSceneCoordinator` plans the scene/variant, relocates off-cell actors via XMarkers tracked in `'BNT1'` (`movedSceneActors`) and returns them on location change, exposes discovered affairs, computes intimate fallback and caught-cheating scene indices, and manages `SkyrimNet_Filter` (`0x12DB`) mutes + stale-mute recovery on save load (`skyrimNetMutedActors` in `'BNT1'`).
 
 ---
 

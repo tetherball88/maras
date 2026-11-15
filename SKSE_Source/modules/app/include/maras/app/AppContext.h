@@ -67,6 +67,13 @@ namespace MARAS::App {
                                                                  const std::vector<RE::Actor*>& secondaryActors,
                                                                  const char* paramsJson) = 0;
 
+        virtual void ShowConfirmationModalWithCallback(
+            const char* actionType,
+            const std::vector<RE::Actor*>& mainActors,
+            const std::vector<RE::Actor*>& secondaryActors,
+            const char* paramsJson,
+            std::function<void(std::int32_t)> onResult) = 0;
+
         virtual void Revert() = 0;
     };
 

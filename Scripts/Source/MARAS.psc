@@ -197,8 +197,18 @@ bool Function RegisterIntimateThread(string framework, int threadID, Actor[] act
 Function ReportIntimateInteraction(string framework, int threadID, Actor actorA, Actor actorB) global native
 
 ;/ Cleans up an intimate scene thread when the encounter ends or is cancelled.
-   Automatically stops the background polling loop when no active threads remain. /;
-Function ClearIntimateThread(string framework, int threadID) global native
+   Automatically stops the background polling loop when no active threads remain.
+   If hadSex is true, awards sexual intimacy affection (15.0 base) instead of foreplay (8.0 base) to any tracked player partner. /;
+Function ClearIntimateThread(string framework, int threadID, bool hadSex = false) global native
+
+;/ Returns true if the specified intimate scene thread is actively tracked for cheating or open-relationship monitoring. /;
+bool Function IsIntimateThreadTracked(string framework, int threadID) global native
+
+;/ Returns true if the player has any tracked non-player intimate partner in the specified thread. /;
+bool Function HasIntimateThreadPlayerParticipants(string framework, int threadID) global native
+
+;/ Marks an active intimate thread as having included confirmed sexual actions. /;
+Function MarkIntimateThreadSexual(string framework, int threadID) global native
 
 ;/ Makes every loaded child in the player's current cell run away (TTM_ChildrenFleeIntimateScene package)
    until StopChildrenFleeing() is called or the player leaves the cell. Children carried out of the cell keep fleeing; children still next to the
@@ -239,9 +249,38 @@ bool Function HasDeceasedChildren(Actor akActor) global native
 int Function GetDeceasedCount() global native
 
 
-; ── Marriage Evaluation ───────────────────────────────────────────────
-;/ Estimate marriage success chance (0.0-1.0) given player metrics /;
-float Function CalculateMarriageSuccessChance(Actor npc, float intimacyAdjustment, float mostGold, float housesOwned, float horsesOwned, float questsCompleted, float dungeonsCleared, float dragonSoulsCollected, bool playerKiller) global native
+; ── Relationship Interactions & Cooldowns ─────────────────────────────
+;/ Award accumulated daily shared income gold from a married spouse (100/day, up to 500) /;
+Function ShareSpouseIncome(Actor spouse) global native
+
+;/ Compute & show the Hold Court divorce settlement modal (with 7-day cooldown) and stop divorceQuest /;
+Function ProcessDivorceSettlement(Actor exSpouse, Quest divorceQuest) global native
+
+;/ Get the in-game timestamp (days passed) of an NPC's most recent qualifying breakup cooldown /;
+float Function GetBrokeupTime(Actor npc) global native
+
+;/ Get or set whether the player has killed an active spouse or fiance /;
+bool Function GetPlayerKiller() global native
+Function SetPlayerKiller(bool value = true) global native
+
+;/ Get or set whether the player has previously held a formal Temple of Mara wedding /;
+bool Function GetPlayerHadWedding() global native
+Function SetPlayerHadWedding(bool value = true) global native
+
+;/ True when playerHadWedding is set, skipWedding setting is off, and dontShowSkipWeddingMessage is false /;
+bool Function ShouldPromptSkipWedding() global native
+
+;/ Suppress future skip-wedding confirmation modals for future engagements /;
+Function SetDontShowSkipWeddingMessage(bool value = true) global native
+
+;/ Show the engagement ceremony started notification for the given fiance /;
+Function NotifyEngagementCeremonyStarted(Actor fiance) global native
+
+;/ Recompute No-AI dialogue chance globals incorporating TT_LoversLedger intimacy metrics /;
+Function ApplyDialogueLoversLedgerBonus(Actor npc, int exclusiveSex, int groupSex, int playerTopLoverRank) global native
+
+;/ Add or remove the pacify spell on aggressive fiance/spouse actors /;
+Function PacifyFianceOrSpouse(Actor npc, bool enable = true) global native
 
 
 ;/ =====================================================================
@@ -333,6 +372,42 @@ Function SetChildChestIntroduced(bool introduced) global native
 
 ;/ Check if the child chest tutorial has been shown /;
 bool Function IsChildChestIntroduced() global native
+
+;/ Select next welcome-home child forcegreet event (1-7, 10-13) and return plan JSON /;
+string Function SelectChildForcegreetEvent(Location akCurrentLoc, bool abHasAnimalCompanion, int aiCritterChance = 10, int aiNameCallingChance = 10) global native
+
+;/ Commit NameCallingUsedLast in 'PLC1' after name-calling scene quest starts /;
+Function CommitNameCallingForcegreet(int aiEventNumber) global native
+
+;/ Plan generic weighted child forcegreet fallback (10-13) and clear NameCallingUsedLast /;
+string Function SelectGenericChildForcegreetFallback(Location akCurrentLoc) global native
+
+;/ Evaluate pet race suitability, set Variable06=1 for dogs, and set BYOHRelationshipPotentialPetFaction rank /;
+int Function EvaluateChildPetSuitability(Actor akPet, FormList akDogRacesList, FormList akAllowedRacesList, Faction akPotentialPetFaction) global native
+
+;/ Spawn and name a transient critter for a child, persisting ref in 'PLC1' /;
+Actor Function SpawnChildTransientCritter(Actor akChild, FormList akMaleCritters, FormList akFemaleCritters) global native
+
+;/ Promote a child's 'PLC1' transient critter into their assigned critter /;
+bool Function AdoptChildTransientCritter(Actor akChild) global native
+
+;/ Clear, disable, and delete a child's 'PLC1' transient critter /;
+Function DismissChildTransientCritter(Actor akChild) global native
+
+;/ Get persisted PoorCounter from 'PLC1' /;
+int Function GetChildPoorCounter() global native
+
+;/ Process child allowance gold transfer, PoorCounter delta, and interaction timestamp /;
+int Function ProcessChildAllowance(Actor akChild, int aiAllowanceAmount) global native
+
+;/ Grant random poor gift, increment PoorCounter by 2, and record interaction /;
+int Function ProcessChildPoorGift(Actor akChild, FormList akPoorGiftsList) global native
+
+;/ Grant random tiered gift matching child's gold, deduct gold cost, and record interaction /;
+Function ProcessChildRegularGift(Actor akChild, FormList akList0000, FormList akList0025, FormList akList0050, FormList akList0100, FormList akList0250, FormList akList0500, FormList akList1000) global native
+
+;/ Refill child chest with junk, 0025 gifts, and richest child's bonus gift /;
+Function RefillChildChestFromLists(ObjectReference akChildChest, Location akHouseLoc, FormList akJunkList, FormList akList0000, FormList akList0025, FormList akList0050, FormList akList0100, FormList akList0250, FormList akList0500, FormList akList1000) global native
 
 
 ; ── Pets ──────────────────────────────────────────────────────────────
@@ -564,12 +639,6 @@ Location Function GetTenantHouse(Actor npc) global native
 
 
 ; ── Spouse Assets & Home Sharing ──────────────────────────────────────
-;/ Get discovered door references in a cell /;
-ObjectReference[] Function GetCellDoors(Cell currentCell) global native
-
-;/ Get original interior home cell recorded for an NPC /;
-Cell Function GetNpcOriginalHouse(Actor npc) global native
-
 ;/ Get center marker reference for an NPC's original home /;
 ObjectReference Function GetNpcOriginalHouseCenterMarker(Actor npc) global native
 
@@ -580,13 +649,10 @@ ObjectReference[] Function GetNpcBeds(Actor npc) global native
 bool Function ShareHouseWithPlayer(Actor npc) global native
 
 ;/ Stop sharing NPC's home furniture and restore original ownership /;
-bool Function StopShareHouseWithPlayer(Actor npc) global native
+bool Function StopShareHouseWithPlayer(Actor npc, string reason = "") global native
 
 ;/ Check if a cell is currently shared with the player /;
 bool Function IsHouseSharedWithPlayer(Cell currentCell) global native
-
-;/ Check if a specific spouse's home is shared with the player /;
-bool Function HasSpouseSharedHouseWithPlayer(Actor spouse) global native
 
 
 ; ── Home Marker Management ────────────────────────────────────
@@ -748,20 +814,6 @@ string Function GetChildName(int childID) global native
 Actor Function GetPrimaryPartner(Actor akActor) global native
 
 
-; ── Message & Notification Builders ───────────────────────────────────
-;/ Build localized display text announcing pregnancy /;
-string Function BuildPregnancyAnnouncedMessage(Actor mother, Actor partner = None, Actor bioFather = None, string bioFatherName = "", int childCount = 1) global native
-
-;/ Build JSON payload announcing pregnancy /;
-string Function BuildPregnancyAnnouncedJson(Actor mother, Actor partner = None, Actor bioFather = None, string bioFatherName = "", int childCount = 1) global native
-
-;/ Build localized display text for child birth /;
-string Function BuildChildBirthMessage(Actor mother, int[] childIDs = None, bool maskSecrets = false) global native
-
-;/ Build JSON payload for child birth /;
-string Function BuildChildBirthJson(Actor mother, int[] childIDs = None, bool maskSecrets = false) global native
-
-
 ;/ =====================================================================
 ;   ██████  ███████ ██████  ███████  ██████  ███    ██  █████  ██      ██ ████████ ██    ██
 ;   ██   ██ ██      ██   ██ ██      ██    ██ ████   ██ ██   ██ ██      ██    ██     ██  ██
@@ -901,6 +953,12 @@ bool Function IsSettingsMigrated() global native
 ;/ Mark legacy settings migration as completed /;
 Function MarkSettingsMigrated() global native
 
+;/ Set legacy save migration guard flag (suppresses transition side-effects while migrating) /;
+Function SetIsMigrating(bool migrating) global native
+
+;/ Query whether legacy save migration guard flag is active /;
+bool Function IsMigrating() global native
+
 
 ; ── Relationship Rules & Dialogue Filters ─────────────────────────────
 ;/ Get gender filter for starting relationship dialogues /;
@@ -1013,9 +1071,6 @@ int Function ShowConfirmationModal(string actionType, Actor[] mainActors, Actor[
 ;/ Show the Prisma UI skip-wedding ceremony prompt (returns 0=skip ceremony, 1=hold ceremony, 2=hold ceremony & don't ask again) /;
 int Function ShowSkipWeddingModal(Actor fiance) global native
 
-;/ Show the Prisma UI divorce settlement notice (returns 0=pay settlement directly, 1=refuse / add to hold crime bounty) /;
-int Function ShowDivorceSettlementModal(Actor exSpouse, int totalFee, int goldShare, int assetsShare, bool canPayDirectly) global native
-
 ;/ Show the Prisma UI residence & schedule selector modal for a spouse or child (returns selected Location or None on cancel) /;
 Location Function ShowChooseHomeModal(Actor targetActor, bool isChild = false) global native
 
@@ -1046,6 +1101,85 @@ bool Function ShouldTriggerSkyrimNetNarration(Actor speaker, Actor target = None
    originatorActor, targetActor, and actors in audience receive the event in their history/prompts.
    When exactAudience is false and audience is empty/None, uses EventAudience::Nearby (all nearby actors). /;
 bool Function RegisterSkyrimNetEvent(string eventType, string content, Actor originatorActor = None, Actor targetActor = None, bool exactAudience = false, Actor[] audience = None) global native
+
+;/ Suppress SkyrimNet action narration for cascading updates over the next durationSeconds /;
+Function SuppressNextActionNarration(float durationSeconds = 5.0) global native
+
+;/ Send direct narration through SkyrimNetEventService /;
+Function DirectNarration(string content, Actor originatorActor = None, Actor targetActor = None, bool exactAudience = false, Actor[] audience = None) global native
+
+;/ Emit ttm_polygamy_blessing event via C++ SkyrimNetEventService /;
+Function RegisterPolygamyBlessing(Actor spouse) global native
+
+;/ Emit ttm_dating_proposal decision event via C++ SkyrimNetEventService /;
+Function RegisterProposalDecision(Actor initiator, Actor acceptor, string status, string decision, bool skipTrigger = true) global native
+
+; ── Dialogue Prompts, Topic Outcomes & SkyrimNet Actions ───────────────
+;/ Retrieve localized prompt template string from native promptStrings.json cache /;
+string Function GetDialoguePrompt(string promptKey) global native
+;/ Evaluate and apply TTM_DialogueManagerMisc OnBegin transitions; returns packed speech*100 + scene code /;
+int Function ApplyDialoguePromptBegin(Actor speaker, string promptKey) global native
+;/ Evaluate and apply TTM_DialogueManagerMisc OnEnd transitions; returns Papyrus side-effect code /;
+int Function ApplyDialoguePromptEnd(Actor speaker, string promptKey) global native
+;/ Map divorce resolution decision ("reconcile" -> 100, "divorce" -> 200, else 0) /;
+int Function GetDivorceResolutionQuestStage(string decision) global native
+
+;/ Execute SkyrimNet YAML action handlers natively in C++ /;
+bool Function ExecuteProposeRelationshipAction(Actor akActor, Actor partner, string suggestedStatus) global native
+bool Function ExecuteConsiderRelationshipAction(Actor akActor, Actor partner, string decision, string status, string reasoning = "") global native
+bool Function ExecuteBreakupRelationshipAction(Actor akActor, string partnerName, string status, string reasoning = "") global native
+bool Function ExecuteSetOpenRelationshipAction(Actor akActor, Actor partner, bool isOpen, string reasoning = "") global native
+bool Function ExecuteRevealChildSecretAction(Actor akActor, string targetFather, string childName, string revealMode = "true_paternity") global native
+bool Function ExecuteDiscoverChildPaternityAction(Actor akActor, string childName, string motherName = "") global native
+bool Function ExecuteConfessAffairAction(Actor akActor, string victimName, string affairPartnerName, string reasoning = "") global native
+bool Function ExecuteExposeAffairAction(Actor akActor, string victimName, string cheaterName, string reasoning = "") global native
+bool Function ExecuteResolveAffairAction(Actor akActor, string partnerName, string affairPartnerName, string resolution, string reasoning = "") global native
+
+; ── Fertility Lifecycle Consolidation (FMR & Beeing Female NG) ─────────
+;/ Handle conception registration, delivery batch init, and SkyrimNet/affection triggers /;
+Function OnFertilityConception(string provider, Actor mother, Actor[] bioFathers, int trackingOrChildCount = 0, float currentGameDay = -1.0) global native
+
+;/ Handle pregnancy progression update (FMR faction rank or Beeing Female cycle state) /;
+Function OnFertilityProgressStatus(string provider, Actor mother, int stageOrRank, float currentGameDay = -1.0) global native
+
+;/ Handle labor started notification (Beeing Female labor batch initialization) /;
+Function OnFertilityLaborStarted(Actor mother, int childCount = 1, Actor fallbackFather = None, float currentGameDay = -1.0) global native
+
+;/ Handle childbirth delivery for one infant and delivery batch completion /;
+Function OnFertilityBirth(string provider, Actor mother, Actor bioFather, string childName, int babySex, float currentGameDay = -1.0) global native
+
+;/ Handle pregnancy abortion, miscarriage, cancellation, or stillbirth /;
+Function OnFertilityPregnancyLoss(string provider, Actor mother, Actor bioFather = None, string reason = "miscarriage", bool requireRemovedRecord = true) global native
+
+;/ Handle child growth transition by mother and child name /;
+Function OnFertilityChildGrewUp(Actor mother, string childName, int gender, bool isNpcNpc = false, Actor fatherHint = None) global native
+
+;/ Handle child growth transition by spawned child actor /;
+Function OnFertilityChildGrewUpActor(Actor childActor, string childName = "") global native
+
+;/ Handle child sent to training notification /;
+Function OnFertilityChildSentToTraining(string childName, string trainingLocation = "", string className = "") global native
+
+;/ Handle child finished training notification /;
+Function OnFertilityChildFinishedTraining(string childName, string trainingLocation = "", string className = "") global native
+
+;/ Handle adult graduation spawn linking, affection, and SkyrimNet milestone event /;
+Function OnFertilityAdultChildSpawned(string provider, Actor adultActor, Actor oldChildActor = None, Actor motherHint = None, Actor fatherHint = None, string childName = "", bool allowFallbackToAdultId = false, bool fireEvent = true) global native
+
+;/ Find synthetic infant child ID for spawn linking /;
+int Function FindFertilityInfantForSpawn(Actor mother, string childName = "") global native
+
+;/ Resolve or allocate synthetic child ID prior to spawning NPC fertility child /;
+int Function ResolveFertilitySpawnSyntheticId(Actor childActor, Actor bioMother, Actor bioFather, int existingSyntheticId = 0, float dob = -1.0, string childName = "") global native
+
+;/ Register or graduate NPC fertility child actor in C++ /;
+bool Function RegisterNpcFertilityChildSpawn(Actor childActor, int childId, Actor bioMother, Actor bioFather, int stage = 0, bool isMigrating = false) global native
+
+;/ Resolve co-spouse guardian for an NPC-originated fertility child spawn /;
+Actor Function GetFertilitySpawnCoSpouse(int childId, Actor bioMother = None, Actor bioFather = None) global native
+
+;/ Generate child name and create completed synthetic child record during FMR NPC migration /;
+int Function MigrateCompletedFmrNpcChild(Actor mother, Actor father, float conceptionTime, float birthTime) global native
 
 
 ;/ =====================================================================
@@ -1081,6 +1215,24 @@ Function RecordScenePlayed(Actor akActorA = None, Actor akActorB = None) global 
 ;/ Checks if a location is allowed for banter/ambient scenes based on MARAS location settings.
    Evaluates interior vs street context and resolves multiple conflicting keywords. /;
 bool Function IsLocationAllowedForScenes(Location akLocation) global native
+
+;/ Plans banter scene setup, relocates off-cell/scene participants, exposes affairs, and returns JSON plan /;
+string Function PrepareBanterScene(Actor akNpc1, Actor akNpc2, string asForcedScenario = "", bool abHasSexFramework = false, bool abHasBedsNearby = false) global native
+
+;/ Plans non-caught cheating banter fallback when quick intimate scene setup fails /;
+string Function PlanBanterCheatingFallback(Actor akNpc1, Actor akNpc2, bool abHasSexFramework = false, bool abHasBedsNearby = false) global native
+
+;/ Plans variant index for a caught-cheating scene, or -1 if invalid /;
+int Function PlanCaughtCheatingSceneIndex(Actor akCheater, Actor akAffairPartner) global native
+
+;/ Applies SkyrimNet filter faction mutes to banter scene participants and tracks them in co-save /;
+Function MuteBanterSceneParticipants(Actor akNpc1, Actor akNpc2, Actor akPartner = None, bool abShouldMutePartner = false) global native
+
+;/ Removes all active banter SkyrimNet mutes tracked by C++ /;
+Function UnMuteBanterSceneParticipants() global native
+
+;/ Restores banter-relocated NPCs not in player cell back to stored XMarkers and deletes markers /;
+Function RestoreMovedBanterSceneNpcs() global native
 
 
 ;/ =====================================================================

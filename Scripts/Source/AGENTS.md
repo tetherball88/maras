@@ -20,12 +20,10 @@ Applies to all Papyrus scripts (`.psc`) in `Scripts/Source/` (compiled via `skyr
 
 ---
 
-## 3. SkyrimNet Gating & Audience Isolation (`TTM_ServiceSkyrimNet.psc`)
+## 3. SkyrimNet Gating & Native Event Bridge (`PapyrusSkyrimNet.cpp`)
 
-- **Caller-Level Gate**: Check `TTM_Data.GetHasSkyrimNet()` at call sites and at entry to `TTM_ServiceSkyrimNet` functions (except YAML action executor callbacks in `TTM_Actions.psc`).
-- **C++ Event Bridge (`MARAS.RegisterSkyrimNetEvent`)**: Never call `SkyrimNetApi.RegisterEvent` or `DirectNarration` directly from Papyrus (they broadcast `Nearby` unconditionally). Always format payloads via `TTM_ServiceSkyrimNet.BuildJson(...)` and dispatch through `MARAS.RegisterSkyrimNetEvent(eventType, content, originator, target, exactAudience, audience)` / `TTM_ServiceSkyrimNet.DirectNarration(...)`:
-  - Default `exactAudience = false` (`Nearby`) for public/interpersonal events.
-  - Set `exactAudience = true` (`Exact`) **only** for private internal events (`RegisterPregnancyAnnounced` $\to$ `[mother]`) or events carrying an undiscovered paternity secret (`IsSecretForPartner` / `IsSecretForBioFather` on `RegisterPaternitySecretEvent`, `RegisterChildBirth` / `RegisterChildBirthBatch`, `RegisterChildGrewUp`, `RegisterChildSentToTraining`, `RegisterChildBecameAdult`), dispatching full secret context **only** to privy actors (`mother` and aware `bioFather`, or `presumedFather` if only `isSecretForBio` applies) while sending `maskSecrets = true` / masked events to unaware `[presumedFather]` (and `childActor` / `adultActor`) and suppressing `playerRef` speaker fallback if `isSecretForBio && bioFather == playerRef`.
+- **Caller-Level Gate**: `TTM_ServiceSkyrimNet.psc` is **retired** (only `TTM_MainController.RegisterSkyrimNetEventSchema()` registers the `"ttm_event"` event schema via `SkyrimnetApi.RegisterEventSchema` on startup/load). Always check `TTM_Data.GetHasSkyrimNet()` at Papyrus call sites before invoking `MARAS.SuppressNextActionNarration`, `MARAS.DirectNarration`, `MARAS.Register*` SkyrimNet functions, or `MARAS.RegisterSkyrimNetEvent` (except YAML action executor callbacks in `TTM_Actions.psc`).
+- **Native C++ Event Dispatcher (`SkyrimNetEventService` / `EventDispatchPlan`)**: Never call `SkyrimnetApi.RegisterEvent` or `SkyrimnetApi.DirectNarration` directly from Papyrus (they broadcast `Nearby` unconditionally without C++ proximity checks or secret isolation). Delegate Papyrus-originated SkyrimNet events through the `MARAS` SkyrimNet natives (`PapyrusSkyrimNet.cpp`), which route through `Projection::EventDispatchPlan` (`PerspectiveView`-based `exactAudience` splits, `MaskForPartner` / `MaskForChildOnly` redaction, `0x14` Player speaker-fallback suppression, and `steady_clock` action-narration suppression).
 
 ---
 

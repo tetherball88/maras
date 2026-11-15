@@ -78,6 +78,7 @@ target_link_libraries(maras_state PUBLIC maras_foundation)
 target_precompile_headers(maras_state REUSE_FROM maras_foundation)
 
 add_library(maras_projection STATIC
+    modules/projection/src/EventDispatchPlan.cpp
     modules/projection/src/PerspectiveLens.cpp
 )
 target_compile_features(maras_projection PUBLIC cxx_std_23)
@@ -92,9 +93,13 @@ add_library(maras_domain_relationships STATIC
     modules/domain_relationships/src/RelationshipRules.cpp
     modules/domain_relationships/src/InfidelityRules.cpp
     modules/domain_relationships/src/AffectionRules.cpp
+    modules/domain_relationships/src/AffectionEventRules.cpp
     modules/domain_relationships/src/SpouseHierarchyRules.cpp
     modules/domain_relationships/src/MarriageDifficultyRules.cpp
     modules/domain_relationships/src/NpcTypeRules.cpp
+    modules/domain_relationships/src/RelationshipSettlementRules.cpp
+    modules/domain_relationships/src/GiftAndIntimacyRules.cpp
+    modules/domain_relationships/src/DialogueAndActionRules.cpp
     modules/domain_relationships/src/BonusesDomain.cpp
 )
 target_compile_features(maras_domain_relationships PUBLIC cxx_std_23)
@@ -111,6 +116,8 @@ add_library(maras_domain_lineage STATIC
     modules/domain_lineage/src/ChildGrowthRules.cpp
     modules/domain_lineage/src/TrainingCatalog.cpp
     modules/domain_lineage/src/NamePool.cpp
+    modules/domain_lineage/src/PaternityActionRules.cpp
+    modules/domain_lineage/src/FertilityLifecycleRules.cpp
 )
 target_compile_features(maras_domain_lineage PUBLIC cxx_std_23)
 target_include_directories(maras_domain_lineage
@@ -121,6 +128,7 @@ target_link_libraries(maras_domain_lineage PUBLIC maras_projection maras_state)
 target_precompile_headers(maras_domain_lineage REUSE_FROM maras_foundation)
 
 add_library(maras_domain_household STATIC
+    modules/domain_household/src/ChildForcegreetRules.cpp
     modules/domain_household/src/HouseholdRules.cpp
     modules/domain_household/src/SpouseAssetRules.cpp
     modules/domain_household/src/DeceasedQueries.cpp
@@ -132,7 +140,7 @@ target_include_directories(maras_domain_household
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_household/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/domain_household/src
 )
-target_link_libraries(maras_domain_household PUBLIC maras_projection maras_state maras_domain_relationships)
+target_link_libraries(maras_domain_household PUBLIC maras_projection maras_state maras_domain_relationships maras_domain_lineage)
 target_precompile_headers(maras_domain_household REUSE_FROM maras_foundation)
 
 add_library(maras_domain_agency STATIC
@@ -188,6 +196,7 @@ add_library(maras_engine OBJECT
     modules/engine/src/FactionReconciler.cpp
     modules/engine/src/FormCache.cpp
     modules/engine/src/FormUtils.cpp
+    modules/engine/src/GiftMenuEventSink.cpp
     modules/engine/src/GlobalVarReconciler.cpp
     modules/engine/src/HouseholdEngineOps.cpp
     modules/engine/src/IntimateThreadService.cpp
@@ -198,13 +207,17 @@ add_library(maras_engine OBJECT
     modules/engine/src/NPCTypeDeterminer.cpp
     modules/engine/src/PackageReconciler.cpp
     modules/engine/src/PlayerChildrenEngineOps.cpp
+    modules/engine/src/PlayerMiscStatsTracker.cpp
     modules/engine/src/PollingService.cpp
     modules/engine/src/QuestEventConfigLoader.cpp
     modules/engine/src/QuestEventHandler.cpp
+    modules/engine/src/RelationshipEngineReconciler.cpp
     modules/engine/src/SkseSerializationCallbacks.cpp
+    modules/engine/src/SleepEventSink.cpp
     modules/engine/src/SpatialWorldIndex.cpp
     modules/engine/src/TaskDispatcher.cpp
     modules/engine/src/TrainingCatalogLoader.cpp
+    modules/engine/src/PromptStringsLoader.cpp
 )
 target_compile_features(maras_engine PUBLIC cxx_std_23)
 target_include_directories(maras_engine
@@ -228,16 +241,23 @@ target_link_libraries(maras_engine
 target_precompile_headers(maras_engine REUSE_FROM maras_pch_engine)
 
 add_library(maras_app OBJECT
+    modules/app/src/AffectionEventCoordinator.cpp
     modules/app/src/AgencyWorkflowCoordinator.cpp
     modules/app/src/AppContext.cpp
     modules/app/src/AppLifecycleCoordinator.cpp
     modules/app/src/AsyncLlmBatchRunner.cpp
+    modules/app/src/BanterSceneCoordinator.cpp
+    modules/app/src/ChildInteractionCoordinator.cpp
+    modules/app/src/DialogueOutcomeCoordinator.cpp
+    modules/app/src/FertilityLifecycleCoordinator.cpp
     modules/app/src/HouseholdUseCases.cpp
     modules/app/src/LineageUseCases.cpp
     modules/app/src/ModalTypes.cpp
     modules/app/src/PaternityWorkflowCoordinator.cpp
+    modules/app/src/RelationshipInteractionCoordinator.cpp
     modules/app/src/RelationshipUseCases.cpp
     modules/app/src/SettingsCoordinator.cpp
+    modules/app/src/SkyrimNetActionCoordinator.cpp
 )
 target_compile_features(maras_app PUBLIC cxx_std_23)
 target_include_directories(maras_app
@@ -248,11 +268,13 @@ target_link_libraries(maras_app PRIVATE maras_engine)
 target_precompile_headers(maras_app REUSE_FROM maras_pch_engine)
 
 add_library(maras_bridge_papyrus OBJECT
+    modules/bridge_papyrus/src/PapyrusChildInteractions.cpp
     modules/bridge_papyrus/src/PapyrusChildren.cpp
     modules/bridge_papyrus/src/PapyrusHousehold.cpp
     modules/bridge_papyrus/src/PapyrusInterface.cpp
     modules/bridge_papyrus/src/PapyrusRelationship.cpp
     modules/bridge_papyrus/src/PapyrusSettings.cpp
+    modules/bridge_papyrus/src/PapyrusSkyrimNet.cpp
 )
 target_compile_features(maras_bridge_papyrus PUBLIC cxx_std_23)
 target_include_directories(maras_bridge_papyrus
@@ -281,6 +303,8 @@ add_library(maras_bridge_skyrimnet OBJECT
     modules/bridge_skyrimnet/src/SkyrimNetApiLoader.cpp
     modules/bridge_skyrimnet/src/SkyrimNetDecisions.cpp
     modules/bridge_skyrimnet/src/SkyrimNetDecorators.cpp
+    modules/bridge_skyrimnet/src/SkyrimNetEventPayloads.cpp
+    modules/bridge_skyrimnet/src/SkyrimNetEventService.cpp
     modules/bridge_skyrimnet/src/SkyrimNetMemoryService.cpp
     modules/bridge_skyrimnet/src/SkyrimNetProfileService.cpp
 )

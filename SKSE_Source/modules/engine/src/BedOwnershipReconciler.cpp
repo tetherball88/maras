@@ -1,10 +1,16 @@
 #include "maras/engine/BedOwnershipReconciler.h"
 
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
+#include "maras/engine/DeferredActorResolver.h"
+#include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/HouseholdEngineOps.h"
 #include "maras/engine/SpatialWorldIndex.h"
+#include "maras/engine/TaskDispatcher.h"
 #include "maras/state/WorldStore.h"
 
+#include <format>
 #include <functional>
 
 namespace MARAS {
@@ -179,6 +185,14 @@ namespace MARAS {
         const RE::FormID homeCell = GetNpcHomeCell(npcFormId);
         if (homeCell == 0) {
             MARAS_LOG_WARN("BedOwnershipReconciler::ApplyShareHomeWithPlayer: NPC {:08X} has no known home", npcFormId);
+            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                Utils::AddToFaction(npcFormId, FormCache::GetSingleton().GetSpouseNoInitialHouseFaction(), 0);
+            } else {
+                AddCurrentEpochTask("BedOwnershipReconciler::AddNoInitialHouseFaction", [npcFormId]() {
+                    Utils::AddToFaction(npcFormId, FormCache::GetSingleton().GetSpouseNoInitialHouseFaction(), 0);
+                });
+            }
+            QueueHUDMessage(std::format("$TTM_MSG_SpouseNoHome{{{}}}", ActorSvc::GetName(npcFormId)));
             return false;
         }
 
@@ -210,12 +224,23 @@ namespace MARAS {
         });
 
         ApplyShareFurniture(npcFormId);
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormId);
+        HouseholdEngineOps::GetSingleton().UnlockAndGrantSpouseHomeAccess(homeCell);
+
+        std::string cellName = GetCellName(homeCell);
+        if (cellName.empty()) {
+            cellName = HouseholdEngineOps::GetHouseName(homeCell);
+        }
+        QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHome{{{}}}{{{}}}",
+                                    ActorSvc::GetName(npcFormId),
+                                    cellName));
+
         MARAS_LOG_INFO("BedOwnershipReconciler::ApplyShareHomeWithPlayer: NPC {:08X} shared home {:08X}",
                        npcFormId, homeCell);
         return true;
     }
 
-    bool BedOwnershipReconciler::StopShareHomeWithPlayer(RE::FormID npcFormId) {
+    bool BedOwnershipReconciler::StopShareHomeWithPlayer(RE::FormID npcFormId, std::string_view reason) {
         if (!HasPhysicalActor(npcFormId)) {
             return false;
         }
@@ -235,11 +260,23 @@ namespace MARAS {
 
         if (found) {
             RestoreFurniture(npcFormId);
+            FactionReconciler::GetSingleton().ReconcileActor(npcFormId);
+
+            const std::string spouseName = ActorSvc::GetName(npcFormId);
+            if (reason == "divorce") {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDivorce{{{}}}", spouseName));
+            } else if (reason == "deceased") {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDeceased{{{}}}", spouseName));
+            } else if (reason == "affection") {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedAffection{{{}}}", spouseName));
+            } else {
+                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedOther{{{}}}", spouseName));
+            }
         }
         RestoreUnsharedCells(cellsToRestore);
 
-        MARAS_LOG_INFO("BedOwnershipReconciler::StopShareHomeWithPlayer: stopped sharing for NPC {:08X} (found: {})",
-                       npcFormId, found);
+        MARAS_LOG_INFO("BedOwnershipReconciler::StopShareHomeWithPlayer: stopped sharing for NPC {:08X} (found: {}, reason: '{}')",
+                       npcFormId, found, reason);
         return found;
     }
 

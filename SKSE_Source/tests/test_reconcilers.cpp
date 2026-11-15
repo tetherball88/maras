@@ -1,5 +1,6 @@
 #include "TestHarness.h"
 
+#include "maras/domain/relationships/MarriageDifficultyRules.h"
 #include "maras/state/EngineSyncPlan.h"
 #include "maras/state/WorldStore.h"
 
@@ -509,4 +510,90 @@ MARAS_TEST(Reconcilers, FreshAndRevertedWorldStoreDefaultsPolygamyFalse) {
     store.Revert();
     MARAS_CHECK_EQ(store.Snapshot()->settings->enablePlayerPolygamy, false);
     MARAS_CHECK_EQ(ComputeDesiredGlobals(*store.Snapshot(), true).enablePolygamy, false);
+}
+
+MARAS_TEST(Reconcilers, ClosedMainPairRankComposesWithNoAiDialogueChances) {
+    WorldStore store{};
+    constexpr ActorId spouseA{ 0x0001A101u };
+    constexpr ActorId unattachedB{ 0x0001A102u };
+    constexpr ActorId openSpouseC{ 0x0001A103u };
+    constexpr ActorId npcHusbD{ 0x0001A104u };
+    constexpr ActorId npcWifeE{ 0x0001A105u };
+
+    store.Modify([&](WorldState& ws) {
+        ws.settings.Write().enablePlayerPolygamy = false;
+        for (ActorId id : { spouseA, unattachedB, openSpouseC, npcHusbD, npcWifeE }) {
+            ws.actors.Write().Upsert(MakeAdultProfile(id.raw(), SocialClass::Working, SkillType::Warrior, Temperament::Humble));
+        }
+        AddRelationship(ws, ActorId::Player(), spouseA, RelationshipStatus::Married, /*isOpen=*/false);
+        AddRelationship(ws, npcHusbD, npcWifeE, RelationshipStatus::Married, /*isOpen=*/false);
+    });
+
+    {
+        const auto snap = store.Snapshot();
+        const bool playerHasClosed = (ComputePlayerFactionPlan(*snap).canFormNonCheatingMainRank == std::int8_t{ 0 });
+        const bool unattachedClosed = (ComputeAdultActorFactionPlan(*snap, unattachedB).canFormNonCheatingMainRank == std::int8_t{ 0 });
+        const bool npcMarriedClosed = (ComputeAdultActorFactionPlan(*snap, npcHusbD).canFormNonCheatingMainRank == std::int8_t{ 0 });
+        MARAS_CHECK(playerHasClosed);
+        MARAS_CHECK(!unattachedClosed);
+        MARAS_CHECK(npcMarriedClosed);
+
+        const auto vsUnattached = MARAS::Domain::Relationships::ComputeNoAiDialogueChances(
+            0.5f, false, RelationshipStatus::Candidate, unattachedClosed, playerHasClosed);
+        MARAS_CHECK(std::fabs(vsUnattached.marriageChance - 30.0f) < 1e-4f);
+    }
+
+    // With polygamy enabled and open relationship on openSpouseC, both Player and openSpouseC/unattachedB can form main rank == 1
+    store.Modify([&](WorldState& ws) {
+        ws.settings.Write().enablePlayerPolygamy = true;
+        ws.relationships.Write().GetOrCreateEdge(ActorId::Player(), spouseA).isOpen = true;
+        AddRelationship(ws, ActorId::Player(), openSpouseC, RelationshipStatus::Dating, /*isOpen=*/true);
+    });
+
+    {
+        const auto snap = store.Snapshot();
+        const bool playerHasClosed = (ComputePlayerFactionPlan(*snap).canFormNonCheatingMainRank == std::int8_t{ 0 });
+        const bool openCClosed = (ComputeAdultActorFactionPlan(*snap, openSpouseC).canFormNonCheatingMainRank == std::int8_t{ 0 });
+        MARAS_CHECK(!playerHasClosed);
+        MARAS_CHECK(!openCClosed);
+
+        const auto vsOpenDating = MARAS::Domain::Relationships::ComputeNoAiDialogueChances(
+            0.5f, false, RelationshipStatus::Dating, openCClosed, playerHasClosed);
+        MARAS_CHECK(std::fabs(vsOpenDating.marriageChance - 75.0f) < 1e-4f);
+    }
+}
+
+MARAS_TEST(Reconcilers, SpouseSharedHouseFactionPlanSync) {
+    WorldStore store{};
+    constexpr ActorId spouseSharing{ 0x0001A201u };
+    constexpr ActorId spouseNotSharing{ 0x0001A202u };
+    constexpr MARAS::State::CellId sharedCell{ 0x0003A001u };
+
+    store.Modify([&](WorldState& ws) {
+        ws.actors.Write().Upsert(MakeAdultProfile(spouseSharing.raw()));
+        ws.actors.Write().Upsert(MakeAdultProfile(spouseNotSharing.raw()));
+        AddRelationship(ws, ActorId::Player(), spouseSharing, RelationshipStatus::Married);
+        AddRelationship(ws, ActorId::Player(), spouseNotSharing, RelationshipStatus::Married);
+
+        MARAS::State::SharedCellRecord rec{};
+        rec.sharedWithPlayer = true;
+        rec.sharingSpouses.insert(spouseSharing);
+        ws.household.Write().UpsertSharedCell(sharedCell, std::move(rec));
+    });
+
+    {
+        const auto snap = store.Snapshot();
+        MARAS_CHECK_EQ(ComputeAdultActorFactionPlan(*snap, spouseSharing).spouseSharedHouseRank,
+                       std::optional<std::int8_t>{ std::int8_t{ 0 } });
+        MARAS_CHECK(!ComputeAdultActorFactionPlan(*snap, spouseNotSharing).spouseSharedHouseRank.has_value());
+    }
+
+    store.Modify([&](WorldState& ws) {
+        MARAS_CHECK(ws.household.Write().StopSharingForSpouse(spouseSharing));
+    });
+
+    {
+        const auto snap = store.Snapshot();
+        MARAS_CHECK(!ComputeAdultActorFactionPlan(*snap, spouseSharing).spouseSharedHouseRank.has_value());
+    }
 }

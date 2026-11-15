@@ -181,7 +181,9 @@ Function Fragment_21()
     endif
     MARAS.SetEnablePolygamy(true)
     TTM_Debug.trace("TTM_QuestEnablePolygamy:Removes player from married faction so player can re-marry")
-    TTM_ServiceSkyrimNet.RegisterPlayerGotPolygamyBlessing(Alias_CurrentSpouse.GetActorReference())
+    if (TTM_Data.GetHasSkyrimNet())
+        MARAS.RegisterPolygamyBlessing(Alias_CurrentSpouse.GetActorReference())
+    endif
     self.CompleteQuest()
     Stop()
 ;END CODE

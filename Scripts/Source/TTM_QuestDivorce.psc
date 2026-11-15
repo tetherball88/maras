@@ -21,8 +21,6 @@ Function Fragment_0()
     Actor player = TTM_Data.GetPlayer()
     ObjectReference letter = Alias_DivorceLetter.GetRef()
     pWICourier.addItemToContainer(letter)
-    StorageUtil.SetFormValue(none, "TTM_DivorceLetter_Spouse", spouse)
-    StorageUtil.SetFormValue(none, "TTM_DivorceLetter_Letter", letter)
 
     RegisterForUpdateGameTime(3*24)
 ;END CODE
@@ -35,8 +33,11 @@ Event OnUpdateGameTime()
     ; in case player was avoiding courier progress and add fee anyway
     ; remove letter from courier
     if(self.IsRunning())
-        TTM_ServiceRelationships.AddDivorceFee(self)
-        ObjectReference letter = StorageUtil.GetFormValue(none, "TTM_DivorceLetter_Letter") as ObjectReference
-        pWICourier.removeRefFromContainer(letter)
+        Actor spouse = Alias_Spouse.GetActorRef()
+        ObjectReference letter = Alias_DivorceLetter.GetRef()
+        MARAS.ProcessDivorceSettlement(spouse, self)
+        if(letter)
+            pWICourier.removeRefFromContainer(letter)
+        endif
     endif
 EndEvent

@@ -35,10 +35,10 @@ Every table sits inside a `CowTable<T>` handle (`PerTableSnapshot.h`). Calling `
 | `affairs` | `AffairLedger` | Directional `AffairRecord` entries (`cheater`, `deceivedPartner`, `paramour`, secret/discovered flags, stage, status, affair cooldowns). |
 | `lineage` | `LineageTable` | `ChildRecord` entries (`bioMother`, `bioFather`, neutral `GuardianSlots`, pregnancy/paternity secret flags, visual genetics, growth stage, beastblood, skill snapshots, Daedric blessing) and pending child spawns. |
 | `hierarchy` | `SpouseHierarchyTable` | Ranked 4-slot spouse array (`slots`) and automatic spouse ranking order. |
-| `household` | `HouseholdTable` | Registered player houses & home markers, tenant assignments + `stayAtHome`, shared spouse cells (`SharedCellRecord`), `ChildHouseholdState` (pets, critters, training progress, orders), `childFactionSnapshots`, adult-child travel records. |
+| `household` | `HouseholdTable` | Registered player houses & home markers, tenant assignments + `stayAtHome`, shared spouse cells (`SharedCellRecord`), `ChildHouseholdState` (pets, critters, transient critter ref, training progress, orders, `ChildChestIntroduced`, `PoorCounter`, `NameCallingUsedLast`), `childFactionSnapshots`, adult-child travel records. |
 | `affection` | `AffectionTable` | Permanent `[0, 100]` affection scores, interaction timestamps, daily accumulation by interaction type and type `[min, max]` bounds. |
 | `deceased` | `DeceasedTable` | Archived dead adults & children (`partnersAtDeath` with secret affair metadata, `DeceasedChildMetadata` with guardian/bio parent snapshot and secret paternity flags). |
-| `cooldowns` | `CooldownTable` | Per-actor matchmaking cooldowns, couple banter cooldowns, daily scene/agency guard timestamps. |
+| `cooldowns` | `CooldownTable` | Per-actor matchmaking cooldowns, couple banter cooldowns, daily scene/agency guard timestamps, banter scene XMarker relocations & SkyrimNet mute recovery (`'BNT1'`), and relationship cooldown/flag fields (`npcBrokeupTime`, `npcLastTimeSharedIncome`, `lastTimePaidDivorceFee`, `playerKiller`, `playerHadWedding`, `dontShowSkipWeddingMessage`). |
 | `settings` | `SettingsData` | Runtime gameplay configuration plus `ForEachPersistedSettingField` X-macro persistence descriptor. |
 
 ---
@@ -70,16 +70,16 @@ flowchart LR
 
 | Chunk FourCC | Domain Contents & Sub-Records / Extensions |
 | :--- | :--- |
-| `'NPCR'` | Registered adults, relationship edges, status history, and `AffairLedger` + inline extensions `'AGN1'`, `'PRG1'`, `'CHD1'`, `'LYC1'`, `'CHD2'` for partner intents, secret pregnancy flags, child genetics, beastblood, and lineage/blessing data. |
+| `'NPCR'` | Registered adults, relationship edges, status history, and `AffairLedger` + inline extensions `'AGN1'`, `'PRG1'`, `'CHD1'`, `'LYC1'`, `'CHD2'`, `'FRT1'` for partner intents, secret pregnancy flags, child genetics, beastblood, lineage/blessing data, and active multi-fetus fertility delivery batches. |
 | `'SPHR'` | 4-slot ranked `SpouseHierarchyTable`. |
 | `'AFCT'` | Permanent affection scores, timestamps, daily per-type maps, and type min/max bounds (`AffectionTable`). |
 | `'PHOU'` | Registered player houses, home markers, tenant assignments, and `stayAtHome` flags. |
 | `'SPAS'` | Shared spouse interior cells (`SharedCellRecord` public area restoration tracking). |
-| `'PLCH'` | Legacy/household child state (`petId`, `critterId`, bans, training location/progress, active orders, chest introduced). |
+| `'PLCH'` | Legacy/household child state (`petId`, `critterId`, bans, training location/progress, active orders), plus optional trailing `'PLC1'` extension (`ChildChestIntroduced`, `PoorCounter`, `NameCallingUsedLast`, `transientCritterId`; omitted when default/empty). |
 | `'CFSN'` | Saved `ChildFactionSnapshot` records (original `crimeFactionId` and faction ranks restored on child graduation to Stage 4 Adult). |
-| `'MKMK'` | Matchmaking NPC cooldown days. |
+| `'MKMK'` | Matchmaking NPC cooldown days, plus optional trailing `'REL1'` (`kExtRelationshipStateREL1`) extension for relationship cooldowns/flags (`lastTimePaidDivorceFee`, `playerKiller`, `playerHadWedding`, `dontShowSkipWeddingMessage`, `npcBrokeupTime`, `npcLastTimeSharedIncome`; omitted when `!HasAnyPhase3RelState()`, FormID-remapped, rejects synthetic child IDs, and pruned on load for deceased or orphaned dynamic `0xFF` actors). |
 | `'DCSD'` | `DeceasedTable` entries (`DeceasedRecord`), plus optional trailing `'DCS1'` extension written whenever any record carries `partnersAtDeath[i].isSecretAffair` or `childInfo->hasUndiscoveredPaternitySecret` (preserving public fallback status/bio-father for Intrigue Mode across save loads). |
-| `'BNTR'` | Ambient couple banter cooldowns and daily banter counters. |
+| `'BNTR'` | Ambient couple banter cooldowns and daily banter counters, plus optional trailing `'BNT1'` extension (`movedSceneActors` return XMarkers and `skyrimNetMutedActors` filter-faction mute recovery; omitted when empty). |
 | `'ACTR'` | Active adult-child travel records and schedules. |
 | `'CNFG'` | Persistent settings using marker `0xFF` and sub-version `4`. INI-only user preferences (`toggleUIKey*`, `enableConfirmationModal`, `actionsCooldown`, `actionsDeclineCooldown`, `defaultLogLevel`, `enablePlayerPolygamy`) are **preserved** from `iniBaselineSettings_` across save loads rather than overwritten by co-save data. |
 
