@@ -920,4 +920,188 @@ namespace MARAS::Tests {
         MARAS_CHECK(GenerateDiceRollProposals(ws.Snapshot(), twoMales, 20.0f, rng).empty());
     }
 
+    MARAS_TEST(DomainAgency, BanterSceneSetupAndCheatingFallbacks) {
+        DefaultActorMetadataProvider meta{};
+
+        // 1. FindBanterCoupleCandidates detects cheating (cheater, paramour) via InfidelityRules
+        //    even when enableScenes_Lover == false and only enableScenes_CheatingDiscovered == true
+        {
+            WorldState ws{};
+            const ActorId cheater{ 0x00045001u };
+            const ActorId victim{ 0x00045002u };
+            const ActorId paramour{ 0x00045003u };
+            AddAdult(ws, cheater);
+            AddAdult(ws, victim);
+            AddAdult(ws, paramour);
+            (void)ws.TransitionRelationship(cheater, victim, RelationshipStatus::Married, 1.0f, cheater, meta);
+            (void)ws.TransitionRelationship(cheater, paramour, RelationshipStatus::Lover, 2.0f, cheater, meta);
+
+            ws.settings.Write().enableScenes = true;
+            ws.settings.Write().enableScenes_Married = false;
+            ws.settings.Write().enableScenes_Lover = false;
+            ws.settings.Write().enableScenes_Cheating = false;
+            ws.settings.Write().enableScenes_CheatingDiscovered = true;
+            ws.settings.Write().enableScenes_CheatingCaught = false;
+
+            SpatialActorSnapshot spatial{};
+            LoadedActorSample player{};
+            player.refId = RefId::Player();
+            player.flags = LoadedActorFlags::Is3DLoaded | LoadedActorFlags::HasCurrentProcess;
+            LoadedActorSample sCheater{};
+            sCheater.refId = cheater.AsRefId();
+            sCheater.flags = LoadedActorFlags::Is3DLoaded | LoadedActorFlags::HasCurrentProcess | LoadedActorFlags::HasActorTypeNpc;
+            LoadedActorSample sParamour{};
+            sParamour.refId = paramour.AsRefId();
+            sParamour.flags = LoadedActorFlags::Is3DLoaded | LoadedActorFlags::HasCurrentProcess | LoadedActorFlags::HasActorTypeNpc;
+            spatial.Clear();
+            spatial.SetMetadata(10.0f, 1u);
+            spatial.AddSample(player);
+            spatial.AddSample(sCheater);
+            spatial.AddSample(sParamour);
+            spatial.FinalizeSortAndDedupe();
+
+            const auto cands = FindBanterCoupleCandidates(ws.Snapshot(), spatial, 3000.0f, 10.0f);
+            MARAS_REQUIRE_EQ(cands.size(), std::size_t{ 1 });
+            MARAS_CHECK(cands[0].isCheating);
+        }
+
+        // 2. Cheating fallback cascades & player-victim forcing
+        {
+            WorldState ws{};
+            const ActorId npcHusb{ 0x00045101u };
+            const ActorId npcWife{ 0x00045102u };
+            const ActorId npcLover{ 0x00045103u };
+            const ActorId playerSpouse{ 0x00045104u };
+            const ActorId playerParamour{ 0x00045105u };
+            for (ActorId id : { npcHusb, npcWife, npcLover, playerSpouse, playerParamour }) {
+                AddAdult(ws, id);
+            }
+            (void)ws.TransitionRelationship(npcHusb, npcWife, RelationshipStatus::Married, 1.0f, npcHusb, meta);
+            (void)ws.TransitionRelationship(npcWife, npcLover, RelationshipStatus::Lover, 2.0f, npcWife, meta);
+            (void)ws.affairs.Write().RecordIncident(
+                npcWife, npcHusb, npcLover, true, AffairType::Casual, AffairStatus::Ongoing, AffairStage::Physical, 2.0f);
+            (void)ws.TransitionRelationship(ActorId::Player(), playerSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+            (void)ws.TransitionRelationship(playerSpouse, playerParamour, RelationshipStatus::Lover, 2.0f, playerSpouse, meta);
+            (void)ws.affairs.Write().RecordIncident(
+                playerSpouse, ActorId::Player(), playerParamour, true, AffairType::Casual, AffairStatus::Ongoing, AffairStage::Physical, 2.0f);
+
+            DeterministicRng rng{ 77u };
+            CheatingSceneEnvironment fullEnv{
+                .hasSexFramework = true,
+                .isInterior = true,
+                .hasBedsNearby = true,
+                .allowCaught = true,
+            };
+
+            // Only Caught enabled with beds+interior+framework -> always returns 2
+            ws.settings.Write().enableScenes_Cheating = false;
+            ws.settings.Write().enableScenes_CheatingDiscovered = false;
+            ws.settings.Write().enableScenes_CheatingCaught = true;
+            for (int k = 0; k < 5; ++k) {
+                MARAS_CHECK_EQ(SelectCheatingSceneKindWithFallbacks(ws.Snapshot(), npcWife, npcLover, fullEnv, rng), 2);
+            }
+
+            // allowCaught = false drops to -1 when only Caught is enabled
+            auto noCaughtEnv = fullEnv;
+            noCaughtEnv.allowCaught = false;
+            MARAS_CHECK_EQ(SelectCheatingSceneKindWithFallbacks(ws.Snapshot(), npcWife, npcLover, noCaughtEnv, rng), -1);
+
+            // Discovered enabled -> falls back from Caught (2) to Discovered (1)
+            ws.settings.Write().enableScenes_CheatingDiscovered = true;
+            MARAS_CHECK_EQ(SelectCheatingSceneKindWithFallbacks(ws.Snapshot(), npcWife, npcLover, noCaughtEnv, rng), 1);
+
+            // Player victim forces CheatingSecret (0): returns -1 if Secret disabled, 0 if enabled
+            MARAS_CHECK_EQ(SelectCheatingSceneKindWithFallbacks(ws.Snapshot(), playerSpouse, playerParamour, fullEnv, rng), -1);
+            ws.settings.Write().enableScenes_Cheating = true;
+            for (int k = 0; k < 5; ++k) {
+                MARAS_CHECK_EQ(SelectCheatingSceneKindWithFallbacks(ws.Snapshot(), playerSpouse, playerParamour, fullEnv, rng), 0);
+            }
+
+            // Scene setup: swap non-cheating npc1 with cheating npc2, move npc1MainPartner only when type >= 1
+            ws.settings.Write().enableScenes_Cheating = false;
+            ws.settings.Write().enableScenes_CheatingDiscovered = true;
+            ws.settings.Write().enableScenes_CheatingCaught = false;
+            const auto plan = PlanBanterSceneSetup(
+                ws.Snapshot(),
+                BanterSceneSetupInput{ npcLover, npcWife, "", fullEnv },
+                rng);
+            MARAS_REQUIRE(plan.valid);
+            MARAS_CHECK_EQ(plan.sceneKind, BanterSceneKind::CheatingDiscovered);
+            MARAS_CHECK(plan.sceneIdx >= 0 && plan.sceneIdx <= 5);
+            MARAS_CHECK_EQ(plan.npc1, npcWife);
+            MARAS_CHECK_EQ(plan.npc2, npcLover);
+            MARAS_CHECK_EQ(plan.npc1MainPartner, npcHusb);
+            MARAS_CHECK(plan.shouldExposeNpc1Affair);
+            MARAS_CHECK(plan.needsPartnerMove);
+            MARAS_CHECK(!plan.shouldSetupSexScene);
+        }
+
+        // 3. Dual cheaters (sceneIdx == 4), open-relationship swaps, forced scenarios & player-cheater guard
+        {
+            WorldState ws{};
+            const ActorId sp1{ 0x00045201u };
+            const ActorId husb1{ 0x00045202u };
+            const ActorId sp2{ 0x00045203u };
+            const ActorId husb2{ 0x00045204u };
+            for (ActorId id : { sp1, husb1, sp2, husb2 }) {
+                AddAdult(ws, id);
+            }
+            (void)ws.TransitionRelationship(sp1, husb1, RelationshipStatus::Married, 1.0f, sp1, meta);
+            (void)ws.TransitionRelationship(sp2, husb2, RelationshipStatus::Married, 1.0f, sp2, meta);
+            (void)ws.TransitionRelationship(sp1, sp2, RelationshipStatus::Lover, 2.0f, sp1, meta);
+
+            DeterministicRng rng{ 13u };
+            MARAS_CHECK_EQ(SelectCheatingSceneVariantIndex(ws.Snapshot(), sp1, sp2, 0, 2, rng), 4);
+
+            // Player cheating with husb1 (while Player is already married to sp1) should return invalid plan for banter
+            (void)ws.TransitionRelationship(ActorId::Player(), sp1, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+            (void)ws.TransitionRelationship(ActorId::Player(), husb1, RelationshipStatus::Lover, 2.0f, ActorId::Player(), meta);
+            (void)ws.affairs.Write().RecordIncident(
+                ActorId::Player(), sp1, husb1, true, AffairType::Casual, AffairStatus::Ongoing, AffairStage::Physical, 2.0f);
+            const auto playerPlan = PlanBanterSceneSetup(
+                ws.Snapshot(),
+                BanterSceneSetupInput{ ActorId::Player(), husb1, "", CheatingSceneEnvironment{} },
+                rng);
+            MARAS_CHECK(!playerPlan.valid);
+
+            // Forced scenario sets npc1MainPartner = Player and exposes affair
+            const auto forcedPhys = PlanBanterSceneSetup(
+                ws.Snapshot(),
+                BanterSceneSetupInput{ sp1, sp2, "cheating_physical_letter", CheatingSceneEnvironment{} },
+                rng);
+            MARAS_REQUIRE(forcedPhys.valid);
+            MARAS_CHECK(forcedPhys.isForced);
+            MARAS_CHECK(forcedPhys.shouldExposeNpc1Affair);
+            MARAS_CHECK(forcedPhys.shouldSetupSexScene);
+            MARAS_CHECK_EQ(forcedPhys.sceneKind, BanterSceneKind::CheatingSecret);
+            MARAS_CHECK_EQ(forcedPhys.npc1MainPartner, ActorId::Player());
+            MARAS_CHECK_EQ(forcedPhys.npc2MainPartner, husb2);
+
+            // Invalid forced scenario returns invalid plan
+            MARAS_CHECK(!PlanBanterSceneSetup(ws.Snapshot(), BanterSceneSetupInput{ sp1, sp2, "unknown_scenario", {} }, rng).valid);
+
+            // Open relationship: single open swaps open partner into npc1 & caps sceneIdx < 4
+            WorldState wsOpen{};
+            const ActorId openNpc{ 0x00045301u };
+            const ActorId openSpouse{ 0x00045302u };
+            const ActorId singleLover{ 0x00045303u };
+            for (ActorId id : { openNpc, openSpouse, singleLover }) {
+                AddAdult(wsOpen, id);
+            }
+            (void)wsOpen.TransitionRelationship(openNpc, openSpouse, RelationshipStatus::Married, 1.0f, openNpc, meta);
+            wsOpen.relationships.Write().GetOrCreateEdge(openNpc, openSpouse).isOpen = true;
+            (void)wsOpen.TransitionRelationship(openNpc, singleLover, RelationshipStatus::Lover, 2.0f, openNpc, meta);
+            const auto openPlan = PlanBanterSceneSetup(
+                wsOpen.Snapshot(),
+                BanterSceneSetupInput{ singleLover, openNpc, "", CheatingSceneEnvironment{} },
+                rng);
+            MARAS_REQUIRE(openPlan.valid);
+            MARAS_CHECK_EQ(openPlan.sceneKind, BanterSceneKind::OpenRelationship);
+            MARAS_CHECK_EQ(openPlan.npc1, openNpc);
+            MARAS_CHECK_EQ(openPlan.npc2, singleLover);
+            MARAS_CHECK_EQ(openPlan.npc1MainPartner, openSpouse);
+            MARAS_CHECK(openPlan.sceneIdx >= 0 && openPlan.sceneIdx <= 3);
+        }
+    }
+
 }  // namespace MARAS::Tests

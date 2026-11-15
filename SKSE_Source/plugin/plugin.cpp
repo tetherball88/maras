@@ -25,15 +25,19 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/GiftMenuEventSink.h"
 #include "maras/engine/GlobalVarReconciler.h"
 #include "maras/engine/IntimateThreadService.h"
 #include "maras/engine/MarriageDifficultyLoader.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/PackageReconciler.h"
 #include "maras/engine/PlayerChildrenEngineOps.h"
+#include "maras/engine/PlayerMiscStatsTracker.h"
 #include "maras/engine/PollingService.h"
+#include "maras/engine/PromptStringsLoader.h"
 #include "maras/engine/QuestEventHandler.h"
 #include "maras/engine/SkseSerializationCallbacks.h"
+#include "maras/engine/SleepEventSink.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"
@@ -334,6 +338,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::BumpSessionEpoch("MessagingInterface::kPreLoadGame");
                         MARAS::ResetPluginEventSinks();
                         MARAS::DialogueEventSink::GetSingleton()->Revert();
+                        MARAS::GiftMenuEventSink::GetSingleton()->Revert();
+                        MARAS::PlayerMiscStatsTracker::GetSingleton()->Revert();
                         MARAS::DeferredActorResolver::GetSingleton().Revert();
                         MARAS::GlobalVarReconciler::GetSingleton().Revert();
                         MARAS::FactionReconciler::GetSingleton().Revert();
@@ -361,11 +367,13 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::Engine::MarriageDifficultyLoader::GetSingleton().LoadConfig();
                         MARAS::Engine::TrainingCatalogLoader::GetSingleton().Initialize();
                         MARAS::Engine::EncounterConfigLoader::GetSingleton().Initialize();
+                        MARAS::Engine::PromptStringsLoader::GetSingleton().Initialize();
 
                         // Initialize/reset polling and runtime background services
                         MARAS::PollingService::GetSingleton().Initialize();
                         MARAS::IntimateThreadService::GetSingleton().Initialize();
                         MARAS::ChildrenFleeService::GetSingleton().Initialize();
+                        MARAS::PlayerMiscStatsTracker::GetSingleton()->SeedFromVmAsync();
 
                         // Converge child packages, adult travel, child visuals, globals, factions, and buffs
                         MARAS::PlayerChildrenEngineOps::GetSingleton().ReassertChildPackagesOnLoad();
@@ -443,17 +451,25 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                                 MARAS::QuestStageEventSink::GetSingleton());
                             scriptEventSourceHolder->AddEventSink<RE::TESDeathEvent>(
                                 MARAS::DeathEventHandler::GetSingleton());
-                            MARAS_LOG_INFO("Registered quest event sinks and TESDeathEvent sink");
+                            scriptEventSourceHolder->AddEventSink<RE::TESTrackedStatsEvent>(
+                                MARAS::PlayerMiscStatsTracker::GetSingleton());
+                            scriptEventSourceHolder->AddEventSink<RE::TESContainerChangedEvent>(
+                                MARAS::GiftMenuEventSink::GetSingleton());
+                            scriptEventSourceHolder->AddEventSink<RE::TESSleepStopEvent>(
+                                MARAS::SleepEventSink::GetSingleton());
+                            MARAS_LOG_INFO(
+                                "Registered quest event sinks, TESDeathEvent, TESTrackedStatsEvent, TESContainerChangedEvent, and TESSleepStopEvent sinks");
                         } else {
                             MARAS_LOG_ERROR("Failed to get ScriptEventSourceHolder for event sink registration");
                         }
 
-                        // Register UI polling & dialogue menu sinks
+                        // Register UI polling, dialogue menu & gift menu sinks
                         if (auto* ui = RE::UI::GetSingleton()) {
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(UpdateEventSink::GetSingleton());
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::DialogueEventSink::GetSingleton());
+                            ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::GiftMenuEventSink::GetSingleton());
                             MARAS_LOG_INFO("Registered polling service update event sink");
-                            MARAS_LOG_INFO("Registered dialogue event sink");
+                            MARAS_LOG_INFO("Registered dialogue and gift menu event sinks");
                         } else {
                             MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
                         }
@@ -467,6 +483,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::Engine::NamePoolLoader::GetSingleton().Initialize();
                         MARAS::Engine::TrainingCatalogLoader::GetSingleton().Initialize();
                         MARAS::Engine::EncounterConfigLoader::GetSingleton().Initialize();
+                        MARAS::Engine::PromptStringsLoader::GetSingleton().Initialize();
 
                         if (auto* console = RE::ConsoleLog::GetSingleton()) {
                             console->Print("MARAS: Ready");

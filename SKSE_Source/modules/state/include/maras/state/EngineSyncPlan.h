@@ -62,6 +62,7 @@ namespace MARAS::State {
         std::optional<std::int8_t> spouseOpenRelationshipRank{};
         std::optional<std::int8_t> canFormNonCheatingMainRank{};
         std::optional<std::int8_t> housedRank{};
+        std::optional<std::int8_t> spouseSharedHouseRank{};
 
         // Vanilla marriage & follower/werewolf factions
         FactionMembershipOp marriedFactionOp{ FactionMembershipOp::LeaveUntouched };

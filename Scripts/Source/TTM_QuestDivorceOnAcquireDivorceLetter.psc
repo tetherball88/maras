@@ -4,6 +4,11 @@ Event OnContainerChanged(ObjectReference akNewContainer, ObjectReference akOldCo
     Actor player = TTM_Data.GetPlayer()
 
     if (player == akNewContainer)
-        TTM_ServiceRelationships.AddDivorceFee(GetOwningQuest())
+        TTM_QuestDivorce divorceQst = GetOwningQuest() as TTM_QuestDivorce
+        Actor exSpouse = none
+        if (divorceQst)
+            exSpouse = divorceQst.Alias_Spouse.GetActorRef()
+        endif
+        MARAS.ProcessDivorceSettlement(exSpouse, divorceQst)
     endif
 endEvent

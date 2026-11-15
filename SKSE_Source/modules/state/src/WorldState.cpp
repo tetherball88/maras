@@ -1563,6 +1563,28 @@ namespace MARAS::State {
             !adjacentPairs.empty() ||
             adultChildLineageMeta.has_value();
 
+        if (killedByPlayer) {
+            bool wasPlayerSpouseOrFiance = false;
+            if (const auto* playerEdge = relationships->FindEdge(CanonicalPairKey{ ActorId::Player(), deceasedActor })) {
+                wasPlayerSpouseOrFiance =
+                    playerEdge->status == RelationshipStatus::Married ||
+                    playerEdge->status == RelationshipStatus::Engaged;
+            } else if (const auto* priorDead = deceased->FindByActor(deceasedActor, resolveStorageBase(deceasedActor))) {
+                for (const auto& partner : priorDead->partnersAtDeath) {
+                    if (partner.isPlayer &&
+                        (partner.statusAtDeath == RelationshipStatus::Married ||
+                         partner.statusAtDeath == RelationshipStatus::Engaged)) {
+                        wasPlayerSpouseOrFiance = true;
+                        break;
+                    }
+                }
+            }
+            if (wasPlayerSpouseOrFiance) {
+                cooldowns.Write().playerKiller = true;
+                result.changed = true;
+            }
+        }
+
         if (isTrackedAdult && !deceasedRef.IsNull() && !deceased->IsDeceased(deceasedActor)) {
             DeceasedActorRecord rec{};
             rec.refId = deceasedRef;
@@ -1690,6 +1712,7 @@ namespace MARAS::State {
         }
         affection.Write().EraseActor(deceasedActor);
         cooldowns.Write().EraseActor(deceasedActor);
+        lineage.Write().EraseActiveDeliveryBatch(deceasedActor);
         if (!deceasedRef.IsNull() && actors.Write().Erase(deceasedRef)) {
             result.changed = true;
         }
@@ -1725,6 +1748,7 @@ namespace MARAS::State {
         household.Write().StopSharingForSpouse(actor);
         affection.Write().EraseActor(actor);
         cooldowns.Write().EraseActor(actor);
+        lineage.Write().EraseActiveDeliveryBatch(actor);
 
         if (actor.HasPhysicalActor() && actors.Write().Erase(actor.AsRefId())) {
             result.changed = true;

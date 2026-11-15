@@ -55,3 +55,14 @@ Sums the Player's standing from configurable weights:
 2. Computes acceptance probability via the inverted logistic curve:
    $$\text{chance} = \frac{1}{1 + \exp\big(\text{sigmoidSteepness} \cdot (\text{difficulty} - \text{sigmoidCenter})\big)}$$
    With default parameters (`sigmoidSteepness = 0.10`, `sigmoidCenter = 50.0`), difficulty `50` yields `50%` chance, lower difficulty yields higher probability, and higher difficulty smoothly approaches `0%`.
+
+---
+
+## 4. Native No-AI Dialogue Chances, Stats Cache & `TT_LoversLedger` Bridge
+
+When dialogue opens, [`DialogueEventSink`](../ARCHITECTURE.md) notifies `RelationshipInteractionCoordinator::OnDialogueOpened`:
+
+- **Pure Intimacy Adjustment (`ComputeIntimacyAdjustment` & `ComputeLoversLedgerIntimacyBonus`)**: Reduces proposal difficulty based on existing player intimacy status (`25` married spouse, `30` married spouse also lover, `15` engaged partner, `20` engaged fiancé also lover, `10` active lover) minus any optional `TT_LoversLedger` bonus (`10` exclusive sex or `6` group sex, plus `2 * (3 - playerTopLoverRank)` for ranks `0`, `1`, or `2`).
+- **Cached Player Stats (`PlayerMiscStatsTracker`)**: Subscribes to `RE::TESTrackedStatsEvent` and seeds initial totals asynchronously via `Game.QueryStat` on load/new game (`mostGold`, `housesOwned`, `horsesOwned`, `questsCompleted`, `dungeonsCleared`, `dragonSoulsCollected`) so dialogue-open and divorce calculations run without synchronous Papyrus VM queries.
+- **No-AI Chance Scaling (`ComputeNoAiDialogueChances` $\rightarrow$ `RelationshipEngineReconciler`)**: Converts `chance` (`0..1`) to `[0, 100]` (`100` across all three when `alwaysSuccessMarriage` is enabled), applies `0.6x` when either actor holds a closed main pair (`canFormNonCheatingMainRank == 0`) and `0.75x` for prior breakup statuses, applies stage-progression boosts (`dating * 1.15`, `lover * 1.3`, plus `marriage * 1.2` / `dating * 1.5` when `Lover`, and `marriage * 1.5` when `Dating`), clamps to `[0, 100]`, and writes `0x5D0` (`TTM_DatingChance`), `0x5D1` (`TTM_LoverChance`), and `0x15C` (`TTM_MarriageChance`).
+- **Optional `TT_LoversLedger.esp` Refresh**: If `TT_LoversLedger.esp` is loaded and `alwaysSuccessMarriage` is disabled, `OnDialogueOpened` dispatches `TTM_ServiceIntimateMoments.RefreshDialogueLoversLedger(npc)` post-lock, which calls back `ApplyDialogueLoversLedgerBonus` to recompute and overwrite the three chance globals with live ledger metrics.

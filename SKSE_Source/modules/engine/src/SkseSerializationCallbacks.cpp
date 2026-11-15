@@ -5,6 +5,8 @@
 #include "maras/engine/ChildrenFleeService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/DialogueEventSink.h"
+#include "maras/engine/GiftMenuEventSink.h"
+#include "maras/engine/PlayerMiscStatsTracker.h"
 #include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
@@ -235,6 +237,12 @@ namespace MARAS::Serialization {
         ChildrenFleeService::GetSingleton().Reset();
         if (auto* dialogueSink = DialogueEventSink::GetSingleton()) {
             dialogueSink->Revert();
+        }
+        if (auto* giftSink = GiftMenuEventSink::GetSingleton()) {
+            giftSink->Revert();
+        }
+        if (auto* statsTracker = PlayerMiscStatsTracker::GetSingleton()) {
+            statsTracker->Revert();
         }
 
         if (auto* hooks = Engine::GetEngineEventHooks()) {

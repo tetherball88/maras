@@ -37,12 +37,6 @@ Event OnSleepStop(bool abInterrupted)
     if(!questDisabled && questIsntTouched && player.GetActorValue("DragonSouls") >= 1 &&  MARAS.GetStatusCount("married") == 1 && !MARAS.GetEnablePolygamy())
         enablePolygamyQst.SetStage(0)
     endif
-
-    ApplySleepRestedSpell()
-EndEvent
-
-Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akDestContainer)
-    TTM_ServiceGift.OnItemGifted(akDestContainer, akBaseItem, aiItemCount)
 EndEvent
 
 Function CheckCell()
@@ -81,68 +75,3 @@ Event OnLocationChange(Location akOldLoc, Location akNewLoc)
 
     npcScenes.RestoreMovedNpcsOnLocationChange()
 EndEvent
-
-Function ApplySleepRestedSpell()
-    Actor player = TTM_Data.GetPlayer()
-    Cell playerCell = player.GetParentCell()
-    if(playerCell)
-        Actor[] partners = MARAS.GetRelationshipPartners(player, "all")
-        int p = 0
-        while(p < partners.Length)
-            Actor partner = partners[p]
-            if(partner && partner.GetParentCell() == playerCell)
-                if(MARAS.IsNPCStatus(partner, "married") || MARAS.IsNPCStatus(partner, "engaged") || MARAS.IsNPCStatus(partner, "dating") || MARAS.IsNPCStatus(partner, "lover"))
-                    TTM_ServiceAffection.AddSleptAffection(partner)
-                endif
-            endif
-            p += 1
-        endwhile
-    endif
-
-    Location loc = player.GetCurrentLocation()
-    Actor[] tenants = MARAS.GetPlayerHouseTenants(loc)
-    PlayerSleepQuestScript sleepQst = TTM_Data.GetPlayerSleepQuest() as PlayerSleepQuestScript
-    ; -1 - none; 0 - lover; 2 - spouse; 3 - child
-    bool hasLoverNonSpouse = false
-    bool hasSpouse = false
-    bool hasChild = false
-
-    int i = 0
-    while(i < tenants.Length)
-        Actor tenant = tenants[i]
-        if(tenant.GetCurrentLocation() == loc)
-            if(MARAS.IsNPCStatus(tenant, "lover") || MARAS.IsNPCStatus(tenant, "dating") || MARAS.IsNPCStatus(tenant, "engaged"))
-                TTM_Debug.debug("TTM_PlayerScript: Player has a lover("+tenant+") in the house. Applying Lover Rested Spell.")
-                hasLoverNonSpouse = true
-            elseif(MARAS.IsNPCStatus(tenant, "married"))
-                TTM_Debug.debug("TTM_PlayerScript: Player has a spouse("+tenant+") in the house. Applying Spouse Rested Spell.")
-                hasSpouse = true
-            elseif(MARAS.IsChildPlayerAdopted(tenant))
-                TTM_Debug.debug("TTM_PlayerScript: Player has a child("+tenant+") in the house. Applying Child Rested Spell.")
-                hasChild = true
-            endif
-        endif
-        i += 1
-    endwhile
-
-    if(hasLoverNonSpouse)
-        sleepQst.RemoveRested()
-        player.AddSpell(TTM_LoversRadianceAbility, false)
-        TTM_Debug.debug("TTM_PlayerScript: Player has a lover in the house. Applying Lover Rested Spell: "+TTM_LoversRadianceAbility)
-    elseif(hasSpouse)
-        sleepQst.RemoveRested()
-        player.AddSpell(MarriageSleepAbility, false)
-        TTM_Debug.debug("TTM_PlayerScript: Player has a spouse in the house. Applying Spouse Rested Spell: "+MarriageSleepAbility)
-    endif
-
-    if(hasChild)
-        sleepQst.RemoveAdoptionRested()
-        if (Game.GetPlayer().GetActorBase().GetSex() == 0)
-            player.AddSpell(BYOHAdoptionSleepAbilityMale, false)
-            TTM_Debug.debug("TTM_PlayerScript: Player has a child in the house. Applying Male Adoption Rested Spell: "+BYOHAdoptionSleepAbilityMale)
-        else
-            player.AddSpell(BYOHAdoptionSleepAbilityFemale, false)
-            TTM_Debug.debug("TTM_PlayerScript: Player has a child in the house. Applying Female Adoption Rested Spell: "+BYOHAdoptionSleepAbilityFemale)
-        endif
-    endif
-EndFunction

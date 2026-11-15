@@ -7,6 +7,7 @@
 
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -49,12 +50,35 @@ namespace MARAS::App {
         [[nodiscard]] bool CanAcceptExternalMarriage(RE::FormID actorId) override;
         void OnExternalMarriageFactionAdded(RE::FormID actorId, std::int8_t rank) override;
         void OnExternalMarriageFactionRemoved(RE::FormID actorId) override;
+        void OnDialogueOpened(RE::FormID npcId) override;
         void OnIntimateCheatingCaught(RE::FormID cheaterId,
                                       RE::FormID victimId,
                                       RE::FormID affairPartnerId,
                                       std::string_view framework,
                                       std::int32_t threadId,
                                       bool isWalkIn) override;
+        void OnIntimateOpenRelationshipWalkIn(RE::FormID partnerId,
+                                              RE::FormID witnessId,
+                                              RE::FormID otherPartnerId,
+                                              std::string_view framework,
+                                              std::int32_t threadId,
+                                              bool isWalkIn = true) override;
+
+        void OnPlayerGiftCompleted(
+            RE::FormID receiverId,
+            std::string_view playerName,
+            std::string_view receiverName,
+            std::span<const Domain::Relationships::GiftedItemEntry> items) override;
+
+        Domain::Household::SleepRestedPlan OnPlayerSlept(
+            std::span<const RE::FormID> sameCellActorIds,
+            RE::FormID currentLocationId,
+            std::span<const RE::FormID> presentAtLocationRawIds,
+            Foundation::ActorSex playerSex) override;
+
+        void OnIntimateThreadEnded(
+            std::span<const RE::FormID> recordedPartnerIds,
+            bool hadSex) override;
 
     private:
         AppLifecycleCoordinator() = default;

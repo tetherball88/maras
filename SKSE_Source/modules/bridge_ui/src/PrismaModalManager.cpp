@@ -327,6 +327,20 @@ namespace MARAS::Bridge::Ui {
                     paramsJson);
             }
 
+            void ShowConfirmationModalWithCallback(
+                const char* actionType,
+                const std::vector<RE::Actor*>& mainActors,
+                const std::vector<RE::Actor*>& secondaryActors,
+                const char* paramsJson,
+                std::function<void(std::int32_t)> onResult) override {
+                ConfirmationModal::ShowWithCallback(
+                    actionType,
+                    mainActors,
+                    secondaryActors,
+                    paramsJson,
+                    std::move(onResult));
+            }
+
             void Revert() override {
                 PrismaModalManager::GetSingleton().Revert();
             }

@@ -214,10 +214,91 @@ namespace MARAS::PapyrusInterface {
     bool SetBioMother(RE::StaticFunctionTag*, int32_t childID, RE::Actor* mother);
     bool SetBioFather(RE::StaticFunctionTag*, int32_t childID, RE::Actor* father);
     std::string GetChildName(RE::StaticFunctionTag*, int32_t childID);
-    std::string BuildPregnancyAnnouncedMessage(RE::StaticFunctionTag*, RE::Actor* mother, RE::Actor* partner = nullptr, RE::Actor* bioFather = nullptr, std::string bioFatherName = "", int32_t childCount = 1);
-    std::string BuildPregnancyAnnouncedJson(RE::StaticFunctionTag*, RE::Actor* mother, RE::Actor* partner = nullptr, RE::Actor* bioFather = nullptr, std::string bioFatherName = "", int32_t childCount = 1);
-    std::string BuildChildBirthMessage(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs = {}, bool maskSecrets = false);
-    std::string BuildChildBirthJson(RE::StaticFunctionTag*, RE::Actor* mother, std::vector<int32_t> childIDs = {}, bool maskSecrets = false);
+
+    // ========================================
+    // Fertility Lifecycle Consolidation
+    // ========================================
+    void OnFertilityConception(RE::StaticFunctionTag*,
+                               std::string provider,
+                               RE::Actor* mother,
+                               std::vector<RE::Actor*> bioFathers,
+                               int32_t trackingOrChildCount = 0,
+                               float currentGameDay = -1.0f);
+    void OnFertilityProgressStatus(RE::StaticFunctionTag*,
+                                   std::string provider,
+                                   RE::Actor* mother,
+                                   int32_t stageOrRank,
+                                   float currentGameDay = -1.0f);
+    void OnFertilityLaborStarted(RE::StaticFunctionTag*,
+                                 RE::Actor* mother,
+                                 int32_t childCount = 1,
+                                 RE::Actor* fallbackFather = nullptr,
+                                 float currentGameDay = -1.0f);
+    void OnFertilityBirth(RE::StaticFunctionTag*,
+                          std::string provider,
+                          RE::Actor* mother,
+                          RE::Actor* bioFather,
+                          std::string childName,
+                          int32_t babySex,
+                          float currentGameDay = -1.0f);
+    void OnFertilityPregnancyLoss(RE::StaticFunctionTag*,
+                                  std::string provider,
+                                  RE::Actor* mother,
+                                  RE::Actor* bioFather = nullptr,
+                                  std::string reason = "miscarriage",
+                                  bool requireRemovedRecord = true);
+    void OnFertilityChildGrewUp(RE::StaticFunctionTag*,
+                                RE::Actor* mother,
+                                std::string childName,
+                                int32_t gender,
+                                bool isNpcNpc = false,
+                                RE::Actor* fatherHint = nullptr);
+    void OnFertilityChildGrewUpActor(RE::StaticFunctionTag*,
+                                     RE::Actor* childActor,
+                                     std::string childName = "");
+    void OnFertilityChildSentToTraining(RE::StaticFunctionTag*,
+                                        std::string childName,
+                                        std::string trainingLocation = "",
+                                        std::string className = "");
+    void OnFertilityChildFinishedTraining(RE::StaticFunctionTag*,
+                                            std::string childName,
+                                            std::string trainingLocation = "",
+                                            std::string className = "");
+    void OnFertilityAdultChildSpawned(RE::StaticFunctionTag*,
+                                      std::string provider,
+                                      RE::Actor* adultActor,
+                                      RE::Actor* oldChildActor = nullptr,
+                                      RE::Actor* motherHint = nullptr,
+                                      RE::Actor* fatherHint = nullptr,
+                                      std::string childName = "",
+                                      bool allowFallbackToAdultId = false,
+                                      bool fireEvent = true);
+    int32_t FindFertilityInfantForSpawn(RE::StaticFunctionTag*,
+                                        RE::Actor* mother,
+                                        std::string childName = "");
+    int32_t ResolveFertilitySpawnSyntheticId(RE::StaticFunctionTag*,
+                                             RE::Actor* childActor,
+                                             RE::Actor* bioMother,
+                                             RE::Actor* bioFather,
+                                             int32_t existingSyntheticId = 0,
+                                             float dob = -1.0f,
+                                             std::string childName = "");
+    bool RegisterNpcFertilityChildSpawn(RE::StaticFunctionTag*,
+                                        RE::Actor* childActor,
+                                        int32_t childId,
+                                        RE::Actor* bioMother,
+                                        RE::Actor* bioFather,
+                                        int32_t stage = 0,
+                                        bool isMigrating = false);
+    RE::Actor* GetFertilitySpawnCoSpouse(RE::StaticFunctionTag*,
+                                         int32_t childId,
+                                         RE::Actor* bioMother = nullptr,
+                                         RE::Actor* bioFather = nullptr);
+    int32_t MigrateCompletedFmrNpcChild(RE::StaticFunctionTag*,
+                                        RE::Actor* mother,
+                                        RE::Actor* father,
+                                        float conceptionTime,
+                                        float birthTime);
 
     // ========================================
     // Random Name Generation (Child & Critter)
@@ -260,7 +341,10 @@ namespace MARAS::PapyrusInterface {
 
     bool RegisterIntimateThread(RE::StaticFunctionTag*, std::string framework, int32_t threadID, std::vector<RE::Actor*> actors);
     void ReportIntimateInteraction(RE::StaticFunctionTag*, std::string framework, int32_t threadID, RE::Actor* actorA, RE::Actor* actorB);
-    void ClearIntimateThread(RE::StaticFunctionTag*, std::string framework, int32_t threadID);
+    bool IsIntimateThreadTracked(RE::StaticFunctionTag*, std::string framework, int32_t threadID);
+    bool HasIntimateThreadPlayerParticipants(RE::StaticFunctionTag*, std::string framework, int32_t threadID);
+    void MarkIntimateThreadSexual(RE::StaticFunctionTag*, std::string framework, int32_t threadID);
+    void ClearIntimateThread(RE::StaticFunctionTag*, std::string framework, int32_t threadID, bool hadSex = false);
     void FleeChildrenFromPlayerCell(RE::StaticFunctionTag*);
     void StopChildrenFleeing(RE::StaticFunctionTag*);
 
@@ -293,10 +377,21 @@ namespace MARAS::PapyrusInterface {
     int32_t GetHierarchyRank(RE::StaticFunctionTag*, RE::Actor* npc);
 
     // ========================================
-    // Marriage Difficulty
+    // Relationship Interactions & Cooldowns
     // ========================================
 
-    float CalculateMarriageSuccessChance(RE::StaticFunctionTag*, RE::Actor* npc, float intimacyAdjustment, float mostGold, float housesOwned, float horsesOwned, float questsCompleted, float dungeonsCleared, float dragonSoulsCollected, bool playerKiller);
+    void ShareSpouseIncome(RE::StaticFunctionTag*, RE::Actor* spouse);
+    void ProcessDivorceSettlement(RE::StaticFunctionTag*, RE::Actor* exSpouse, RE::TESQuest* divorceQuest);
+    float GetBrokeupTime(RE::StaticFunctionTag*, RE::Actor* npc);
+    bool GetPlayerKiller(RE::StaticFunctionTag*);
+    void SetPlayerKiller(RE::StaticFunctionTag*, bool value = true);
+    bool GetPlayerHadWedding(RE::StaticFunctionTag*);
+    void SetPlayerHadWedding(RE::StaticFunctionTag*, bool value = true);
+    bool ShouldPromptSkipWedding(RE::StaticFunctionTag*);
+    void SetDontShowSkipWeddingMessage(RE::StaticFunctionTag*, bool value = true);
+    void NotifyEngagementCeremonyStarted(RE::StaticFunctionTag*, RE::Actor* fiance);
+    void ApplyDialogueLoversLedgerBonus(RE::StaticFunctionTag*, RE::Actor* npc, int32_t exclusiveSex, int32_t groupSex, int32_t playerTopLoverRank);
+    void PacifyFianceOrSpouse(RE::StaticFunctionTag*, RE::Actor* npc, bool enable = true);
 
     // ========================================
     // Buffs & Multipliers
@@ -342,8 +437,6 @@ namespace MARAS::PapyrusInterface {
     RE::TESObjectREFR* GetHouseMarker(RE::StaticFunctionTag*, RE::BGSLocation* playerHouse);
     RE::BGSLocation* GetTenantHouse(RE::StaticFunctionTag*, RE::Actor* npc);
     int32_t CountPlayerHouses(RE::StaticFunctionTag*);
-    std::vector<RE::TESObjectREFR*> GetCellDoors(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell);
-    RE::TESObjectCELL* GetNpcOriginalHouse(RE::StaticFunctionTag*, RE::Actor* npc);
     RE::TESObjectREFR* GetNpcOriginalHouseCenterMarker(RE::StaticFunctionTag*, RE::Actor* npc);
     std::vector<RE::TESObjectREFR*> GetNpcBeds(RE::StaticFunctionTag*, RE::Actor* npc);
 
@@ -352,9 +445,8 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     bool ShareHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* npc);
-    bool StopShareHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* npc);
+    bool StopShareHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* npc, std::string reason = "");
     bool IsHouseSharedWithPlayer(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell);
-    bool HasSpouseSharedHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* spouse);
     RE::TESObjectREFR* GetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc);
     bool SetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc, RE::TESObjectREFR* marker);
     RE::TESObjectREFR* GetChildHomeMarker(RE::StaticFunctionTag*, RE::Actor* child);
@@ -399,7 +491,6 @@ namespace MARAS::PapyrusInterface {
     bool IsUIVisible(RE::StaticFunctionTag*);
     RE::BSScript::LatentStatus ShowConfirmationModal(RE::BSScript::Internal::VirtualMachine* vm, RE::VMStackID stackID, RE::StaticFunctionTag*, std::string actionType, std::vector<RE::Actor*> mainActors, std::vector<RE::Actor*> secondaryActors, std::string paramsJson = "");
     RE::BSScript::LatentStatus ShowSkipWeddingModal(RE::BSScript::Internal::VirtualMachine* vm, RE::VMStackID stackID, RE::StaticFunctionTag*, RE::Actor* fiance);
-    RE::BSScript::LatentStatus ShowDivorceSettlementModal(RE::BSScript::Internal::VirtualMachine* vm, RE::VMStackID stackID, RE::StaticFunctionTag*, RE::Actor* exSpouse, int32_t totalFee, int32_t goldShare, int32_t assetsShare, bool canPayDirectly);
     RE::BSScript::LatentStatus ShowChooseHomeModal(RE::BSScript::Internal::VirtualMachine* vm, RE::VMStackID stackID, RE::StaticFunctionTag*, RE::Actor* targetActor, bool isChild = false);
     RE::BSScript::LatentStatus ShowChooseAdoptionSpouseModal(RE::BSScript::Internal::VirtualMachine* vm, RE::VMStackID stackID, RE::StaticFunctionTag*, RE::Actor* child = nullptr);
     RE::BSScript::LatentStatus ShowDebugStatusModal(RE::BSScript::Internal::VirtualMachine* vm, RE::VMStackID stackID, RE::StaticFunctionTag*, RE::Actor* target);
@@ -418,6 +509,8 @@ namespace MARAS::PapyrusInterface {
     float GetSettingFloat(RE::StaticFunctionTag*, std::string key);
     bool IsSettingsMigrated(RE::StaticFunctionTag*);
     void MarkSettingsMigrated(RE::StaticFunctionTag*);
+    void SetIsMigrating(RE::StaticFunctionTag*, bool migrating);
+    bool IsMigrating(RE::StaticFunctionTag*);
 
     int32_t GetStartDialGender(RE::StaticFunctionTag*);
     void SetStartDialGender(RE::StaticFunctionTag*, int32_t value);
@@ -444,6 +537,12 @@ namespace MARAS::PapyrusInterface {
     bool IsLocationAllowedForScenes(RE::StaticFunctionTag*, RE::BGSLocation* akLocation);
     bool ShouldTriggerSkyrimNetNarration(RE::StaticFunctionTag*, RE::Actor* speaker, RE::Actor* target = nullptr);
     bool RegisterSkyrimNetEvent(RE::StaticFunctionTag*, std::string eventType, std::string content, RE::Actor* originatorActor = nullptr, RE::Actor* targetActor = nullptr, bool exactAudience = false, std::vector<RE::Actor*> audience = {});
+    std::string GetDialoguePrompt(RE::StaticFunctionTag*, std::string promptKey);
+    int32_t ApplyDialoguePromptBegin(RE::StaticFunctionTag*, RE::Actor* speaker, std::string promptKey);
+    int32_t ApplyDialoguePromptEnd(RE::StaticFunctionTag*, RE::Actor* speaker, std::string promptKey);
+    int32_t GetDivorceResolutionQuestStage(RE::StaticFunctionTag*, std::string decision);
+    void RegisterPapyrusSkyrimNetFunctions(RE::BSScript::IVirtualMachine* vm);
+    void RegisterPapyrusChildInteractionFunctions(RE::BSScript::IVirtualMachine* vm);
 
     // Registration function for SKSE
     bool RegisterPapyrusFunctions(RE::BSScript::IVirtualMachine* vm);

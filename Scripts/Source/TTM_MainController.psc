@@ -27,7 +27,6 @@ EndEvent
   Main maintenance function. Imports static data, checks for integrations, and triggers maintenance for all subsystems.
 /;
 Function Maintenance()
-    TTM_ServiceAffection.Maintenance()
     Quest _self = self as Quest
     TTM_QuestTracker questTracker = _self as TTM_QuestTracker
     TTM_Conditions conditions = _self as TTM_Conditions
@@ -51,25 +50,25 @@ Function Maintenance()
     TTM_Data.GetSetHasSkyrimNetGlobal(hasSkyrimNetGlobal)
     TTM_Data.GetSetHasAdultFramework()
 
-    RegisterForModEvent("maras_status_changed", "OnRelationshipChanged")
+    UnregisterForModEvent("maras_status_changed")
     RegisterForModEvent("maras_status_changed_full", "OnRelationshipChangedFull")
-    RegisterForModEvent("maras_hierarchy_changed", "OnChangeHierarchyRank")
+    UnregisterForModEvent("maras_hierarchy_changed")
     RegisterForModEvent("maras_change_affection", "OnSpouseAffectionChanged")
     UnregisterForModEvent("maras_teammate_change")
     UnregisterForModEvent("maras_teammate_added")
     UnregisterForModEvent("maras_teammate_removed")
-    RegisterForModEvent("maras_dialogue_opened", "OnDialogueOpened")
-    RegisterForModEvent("maras_decline", "OnActionDecline")
+    UnregisterForModEvent("maras_dialogue_opened")
+    UnregisterForModEvent("maras_decline")
     RegisterForModEvent("maras_actor_died", "OnActorDied")
-    RegisterForModEvent("maras_child_event", "OnChildEvent")
-    RegisterForModEvent("maras_paternity_secret_resolved", "OnPaternitySecretResolved")
+    UnregisterForModEvent("maras_child_event")
+    UnregisterForModEvent("maras_paternity_secret_resolved")
     RegisterForModEvent("maras_spawn_synthetic_child", "OnSpawnSyntheticChild")
 
     RegisterForModEvent("maras_cheating_caught", "OnMarasCheatingCaught")
     RegisterForModEvent("maras_open_relationship_walkin", "OnMarasOpenRelationshipWalkIn")
-    RegisterForModEvent("maras_open_relationship_changed", "OnMarasOpenRelationshipChanged")
-    RegisterForModEvent("maras_affair_exposed", "OnMarasAffairExposed")
-    RegisterForModEvent("maras_affair_resolved", "OnMarasAffairResolved")
+    UnregisterForModEvent("maras_open_relationship_changed")
+    UnregisterForModEvent("maras_affair_exposed")
+    UnregisterForModEvent("maras_affair_resolved")
     RegisterForModEvent("maras_partner_home_arrival_event", "OnMarasPartnerHomeArrivalEvent")
     RegisterForModEvent("maras_stop_polygamy_quest", "OnStopPolygamyQuest")
 
@@ -113,9 +112,9 @@ Function Maintenance()
     conditions.Maintenance()
     intimateMoments.Maintenance()
 
-    TTM_ServiceSkyrimNet.Maintenance()
+    RegisterSkyrimNetEventSchema()
 
-    RegisterForMenu("GiftMenu")
+    UnregisterForMenu("GiftMenu")
 
     Quest enablePolygamyQst = TTM_Data.GetMarasEnablePolygamyQuest()
     ; it does check inside to see if spouse alias is empty and quest is running
@@ -140,6 +139,21 @@ Function Maintenance()
     ; clean outdated StorageUtil data which was moved to SKSE plugin
     StorageUtil.ClearAllPrefix("TTM_Household_")
     StorageUtil.ClearAllPrefix("TTM_MCMState")
+    StorageUtil.ClearAllPrefix("Gift")
+    StorageUtil.ClearAllPrefix("TTM_IntimacyActors_")
+    StorageUtil.ClearAllPrefix("TTM_IntimacyHadSex_")
+    StorageUtil.ClearAllPrefix("TTM_CheatersFormList_")
+    StorageUtil.ClearAllPrefix("MARAS_OStim_Track_")
+    StorageUtil.ClearAllPrefix("MARAS_SexLab_Track_")
+    StorageUtil.ClearAllPrefix("MARAS.BF.")
+    StorageUtil.ClearAllPrefix("MARAS_FMR_Migration_")
+    StorageUtil.ClearAllPrefix("TTM_MovedNpcs")
+    StorageUtil.ClearAllPrefix("TTM_NpcOriginalLocation")
+    StorageUtil.ClearAllPrefix("SkyrimNet_Blacklisted_Actors")
+    StorageUtil.ClearAllPrefix("TransientCritter")
+    StorageUtil.ClearAllPrefix("TmpActorNames")
+    StorageUtil.ClearAllPrefix("TTM_PartnerResentment")
+    StorageUtil.ClearAllPrefix("TTM_PartnerUpset")
 EndFunction
 
 Event OnMarasCheatingCaught(string eventName, string jsonPayload, float threadID, Form victimSender)
@@ -149,26 +163,6 @@ Event OnMarasCheatingCaught(string eventName, string jsonPayload, float threadID
     Actor victim = MARAS.GetJsonActor(jsonPayload, "victim")
     TTM_Debug.debug("OnMarasCheatingCaught:cheater:" + cheater + ":affairPartner:" + affairPartner + ":victim:" + victim)
     TTM_NpcsScenes npcScenes = TTM_Data.GetMarasNpcsScenesQuest() as TTM_NpcsScenes
-
-    ; Apply affection & SkyrimNet events
-    if (victim == player)
-        ; Player caught their partner cheating
-        TTM_ServiceAffection.ApplyCheatingCaughtAffection(cheater, false)
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterCheatingCaught(player, cheater, affairPartner, true)
-        endif
-    elseif (cheater == player)
-        ; Partner caught player cheating
-        TTM_ServiceAffection.ApplyCheatingCaughtAffection(victim, true)
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterCheatingCaught(victim, player, affairPartner, true)
-        endif
-    else
-        ; NPC-NPC affair caught
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterCheatingCaught(victim, cheater, affairPartner, true)
-        endif
-    endif
 
     if(victimSender == player)
         return ; player will decide how to react
@@ -189,90 +183,12 @@ Event OnMarasOpenRelationshipWalkIn(string eventName, string jsonPayload, float 
     TTM_Debug.debug("OnMarasOpenRelationshipWalkIn:partner:" + partner + ":sexPartner:" + sexPartner + ":witness:" + witness)
     TTM_NpcsScenes npcScenes = TTM_Data.GetMarasNpcsScenesQuest() as TTM_NpcsScenes
 
-    ; If witness is player's partner and walks in on player having open sex:
-    if (partner == player)
-        TTM_ServiceAffection.ApplyOpenRelationshipWalkInAffection(witness)
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet())
-        TTM_ServiceSkyrimNet.RegisterOpenRelationshipWalkIn(witness, partner, sexPartner, true)
-    endif
-
     if(witnessSender == player)
         return ; player will decide how to react
     endif
 
     if(partner == player)
         npcScenes.PartnerNoticedOpenRelPlayer(witness)
-    endif
-EndEvent
-
-Event OnMarasOpenRelationshipChanged(string eventName, string jsonPayload, float numArg, Form sender)
-    Actor player = TTM_Data.GetPlayer()
-    Actor actorA = MARAS.GetJsonActor(jsonPayload, "actorA")
-    Actor actorB = MARAS.GetJsonActor(jsonPayload, "actorB")
-    bool isOpen = MARAS.GetJsonBool(jsonPayload, "isOpen")
-
-    TTM_Debug.debug("OnMarasOpenRelationshipChanged: actorA=" + actorA + ", actorB=" + actorB + ", isOpen=" + isOpen)
-
-    Actor playerPartner = None
-    if (actorA == player)
-        playerPartner = actorB
-    elseif (actorB == player)
-        playerPartner = actorA
-    endif
-
-    if (playerPartner != None)
-        TTM_ServiceAffection.ApplyOpenRelationshipToggleAffection(playerPartner, isOpen)
-    endif
-
-    if (TTM_Data.GetHasSkyrimNet() && actorA != None && actorB != None)
-        TTM_ServiceSkyrimNet.RegisterOpenRelationshipChangeEvent(actorA, actorB, isOpen)
-    endif
-EndEvent
-
-Event OnMarasAffairExposed(string eventName, string jsonPayload, float numArg, Form sender)
-    Actor cheater = MARAS.GetJsonActor(jsonPayload, "cheater")
-    Actor victim = MARAS.GetJsonActor(jsonPayload, "victim")
-    Actor affairPartner = MARAS.GetJsonActor(jsonPayload, "affairPartner")
-    string discType = MARAS.GetJsonString(jsonPayload, "type")
-
-    TTM_Debug.info("OnMarasAffairExposed: cheater=" + TTM_Utils.GetActorName(cheater) + ", victim=" + TTM_Utils.GetActorName(victim) + ", affairPartner=" + TTM_Utils.GetActorName(affairPartner) + ", type=" + discType)
-
-    if (!cheater || !victim)
-        return
-    endif
-
-    if (discType == "confessed")
-        TTM_ServiceAffection.ApplyAffairConfessedAffection(cheater, victim)
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterAffairConfessed(cheater, victim, affairPartner)
-        endif
-    elseif (discType == "exposed")
-        TTM_ServiceAffection.ApplyAffairExposedAffection(affairPartner, victim, cheater)
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterAffairExposed(affairPartner, victim, cheater)
-        endif
-    endif
-EndEvent
-
-Event OnMarasAffairResolved(string eventName, string jsonPayload, float numArg, Form sender)
-    Actor cheater = MARAS.GetJsonActor(jsonPayload, "cheater")
-    Actor victim = MARAS.GetJsonActor(jsonPayload, "victim")
-    Actor affairPartner = MARAS.GetJsonActor(jsonPayload, "affairPartner")
-    string resolution = MARAS.GetJsonString(jsonPayload, "resolution")
-
-    TTM_Debug.info("OnMarasAffairResolved: cheater=" + TTM_Utils.GetActorName(cheater) + ", victim=" + TTM_Utils.GetActorName(victim) + ", affairPartner=" + TTM_Utils.GetActorName(affairPartner) + ", res=" + resolution)
-
-    if (!cheater || !victim)
-        return
-    endif
-
-    if (resolution == "confronted" || resolution == "allowed" || resolution == "breakup")
-        TTM_ServiceAffection.ApplyAffairResolvedAffection(cheater, victim, resolution)
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterAffairResolved(cheater, victim, affairPartner, resolution)
-        endif
     endif
 EndEvent
 
@@ -430,29 +346,18 @@ Event OnBeeingFemaleStateChange(string eventName, string strArg, float numArg, F
     TTM_ServiceFertility.OnBeeingFemaleStateChange(eventName, strArg, numArg, sender)
 EndEvent
 
-Event OnPaternitySecretResolved(string eventName, string strArg, float numArg, Form sender)
-    TTM_ServiceFertility.OnPaternitySecretResolved(eventName, strArg, numArg, sender)
-EndEvent
-
 ;/
   Handles relationship change events. Updates tracked NPCs and their status, and syncs with CHIM if enabled.
   @param npc    The NPC whose relationship changed
   @param status The new relationship status (candidate, engaged, married, jilted, divorced)
   @param statusEnum The enum value of the new status
 /;
-Event OnRelationshipChanged(String EventName, String status, Float statusEnum, Form npc)
-    Actor npcA = npc as Actor
-
-EndEvent
-
 Event OnRelationshipChangedFull(String EventName, String jsonPayload, Float statusEnum, Form npc)
     if (TTM_Data.IsMigrating())
         return
     endif
     Actor initiator = MARAS.GetJsonActor(jsonPayload, "initiator")
-    string initiatorName = MARAS.GetJsonString(jsonPayload, "initiatorName")
     Actor acceptor = MARAS.GetJsonActor(jsonPayload, "acceptor")
-    string acceptorName = MARAS.GetJsonString(jsonPayload, "acceptorName")
     string status = MARAS.GetJsonString(jsonPayload, "status")
     TTM_Debug.info("MainController:OnRelationshipChangedFull: " + TTM_Utils.GetActorName(initiator) + " -> " + TTM_Utils.GetActorName(acceptor) + " (" + status + ")")
 
@@ -465,117 +370,48 @@ Event OnRelationshipChangedFull(String EventName, String jsonPayload, Float stat
             nonPlayerPartner = acceptor
         endif
         if(nonPlayerPartner)
-            if(status == "candidate")
-                TTM_ServiceRelationships.MakeNpcCandidate(nonPlayerPartner)
-            elseif(status == "dating")
-                TTM_ServiceRelationships.MakeNpcDating(nonPlayerPartner)
-            elseif(status == "lover")
-                TTM_ServiceRelationships.MakeNpcLover(nonPlayerPartner)
-            elseif(status == "engaged")
-                TTM_ServiceRelationships.MakeNpcEngaged(nonPlayerPartner)
+            if(status == "engaged")
+                bool alwaysSkipWeddings = MARAS.GetSettingBool("skipWedding")
+                int answerSkipWedding = -1
+                if(!alwaysSkipWeddings && MARAS.ShouldPromptSkipWedding())
+                    answerSkipWedding = MARAS.ShowSkipWeddingModal(nonPlayerPartner)
+                endif
+                if(alwaysSkipWeddings || answerSkipWedding == 0)
+                    TTM_Utils.FadeToBlack()
+                    MARAS.PromoteNPCToStatus(nonPlayerPartner, "married")
+                    if (TTM_Data.GetHasSkyrimNet())
+                        MARAS.DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(nonPlayerPartner) + " got married!", nonPlayerPartner, player)
+                    endif
+                else
+                    TTM_ServiceMarriageQuest.StartEngagement(nonPlayerPartner)
+                    MARAS.NotifyEngagementCeremonyStarted(nonPlayerPartner)
+                endif
             elseif(status == "married")
-                TTM_ServiceRelationships.MakeNpcMarried(nonPlayerPartner)
-            elseif(status == "jilted")
-                TTM_ServiceRelationships.MakeNpcJilted(nonPlayerPartner)
+                TTM_ServiceMarriageQuest.SkipWedding(nonPlayerPartner)
             elseif(status == "divorced")
-                TTM_ServiceRelationships.MakeNpcDivorced(nonPlayerPartner)
-            elseif(status == "exdating")
-                TTM_ServiceRelationships.MakeNpcExDating(nonPlayerPartner)
-            elseif(status == "exlover")
-                TTM_ServiceRelationships.MakeNpcExLover(nonPlayerPartner)
+                bool res = TTM_Data.GetDivorceKeyword().SendStoryEventAndWait(akRef1 = nonPlayerPartner)
+                TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(nonPlayerPartner, "divorce")
+                TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(nonPlayerPartner)
             endif
         endif
     endif
-
-    TTM_ServiceSkyrimNet.RegisterMaritalStatusChangeEvent(initiator, acceptor, status)
-EndEvent
-
-Event OnActionDecline(string eventName, string strArg, float numArg, Form akSpeaker)
-    TTM_Debug.debug("Received MARAS decline event: " + strArg)
-    Actor target = MARAS.GetJsonActor(strArg, "initiator")
-    if(!target || target == akSpeaker)
-        target = MARAS.GetJsonActor(strArg, "target")
-    endif
-    TTM_ServiceSkyrimNet.RegisterActionDeclineEvent(strArg, akSpeaker as Actor, target)
 EndEvent
 
 Event OnActorDied(string eventName, string strArg, float isPlayerKillerNum, Form sender)
     Actor victim = sender as Actor
+    if (!victim)
+        return
+    endif
     bool isPlayerKiller = (isPlayerKillerNum > 0.0)
     TTM_Debug.info("MainController:OnActorDied: " + TTM_Utils.GetActorName(victim) + "; isPlayerKiller=" + isPlayerKiller)
-    TTM_ServiceRelationships.HandleSpouseDeath(victim, isPlayerKiller)
-EndEvent
-
-Event OnChildEvent(string eventName, string strArg, float numArg, Form sender)
-    if (TTM_Data.IsMigrating())
-        return
+    Actor player = TTM_Data.GetPlayer()
+    bool spouse = MARAS.IsNPCStatus(victim, "married") || MARAS.WasMarriedTo(victim, player)
+    bool engaged = MARAS.IsNPCStatus(victim, "engaged") || MARAS.WasEngagedTo(victim, player)
+    if ((spouse || engaged) && isPlayerKiller)
+        MARAS.SetPlayerKiller(true)
+        TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(victim, "deceased")
     endif
-    string eventType = MARAS.GetJsonString(strArg, "eventType")
-    Actor child = sender as Actor
-    if(!child)
-        child = MARAS.GetJsonActor(strArg, "child")
-    endif
-    Actor guardianA = MARAS.GetJsonActor(strArg, "guardianA")
-    Actor guardianB = MARAS.GetJsonActor(strArg, "guardianB")
-    Actor other = MARAS.GetJsonActor(strArg, "other")
-    string reason = MARAS.GetJsonString(strArg, "reason")
-
-    TTM_Debug.info("MainController:OnChildEvent: " + eventType + " for child " + TTM_Utils.GetActorName(child))
-
-    if(eventType == "adopted")
-        Actor player = TTM_Data.GetPlayer()
-        if (guardianA == player && guardianB != player && guardianB != None)
-            TTM_ServiceAffection.ApplyChildAdoptedAffection(guardianB)
-        elseif (guardianB == player && guardianA != player && guardianA != None)
-            TTM_ServiceAffection.ApplyChildAdoptedAffection(guardianA)
-        endif
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildAdopted(child, guardianA, guardianB)
-        endif
-    elseif(eventType == "inherited")
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildInherited(child, other, guardianA, guardianB)
-        endif
-    elseif(eventType == "guardians_changed")
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildParentsChanged(child, guardianA, guardianB, reason)
-        endif
-    elseif(eventType == "sent_to_training")
-        int childID = MARAS.GetJsonInt(strArg, "childId")
-        string childName = MARAS.GetJsonString(strArg, "childName")
-        TTM_ServiceAffection.ApplyChildMilestoneForParents(childID, "training")
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildSentToTraining(childID, childName, reason)
-        endif
-    elseif(eventType == "became_adult")
-        int childID = MARAS.GetJsonInt(strArg, "childId")
-        string childName = MARAS.GetJsonString(strArg, "childName")
-        TTM_ServiceAffection.ApplyChildMilestoneForParents(childID, "adult")
-        if (TTM_Data.GetHasSkyrimNet())
-            TTM_ServiceSkyrimNet.RegisterChildBecameAdult(childID, childName)
-        endif
-    endif
-EndEvent
-
-
-Event OnChangeHierarchyRank(String EventName, String promoteDemote, Float rankDiff, Form spouse)
-    if (TTM_Data.IsMigrating())
-        return
-    endif
-    Actor spouseA = spouse as Actor
-    string spouseName = TTM_Utils.GetActorName(spouseA)
-    TTM_Debug.debug("MainController:OnChangeHierarchyRank:"+promoteDemote+" " + spouseName + ";  rankDiff: " + rankDiff)
-    if(rankDiff == 0)
-        return
-    endif
-
-    TTM_Messages.RankChangeMsg(spouseName, rankDiff > 0)
-
-    TTM_ServiceAffection.AddPromotionAffection(spouseA, rankDiff)
-    if(rankDiff < 0)
-        spouseA.AddSpell(TTM_Data.GetDemotedCooldownSpell())
-    endif
-    TTM_ServiceSkyrimNet.RegisterMaritalHiearchyChangeEvent(spouseA, rankDiff < 0)
+    TTM_ServiceMarriageQuest.ResetMarriageQuests(victim)
 EndEvent
 
 Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDiff, Form spouse)
@@ -583,11 +419,8 @@ Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDi
         return
     endif
     Actor spouseA = spouse as Actor
-    string spouseName = TTM_Utils.GetActorName(spouseA)
 
-    string direction
     if(affectionDiff > 0)
-        direction = "improved"
         ; if affection level restored complete affection estranged divorce quest
         if(level == "content" || level == "happy")
             Quest affectionEstrangedDivorce = TTM_Data.GetMarasAffectionEstrangedDivorceQuest()
@@ -599,49 +432,16 @@ Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDi
             endif
         endif
     elseif(affectionDiff < 0)
-        direction = "worsened"
         if(level == "troubled")
             ; when affection drops to troubled, stop sharing home with player
             TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
             TTM_Data.GetAffectionQuestKeyword("troubled").SendStoryEvent()
         elseif(level == "estranged")
             ; when affection drops to estranged, stop sharing home with player and stop using player's home
-            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
             TTM_ServicePlayerHouse.ReleaseSpouseFromPlayerHome(spouseA, "affection")
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(spouseA, "affection")
             TTM_Data.GetAffectionQuestKeyword("estranged").SendStoryEvent()
         endif
-    endif
-
-    TTM_ServiceSkyrimNet.RegisterMariatalAffectionChangeEvent(spouseA, level, direction)
-
-    TTM_Messages.AffectionChangeMsg(spouseName, level, affectionDiff > 0)
-EndEvent
-
-Event OnMenuOpen(string menuName)
-    if(menuName == "GiftMenu")
-        TTM_ServiceGift.OnGiftMenuOpen()
-    endif
-endEvent
-
-
-Event OnMenuClose(string menuName)
-    if(menuName == "GiftMenu")
-        TTM_ServiceGift.OnGiftMenuClose()
-    endif
-endEvent
-
-Event OnDialogueOpened(string eventName, string strArg, float fltArg, Form sender)
-    Actor player = TTM_Data.GetPlayer()
-    Actor akActor = sender as Actor
-    bool isMarasRegistered = MARAS.IsNPCStatus(akActor, "any")
-    TTM_Debug.debug("OnDialogueOpened: Dialogue Menu with " + TTM_Utils.GetActorName(akActor) + " registered:" + isMarasRegistered)
-    if(isMarasRegistered)
-        TTM_ServiceAffection.AddDialogueStartedAffection(akActor)
-        bool notMarried = !MARAS.IsNPCStatus(akActor, "married")
-        bool notEngaged = !MARAS.IsNPCStatus(akActor, "engaged")
-        ; calculate and apply NoAIMarriage if applicable for this dialogue partner
-        TTM_Debug.debug("Checking NoAIMarriage for " + TTM_Utils.GetActorName(akActor))
-        TTM_Data.SetGameNoAIChancesGlobals(akActor)
     endif
 EndEvent
 
@@ -694,7 +494,55 @@ Function MigrateSettingsToCpp()
         MARAS.SetSettingBool("confirmDivorceDuringLowAffectionQuest", valLowAffDivorce == 1)
     endif
 
+    if(StorageUtil.GetIntValue(none, "PlayerKiller", 0) == 1)
+        MARAS.SetPlayerKiller(true)
+    endif
+    if(StorageUtil.GetIntValue(none, "PlayerHadWedding", 0) == 1)
+        MARAS.SetPlayerHadWedding(true)
+    endif
+    if(StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 1)
+        MARAS.SetDontShowSkipWeddingMessage(true)
+    endif
+
     MARAS.MarkSettingsMigrated()
     Debug.Notification("MARAS: Settings migrated to native storage.")
+EndFunction
+
+Function RegisterSkyrimNetEventSchema()
+    if (!TTM_Data.GetHasSkyrimNet())
+        return
+    endif
+    string name = "MARAS Event"
+    string description = "Happens on different occasions, related to marriage life"
+    string jsonParams = "[" \
+        + "{\"name\": \"type\", \"type\": 0, \"required\": true, \"description\": \"Type of MARAS event.\"}," \
+        + "{\"name\": \"declinedAction\", \"type\": 0, \"required\": false, \"description\": \"If player declined what kind of declanation it was.\"}," \
+        + "{\"name\": \"msg\", \"type\": 0, \"required\": true, \"description\": \"Event message to send.\"}," \
+        + "{\"name\": \"skipTrigger\", \"type\": 2, \"required\": false, \"description\": \"If trigger should be skipped.\"}," \
+        + "{\"name\": \"newStatus\", \"type\": 0, \"required\": false, \"description\": \"New marital status in case of marital status change event.\"}," \
+        + "{\"name\": \"affectionLevel\", \"type\": 0, \"required\": false, \"description\": \"New affection level in case of marital affection change event.\"}," \
+        + "{\"name\": \"affectionDirection\", \"type\": 0, \"required\": false, \"description\": \"Direction of affection change in case of marital affection change event.\"}," \
+        + "{\"name\": \"isDemoted\", \"type\": 2, \"required\": false, \"description\": \"Whether the spouse was demoted in case of hierarchy change event.\"}," \
+        + "{\"name\": \"child\", \"type\": 0, \"required\": false, \"description\": \"Child name or form ID in case of child event.\"}," \
+        + "{\"name\": \"parentA\", \"type\": 0, \"required\": false, \"description\": \"Parent A in case of child event.\"}," \
+        + "{\"name\": \"parentB\", \"type\": 0, \"required\": false, \"description\": \"Parent B in case of child event.\"}," \
+        + "{\"name\": \"reason\", \"type\": 0, \"required\": false, \"description\": \"Reason for child custody or parent change.\"}," \
+        + "{\"name\": \"bioFather\", \"type\": 0, \"required\": false, \"description\": \"Biological father name in paternity events.\"}," \
+        + "{\"name\": \"presumedFather\", \"type\": 0, \"required\": false, \"description\": \"Presumed father name in paternity events.\"}," \
+        + "{\"name\": \"paternityOutcome\", \"type\": 0, \"required\": false, \"description\": \"Outcome of paternity intrigue evaluation.\"}," \
+        + "{\"name\": \"trainingLocation\", \"type\": 0, \"required\": false, \"description\": \"Training location for child training events.\"}," \
+        + "{\"name\": \"gender\", \"type\": 0, \"required\": false, \"description\": \"Gender of the child (male/female).\"}," \
+        + "{\"name\": \"relation\", \"type\": 0, \"required\": false, \"description\": \"Relationship noun of the child (son/daughter).\"}," \
+        + "{\"name\": \"cheater\", \"type\": 0, \"required\": false, \"description\": \"Cheater actor name.\"}," \
+        + "{\"name\": \"victim\", \"type\": 0, \"required\": false, \"description\": \"Victim partner actor name.\"}," \
+        + "{\"name\": \"affairPartner\", \"type\": 0, \"required\": false, \"description\": \"Affair partner actor name.\"}," \
+        + "{\"name\": \"resolution\", \"type\": 0, \"required\": false, \"description\": \"Resolution of affair (confronted, allowed, breakup).\"}," \
+        + "{\"name\": \"isOpen\", \"type\": 2, \"required\": false, \"description\": \"Whether open relationship is active.\"}," \
+        + "{\"name\": \"isWalkIn\", \"type\": 2, \"required\": false, \"description\": \"Whether event was a walk-in discovery.\"}," \
+        + "{\"name\": \"mother\", \"type\": 0, \"required\": false, \"description\": \"Mother actor name.\"}," \
+        + "{\"name\": \"partner\", \"type\": 0, \"required\": false, \"description\": \"Partner actor name.\"}" \
+        + "]"
+    string renderParams = "{\"recent_events\":\"{{msg}}\",\"raw\":\"{{msg}}\",\"compact\":\"{{msg}}\",\"verbose\":\"{{msg}}\"}"
+    SkyrimnetApi.RegisterEventSchema("ttm_event", name, description, jsonParams, renderParams, false, 0)
 EndFunction
 

@@ -42,9 +42,19 @@ namespace MARAS::State {
         inline constexpr std::uint32_t kExtChildVisualRpgCHD1 = MakeFourCC('C', 'H', 'D', '1');
         inline constexpr std::uint32_t kExtChildBeastbloodLYC1 = MakeFourCC('L', 'Y', 'C', '1');
         inline constexpr std::uint32_t kExtChildLineageCHD2 = MakeFourCC('C', 'H', 'D', '2');
+        inline constexpr std::uint32_t kExtFertilityBatchFRT1 = MakeFourCC('F', 'R', 'T', '1');
 
         // Optional inline extension magic inside 'DCSD' (omitted when no deceased secrecy flags exist)
         inline constexpr std::uint32_t kExtDeceasedSecrecyDCS1 = MakeFourCC('D', 'C', 'S', '1');
+
+        // Optional inline extension magic inside 'MKMK' (omitted when no Phase 3 relationship lifecycle state exists)
+        inline constexpr std::uint32_t kExtRelationshipStateREL1 = MakeFourCC('R', 'E', 'L', '1');
+
+        // Optional inline extension magic inside 'PLCH' (omitted when all Phase 7 child/forcegreet state is default/empty)
+        inline constexpr std::uint32_t kExtPlayerChildrenStatePLC1 = MakeFourCC('P', 'L', 'C', '1');
+
+        // Optional inline extension magic inside 'BNTR' (omitted when no moved actors or muted SkyrimNet participants exist)
+        inline constexpr std::uint32_t kExtBanterSceneStateBNT1 = MakeFourCC('B', 'N', 'T', '1');
 
         // 'CNFG' sub-version header
         inline constexpr std::uint8_t kSettingsVersionMarker = 0xFFu;

@@ -2,8 +2,11 @@
 
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
+#include "maras/domain/household/SpouseBuffRules.h"
+#include "maras/domain/relationships/GiftAndIntimacyRules.h"
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -59,6 +62,7 @@ namespace MARAS::Engine {
             (void)rank;
         }
         virtual void OnExternalMarriageFactionRemoved(RE::FormID actorId) { (void)actorId; }
+        virtual void OnDialogueOpened(RE::FormID npcId) { (void)npcId; }
         virtual void OnIntimateCheatingCaught(RE::FormID cheaterId,
                                               RE::FormID victimId,
                                               RE::FormID affairPartnerId,
@@ -71,6 +75,50 @@ namespace MARAS::Engine {
             (void)framework;
             (void)threadId;
             (void)isWalkIn;
+        }
+        virtual void OnIntimateOpenRelationshipWalkIn(RE::FormID partnerId,
+                                                      RE::FormID witnessId,
+                                                      RE::FormID otherPartnerId,
+                                                      std::string_view framework,
+                                                      std::int32_t threadId,
+                                                      bool isWalkIn = true) {
+            (void)partnerId;
+            (void)witnessId;
+            (void)otherPartnerId;
+            (void)framework;
+            (void)threadId;
+            (void)isWalkIn;
+        }
+
+        // Player gift, sleep, and intimate completion lifecycle
+        virtual void OnPlayerGiftCompleted(
+            RE::FormID receiverId,
+            std::string_view playerName,
+            std::string_view receiverName,
+            std::span<const Domain::Relationships::GiftedItemEntry> items) {
+            (void)receiverId;
+            (void)playerName;
+            (void)receiverName;
+            (void)items;
+        }
+
+        virtual Domain::Household::SleepRestedPlan OnPlayerSlept(
+            std::span<const RE::FormID> sameCellActorIds,
+            RE::FormID currentLocationId,
+            std::span<const RE::FormID> presentAtLocationRawIds,
+            Foundation::ActorSex playerSex) {
+            (void)sameCellActorIds;
+            (void)currentLocationId;
+            (void)presentAtLocationRawIds;
+            (void)playerSex;
+            return {};
+        }
+
+        virtual void OnIntimateThreadEnded(
+            std::span<const RE::FormID> recordedPartnerIds,
+            bool hadSex) {
+            (void)recordedPartnerIds;
+            (void)hadSex;
         }
     };
 

@@ -307,7 +307,7 @@ External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<
 | `maras_partner_home_arrival_event` / `maras_banter_scene_trigger` | Event JSON payload | Home-arrival encounter dispatch or ambient couple banter trigger. |
 | `maras_child_event` / `maras_spawn_synthetic_child` / `maras_paternity_secret_resolved` / `maras_child_chest_event` | Child / secret JSON or string | Child lifecycle changes, synthetic spawning, paternity secret resolution, or chest introduction/reset. |
 | `maras_teammate_change` / `maras_teammate_added` / `maras_teammate_removed` | `""` (`sender` on add/remove) | When the active follower/teammate set changes. |
-| `maras_day_changed` / `maras_dialogue_opened` / `maras_decline` | `""` / dialogue or decline JSON | Daily midnight rollover (`numArg` = game day), dialogue menu entry, or confirmation decline. |
+| `maras_day_changed` / `maras_dialogue_opened` | `""` / dialogue notification | Daily midnight rollover (`numArg` = game day) or dialogue menu entry. |
 | `maras_actor_died` / `maras_child_died` / `maras_child_pet_died` | `""` (`numArg` `1.0` if player killer) | When a tracked adult, registered child, or household child's pet/critter dies. |
 
 ### 7.3 Native C++ DLL API (`MARAS_PublicAPI.h`)

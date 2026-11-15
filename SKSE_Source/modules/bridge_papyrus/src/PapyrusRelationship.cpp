@@ -2,6 +2,7 @@
 
 #include "maras/app/AgencyWorkflowCoordinator.h"
 #include "maras/app/LineageUseCases.h"
+#include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/domain/household/SpouseBuffRules.h"
 #include "maras/engine/ActorEngineUtils.h"
@@ -9,6 +10,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FormUtils.h"
 #include "maras/engine/PollingService.h"
+#include "maras/engine/RelationshipEngineReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/foundation/EnumUtils.h"
@@ -133,15 +135,21 @@ namespace MARAS::PapyrusInterface {
             return false;
         }
 
-        const auto parsed = Foundation::StringToRelationshipStatus(statusType);
-        if (parsed == Foundation::RelationshipStatus::Unknown) {
+        const bool anyStatus =
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "any") ||
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "all");
+        const auto parsed = anyStatus
+            ? Foundation::RelationshipStatus::Unknown
+            : Foundation::StringToRelationshipStatus(statusType);
+        if (!anyStatus && parsed == Foundation::RelationshipStatus::Unknown) {
             MARAS_LOG_WARN("IsNPCStatusWith: unknown statusType '{}'", statusType);
             return false;
         }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         const RE::FormID targetID = target ? target->GetFormID() : kPlayerFormID;
-        return App::RelationshipUseCases::GetSingleton().GetRelationshipStatus(npc->GetFormID(), targetID) == parsed;
+        const auto current = App::RelationshipUseCases::GetSingleton().GetRelationshipStatus(npc->GetFormID(), targetID);
+        return anyStatus ? (current != Foundation::RelationshipStatus::Unknown) : (current == parsed);
     }
 
     bool IsNPCStatusWithByEnum(RE::StaticFunctionTag*, RE::Actor* npc, RE::Actor* target, int32_t statusEnum) {
@@ -922,34 +930,92 @@ namespace MARAS::PapyrusInterface {
     }
 
     // ========================================
-    // Marriage Difficulty
+    // Relationship Interactions & Cooldowns
     // ========================================
 
-    float CalculateMarriageSuccessChance(RE::StaticFunctionTag*,
-                                         RE::Actor* npc,
-                                         float intimacyAdjustment,
-                                         float mostGold,
-                                         float housesOwned,
-                                         float horsesOwned,
-                                         float questsCompleted,
-                                         float dungeonsCleared,
-                                         float dragonSoulsCollected,
-                                         bool playerKiller) {
-        if (!npc) {
-            return 0.0f;
+    void ShareSpouseIncome(RE::StaticFunctionTag*, RE::Actor* spouse) {
+        if (!spouse) {
+            return;
         }
-
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::RelationshipUseCases::GetSingleton().CalculateMarriageSuccessChance(
-            npc,
-            intimacyAdjustment,
-            mostGold,
-            housesOwned,
-            horsesOwned,
-            questsCompleted,
-            dungeonsCleared,
-            dragonSoulsCollected,
-            playerKiller);
+        App::RelationshipInteractionCoordinator::GetSingleton().ShareSpouseIncome(spouse->GetFormID());
+    }
+
+    void ProcessDivorceSettlement(RE::StaticFunctionTag*, RE::Actor* exSpouse, RE::TESQuest* divorceQuest) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        const RE::FormID spouseID = exSpouse ? exSpouse->GetFormID() : 0;
+        App::RelationshipInteractionCoordinator::GetSingleton().ProcessDivorceSettlement(spouseID, divorceQuest);
+    }
+
+    float GetBrokeupTime(RE::StaticFunctionTag*, RE::Actor* npc) {
+        if (!npc) {
+            return -1.0f;
+        }
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::RelationshipInteractionCoordinator::GetSingleton().GetBrokeupTime(npc->GetFormID());
+    }
+
+    bool GetPlayerKiller(RE::StaticFunctionTag*) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::RelationshipInteractionCoordinator::GetSingleton().GetPlayerKiller();
+    }
+
+    void SetPlayerKiller(RE::StaticFunctionTag*, bool value) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::RelationshipInteractionCoordinator::GetSingleton().SetPlayerKiller(value);
+    }
+
+    bool GetPlayerHadWedding(RE::StaticFunctionTag*) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::RelationshipInteractionCoordinator::GetSingleton().GetPlayerHadWedding();
+    }
+
+    void SetPlayerHadWedding(RE::StaticFunctionTag*, bool value) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::RelationshipInteractionCoordinator::GetSingleton().SetPlayerHadWedding(value);
+    }
+
+    bool ShouldPromptSkipWedding(RE::StaticFunctionTag*) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::RelationshipInteractionCoordinator::GetSingleton().ShouldPromptSkipWedding();
+    }
+
+    void SetDontShowSkipWeddingMessage(RE::StaticFunctionTag*, bool value) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::RelationshipInteractionCoordinator::GetSingleton().SetDontShowSkipWeddingMessage(value);
+    }
+
+    void NotifyEngagementCeremonyStarted(RE::StaticFunctionTag*, RE::Actor* fiance) {
+        if (!fiance) {
+            return;
+        }
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::RelationshipInteractionCoordinator::GetSingleton().NotifyEngagementCeremonyStarted(fiance->GetFormID());
+    }
+
+    void ApplyDialogueLoversLedgerBonus(
+        RE::StaticFunctionTag*,
+        RE::Actor* npc,
+        int32_t exclusiveSex,
+        int32_t groupSex,
+        int32_t playerTopLoverRank) {
+        if (!npc) {
+            return;
+        }
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::RelationshipInteractionCoordinator::GetSingleton().ApplyDialogueLoversLedgerBonus(
+            npc->GetFormID(),
+            static_cast<int>(exclusiveSex),
+            static_cast<int>(groupSex),
+            static_cast<int>(playerTopLoverRank));
+    }
+
+    void PacifyFianceOrSpouse(RE::StaticFunctionTag*, RE::Actor* npc, bool enable) {
+        if (!npc) {
+            return;
+        }
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        RelationshipEngineReconciler::GetSingleton().PacifyFianceOrSpouse(npc->GetFormID(), enable);
     }
 
     // ========================================

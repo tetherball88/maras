@@ -1,5 +1,6 @@
 #include "maras/engine/DialogueEventSink.h"
 
+#include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -117,6 +118,10 @@ namespace MARAS {
     void DialogueEventSink::SendDialogueEvent(RE::Actor* npc) {
         FactionReconciler::GetSingleton().ReconcilePlayer();
         FactionReconciler::GetSingleton().ReconcileLoadedActor(npc);
+
+        if (auto* hooks = Engine::GetEngineEventHooks(); hooks && npc) {
+            hooks->OnDialogueOpened(npc->GetFormID());
+        }
 
         EmitModCallbackEvent("maras_dialogue_opened", "", 0.0f, npc);
         MARAS_LOG_INFO("Sent maras_dialogue_opened for actor {:08X} ({})", npc->GetFormID(), npc->GetName());

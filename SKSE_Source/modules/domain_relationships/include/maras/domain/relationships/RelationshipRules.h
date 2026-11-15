@@ -26,6 +26,8 @@ namespace MARAS::Domain::Relationships {
         bool isChildA{ false };
         bool isChildB{ false };
         bool areEngineFamily{ false };
+        int playerRelationshipRank{ 0 };
+        bool partnerCheatedOnPlayer{ false };
         std::string engineFamilyReason{};
     };
 
@@ -38,6 +40,7 @@ namespace MARAS::Domain::Relationships {
         bool resetOpenOnBreakup{ false };
         bool recordMemory{ false };
         bool reconcilePlayerBuffs{ false };
+        bool appliedBreakupCooldown{ false };
         RelationshipStatus oldStatus{ RelationshipStatus::Candidate };
         RelationshipStatus newStatus{ RelationshipStatus::Candidate };
         std::optional<int> offlineSyncedAffection{};

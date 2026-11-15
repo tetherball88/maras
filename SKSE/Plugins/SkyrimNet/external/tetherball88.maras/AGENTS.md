@@ -8,8 +8,8 @@ Applies to `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/` (`manifest.json
 
 - **`manifest.json`**: Must remain valid JSON at the bundle root.
 - **`actions/*.yaml` (18 files)**: Filename **must** match internal `name:` (case-sensitive, e.g., `ProposeLover.yaml` $\to$ `name: ProposeLover`), pointing `scriptName`/`functionName` to valid functions in `TTM_Actions.psc` / `TTM_ServiceRelationships.psc`.
-- **`triggers/*.yaml` (25 files)**: Filename **must** match internal `name:` (e.g., `ttm_cheating_caught.yaml` $\to$ `name: ttm_cheating_caught`), listening on `eventType: ttm_event` and filtering `event_json.type` emitted by `TTM_ServiceSkyrimNet.BuildJson(...)`.
-- **Event-Side Secrecy Parity**: Child birth, growth (`RegisterChildGrewUp`), training (`RegisterChildSentToTraining`), and adulthood (`RegisterChildBecameAdult`) events emitted by `TTM_ServiceSkyrimNet.psc` check both `IsSecretForPartner` and `IsSecretForBioFather` using `exactAudience = true` and `maskSecrets = true` splits—never weaken prompt isolation assuming all targets are `Nearby`.
+- **`triggers/*.yaml` (25 files)**: Filename **must** match internal `name:` (e.g., `ttm_cheating_caught.yaml` $\to$ `name: ttm_cheating_caught`), listening on `eventType: ttm_event` and filtering `event_json.type` serialized in C++ by `SkyrimNetEventPayloads`.
+- **Event-Side Secrecy Parity**: Child birth (`ChildBirth`), growth (`ChildGrewUp`), training (`ChildSentToTraining`), adulthood (`ChildBecameAdult`), and paternity-resolution (`PaternitySecretResolved`) events planned in C++ by `Projection::EventDispatchPlan` and dispatched by `SkyrimNetEventService` check both `isSecretForPartner` and `isSecretForBioFather` using `exactAudience = true` and `DispatchMaskMode` (`MaskForPartner` / `MaskForChildOnly`) splits—never weaken prompt isolation assuming all targets are `Nearby`.
 
 ---
 

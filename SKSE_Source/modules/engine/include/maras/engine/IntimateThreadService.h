@@ -63,6 +63,9 @@ namespace MARAS {
         std::vector<SexualPairRecord> sexualPairs;
         std::unordered_set<CaughtEventKey, CaughtEventKeyHash> caughtEvents;
         std::unordered_set<CaughtEventKey, CaughtEventKeyHash> openRelationshipWitnessEvents;
+        std::vector<RE::FormID> playerIntimacyPartners;
+        std::vector<RE::FormID> caughtMidActFactionActors;
+        bool hadSex{ false };
         bool hasCheatingPotential{ false };
         bool hasOpenRelationshipPotential{ false };
     };
@@ -101,7 +104,10 @@ namespace MARAS {
                                        std::int32_t threadID,
                                        RE::Actor* actorA,
                                        RE::Actor* actorB);
-        void ClearIntimateThread(const std::string& framework, std::int32_t threadID);
+        [[nodiscard]] bool IsIntimateThreadTracked(const std::string& framework, std::int32_t threadID) const;
+        [[nodiscard]] bool HasIntimateThreadPlayerParticipants(const std::string& framework, std::int32_t threadID) const;
+        void MarkIntimateThreadSexual(const std::string& framework, std::int32_t threadID);
+        void ClearIntimateThread(const std::string& framework, std::int32_t threadID, bool hadSex = false);
 
         // Game-thread periodic tick driven by PollingService::Update()
         void Tick(std::chrono::steady_clock::time_point now);

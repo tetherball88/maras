@@ -1,5 +1,6 @@
 #include "maras/app/LineageUseCases.h"
 
+#include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
@@ -809,6 +810,12 @@ namespace MARAS::App {
         }
 
         if (sendEvent && rec.isAdopted && !wasAlreadyAdopted) {
+            if (syntheticID == 0 && rec.guardians.HasGuardian(State::ActorId::Player())) {
+                const auto coG = rec.guardians.OtherGuardian(State::ActorId::Player());
+                if (!coG.IsNull() && !coG.IsPlayer()) {
+                    AffectionEventCoordinator::GetSingleton().OnChildAdopted(coG.raw());
+                }
+            }
             SendChildEvent("adopted", childID, rec.guardians.slotA.raw(), rec.guardians.slotB.raw(), 0, "adoption");
         } else if (sendEvent && hadPreExistingEntry && guardianDiff.changed) {
             SendChildEvent(
@@ -1473,17 +1480,25 @@ namespace MARAS::App {
                 const float childIdFloat = static_cast<float>(static_cast<std::int32_t>(cID));
                 if (wasSecretPartner) {
                     const std::string baseOutcome = "presumed_father_learnt";
-                    std::string eventOutcome = wasPregSecretPartner
+                    const std::string eventOutcome = wasPregSecretPartner
                         ? (baseOutcome + "_unannounced")
                         : baseOutcome;
+                    AffectionEventCoordinator::GetSingleton().OnPaternitySecretResolved(cID, eventOutcome);
                     EmitModCallbackEvent(
-                        "maras_paternity_secret_resolved", std::move(eventOutcome), childIdFloat, RE::FormID{ 0 });
-                    GetSkyrimNetGateway().RecordPaternityReveal(
-                        cID, baseOutcome, "none", wasPregSecretPartner);
+                        "maras_paternity_secret_resolved", eventOutcome, childIdFloat, RE::FormID{ 0 });
+                    if (GetSkyrimNetGateway().IsAvailable()) {
+                        GetSkyrimNetGateway().EmitPaternitySecretResolved(cID, eventOutcome);
+                        GetSkyrimNetGateway().RecordPaternityReveal(
+                            cID, baseOutcome, "none", wasPregSecretPartner);
+                    }
                 } else {
+                    AffectionEventCoordinator::GetSingleton().OnPaternitySecretResolved(cID, "divorce_revealed");
                     EmitModCallbackEvent(
                         "maras_paternity_secret_resolved", "divorce_revealed", childIdFloat, RE::FormID{ 0 });
-                    GetSkyrimNetGateway().RecordPaternityReveal(cID, "divorce_revealed");
+                    if (GetSkyrimNetGateway().IsAvailable()) {
+                        GetSkyrimNetGateway().EmitPaternitySecretResolved(cID, "divorce_revealed");
+                        GetSkyrimNetGateway().RecordPaternityReveal(cID, "divorce_revealed");
+                    }
                 }
                 const std::string notifyMsg = std::format(
                     "Paternity secret for {} has been resolved following breakup.",
@@ -1860,7 +1875,9 @@ namespace MARAS::App {
         const std::string& reason) {
         nlohmann::json payload;
         payload["event"] = eventType;
+        payload["eventType"] = eventType;
         payload["child"] = std::format("{:08X}", childID);
+        payload["childId"] = static_cast<std::int32_t>(childID);
         payload["childName"] = GetChildName(childID);
         if (guardianAID != 0) {
             payload["guardianA"] = std::format("{:08X}", guardianAID);
@@ -1890,8 +1907,21 @@ namespace MARAS::App {
             (!IsSyntheticId(childID) && RE::TESForm::LookupByID(childID) != nullptr) ? childID : 0;
         EmitModCallbackEvent("maras_child_event", jsonStr, 0.0f, senderID);
         MARAS_LOG_INFO("Sent maras_child_event: {}", jsonStr);
-        GetSkyrimNetGateway().RecordChildCustodyEvent(
-            eventType, childID, guardianAID, guardianBID, otherID, reason);
+        if (GetSkyrimNetGateway().IsAvailable()) {
+            if (eventType == "adopted") {
+                GetSkyrimNetGateway().EmitChildAdopted(childID, guardianAID, guardianBID);
+            } else if (eventType == "inherited") {
+                GetSkyrimNetGateway().EmitChildInherited(childID, otherID, guardianAID, guardianBID);
+            } else if (eventType == "guardians_changed") {
+                GetSkyrimNetGateway().EmitChildParentsChanged(childID, guardianAID, guardianBID, reason);
+            } else if (eventType == "sent_to_training") {
+                GetSkyrimNetGateway().EmitChildSentToTraining(childID, GetChildName(childID), reason);
+            } else if (eventType == "became_adult") {
+                GetSkyrimNetGateway().EmitChildBecameAdult(childID, GetChildName(childID));
+            }
+            GetSkyrimNetGateway().RecordChildCustodyEvent(
+                eventType, childID, guardianAID, guardianBID, otherID, reason);
+        }
     }
 
     // =========================================================================
@@ -2091,7 +2121,6 @@ namespace MARAS::App {
         }
 
         bool isNewToHousehold = false;
-        bool needChestEvent = false;
         State::ChildHouseholdRecord savedState{};
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& hh = ws.household.Write();
@@ -2108,10 +2137,6 @@ namespace MARAS::App {
                 hh.AssignTenant(childID, State::HouseId{ resolvedHouseID }, /*stayAtHome=*/true, /*isChildTenant=*/true);
             }
             hh.UpsertChildState(savedState);
-            if (!hh.IsChildChestIntroduced()) {
-                hh.SetChildChestIntroduced(true);
-                needChestEvent = true;
-            }
         });
 
         auto& ops = PlayerChildrenEngineOps::GetSingleton();
@@ -2133,9 +2158,6 @@ namespace MARAS::App {
         }
 
         ops.ApplyOrderOnActorFromWorld(childID);
-        if (needChestEvent && resolvedHouseID != 0) {
-            ops.SendChildChestEvent(resolvedHouseID, true);
-        }
         FactionReconciler::GetSingleton().ReconcileActor(childID);
         return true;
     }
@@ -3021,6 +3043,7 @@ namespace MARAS::App {
                                     rec.trainingLocation,
                                     spec->className));
 
+        AffectionEventCoordinator::GetSingleton().OnChildMilestone(targetChildID, "training");
         SendChildEvent(
             "sent_to_training", targetChildID,
             rec.guardians.slotA.raw(), rec.guardians.slotB.raw(), 0, rec.trainingLocation);
@@ -3059,6 +3082,7 @@ namespace MARAS::App {
                                     className.empty() ? "adolescent" : className,
                                     rec.trainingLocation.empty() ? "their academy" : rec.trainingLocation));
 
+        AffectionEventCoordinator::GetSingleton().OnChildMilestone(childID, "adult");
         SendChildEvent(
             "became_adult", childID,
             rec.guardians.slotA.raw(), rec.guardians.slotB.raw(), 0, rec.trainingLocation);
@@ -3331,7 +3355,7 @@ namespace MARAS::App {
         }
 
         if (wasTrackedAdult || wasAdultChild) {
-            BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(canonicalVictimId);
+            BedOwnershipReconciler::GetSingleton().StopShareHomeWithPlayer(canonicalVictimId, "deceased");
             HouseholdEngineOps::GetSingleton().ClearHomeMarkerLinkedRef(canonicalVictimId);
             FactionReconciler::GetSingleton().ReconcileActor(canonicalVictimId);
             PackageReconciler::GetSingleton().UnregisterActor(canonicalVictimId);

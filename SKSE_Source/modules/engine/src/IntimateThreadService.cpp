@@ -1,9 +1,13 @@
 #include "maras/engine/IntimateThreadService.h"
 
+#include "maras/domain/relationships/GiftAndIntimacyRules.h"
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
+#include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
+#include "maras/engine/FormCache.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -25,6 +29,39 @@ namespace MARAS {
             }
             return Foundation::IsMainTierStatus(
                 snap.relationships->GetStatus(Foundation::ActorId{ id }, Foundation::ActorId::Player()));
+        }
+
+        void AppendUniqueRawId(std::vector<RE::FormID>& dst, RE::FormID id) {
+            if (id != 0 && std::find(dst.begin(), dst.end(), id) == dst.end()) {
+                dst.push_back(id);
+            }
+        }
+
+        void ApplyCheatingCaughtFaction(std::vector<RE::FormID> actorIds, bool add) {
+            if (actorIds.empty()) {
+                return;
+            }
+            auto apply = [actorIds = std::move(actorIds), add]() {
+                auto* fac = FormCache::GetSingleton().GetCheatingNpcCaughtFaction();
+                if (!fac) {
+                    return;
+                }
+                for (const RE::FormID id : actorIds) {
+                    if (id == 0 || id == kPlayerFormID) {
+                        continue;
+                    }
+                    if (add) {
+                        Utils::AddToFaction(id, fac, 0);
+                    } else {
+                        Utils::RemoveFromFaction(id, fac);
+                    }
+                }
+            };
+            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                apply();
+            } else {
+                AddCurrentEpochTask("IntimateThreadService::ApplyCheatingCaughtFaction", std::move(apply));
+            }
         }
 
         void RecordCheatingIncidentDirect(RE::FormID cheaterID,
@@ -246,22 +283,49 @@ namespace MARAS {
         EvaluateParticipants(actorIDs, evaluatedCheaters, evaluatedOpenWatchers, hasCheatingPotential,
                              hasOpenRelationshipPotential);
 
+        std::vector<Foundation::ActorId> strongActorIds;
+        strongActorIds.reserve(actorIDs.size());
+        for (const RE::FormID id : actorIDs) {
+            strongActorIds.emplace_back(id);
+        }
+        Domain::Relationships::IntimateThreadParticipantEvaluation participantEval{};
+        if (const auto snap = State::WorldStore::GetSingleton().Snapshot()) {
+            participantEval = Domain::Relationships::EvaluateIntimateThreadParticipants(
+                *snap,
+                strongActorIds,
+                hasCheatingPotential || hasOpenRelationshipPotential);
+        }
+
+        std::vector<RE::FormID> actorsToAddFaction;
         ThreadKey key{ framework, threadID };
 
         {
             std::lock_guard<std::mutex> lock(mutex_);
             auto it = activeThreads_.find(key);
             if (it != activeThreads_.end()) {
-                // Update existing thread actors and potential cheaters/open watchers while preserving existing sexualPairs
+                // Update existing thread actors and potential cheaters/open watchers while preserving existing sexualPairs/hadSex
                 it->second.actorIDs = std::move(actorIDs);
                 it->second.potentialCheaters = std::move(evaluatedCheaters);
                 it->second.openRelationshipWatchers = std::move(evaluatedOpenWatchers);
                 it->second.hasCheatingPotential = hasCheatingPotential;
                 it->second.hasOpenRelationshipPotential = hasOpenRelationshipPotential;
+                for (const auto partnerId : participantEval.playerIntimacyPartners) {
+                    AppendUniqueRawId(it->second.playerIntimacyPartners, partnerId.raw());
+                }
+                for (const auto cheaterId : participantEval.cheatersCaughtMidAct) {
+                    const RE::FormID rawId = cheaterId.raw();
+                    if (std::find(it->second.caughtMidActFactionActors.begin(),
+                                  it->second.caughtMidActFactionActors.end(),
+                                  rawId) == it->second.caughtMidActFactionActors.end()) {
+                        it->second.caughtMidActFactionActors.push_back(rawId);
+                        actorsToAddFaction.push_back(rawId);
+                    }
+                }
                 MARAS_LOG_INFO(
-                    "RegisterIntimateThread: Updated existing thread {} #{} (participants={}, hasCheaters={}, hasOpenWatchers={})",
+                    "RegisterIntimateThread: Updated existing thread {} #{} (participants={}, hasCheaters={}, hasOpenWatchers={}, playerPartners={}, caughtFactions={})",
                     framework, threadID, it->second.actorIDs.size(), hasCheatingPotential,
-                    hasOpenRelationshipPotential);
+                    hasOpenRelationshipPotential, it->second.playerIntimacyPartners.size(),
+                    it->second.caughtMidActFactionActors.size());
             } else {
                 TrackedIntimateThread thread;
                 thread.framework = framework;
@@ -269,18 +333,28 @@ namespace MARAS {
                 thread.actorIDs = std::move(actorIDs);
                 thread.potentialCheaters = std::move(evaluatedCheaters);
                 thread.openRelationshipWatchers = std::move(evaluatedOpenWatchers);
+                for (const auto partnerId : participantEval.playerIntimacyPartners) {
+                    AppendUniqueRawId(thread.playerIntimacyPartners, partnerId.raw());
+                }
+                for (const auto cheaterId : participantEval.cheatersCaughtMidAct) {
+                    const RE::FormID rawId = cheaterId.raw();
+                    AppendUniqueRawId(thread.caughtMidActFactionActors, rawId);
+                }
+                actorsToAddFaction = thread.caughtMidActFactionActors;
                 thread.hasCheatingPotential = hasCheatingPotential;
                 thread.hasOpenRelationshipPotential = hasOpenRelationshipPotential;
                 auto [insertedIt, _] = activeThreads_.emplace(key, std::move(thread));
                 MARAS_LOG_INFO(
-                    "RegisterIntimateThread: Registered new thread {} #{} (participants={}, hasCheaters={}, hasOpenWatchers={})",
+                    "RegisterIntimateThread: Registered new thread {} #{} (participants={}, hasCheaters={}, hasOpenWatchers={}, playerPartners={}, caughtFactions={})",
                     framework, threadID, insertedIt->second.actorIDs.size(), hasCheatingPotential,
-                    hasOpenRelationshipPotential);
+                    hasOpenRelationshipPotential, insertedIt->second.playerIntimacyPartners.size(),
+                    insertedIt->second.caughtMidActFactionActors.size());
             }
 
             hasActiveThreads_.store(!activeThreads_.empty(), std::memory_order_release);
         }
 
+        ApplyCheatingCaughtFaction(std::move(actorsToAddFaction), /*add=*/true);
         ChildrenFleeService::GetSingleton().QueueRefresh();
 
         return hasCheatingPotential || hasOpenRelationshipPotential;
@@ -524,14 +598,78 @@ namespace MARAS {
             });
     }
 
-    void IntimateThreadService::ClearIntimateThread(const std::string& framework, std::int32_t threadID) {
+    bool IntimateThreadService::IsIntimateThreadTracked(const std::string& framework, std::int32_t threadID) const {
         ThreadKey key{ framework, threadID };
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto it = activeThreads_.find(key);
+        return it != activeThreads_.end() &&
+               (it->second.hasCheatingPotential || it->second.hasOpenRelationshipPotential);
+    }
+
+    bool IntimateThreadService::HasIntimateThreadPlayerParticipants(const std::string& framework,
+                                                                    std::int32_t threadID) const {
+        ThreadKey key{ framework, threadID };
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto it = activeThreads_.find(key);
+        return it != activeThreads_.end() && !it->second.playerIntimacyPartners.empty();
+    }
+
+    void IntimateThreadService::MarkIntimateThreadSexual(const std::string& framework, std::int32_t threadID) {
+        ThreadKey key{ framework, threadID };
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (auto it = activeThreads_.find(key); it != activeThreads_.end()) {
+            it->second.hadSex = true;
+        }
+    }
+
+    void IntimateThreadService::ClearIntimateThread(const std::string& framework,
+                                                    std::int32_t threadID,
+                                                    bool hadSex) {
+        ThreadKey key{ framework, threadID };
+        bool found = false;
+        bool finalHadSex = hadSex;
+        std::vector<RE::FormID> recordedPartners;
+        std::vector<RE::FormID> actorsToClearFaction;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            activeThreads_.erase(key);
-            hasActiveThreads_.store(!activeThreads_.empty(), std::memory_order_release);
+            auto it = activeThreads_.find(key);
+            if (it != activeThreads_.end()) {
+                found = true;
+                finalHadSex = it->second.hadSex || hadSex;
+                recordedPartners = std::move(it->second.playerIntimacyPartners);
+                std::vector<RE::FormID> candidateClear = std::move(it->second.caughtMidActFactionActors);
+                activeThreads_.erase(it);
+                hasActiveThreads_.store(!activeThreads_.empty(), std::memory_order_release);
+
+                for (const RE::FormID actorId : candidateClear) {
+                    bool stillCaughtElsewhere = false;
+                    for (const auto& [otherKey, otherThread] : activeThreads_) {
+                        (void)otherKey;
+                        if (std::find(otherThread.caughtMidActFactionActors.begin(),
+                                      otherThread.caughtMidActFactionActors.end(),
+                                      actorId) != otherThread.caughtMidActFactionActors.end()) {
+                            stillCaughtElsewhere = true;
+                            break;
+                        }
+                    }
+                    if (!stillCaughtElsewhere) {
+                        actorsToClearFaction.push_back(actorId);
+                    }
+                }
+            }
         }
-        MARAS_LOG_INFO("ClearIntimateThread: Cleared thread {} #{}", framework, threadID);
+
+        if (!found) {
+            MARAS_LOG_DEBUG("ClearIntimateThread: Thread {} #{} already cleared", framework, threadID);
+            return;
+        }
+
+        ApplyCheatingCaughtFaction(std::move(actorsToClearFaction), /*add=*/false);
+        if (auto* hooks = Engine::GetEngineEventHooks()) {
+            hooks->OnIntimateThreadEnded(recordedPartners, finalHadSex);
+        }
+        MARAS_LOG_INFO("ClearIntimateThread: Cleared thread {} #{} (partners={}, hadSex={})",
+                       framework, threadID, recordedPartners.size(), finalHadSex);
         ChildrenFleeService::GetSingleton().QueueRefresh();
     }
 
@@ -870,6 +1008,25 @@ namespace MARAS {
         if (auto* hooks = Engine::GetEngineEventHooks()) {
             hooks->OnIntimateCheatingCaught(cheaterID, victimID, partnerID, framework, threadID, isWalkIn);
         }
+
+        if (victimID == kPlayerFormID && cheaterID != 0 && cheaterID != kPlayerFormID) {
+            bool needAddFaction = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (auto tIt = activeThreads_.find(ThreadKey{ framework, threadID });
+                    tIt != activeThreads_.end()) {
+                    if (std::find(tIt->second.caughtMidActFactionActors.begin(),
+                                  tIt->second.caughtMidActFactionActors.end(),
+                                  cheaterID) == tIt->second.caughtMidActFactionActors.end()) {
+                        tIt->second.caughtMidActFactionActors.push_back(cheaterID);
+                        needAddFaction = true;
+                    }
+                }
+            }
+            if (needAddFaction) {
+                ApplyCheatingCaughtFaction({ cheaterID }, /*add=*/true);
+            }
+        }
     }
 
     void IntimateThreadService::SendOpenRelationshipWalkInEvent(RE::Actor* witnessActor,
@@ -904,6 +1061,11 @@ namespace MARAS {
         MARAS_LOG_INFO(
             "IntimateThreadService: Sent maras_open_relationship_walkin event: witness={:08X}, partner={:08X}, sexPartner={:08X}, walkIn={}",
             witnessID, partnerID, sexPartnerID, isWalkIn);
+
+        if (auto* hooks = Engine::GetEngineEventHooks()) {
+            hooks->OnIntimateOpenRelationshipWalkIn(
+                partnerID, witnessID, sexPartnerID, framework, threadID, isWalkIn);
+        }
     }
 
 }  // namespace MARAS

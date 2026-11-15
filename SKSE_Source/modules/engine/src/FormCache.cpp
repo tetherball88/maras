@@ -7,6 +7,7 @@ namespace MARAS {
 
     namespace {
         constexpr std::string_view PLUGIN_NAME = "TT_MARAS.esp";
+        constexpr std::string_view SKYRIMNET_ESP = "SkyrimNet.esp";
         constexpr std::string_view HEARTHFIRES_ESM = "HearthFires.esm";
         constexpr std::string_view DAWNGUARD_ESM = "Dawnguard.esm";
         constexpr std::string_view DRAGONBORN_ESM = "Dragonborn.esm";
@@ -71,6 +72,9 @@ namespace MARAS {
         (void)GetSpouseCheatingFaction();
         (void)GetSpouseOpenRelationshipFaction();
         (void)GetCanFormNonCheatingMainFaction();
+        (void)GetSpouseSharedHouseFaction();
+        (void)GetSpouseNoInitialHouseFaction();
+        (void)GetCheatingNpcCaughtFaction();
         (void)GetBYOHRelationshipAdoptionChildOwnedFaction();
         (void)GetBYOHRelationshipAdoptionFaction();
         (void)GetBYOHRelationshipAdoptableFaction();
@@ -167,6 +171,23 @@ namespace MARAS {
         (void)GetMinRelRankForDialGlobal();
         (void)GetPreferVanillaAudioGlobal();
         (void)GetAllowAIDialGlobal();
+        (void)GetDatingChanceGlobal();
+        (void)GetLoverChanceGlobal();
+        (void)GetMarriageChanceGlobal();
+
+        (void)GetBreakupCooldownSpell();
+        (void)GetDemotedCooldownSpell();
+        (void)GetPacifyFianceOrSpouseSpell();
+        (void)GetDefaultCrimeFaction();
+
+        (void)GetChildLogicQuest();
+        (void)GetLoversRadianceAbility();
+        (void)GetPlayerSleepQuest();
+        (void)GetRestedSpell();
+        (void)GetWellRestedSpell();
+        (void)GetMarriageSleepAbility();
+        (void)GetAdoptionSleepAbilityMale();
+        (void)GetAdoptionSleepAbilityFemale();
 
         (void)GetIgnoreProposeKeyword();
         (void)GetClothingRichKeyword();
@@ -190,6 +211,8 @@ namespace MARAS {
         (void)GetLocTypeFarmKeyword();
 
         (void)GetHomeSandboxMarkerStatic();
+        (void)GetXMarkerStatic();
+        (void)GetSkyrimNetFilterFaction();
         (void)GetLocationCenterMarkerRefType();
         (void)GetGoldBaseObject();
         (void)GetHonorhallOrphanageCenterMarker();
@@ -258,6 +281,18 @@ namespace MARAS {
         return LazyLoadForm(CanFormNonCheatingMainFaction_, 0x5D2, "NPC taken faction");
     }
 
+    RE::TESFaction* FormCache::GetSpouseSharedHouseFaction() {
+        return LazyLoadForm(spouseSharedHouseFaction_, 0x7B, "spouse shared house faction");
+    }
+
+    RE::TESFaction* FormCache::GetSpouseNoInitialHouseFaction() {
+        return LazyLoadForm(spouseNoInitialHouseFaction_, 0x7F, "spouse no initial house faction");
+    }
+
+    RE::TESFaction* FormCache::GetCheatingNpcCaughtFaction() {
+        return LazyLoadForm(cheatingNpcCaughtFaction_, 0x5C4, "cheating NPC caught faction");
+    }
+
     RE::TESFaction* FormCache::GetBYOHRelationshipAdoptionChildOwnedFaction() {
         return LazyLoadPluginForm(byohRelationshipAdoptionChildOwnedFaction_, 0x183a8, HEARTHFIRES_ESM,
                                   "BYOHRelationshipAdoptionChildOwnedFaction");
@@ -271,6 +306,17 @@ namespace MARAS {
     RE::TESFaction* FormCache::GetBYOHRelationshipAdoptableFaction() {
         return LazyLoadPluginForm(byohRelationshipAdoptableFaction_, 0x4290, HEARTHFIRES_ESM,
                                   "BYOHRelationshipAdoptableFaction");
+    }
+
+    RE::TESFaction* FormCache::GetSkyrimNetFilterFaction() {
+        if (!skyrimNetFilterFaction_) {
+            auto* dataHandler = RE::TESDataHandler::GetSingleton();
+            if (dataHandler && dataHandler->LookupModByName(SKYRIMNET_ESP) != nullptr) {
+                skyrimNetFilterFaction_ =
+                    Utils::LookupForm<RE::TESFaction>(0x12DB, SKYRIMNET_ESP, "SkyrimNet filter faction");
+            }
+        }
+        return skyrimNetFilterFaction_;
     }
 
     RE::BGSKeyword* FormCache::GetIgnoreProposeKeyword() {
@@ -287,6 +333,10 @@ namespace MARAS {
 
     RE::TESObjectSTAT* FormCache::GetHomeSandboxMarkerStatic() {
         return LazyLoadForm(homeSandboxMarkerStatic_, 0x76, "home sandbox marker static");
+    }
+
+    RE::TESObjectSTAT* FormCache::GetXMarkerStatic() {
+        return LazyLoadSkyrimForm(xMarkerStatic_, 0x3B, "XMarker static");
     }
 
     RE::BGSLocationRefType* FormCache::GetLocationCenterMarkerRefType() {
@@ -496,6 +546,68 @@ namespace MARAS {
 
     RE::TESGlobal* FormCache::GetAllowAIDialGlobal() {
         return LazyLoadForm(allowAIDialGlobal_, 0x1c, "TTM_MCM_AllowAIDial global");
+    }
+
+    RE::TESGlobal* FormCache::GetDatingChanceGlobal() {
+        return LazyLoadForm(datingChanceGlobal_, 0x5d0, "TTM_DatingChance global");
+    }
+
+    RE::TESGlobal* FormCache::GetLoverChanceGlobal() {
+        return LazyLoadForm(loverChanceGlobal_, 0x5d1, "TTM_LoverChance global");
+    }
+
+    RE::TESGlobal* FormCache::GetMarriageChanceGlobal() {
+        return LazyLoadForm(marriageChanceGlobal_, 0x15c, "TTM_MarriageChance global");
+    }
+
+    RE::SpellItem* FormCache::GetBreakupCooldownSpell() {
+        return LazyLoadForm(breakupCooldownSpell_, 0x102, "TTM_BreakupCooldownAbility spell");
+    }
+
+    RE::SpellItem* FormCache::GetDemotedCooldownSpell() {
+        return LazyLoadForm(demotedCooldownSpell_, 0x10e, "TTM_SpouseDemotedAbility spell");
+    }
+
+    RE::SpellItem* FormCache::GetPacifyFianceOrSpouseSpell() {
+        return LazyLoadForm(pacifyFianceOrSpouseSpell_, 0x167, "TTM_PacifyFianceOrSpouseAbility spell");
+    }
+
+    RE::TESFaction* FormCache::GetDefaultCrimeFaction() {
+        return LazyLoadSkyrimForm(defaultCrimeFaction_, 0x29db0, "Default crime faction (Whiterun)");
+    }
+
+    RE::TESQuest* FormCache::GetChildLogicQuest() {
+        return LazyLoadForm(childLogicQuest_, 0xC25, "TTM_ServiceChildrenLogic quest");
+    }
+
+    RE::SpellItem* FormCache::GetLoversRadianceAbility() {
+        return LazyLoadForm(loversRadianceAbility_, 0xDA, "TTM_LoversRadianceAbility spell");
+    }
+
+    RE::TESQuest* FormCache::GetPlayerSleepQuest() {
+        return LazyLoadSkyrimForm(playerSleepQuest_, 0xFC1A2, "PlayerSleepQuest");
+    }
+
+    RE::SpellItem* FormCache::GetRestedSpell() {
+        return LazyLoadSkyrimForm(restedSpell_, 0xFB981, "Rested spell");
+    }
+
+    RE::SpellItem* FormCache::GetWellRestedSpell() {
+        return LazyLoadSkyrimForm(wellRestedSpell_, 0xFB984, "WellRested spell");
+    }
+
+    RE::SpellItem* FormCache::GetMarriageSleepAbility() {
+        return LazyLoadSkyrimForm(marriageSleepAbility_, 0xCDA1D, "MarriageSleepAbility spell");
+    }
+
+    RE::SpellItem* FormCache::GetAdoptionSleepAbilityMale() {
+        return LazyLoadPluginForm(adoptionSleepAbilityMale_, 0x2F54, HEARTHFIRES_ESM,
+                                  "BYOHAdoptionSleepAbilityMale spell");
+    }
+
+    RE::SpellItem* FormCache::GetAdoptionSleepAbilityFemale() {
+        return LazyLoadPluginForm(adoptionSleepAbilityFemale_, 0x4292, HEARTHFIRES_ESM,
+                                    "BYOHAdoptionSleepAbilityFemale spell");
     }
 
     // Skyrim.esm Faction getters (cached)

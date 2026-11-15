@@ -21,43 +21,6 @@ Function SetActorAlias(Quest qst, string name, Actor akActor) global
     al.ForceRefTo(akActor)
 EndFunction
 
-int Function ToggleGlobalVariable(GlobalVariable gVar) global
-    float val = gVar.GetValue()
-    int newVal = 0
-    if(val == 0)
-        newVal = 1
-    endif
-    gVar.SetValue(newVal)
-
-    return newVal
-EndFunction
-
-string Function GetActorsNamesJson(Actor[] actors, Actor excluded = none) global
-    if(actors.length == 0)
-        return ""
-    endif
-    int i = 0
-    string listName = "TmpActorNames" + Utility.GetCurrentRealTime()
-
-    int aLength = actors.length
-
-    while(i < actors.length)
-        Actor currentActor = actors[i]
-
-        if(currentActor && currentActor != excluded)
-            string actorName = GetActorName(currentActor)
-            if(actorName != "")
-                StorageUtil.StringListAdd(none, listName, actorName)
-            else
-                TTM_Debug.warn("GetActorsNamesJson: Actor has no name! Actor FormID: " + currentActor.GetFormID())
-            endif
-        endif
-        i += 1
-    endwhile
-
-    return PapyrusUtil.StringJoin(StorageUtil.StringListToArray(none, listName), ", ")
-EndFunction
-
 Function FadeToBlack() global
     ImageSpaceModifier fadeToBlack = Game.GetFormFromFile(0xf756d, "Skyrim.esm") as ImageSpaceModifier
     ImageSpaceModifier fadeToBlackHold = Game.GetFormFromFile(0xf756e, "Skyrim.esm") as ImageSpaceModifier
@@ -79,7 +42,7 @@ Function RequestDialogue(string prompt, string values, Actor akSpeaker, Actor ak
     if(!target)
         target = TTM_Data.GetPlayer()
     endif
-    TTM_ServiceSkyrimNet.DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, target)
+    MARAS.DirectNarration(SkyrimNetApi.ParseString(prompt, "values", values), akSpeaker, target)
 EndFunction
 
 Function ReinforceEnablePolygamySpouseAlias() global
@@ -125,16 +88,6 @@ Location Function GetSpouseMigrationPlayerHouse() global
     return none
 EndFunction
 
-string Function GetChildNameByParents(Actor mother, Actor father, int gender = -1) global
-    if(gender == -1)
-        gender = Utility.RandomInt(0, 1)
-    endif
-    Race raceForName = mother.GetRace()
-    if(Utility.RandomInt(0,1) == 0 && father)
-        raceForName = father.GetRace()
-    endif
-    return MARAS.GenerateRandomChildName(raceForName, gender == 1)
-EndFunction
 
 Location Function GetChildMigrationPlayerHouse() global
     Quest childSandboxQst = TTM_Data.GetOriginalChildrenSandboxQuest()

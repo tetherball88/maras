@@ -4,6 +4,7 @@
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/app/SkyrimNetGateway.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/state/SessionEpoch.h"
 
 namespace MARAS::PapyrusInterface {
 
@@ -49,6 +50,17 @@ namespace MARAS::PapyrusInterface {
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         App::SettingsCoordinator::GetSingleton().SetBoolByKey("migratedFromStorageUtil", true);
         MARAS_LOG_INFO("Papyrus: Marked settings as migrated from StorageUtil");
+    }
+
+    void SetIsMigrating(RE::StaticFunctionTag*, bool migrating) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        State::SetLegacyMigrationActive(migrating);
+        MARAS_LOG_DEBUG("Papyrus: SetIsMigrating({})", migrating);
+    }
+
+    bool IsMigrating(RE::StaticFunctionTag*) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return State::IsLegacyMigrationActive();
     }
 
     int32_t GetStartDialGender(RE::StaticFunctionTag*) {

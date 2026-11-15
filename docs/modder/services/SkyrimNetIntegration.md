@@ -1,8 +1,11 @@
-# `SkyrimNetIntegration` (`ApiLoader`, `Decisions`, `Decorators`) — Architecture & Behavioral Guide
+# `SkyrimNetIntegration` (`ApiLoader`, `Decisions`, `Decorators`, `EventService`) — Architecture & Behavioral Guide
 
 **Layer**: Bridge SkyrimNet (`SKSE_Source/modules/bridge_skyrimnet`) & SkyrimNet Bundle (`SKSE/Plugins/SkyrimNet/external/tetherball88.maras`)  
 **Sources**:
 - [SkyrimNetApiLoader.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetApiLoader.h) / [SkyrimNetApiLoader.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetApiLoader.cpp)
+- [SkyrimNetEventPayloads.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetEventPayloads.h) / [SkyrimNetEventPayloads.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetEventPayloads.cpp)
+- [SkyrimNetEventService.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetEventService.h) / [SkyrimNetEventService.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetEventService.cpp)
+- [EventDispatchPlan.h](../../../SKSE_Source/modules/projection/include/maras/projection/EventDispatchPlan.h) / [EventDispatchPlan.cpp](../../../SKSE_Source/modules/projection/src/EventDispatchPlan.cpp)
 - [SkyrimNetDecisions.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetDecisions.h) / [SkyrimNetDecisions.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetDecisions.cpp)
 - [SkyrimNetDecorators.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetDecorators.h) / [SkyrimNetDecorators.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetDecorators.cpp)
 - [Architecture Overview](../ARCHITECTURE.md)
@@ -24,6 +27,10 @@ The `bridge_skyrimnet` module cleanly isolates optional runtime linking to `Skyr
   - Prefers `PublicSendCustomDecisionToLLM` (SkyrimNet API v12+) for structured boolean/categorical judgments (`EvaluateStepIn`, `EvaluatePaternity`, `EvaluatePartnerAgency`, `EvaluateMatchmakingVerify`) when `ShouldUseDecisions()` (`skyrimnetUseDecisions && IsDecisionsAvailable()`) is true.
   - **Automatic Chat Fallback**: If a decision request returns `error == "no_decisions_route"` (`ShouldFallbackToChatOnFailure`), callers automatically fall back to `SendCustomPromptToLLM` on the standard Chat route and parse strict JSON objects (`is_object()`, typed getters with defaults).
   - **Prompt Injection Defense**: `SanitizeSingleLine` collapses CR/LF/tabs/repeated spaces and trims bounds, while `SanitizeKey` restricts criterion keys to `[A-Za-z0-9_-]`.
+- **Event Planning, Serialization & Suppression (`EventDispatchPlan`, `SkyrimNetEventPayloads`, `SkyrimNetEventService`)**:
+  - Domain use cases, fertility hooks, and Papyrus actions route all `ttm_*` events and `direct_narration` through `ISkyrimNetGateway` $\to$ `SkyrimNetEventService` instead of Papyrus JSON string concatenation (`TTM_ServiceSkyrimNet.psc` is retired; `TTM_MainController.psc` retains only startup `SkyrimnetApi.RegisterEventSchema("ttm_event", ...)` registration).
+  - `EventDispatchPlan` computes audience isolation (`exactAudience` lists vs. `Nearby`), `DispatchMaskMode` legs, speaker fallback guards (`0x14` Player never selected as speaker for a hidden biological child), and cascade suppression cleanly on immutable snapshots.
+  - `SkyrimNetEventPayloads` serializes UTF-8-safe `nlohmann::json` (`error_handler_t::replace`), `SkyrimNetEventService` executes legs with proximity gating and a `std::chrono::steady_clock` action-narration suppression timer (cleared on `Revert()`), and pregnancy/birth events feed [`SkyrimNetMemoryService`](SkyrimNetMemoryService.md) directly in C++.
 
 ---
 
@@ -45,5 +52,5 @@ At `kPostLoad`, `RegisterSkyrimNetDecorators()` registers **23 `ttm_*` prompt de
 
 Located under [SKSE/Plugins/SkyrimNet/external/tetherball88.maras](../../../SKSE/Plugins/SkyrimNet/external/tetherball88.maras):
 - **25 YAML Triggers** (`triggers/*.yaml`): React to MARAS lifecycle and relationship events (proposals, marriage/engagement/lovers, infidelity caught/confessed/exposed/resolved, open relationships & walk-ins, polygamy blessing, pregnancy/labor/birth/loss, child growth/adulthood/training/adoption/inheritance, paternity resolution, affection/hierarchy shifts, and action declines).
-- **18 YAML Actions** (`actions/*.yaml`): Expose conversational SkyrimNet actions for proposals, breakups, divorce, opening/closing relationships, confessing/exposing/resolving affairs, revealing/discovering child paternity, and managing relationships.
+- **18 YAML Actions** (`actions/*.yaml`): Expose conversational SkyrimNet actions for proposals, breakups, divorce, opening/closing relationships, confessing/exposing/resolving affairs, revealing/discovering child paternity, and managing relationships. Thin 1-line `TTM_Actions.psc` entrypoints delegate execution natively to C++ `SkyrimNetActionCoordinator` (`Execute*Action` and `GetDivorceResolutionQuestStage`), which handles C++ confirmation modals, post-modal state revalidation, delayed NPC–NPC proposal narrations (`TickPendingNarrations`), `-15.0f` rejection affection penalties, and paternity directive parsing (`PaternityActionRules`).
 - **Companion Services**: Memory narration runs through [`SkyrimNetMemoryService`](SkyrimNetMemoryService.md), and placed child bio creation runs through [`SkyrimNetProfileService`](SkyrimNetProfileService.md).

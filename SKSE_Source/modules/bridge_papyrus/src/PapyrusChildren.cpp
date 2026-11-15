@@ -1,5 +1,6 @@
 #include "maras/bridge_papyrus/PapyrusInterface.h"
 
+#include "maras/app/FertilityLifecycleCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
@@ -1176,80 +1177,6 @@ namespace MARAS::PapyrusInterface {
         return App::LineageUseCases::GetSingleton().GetChildName(static_cast<RE::FormID>(childID));
     }
 
-    std::string BuildPregnancyAnnouncedMessage(RE::StaticFunctionTag*,
-                                               RE::Actor* mother,
-                                               RE::Actor* partner,
-                                               RE::Actor* bioFather,
-                                               std::string bioFatherName,
-                                               int32_t childCount) {
-        if (!mother) {
-            return "";
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::PaternityWorkflowCoordinator::GetSingleton().BuildPregnancyAnnouncedMessage(
-            mother->GetFormID(),
-            partner ? partner->GetFormID() : 0,
-            bioFather ? bioFather->GetFormID() : 0,
-            bioFatherName,
-            childCount);
-    }
-
-    std::string BuildPregnancyAnnouncedJson(RE::StaticFunctionTag*,
-                                            RE::Actor* mother,
-                                            RE::Actor* partner,
-                                            RE::Actor* bioFather,
-                                            std::string bioFatherName,
-                                            int32_t childCount) {
-        if (!mother) {
-            return "{}";
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::PaternityWorkflowCoordinator::GetSingleton().BuildPregnancyAnnouncedJson(
-            mother->GetFormID(),
-            partner ? partner->GetFormID() : 0,
-            bioFather ? bioFather->GetFormID() : 0,
-            bioFatherName,
-            childCount);
-    }
-
-    std::string BuildChildBirthMessage(RE::StaticFunctionTag*,
-                                       RE::Actor* mother,
-                                       std::vector<int32_t> childIDs,
-                                       bool maskSecrets) {
-        if (!mother) {
-            return "";
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        std::vector<RE::FormID> formIDs;
-        formIDs.reserve(childIDs.size());
-        for (const int32_t id : childIDs) {
-            formIDs.push_back(static_cast<RE::FormID>(id));
-        }
-        return App::PaternityWorkflowCoordinator::GetSingleton().BuildChildBirthMessage(
-            mother->GetFormID(), formIDs, maskSecrets);
-    }
-
-    std::string BuildChildBirthJson(RE::StaticFunctionTag*,
-                                    RE::Actor* mother,
-                                    std::vector<int32_t> childIDs,
-                                    bool maskSecrets) {
-        if (!mother) {
-            return "{}";
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        std::vector<RE::FormID> formIDs;
-        formIDs.reserve(childIDs.size());
-        for (const int32_t id : childIDs) {
-            formIDs.push_back(static_cast<RE::FormID>(id));
-        }
-        return App::PaternityWorkflowCoordinator::GetSingleton().BuildChildBirthJson(
-            mother->GetFormID(), formIDs, maskSecrets);
-    }
-
     // ========================================
     // Random Name Generation (Child & Critter)
     // ========================================
@@ -1326,6 +1253,166 @@ namespace MARAS::PapyrusInterface {
     bool ReloadCritterNames(RE::StaticFunctionTag*) {
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         return Engine::NamePoolLoader::GetSingleton().LoadCritterNamesFromFile();
+    }
+
+    void OnFertilityConception(RE::StaticFunctionTag*,
+                               std::string provider,
+                               RE::Actor* mother,
+                               std::vector<RE::Actor*> bioFathers,
+                               int32_t trackingOrChildCount,
+                               float currentGameDay) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        const float effectiveGameDay = currentGameDay <= 0.0f ? GetCurrentGameDays() : currentGameDay;
+        App::FertilityLifecycleCoordinator::GetSingleton().OnConception(
+            provider, mother, bioFathers, trackingOrChildCount, effectiveGameDay);
+    }
+
+    void OnFertilityProgressStatus(RE::StaticFunctionTag*,
+                                   std::string provider,
+                                   RE::Actor* mother,
+                                   int32_t stageOrRank,
+                                   float currentGameDay) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        const float effectiveGameDay = currentGameDay <= 0.0f ? GetCurrentGameDays() : currentGameDay;
+        App::FertilityLifecycleCoordinator::GetSingleton().OnProgressStatus(
+            provider, mother, stageOrRank, effectiveGameDay);
+    }
+
+    void OnFertilityLaborStarted(RE::StaticFunctionTag*,
+                                 RE::Actor* mother,
+                                 int32_t childCount,
+                                 RE::Actor* fallbackFather,
+                                 float currentGameDay) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        const float effectiveGameDay = currentGameDay <= 0.0f ? GetCurrentGameDays() : currentGameDay;
+        App::FertilityLifecycleCoordinator::GetSingleton().OnLaborStarted(
+            mother, childCount, fallbackFather, effectiveGameDay);
+    }
+
+    void OnFertilityBirth(RE::StaticFunctionTag*,
+                          std::string provider,
+                          RE::Actor* mother,
+                          RE::Actor* bioFather,
+                          std::string childName,
+                          int32_t babySex,
+                          float currentGameDay) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        const float effectiveGameDay = currentGameDay <= 0.0f ? GetCurrentGameDays() : currentGameDay;
+        App::FertilityLifecycleCoordinator::GetSingleton().OnBirth(
+            provider, mother, bioFather, childName, babySex, effectiveGameDay);
+    }
+
+    void OnFertilityPregnancyLoss(RE::StaticFunctionTag*,
+                                  std::string provider,
+                                  RE::Actor* mother,
+                                  RE::Actor* bioFather,
+                                  std::string reason,
+                                  bool requireRemovedRecord) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::FertilityLifecycleCoordinator::GetSingleton().OnPregnancyLoss(
+            provider, mother, bioFather, reason, requireRemovedRecord);
+    }
+
+    void OnFertilityChildGrewUp(RE::StaticFunctionTag*,
+                                RE::Actor* mother,
+                                std::string childName,
+                                int32_t gender,
+                                bool isNpcNpc,
+                                RE::Actor* fatherHint) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::FertilityLifecycleCoordinator::GetSingleton().OnChildGrewUp(
+            mother, childName, gender, isNpcNpc, fatherHint);
+    }
+
+    void OnFertilityChildGrewUpActor(RE::StaticFunctionTag*,
+                                     RE::Actor* childActor,
+                                     std::string childName) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::FertilityLifecycleCoordinator::GetSingleton().OnChildGrewUpActor(childActor, childName);
+    }
+
+    void OnFertilityChildSentToTraining(RE::StaticFunctionTag*,
+                                        std::string childName,
+                                        std::string trainingLocation,
+                                        std::string className) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::FertilityLifecycleCoordinator::GetSingleton().OnChildSentToTraining(
+            childName, trainingLocation, className);
+    }
+
+    void OnFertilityChildFinishedTraining(RE::StaticFunctionTag*,
+                                            std::string childName,
+                                            std::string trainingLocation,
+                                            std::string className) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::FertilityLifecycleCoordinator::GetSingleton().OnChildFinishedTraining(
+            childName, trainingLocation, className);
+    }
+
+    void OnFertilityAdultChildSpawned(RE::StaticFunctionTag*,
+                                      std::string provider,
+                                      RE::Actor* adultActor,
+                                      RE::Actor* oldChildActor,
+                                      RE::Actor* motherHint,
+                                      RE::Actor* fatherHint,
+                                      std::string childName,
+                                      bool allowFallbackToAdultId,
+                                      bool fireEvent) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        App::FertilityLifecycleCoordinator::GetSingleton().OnAdultChildSpawned(
+            provider, adultActor, oldChildActor, motherHint, fatherHint, childName,
+            allowFallbackToAdultId, fireEvent);
+    }
+
+    int32_t FindFertilityInfantForSpawn(RE::StaticFunctionTag*,
+                                        RE::Actor* mother,
+                                        std::string childName) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::FertilityLifecycleCoordinator::GetSingleton().FindInfantForSpawn(mother, childName);
+    }
+
+    int32_t ResolveFertilitySpawnSyntheticId(RE::StaticFunctionTag*,
+                                             RE::Actor* childActor,
+                                             RE::Actor* bioMother,
+                                             RE::Actor* bioFather,
+                                             int32_t existingSyntheticId,
+                                             float dob,
+                                             std::string childName) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        const float effectiveDob = dob <= 0.0f ? GetCurrentGameDays() : dob;
+        return App::FertilityLifecycleCoordinator::GetSingleton().ResolveFertilitySpawnSyntheticId(
+            childActor, bioMother, bioFather, existingSyntheticId, effectiveDob, childName);
+    }
+
+    bool RegisterNpcFertilityChildSpawn(RE::StaticFunctionTag*,
+                                        RE::Actor* childActor,
+                                        int32_t childId,
+                                        RE::Actor* bioMother,
+                                        RE::Actor* bioFather,
+                                        int32_t stage,
+                                        bool isMigrating) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::FertilityLifecycleCoordinator::GetSingleton().RegisterNpcFertilityChildSpawn(
+            childActor, childId, bioMother, bioFather, stage, isMigrating);
+    }
+
+    RE::Actor* GetFertilitySpawnCoSpouse(RE::StaticFunctionTag*,
+                                         int32_t childId,
+                                         RE::Actor* bioMother,
+                                         RE::Actor* bioFather) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::FertilityLifecycleCoordinator::GetSingleton().GetFertilitySpawnCoSpouse(
+            childId, bioMother, bioFather);
+    }
+
+    int32_t MigrateCompletedFmrNpcChild(RE::StaticFunctionTag*,
+                                        RE::Actor* mother,
+                                        RE::Actor* father,
+                                        float conceptionTime,
+                                        float birthTime) {
+        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+        return App::FertilityLifecycleCoordinator::GetSingleton().MigrateCompletedFmrNpcChild(
+            mother, father, conceptionTime, birthTime);
     }
 
 }  // namespace MARAS::PapyrusInterface

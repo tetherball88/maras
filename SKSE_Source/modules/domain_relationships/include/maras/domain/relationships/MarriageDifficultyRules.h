@@ -72,6 +72,12 @@ namespace MARAS::Domain::Relationships {
         float guildAlignment{ 0.0f };
     };
 
+    struct NoAiDialogueChances {
+        float datingChance{ 0.0f };
+        float loverChance{ 0.0f };
+        float marriageChance{ 0.0f };
+    };
+
     [[nodiscard]] float CalculatePlayerPrestige(
         const MarriageDifficultyConfig& config,
         const MarriageDifficultyInputs& inputs) noexcept;
@@ -83,5 +89,25 @@ namespace MARAS::Domain::Relationships {
     [[nodiscard]] MarriageDifficultyResult CalculateMarriageSuccessChance(
         const MarriageDifficultyConfig& config,
         const MarriageDifficultyInputs& inputs);
+
+    [[nodiscard]] float ComputeLoversLedgerIntimacyBonus(
+        int exclusiveSexCount,
+        int partOfSameGroupSexCount,
+        int playerTopLoverRank) noexcept;
+
+    [[nodiscard]] float ComputeIntimacyAdjustment(
+        bool hasMarriedPartner,
+        bool isSpouseAlsoLover,
+        bool hasEngagedPartner,
+        bool isFianceAlsoLover,
+        bool hasAnyLover,
+        float ttllIntimacyBonus) noexcept;
+
+    [[nodiscard]] NoAiDialogueChances ComputeNoAiDialogueChances(
+        float rawMarriageSuccessChance01,
+        bool alwaysSuccessMarriage,
+        Foundation::RelationshipStatus playerNpcStatus,
+        bool npcHasClosedMainPair,
+        bool playerHasClosedMainPair) noexcept;
 
 }  // namespace MARAS::Domain::Relationships

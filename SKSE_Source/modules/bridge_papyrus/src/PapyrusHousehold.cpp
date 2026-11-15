@@ -141,26 +141,6 @@ namespace MARAS::PapyrusInterface {
         return static_cast<int32_t>(App::HouseholdUseCases::GetSingleton().CountPlayerHouses());
     }
 
-    std::vector<RE::TESObjectREFR*> GetCellDoors(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell) {
-        if (!currentCell) {
-            return {};
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return LookupFormsById<RE::TESObjectREFR>(
-            SpatialWorldIndex::GetSingleton().GetCellDoors(currentCell->GetFormID()));
-    }
-
-    RE::TESObjectCELL* GetNpcOriginalHouse(RE::StaticFunctionTag*, RE::Actor* npc) {
-        if (!npc) {
-            return nullptr;
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        const RE::FormID cellID = SpatialWorldIndex::GetSingleton().GetNpcHome(npc);
-        return cellID != 0 ? RE::TESForm::LookupByID<RE::TESObjectCELL>(cellID) : nullptr;
-    }
-
     RE::TESObjectREFR* GetNpcOriginalHouseCenterMarker(RE::StaticFunctionTag*, RE::Actor* npc) {
         if (!npc) {
             return nullptr;
@@ -194,14 +174,14 @@ namespace MARAS::PapyrusInterface {
         return App::HouseholdUseCases::GetSingleton().ShareHouseWithPlayer(npc->GetFormID());
     }
 
-    bool StopShareHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* npc) {
+    bool StopShareHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* npc, std::string reason) {
         if (!npc) {
             MARAS_LOG_WARN("StopShareHouseWithPlayer: null npc");
             return false;
         }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::HouseholdUseCases::GetSingleton().StopShareHouseWithPlayer(npc->GetFormID());
+        return App::HouseholdUseCases::GetSingleton().StopShareHouseWithPlayer(npc->GetFormID(), reason);
     }
 
     bool IsHouseSharedWithPlayer(RE::StaticFunctionTag*, RE::TESObjectCELL* currentCell) {
@@ -211,20 +191,6 @@ namespace MARAS::PapyrusInterface {
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         return App::HouseholdUseCases::GetSingleton().IsHouseSharedWithPlayer(currentCell->GetFormID());
-    }
-
-    bool HasSpouseSharedHouseWithPlayer(RE::StaticFunctionTag*, RE::Actor* spouse) {
-        if (!spouse) {
-            MARAS_LOG_WARN("HasSpouseSharedHouseWithPlayer: null spouse provided");
-            return false;
-        }
-
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        const RE::FormID houseID = SpatialWorldIndex::GetSingleton().GetNpcHome(spouse);
-        if (houseID == 0) {
-            return false;
-        }
-        return App::HouseholdUseCases::GetSingleton().IsHouseSharedWithPlayer(houseID);
     }
 
     RE::TESObjectREFR* GetTrackedNpcHomeMarker(RE::StaticFunctionTag*, RE::Actor* npc) {

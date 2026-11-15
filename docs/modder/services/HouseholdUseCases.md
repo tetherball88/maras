@@ -6,6 +6,7 @@
 - [HouseholdRules.h](../../../SKSE_Source/modules/domain_household/include/maras/domain/household/HouseholdRules.h) / [HouseholdRules.cpp](../../../SKSE_Source/modules/domain_household/src/HouseholdRules.cpp)
 - [SpouseAssetRules.h](../../../SKSE_Source/modules/domain_household/include/maras/domain/household/SpouseAssetRules.h) / [SpouseAssetRules.cpp](../../../SKSE_Source/modules/domain_household/src/SpouseAssetRules.cpp)
 - [HouseholdEngineOps.h](../../../SKSE_Source/modules/engine/include/maras/engine/HouseholdEngineOps.h) / [HouseholdEngineOps.cpp](../../../SKSE_Source/modules/engine/src/HouseholdEngineOps.cpp)
+- [ChildForcegreetRules.h](../../../SKSE_Source/modules/domain_household/include/maras/domain/household/ChildForcegreetRules.h) / [ChildInteractionCoordinator.h](../../../SKSE_Source/modules/app/include/maras/app/ChildInteractionCoordinator.h)
 - [BedOwnershipReconciler.h](../../../SKSE_Source/modules/engine/include/maras/engine/BedOwnershipReconciler.h) / [BedOwnershipReconciler.cpp](../../../SKSE_Source/modules/engine/src/BedOwnershipReconciler.cpp)
 - [Architecture Overview](../ARCHITECTURE.md)
 
@@ -13,7 +14,7 @@
 
 ## 1. Purpose & Responsibility
 
-`HouseholdUseCases` coordinates player houses, spouse/child tenant assignments, family relocation, shared spouse residences/beds/keys (`'SPAS'`), and adult-child travel schedules (see [`TravelRules`](TravelRules.md)). Pure residency and sharing mutations execute inside `HouseholdRules` and `SpouseAssetRules` on [`WorldStore`](WorldStoreAndCoSave.md), while Skyrim marker, linked-ref, bed-ownership, and cell public-area changes execute through `HouseholdEngineOps` and `BedOwnershipReconciler`.
+`HouseholdUseCases` coordinates player houses, spouse/child tenant assignments, family relocation, shared spouse residences/beds/keys (`'SPAS'`), and adult-child travel schedules (see [`TravelRules`](TravelRules.md)). Pure residency and sharing mutations execute inside `HouseholdRules` and `SpouseAssetRules` on [`WorldStore`](WorldStoreAndCoSave.md), while Skyrim marker, linked-ref, bed-ownership, and cell public-area changes execute through `HouseholdEngineOps` and `BedOwnershipReconciler`. Companion coordinator `ChildInteractionCoordinator` pairs with `ChildForcegreetRules` to handle player household welcome-home forcegreet planning, pet race suitability checks, `'PLC1'` transient critters, allowance/`PoorCounter` tracking, tiered child gifts, and bounds-safe child chest refills.
 
 ---
 
@@ -31,8 +32,8 @@
 
 When the Player marries an NPC with an indexed original residence (detected by [`HomeCellDetector`](HomeCellDetector.md)):
 - **Multi-Spouse Reference Counting (`SharedCellRecord`)**: `ApplyShareCellsWithPlayer` inserts the spouse into `sharingSpouses` for each residential interior cell. `ApplyStopSharingForSpouse` removes the spouse upon divorce, death, or eviction, restoring private status **only** when zero sharing spouses remain in that cell (`!IsCellSharedWithPlayer`).
-- **Safe Public-Area Toggling (`BedOwnershipReconciler`)**: Before setting `cell->SetPublic(true)` so the Player is never flagged for trespassing in their spouse's home, `ApplyCellSharedPublicState` records `originalPublicRecorded` and `originalPublicState`. When `RestoreUnsharedCells` runs on dissolution/eviction, cells that were originally private revert cleanly via `cell->SetPublic(false)`.
-- **Bed Ownership & Keys**: `ApplyShareFurniture` grants Player bed ownership across beds indexed in `SpatialWorldIndex::GetNpcBeds()`, and post-load reconciliation (`FinalizeLoad` $\rightarrow$ `ReconcileTenantsOnLoad` + `ReapplyAllSharedCellsOnLoad` + `ReassertAllTravelOnLoad`) reasserts transient engine cell/bed/package states across save loads.
+- **Safe Public-Area Toggling, Factions & Notifications (`BedOwnershipReconciler` + `FactionReconciler`)**: When a spouse has no indexed home cell, `ApplyShareHomeWithPlayer` assigns `NoInitialHouseFaction` (`0x7F`) and queues `$TTM_MSG_SpouseNoHome`. For indexed homes, `ApplyCellSharedPublicState` records `originalPublicRecorded` and `originalPublicState` before setting `cell->SetPublic(true)` so the Player is never flagged for trespassing, `FactionReconciler` syncs `SharedHouseFaction` (`0x7B`), and `BedOwnershipReconciler` emits `$TTM_MSG_SpouseSharedHome` (and reason-specific `$TTM_MSG_SpouseSharedHomeStopped*` notifications for `"divorce"`, `"deceased"`, `"affection"`, or generic stops when `StopShareHouseWithPlayer` runs). When `RestoreUnsharedCells` runs on dissolution/eviction, cells that were originally private revert cleanly via `cell->SetPublic(false)`.
+- **Bed Ownership & Door Keys (`HouseholdEngineOps::UnlockAndGrantSpouseHomeAccess`)**: `ApplyShareFurniture` grants Player bed ownership across beds indexed in `SpatialWorldIndex::GetNpcBeds()`, `UnlockAndGrantSpouseHomeAccess` unlocks non-keyed lockable cell doors or grants missing door keys to the Player, and post-load reconciliation (`FinalizeLoad` $\rightarrow$ `ReconcileTenantsOnLoad` + `ReapplyAllSharedCellsOnLoad` + `ReassertAllTravelOnLoad`) reasserts transient engine cell/bed/package states across save loads.
 
 ---
 

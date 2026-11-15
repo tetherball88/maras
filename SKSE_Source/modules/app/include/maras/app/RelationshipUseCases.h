@@ -505,15 +505,6 @@ namespace MARAS::App {
             float dungeonsCleared,
             float dragonSoulsCollected,
             bool playerKiller) const;
-        [[nodiscard]] float CalculateMarriageSuccessChance(RE::Actor* npc,
-                                                           float intimacyAdjustment,
-                                                           float mostGold,
-                                                           float housesOwned,
-                                                           float horsesOwned,
-                                                           float questsCompleted,
-                                                           float dungeonsCleared,
-                                                           float dragonSoulsCollected,
-                                                           bool playerKiller) const;
         [[nodiscard]] float CalculatePlayerPrestige(float mostGold,
                                                     float housesOwned,
                                                     float horsesOwned,
@@ -540,7 +531,8 @@ namespace MARAS::App {
                                 Foundation::RelationshipStatus status,
                                 RE::FormID explicitInitiatorID,
                                 bool sendEvent,
-                                bool breakLovers);
+                                bool breakLovers,
+                                bool partnerCheatedOnPlayer = false);
         [[nodiscard]] static RE::FormID DetermineDefaultInitiator(RE::FormID actorA, RE::FormID actorB);
 
         [[nodiscard]] std::size_t CountPartnersWithStatus(RE::FormID npcFormID,

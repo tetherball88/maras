@@ -72,6 +72,15 @@ namespace MARAS::App {
                 }
                 return RE::BSScript::LatentStatus::kStarted;
             }
+            void ShowConfirmationModalWithCallback(const char*,
+                                                 const std::vector<RE::Actor*>&,
+                                                 const std::vector<RE::Actor*>&,
+                                                 const char*,
+                                                 std::function<void(std::int32_t)> onResult) override {
+                if (onResult) {
+                    onResult(5);
+                }
+            }
             void Revert() override {}
         };
 
@@ -147,6 +156,45 @@ namespace MARAS::App {
             bool RequestActorProfileUpdate(std::uint32_t, const std::string&, const std::string&) override {
                 return false;
             }
+            void RevertEvents() noexcept override {}
+            void SuppressNextActionNarration(float) noexcept override {}
+            bool IsActionNarrationSuppressed() const noexcept override { return false; }
+            void EmitDirectNarration(
+                std::string_view, std::uint32_t, std::uint32_t, bool, const std::vector<std::uint32_t>&) override {}
+            void EmitPolygamyBlessing(std::uint32_t) override {}
+            void EmitAffectionGift(std::string_view, std::uint32_t) override {}
+            void EmitMaritalStatusChange(std::uint32_t, std::uint32_t, std::string_view, bool) override {}
+            void EmitOpenRelationshipChange(std::uint32_t, std::uint32_t, bool, bool) override {}
+            void EmitSpouseHierarchyChange(std::uint32_t, bool) override {}
+            void EmitSpouseAffectionChange(std::uint32_t, std::string_view, std::string_view) override {}
+            void EmitProposalDecision(std::uint32_t, std::uint32_t, std::string_view, std::string_view, bool) override {}
+            void EmitActionDecline(
+                std::uint32_t,
+                std::uint32_t,
+                std::uint32_t,
+                std::uint32_t,
+                std::string_view,
+                std::string_view,
+                bool) override {}
+            void EmitChildAdopted(std::uint32_t, std::uint32_t, std::uint32_t) override {}
+            void EmitChildInherited(std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t) override {}
+            void EmitChildParentsChanged(std::uint32_t, std::uint32_t, std::uint32_t, std::string_view) override {}
+            void EmitPregnancyAnnounced(
+                std::uint32_t, std::uint32_t, std::uint32_t, std::string_view, std::int32_t) override {}
+            void EmitPregnancyLost(std::uint32_t, std::uint32_t, std::string_view) override {}
+            void EmitLaborStarted(std::uint32_t, std::uint32_t, std::int32_t) override {}
+            void EmitLaborProgress(std::uint32_t, std::int32_t, std::int32_t) override {}
+            void EmitChildBirthBatch(std::uint32_t, const std::vector<std::uint32_t>&) override {}
+            void EmitChildBirth(std::uint32_t, std::string_view) override {}
+            void EmitChildGrewUp(std::uint32_t, std::string_view) override {}
+            void EmitChildSentToTraining(std::uint32_t, std::string_view, std::string_view) override {}
+            void EmitChildBecameAdult(std::uint32_t, std::string_view) override {}
+            void EmitPaternitySecretResolved(std::uint32_t, std::string_view) override {}
+            void EmitAffairConfessed(std::uint32_t, std::uint32_t, std::uint32_t) override {}
+            void EmitAffairExposed(std::uint32_t, std::uint32_t, std::uint32_t) override {}
+            void EmitAffairResolved(std::uint32_t, std::uint32_t, std::uint32_t, std::string_view) override {}
+            void EmitCheatingCaught(std::uint32_t, std::uint32_t, std::uint32_t, bool) override {}
+            void EmitOpenRelationshipWalkIn(std::uint32_t, std::uint32_t, std::uint32_t, bool) override {}
         };
 
         IUiBridgeGateway& GetDefaultUiBridgeGateway() noexcept {

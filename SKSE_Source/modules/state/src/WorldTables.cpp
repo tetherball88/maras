@@ -1004,7 +1004,38 @@ namespace MARAS::State {
     }
 
     bool LineageTable::EraseChild(ChildId id) noexcept {
+        for (auto& [motherId, batch] : activeDeliveryBatches_) {
+            (void)motherId;
+            auto& born = batch.bornChildIds;
+            born.erase(std::remove(born.begin(), born.end(), id), born.end());
+        }
         return children_.erase(id) > 0;
+    }
+
+    const ActiveDeliveryBatch* LineageTable::FindActiveDeliveryBatch(ActorId mother) const noexcept {
+        if (mother.IsNull()) {
+            return nullptr;
+        }
+        const auto it = activeDeliveryBatches_.find(mother);
+        return it == activeDeliveryBatches_.end() ? nullptr : &it->second;
+    }
+
+    ActiveDeliveryBatch* LineageTable::FindActiveDeliveryBatchMutable(ActorId mother) noexcept {
+        if (mother.IsNull()) {
+            return nullptr;
+        }
+        const auto it = activeDeliveryBatches_.find(mother);
+        return it == activeDeliveryBatches_.end() ? nullptr : &it->second;
+    }
+
+    ActiveDeliveryBatch& LineageTable::UpsertActiveDeliveryBatch(ActorId mother, ActiveDeliveryBatch batch) {
+        auto [it, inserted] = activeDeliveryBatches_.insert_or_assign(mother, std::move(batch));
+        (void)inserted;
+        return it->second;
+    }
+
+    bool LineageTable::EraseActiveDeliveryBatch(ActorId mother) noexcept {
+        return activeDeliveryBatches_.erase(mother) > 0;
     }
 
     std::vector<ChildId> LineageTable::GetChildrenOfGuardian(ActorId guardian) const {
@@ -1061,6 +1092,7 @@ namespace MARAS::State {
         nextSyntheticChildRaw_ = Foundation::kSyntheticChildMinRawId + 1u;
         children_.clear();
         pendingChildrenByBase_.clear();
+        activeDeliveryBatches_.clear();
     }
 
     // =========================================================================
@@ -1367,8 +1399,23 @@ namespace MARAS::State {
         return childStates_.erase(childId) > 0;
     }
 
+    bool HouseholdTable::HasAnyPlc1State() const noexcept {
+        if (poorCounter_ > 0 || nameCallingUsedLast_) {
+            return true;
+        }
+        for (const auto& [cId, st] : childStates_) {
+            (void)cId;
+            if (!st.transientCritterId.IsNull()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void HouseholdTable::ClearOnlyPlayerChildrenRecords() noexcept {
         childChestIntroduced_ = false;
+        poorCounter_ = 0;
+        nameCallingUsedLast_ = false;
         childStates_.clear();
     }
 
@@ -1403,6 +1450,8 @@ namespace MARAS::State {
         sharedCells_.clear();
         originalBedOwners_.clear();
         childChestIntroduced_ = false;
+        poorCounter_ = 0;
+        nameCallingUsedLast_ = false;
         childStates_.clear();
         childFactionSnapshots_.clear();
         adultChildTravel_.clear();
@@ -1607,6 +1656,10 @@ namespace MARAS::State {
 
     void CooldownTable::EraseActor(ActorId actor) noexcept {
         npcLastMatchmakingChangeDay.erase(actor);
+        npcBrokeupTime.erase(actor);
+        npcLastTimeSharedIncome.erase(actor);
+        movedSceneActors.erase(actor);
+        EraseValue(skyrimNetMutedActors, actor);
         for (auto it = banterCoupleCooldowns.begin(); it != banterCoupleCooldowns.end();) {
             if (it->first.Contains(actor)) {
                 it = banterCoupleCooldowns.erase(it);

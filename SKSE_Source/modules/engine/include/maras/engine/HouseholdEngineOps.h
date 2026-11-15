@@ -33,6 +33,9 @@ namespace MARAS {
         // Post-load engine sync for globals and all non-child house tenants.
         void ReconcileTenantsOnLoad();
 
+        // Unlocks pickable spouse home doors and grants missing house keys to the Player.
+        void UnlockAndGrantSpouseHomeAccess(RE::FormID homeCellFormId);
+
     private:
         HouseholdEngineOps() = default;
         ~HouseholdEngineOps() = default;

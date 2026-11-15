@@ -143,6 +143,8 @@ namespace MARAS::State {
                 dst.SetOriginalBedOwner(bedRef, ownerId);
             }
             dst.SetChildChestIntroduced(src.IsChildChestIntroduced());
+            dst.SetPoorCounter(src.GetPoorCounter());
+            dst.SetNameCallingUsedLast(src.IsNameCallingUsedLast());
             for (const auto& [cId, cState] : src.AllChildStates()) {
                 dst.UpsertChildState(cState);
             }
@@ -165,6 +167,8 @@ namespace MARAS::State {
                 }
             }
             dst.SetChildChestIntroduced(src.IsChildChestIntroduced());
+            dst.SetPoorCounter(src.GetPoorCounter());
+            dst.SetNameCallingUsedLast(src.IsNameCallingUsedLast());
             for (const auto& [cId, cState] : src.AllChildStates()) {
                 dst.UpsertChildState(cState);
             }
@@ -521,6 +525,39 @@ namespace MARAS::State {
                 }
             }
 
+            // 6f. Optional Inline Extension Block 'FRT1' (omitted when activeDeliveryBatches is empty)
+            if (!lineage.AllActiveDeliveryBatches().empty()) {
+                std::vector<ActorId> sortedBatchMothers;
+                sortedBatchMothers.reserve(lineage.AllActiveDeliveryBatches().size());
+                for (const auto& [motherId, batch] : lineage.AllActiveDeliveryBatches()) {
+                    (void)batch;
+                    sortedBatchMothers.push_back(motherId);
+                }
+                std::sort(sortedBatchMothers.begin(), sortedBatchMothers.end());
+
+                if (!writer.WritePod(CoSaveConstants::kExtFertilityBatchFRT1) ||
+                    !writer.WritePod(static_cast<std::uint32_t>(sortedBatchMothers.size()))) {
+                    return false;
+                }
+                for (const ActorId motherId : sortedBatchMothers) {
+                    const ActiveDeliveryBatch* batch = lineage.FindActiveDeliveryBatch(motherId);
+                    if (!batch) {
+                        return false;
+                    }
+                    if (!writer.WritePod(motherId.raw()) ||
+                        !writer.WritePod(batch->laborTotal) ||
+                        !writer.WritePod(batch->laborStartGameDay) ||
+                        !writer.WritePod(static_cast<std::uint32_t>(batch->bornChildIds.size()))) {
+                        return false;
+                    }
+                    for (const ChildId cid : batch->bornChildIds) {
+                        if (!writer.WritePod(cid.raw())) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
             return true;
         }
 
@@ -735,6 +772,28 @@ namespace MARAS::State {
                     return false;
                 }
             }
+
+            // Optional trailing 'PLC1' extension — omitted when all Phase 7 child/forcegreet state is default/empty
+            if (hh.HasAnyPlc1State()) {
+                std::vector<ChildId> transientChildIds;
+                for (const ChildId cId : childIds) {
+                    if (!hh.AllChildStates().at(cId).transientCritterId.IsNull()) {
+                        transientChildIds.push_back(cId);
+                    }
+                }
+                if (!writer.WritePod(CoSaveConstants::kExtPlayerChildrenStatePLC1) ||
+                    !writer.WritePod(hh.GetPoorCounter()) ||
+                    !writer.WritePod(hh.IsNameCallingUsedLast()) ||
+                    !writer.WritePod(static_cast<std::uint32_t>(transientChildIds.size()))) {
+                    return false;
+                }
+                for (const ChildId cId : transientChildIds) {
+                    const RefId critterId = hh.AllChildStates().at(cId).transientCritterId;
+                    if (!writer.WritePod(cId.raw()) || !writer.WritePod(critterId.raw())) {
+                        return false;
+                    }
+                }
+            }
             return true;
         }
 
@@ -814,6 +873,48 @@ namespace MARAS::State {
             for (const LocationId locId : locIds) {
                 if (!writer.WritePod(locId.raw()) || !writer.WritePod(cd.lastHomeArrivalEventDayByLoc.at(locId))) {
                     return false;
+                }
+            }
+
+            if (cd.HasAnyPhase3RelState()) {
+                if (!writer.WritePod(CoSaveConstants::kExtRelationshipStateREL1) ||
+                    !writer.WritePod(cd.lastTimePaidDivorceFee) ||
+                    !writer.WritePod(cd.playerKiller) ||
+                    !writer.WritePod(cd.playerHadWedding) ||
+                    !writer.WritePod(cd.dontShowSkipWeddingMessage)) {
+                    return false;
+                }
+
+                std::vector<ActorId> brokeupIds;
+                brokeupIds.reserve(cd.npcBrokeupTime.size());
+                for (const auto& [id, day] : cd.npcBrokeupTime) {
+                    (void)day;
+                    brokeupIds.push_back(id);
+                }
+                std::sort(brokeupIds.begin(), brokeupIds.end());
+                if (!writer.WritePod(static_cast<std::uint32_t>(brokeupIds.size()))) {
+                    return false;
+                }
+                for (const ActorId id : brokeupIds) {
+                    if (!writer.WritePod(id.raw()) || !writer.WritePod(cd.npcBrokeupTime.at(id))) {
+                        return false;
+                    }
+                }
+
+                std::vector<ActorId> incomeIds;
+                incomeIds.reserve(cd.npcLastTimeSharedIncome.size());
+                for (const auto& [id, day] : cd.npcLastTimeSharedIncome) {
+                    (void)day;
+                    incomeIds.push_back(id);
+                }
+                std::sort(incomeIds.begin(), incomeIds.end());
+                if (!writer.WritePod(static_cast<std::uint32_t>(incomeIds.size()))) {
+                    return false;
+                }
+                for (const ActorId id : incomeIds) {
+                    if (!writer.WritePod(id.raw()) || !writer.WritePod(cd.npcLastTimeSharedIncome.at(id))) {
+                        return false;
+                    }
                 }
             }
             return true;
@@ -980,7 +1081,51 @@ namespace MARAS::State {
                     return false;
                 }
             }
-            return writer.WritePod(cd.lastBanterSceneDay);
+            if (!writer.WritePod(cd.lastBanterSceneDay)) {
+                return false;
+            }
+
+            // Optional trailing 'BNT1' extension — omitted when no moved actors or muted SkyrimNet participants exist
+            if (cd.HasAnyBnt1State()) {
+                std::vector<ActorId> movedActors;
+                movedActors.reserve(cd.movedSceneActors.size());
+                for (const auto& [actorId, markerId] : cd.movedSceneActors) {
+                    if (!actorId.IsNull() && !actorId.IsPlayer() && !markerId.IsNull()) {
+                        movedActors.push_back(actorId);
+                    }
+                }
+                std::sort(movedActors.begin(), movedActors.end());
+
+                std::vector<ActorId> mutedActors;
+                mutedActors.reserve(cd.skyrimNetMutedActors.size());
+                for (const ActorId actorId : cd.skyrimNetMutedActors) {
+                    if (!actorId.IsNull() && !actorId.IsPlayer()) {
+                        mutedActors.push_back(actorId);
+                    }
+                }
+                std::sort(mutedActors.begin(), mutedActors.end());
+                mutedActors.erase(std::unique(mutedActors.begin(), mutedActors.end()), mutedActors.end());
+
+                if (!writer.WritePod(CoSaveConstants::kExtBanterSceneStateBNT1) ||
+                    !writer.WritePod(static_cast<std::uint32_t>(movedActors.size()))) {
+                    return false;
+                }
+                for (const ActorId actorId : movedActors) {
+                    const RefId markerId = cd.movedSceneActors.at(actorId);
+                    if (!writer.WritePod(actorId.raw()) || !writer.WritePod(markerId.raw())) {
+                        return false;
+                    }
+                }
+                if (!writer.WritePod(static_cast<std::uint32_t>(mutedActors.size()))) {
+                    return false;
+                }
+                for (const ActorId actorId : mutedActors) {
+                    if (!writer.WritePod(actorId.raw())) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
 
         bool SaveChunkACTR(const WorldState& state, ICoSaveWriter& writer) {
@@ -1925,6 +2070,53 @@ namespace MARAS::State {
                                                                 }
                                                             }
                                                         }
+
+                                                        // 'FRT1' (optional active fertility delivery batches)
+                                                        if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                                                            std::uint32_t frtMagic = 0;
+                                                            if (!chunk.ReadValue(frtMagic)) {
+                                                                return false;
+                                                            }
+                                                            if (frtMagic == CoSaveConstants::kExtFertilityBatchFRT1) {
+                                                                std::uint32_t frtCount = 0;
+                                                                if (!chunk.ReadValue(frtCount) || frtCount > kMaxSerializedEntries) {
+                                                                    return false;
+                                                                }
+                                                                for (std::uint32_t fIdx = 0; fIdx < frtCount; ++fIdx) {
+                                                                    std::uint32_t oldMother = 0;
+                                                                    std::int32_t laborTotal = 0;
+                                                                    float laborStartDay = 0.0f;
+                                                                    std::uint32_t bornCount = 0;
+                                                                    if (!chunk.ReadValue(oldMother) ||
+                                                                        !chunk.ReadValue(laborTotal) ||
+                                                                        !chunk.ReadValue(laborStartDay) ||
+                                                                        !chunk.ReadValue(bornCount) ||
+                                                                        bornCount > kMaxSerializedEntries) {
+                                                                        return false;
+                                                                    }
+                                                                    std::vector<ChildId> resolvedBorn;
+                                                                    resolvedBorn.reserve(bornCount);
+                                                                    for (std::uint32_t bIdx = 0; bIdx < bornCount; ++bIdx) {
+                                                                        std::uint32_t oldChild = 0;
+                                                                        if (!chunk.ReadValue(oldChild)) {
+                                                                            return false;
+                                                                        }
+                                                                        std::uint32_t newChild = 0;
+                                                                        if (ResolveActorOrSpecialRaw(resolver, oldChild, newChild, false, false, true, true)) {
+                                                                            resolvedBorn.emplace_back(newChild);
+                                                                        }
+                                                                    }
+                                                                    std::uint32_t newMother = 0;
+                                                                    if (ResolveActorOrSpecialRaw(resolver, oldMother, newMother, false, false, false, true)) {
+                                                                        ActiveDeliveryBatch batch{};
+                                                                        batch.laborTotal = laborTotal;
+                                                                        batch.laborStartGameDay = laborStartDay;
+                                                                        batch.bornChildIds = std::move(resolvedBorn);
+                                                                        stagedLineage.UpsertActiveDeliveryBatch(ActorId{ newMother }, std::move(batch));
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2286,6 +2478,42 @@ namespace MARAS::State {
                 staged.UpsertChildState(std::move(rec));
             }
 
+            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                std::uint32_t extTag = 0;
+                if (!chunk.ReadValue(extTag) || extTag != CoSaveConstants::kExtPlayerChildrenStatePLC1) {
+                    return false;
+                }
+                std::int32_t poorCounter = 0;
+                bool nameCallingUsedLast = false;
+                std::uint32_t transientCount = 0;
+                if (!chunk.ReadValue(poorCounter) ||
+                    !chunk.ReadValue(nameCallingUsedLast) ||
+                    !chunk.ReadValue(transientCount) ||
+                    transientCount > kMaxTenants) {
+                    return false;
+                }
+                staged.SetPoorCounter(poorCounter);
+                staged.SetNameCallingUsedLast(nameCallingUsedLast);
+
+                for (std::uint32_t t = 0; t < transientCount; ++t) {
+                    std::uint32_t oldChild = 0;
+                    std::uint32_t oldCritter = 0;
+                    if (!chunk.ReadValue(oldChild) || !chunk.ReadValue(oldCritter)) {
+                        return false;
+                    }
+                    std::uint32_t newChild = 0;
+                    std::uint32_t newCritter = 0;
+                    if (!Foundation::IsSyntheticChildRawId(oldChild) &&
+                        ResolveActorOrSpecialRaw(resolver, oldChild, newChild, false, false, false, true) &&
+                        ResolveActorOrSpecialRaw(resolver, oldCritter, newCritter, false, false, false, true) &&
+                        newChild != 0 && newCritter != 0) {
+                        if (auto* childState = staged.FindChildStateMutable(ChildId{ newChild })) {
+                            childState->transientCritterId = RefId{ newCritter };
+                        }
+                    }
+                }
+            }
+
             state.household.Reset(std::move(staged));
             return true;
         }
@@ -2400,6 +2628,59 @@ namespace MARAS::State {
                             }
                         }
                     }
+                }
+            }
+
+            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                std::uint32_t relMagic = 0;
+                if (!chunk.ReadValue(relMagic)) {
+                    return false;
+                }
+                if (relMagic == CoSaveConstants::kExtRelationshipStateREL1) {
+                    if (!chunk.ReadValue(staged.lastTimePaidDivorceFee) ||
+                        !chunk.ReadValue(staged.playerKiller) ||
+                        !chunk.ReadValue(staged.playerHadWedding) ||
+                        !chunk.ReadValue(staged.dontShowSkipWeddingMessage)) {
+                        return false;
+                    }
+
+                    std::uint32_t brokeupCount = 0;
+                    if (!chunk.ReadValue(brokeupCount) || brokeupCount > kMaxSerializedEntries) {
+                        return false;
+                    }
+                    for (std::uint32_t i = 0; i < brokeupCount; ++i) {
+                        std::uint32_t savedId = 0;
+                        float day = -1.0f;
+                        if (!chunk.ReadValue(savedId) || !chunk.ReadValue(day)) {
+                            return false;
+                        }
+                        std::uint32_t resolvedId = 0;
+                        if (!Foundation::IsSyntheticChildRawId(savedId) &&
+                            ResolveActorOrSpecialRaw(resolver, savedId, resolvedId, false, false, false, true) &&
+                            resolvedId != 0) {
+                            staged.npcBrokeupTime[ActorId{ resolvedId }] = day;
+                        }
+                    }
+
+                    std::uint32_t incomeCount = 0;
+                    if (!chunk.ReadValue(incomeCount) || incomeCount > kMaxSerializedEntries) {
+                        return false;
+                    }
+                    for (std::uint32_t i = 0; i < incomeCount; ++i) {
+                        std::uint32_t savedId = 0;
+                        float day = -1.0f;
+                        if (!chunk.ReadValue(savedId) || !chunk.ReadValue(day)) {
+                            return false;
+                        }
+                        std::uint32_t resolvedId = 0;
+                        if (!Foundation::IsSyntheticChildRawId(savedId) &&
+                            ResolveActorOrSpecialRaw(resolver, savedId, resolvedId, false, false, false, true) &&
+                            resolvedId != 0) {
+                            staged.npcLastTimeSharedIncome[ActorId{ resolvedId }] = day;
+                        }
+                    }
+                } else {
+                    return false;
                 }
             }
 
@@ -2675,6 +2956,7 @@ namespace MARAS::State {
 
             CooldownTable staged = state.cooldowns.Read();
             staged.ClearBanter(cooldownHours);
+            staged.ClearBanterSceneRuntimeState();
 
             for (std::uint32_t i = 0; i < count; ++i) {
                 std::uint32_t oldA = 0;
@@ -2697,8 +2979,65 @@ namespace MARAS::State {
 
             if (version >= 2 && chunk.HasRemaining(sizeof(float))) {
                 float lastSceneDay = -1.0f;
-                if (chunk.ReadValue(lastSceneDay)) {
-                    staged.lastBanterSceneDay = lastSceneDay;
+                if (!chunk.ReadValue(lastSceneDay)) {
+                    return false;
+                }
+                staged.lastBanterSceneDay = lastSceneDay;
+
+                if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                    std::uint32_t extTag = 0;
+                    std::uint32_t movedCount = 0;
+                    if (!chunk.ReadValue(extTag) ||
+                        extTag != CoSaveConstants::kExtBanterSceneStateBNT1 ||
+                        !chunk.ReadValue(movedCount) ||
+                        movedCount > kMaxSerializedEntries) {
+                        return false;
+                    }
+                    for (std::uint32_t m = 0; m < movedCount; ++m) {
+                        std::uint32_t oldActor = 0;
+                        std::uint32_t oldMarker = 0;
+                        if (!chunk.ReadValue(oldActor) || !chunk.ReadValue(oldMarker)) {
+                            return false;
+                        }
+                        std::uint32_t newActor = 0;
+                        if (Foundation::IsSyntheticChildRawId(oldActor) ||
+                            !ResolveActorOrSpecialRaw(resolver, oldActor, newActor, false, false, false, true) ||
+                            newActor == 0 || newActor == Foundation::kPlayerRefRawId) {
+                            continue;
+                        }
+                        std::uint32_t newMarker = 0;
+                        if (Foundation::IsDynamicPrefixRawId(oldMarker)) {
+                            if (oldMarker != 0xFFFFFFFFu) {
+                                newMarker = oldMarker;
+                            }
+                        } else if (oldMarker != 0) {
+                            (void)resolver.ResolveFormId(oldMarker, newMarker);
+                        }
+                        if (newMarker != 0) {
+                            staged.movedSceneActors[ActorId{ newActor }] = RefId{ newMarker };
+                        }
+                    }
+
+                    std::uint32_t mutedCount = 0;
+                    if (!chunk.ReadValue(mutedCount) || mutedCount > kMaxSerializedEntries) {
+                        return false;
+                    }
+                    std::unordered_set<ActorId> seenMuted;
+                    for (std::uint32_t u = 0; u < mutedCount; ++u) {
+                        std::uint32_t oldActor = 0;
+                        if (!chunk.ReadValue(oldActor)) {
+                            return false;
+                        }
+                        std::uint32_t newActor = 0;
+                        if (!Foundation::IsSyntheticChildRawId(oldActor) &&
+                            ResolveActorOrSpecialRaw(resolver, oldActor, newActor, false, false, false, true) &&
+                            newActor != 0 && newActor != Foundation::kPlayerRefRawId) {
+                            const ActorId actor{ newActor };
+                            if (seenMuted.insert(actor).second) {
+                                staged.skyrimNetMutedActors.push_back(actor);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -3168,6 +3507,26 @@ namespace MARAS::State {
                 result.changed = true;
             }
 
+            // Clear orphaned dynamic or deceased transient critters from surviving child states ('PLC1')
+            std::vector<ChildId> staleTransientCritterChildren;
+            for (const auto& [cId, cState] : state.household->AllChildStates()) {
+                if (cState.transientCritterId.IsNull()) {
+                    continue;
+                }
+                const ActorId critterActor{ cState.transientCritterId.raw() };
+                if (isOrphanedDynamicRaw(cState.transientCritterId.raw()) ||
+                    state.deceased->IsDeceased(critterActor) ||
+                    !resolver.IsAliveAndValid(critterActor)) {
+                    staleTransientCritterChildren.push_back(cId);
+                }
+            }
+            for (const ChildId cId : staleTransientCritterChildren) {
+                if (auto* mutableState = state.household.Write().FindChildStateMutable(cId)) {
+                    mutableState->transientCritterId = RefId{};
+                    result.changed = true;
+                }
+            }
+
             // Prune stale CFSN snapshots & ACTR travel entries
             std::vector<ChildId> staleSnapshots;
             for (const auto& [cId, snap] : state.household->AllChildFactionSnapshots()) {
@@ -3220,6 +3579,106 @@ namespace MARAS::State {
             }
             for (const ActorId actor : deadAffectionActors) {
                 state.affection.Write().EraseActor(actor);
+            }
+
+            // Prune deceased / orphaned actors from CooldownTable actor maps & 'BNT1' runtime tracking
+            // Note: movedSceneActors's marker RefId may be a dynamic 0xFFxxxxxx XMarker TESObjectREFR
+            // (not an Actor), so we validate movedSceneActors keys only and leave marker validation to engine lookup.
+            std::unordered_set<ActorId> deadCooldownActors;
+            auto isStaleCooldownActor = [&](ActorId actor) -> bool {
+                return actor.IsNull() ||
+                       actor.IsPlayer() ||
+                       actor.IsSyntheticChild() ||
+                       isOrphanedDynamicRaw(actor.raw()) ||
+                       state.deceased->IsDeceased(actor) ||
+                       !resolver.IsAliveAndValid(actor);
+            };
+            auto collectDeadCooldownActors = [&](const std::unordered_map<ActorId, float>& map) {
+                for (const auto& [actor, day] : map) {
+                    (void)day;
+                    if (isStaleCooldownActor(actor)) {
+                        deadCooldownActors.insert(actor);
+                    }
+                }
+            };
+            collectDeadCooldownActors(state.cooldowns->npcLastMatchmakingChangeDay);
+            collectDeadCooldownActors(state.cooldowns->npcBrokeupTime);
+            collectDeadCooldownActors(state.cooldowns->npcLastTimeSharedIncome);
+            for (const auto& [actor, marker] : state.cooldowns->movedSceneActors) {
+                (void)marker;
+                if (isStaleCooldownActor(actor)) {
+                    deadCooldownActors.insert(actor);
+                }
+            }
+            for (const ActorId actor : state.cooldowns->skyrimNetMutedActors) {
+                if (isStaleCooldownActor(actor)) {
+                    deadCooldownActors.insert(actor);
+                }
+            }
+            for (const ActorId actor : deadCooldownActors) {
+                state.cooldowns.Write().EraseActor(actor);
+                result.changed = true;
+            }
+            if (!state.cooldowns->skyrimNetMutedActors.empty()) {
+                std::unordered_set<ActorId> seenMuted;
+                bool hasDup = false;
+                for (const ActorId actor : state.cooldowns->skyrimNetMutedActors) {
+                    if (!seenMuted.insert(actor).second) {
+                        hasDup = true;
+                        break;
+                    }
+                }
+                if (hasDup) {
+                    std::unordered_set<ActorId> dedup;
+                    std::vector<ActorId> cleaned;
+                    cleaned.reserve(state.cooldowns->skyrimNetMutedActors.size());
+                    for (const ActorId actor : state.cooldowns->skyrimNetMutedActors) {
+                        if (dedup.insert(actor).second) {
+                            cleaned.push_back(actor);
+                        }
+                    }
+                    state.cooldowns.Write().skyrimNetMutedActors = std::move(cleaned);
+                    result.changed = true;
+                }
+            }
+
+            // Prune orphaned / deceased mothers and missing child references from ActiveDeliveryBatches ('FRT1')
+            std::vector<ActorId> deadBatchMothers;
+            std::vector<std::pair<ActorId, std::vector<ChildId>>> updatedBatchBorn;
+            for (const auto& [motherId, batch] : state.lineage->AllActiveDeliveryBatches()) {
+                if (isOrphanedDynamicRaw(motherId.raw()) || state.deceased->IsDeceased(motherId) ||
+                    !resolver.IsAliveAndValid(motherId)) {
+                    deadBatchMothers.push_back(motherId);
+                    continue;
+                }
+                bool anyMissingChild = false;
+                for (const ChildId cid : batch.bornChildIds) {
+                    if (!state.lineage->FindChild(cid)) {
+                        anyMissingChild = true;
+                        break;
+                    }
+                }
+                if (anyMissingChild) {
+                    std::vector<ChildId> validBorn;
+                    validBorn.reserve(batch.bornChildIds.size());
+                    for (const ChildId cid : batch.bornChildIds) {
+                        if (state.lineage->FindChild(cid)) {
+                            validBorn.push_back(cid);
+                        }
+                    }
+                    updatedBatchBorn.emplace_back(motherId, std::move(validBorn));
+                }
+            }
+            if (!deadBatchMothers.empty() || !updatedBatchBorn.empty()) {
+                auto& lineageWrite = state.lineage.Write();
+                for (const ActorId motherId : deadBatchMothers) {
+                    lineageWrite.EraseActiveDeliveryBatch(motherId);
+                }
+                for (auto& [motherId, validBorn] : updatedBatchBorn) {
+                    if (auto* batch = lineageWrite.FindActiveDeliveryBatchMutable(motherId)) {
+                        batch->bornChildIds = std::move(validBorn);
+                    }
+                }
             }
         }
 

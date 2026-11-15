@@ -4,6 +4,7 @@
 #include "maras/state/WorldTables.h"
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -34,7 +35,7 @@ namespace MARAS {
 
         // Full engine+store workflows for sharing/unsharing an NPC's home cell & beds with the Player.
         bool ApplyShareHomeWithPlayer(RE::FormID npcFormId);
-        bool StopShareHomeWithPlayer(RE::FormID npcFormId);
+        bool StopShareHomeWithPlayer(RE::FormID npcFormId, std::string_view reason = "");
 
         // Re-applies all shared cells' public flags and bed ownership after loading a save game.
         void ReapplyAllSharedCellsOnLoad();

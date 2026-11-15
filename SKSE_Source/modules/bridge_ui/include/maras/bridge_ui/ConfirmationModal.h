@@ -3,6 +3,7 @@
 #include <RE/Skyrim.h>
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace MARAS::Bridge::Ui {
@@ -15,6 +16,14 @@ namespace MARAS::Bridge::Ui {
 
         /// Returns true if the given action/actor pair is currently within its confirmation cooldown window.
         static bool IsOnCooldown(const char* actionType, const std::vector<RE::Actor*>& actors);
+
+        /// Displays a confirmation modal dialog and invokes `onResult` on the main thread with the result code (0..5).
+        static void ShowWithCallback(
+            const char* actionType,
+            const std::vector<RE::Actor*>& mainActors,
+            const std::vector<RE::Actor*>& secondaryActors,
+            const char* paramsJson,
+            std::function<void(std::int32_t)> onResult);
 
         /// Displays a latent confirmation modal dialog to the player (resolves Papyrus stack with result code).
         static RE::BSScript::LatentStatus Show(

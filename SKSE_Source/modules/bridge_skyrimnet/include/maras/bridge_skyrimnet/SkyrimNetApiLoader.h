@@ -25,7 +25,7 @@ namespace MARAS::Bridge::SkyrimNet {
     // Checks whether SkyrimNet live narration/triggers should fire for the given event participant(s).
     [[nodiscard]] bool ShouldTriggerSkyrimNetNarration(RE::Actor* speaker, RE::Actor* target = nullptr);
 
-    // Registers an event with SkyrimNet via PublicRegisterEvent (including _marasMemory intercept).
+    // Registers an event with SkyrimNet via PublicRegisterEvent.
     bool RegisterSkyrimNetEvent(const std::string& eventType,
                                 const std::string& content,
                                 std::uint32_t originatorFormID = 0,

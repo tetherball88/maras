@@ -53,3 +53,15 @@ Applies to **Permanent Social Class Buffs**:
 - **Main-Thread Marshalling**: `ReconcilePlayerBuffs()` checks `DeferredActorResolver::CanSyncEngineInline()`. Off-thread callers coalesce via `pendingReconcile_` atomic exchange into a single `SessionEpoch`-guarded SKSE main-thread task acquiring `GetPapyrusMutex()`.
 - **Grouped Perk Updates**: `RebuildCacheIfNeeded()` groups multiple bonus entries referencing the same `RE::BGSPerk*`. When no entry in a perk group is active, `BuffReconciler` removes the perk; when magnitudes drift beyond `kMagnitudeEpsilon = 1e-5` (or `forceRefreshOnLoad_` is set post-load), it patches spell/entry-point magnitudes and cycles `RemovePerk` $\rightarrow$ `AddPerk` cleanly so Skyrim recalculates active magic effects immediately.
 - **Dashboard Reporting (`EvaluateHouseholdBuffs`)**: [`HouseholdBuffsJsonBuilder`](PrismaUIDataBridge.md) evaluates the identical `SpouseBuffRules` snapshot purely read-only to display live bonuses, active contributors, and at-home potential follower contributors.
+
+---
+
+## 5. Sleep Rested Abilities & Partner Sleep Affection (`SleepEventSink`)
+
+When `RE::TESSleepStopEvent` fires, [`SleepEventSink`](../../../SKSE_Source/modules/engine/include/maras/engine/SleepEventSink.h) collects active high actors sharing the Player's parent cell plus household tenants physically present at the Player's current `BGSLocation` and dispatches into `AppLifecycleCoordinator::OnPlayerSlept`:
+
+- **Slept Affection**: `EvaluateSleepPaidAffectionPartners` selects deduplicated same-cell living partners (`Married`, `Engaged`, `Dating`, or `Lover`) and applies `AffectionEventCoordinator::AddSleptAffection`.
+- **Rested Buff Selection (`EvaluateSleepRestedPlan`)**:
+  - When a `Lover`, `Dating`, or `Engaged` tenant is present in the Player's house, selects `LoversRadiance` (`0xDA`); otherwise, when a `Married` spouse tenant is present, selects `MarriageSleep` (`0xCDA1D`, vanilla *Lover's Comfort*). Non-spouse lovers intentionally take precedence over spouses if both are present.
+  - Independently, when a custodied non-adult child is present in the Player's house, selects `BYOHAdoptionSleepAbilityMale` (`0x2F54`) or `BYOHAdoptionSleepAbilityFemale` (`0x4292`) according to Player sex.
+- **Vanilla Synchronization**: Before adding the selected ability, `SleepEventSink` invokes `PlayerSleepQuestScript.RemoveRested()` / `RemoveAdoptionRested()` and waits for the `SessionEpoch`-guarded VM stack callback before running `BuffReconciler::ApplySleepRestedPlan` on the main game thread (falling back directly if the vanilla quest VM handle is unavailable).
