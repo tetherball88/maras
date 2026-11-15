@@ -314,12 +314,14 @@ namespace MARAS::Projection {
             forceSkipTrigger || narrationSuppressed || !SafeCanTrigger(canTrigger, initiator, acceptor);
         const float suppressSeconds =
             (!skip && lowerStatus != "lover" && lowerStatus != "engaged") ? 3.0f : 0.0f;
-        return MakeSingleSimpleLegPlan(
+        plan = MakeSingleSimpleLegPlan(
             SkyrimNetEventKind::MaritalStatusChange,
             initiator,
             acceptor,
             skip,
             suppressSeconds);
+        plan.canonicalOutcome = lowerStatus;
+        return plan;
     }
 
     EventDispatchPlan PlanOpenRelationshipChange(

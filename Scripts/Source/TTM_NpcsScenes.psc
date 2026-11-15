@@ -156,11 +156,9 @@ Function MuteParticipants(Actor npc1, Actor npc2, Actor npc1Partner, bool should
 EndFunction
 
 Function UnMuteParticipants()
-    if(TTM_Data.GetHasSkyrimNet())
-        MARAS.UnMuteBanterSceneParticipants()
-        if(Game.GetModByName("TT_OStimNet.esp") != 255)
-            OStimNet.SetMuted(false)
-        endif
+    bool wasMuted = MARAS.UnMuteBanterSceneParticipants()
+    if(wasMuted && Game.GetModByName("TT_OStimNet.esp") != 255)
+        OStimNet.SetMuted(false)
     endif
 EndFunction
 

@@ -141,7 +141,8 @@ namespace MARAS::Domain::Lineage {
         const State::WorldStateSnapshot& snap,
         ChildId syntheticOrExistingId,
         ActorId bioMotherHint,
-        ActorId bioFatherHint) noexcept;
+        ActorId bioFatherHint,
+        ChildStage stage = ChildStage::Child) noexcept;
 
     [[nodiscard]] AdultGraduationPlan ResolveAdultGraduationSource(
         const State::LineageTable& lineage,

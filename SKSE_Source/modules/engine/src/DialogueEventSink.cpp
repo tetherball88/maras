@@ -1,5 +1,6 @@
 #include "maras/engine/DialogueEventSink.h"
 
+#include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
@@ -116,15 +117,39 @@ namespace MARAS {
     }
 
     void DialogueEventSink::SendDialogueEvent(RE::Actor* npc) {
+        if (!npc) {
+            return;
+        }
+        const RE::FormID npcId = npc->GetFormID();
+        if (npcId == 0) {
+            return;
+        }
+
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddCurrentEpochTask("DialogueEventSink::SendDialogueEvent", [npcId]() {
+                if (!HasPhysicalActor(npcId)) {
+                    return;
+                }
+                FactionReconciler::GetSingleton().ReconcilePlayer();
+                FactionReconciler::GetSingleton().ReconcileActor(npcId);
+                if (auto* hooks = Engine::GetEngineEventHooks()) {
+                    hooks->OnDialogueOpened(npcId);
+                }
+                EmitModCallbackEvent("maras_dialogue_opened", "", 0.0f, npcId);
+                MARAS_LOG_INFO("Sent maras_dialogue_opened for actor {:08X} (deferred to main thread)", npcId);
+            });
+            return;
+        }
+
         FactionReconciler::GetSingleton().ReconcilePlayer();
         FactionReconciler::GetSingleton().ReconcileLoadedActor(npc);
 
-        if (auto* hooks = Engine::GetEngineEventHooks(); hooks && npc) {
-            hooks->OnDialogueOpened(npc->GetFormID());
+        if (auto* hooks = Engine::GetEngineEventHooks()) {
+            hooks->OnDialogueOpened(npcId);
         }
 
         EmitModCallbackEvent("maras_dialogue_opened", "", 0.0f, npc);
-        MARAS_LOG_INFO("Sent maras_dialogue_opened for actor {:08X} ({})", npc->GetFormID(), npc->GetName());
+        MARAS_LOG_INFO("Sent maras_dialogue_opened for actor {:08X} ({})", npcId, npc->GetName());
     }
 
 }  // namespace MARAS

@@ -98,8 +98,6 @@ namespace MARAS::Domain::Relationships {
         float currentGameDay,
         ActorId initiator,
         const State::IActorMetadataProvider& meta,
-        bool sendEvent,
-        bool playerPartnerLoadedInEngine,
         const RelationshipCheckContext& ctx = {},
         Foundation::IRng* optionalRng = nullptr);
 

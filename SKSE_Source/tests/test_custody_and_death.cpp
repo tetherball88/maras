@@ -513,4 +513,90 @@ namespace MARAS::Tests {
             std::size_t{ 1 });
     }
 
+    MARAS_TEST(CustodyAndDeath, DeathAndUnregisterSharedCellSceneMarkersAndBatchCleanup) {
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+
+        const ActorId widowSpouse{ 0x000A1001u };
+        const ActorId killedSpouse{ 0x000A1002u };
+        const ActorId unregNpc{ 0x000A1003u };
+        const CellId widowCell{ 0x000A2001u };
+        const CellId killedCell{ 0x000A2002u };
+        const CellId unregCell{ 0x000A2003u };
+        const RefId marker1{ 0xFF00E001u };
+        const RefId marker2{ 0xFF00E002u };
+        const RefId marker3{ 0xFF00E003u };
+
+        ws.settings.Write().enablePlayerPolygamy = true;
+        for (ActorId id : { widowSpouse, killedSpouse, unregNpc }) {
+            ActorProfileRecord rec{};
+            rec.refId = id.AsRefId();
+            rec.baseId = BaseId{ id.raw() + 0x100u };
+            rec.isRegisteredAdult = true;
+            ws.actors.Write().Upsert(rec);
+        }
+        (void)ws.PromoteToMarried(ActorId::Player(), widowSpouse, 1.0f, ActorId::Player(), meta);
+        (void)ws.PromoteToMarried(ActorId::Player(), killedSpouse, 1.0f, ActorId::Player(), meta);
+
+        auto addSharedCell = [&](CellId cell, ActorId owner) {
+            SharedCellRecord cr{};
+            cr.sharedWithPlayer = true;
+            cr.originalPublicRecorded = true;
+            cr.originalPublicState = false;
+            cr.sharingSpouses.insert(owner);
+            ws.household.Write().UpsertSharedCell(cell, cr);
+        };
+        addSharedCell(widowCell, widowSpouse);
+        addSharedCell(killedCell, killedSpouse);
+        addSharedCell(unregCell, unregNpc);
+
+        {
+            auto& cd = ws.cooldowns.Write();
+            cd.movedSceneActors[widowSpouse] = marker1;
+            cd.movedSceneActors[killedSpouse] = marker2;
+            cd.movedSceneActors[unregNpc] = marker3;
+            cd.skyrimNetMutedActors = { widowSpouse, killedSpouse, unregNpc };
+        }
+        {
+            auto& lin = ws.lineage.Write();
+            lin.UpsertActiveDeliveryBatch(widowSpouse, ActiveDeliveryBatch{ 1, 5.0f, {} });
+            lin.UpsertActiveDeliveryBatch(killedSpouse, ActiveDeliveryBatch{ 1, 5.0f, {} });
+            lin.UpsertActiveDeliveryBatch(unregNpc, ActiveDeliveryBatch{ 1, 5.0f, {} });
+        }
+
+        // 1. Widow spouse death (killedByPlayer=false) preserves shared cell, retires scene marker & batch
+        const auto dWidow = ws.RecordActorDeath(widowSpouse, 10.0f, /*killedByPlayer=*/false, ActorId{}, meta);
+        MARAS_CHECK(dWidow.stoppedSharingSpouses.empty());
+        MARAS_CHECK(ws.household->IsCellSharedWithPlayer(widowCell));
+        MARAS_REQUIRE_EQ(dWidow.retiredSceneMarkers.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(dWidow.retiredSceneMarkers[0], marker1);
+        MARAS_CHECK(ws.lineage->FindActiveDeliveryBatch(widowSpouse) == nullptr);
+        MARAS_CHECK(!ws.cooldowns->movedSceneActors.contains(widowSpouse));
+
+        // 2. Player-killed spouse unshares shared cell + emits cell/spouse deltas & retires scene marker
+        const auto dKilled = ws.RecordActorDeath(
+            killedSpouse, 11.0f, /*killedByPlayer=*/true, ActorId::Player(), meta);
+        MARAS_REQUIRE_EQ(dKilled.stoppedSharingSpouses.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(dKilled.stoppedSharingSpouses[0], killedSpouse);
+        MARAS_REQUIRE_EQ(dKilled.restoredSharedCells.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(dKilled.restoredSharedCells[0].cellId, killedCell);
+        MARAS_CHECK(!ws.household->IsCellSharedWithPlayer(killedCell));
+        MARAS_REQUIRE_EQ(dKilled.retiredSceneMarkers.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(dKilled.retiredSceneMarkers[0], marker2);
+        MARAS_CHECK(ws.lineage->FindActiveDeliveryBatch(killedSpouse) == nullptr);
+
+        // 3. UnregisterActor unshares cell, retires marker, clears cooldowns & delivery batch
+        const auto uRes = ws.UnregisterActor(unregNpc);
+        MARAS_REQUIRE_EQ(uRes.stoppedSharingSpouses.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(uRes.stoppedSharingSpouses[0], unregNpc);
+        MARAS_REQUIRE_EQ(uRes.restoredSharedCells.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(uRes.restoredSharedCells[0].cellId, unregCell);
+        MARAS_CHECK(!ws.household->IsCellSharedWithPlayer(unregCell));
+        MARAS_REQUIRE_EQ(uRes.retiredSceneMarkers.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(uRes.retiredSceneMarkers[0], marker3);
+        MARAS_CHECK(ws.cooldowns->movedSceneActors.empty());
+        MARAS_CHECK(ws.cooldowns->skyrimNetMutedActors.empty());
+        MARAS_CHECK(ws.lineage->FindActiveDeliveryBatch(unregNpc) == nullptr);
+    }
+
 }  // namespace MARAS::Tests

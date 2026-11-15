@@ -228,7 +228,9 @@ Function CheckNextFiance() global
     TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckNextFiance:"+TTM_Utils.GetActorName(nextFiance))
     if(nextFiance)
         Utility.Wait(0.3)
-        MARAS.PromoteNPCToStatus(nextFiance, "engaged")
+        if(StartEngagement(nextFiance))
+            MARAS.NotifyEngagementCeremonyStarted(nextFiance)
+        endif
     endif
 EndFunction
 
@@ -242,5 +244,15 @@ EndFunction
 
 Function OnMarriageBreakupReconcile() global
     TTM_Debug.debug("TTM_ServiceMarriageQuest:OnMarriageBreakupReconcile")
-    MARAS.PromoteNPCToStatus(TTM_Utils.GetActorAlias(TTM_Data.GetMarriageBreakupQuest(), "LoveInterest"), "engaged")
+    Actor loveInterest = TTM_Utils.GetActorAlias(TTM_Data.GetMarriageBreakupQuest(), "LoveInterest")
+    if(!loveInterest)
+        return
+    endif
+    if(MARAS.IsNPCStatus(loveInterest, "engaged"))
+        if(StartEngagement(loveInterest))
+            MARAS.NotifyEngagementCeremonyStarted(loveInterest)
+        endif
+    else
+        MARAS.PromoteNPCToStatus(loveInterest, "engaged")
+    endif
 EndFunction

@@ -47,6 +47,7 @@ namespace MARAS {
         void SendDayChangeEvent(float newDay);
 
         // Timing
+        TimePoint lastFastTick_{};
         TimePoint lastSpatialSnapshot_{};
         TimePoint lastTeammateCheck_{};
         TimePoint lastDayCheck_{};

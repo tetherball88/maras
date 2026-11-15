@@ -1,6 +1,6 @@
 # M.A.R.A.S. Children Architecture & Fertility Integration Specification
 
-This document provides a comprehensive technical reference for the child management architecture in **M.A.R.A.S.**, encompassing vanilla adoption, household hierarchy, custody mechanics, paternity secrets, and deep integration with fertility frameworks like **Fertility Mode Reloaded (FMR)** (and upcoming support for **Beeing Female NG**).
+This document provides a comprehensive technical reference for the child management architecture in **M.A.R.A.S.**, encompassing vanilla adoption, household hierarchy, custody mechanics, paternity secrets, and deep integration with fertility frameworks like **Fertility Mode Reloaded (FMR)** and **Beeing Female NG**.
 
 ---
 
@@ -66,7 +66,7 @@ Children residing within the player's domestic sphere integrate directly with M.
   - *Hang-Out Toggle*: The player can uncheck the spouse's "Hang Out in House" setting in M.A.R.A.S., which frees the spouse to follow their normal default external AI packages (e.g., store tending or adventuring) while remaining the child's legal custodial parent.
 - **Performance & Overcrowding Safeguards**:
   - While M.A.R.A.S. supports unlimited actors theoretically, players should avoid stacking excessive numbers of actors in one interior cell (e.g., 30 children, 20 spouses, 30 critters, and 30 pets in Breezehome will overload the Skyrim actor processing engine).
-  - **Detailed Routine Cap (20 Children per House)**: Only up to **20 children per house** are pulled into active sandbox quest aliases ([`TTM_ChildreSandboxQst`](../../Scripts/Source/TTM_ServiceChildrenLogic.psc#L1058-L1076)) for detailed forcegreets, chore events, and gift sequences. Any children beyond the 20-actor threshold fall back to standard interior sandboxing packages.
+  - **Detailed Routine Cap (20 Children per House)**: Only up to **20 children per house** are pulled into active sandbox quest aliases ([`TTM_ChildreSandboxQst`](../../Scripts/Source/TTM_ServiceChildrenLogic.psc#L778-L802)) for detailed forcegreets, chore events, and gift sequences. Any children beyond the 20-actor threshold fall back to standard interior sandboxing packages.
 
 ### 2.2 Non-Player Household Children
 Spawned children belonging to NPC couples operate under realistic custody routines:

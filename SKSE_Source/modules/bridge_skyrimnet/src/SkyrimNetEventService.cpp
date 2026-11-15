@@ -92,7 +92,7 @@ namespace MARAS::Bridge::SkyrimNet {
         [[nodiscard]] bool DispatchTtmLeg(
             const Projection::EventDeliveryLeg& leg,
             const std::string& jsonPayload) {
-            if (jsonPayload.empty()) {
+            if (State::IsLegacyMigrationActive() || jsonPayload.empty()) {
                 return false;
             }
             const auto audience = ToRawFormIds(leg.audience);
@@ -138,7 +138,7 @@ namespace MARAS::Bridge::SkyrimNet {
         std::uint32_t targetFormId,
         bool exactAudience,
         const std::vector<std::uint32_t>& audienceFormIds) {
-        if (!IsSkyrimNetAvailable() || content.empty()) {
+        if (!IsSkyrimNetAvailable() || State::IsLegacyMigrationActive() || content.empty()) {
             return;
         }
 
@@ -237,8 +237,10 @@ namespace MARAS::Bridge::SkyrimNet {
         const std::string accName = ResolveActorName(acceptorFormId, *worldSnap, *spatialSnap);
 
         const auto& leg = plan.legs.front();
+        const std::string_view effectiveStatus =
+            !plan.canonicalOutcome.empty() ? std::string_view(plan.canonicalOutcome) : newStatus;
         const std::string payload =
-            BuildMaritalStatusChangePayload(initName, accName, newStatus, leg.skipTrigger);
+            BuildMaritalStatusChangePayload(initName, accName, effectiveStatus, leg.skipTrigger);
         (void)DispatchTtmLeg(leg, payload);
 
         if (plan.postSuppressNarrationSeconds > 0.0f) {
@@ -506,7 +508,7 @@ namespace MARAS::Bridge::SkyrimNet {
         std::uint32_t fallbackBioId,
         std::string_view fallbackBioName,
         std::int32_t childCount) {
-        if (!IsSkyrimNetAvailable()) {
+        if (!IsSkyrimNetAvailable() || State::IsLegacyMigrationActive()) {
             return;
         }
 
@@ -533,14 +535,13 @@ namespace MARAS::Bridge::SkyrimNet {
             return;
         }
 
-        if (DispatchTtmLeg(leg, payload)) {
-            SkyrimNetMemoryService::GetSingleton().RecordPregnancyDiscovered(
-                motherId,
-                partnerId,
-                fallbackBioId,
-                std::string(fallbackBioName),
-                childCount);
-        }
+        SkyrimNetMemoryService::GetSingleton().RecordPregnancyDiscovered(
+            motherId,
+            partnerId,
+            fallbackBioId,
+            std::string(fallbackBioName),
+            childCount);
+        (void)DispatchTtmLeg(leg, payload);
     }
 
     void SkyrimNetEventService::EmitPregnancyLost(
@@ -626,7 +627,9 @@ namespace MARAS::Bridge::SkyrimNet {
     void SkyrimNetEventService::EmitChildBirthBatch(
         std::uint32_t motherId,
         const std::vector<std::uint32_t>& childIds) {
-        if (!IsSkyrimNetAvailable() || !Foundation::HasPhysicalActorRawId(motherId)) {
+        if (!IsSkyrimNetAvailable() ||
+            State::IsLegacyMigrationActive() ||
+            !Foundation::HasPhysicalActorRawId(motherId)) {
             return;
         }
 

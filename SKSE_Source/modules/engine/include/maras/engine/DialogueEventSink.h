@@ -6,8 +6,9 @@
 
 namespace MARAS {
 
-    // Listens for "Dialogue Menu" open/close events and fires the Papyrus ModCallbackEvent
-    // "maras_dialogue_opened" with the speaking NPC as the sender.
+    // Listens for "Dialogue Menu" open/close events, invokes IEngineEventHooks::OnDialogueOpened
+    // (RelationshipInteractionCoordinator -> daily dialoguestarted affection + native No-AI
+    // chance globals 0x5D0/0x5D1/0x15C), and emits "maras_dialogue_opened" with speaker as sender.
     //
     // When speaker is empty at open time (NPC still finishing a previous line), a flag is
     // set and resolved on the next frame task, input tick, or incoming UI event.

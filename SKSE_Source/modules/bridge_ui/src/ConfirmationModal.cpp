@@ -7,6 +7,7 @@
 #include "maras/bridge_ui/PrismaModalManager.h"
 #include "maras/bridge_ui/PrismaUIManager.h"
 #include "maras/engine/ActorService.h"
+#include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -20,6 +21,7 @@
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -497,13 +499,26 @@ namespace MARAS::Bridge::Ui {
             actorBName,
             skyrimNetAvailable);
 
-        auto dispatchOnMainThread = [expectedEpoch, onResult = std::move(onResult)](std::int32_t code) mutable {
-            if (!onResult) {
+        auto dispatchOnMainThread = [expectedEpoch, sharedCb = std::make_shared<std::function<void(std::int32_t)>>(std::move(onResult))](std::int32_t code) mutable {
+            if (!sharedCb || !*sharedCb) {
                 return;
             }
-            MARAS::AddEpochTask(expectedEpoch, "ConfirmationModal::OnResult", [cb = std::move(onResult), code]() {
-                cb(code);
-            });
+            if (!MARAS::AddEpochTask(
+                    expectedEpoch,
+                    "ConfirmationModal::OnResult",
+                    [sharedCb, code]() {
+                        if (*sharedCb) {
+                            (*sharedCb)(code);
+                        }
+                    })) {
+                if (MARAS::IsSessionEpochCurrent(expectedEpoch) &&
+                    MARAS::DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+                    MARAS_LOG_WARN("[ConfirmationModal] AddEpochTask unavailable on main thread; invoking cancel fallback (origCode={})", code);
+                    (*sharedCb)(kResultCancel);
+                } else {
+                    MARAS_LOG_ERROR("[ConfirmationModal] Failed to dispatch confirmation callback (code={})", code);
+                }
+            }
         };
 
         PrismaModalManager::GetSingleton().ShowModal(
@@ -617,7 +632,8 @@ namespace MARAS::Bridge::Ui {
         const std::vector<RE::Actor*>& mainActors,
         const std::vector<RE::Actor*>& secondaryActors,
         const char* paramsJson) {
-        if (!vm) {
+        if (!vm || !SKSE::GetTaskInterface()) {
+            MARAS_LOG_WARN("[ConfirmationModal] VirtualMachine or SKSE TaskInterface unavailable for ConfirmationModal::Show");
             return RE::BSScript::LatentStatus::kFailed;
         }
 

@@ -74,10 +74,7 @@ namespace MARAS::App {
             const std::string& trainingLocation,
             const std::string& className);
 
-        void OnChildFinishedTraining(
-            const std::string& childName,
-            const std::string& trainingLocation,
-            const std::string& className);
+        void OnChildFinishedTraining(const std::string& childName);
 
         void OnAdultChildSpawned(
             std::string_view provider,

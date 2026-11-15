@@ -334,7 +334,6 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
 
                     case SKSE::MessagingInterface::kPreLoadGame:
                         MARAS_LOG_INFO("PreLoadGame...");
-                        MARAS::ResetPluginEventSinks();
                         MARAS::BumpSessionEpoch("MessagingInterface::kPreLoadGame");
                         MARAS::ResetPluginEventSinks();
                         MARAS::DialogueEventSink::GetSingleton()->Revert();
@@ -410,6 +409,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS_LOG_INFO("Data loaded successfully.");
 
                         MARAS::FormCache::GetSingleton().Initialize();
+                        MARAS::PlayerMiscStatsTracker::GetSingleton()->Initialize();
 
                         if (auto* holder = RE::ScriptEventSourceHolder::GetSingleton()) {
                             holder->AddEventSink<RE::TESInitScriptEvent>(ActorInitLoadedEventSink::GetSingleton());

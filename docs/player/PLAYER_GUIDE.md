@@ -68,7 +68,7 @@ From here (or naturally through **SkyrimNet AI conversation**!), you can:
 ### Step 3: Proposing Marriage & Passing Their Standards 💍🏰
 When you're ready to pop the question, choose **`Will you marry me?`** in dialogue (or propose in **SkyrimNet AI chat**):
 - **Will They Say Yes? (Marriage Difficulty)**:
-  - M.A.R.A.S checks your **Affection**, their **Social Class** vs. your wealth/houses/completed quests, and whether you belong to a **Guild** that matches their **Skill Type** (e.g., Companions for Warriors, College of Winterhold for Mages, Thieves Guild for Rogues).
+  - M.A.R.A.S checks your **Affection**, their **Social Class** vs. your wealth/houses/completed quests, and whether you lead/belong to a **Guild** that aligns with or offends their **Social Class** (for instance, the Companions or College of Winterhold vs. Thieves Guild or Dark Brotherhood).
   - **If They Say No**: Wait **24 in-game hours**, build up your Affection (or buy a house / finish some quests), and try again! *(Or lower the Marriage Difficulty sliders in **Dashboard $\rightarrow$ Settings**.)*
   - **If They Say Yes**: Congratulations, you are now **Engaged**! 💎
 
@@ -111,7 +111,7 @@ Once married, talk to your spouse and choose:
 
 ### 💰 4. Daily Store Income & Specialized Home Merchants
 When a spouse is assigned to one of your Player Houses (and their **Affection is above `50`**):
-1. **Collect Daily Store Profits**: Ask **`Has the store made any money?`** once per day. Their payout scales with their **Social Class** (Nobles and Rulers bring in serious coin!), their **Household Rank**, and their **Affection Mood**!
+1. **Collect Daily Store Profits**: Ask **`Has the store made any money?`** once per day. Your spouse hands over **`100` gold per elapsed in-game day** saved up since your last collection, capped at **`500` gold**!
 2. **Shop at Their Home Stall**: Housed spouses become active merchants right in your living room! Based on their background and **Skill Type**, they stock one of **9 Merchant Inventories**:
    - 🧪 **Apothecary** *(potions & alchemy ingredients)*
    - ⚒️ **Blacksmith** *(weapons, armor & ingots)*
@@ -146,11 +146,11 @@ Want to marry more than one person without anyone accusing you of cheating?
    - Open **Dashboard (`Alt + B`) $\rightarrow$ Settings $\rightarrow$ General** and toggle **Enable Polygamy** to **ON**.
 
 ### 🏆 Ranking Your Spouses (`1st`, `2nd`, `3rd`, `4th+`)
-Once you have 2+ spouses, you can organize your **Household Hierarchy** either via **`Let's talk about your standing in our home`** or in **Dashboard $\rightarrow$ My Household**:
-- 🥇 **Lead Spouse (`1st`)**: **`1.00x`** Permanent Buff & Store Gold
-- 🥈 **Second Spouse (`2nd`)**: **`0.50x`** Permanent Buff & Store Gold
-- 🥉 **Third Spouse (`3rd`)**: **`0.25x`** Permanent Buff & Store Gold
-- 🏅 **Fourth+ Spouses (`4th+`)**: **`0.10x`** Permanent Buff & Store Gold each
+Once you have 2+ spouses, you can organize your **Household Hierarchy** either via **`Let's talk about your standing in our home`** or in **Dashboard $\rightarrow$ My Household** *(hierarchy scales Permanent Household Buffs; daily store income remains `100` gold/day up to `500` gold once Affection exceeds `50`)*:
+- 🥇 **Lead Spouse (`1st`)**: **`1.00x`** Permanent Buff
+- 🥈 **Second Spouse (`2nd`)**: **`0.50x`** Permanent Buff
+- 🥉 **Third Spouse (`3rd`)**: **`0.25x`** Permanent Buff
+- 🏅 **Fourth+ Spouses (`4th+`)**: **`0.10x`** Permanent Buff each
 - *(Watch out: Promoting a spouse boosts their affection—especially **Proud** spouses at **`+24`**—while demoting them tanks their affection by up to **`-24`**!)*
 
 ---
@@ -189,7 +189,7 @@ Whether *you* initiate a divorce (`(M) We need to talk about... us. (Breakup)`),
   - **+ `500` gold per horse** you own
   - **+ `100` gold per quest completed** *(up to `1,000` gold)*
   - **+ `100` gold per dungeon cleared** *(up to `1,000` gold)*
-- **Pay the Courier or Face the Guards**: A courier will deliver the settlement notice. Once delivered (or if you dodge the courier for **3 days**!), the settlement is added as a **Crime Bounty in your ex-spouse's Hold**! Pay the guards—or go to jail! 🚓
+- **Pay Now or Add to Hold Bounty**: When the **Divorce Settlement Notice** prompt appears, choose to **Pay Settlement Now** or refuse (adding the unpaid fee to your **Hold Bounty** in your ex-spouse's hold; if you can't afford the full sum upfront, it automatically becomes a Hold Bounty)! 🚓
 - *(Mercy Rule: Divorce settlements have a **7-day cooldown**, so if two spouses divorce you in the same week, you only get billed once!)*
 
 ### ⚰️ Death, Mourning & The "Murderer Gets Nothing" Rule

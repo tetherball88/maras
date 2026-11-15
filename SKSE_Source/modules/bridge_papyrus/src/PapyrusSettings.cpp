@@ -103,11 +103,6 @@ namespace MARAS::PapyrusInterface {
         App::SettingsCoordinator::GetSingleton().SetMinRelRankForDial(value);
     }
 
-    bool GetShouldUseSkyrimNetDecisions(RE::StaticFunctionTag*) {
-        std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::GetSkyrimNetGateway().ShouldUseDecisions();
-    }
-
     std::string DumpStoredData(RE::StaticFunctionTag*, std::string tag) {
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         return App::GetUiBridgeGateway().DumpStoredData(tag);

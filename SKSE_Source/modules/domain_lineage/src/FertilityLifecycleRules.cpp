@@ -301,7 +301,8 @@ namespace MARAS::Domain::Lineage {
         const State::WorldStateSnapshot& snap,
         ChildId syntheticOrExistingId,
         ActorId bioMotherHint,
-        ActorId bioFatherHint) noexcept {
+        ActorId bioFatherHint,
+        ChildStage stage) noexcept {
         SpawnedChildLineagePlan plan{};
         ActorId guardianA{};
         ActorId guardianB{};
@@ -363,9 +364,21 @@ namespace MARAS::Domain::Lineage {
                 plan.npcGuardianA = guardianA;
                 plan.npcGuardianB = guardianB;
             } else {
-                plan.npcGuardianA = bioMother;
-                if (!motherPartner.IsNull() && !bioMother.IsNull() && AreMarried(snap, bioMother, motherPartner)) {
-                    plan.npcGuardianB = motherPartner;
+                ActorId secondary = !motherPartner.IsNull()
+                    ? motherPartner
+                    : ((!bioFather.IsNull() && !bioFather.IsUnknownFather()) ? bioFather : ActorId{});
+                if (secondary == bioMother) {
+                    secondary = ActorId{};
+                }
+                if (!bioMother.IsNull()) {
+                    plan.npcGuardianA = bioMother;
+                    if (!secondary.IsNull() &&
+                        (stage == ChildStage::Adult ||
+                         (!motherPartner.IsNull() && AreMarried(snap, bioMother, motherPartner)))) {
+                        plan.npcGuardianB = secondary;
+                    }
+                } else if (!secondary.IsNull()) {
+                    plan.npcGuardianA = secondary;
                 }
             }
             plan.tenantHouseLookupActor = !plan.npcGuardianA.IsNull() ? plan.npcGuardianA : bioMother;

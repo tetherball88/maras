@@ -1216,7 +1216,7 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlan_ChildBirthSecretMaskingAndPlayerBi
         child.paternitySecret.isSecretForBioFather = true;
         ws.lineage.Write().UpsertChild(child);
 
-        auto worldSnap = std::make_shared<WorldStateSnapshot>(ws.Snapshot());
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
         auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
         spatialSnap->AddSample(MakeBasicSample(RefId{ mother.raw() }, 0, 0, 0));
         spatialSnap->AddSample(MakeBasicSample(RefId{ husband.raw() }, 5, 0, 0));
@@ -1278,7 +1278,7 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlan_ChildBirthSecretMaskingAndPlayerBi
         child.paternitySecret.isSecretForBioFather = false;
         ws.lineage.Write().UpsertChild(child);
 
-        auto worldSnap = std::make_shared<WorldStateSnapshot>(ws.Snapshot());
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
         auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
         spatialSnap->AddSample(MakeBasicSample(RefId{ mother.raw() }, 0, 0, 0));
         spatialSnap->AddSample(MakeBasicSample(RefId{ playerPresumed.raw() }, 5, 0, 0));
@@ -1317,7 +1317,7 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlan_ChildBirthSecretMaskingAndPlayerBi
         child.paternitySecret.isSecretForBioFather = true;
         ws.lineage.Write().UpsertChild(child);
 
-        auto worldSnap = std::make_shared<WorldStateSnapshot>(ws.Snapshot());
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
         auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
         const auto plan = PlanChildBirth(worldSnap, spatialSnap, ActorId{}, { infantId }, alwaysTrigger);
         MARAS_CHECK(!plan.shouldEmit);
@@ -1384,7 +1384,7 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlan_ChildMilestoneSecretRoutingAndSpea
         orphan.paternitySecret.isSecretForBioFather = true;
         ws.lineage.Write().UpsertChild(orphan);
 
-        auto worldSnap = std::make_shared<WorldStateSnapshot>(ws.Snapshot());
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
         auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
         spatialSnap->AddSample(MakeBasicSample(RefId{ mother.raw() }, 0, 0, 0));
         spatialSnap->AddSample(MakeBasicSample(RefId{ husband.raw() }, 5, 0, 0));
@@ -1443,7 +1443,7 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlan_ChildMilestoneSecretRoutingAndSpea
         child.paternitySecret.isSecretForBioFather = true;
         ws.lineage.Write().UpsertChild(child);
 
-        auto worldSnap = std::make_shared<WorldStateSnapshot>(ws.Snapshot());
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
         auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
         spatialSnap->AddSample(MakeBasicSample(RefId{ mother.raw() }, 0, 0, 0));
         spatialSnap->AddSample(MakeBasicSample(RefId{ husband.raw() }, 5, 0, 0));
@@ -1646,4 +1646,187 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlan_NarrationSuppressionAndCascadeRule
         SkyrimNetEventKind::ChildParentsChanged, child, spouse, player, "custody", false, alwaysTrigger);
     MARAS_REQUIRE(custodyDirect.shouldEmit);
     MARAS_CHECK(!custodyDirect.legs[0].skipTrigger);
+}
+
+MARAS_TEST(PerspectiveLens, EventDispatchPlanPostAuditEdgeCases) {
+    using namespace MARAS::Projection;
+    const auto alwaysTrigger = [](ActorId, ActorId) { return true; };
+
+    const ActorId mother{ 0x000B0001u };
+    const ActorId presumedHusband{ 0x000B0002u };
+    const ActorId npcBioDad{ 0x000B0003u };
+
+    // 1. PlanChildGrewUp / PlanChildBecameAdult synthetic child (no physical child actor) + secret splits
+    {
+        WorldState ws{};
+        MARAS::State::DefaultActorMetadataProvider meta{};
+        (void)ws.PromoteToMarried(mother, presumedHusband, 1.0f, mother, meta);
+
+        ChildRecord synSecretPartner{};
+        const ChildId synPartnerCid{ 0xFF70B001u };
+        synSecretPartner.childId = synPartnerCid;
+        synSecretPartner.stage = ChildStage::Child;
+        synSecretPartner.bioMother = mother;
+        synSecretPartner.bioFather = npcBioDad;
+        synSecretPartner.presumedFather = presumedHusband;
+        synSecretPartner.paternitySecret.isSecret = true;
+        synSecretPartner.paternitySecret.isSecretForPartner = true;
+        ws.lineage.Write().UpsertChild(synSecretPartner);
+
+        ChildRecord synSecretBio{};
+        const ChildId synBioCid{ 0xFF70B002u };
+        synSecretBio.childId = synBioCid;
+        synSecretBio.stage = ChildStage::Adult;
+        synSecretBio.bioMother = mother;
+        synSecretBio.bioFather = npcBioDad;
+        synSecretBio.presumedFather = presumedHusband;
+        synSecretBio.paternitySecret.isSecret = true;
+        synSecretBio.paternitySecret.isSecretForBioFather = true;
+        ws.lineage.Write().UpsertChild(synSecretBio);
+
+        ChildRecord motherlessPlayerSecretBio{};
+        const ChildId synPlayerSecretCid{ 0xFF70B003u };
+        motherlessPlayerSecretBio.childId = synPlayerSecretCid;
+        motherlessPlayerSecretBio.stage = ChildStage::Child;
+        motherlessPlayerSecretBio.bioFather = ActorId::Player();
+        motherlessPlayerSecretBio.paternitySecret.isSecret = true;
+        motherlessPlayerSecretBio.paternitySecret.isSecretForBioFather = true;
+        ws.lineage.Write().UpsertChild(motherlessPlayerSecretBio);
+
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+        auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
+        spatialSnap->AddSample(MakeBasicSample(RefId{ mother.raw() }, 0, 0, 0));
+        spatialSnap->AddSample(MakeBasicSample(RefId{ presumedHusband.raw() }, 5, 0, 0));
+        spatialSnap->AddSample(MakeBasicSample(RefId{ npcBioDad.raw() }, 10, 0, 0));
+        spatialSnap->FinalizeSortAndDedupe();
+
+        // Secret-for-partner synthetic child excludes null physical child from MaskForPartner audience
+        const auto grewPlan = PlanChildGrewUp(worldSnap, spatialSnap, synPartnerCid, alwaysTrigger);
+        MARAS_REQUIRE(grewPlan.shouldEmit);
+        MARAS_REQUIRE_EQ(grewPlan.legs.size(), 2u);
+        MARAS_CHECK_EQ(grewPlan.legs[0].maskMode, DispatchMaskMode::Unmasked);
+        MARAS_CHECK(!grewPlan.legs[0].skipTrigger);
+        MARAS_CHECK_EQ(grewPlan.legs[1].maskMode, DispatchMaskMode::MaskForPartner);
+        MARAS_REQUIRE_EQ(grewPlan.legs[1].audience.size(), 1u);
+        MARAS_CHECK_EQ(grewPlan.legs[1].audience[0], presumedHusband);
+        MARAS_CHECK(grewPlan.legs[1].skipTrigger);
+
+        // Secret-for-bio-father synthetic child omits MaskForChildOnly leg when child has no physical Actor
+        const auto adultPlan = PlanChildBecameAdult(worldSnap, spatialSnap, synBioCid, alwaysTrigger);
+        MARAS_REQUIRE(adultPlan.shouldEmit);
+        MARAS_REQUIRE_EQ(adultPlan.legs.size(), 1u);
+        MARAS_CHECK_EQ(adultPlan.legs[0].maskMode, DispatchMaskMode::Unmasked);
+        MARAS_CHECK(std::find(adultPlan.legs[0].audience.begin(), adultPlan.legs[0].audience.end(), npcBioDad) ==
+                    adultPlan.legs[0].audience.end());
+
+        // Motherless + presumedFather-less secret Player bioFather suppresses Player fallback (!shouldEmit)
+        const auto suppressedBirth = PlanChildBirth(
+            worldSnap, spatialSnap, ActorId{}, { synPlayerSecretCid }, alwaysTrigger);
+        MARAS_CHECK(!suppressedBirth.shouldEmit);
+        const auto suppressedGrew = PlanChildGrewUp(
+            worldSnap, spatialSnap, synPlayerSecretCid, alwaysTrigger);
+        MARAS_CHECK(!suppressedGrew.shouldEmit);
+    }
+
+    // 2. PlanChildBirth motherless single child with presumedFather + PlanPaternitySecretResolved pregnancy legs
+    {
+        WorldState ws{};
+        MARAS::State::DefaultActorMetadataProvider meta{};
+        (void)ws.PromoteToMarried(ActorId::Player(), presumedHusband, 1.0f, ActorId::Player(), meta);
+
+        ChildRecord motherlessWithPartner{};
+        const ChildId cid1{ 0xFF70B010u };
+        motherlessWithPartner.childId = cid1;
+        motherlessWithPartner.stage = ChildStage::Infant;
+        motherlessWithPartner.bioFather = npcBioDad;
+        motherlessWithPartner.presumedFather = presumedHusband;
+        motherlessWithPartner.paternitySecret.isSecret = true;
+        motherlessWithPartner.paternitySecret.isSecretForPartner = true;
+        motherlessWithPartner.paternitySecret.isSecretForBioFather = true;
+        ws.lineage.Write().UpsertChild(motherlessWithPartner);
+
+        ChildRecord playerPreg{};
+        const ChildId cid2{ 0xFF70B011u };
+        playerPreg.childId = cid2;
+        playerPreg.stage = ChildStage::Unborn;
+        playerPreg.bioMother = ActorId::Player();
+        playerPreg.bioFather = npcBioDad;
+        playerPreg.presumedFather = presumedHusband;
+        playerPreg.paternitySecret.isSecret = true;
+        playerPreg.paternitySecret.isSecretForPartner = true;
+        ws.lineage.Write().UpsertChild(playerPreg);
+
+        auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+        auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
+        spatialSnap->AddSample(MakeBasicSample(RefId::Player(), 0, 0, 0, MARAS::State::LoadedActorFlags::IsPlayer));
+        spatialSnap->AddSample(MakeBasicSample(RefId{ presumedHusband.raw() }, 5, 0, 0));
+        spatialSnap->AddSample(MakeBasicSample(RefId{ npcBioDad.raw() }, 10, 0, 0));
+        spatialSnap->FinalizeSortAndDedupe();
+
+        const auto birthMotherless = PlanChildBirth(worldSnap, spatialSnap, ActorId{}, { cid1 }, alwaysTrigger);
+        MARAS_REQUIRE(birthMotherless.shouldEmit);
+        MARAS_REQUIRE_EQ(birthMotherless.legs.size(), 1u);
+        MARAS_CHECK_EQ(birthMotherless.legs[0].maskMode, DispatchMaskMode::MaskForPartner);
+        MARAS_CHECK_EQ(birthMotherless.legs[0].originator, presumedHusband);
+        MARAS_CHECK(birthMotherless.legs[0].skipTrigger);
+
+        // mother == Player sharing pregnancy lets presumedFather leg trigger when near
+        const auto sharedPreg = PlanPaternitySecretResolved(
+            worldSnap, spatialSnap, cid2, "mother_shared_pregnancy_presumed", false, alwaysTrigger);
+        MARAS_REQUIRE(sharedPreg.shouldEmit);
+        MARAS_REQUIRE_EQ(sharedPreg.legs.size(), 2u);
+        MARAS_CHECK(sharedPreg.legs[0].skipTrigger);
+        MARAS_CHECK_EQ(sharedPreg.legs[1].maskMode, DispatchMaskMode::MaskForPartner);
+        MARAS_CHECK(!sharedPreg.legs[1].skipTrigger);
+
+        const auto visiblePreg = PlanPaternitySecretResolved(
+            worldSnap, spatialSnap, cid2, "pregnancy_visible_presumed", false, alwaysTrigger);
+        MARAS_REQUIRE(visiblePreg.shouldEmit);
+        MARAS_REQUIRE_EQ(visiblePreg.legs.size(), 2u);
+        MARAS_CHECK(visiblePreg.legs[0].skipTrigger);
+        MARAS_CHECK_EQ(visiblePreg.legs[1].maskMode, DispatchMaskMode::MaskForPartner);
+        MARAS_CHECK(!visiblePreg.legs[1].skipTrigger);
+
+        const auto presumedUnannounced = PlanPaternitySecretResolved(
+            worldSnap, spatialSnap, cid2, "presumed_father_learnt_unannounced", false, alwaysTrigger);
+        MARAS_CHECK_EQ(presumedUnannounced.canonicalOutcome, "presumed_father_learnt");
+        MARAS_CHECK(presumedUnannounced.wasPregnancyUnannounced);
+
+        const auto bothUnannounced = PlanPaternitySecretResolved(
+            worldSnap, spatialSnap, cid2, "mother_confessed_both_unannounced", false, alwaysTrigger);
+        MARAS_CHECK_EQ(bothUnannounced.canonicalOutcome, "mother_confessed_both");
+        MARAS_CHECK(bothUnannounced.wasPregnancyUnannounced);
+    }
+
+    // 3. PlanChildGuardianEvent ("custody_divorce") & PlanMaritalStatusChange suppress timings
+    {
+        const ActorId child{ 0x000B1001u };
+        const auto custodyDivorce = PlanChildGuardianEvent(
+            SkyrimNetEventKind::ChildParentsChanged,
+            child,
+            presumedHusband,
+            ActorId::Player(),
+            "custody_divorce",
+            false,
+            alwaysTrigger);
+        MARAS_REQUIRE(custodyDivorce.shouldEmit);
+        MARAS_CHECK(!custodyDivorce.legs[0].skipTrigger);
+
+        const auto emptyStatus = PlanMaritalStatusChange(ActorId::Player(), presumedHusband, "", false, false, alwaysTrigger);
+        MARAS_CHECK(!emptyStatus.shouldEmit);
+        const auto candStatus = PlanMaritalStatusChange(ActorId::Player(), presumedHusband, "Candidate", false, false, alwaysTrigger);
+        MARAS_CHECK(!candStatus.shouldEmit);
+        const auto loverStatus = PlanMaritalStatusChange(ActorId::Player(), presumedHusband, "Lover", false, false, alwaysTrigger);
+        MARAS_CHECK(loverStatus.shouldEmit);
+        MARAS_CHECK_EQ(loverStatus.postSuppressNarrationSeconds, 0.0f);
+        const auto engagedStatus = PlanMaritalStatusChange(ActorId::Player(), presumedHusband, "Engaged", false, false, alwaysTrigger);
+        MARAS_CHECK(engagedStatus.shouldEmit);
+        MARAS_CHECK_EQ(engagedStatus.postSuppressNarrationSeconds, 0.0f);
+        const auto datingStatus = PlanMaritalStatusChange(ActorId::Player(), presumedHusband, "Dating", false, false, alwaysTrigger);
+        MARAS_CHECK(datingStatus.shouldEmit);
+        MARAS_CHECK_EQ(datingStatus.postSuppressNarrationSeconds, 3.0f);
+        const auto divorcedSkipped = PlanMaritalStatusChange(ActorId::Player(), presumedHusband, "Divorced", true, false, alwaysTrigger);
+        MARAS_CHECK(divorcedSkipped.shouldEmit);
+        MARAS_CHECK_EQ(divorcedSkipped.postSuppressNarrationSeconds, 0.0f);
+    }
 }

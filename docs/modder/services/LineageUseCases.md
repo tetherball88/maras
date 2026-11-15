@@ -4,15 +4,15 @@
 **Sources**:
 - [LineageUseCases.h](../../../SKSE_Source/modules/app/include/maras/app/LineageUseCases.h) / [LineageUseCases.cpp](../../../SKSE_Source/modules/app/src/LineageUseCases.cpp)
 - [LineageRules.h](../../../SKSE_Source/modules/domain_lineage/include/maras/domain/lineage/LineageRules.h) / [LineageRules.cpp](../../../SKSE_Source/modules/domain_lineage/src/LineageRules.cpp)
-- [FertilityRules.h](../../../SKSE_Source/modules/domain_lineage/include/maras/domain/lineage/FertilityRules.h)
-- [ChildSpawnService.h](../../../SKSE_Source/modules/engine/include/maras/engine/ChildSpawnService.h) / [ChildSpawnService.cpp](../../../SKSE_Source/modules/engine/src/ChildSpawnService.cpp)
+- [FertilityRules.h](../../../SKSE_Source/modules/domain_lineage/include/maras/domain/lineage/FertilityRules.h) / [FertilityLifecycleRules.h](../../../SKSE_Source/modules/domain_lineage/include/maras/domain/lineage/FertilityLifecycleRules.h)
+- [FertilityLifecycleCoordinator.h](../../../SKSE_Source/modules/app/include/maras/app/FertilityLifecycleCoordinator.h) / [ChildSpawnService.h](../../../SKSE_Source/modules/engine/include/maras/engine/ChildSpawnService.h) / [ChildSpawnService.cpp](../../../SKSE_Source/modules/engine/src/ChildSpawnService.cpp)
 - [Architecture Overview](../ARCHITECTURE.md)
 
 ---
 
 ## 1. Purpose & Responsibility
 
-`LineageUseCases` is the Layer-4 orchestrator for pregnancy tracking, off-map and placed child growth (`Unborn` $\rightarrow$ `Newborn` $\rightarrow$ `Infant` $\rightarrow$ `Toddler` $\rightarrow$ `Child` $\rightarrow$ `Training` $\rightarrow$ `Adult`), household adoption, child pets/critters/orders/chores, child-to-adult promotion, death archival (`DeceasedTable`), and epistemic JSON dumps (`DumpDeceasedJson`, `DumpPlayerChildrenJson`).
+`LineageUseCases` is the Layer-4 orchestrator for pregnancy tracking, off-map and placed child growth (`Unborn` $\rightarrow$ `Newborn` $\rightarrow$ `Infant` $\rightarrow$ `Toddler` $\rightarrow$ `Child` $\rightarrow$ `Training` $\rightarrow$ `Adult`), household adoption, child pets/critters/orders/chores, child-to-adult promotion, death archival (`DeceasedTable`), and epistemic JSON dumps (`DumpDeceasedJson`, `DumpPlayerChildrenJson`). Paired with `FertilityLifecycleCoordinator` and `FertilityLifecycleRules`, it also consolidates third-party fertility mod handoffs (FMR & Beeing Female NG) and multi-fetus delivery batching (`'FRT1'`) natively in C++.
 
 ---
 

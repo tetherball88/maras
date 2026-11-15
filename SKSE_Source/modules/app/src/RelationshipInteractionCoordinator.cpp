@@ -225,15 +225,6 @@ namespace MARAS::App {
             stats.questsCompleted,
             stats.dungeonsCleared);
 
-        if (settlement.onCooldown) {
-            MARAS_LOG_INFO("[RelationshipInteractionCoordinator] Divorce settlement skipped (7-day cooldown active)");
-            return;
-        }
-
-        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            ws.cooldowns.Write().lastTimePaidDivorceFee = currentDay;
-        });
-
         if (const RE::FormID questID = divorceQuest ? divorceQuest->GetFormID() : 0; questID != 0) {
             DispatchPostLock(
                 GetSessionEpoch(),
@@ -244,6 +235,15 @@ namespace MARAS::App {
                 },
                 "RelationshipInteractionCoordinator::StopDivorceQuest");
         }
+
+        if (settlement.onCooldown) {
+            MARAS_LOG_INFO("[RelationshipInteractionCoordinator] Divorce settlement skipped (7-day cooldown active)");
+            return;
+        }
+
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            ws.cooldowns.Write().lastTimePaidDivorceFee = currentDay;
+        });
 
         const std::string spouseName = (exSpouseFormID != 0) ? ActorSvc::GetName(exSpouseFormID) : "";
 
@@ -328,8 +328,8 @@ namespace MARAS::App {
                             crimeFaction = FormCache::GetSingleton().GetDefaultCrimeFaction();
                         }
                         if (crimeFaction) {
-                            crimeFaction->SetCrimeGold(static_cast<std::int32_t>(totalFee));
-                            MARAS_LOG_INFO("[RelationshipInteractionCoordinator] Applied {} gold divorce bounty to faction {:08X}",
+                            crimeFaction->ModCrimeGold(static_cast<std::int32_t>(totalFee), false);
+                            MARAS_LOG_INFO("[RelationshipInteractionCoordinator] Added {} gold divorce bounty to faction {:08X}",
                                            totalFee, crimeFaction->GetFormID());
                         } else {
                             MARAS_LOG_WARN("[RelationshipInteractionCoordinator] No crime faction available for {} gold divorce bounty",

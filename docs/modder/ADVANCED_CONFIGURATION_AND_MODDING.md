@@ -35,6 +35,7 @@ All external configuration files live under `Data/SKSE/Plugins/`:
 | `SKSE/Plugins/MARAS/marriageDifficultyConfig.json` *(or `marriage_difficulty.json`)* | Weights, clamps, prestige targets, and guild alignment tables for marriage proposal calculations. | `kDataLoaded` & every save load / new game |
 | `SKSE/Plugins/MARAS/childrenNames.json` | Race-keyed male and female name pools for newborn and NPC-couple children. | `kDataLoaded` & save load |
 | `SKSE/Plugins/MARAS/critterNames.json` | Species-keyed (`fox`, `arctic_fox`, `hare`, `mudcrab`, `skeever`) name pools for adopted child critters. | `kDataLoaded` & save load |
+| `SKSE/Plugins/MARAS/promptStrings.json` | Localized vanilla dialogue prompt templates keyed by topic/prompt ID (`PromptStringsLoader`). | `kDataLoaded` & save load |
 | `SKSE/Plugins/MARAS/childTraining.yaml` & `childTraining/*.yaml` | Extensible child training locations (`0..21`), adult class outcomes (weighted `1..5` skills, spells, perks, outfits, items, combat styles, `costMultiplier`, `affiliation:` discounts, `requiresBeastblood`), and Daedric Champion Lineage blessings. | `kDataLoaded` & every save load / new game |
 | `SKSE/Plugins/MARAS/npc_index_overrides.ini` | Manual `SpatialWorldIndex` inclusion/exclusion rules (`[Include]`, `[Exclude]`, `[ExcludeNames]`, `[ExcludeEditorIDs]`, `[ExcludePlugins]`) for custom or modded NPCs. | `kDataLoaded` (`SpatialWorldIndex::BuildIndex`) |
 
@@ -269,30 +270,28 @@ When the custom marriage quest reaches stage `100`, M.A.R.A.S automatically prom
 
 ## 7. Papyrus & Native C++ Integration Points
 
-M.A.R.A.S supports both **Player $\leftrightarrow$ NPC** and **NPC $\leftrightarrow$ NPC** relationships across 10 statuses:
-`Candidate` (`0`), `Engaged` (`1`), `Married` (`2`), `Divorced` (`3`), `Jilted` (`4`), `Lover` (`5`), `Dating` (`6`), `ExLover` (`7`), `ExDating` (`8`), and `Deceased` (`9`).
+M.A.R.A.S supports both **Player $\leftrightarrow$ NPC** and **NPC $\leftrightarrow$ NPC** relationships across 9 live statuses (`Candidate` (`0`), `Engaged` (`1`), `Married` (`2`), `Divorced` (`3`), `Jilted` (`4`), `Dating` (`5`), `Lover` (`6`), `ExDating` (`7`), `ExLover` (`8`), plus `Unknown` (`255`)), while deceased partners/children are archived in `DeceasedTable` (`'DCSD'`).
 
 For complete function signatures and payloads, consult [API_AND_PRISMA_BRIDGE_REFERENCE.md](API_AND_PRISMA_BRIDGE_REFERENCE.md).
 
 ### 7.1 Key Papyrus Functions (`MARAS.psc`)
 - **Pair-Keyed Relationship Transitions**:
-  - `PromoteNPCToStatus(Actor npc, String statusName, Bool sendEvent = true)` / `PromoteNPCToStatusByEnum(Actor npc, Int statusEnum, Bool sendEvent = true)` — Transitions a relationship between the **Player** and `npc`. Pass `sendEvent = false` to suppress SKSE ModEvent dispatch during save migrations or batch syncs.
-  - `PromoteNPCToStatusWith(Actor actorA, Actor actorB, String statusName, Bool sendEvent = true)` / `PromoteNPCToStatusWithByEnum(Actor actorA, Actor actorB, Int statusEnum, Bool sendEvent = true)` — Transitions a relationship between **any two actors** (`Player <-> NPC` or `NPC <-> NPC`). Pass `sendEvent = false` to suppress event dispatch.
-  - `DemoteNPCToCandidateWith(Actor actorA, Actor actorB)` — Resets a pair's romantic relationship back to `Candidate`.
+  - `PromoteNPCToStatus(Actor npc, string statusType, bool sendEvent = true)` / `PromoteNPCToStatusByEnum(Actor npc, int statusEnum, bool sendEvent = true)` — Transitions a relationship between the **Player** and `npc`. Pass `sendEvent = false` to suppress SKSE ModEvent dispatch during save migrations or batch syncs.
+  - `PromoteNPCToStatusWith(Actor npc, Actor target, string statusType, bool sendEvent = true)` / `PromoteNPCToStatusWithByEnum(Actor npc, Actor target, int statusEnum, bool sendEvent = true)` — Transitions a relationship between **any two actors** (`Player <-> NPC` or `NPC <-> NPC`). Pass `sendEvent = false` to suppress event dispatch.
+  - `Breakup(Actor actorA, Actor actorB)` — Ends a romantic pair's active status (recording the appropriate breakup/ex status, cooldowns, and spouse cleanup).
 - **Open Relationships & Infidelity**:
-  - `SetPairIsOpen(Actor actorA, Actor actorB, Bool isOpen)` / `GetPairIsOpen(Actor actorA, Actor actorB)` — Configures mutual open-relationship consent for a specific couple.
-  - `RecordCheating(Actor cheater, Actor victim, Actor affairPartner, Bool isSecret, Int affairType)` — Records an infidelity incident (`affairType`: `0` = OneNightStand, `1` = OngoingAffair, `2` = CommittedSecret) and syncs cheating factions.
+  - `SetPairIsOpen(Actor actorA, Actor actorB, bool isOpen)` / `GetPairIsOpen(Actor actorA, Actor actorB)` — Configures mutual open-relationship consent for a specific couple.
+  - `RecordCheating(Actor cheater, Actor victim, Actor affairPartner, bool isSecret = false)` — Records an infidelity incident and syncs cheating factions.
 - **Custom Daily Affection Channels & Permanent Score**:
-  - `SetPermanentAffection(Actor npc, Float value, Bool sendEvent = true)` — Directly sets an actor's permanent affection score (`0..100`). Pass `sendEvent = false` to prevent firing `maras_change_affection` events (e.g. when establishing baseline 100 affection on migrated spouses).
-  - `AddAffection(Actor npc, Float amount, String type)` — Adds positive or negative affection to a named daily channel (e.g., `"MyModDate"`, `"CustomGift"`).
-  - `SetAffectionMinMax(String type, Float minVal, Float maxVal)` — Configures the daily clamping range for your custom channel before midnight rollup into permanent affection (see [`AffectionRules`](services/AffectionRules.md)).
+  - `SetPermanentAffection(Actor npc, int amount, bool sendEvent = true)` — Directly sets an actor's permanent affection score (`0..100`). Pass `sendEvent = false` to prevent firing `maras_change_affection` events (e.g. when establishing baseline 100 affection on migrated spouses).
+  - `AddAffection(Actor npc, float amount, string type)` — Adds positive or negative affection to a named daily channel (e.g., `"MyModDate"`, `"CustomGift"`).
+  - `SetAffectionMinMax(string type, int minVal, int maxVal)` — Configures the daily clamping range for your custom channel before midnight rollup into permanent affection (see [`AffectionRules`](services/AffectionRules.md)).
 - **Children & Lineage**:
-  - `RegisterChild(Actor child, Actor guardianA, Actor guardianB, Form houseLocation)` — Registers an adopted or spawned child with up to two neutral custodial guardians (`guardianA` and `guardianB` are strictly gender-neutral and interchangeable).
-  - `RegisterChildActor(Actor childActor, Actor guardianA, Actor guardianB, Form houseLocation, Bool sendEvent = true)` — Registers a physical child actor with optional ModEvent emission suppression (`sendEvent = false`).
-  - `RegisterBiologicalChild(...)` / `SetBioParents(Int childId, Actor mother, Actor father)` — Tracks genetic parentage and triggers automatic paternity secret detection when a birth results from an affair.
+  - `RegisterChildActor(Actor child, Actor guardianA, Actor guardianB = None, Location houseLocation = None, Actor bioMother = None, Actor bioFather = None, int syntheticID = 0, int stage = 2, bool sendEvent = true)` — Registers an adopted or placed physical child actor with up to two neutral custodial guardians (`guardianA` and `guardianB` are strictly gender-neutral and interchangeable) and optional genetic parents.
+  - `RegisterUnbornChild(Actor mother, Actor bioFather = None, float conceptionTime = 0.0, bool evaluateStepIn = true)` / `SetBioMother(int childID, Actor mother)` / `SetBioFather(int childID, Actor father)` — Tracks unborn/synthetic lineage and triggers automatic paternity secret evaluation when a conception involves an affair.
 
 ### 7.2 SKSE ModEvents Emitted by M.A.R.A.S
-External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<HandlerName>")` to react to M.A.R.A.S state transitions (see [API_AND_PRISMA_BRIDGE_REFERENCE.md](API_AND_PRISMA_BRIDGE_REFERENCE.md#3-skse-modevents) for detailed payload contracts):
+External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<HandlerName>")` to react to M.A.R.A.S state transitions (see [API_AND_PRISMA_BRIDGE_REFERENCE.md](API_AND_PRISMA_BRIDGE_REFERENCE.md#22-skse-modevents-emitted-by-c) for detailed payload contracts):
 
 | ModEvent Name | `strArg` / Key Payload | When Fired |
 | :--- | :--- | :--- |
@@ -307,8 +306,8 @@ External Papyrus scripts can register via `RegisterForModEvent("<eventName>", "<
 | `maras_partner_home_arrival_event` / `maras_banter_scene_trigger` | Event JSON payload | Home-arrival encounter dispatch or ambient couple banter trigger. |
 | `maras_child_event` / `maras_spawn_synthetic_child` / `maras_paternity_secret_resolved` / `maras_child_chest_event` | Child / secret JSON or string | Child lifecycle changes, synthetic spawning, paternity secret resolution, or chest introduction/reset. |
 | `maras_teammate_change` / `maras_teammate_added` / `maras_teammate_removed` | `""` (`sender` on add/remove) | When the active follower/teammate set changes. |
-| `maras_day_changed` / `maras_dialogue_opened` | `""` / dialogue notification | Daily midnight rollover (`numArg` = game day) or dialogue menu entry. |
+| `maras_day_changed` | `""` (`numArg` = game day) | Daily midnight rollover. |
 | `maras_actor_died` / `maras_child_died` / `maras_child_pet_died` | `""` (`numArg` `1.0` if player killer) | When a tracked adult, registered child, or household child's pet/critter dies. |
 
 ### 7.3 Native C++ DLL API (`MARAS_PublicAPI.h`)
-SKSE C++ plugin authors can query and mutate M.A.R.A.S state directly in C++ without going through Papyrus by including [MARAS_PublicAPI.h](../../SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h) and calling `MARAS_API::RequestPluginAPI(MARAS_API::InterfaceVersion::V1)` after `MARAS.dll` is loaded.
+External SKSE C++ plugin authors can query live M.A.R.A.S relationship, household, and teammate state read-only by including [MARAS_PublicAPI.h](../../SKSE_Source/modules/bridge_c_api/include/MARAS_PublicAPI.h) (or resolving the exported `extern "C"` functions via `GetModuleHandleW(L"MARAS.dll")` + `GetProcAddress`): `MARAS_GetPermanentAffection`, `MARAS_GetDaysSinceLastAffection`, `MARAS_GetAllMarried`, `MARAS_GetAllEngaged`, `MARAS_GetTemperament`, `MARAS_GetStatusHistoryCount`, `MARAS_GetStatusHistoryEntry`, `MARAS_GetTenantHouseFormID`, `MARAS_GetPlayerHouseTenants`, and `MARAS_GetCurrentTeammates`. See [API_AND_PRISMA_BRIDGE_REFERENCE.md#1-c-public-dll-api-maras_publich](API_AND_PRISMA_BRIDGE_REFERENCE.md#1-c-public-dll-api-maras_publich) for buffer contracts.

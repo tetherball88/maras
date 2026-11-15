@@ -8,6 +8,7 @@
 #include "maras/engine/FormCache.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/PlayerChildrenEngineOps.h"
+#include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/state/WorldStore.h"
 
@@ -92,17 +93,32 @@ namespace MARAS::App {
             if (!form) {
                 return;
             }
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            auto notifyIfPlayerGift = [targetContainer, player](RE::TESBoundObject* item, std::int32_t addedCount) {
+                if (!player || targetContainer != player || !item || addedCount <= 0) {
+                    return;
+                }
+                const char* itemName = item->GetName();
+                if (!itemName || itemName[0] == '\0') {
+                    return;
+                }
+                QueueHUDMessage(addedCount > 1 ? std::format("{} ({}) Added", itemName, addedCount)
+                                               : std::format("{} Added", itemName));
+            };
             if (auto* levItem = form->As<RE::TESLevItem>()) {
+                const std::uint16_t calcLevel = player ? player->GetLevel() : 1;
                 RE::BSScrapArray<RE::CALCED_OBJECT> calced;
-                levItem->CalculateCurrentFormList(1, static_cast<std::int16_t>(count), calced, 0, true);
+                levItem->CalculateCurrentFormList(calcLevel, static_cast<std::int16_t>(count), calced, 0, true);
                 for (const auto& entry : calced) {
                     auto* bound = entry.form ? entry.form->As<RE::TESBoundObject>() : nullptr;
                     if (bound && entry.count > 0) {
                         targetContainer->AddObjectToContainer(bound, nullptr, entry.count, nullptr);
+                        notifyIfPlayerGift(bound, entry.count);
                     }
                 }
             } else if (auto* bound = form->As<RE::TESBoundObject>()) {
                 targetContainer->AddObjectToContainer(bound, nullptr, count, nullptr);
+                notifyIfPlayerGift(bound, count);
             }
         }
 
@@ -344,10 +360,10 @@ namespace MARAS::App {
         if (critterRefId.IsNull()) {
             return;
         }
-        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(critterRefId.raw());
-        if (ref && !ref->IsDeleted()) {
-            ref->Disable();
-            ref->SetDelete(true);
+        auto* actor = RE::TESForm::LookupByID<RE::Actor>(critterRefId.raw());
+        if (actor && !actor->IsDeleted() && !actor->IsPlayerRef() && actor->IsDynamicForm()) {
+            actor->Disable();
+            actor->SetDelete(true);
         }
     }
 

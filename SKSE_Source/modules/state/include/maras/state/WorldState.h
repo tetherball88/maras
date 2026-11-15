@@ -62,10 +62,20 @@ namespace MARAS::State {
      * (factions, AI packages, Prisma UI push notifications) can reconcile strictly
      * what changed without mutating domain state inside queries.
      */
+    struct RestoredSharedCellDelta {
+        CellId cellId{};
+        SharedCellRecord previousRecord{};
+
+        bool operator==(const RestoredSharedCellDelta&) const = default;
+    };
+
     struct WorldMutationResult {
         bool changed{ false };
         std::vector<ActorId> dirtyActors{};
         std::vector<ChildId> dirtyChildren{};
+        std::vector<ActorId> stoppedSharingSpouses{};
+        std::vector<RestoredSharedCellDelta> restoredSharedCells{};
+        std::vector<RefId> retiredSceneMarkers{};
 
         void MarkActorDirty(ActorId actor);
         void MarkChildDirty(ChildId child);
@@ -231,6 +241,7 @@ namespace MARAS::State {
             const IActorMetadataProvider& meta = DefaultActorMetadataProvider{});
 
         WorldMutationResult UnregisterActor(ActorId actor);
+        WorldMutationResult StopSharingForSpouseWithDeltas(ActorId spouse);
 
         bool operator==(const WorldState&) const = default;
     };

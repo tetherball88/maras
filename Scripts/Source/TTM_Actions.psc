@@ -31,6 +31,10 @@ Function QuestDivorceResolutionActionExecute(Actor akActor, string decision)
     if (!estrangedQuest || !estrangedQuest.IsRunning())
         return
     endif
+    Actor questSpouse = TTM_Utils.GetActorAlias(estrangedQuest, "Spouse")
+    if (!questSpouse || akActor != questSpouse)
+        return
+    endif
     estrangedQuest.SetStage(stage)
 EndFunction
 

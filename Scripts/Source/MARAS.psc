@@ -282,6 +282,9 @@ Function ApplyDialogueLoversLedgerBonus(Actor npc, int exclusiveSex, int groupSe
 ;/ Add or remove the pacify spell on aggressive fiance/spouse actors /;
 Function PacifyFianceOrSpouse(Actor npc, bool enable = true) global native
 
+;/ Seed legacy save-upgrade runtime cooldowns and PoorCounter when C++ values are still unset /;
+Function SeedLegacyUpgradeState(float lastPaidDivorceFee, int childPoorCounter, Actor[] npcs, float[] brokeupTimes, float[] sharedIncomeTimes) global native
+
 
 ;/ =====================================================================
 ;    ██████ ██   ██ ██ ██      ██████  ██████  ███████ ███    ██
@@ -1228,8 +1231,8 @@ int Function PlanCaughtCheatingSceneIndex(Actor akCheater, Actor akAffairPartner
 ;/ Applies SkyrimNet filter faction mutes to banter scene participants and tracks them in co-save /;
 Function MuteBanterSceneParticipants(Actor akNpc1, Actor akNpc2, Actor akPartner = None, bool abShouldMutePartner = false) global native
 
-;/ Removes all active banter SkyrimNet mutes tracked by C++ /;
-Function UnMuteBanterSceneParticipants() global native
+;/ Removes all active banter SkyrimNet mutes tracked by C++ and returns whether any actor was unmuted /;
+bool Function UnMuteBanterSceneParticipants() global native
 
 ;/ Restores banter-relocated NPCs not in player cell back to stored XMarkers and deletes markers /;
 Function RestoreMovedBanterSceneNpcs() global native
@@ -1250,8 +1253,8 @@ Function RestoreMovedBanterSceneNpcs() global native
 ; ── Relationship & Social Events ──────────────────────────────────────
 ;/ Handles relationship change events.
    @param EventName - "maras_status_changed"
-   @param status - New relationship status ("candidate", "dating", "lover", "engaged", "married", "jilted", "divorced", "exdating", "exlover")
-   @param statusEnum - Enum value of the new status (0..6)
+   @param status - New relationship status ("candidate", "engaged", "married", "divorced", "jilted", "dating", "lover", "exdating", "exlover")
+   @param statusEnum - Enum value of the new status (0..8)
    @param npc - The Actor whose relationship changed /;
 ; Event OnMarasStatusChanged(string eventName, string status, float statusEnum, Form npc)
 ; EndEvent
@@ -1259,7 +1262,7 @@ Function RestoreMovedBanterSceneNpcs() global native
 ;/ Handles full relationship change events with JSON payload containing both participants.
    @param EventName - "maras_status_changed_full"
    @param jsonPayload - JSON formatted as {"initiator":"0x...","acceptor":"0x...","initiatorName":"...","acceptorName":"...","status":"..."}
-   @param statusEnum - Enum value of the new status
+   @param statusEnum - Enum value of the new status (0..8)
    @param npc - The initiator Actor /;
 ; Event OnMarasStatusChangedFull(string eventName, string jsonPayload, float statusEnum, Form npc)
 ; EndEvent
@@ -1272,9 +1275,9 @@ Function RestoreMovedBanterSceneNpcs() global native
 ; Event OnMarasHierarchyChanged(string eventName, string promotDemote, float rankDiff, Form spouse)
 ; EndEvent
 
-;/ Handles spouse affection change events.
+;/ Handles spouse affection change events when crossing affection thresholds.
    @param EventName - "maras_change_affection"
-   @param level - "happy", "neutral", "unhappy", "estranged"
+   @param level - "happy", "content", "troubled", "estranged"
    @param affectionDiff - Positive for increase, negative for decrease
    @param spouse - The spouse Actor whose affection changed /;
 ; Event OnMarasChangeAffection(string eventName, string level, float affectionDiff, Form spouse)
@@ -1391,11 +1394,35 @@ Function RestoreMovedBanterSceneNpcs() global native
 ; Event OnMarasActorDied(string eventName, string strArg, float fltArg, Form sender)
 ; EndEvent
 
-;/ Fires when a paternity secret is resolved.
+;/ Handles paternity secret resolution events.
    @param EventName - "maras_paternity_secret_resolved"
    @param strArg - Outcome string: "bio_father_learnt", "presumed_father_learnt",
                    "divorce_revealed", or SkyrimNet outcome
    @param fltArg - Child ID (cast from int to float)
    @param sender - None /;
 ; Event OnMarasPaternitySecretResolved(string eventName, string strArg, float fltArg, Form sender)
+; EndEvent
+
+;/ Handles exposed affair events before resolution.
+   @param EventName - "maras_affair_exposed"
+   @param strArg - JSON payload with cheater/victim/affairPartner details
+   @param fltArg - Unused (0.0)
+   @param sender - Actor form of exposer or cheater /;
+; Event OnMarasAffairExposed(string eventName, string strArg, float fltArg, Form sender)
+; EndEvent
+
+;/ Handles partner agency intent changes, home arrival encounters, and banter scene triggers.
+   @param EventName - "maras_partner_intent_changed" / "maras_partner_home_arrival_event" / "maras_banter_scene_trigger"
+   @param strArg - Intent enum name or JSON encounter payload
+   @param fltArg - Intent enum value or priority/presence flag
+   @param sender - Actor form of partner /;
+; Event OnMarasAgencyEvent(string eventName, string strArg, float fltArg, Form sender)
+; EndEvent
+
+;/ Handles child treasure chest introduction/reset, synthetic child spawn, and intimate thread verification.
+   @param EventName - "maras_child_chest_event" / "maras_spawn_synthetic_child" / "maras_verify_intimate_thread"
+   @param strArg - Action string ("introduced"/"reset"), child ID string, or framework name
+   @param fltArg - Flag/child ID/thread ID
+   @param sender - Child/house, None, or Player form /;
+; Event OnMarasLifecycleUtilityEvent(string eventName, string strArg, float fltArg, Form sender)
 ; EndEvent

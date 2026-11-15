@@ -860,4 +860,69 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainLineage, FertilityBatchWindowSpawnNullMotherAndPaternityDirectiveEdgeCases) {
+        const ActorId mother{ 0x00029001u };
+        const ActorId npcFather{ 0x00029002u };
+        const ActorId datingPartner{ 0x00029003u };
+
+        // 1. Aborted labor >= 0.5f days starts new batch, empty batch pop returns nullopt
+        {
+            LineageTable lineage{};
+            const auto first = ApplyBeginLaborBatch(lineage, mother, 2, 10.0f);
+            MARAS_CHECK(first.startedNewBatch);
+            MARAS_CHECK_EQ(first.totalCount, 2);
+
+            const auto sameWindow = ApplyBeginLaborBatch(lineage, mother, 1, 10.3f);
+            MARAS_CHECK(!sameWindow.startedNewBatch);
+
+            // Empty bornChildIds yields nullopt when popped
+            MARAS_CHECK(!ApplyPopDeliveryBatch(lineage, mother).has_value());
+            MARAS_CHECK(lineage.FindActiveDeliveryBatch(mother) == nullptr);
+
+            const auto newAfterExpiry = ApplyBeginLaborBatch(lineage, mother, 3, 10.5f);
+            MARAS_CHECK(newAfterExpiry.startedNewBatch);
+            MARAS_CHECK_EQ(newAfterExpiry.totalCount, 3);
+        }
+
+        // 2. PlanSpawnedChildLineage: null mother + unmarried mother Child vs Adult marriage gate
+        {
+            WorldState ws{};
+            DefaultActorMetadataProvider meta{};
+            (void)ws.TransitionRelationship(
+                mother, datingPartner, RelationshipStatus::Dating, 1.0f, mother, meta);
+
+            const auto nullMotherPlan = PlanSpawnedChildLineage(
+                ws.Snapshot(), ChildId{}, ActorId{}, npcFather, ChildStage::Child);
+            MARAS_CHECK(!nullMotherPlan.isPlayerChild);
+            MARAS_CHECK_EQ(nullMotherPlan.npcGuardianA, npcFather);
+            MARAS_CHECK(nullMotherPlan.npcGuardianB.IsNull());
+            MARAS_CHECK_EQ(nullMotherPlan.tenantHouseLookupActor, npcFather);
+
+            const auto datingChildPlan = PlanSpawnedChildLineage(
+                ws.Snapshot(), ChildId{}, mother, npcFather, ChildStage::Child);
+            MARAS_CHECK_EQ(datingChildPlan.npcGuardianA, mother);
+            MARAS_CHECK(datingChildPlan.npcGuardianB.IsNull());
+
+            const auto datingAdultPlan = PlanSpawnedChildLineage(
+                ws.Snapshot(), ChildId{}, mother, npcFather, ChildStage::Adult);
+            MARAS_CHECK_EQ(datingAdultPlan.npcGuardianA, mother);
+            MARAS_CHECK_EQ(datingAdultPlan.npcGuardianB, datingPartner);
+        }
+
+        // 3. PaternityActionRules::ParsePaternityRevealDirective role keywords & pregnancy_only guard
+        {
+            for (const char* kw : { "bio", "biological", "presumed", "assumed", "partner", "both" }) {
+                const auto dir = ParsePaternityRevealDirective(kw, "all", "full");
+                MARAS_CHECK(dir.fatherLookupQuery.empty());
+            }
+            const auto npcDir = ParsePaternityRevealDirective("  Brynjolf  ", "all", "full");
+            MARAS_CHECK_EQ(npcDir.fatherLookupQuery, std::string("Brynjolf"));
+            MARAS_CHECK(npcDir.resolveAllMatches);
+
+            const auto pregOnlyDir = ParsePaternityRevealDirective("partner", "all", "pregnancy_only");
+            MARAS_CHECK(pregOnlyDir.isPregnancyOnly);
+            MARAS_CHECK(!pregOnlyDir.resolveAllMatches);
+        }
+    }
+
 }  // namespace MARAS::Tests

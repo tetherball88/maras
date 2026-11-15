@@ -384,6 +384,7 @@ namespace MARAS::Domain::Relationships {
 
     DialogueTopicEndOutcome EvaluateDialogueTopicEndOutcome(std::string_view promptKey) {
         if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_sorry_no_persuade_failure") ||
+            StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_sorry_didnt_forgave_persuade_failure") ||
             StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_join_no_persuade_failure")) {
             return DialogueTopicEndOutcome{ .breakupWithSpeaker = true };
         }

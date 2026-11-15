@@ -34,7 +34,7 @@ namespace MARAS::State {
                 : reader_(reader), chunkLength_(chunkLength) {}
 
             [[nodiscard]] bool HasRemaining(std::uint32_t needed) const noexcept {
-                return chunkLength_ == 0 || (bytesRead_ <= chunkLength_ && needed <= (chunkLength_ - bytesRead_));
+                return bytesRead_ <= chunkLength_ && needed <= (chunkLength_ - bytesRead_);
             }
 
             [[nodiscard]] std::uint32_t BytesRead() const noexcept { return bytesRead_; }
@@ -2115,6 +2115,8 @@ namespace MARAS::State {
                                                                         stagedLineage.UpsertActiveDeliveryBatch(ActorId{ newMother }, std::move(batch));
                                                                     }
                                                                 }
+                                                            } else {
+                                                                return false;
                                                             }
                                                         }
                                                     }
@@ -2127,6 +2129,10 @@ namespace MARAS::State {
                         }
                     }
                 }
+            }
+
+            if (chunk.HasRemaining(1u)) {
+                return false;
             }
 
             state.actors.Reset(std::move(stagedActors));
@@ -2478,7 +2484,7 @@ namespace MARAS::State {
                 staged.UpsertChildState(std::move(rec));
             }
 
-            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+            if (chunk.HasRemaining(1u)) {
                 std::uint32_t extTag = 0;
                 if (!chunk.ReadValue(extTag) || extTag != CoSaveConstants::kExtPlayerChildrenStatePLC1) {
                     return false;
@@ -2512,6 +2518,10 @@ namespace MARAS::State {
                         }
                     }
                 }
+            }
+
+            if (chunk.HasRemaining(1u)) {
+                return false;
             }
 
             state.household.Reset(std::move(staged));
@@ -2583,55 +2593,53 @@ namespace MARAS::State {
                 return false;
             }
 
-            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+            if (chunk.HasRemaining(1u)) {
                 std::uint32_t count = 0;
-                if (chunk.ReadValue(count)) {
-                    if (count > kMaxSerializedEntries) {
+                if (!chunk.ReadValue(count) || count > kMaxSerializedEntries) {
+                    return false;
+                }
+                for (std::uint32_t i = 0; i < count; ++i) {
+                    std::uint32_t savedId = 0;
+                    float day = 0.0f;
+                    if (!chunk.ReadValue(savedId) || !chunk.ReadValue(day)) {
                         return false;
                     }
-                    for (std::uint32_t i = 0; i < count; ++i) {
-                        std::uint32_t savedId = 0;
-                        float day = 0.0f;
-                        if (!chunk.ReadValue(savedId) || !chunk.ReadValue(day)) {
+                    std::uint32_t resolvedId = 0;
+                    if (!Foundation::IsSyntheticChildRawId(savedId) &&
+                        ResolveActorOrSpecialRaw(resolver, savedId, resolvedId, false, false, false, true) &&
+                        resolvedId != 0) {
+                        staged.npcLastMatchmakingChangeDay[ActorId{ resolvedId }] = day;
+                    }
+                }
+
+                if (chunk.HasRemaining(1u)) {
+                    float partnerCheatDay = -1.0f;
+                    if (!chunk.ReadValue(partnerCheatDay)) {
+                        return false;
+                    }
+                    staged.lastPlayerPartnerCheatingDay = partnerCheatDay;
+
+                    if (chunk.HasRemaining(1u)) {
+                        std::uint32_t locCount = 0;
+                        if (!chunk.ReadValue(locCount) || locCount > kMaxSerializedEntries) {
                             return false;
                         }
-                        std::uint32_t resolvedId = 0;
-                        if (!Foundation::IsSyntheticChildRawId(savedId) &&
-                            ResolveActorOrSpecialRaw(resolver, savedId, resolvedId, false, false, false, true) &&
-                            resolvedId != 0) {
-                            staged.npcLastMatchmakingChangeDay[ActorId{ resolvedId }] = day;
-                        }
-                    }
-
-                    if (chunk.HasRemaining(sizeof(float))) {
-                        float partnerCheatDay = -1.0f;
-                        if (chunk.ReadValue(partnerCheatDay)) {
-                            staged.lastPlayerPartnerCheatingDay = partnerCheatDay;
-                            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
-                                std::uint32_t locCount = 0;
-                                if (chunk.ReadValue(locCount)) {
-                                    if (locCount > kMaxSerializedEntries) {
-                                        return false;
-                                    }
-                                    for (std::uint32_t i = 0; i < locCount; ++i) {
-                                        std::uint32_t savedLoc = 0;
-                                        float locDay = 0.0f;
-                                        if (!chunk.ReadValue(savedLoc) || !chunk.ReadValue(locDay)) {
-                                            return false;
-                                        }
-                                        std::uint32_t resolvedLoc = 0;
-                                        if (savedLoc != 0 && resolver.ResolveFormId(savedLoc, resolvedLoc) && resolvedLoc != 0) {
-                                            staged.lastHomeArrivalEventDayByLoc[LocationId{ resolvedLoc }] = locDay;
-                                        }
-                                    }
-                                }
+                        for (std::uint32_t i = 0; i < locCount; ++i) {
+                            std::uint32_t savedLoc = 0;
+                            float locDay = 0.0f;
+                            if (!chunk.ReadValue(savedLoc) || !chunk.ReadValue(locDay)) {
+                                return false;
+                            }
+                            std::uint32_t resolvedLoc = 0;
+                            if (savedLoc != 0 && resolver.ResolveFormId(savedLoc, resolvedLoc) && resolvedLoc != 0) {
+                                staged.lastHomeArrivalEventDayByLoc[LocationId{ resolvedLoc }] = locDay;
                             }
                         }
                     }
                 }
             }
 
-            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+            if (chunk.HasRemaining(1u)) {
                 std::uint32_t relMagic = 0;
                 if (!chunk.ReadValue(relMagic)) {
                     return false;
@@ -2682,6 +2690,10 @@ namespace MARAS::State {
                 } else {
                     return false;
                 }
+            }
+
+            if (chunk.HasRemaining(1u)) {
+                return false;
             }
 
             state.cooldowns.Reset(std::move(staged));
@@ -2853,7 +2865,7 @@ namespace MARAS::State {
                 }
             }
 
-            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+            if (chunk.HasRemaining(1u)) {
                 std::uint32_t dcsMagic = 0;
                 if (!chunk.ReadValue(dcsMagic)) {
                     return false;
@@ -2931,7 +2943,13 @@ namespace MARAS::State {
                             }
                         }
                     }
+                } else {
+                    return false;
                 }
+            }
+
+            if (chunk.HasRemaining(1u)) {
+                return false;
             }
 
             DeceasedTable staged{};
@@ -2977,14 +2995,14 @@ namespace MARAS::State {
                 }
             }
 
-            if (version >= 2 && chunk.HasRemaining(sizeof(float))) {
+            if (version >= 2 && chunk.HasRemaining(1u)) {
                 float lastSceneDay = -1.0f;
                 if (!chunk.ReadValue(lastSceneDay)) {
                     return false;
                 }
                 staged.lastBanterSceneDay = lastSceneDay;
 
-                if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                if (chunk.HasRemaining(1u)) {
                     std::uint32_t extTag = 0;
                     std::uint32_t movedCount = 0;
                     if (!chunk.ReadValue(extTag) ||
@@ -3039,6 +3057,10 @@ namespace MARAS::State {
                         }
                     }
                 }
+            }
+
+            if (chunk.HasRemaining(1u)) {
+                return false;
             }
 
             state.cooldowns.Reset(std::move(staged));
@@ -3553,13 +3575,23 @@ namespace MARAS::State {
                 state.household.Write().EraseAdultChildTravel(cId);
             }
 
-            // Prune deceased / unmarried spouses from SPAS sharedCells (preserving unloaded living married spouses!)
+            // Prune deceased / unmarried spouses from SPAS sharedCells (preserving unloaded living married spouses
+            // and inherited homes from deceased spouses not killed by the player)
             std::vector<ActorId> spousesToUnshare;
             for (const auto& [cellId, cellRec] : state.household->AllSharedCells()) {
                 (void)cellId;
                 for (const ActorId sp : cellRec.sharingSpouses) {
-                    if (sp.IsNull() || isOrphanedDynamicRaw(sp.raw()) ||
-                        state.deceased->IsDeceased(sp) || !state.IsMarried(ActorId::Player(), sp)) {
+                    const auto* decRec = state.deceased->FindByActor(sp);
+                    const bool isInheritedDeceasedSpouse =
+                        decRec != nullptr && !decRec->wasKilledByPlayer &&
+                        std::any_of(decRec->partnersAtDeath.begin(), decRec->partnersAtDeath.end(),
+                                    [](const DeceasedPartnerEntry& p) {
+                                        return p.isPlayer && p.statusAtDeath == RelationshipStatus::Married;
+                                    });
+                    if (sp.IsNull() ||
+                        (!isInheritedDeceasedSpouse &&
+                         (isOrphanedDynamicRaw(sp.raw()) || state.deceased->IsDeceased(sp) ||
+                          !state.IsMarried(ActorId::Player(), sp)))) {
                         spousesToUnshare.push_back(sp);
                     }
                 }
@@ -3568,17 +3600,33 @@ namespace MARAS::State {
                 state.household.Write().StopSharingForSpouse(sp);
             }
 
-            // Prune deceased / orphaned actors from AffectionTable
-            std::vector<ActorId> deadAffectionActors;
+            // Prune deceased / orphaned actors from AffectionTable (across permanent, lastDays, and daily maps)
+            std::unordered_set<ActorId> deadAffectionActors;
+            auto isStaleAffectionActor = [&](ActorId actor) -> bool {
+                return isOrphanedDynamicRaw(actor.raw()) || state.deceased->IsDeceased(actor) ||
+                       !resolver.IsAliveAndValid(actor);
+            };
             for (const auto& [actor, score] : state.affection->AllPermanent()) {
                 (void)score;
-                if (isOrphanedDynamicRaw(actor.raw()) || state.deceased->IsDeceased(actor) ||
-                    !resolver.IsAliveAndValid(actor)) {
-                    deadAffectionActors.push_back(actor);
+                if (isStaleAffectionActor(actor)) {
+                    deadAffectionActors.insert(actor);
+                }
+            }
+            for (const auto& [actor, day] : state.affection->AllLastDays()) {
+                (void)day;
+                if (isStaleAffectionActor(actor)) {
+                    deadAffectionActors.insert(actor);
+                }
+            }
+            for (const auto& [actor, types] : state.affection->AllDaily()) {
+                (void)types;
+                if (isStaleAffectionActor(actor)) {
+                    deadAffectionActors.insert(actor);
                 }
             }
             for (const ActorId actor : deadAffectionActors) {
                 state.affection.Write().EraseActor(actor);
+                result.changed = true;
             }
 
             // Prune deceased / orphaned actors from CooldownTable actor maps & 'BNT1' runtime tracking
@@ -3605,9 +3653,13 @@ namespace MARAS::State {
             collectDeadCooldownActors(state.cooldowns->npcBrokeupTime);
             collectDeadCooldownActors(state.cooldowns->npcLastTimeSharedIncome);
             for (const auto& [actor, marker] : state.cooldowns->movedSceneActors) {
-                (void)marker;
                 if (isStaleCooldownActor(actor)) {
                     deadCooldownActors.insert(actor);
+                    if (!marker.IsNull() &&
+                        std::find(result.retiredSceneMarkers.begin(), result.retiredSceneMarkers.end(), marker) ==
+                            result.retiredSceneMarkers.end()) {
+                        result.retiredSceneMarkers.push_back(marker);
+                    }
                 }
             }
             for (const ActorId actor : state.cooldowns->skyrimNetMutedActors) {
@@ -3780,7 +3832,8 @@ namespace MARAS::State {
 
         // Phase 2: Post-chunk cross-table normalization
         if (report.loadedChunkCount > 0) {
-            (void)FinalizeWorldStateAfterLoad(state, resolver, optionalRng);
+            const WorldMutationResult normResult = FinalizeWorldStateAfterLoad(state, resolver, optionalRng);
+            report.retiredSceneMarkers = normResult.retiredSceneMarkers;
         }
 
         return report;

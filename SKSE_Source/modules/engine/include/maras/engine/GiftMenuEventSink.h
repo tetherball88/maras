@@ -32,6 +32,13 @@ namespace MARAS {
         void Revert();
 
     private:
+        void RecordTransferredItemOnGameThread(
+            std::uint64_t sessionId,
+            RE::FormID destId,
+            RE::FormID baseObjId,
+            std::int32_t itemCount);
+        void FinalizeGiftSession(std::uint64_t sessionId);
+
         GiftMenuEventSink() = default;
         ~GiftMenuEventSink() override = default;
         GiftMenuEventSink(const GiftMenuEventSink&) = delete;
@@ -41,6 +48,7 @@ namespace MARAS {
 
         std::atomic<bool> giftMenuOpen_{ false };
         std::mutex mutex_;
+        std::uint64_t menuSessionId_{ 0 };
         RE::FormID receiverId_{ 0 };
         std::vector<Domain::Relationships::GiftedItemEntry> items_;
     };

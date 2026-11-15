@@ -543,7 +543,8 @@ namespace MARAS::App {
         void ReconcileBreakupOrDivorceEngineState(RE::FormID actorA,
                                                   RE::FormID actorB,
                                                   Foundation::RelationshipStatus oldStatus,
-                                                  Foundation::RelationshipStatus newStatus);
+                                                  Foundation::RelationshipStatus newStatus,
+                                                  const State::WorldMutationResult& mut);
         void SyncAllMarriedCouplesChildCustody();
         void UpdateAllSpousesChildrenFaction();
 

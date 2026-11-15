@@ -221,6 +221,7 @@ namespace MARAS {
 
     void PollingService::Initialize() {
         auto now = std::chrono::steady_clock::now();
+        lastFastTick_ = now;
         lastSpatialSnapshot_ = now;
         lastTeammateCheck_ = now;
         lastDayCheck_ = now;
@@ -263,6 +264,7 @@ namespace MARAS {
         previousTeammates_.clear();
         previousPlayerLevel_ = 0;
         previousGameDay_ = -1.0f;
+        lastFastTick_ = TimePoint{};
         lastSpatialSnapshot_ = TimePoint{};
         initialized_ = false;
         State::SpatialSnapshotStore::GetSingleton().Reset();
@@ -284,6 +286,14 @@ namespace MARAS {
         std::lock_guard papyrusLock(GetPapyrusMutex());
 
         auto now = std::chrono::steady_clock::now();
+
+        const float deltaSeconds = lastFastTick_.time_since_epoch().count() > 0
+                                       ? std::clamp(std::chrono::duration<float>(now - lastFastTick_).count(), 0.0f, 1.5f)
+                                       : 0.0f;
+        lastFastTick_ = now;
+        if (auto* hooks = Engine::GetEngineEventHooks()) {
+            hooks->OnPollingFastTick(deltaSeconds);
+        }
 
         if (now - lastSpatialSnapshot_ >= kSpatialSnapshotInterval) {
             PublishSpatialSnapshot();

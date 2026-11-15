@@ -8,6 +8,8 @@
 #include "maras/state/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
 
+#include <atomic>
+#include <memory>
 #include <vector>
 
 namespace MARAS {
@@ -16,12 +18,18 @@ namespace MARAS {
 
         class SleepRestedSyncCallback final : public RE::BSScript::IStackCallbackFunctor {
         public:
-            SleepRestedSyncCallback(SessionEpoch epoch, Domain::Household::SleepRestedPlan plan) noexcept
-                : epoch_(epoch), plan_(plan) {}
+            SleepRestedSyncCallback(
+                SessionEpoch epoch,
+                Domain::Household::SleepRestedPlan plan,
+                std::shared_ptr<std::atomic<int>> pending) noexcept
+                : epoch_(epoch), plan_(plan), pending_(std::move(pending)) {}
 
             ~SleepRestedSyncCallback() override = default;
 
             void operator()(RE::BSScript::Variable) override {
+                if (!pending_ || pending_->fetch_sub(1, std::memory_order_acq_rel) != 1) {
+                    return;
+                }
                 if (!IsSessionEpochCurrent(epoch_)) {
                     return;
                 }
@@ -35,6 +43,7 @@ namespace MARAS {
         private:
             SessionEpoch epoch_{ 0 };
             Domain::Household::SleepRestedPlan plan_{};
+            std::shared_ptr<std::atomic<int>> pending_{};
         };
 
     }  // namespace
@@ -47,7 +56,7 @@ namespace MARAS {
     RE::BSEventNotifyControl SleepEventSink::ProcessEvent(
         const RE::TESSleepStopEvent* a_event,
         RE::BSTEventSource<RE::TESSleepStopEvent>*) {
-        if (!a_event) {
+        if (!a_event || a_event->interrupted) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
@@ -64,8 +73,8 @@ namespace MARAS {
                 for (const auto& handle : procLists->highActorHandles) {
                     if (auto actorPtr = handle.get()) {
                         auto* actor = actorPtr.get();
-                        if (actor && !actor->IsDeleted() && !actor->IsPlayerRef() &&
-                            actor->GetParentCell() == playerCell) {
+                        if (actor && !actor->IsDeleted() && !actor->IsDead() && !actor->IsDisabled() &&
+                            !actor->IsPlayerRef() && actor->GetParentCell() == playerCell) {
                             sameCellActorIds.push_back(actor->GetFormID());
                         }
                     }
@@ -91,7 +100,8 @@ namespace MARAS {
                     continue;
                 }
                 if (auto* tenant = RE::TESForm::LookupByID<RE::Actor>(rawId);
-                    tenant && !tenant->IsDeleted() && tenant->GetCurrentLocation() == currentLocation) {
+                    tenant && !tenant->IsDeleted() && !tenant->IsDead() && !tenant->IsDisabled() &&
+                    tenant->GetCurrentLocation() == currentLocation) {
                     presentAtLocationRawIds.push_back(rawId);
                 }
             }
@@ -116,54 +126,66 @@ namespace MARAS {
         const bool needRemoveRested = plan.partnerBuff != Domain::Household::PartnerSleepBuff::None;
         const bool needRemoveAdoption = plan.childBuff != Domain::Household::ChildSleepBuff::None;
 
-        auto* sleepQuest = FormCache::GetSingleton().GetPlayerSleepQuest();
-        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-        auto* policy = vm ? vm->GetObjectHandlePolicy() : nullptr;
-        const RE::VMHandle handle = (sleepQuest && policy)
-            ? policy->GetHandleForObject(RE::TESQuest::FORMTYPE, sleepQuest)
-            : 0;
+        const SessionEpoch expectedEpoch = GetSessionEpoch();
+        if (!AddEpochTask(
+                expectedEpoch,
+                "SleepEventSink::DispatchRestedCleanup",
+                [expectedEpoch, plan, needRemoveRested, needRemoveAdoption]() {
+                    auto* sleepQuest = FormCache::GetSingleton().GetPlayerSleepQuest();
+                    auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+                    auto* policy = vm ? vm->GetObjectHandlePolicy() : nullptr;
+                    const RE::VMHandle handle = (sleepQuest && policy)
+                        ? policy->GetHandleForObject(RE::TESQuest::FORMTYPE, sleepQuest)
+                        : 0;
 
-        if (vm && policy && handle != 0 && handle != policy->EmptyHandle()) {
-            const SessionEpoch expectedEpoch = GetSessionEpoch();
-            bool callbackQueued = false;
+                    if (vm && policy && handle != 0 && handle != policy->EmptyHandle()) {
+                        auto pending = std::make_shared<std::atomic<int>>(1);
+                        auto makeCb = [&]() {
+                            return RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>(
+                                new SleepRestedSyncCallback(expectedEpoch, plan, pending));
+                        };
 
-            if (needRemoveRested) {
-                auto* args = RE::MakeFunctionArguments();
-                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
-                if (!needRemoveAdoption) {
-                    cb.reset(new SleepRestedSyncCallback(expectedEpoch, plan));
-                }
-                if (vm->DispatchMethodCall2(
-                        handle,
-                        RE::BSFixedString("PlayerSleepQuestScript"),
-                        RE::BSFixedString("RemoveRested"),
-                        args,
-                        cb)) {
-                    callbackQueued = !needRemoveAdoption;
-                }
-            }
+                        if (needRemoveRested) {
+                            pending->fetch_add(1, std::memory_order_acq_rel);
+                            auto* args = RE::MakeFunctionArguments();
+                            auto cb = makeCb();
+                            if (!vm->DispatchMethodCall2(
+                                    handle,
+                                    RE::BSFixedString("PlayerSleepQuestScript"),
+                                    RE::BSFixedString("RemoveRested"),
+                                    args,
+                                    cb)) {
+                                pending->fetch_sub(1, std::memory_order_acq_rel);
+                            }
+                        }
 
-            if (needRemoveAdoption) {
-                auto* args = RE::MakeFunctionArguments();
-                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb(
-                    new SleepRestedSyncCallback(expectedEpoch, plan));
-                if (vm->DispatchMethodCall2(
-                        handle,
-                        RE::BSFixedString("PlayerSleepQuestScript"),
-                        RE::BSFixedString("RemoveAdoptionRested"),
-                        args,
-                        cb)) {
-                    callbackQueued = true;
-                }
-            }
+                        if (needRemoveAdoption) {
+                            pending->fetch_add(1, std::memory_order_acq_rel);
+                            auto* args = RE::MakeFunctionArguments();
+                            auto cb = makeCb();
+                            if (!vm->DispatchMethodCall2(
+                                    handle,
+                                    RE::BSFixedString("PlayerSleepQuestScript"),
+                                    RE::BSFixedString("RemoveAdoptionRested"),
+                                    args,
+                                    cb)) {
+                                pending->fetch_sub(1, std::memory_order_acq_rel);
+                            }
+                        }
 
-            if (callbackQueued) {
-                return RE::BSEventNotifyControl::kContinue;
-            }
+                        if (pending->fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                            MARAS_LOG_DEBUG("SleepEventSink: no PlayerSleepQuestScript rested callbacks pending; applying rested plan directly");
+                            BuffReconciler::GetSingleton().ApplySleepRestedPlan(plan);
+                        }
+                        return;
+                    }
+
+                    MARAS_LOG_DEBUG("SleepEventSink: PlayerSleepQuestScript VM handle unavailable; applying rested plan directly");
+                    BuffReconciler::GetSingleton().ApplySleepRestedPlan(plan);
+                })) {
+            MARAS_LOG_DEBUG("SleepEventSink: AddEpochTask unavailable; applying rested plan directly");
+            BuffReconciler::GetSingleton().ApplySleepRestedPlan(plan);
         }
-
-        MARAS_LOG_DEBUG("SleepEventSink: PlayerSleepQuestScript VM handle unavailable; applying rested plan directly");
-        BuffReconciler::GetSingleton().ApplySleepRestedPlan(plan);
         return RE::BSEventNotifyControl::kContinue;
     }
 

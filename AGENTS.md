@@ -34,7 +34,7 @@ Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_I
 ## 2. Core Cross-Layer Domain Rules
 
 - **Single Source of Truth & Strict CQS**:
-  - Domain state (relationships, affection, hierarchy, houses, children, cooldowns, settings) is owned by C++ (`WorldStore` in `modules/state/`) and persisted in the `'MARS'` v7 SKSE co-save (12 chunks, plus `'DCS1'` deceased secrecy extension inside `'DCSD'`). `TT_MARAS.esp` factions (`0x7`, `0x111`, `0x119`, `0x6C`, `0xC23`, etc.) are **engine mirrors** for CK conditions/packages—never treat faction rank alone as authoritative when C++ APIs exist.
+  - Domain state (relationships, affection, hierarchy, houses, children, cooldowns, settings) is owned by C++ (`WorldStore` in `modules/state/`) and persisted in the `'MARS'` v7 SKSE co-save (12 chunks, plus 5 optional trailing extensions: `'FRT1'` in `'NPCR'`, `'PLC1'` in `'PLCH'`, `'REL1'` in `'MKMK'`, `'DCS1'` in `'DCSD'`, and `'BNT1'` in `'BNTR'`). `TT_MARAS.esp` factions (`0x7`, `0x111`, `0x119`, `0x6C`, `0xC23`, etc.) are **engine mirrors** for CK conditions/packages—never treat faction rank alone as authoritative when C++ APIs exist.
   - **Command-Query Separation (CQS)**: Query snapshots, UI bridge payloads (`SendOverviewData`, `SendNPCList`, `SendNPCDetail`), JSON builders (`Build*Json`, `DumpJson`), Papyrus queries (`GetTrackedNpcHomeMarker`, `GetChildHomeMarker`), and SkyrimNet decorators (`ttm_*`) **must** be strictly read-only—never mutate state, sync custody, lazy-register actors, or record memories while reading.
 - **Pair Symmetry vs. Directional Asymmetry**:
   - Romantic statuses (`Dating`, `Lover`, `Engaged`, `Married`, `ExDating`, `ExLover`, `Jilted`, `Divorced`) live on canonical `PairKey(min(A,B), max(A,B))`.

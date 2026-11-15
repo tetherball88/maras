@@ -168,24 +168,25 @@ Evaluates five factions: **The Companions** (`companions`), **Thieves Guild** (`
 
 ---
 
-## 7. Papyrus Dialogue Globals & Tier Multipliers (`TTM_Data.SetGameNoAIChancesGlobals`)
+## 7. C++ Dialogue Globals & Tier Multipliers (`DialogueEventSink` & `MarriageDifficultyRules`)
 
-When standard (non-SkyrimNet) dialogue opens with a tracked NPC who is not yet `engaged` or `married`, [`TTM_Data.SetGameNoAIChancesGlobals`](../../Scripts/Source/TTM_Data.psc#L111-L156) takes the C++ `CalculateMarriageSuccessChance` output (scaled to `0–100`), applies relationship-state modifiers, and writes the resulting values to three `TT_MARAS.esp` `GlobalVariable` records used by Creation Kit dialogue conditions:
+When standard (non-SkyrimNet) dialogue opens with a tracked NPC who is not yet `Engaged` or `Married`, `DialogueEventSink` invokes `RelationshipInteractionCoordinator::OnDialogueOpened` (running `AffectionEventCoordinator::OnDialogueStarted` and `MarriageDifficultyRules::ComputeNoAiDialogueChances` + optional `TT_LoversLedger.esp` intimacy bonus refresh via `MARAS.ApplyDialogueLoversLedgerBonus`), then pushes the computed `0–100` percentages directly via `RelationshipEngineReconciler` to three `TT_MARAS.esp` `GlobalVariable` records used by Creation Kit dialogue conditions:
 
-- **`GetLoverChanceGV()` (`0x5D1`)**: Lover proposal chance global.
-- **`GetDatingChanceGV()` (`0x5D0`)**: Dating proposal chance global.
-- **`GetMarriageChanceGV()` (`0x15C`)**: Engagement/marriage proposal chance global.
+- **`DatingChance` (`0x5D0`)**: Dating proposal chance global.
+- **`LoverChance` (`0x5D1`)**: Lover proposal chance global.
+- **`MarriageChance` (`0x15C`)**: Engagement/marriage proposal chance global.
 
-### Post-Calculation Modifiers Applied in Papyrus
-1. **Cheating Check (`0.6x`)**: If either the NPC or the Player has `Rank 0` in `TTM_CanFormNonCheatingMain` (`0x5D2`, indicating a closed main-tier relationship where a new romance requires cheating), base `chance` is multiplied by `0.6`.
-2. **Prior Breakup Check (`0.75x`)**: If the NPC is currently an `exlover`, `exdating`, `jilted`, or `divorced`, `chance` is multiplied by `0.75`.
+### Post-Calculation Modifiers Applied in `ComputeNoAiDialogueChances`
+Starting from `basePct = clamp(round(rawChance * 100), 0, 100)` (or immediate `100.0` across all three globals if `alwaysSuccessMarriage` is enabled):
+1. **Cheating Check (`0.6x`)**: If either the NPC or the Player is currently in a closed main-tier relationship (`Dating`, `Engaged`, `Married` with `!isOpen`), `basePct` is multiplied by `0.6`.
+2. **Prior Breakup Check (`0.75x`)**: If the Player $\leftrightarrow$ NPC status is `ExDating`, `ExLover`, `Jilted`, or `Divorced`, `basePct` is multiplied by `0.75`.
 3. **Base Tier Multipliers**:
-   - `loverChance = chance * 0.7`
-   - `datingChance = chance * 0.85`
-   - `marriageChance = chance`
-4. **Current Romantic Stage Multipliers**:
-   - If the NPC is already a **`lover`**: `datingChance *= 1.5` (`lover` $\rightarrow$ `dating`) and `marriageChance *= 1.2` (`lover` $\rightarrow$ `engaged`).
-   - If the NPC is already **`dating`**: `marriageChance *= 1.5` (`dating` $\rightarrow$ `engaged`).
+   - `lover = basePct * 1.3`
+   - `dating = basePct * 1.15`
+   - `marriage = basePct`
+4. **Current Romantic Stage Multipliers** (all final outputs clamped to `[0, 100]`):
+   - If the NPC is currently a **`Lover`**: `dating *= 1.5` (`Lover` $\rightarrow$ `Dating`) and `marriage *= 1.2` (`Lover` $\rightarrow$ `Engaged`).
+   - If the NPC is currently **`Dating`**: `marriage *= 1.5` (`Dating` $\rightarrow$ `Engaged`).
 
 ---
 

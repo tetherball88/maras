@@ -13,6 +13,10 @@ Function Fragment_6()
 ; stage 200
     Actor spouse = Alias_Spouse.GetActorRef()
     if(spouse)
+        if(!MARAS.IsNPCStatus(spouse, "married"))
+            FinishQuest(false)
+            return
+        endif
         Actor[] mainActors = new Actor[1]
         mainActors[0] = spouse
         Actor[] secondaryActors = new Actor[1]

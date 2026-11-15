@@ -17,14 +17,14 @@ flowchart TD
 
     subgraph SKSE["Layer 1: SKSE C++ Plugin (MARAS.dll & maras_tests.exe — SKSE_Source/)"]
         CoreDomain["Layers 0-2: Pure C++23 Static Libraries (pch_core.h)\nmaras_foundation (StrongIds, DomainEnums, IRng)\nmaras_state (WorldStore, 10 CowTables, SpatialActorSnapshot,\nEngineSyncPlan, SessionEpoch, 'MARS' v1-v7 CoSaveCodec)\nmaras_projection (PerspectiveView & EventDispatchPlan Lens)\nmaras_domain_* (relationships, lineage, household, agency)"]
-        EngineApp["Layers 3-4: Engine & App OBJECT Modules (pch_engine.h)\nmaras_engine (FormCache, SpatialWorldIndex, BuffReconciler,\nFactionReconciler, PackageReconciler, PollingService, PlayerMiscStatsTracker,\nGiftMenuEventSink, SleepEventSink, PromptStringsLoader, HouseholdEngineOps,\nBedOwnershipReconciler, RelationshipEngineReconciler, QuestEventHandler,\nChildrenFleeService, IntimateThreadService)\nmaras_app (AppLifecycleCoordinator, RelationshipUseCases, RelationshipInteractionCoordinator,\nDialogueOutcomeCoordinator, SkyrimNetActionCoordinator, HouseholdUseCases,\nLineageUseCases, PaternityWorkflowCoordinator, AgencyWorkflowCoordinator, SettingsCoordinator)"]
-        Bridges["Layer 5: External Bridge OBJECT Modules & Composition Root\nmaras_bridge_papyrus (6 Papyrus TUs) | maras_bridge_ui (PrismaUI)\nmaras_bridge_skyrimnet (EventService/Payloads, 23 Decorators, Decisions, Profiles, Memories)\nmaras_bridge_c_api (MARAS_PublicAPI.h)\nplugin/plugin.cpp -> MARAS.dll | tests/ -> maras_tests.exe"]
+        EngineApp["Layers 3-4: Engine & App OBJECT Modules (pch_engine.h)\nmaras_engine (FormCache, SpatialWorldIndex, BuffReconciler,\nFactionReconciler, PackageReconciler, PollingService, PlayerMiscStatsTracker,\nGiftMenuEventSink, SleepEventSink, PromptStringsLoader, HouseholdEngineOps,\nBedOwnershipReconciler, RelationshipEngineReconciler, QuestEventHandler,\nChildrenFleeService, IntimateThreadService)\nmaras_app (AppLifecycleCoordinator, RelationshipUseCases, RelationshipInteractionCoordinator,\nDialogueOutcomeCoordinator, SkyrimNetActionCoordinator, AffectionEventCoordinator,\nHouseholdUseCases, ChildInteractionCoordinator, LineageUseCases,\nFertilityLifecycleCoordinator, PaternityWorkflowCoordinator, AgencyWorkflowCoordinator,\nBanterSceneCoordinator, SettingsCoordinator)"]
+        Bridges["Layer 5: External Bridge OBJECT Modules & Composition Root\nmaras_bridge_papyrus (7 Papyrus TUs) | maras_bridge_ui (PrismaUI)\nmaras_bridge_skyrimnet (EventService/Payloads, 23 Decorators, Decisions, Profiles, Memories)\nmaras_bridge_c_api (MARAS_PublicAPI.h)\nplugin/plugin.cpp -> MARAS.dll | tests/ -> maras_tests.exe"]
     end
 
     subgraph Papyrus["Layer 2: Papyrus Scripts (Scripts/Source/)"]
         NativeBind["MARAS.psc\n(Native Function Bindings & ModEvents)"]
         MainCtrl["TTM_MainController.psc\n(Central Event Router & Lifecycle Coordinator)"]
-        Services["Domain Services\nTTM_ServiceAffection | TTM_ServicePlayerHouse\nTTM_ServiceChildrenLogic | TTM_ServiceFertility (FMR/BF)\nTTM_ServiceIntimateMoments | TTM_MCM (Ongoing-Save Stub)"]
+        Services["Domain Services\nTTM_ServicePlayerHouse | TTM_ServiceChildrenLogic\nTTM_ServiceFertility (FMR/BF)\nTTM_ServiceIntimateMoments | TTM_MCM (Ongoing-Save Stub)"]
         ScenesDial["Quests, Scenes & Dialogues\nTTM_Actions | TTM_NpcsScenes | TTM_DialogueManager*\nTTM_QuestDivorce | TTM_QuestTrackKilledSpouses"]
     end
 
@@ -52,7 +52,7 @@ flowchart TD
     Zustand <--> Pages
     Bridges <-->|"GetProcAddress(SkyrimNet.dll)"| Decorators
     YAMLActions -->|"Papyrus Action Executor"| ScenesDial
-    Services -->|"SkyrimNetApi.RegisterEvent('ttm_event')"| YAMLTriggers
+    Bridges -->|"SkyrimNetEventService ('ttm_event')"| YAMLTriggers
     Decorators --> Prompts
 ```
 
@@ -107,7 +107,7 @@ The SKSE C++ codebase (`SKSE_Source/`) compiles via [CMakeLists.txt](../../SKSE_
 - **6 `OBJECT` Engine/App/Bridge Libraries**: `maras_engine`, `maras_app`, `maras_bridge_papyrus`, `maras_bridge_ui`, `maras_bridge_skyrimnet`, `maras_bridge_c_api`.
 - **Outputs**: `MARAS.dll` (linked at [plugin.cpp](../../SKSE_Source/plugin/plugin.cpp)) and `maras_tests.exe` (`SKSE_Source/tests/`, physically enforced by `LNK2019` to link only the 7 pure `STATIC` libraries).
 
-The SKSE plugin entry point (`SKSEPluginLoad` in [plugin.cpp](../../SKSE_Source/plugin/plugin.cpp)) wires cross-layer gateways and orchestrates initialization across five SKSE messaging phases and six engine event sinks:
+The SKSE plugin entry point (`SKSEPluginLoad` in [plugin.cpp](../../SKSE_Source/plugin/plugin.cpp)) wires cross-layer gateways and orchestrates initialization across five SKSE messaging phases and eight engine event sinks:
 
 ```mermaid
 sequenceDiagram
@@ -133,8 +133,8 @@ sequenceDiagram
 
     SKSE->>Plugin: kDataLoaded
     Plugin->>Engine: FormCache::Initialize() (Cache TT_MARAS.esp & Vanilla forms)
-    Plugin->>Plugin: Load spousesTypes/*.json, questEvents/*.json, PackageOverrides.ini
-    Plugin->>Engine: SpatialWorldIndex::BuildIndex() & Register 6 Event Sinks
+    Plugin->>Plugin: Load spousesTypes/*.json, questEvents/*.json, promptStrings.json, PackageOverrides.ini
+    Plugin->>Engine: SpatialWorldIndex::BuildIndex() & Register 8 Event Sinks
 
     alt Loading Existing Save
         SKSE->>Plugin: kPreLoadGame

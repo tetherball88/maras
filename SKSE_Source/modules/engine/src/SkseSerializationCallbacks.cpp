@@ -2,6 +2,7 @@
 
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BuffReconciler.h"
+#include "maras/engine/ChildVisualReconciler.h"
 #include "maras/engine/ChildrenFleeService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/DialogueEventSink.h"
@@ -211,7 +212,7 @@ namespace MARAS::Serialization {
         }
 
         if (hooks) {
-            hooks->FinalizeCoSaveLoad(loadedAny);
+            hooks->FinalizeCoSaveLoad(loadedAny, report.retiredSceneMarkers);
         }
 
         if (loadedAny) {
@@ -223,7 +224,6 @@ namespace MARAS::Serialization {
     }
 
     void RevertCallback(SKSE::SerializationInterface*) {
-        ResetPluginEventSinks();
         BumpSessionEpoch("Serialization::RevertCallback");
         ResetPluginEventSinks();
         DeferredActorResolver::GetSingleton().Revert();
@@ -233,6 +233,7 @@ namespace MARAS::Serialization {
         PollingService::GetSingleton().Shutdown();
         State::WorldStore::GetSingleton().Revert();
         PackageReconciler::GetSingleton().Revert();
+        ChildVisualReconciler::GetSingleton().Revert();
         IntimateThreadService::GetSingleton().ClearAll();
         ChildrenFleeService::GetSingleton().Reset();
         if (auto* dialogueSink = DialogueEventSink::GetSingleton()) {

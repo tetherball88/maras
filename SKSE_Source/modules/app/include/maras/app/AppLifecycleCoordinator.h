@@ -30,14 +30,17 @@ namespace MARAS::App {
 
         // SKSE Co-Save Lifecycle
         void BeginCoSaveLoad() override;
-        void FinalizeCoSaveLoad(bool loadedAny) override;
+        void FinalizeCoSaveLoad(bool loadedAny, std::span<const Foundation::RefId> retiredSceneMarkers = {}) override;
         void OnCoSaveRevert() override;
 
         // PollingService Timers (Main Thread)
+        void OnPollingFastTick(float deltaSeconds) override;
         void OnPollingUpdate(float currentGameDay) override;
         void OnPollingAutoMarriageTick(float currentGameDay) override;
         void OnPollingDayChanged(float currentGameDay) override;
         void OnPollingRefreshChildVisuals() override;
+
+        void EnsureActorRegistered(RE::FormID actorId) override;
 
         // Engine Event Sinks & Faction Hooks (Main Thread)
         void OnActorLoadedBatch(const std::vector<RE::FormID>& initActors,

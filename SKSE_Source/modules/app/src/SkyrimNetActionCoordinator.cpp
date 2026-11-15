@@ -16,6 +16,7 @@
 #include "maras/foundation/StrongIds.h"
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace MARAS::App {
 
@@ -61,7 +62,7 @@ namespace MARAS::App {
         pendingNarrations_.clear();
     }
 
-    void SkyrimNetActionCoordinator::TickPendingNarrations() {
+    void SkyrimNetActionCoordinator::TickPendingNarrations(float deltaSeconds) {
         std::vector<PendingProposalNarration> ready;
         {
             std::lock_guard lock(pendingMutex_);
@@ -69,14 +70,15 @@ namespace MARAS::App {
                 return;
             }
 
-            const auto now = std::chrono::steady_clock::now();
+            const float clampedDelta = (std::max)(0.0f, deltaSeconds);
             std::vector<PendingProposalNarration> remaining;
             remaining.reserve(pendingNarrations_.size());
             for (auto& entry : pendingNarrations_) {
                 if (!MARAS::IsSessionEpochCurrent(entry.epoch)) {
                     continue;
                 }
-                if (now >= entry.readyAt) {
+                entry.remainingSeconds -= clampedDelta;
+                if (entry.remainingSeconds <= 0.0f) {
                     ready.push_back(std::move(entry));
                 } else {
                     remaining.push_back(std::move(entry));
@@ -238,7 +240,7 @@ namespace MARAS::App {
                 akActorId,
                 partnerId,
                 std::move(message),
-                std::chrono::steady_clock::now() + std::chrono::seconds(5),
+                5.0f,
                 MARAS::GetSessionEpoch() });
         }
 
@@ -514,7 +516,13 @@ namespace MARAS::App {
 
         auto& relSvc = RelationshipUseCases::GetSingleton();
         const auto currentStatus = relSvc.GetRelationshipStatus(akActorId, partnerId);
-        if (relSvc.GetPairIsOpen(akActorId, partnerId) == isOpen) {
+        const bool isEligible = isOpen ? relSvc.CanOpenRelationship(akActorId, partnerId)
+                                       : relSvc.CanCloseRelationship(akActorId, partnerId);
+        if (relSvc.GetPairIsOpen(akActorId, partnerId) == isOpen || !isEligible) {
+            MARAS_LOG_DEBUG("[SkyrimNetActionCoordinator] SetOpenRelationshipChange({}): {} ({:08X}) and {} ({:08X}) not eligible",
+                            isOpen ? "open" : "close",
+                            ActorSvc::GetName(akActorId), akActorId,
+                            ActorSvc::GetName(partnerId), partnerId);
             if (onComplete) {
                 onComplete(false);
             }
@@ -591,8 +599,10 @@ namespace MARAS::App {
         auto& paternitySvc = PaternityWorkflowCoordinator::GetSingleton();
         auto& lineageSvc = LineageUseCases::GetSingleton();
 
-        RE::FormID childID = paternitySvc.FindChildPaternitySecret(akActorId, targetFatherId, std::string(childName));
-        if (childID == 0 && targetFatherId != 0) {
+        RE::FormID filterFatherId = targetFatherId;
+        RE::FormID childID = paternitySvc.FindChildPaternitySecret(akActorId, filterFatherId, std::string(childName));
+        if (childID == 0 && filterFatherId != 0) {
+            filterFatherId = 0;
             childID = paternitySvc.FindChildPaternitySecret(akActorId, 0, std::string(childName));
         }
         if (childID == 0) {
@@ -643,16 +653,18 @@ namespace MARAS::App {
         const bool ok = resolveOne(childID);
 
         if (directive.resolveAllMatches) {
-            RE::FormID lastChildId = childID;
-            RE::FormID nextChildId = paternitySvc.FindChildPaternitySecret(akActorId, targetFatherId, "all");
-            int guardLoop = 0;
-            while (nextChildId != 0 && nextChildId != lastChildId && guardLoop < 10) {
-                ++guardLoop;
-                lastChildId = nextChildId;
-                if (!resolveOne(nextChildId)) {
-                    break;
+            std::unordered_set<RE::FormID> visited{ childID };
+            const auto candidates = paternitySvc.GetChildrenWithActiveSecretsForActor(akActorId);
+            for (const RE::FormID candId : candidates) {
+                if (candId == 0 || !visited.insert(candId).second) {
+                    continue;
                 }
-                nextChildId = paternitySvc.FindChildPaternitySecret(akActorId, targetFatherId, "all");
+                if (filterFatherId != 0 &&
+                    lineageSvc.GetBioFather(candId) != filterFatherId &&
+                    lineageSvc.GetMotherPartner(candId) != filterFatherId) {
+                    continue;
+                }
+                (void)resolveOne(candId);
             }
         }
 
@@ -680,6 +692,9 @@ namespace MARAS::App {
         RE::FormID childID = paternitySvc.FindChildPaternitySecret(akActorId, motherId, std::string(childName));
         if (childID == 0 && motherId != 0) {
             childID = paternitySvc.FindChildPaternitySecret(akActorId, 0, std::string(childName));
+            if (childID != 0) {
+                motherId = lineageSvc.GetBioMother(childID);
+            }
         }
         if (childID == 0) {
             MARAS_LOG_WARN("[SkyrimNetActionCoordinator] DiscoverChildPaternity: no child with active paternity secret for father {} ({:08X}) (childName='{}')",
@@ -713,16 +728,16 @@ namespace MARAS::App {
         const bool ok = discoverOne(childID);
 
         if (StringUtils::CaseInsensitiveEquals(StringUtils::TrimView(childName), "all")) {
-            RE::FormID lastChildId = childID;
-            RE::FormID nextChildId = paternitySvc.FindChildPaternitySecret(akActorId, motherId, "all");
-            int guardLoop = 0;
-            while (nextChildId != 0 && nextChildId != lastChildId && guardLoop < 10) {
-                ++guardLoop;
-                lastChildId = nextChildId;
-                if (!discoverOne(nextChildId)) {
-                    break;
+            std::unordered_set<RE::FormID> visited{ childID };
+            const auto candidates = paternitySvc.GetChildrenWithActiveSecretsForActor(akActorId);
+            for (const RE::FormID candId : candidates) {
+                if (candId == 0 || !visited.insert(candId).second) {
+                    continue;
                 }
-                nextChildId = paternitySvc.FindChildPaternitySecret(akActorId, motherId, "all");
+                if (motherId != 0 && lineageSvc.GetBioMother(candId) != motherId) {
+                    continue;
+                }
+                (void)discoverOne(candId);
             }
         }
 

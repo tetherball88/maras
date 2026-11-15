@@ -3,10 +3,10 @@
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/DeferredActorResolver.h"
+#include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/GlobalVarReconciler.h"
-#include "maras/engine/NPCTypeDeterminer.h"
 #include "maras/engine/PackageReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -93,11 +93,14 @@ namespace MARAS {
         }
 
         RE::FormID existingMarkerId = 0;
+        bool hasProfile = false;
         {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
-            if (const auto* prof = snap->actors->Find(State::RefId{ npcFormId });
-                prof && prof->legacyHomeMarker.has_value()) {
-                existingMarkerId = prof->legacyHomeMarker->raw();
+            if (const auto* prof = snap->actors->Find(State::RefId{ npcFormId })) {
+                hasProfile = true;
+                if (prof->legacyHomeMarker.has_value()) {
+                    existingMarkerId = prof->legacyHomeMarker->raw();
+                }
             }
         }
 
@@ -127,12 +130,10 @@ namespace MARAS {
         }
 
         const RE::FormID markerId = markerRef->GetFormID();
-        const auto sc = NPCTypeDeterminer::DetermineSocialClass(npcFormId, {});
-        const auto st = NPCTypeDeterminer::DetermineSkillType(npcFormId, {});
-        const auto temp = NPCTypeDeterminer::ComputeTemperament(sc, st);
-        RE::FormID baseId = 0;
-        if (auto* base = npcActor->GetActorBase()) {
-            baseId = base->GetFormID();
+        if (!hasProfile) {
+            if (auto* hooks = Engine::GetEngineEventHooks()) {
+                hooks->EnsureActorRegistered(npcFormId);
+            }
         }
 
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
@@ -140,15 +141,9 @@ namespace MARAS {
             if (auto* prof = actors.FindMutable(State::RefId{ npcFormId })) {
                 prof->legacyHomeMarker = State::RefId{ markerId };
             } else {
-                State::ActorProfileRecord rec{};
-                rec.refId = State::RefId{ npcFormId };
-                rec.baseId = State::BaseId{ baseId };
-                rec.socialClass = sc;
-                rec.skillType = st;
-                rec.temperament = temp;
-                rec.isRegisteredAdult = true;
-                rec.legacyHomeMarker = State::RefId{ markerId };
-                actors.Upsert(std::move(rec));
+                MARAS_LOG_WARN(
+                    "HouseholdEngineOps::GetOrCreateHomeMarker: actor {:08X} lacks ActorProfileRecord; skipping partial upsert",
+                    npcFormId);
             }
         });
 
@@ -282,17 +277,13 @@ namespace MARAS {
         auto* player = RE::PlayerCharacter::GetSingleton();
         auto invCounts = player ? player->GetInventoryCounts() : RE::TESObjectREFR::InventoryCountMap{};
 
-        for (const RE::FormID doorId : doorIds) {
-            if (doorId == 0) {
-                continue;
+        const auto processDoorLock = [&](RE::TESObjectREFR* ref) {
+            if (!ref || ref->IsDeleted()) {
+                return;
             }
-            auto* doorRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(doorId);
-            if (!doorRef || doorRef->IsDeleted()) {
-                continue;
-            }
-            auto* lockData = doorRef->GetLock();
+            auto* lockData = ref->GetLock();
             if (!lockData) {
-                continue;
+                return;
             }
             if (RE::TESKey* key = lockData->key) {
                 if (player) {
@@ -303,9 +294,26 @@ namespace MARAS {
                     }
                 }
             } else if (lockData->IsLocked() &&
-                       lockData->GetLockLevel(doorRef) != RE::LOCK_LEVEL::kRequiresKey) {
+                       lockData->GetLockLevel(ref) != RE::LOCK_LEVEL::kRequiresKey) {
                 lockData->SetLocked(false);
-                doorRef->AddLockChange();
+                ref->AddLockChange();
+            }
+        };
+
+        for (const RE::FormID doorId : doorIds) {
+            if (doorId == 0) {
+                continue;
+            }
+            auto* doorRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(doorId);
+            if (!doorRef || doorRef->IsDeleted()) {
+                continue;
+            }
+            processDoorLock(doorRef);
+            if (auto* teleport = doorRef->extraList.GetByType<RE::ExtraTeleport>();
+                teleport && teleport->teleportData) {
+                if (auto linked = teleport->teleportData->linkedDoor.get()) {
+                    processDoorLock(linked.get());
+                }
             }
         }
     }
