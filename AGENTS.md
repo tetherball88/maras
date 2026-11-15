@@ -1,12 +1,12 @@
 # M.A.R.A.S — Cross-Layer Architecture & Project Rules
 
-Project-wide invariants across all layers of **M.A.R.A.S**. Layer-specific rules live in:
+Project-wide invariants across all layers of **M.A.R.A.S**. **Mandatory First Step**: Before planning or editing code in any layer, read that layer's `AGENTS.md` first:
 1. **SKSE C++ Plugin**: [SKSE_Source/AGENTS.md](SKSE_Source/AGENTS.md) ([modules/](SKSE_Source/modules/AGENTS.md), [tests/](SKSE_Source/tests/AGENTS.md))
 2. **Prisma UI Dashboard**: [prisma-src/AGENTS.md](prisma-src/AGENTS.md)
 3. **Papyrus Scripts**: [Scripts/Source/AGENTS.md](Scripts/Source/AGENTS.md)
 4. **SkyrimNet Bundle**: [SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md](SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md)
 
-Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_INTEGRATION.md`, `HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md`, `API_AND_PRISMA_BRIDGE_REFERENCE.md`, `RELATIONSHIP_DYNAMICS_GUIDE.md`, `FERTILITY_MODE_RELOADED_INTEGRATION.md`). Step-by-step runbooks live in `.agents/skills/` (`maras-build-and-test`, `maras-cosave-and-tests`, `maras-add-setting`, `maras-doc-sync`).
+Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_INTEGRATION.md`, `HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md`, `API_AND_PRISMA_BRIDGE_REFERENCE.md`, `RELATIONSHIP_DYNAMICS_GUIDE.md`, `FERTILITY_MODE_RELOADED_INTEGRATION.md`, `INGAME_SANITY_TEST_SUITE.md`). Step-by-step runbooks live in `.agents/skills/` (`maras-build-and-test`, `maras-cosave-and-tests`, `maras-add-setting`, `maras-doc-sync`).
 
 ---
 
@@ -19,7 +19,19 @@ Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_I
 
 ---
 
-## 1. Core Cross-Layer Domain Rules
+## 1. Module Placement & Anti-Monolith Discipline
+
+- **C++ 13-Module DAG (`7 STATIC` Pure + `6 OBJECT` Engine/App/Bridge in `SKSE_Source/modules/`)**:
+  - **Pure State (`maras_state`) & Visibility (`maras_projection`)**: Persistent/runtime tables, `SessionEpoch`, and `'MARS'` v7 co-save live **only** in `modules/state/`; observer/UI/SkyrimNet secret filtering lives **only** in `modules/projection/` (`PerspectiveView`). Zero ad-hoc state caches in `app/` or `bridge_*/`.
+  - **Pure Domain First (`maras_domain_{relationships,lineage,household,agency}`)**: All gameplay rules, eligibility checks, math/scoring, daily ticks, and state-transition decisions **must** be authored as pure, engine-free functions/types in `modules/domain_*/` (`pch_core.h`; zero `<RE/...>`, `<SKSE/...>`, JSON, YAML, or spdlog) with headless unit tests in `SKSE_Source/tests/`. **Never** inline domain rules or formulas inside `*UseCases.cpp`, coordinators, reconcilers, or bridges.
+  - **Thin Engine (`maras_engine`), App (`maras_app`), & Bridges (`maras_bridge_{papyrus,ui,skyrimnet,c_api}`)**: `engine/` owns SKSE hooks, `FormCache`, `SpatialWorldIndex`, and main-thread `DirtyActorSet` reconcilers; `app/` coordinates `WorldStore::Modify` + pure domain calls + reconciler triggers; `bridge_*/` marshals Papyrus, Prisma UI, SkyrimNet, and C API payloads only.
+- **No God-File Dumping (Split Focused Files Instead of Growing Monoliths)**:
+  - **Never** dump new features, subsystems, JSON builders, or unrelated helpers into large existing files (`RelationshipUseCases.cpp`, `LineageUseCases.cpp`, `PaternityWorkflowCoordinator.cpp`, `AgencyWorkflowCoordinator.cpp`, `PrismaUIDataBridge.cpp`, `SkyrimNetDecorators.cpp`, `SkyrimNetMemoryService.cpp`, `useMarasStore.ts`, `TTM_ServiceChildrenLogic.psc`). Treat oversized files as **extraction targets, not dumping grounds**.
+  - For any distinct new workflow, calculator, payload builder, or UI feature, create focused single-responsibility `.h`/`.cpp` (or `.ts`/`.tsx`) files in the proper module directory, register new C++ sources in [SKSE_Source/CMakeLists.txt](SKSE_Source/CMakeLists.txt), and build with `-Reconfigure`. When modifying an oversized file, extract touched domain/helper logic out rather than growing it.
+
+---
+
+## 2. Core Cross-Layer Domain Rules
 
 - **Single Source of Truth & Strict CQS**:
   - Domain state (relationships, affection, hierarchy, houses, children, cooldowns, settings) is owned by C++ (`WorldStore` in `modules/state/`) and persisted in the `'MARS'` v7 SKSE co-save (12 chunks, plus `'DCS1'` deceased secrecy extension inside `'DCSD'`). `TT_MARAS.esp` factions (`0x7`, `0x111`, `0x119`, `0x6C`, `0xC23`, etc.) are **engine mirrors** for CK conditions/packages—never treat faction rank alone as authoritative when C++ APIs exist.
@@ -39,14 +51,14 @@ Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_I
 
 ---
 
-## 2. SkyrimNet Cross-Layer Gating Policy
+## 3. SkyrimNet Cross-Layer Gating Policy
 
 - **Caller-Level Runtime Gate**: Gate all SkyrimNet features/UI/logic at the **call site** (`MARAS::IsSkyrimNetAvailable()` in C++, `TTM_Data.GetHasSkyrimNet()` in Papyrus) *before* dice rolls, data gathering, or state mutations. *(Exempt: C++ callbacks registered via `PublicRegisterDecorator` and functions invoked solely by `external/tetherball88.maras/actions/*.yaml`.)*
 - **Non-SkyrimNet Fallback**: Never silently assume "skip if no SkyrimNet" on new features without fallback—explicitly ask the user whether to (1) no-op, (2) use a deterministic/dice-roll fallback, or (3) hide/disable in UI.
 
 ---
 
-## 3. Refactoring, Documentation & Logging Discipline
+## 4. Refactoring, Documentation & Logging Discipline
 
 - **Clean Cut Refactoring**: Delete superseded logic, obsolete helpers, and dead parameters outright. Preserve **save-game (`'MARS'` v1–v7 co-save) backward compatibility**, **not** internal code/API compatibility. **Never** add unsolicited duplicate alias functions.
 - **Documentation Sync**: Update affected `docs/modder/*` and `docs/player/*` files in the same task (activate `maras-doc-sync` skill; describe behavior/formulas/edge cases in `docs/modder/services/`, never copy-paste `.h` signatures).
