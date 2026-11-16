@@ -6,7 +6,6 @@
 #include "maras/bridge_skyrimnet/SkyrimNetEventService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetMemoryService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetProfileService.h"
-#include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/StrongIds.h"
@@ -16,59 +15,31 @@
 #include <nlohmann/json.hpp>
 
 #include <Windows.h>
+#include <PublicAPI.h>
 #include <algorithm>
 #include <exception>
+#include <mutex>
 
 namespace MARAS::Bridge::SkyrimNet {
 
     namespace {
 
-        using PublicGetVersion_t = int (*)();
-        using PublicRegisterDecorator_t = bool (*)(
-            const char* name,
-            const char* description,
-            std::function<std::string(RE::Actor*)> callback);
-        using PublicFormIDToUUID_t = std::uint64_t (*)(std::uint32_t formId);
-        using PublicRecordActorSuccession_t = bool (*)(std::uint32_t fromFormId, std::uint32_t toFormId);
-        using PublicRecordActorSuccessionByUUID_t = bool (*)(std::uint64_t fromUuid, std::uint64_t toUuid);
-        using PublicGetPluginConfigValue_t = std::string (*)(const char* plugin,
-                                                           const char* path,
-                                                           const char* defaultValue);
-        using PublicRegisterEvent_t = bool (*)(const char* eventType,
-                                               const char* content,
-                                               std::uint32_t originatorFormId,
-                                               std::uint32_t targetFormId,
-                                               const std::uint32_t* audienceFormIds,
-                                               int audienceCount);
-        using PublicSendCustomPromptToLLM_t = bool (*)(
-            const char* promptName,
-            const char* variant,
-            const char* contextJson,
-            std::function<void(const char* response, int success)> callback);
-        using PublicSendCustomDecisionToLLM_t = bool (*)(
-            const char* templateName,
-            const char* contextJson,
-            int maxProbabilities,
-            std::function<void(const char* answer, const char* resultJson, int success)> callback);
-        using PublicAddMemory_t = int (*)(
-            std::uint32_t formId,
-            const char* contentText,
-            float importance,
-            const char* memoryType,
-            const char* emotion,
-            const char* location,
-            const char* tagsJSON,
-            const char* relatedActorsJSON);
-        using PublicRequestProfileUpdate_t = bool (*)(
-            std::uint32_t formId,
-            const char* additionalInstructions,
-            const char* updatableBlocksCSV);
-        using PublicGetBioTemplateName_t = std::string (*)(std::uint32_t formId);
-        using PublicGetSaveUniqueID_t = std::string (*)();
-        using PublicGetMemoriesForActor_t = std::string (*)(
-            std::uint32_t formId,
-            int maxCount,
-            const char* contextQuery);
+        bool EnsureSkyrimNetApiResolved() {
+            if (::GetModuleHandleW(L"SkyrimNet.dll") == nullptr) {
+                return false;
+            }
+            static std::once_flag s_initFlag;
+            static bool s_resolved = false;
+            std::call_once(s_initFlag, []() {
+                s_resolved = FindFunctions();
+                if (s_resolved && PublicGetVersion) {
+                    MARAS_LOG_INFO("[SkyrimNet] Resolved SkyrimNet Public API v{}", PublicGetVersion());
+                } else {
+                    MARAS_LOG_WARN("[SkyrimNet] Failed to resolve SkyrimNet Public API via FindFunctions()");
+                }
+            });
+            return s_resolved;
+        }
 
         std::string GetModelSlotDisplayName(std::string_view llmVariant) {
             if (llmVariant == "memory") {
@@ -78,15 +49,6 @@ namespace MARAS::Bridge::SkyrimNet {
                 return "Decisions";
             }
             return "GameMaster";
-        }
-
-        template <typename FnPtr>
-        FnPtr LookupSkyrimNetExport(const char* exportName) {
-            HMODULE hMod = ::GetModuleHandleW(L"SkyrimNet.dll");
-            if (!hMod) {
-                return nullptr;
-            }
-            return reinterpret_cast<FnPtr>(::GetProcAddress(hMod, exportName));
         }
 
     }  // namespace
@@ -99,10 +61,10 @@ namespace MARAS::Bridge::SkyrimNet {
     }
 
     bool IsDecisionsExportAvailable() {
-        if (!IsSkyrimNetAvailable()) {
+        if (!IsSkyrimNetAvailable() || !EnsureSkyrimNetApiResolved()) {
             return false;
         }
-        return LookupSkyrimNetExport<PublicSendCustomDecisionToLLM_t>("PublicSendCustomDecisionToLLM") != nullptr;
+        return PublicSendCustomDecisionToLLM != nullptr;
     }
 
     bool ShouldTriggerSkyrimNetNarration(RE::Actor* speaker, RE::Actor* target) {
@@ -185,15 +147,11 @@ namespace MARAS::Bridge::SkyrimNet {
             return false;
         }
 
-        HMODULE hMod = ::GetModuleHandleW(L"SkyrimNet.dll");
-        if (!hMod) {
+        if (!EnsureSkyrimNetApiResolved()) {
             MARAS_LOG_WARN("[SkyrimNet] RegisterSkyrimNetEvent: SkyrimNet.dll not found in process");
             return false;
         }
-
-        auto* fnRegisterEvent = reinterpret_cast<PublicRegisterEvent_t>(
-            ::GetProcAddress(hMod, "PublicRegisterEvent"));
-        if (!fnRegisterEvent) {
+        if (!PublicRegisterEvent) {
             MARAS_LOG_WARN("[SkyrimNet] RegisterSkyrimNetEvent: PublicRegisterEvent export not found in SkyrimNet.dll");
             return false;
         }
@@ -228,18 +186,19 @@ namespace MARAS::Bridge::SkyrimNet {
         }
 
         const std::uint32_t* audiencePtr = exactAudienceIds.empty() ? nullptr : exactAudienceIds.data();
-        const int audienceCount = static_cast<int>(exactAudienceIds.size());
+        const std::uint32_t audienceCount = static_cast<std::uint32_t>(exactAudienceIds.size());
 
-        const bool ok = fnRegisterEvent(
+        const int eventId = PublicRegisterEvent(
             eventType.c_str(),
             content.c_str(),
             originatorFormID,
             targetFormID,
             audiencePtr,
             audienceCount);
+        const bool ok = (eventId > 0);
 
-        MARAS_LOG_DEBUG("[SkyrimNet] RegisterSkyrimNetEvent('{}', orig=0x{:08X}, target=0x{:08X}, exactAudience={}, audienceCount={}) -> {}",
-                        eventType, originatorFormID, targetFormID, exactAudience || audienceCount > 0, audienceCount, ok);
+        MARAS_LOG_DEBUG("[SkyrimNet] RegisterSkyrimNetEvent('{}', orig=0x{:08X}, target=0x{:08X}, exactAudience={}, audienceCount={}) -> {} (id={})",
+                        eventType, originatorFormID, targetFormID, exactAudience || audienceCount > 0, audienceCount, ok, eventId);
         return ok;
     }
 
@@ -249,14 +208,11 @@ namespace MARAS::Bridge::SkyrimNet {
         if (!name || name[0] == '\0') {
             return false;
         }
-        HMODULE hMod = ::GetModuleHandleW(L"SkyrimNet.dll");
-        if (!hMod) {
+        if (!EnsureSkyrimNetApiResolved()) {
             MARAS_LOG_WARN("[SkyrimNet] SkyrimNet.dll not found in process - decorator '{}' skipped.", name);
             return false;
         }
-        auto* fn = reinterpret_cast<PublicRegisterDecorator_t>(
-            ::GetProcAddress(hMod, "PublicRegisterDecorator"));
-        if (!fn) {
+        if (!PublicRegisterDecorator) {
             MARAS_LOG_WARN("[SkyrimNet] PublicRegisterDecorator export not found in SkyrimNet.dll.");
             return false;
         }
@@ -279,7 +235,7 @@ namespace MARAS::Bridge::SkyrimNet {
         };
 
         const char* safeDesc = description ? description : "";
-        if (fn(name, safeDesc, std::move(wrappedCallback))) {
+        if (PublicRegisterDecorator(name, safeDesc, std::move(wrappedCallback))) {
             MARAS_LOG_INFO("[SkyrimNet] Registered decorator '{}'", name);
             return true;
         }
@@ -288,52 +244,21 @@ namespace MARAS::Bridge::SkyrimNet {
     }
 
     std::uint64_t GetActorUUID(std::uint32_t formID) {
-        if (formID == 0 || formID == MARAS::kUnknownFatherFormID || MARAS::IsSyntheticChildID(formID)) {
+        if (!IsSkyrimNetAvailable() || formID == 0 ||
+            formID == MARAS::kUnknownFatherFormID || MARAS::IsSyntheticChildID(formID)) {
             return 0;
         }
-        auto* fn = LookupSkyrimNetExport<PublicFormIDToUUID_t>("PublicFormIDToUUID");
-        if (!fn) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicFormIDToUUID) {
             return 0;
         }
-        std::uint64_t uuid = 0;
-        if (auto* base = MARAS::ActorSvc::GetActorBase(formID)) {
-            uuid = fn(base->GetFormID());
-        }
-        if (uuid == 0) {
-            uuid = fn(formID);
-        }
-        return uuid;
-    }
-
-    std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID) {
-        if (!IsSkyrimNetAvailable() || actorFormID == 0 || actorFormID == MARAS::kUnknownFatherFormID ||
-            MARAS::IsSyntheticChildID(actorFormID)) {
-            return 0;
-        }
-        if (auto* fn = LookupSkyrimNetExport<PublicFormIDToUUID_t>("PublicFormIDToUUID")) {
-            // Pass the placed RE::Actor reference FormID directly first so SkyrimNet's
-            // ResolveActorEntity(formId) registers the live Actor in EntityMap and UUIDResolver.
-            const std::uint64_t uuid = fn(actorFormID);
-            if (uuid != 0) {
-                return uuid;
-            }
-        }
-        if (MARAS::Foundation::IsDynamicRuntimeActorRawId(actorFormID)) {
-            return 0;
-        }
-        return GetActorUUID(actorFormID);
+        return PublicFormIDToUUID(formID);
     }
 
     bool IsActorSuccessionAvailable() {
-        if (!IsSkyrimNetAvailable()) {
+        if (!IsSkyrimNetAvailable() || !EnsureSkyrimNetApiResolved()) {
             return false;
         }
-        if (auto* fnVer = LookupSkyrimNetExport<PublicGetVersion_t>("PublicGetVersion")) {
-            if (fnVer() < 15) {
-                return false;
-            }
-        }
-        return LookupSkyrimNetExport<PublicRecordActorSuccessionByUUID_t>("PublicRecordActorSuccessionByUUID") != nullptr;
+        return PublicRecordActorSuccessionByUUID != nullptr;
     }
 
     bool RecordActorSuccession(std::uint32_t fromFormID, std::uint32_t toFormID) {
@@ -342,16 +267,10 @@ namespace MARAS::Bridge::SkyrimNet {
             MARAS::IsSyntheticChildID(fromFormID) || MARAS::IsSyntheticChildID(toFormID)) {
             return false;
         }
-        if (auto* fnVer = LookupSkyrimNetExport<PublicGetVersion_t>("PublicGetVersion")) {
-            if (fnVer() < 15) {
-                return false;
-            }
-        }
-        auto* fn = LookupSkyrimNetExport<PublicRecordActorSuccession_t>("PublicRecordActorSuccession");
-        if (!fn) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicRecordActorSuccession) {
             return false;
         }
-        const bool ok = fn(fromFormID, toFormID);
+        const bool ok = PublicRecordActorSuccession(fromFormID, toFormID);
         MARAS_LOG_INFO("[SkyrimNet] RecordActorSuccession(0x{:08X} -> 0x{:08X}) -> {}", fromFormID, toFormID, ok);
         return ok;
     }
@@ -360,16 +279,10 @@ namespace MARAS::Bridge::SkyrimNet {
         if (!IsSkyrimNetAvailable() || fromUuid == 0 || toUuid == 0 || fromUuid == toUuid) {
             return false;
         }
-        if (auto* fnVer = LookupSkyrimNetExport<PublicGetVersion_t>("PublicGetVersion")) {
-            if (fnVer() < 15) {
-                return false;
-            }
-        }
-        auto* fn = LookupSkyrimNetExport<PublicRecordActorSuccessionByUUID_t>("PublicRecordActorSuccessionByUUID");
-        if (!fn) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicRecordActorSuccessionByUUID) {
             return false;
         }
-        const bool ok = fn(fromUuid, toUuid);
+        const bool ok = PublicRecordActorSuccessionByUUID(fromUuid, toUuid);
         MARAS_LOG_INFO("[SkyrimNet] RecordActorSuccessionByUUID({:016X} -> {:016X}) -> {}", fromUuid, toUuid, ok);
         return ok;
     }
@@ -381,11 +294,10 @@ namespace MARAS::Bridge::SkyrimNet {
         if (!plugin || !path || !IsSkyrimNetAvailable()) {
             return fallback;
         }
-        auto* fn = LookupSkyrimNetExport<PublicGetPluginConfigValue_t>("PublicGetPluginConfigValue");
-        if (!fn) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicGetPluginConfigValue) {
             return fallback;
         }
-        return fn(plugin, path, fallback.c_str());
+        return PublicGetPluginConfigValue(plugin, path, fallback.c_str());
     }
 
     bool SendCustomPromptToLLM(const std::string& promptName,
@@ -397,20 +309,17 @@ namespace MARAS::Bridge::SkyrimNet {
             return false;
         }
 
-        HMODULE hMod = ::GetModuleHandleW(L"SkyrimNet.dll");
-        if (!hMod) {
+        if (!EnsureSkyrimNetApiResolved()) {
             MARAS_LOG_WARN("[SkyrimNet] SendCustomPromptToLLM: SkyrimNet.dll not found in process");
             return false;
         }
 
-        auto* fnSendLLM = reinterpret_cast<PublicSendCustomPromptToLLM_t>(
-            ::GetProcAddress(hMod, "PublicSendCustomPromptToLLM"));
-        if (!fnSendLLM) {
+        if (!PublicSendCustomPromptToLLM) {
             MARAS_LOG_WARN("[SkyrimNet] SendCustomPromptToLLM: PublicSendCustomPromptToLLM export not found in SkyrimNet.dll");
             return false;
         }
 
-        return fnSendLLM(promptName.c_str(), variant.c_str(), contextJson.c_str(), std::move(callback));
+        return PublicSendCustomPromptToLLM(promptName.c_str(), variant.c_str(), contextJson.c_str(), std::move(callback));
     }
 
     bool SendCustomDecisionToLLM(const std::string& templateName,
@@ -422,20 +331,17 @@ namespace MARAS::Bridge::SkyrimNet {
             return false;
         }
 
-        HMODULE hMod = ::GetModuleHandleW(L"SkyrimNet.dll");
-        if (!hMod) {
+        if (!EnsureSkyrimNetApiResolved()) {
             MARAS_LOG_WARN("[SkyrimNet] SendCustomDecisionToLLM: SkyrimNet.dll not found in process");
             return false;
         }
 
-        auto* fnSendDecision = reinterpret_cast<PublicSendCustomDecisionToLLM_t>(
-            ::GetProcAddress(hMod, "PublicSendCustomDecisionToLLM"));
-        if (!fnSendDecision) {
+        if (!PublicSendCustomDecisionToLLM) {
             MARAS_LOG_WARN("[SkyrimNet] SendCustomDecisionToLLM: PublicSendCustomDecisionToLLM export not found in SkyrimNet.dll");
             return false;
         }
 
-        return fnSendDecision(templateName.c_str(), contextJson.c_str(), maxProbabilities, std::move(callback));
+        return PublicSendCustomDecisionToLLM(templateName.c_str(), contextJson.c_str(), maxProbabilities, std::move(callback));
     }
 
     bool AddActorMemory(std::uint32_t actorFormID,
@@ -453,8 +359,7 @@ namespace MARAS::Bridge::SkyrimNet {
             return false;
         }
 
-        auto* fnAddMemory = LookupSkyrimNetExport<PublicAddMemory_t>("PublicAddMemory");
-        if (!fnAddMemory) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicAddMemory) {
             MARAS_LOG_WARN("[SkyrimNet] AddActorMemory: PublicAddMemory export not found in SkyrimNet.dll");
             return false;
         }
@@ -470,7 +375,7 @@ namespace MARAS::Bridge::SkyrimNet {
         }
         const std::string relatedStr = relatedJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 
-        const int memId = fnAddMemory(
+        const int memId = PublicAddMemory(
             actorFormID,
             content.c_str(),
             importance,
@@ -495,13 +400,12 @@ namespace MARAS::Bridge::SkyrimNet {
         if (!IsSkyrimNetAvailable() || formID == 0 || MARAS::IsSyntheticChildID(formID)) {
             return false;
         }
-        auto* fn = LookupSkyrimNetExport<PublicRequestProfileUpdate_t>("PublicRequestProfileUpdate");
-        if (!fn) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicRequestProfileUpdate) {
             return false;
         }
         const char* instrPtr = additionalInstructions.empty() ? nullptr : additionalInstructions.c_str();
         const char* blocksPtr = updatableBlocksCSV.empty() ? nullptr : updatableBlocksCSV.c_str();
-        return fn(formID, instrPtr, blocksPtr);
+        return PublicRequestProfileUpdate(formID, instrPtr, blocksPtr);
     }
 
     std::string GetBioTemplateNameExport(std::uint32_t formID) {
@@ -511,23 +415,17 @@ namespace MARAS::Bridge::SkyrimNet {
         if (formID == MARAS::kPlayerFormID) {
             return "player_special";
         }
-        if (!IsSkyrimNetAvailable()) {
+        if (!IsSkyrimNetAvailable() || !EnsureSkyrimNetApiResolved() || !PublicGetBioTemplateName) {
             return "";
         }
-        if (auto* fn = LookupSkyrimNetExport<PublicGetBioTemplateName_t>("PublicGetBioTemplateName")) {
-            return fn(formID);
-        }
-        return "";
+        return PublicGetBioTemplateName(formID);
     }
 
     std::string GetSaveUniqueIDExport() {
-        if (!IsSkyrimNetAvailable()) {
+        if (!IsSkyrimNetAvailable() || !EnsureSkyrimNetApiResolved() || !PublicGetSaveUniqueID) {
             return "";
         }
-        if (auto* fn = LookupSkyrimNetExport<PublicGetSaveUniqueID_t>("PublicGetSaveUniqueID")) {
-            return fn();
-        }
-        return "";
+        return PublicGetSaveUniqueID();
     }
 
     std::vector<std::string> QueryActorMemoriesExport(std::uint32_t formID,
@@ -539,12 +437,11 @@ namespace MARAS::Bridge::SkyrimNet {
             return memories;
         }
 
-        auto* memFn = LookupSkyrimNetExport<PublicGetMemoriesForActor_t>("PublicGetMemoriesForActor");
-        if (!memFn) {
+        if (!EnsureSkyrimNetApiResolved() || !PublicGetMemoriesForActor) {
             return memories;
         }
 
-        const std::string memJsonStr = memFn(formID, maxCount, contextQuery ? contextQuery : "");
+        const std::string memJsonStr = PublicGetMemoriesForActor(formID, maxCount, contextQuery ? contextQuery : "");
         if (memJsonStr.empty() || memJsonStr == "[]") {
             return memories;
         }
@@ -849,10 +746,6 @@ namespace MARAS::Bridge::SkyrimNet {
 
             bool IsActorSuccessionAvailable() const override {
                 return MARAS::Bridge::SkyrimNet::IsActorSuccessionAvailable();
-            }
-
-            std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID) const override {
-                return MARAS::Bridge::SkyrimNet::ResolvePlacedActorUUID(actorFormID);
             }
 
             bool RecordActorSuccession(std::uint32_t fromFormID, std::uint32_t toFormID) override {

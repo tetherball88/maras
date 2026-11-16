@@ -685,7 +685,7 @@ namespace MARAS::App {
         if (rec.skyrimNetUuid == 0 && hasSynthErase && synthFormID != 0 &&
             !IsSyntheticId(synthFormID) && synthFormID != childID &&
             GetSkyrimNetGateway().IsAvailable()) {
-            rec.skyrimNetUuid = GetSkyrimNetGateway().ResolvePlacedActorUUID(synthFormID);
+            rec.skyrimNetUuid = GetSkyrimNetGateway().GetActorUUID(synthFormID);
         }
 
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {

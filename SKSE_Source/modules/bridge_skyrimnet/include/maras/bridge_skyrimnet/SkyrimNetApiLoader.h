@@ -38,11 +38,8 @@ namespace MARAS::Bridge::SkyrimNet {
                                  const char* description,
                                  std::function<std::string(RE::Actor*)> callback);
 
-    // Resolves a SkyrimNet actor UUID for the given FormID (checking actor base and ref IDs).
+    // Resolves a SkyrimNet EntityUUID for the given placed actor FormID via PublicFormIDToUUID.
     [[nodiscard]] std::uint64_t GetActorUUID(std::uint32_t formID);
-
-    // Resolves a SkyrimNet UUID prioritizing placed RE::Actor ref first so runtime entities register cleanly.
-    [[nodiscard]] std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID);
 
     // Checks if SkyrimNet Public API v15+ actor succession exports are available.
     [[nodiscard]] bool IsActorSuccessionAvailable();

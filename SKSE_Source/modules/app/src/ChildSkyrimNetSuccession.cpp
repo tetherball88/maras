@@ -24,10 +24,10 @@ namespace MARAS::App {
 
         if (previousUuid == 0 && previousFormId != 0 && !IsSyntheticChildID(previousFormId) &&
             previousFormId != spawnedActorId) {
-            previousUuid = sn.ResolvePlacedActorUUID(previousFormId);
+            previousUuid = sn.GetActorUUID(previousFormId);
         }
 
-        const std::uint64_t newUuid = sn.ResolvePlacedActorUUID(spawnedActorId);
+        const std::uint64_t newUuid = sn.GetActorUUID(spawnedActorId);
         if (newUuid == 0) {
             return previousUuid;
         }
@@ -67,7 +67,7 @@ namespace MARAS::App {
                            bioTpl, childActorId);
         }
         if (rec.skyrimNetUuid == 0) {
-            rec.skyrimNetUuid = sn.ResolvePlacedActorUUID(childActorId);
+            rec.skyrimNetUuid = sn.GetActorUUID(childActorId);
             if (rec.skyrimNetUuid != 0) {
                 MARAS_LOG_INFO("[Training] Captured SkyrimNet UUID {:016X} for child {:08X}",
                                rec.skyrimNetUuid, childActorId);
