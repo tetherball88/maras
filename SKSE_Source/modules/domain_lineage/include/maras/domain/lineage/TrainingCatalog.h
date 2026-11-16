@@ -38,6 +38,7 @@ namespace MARAS::Domain::Lineage {
         std::string className{};
         std::string locationName{};
         std::string description{};
+        std::string trainingContext{};
         float costMultiplier{ 1.0f };
         SkillType mappedSkillType{ SkillType::Warrior };
         bool requiresBeastblood{ false };
@@ -114,6 +115,9 @@ namespace MARAS::Domain::Lineage {
 
         [[nodiscard]] const TrainingClassSpec* FindClass(std::int32_t classIndex) const noexcept;
         [[nodiscard]] std::int32_t FindClassByLocation(std::string_view locationName) const noexcept;
+        [[nodiscard]] const TrainingClassSpec* ResolveClassSpec(
+            std::int32_t classIndex,
+            std::string_view locationName) const noexcept;
         [[nodiscard]] const DaedricBlessingSpec* FindDaedricBlessingById(std::string_view blessingId) const noexcept;
 
         [[nodiscard]] std::int32_t GetEffectiveTrainingCost(

@@ -311,6 +311,13 @@ namespace MARAS::Engine {
             if (obj.contains("description") && obj["description"].is_string()) {
                 target->description = MARAS::Foundation::StringUtils::TrimStd(obj["description"].get<std::string>());
             }
+            if (obj.contains("skyrimnetContext") && obj["skyrimnetContext"].is_string()) {
+                target->trainingContext = MARAS::Foundation::StringUtils::TrimStd(obj["skyrimnetContext"].get<std::string>());
+            } else if (obj.contains("skyrimNetContext") && obj["skyrimNetContext"].is_string()) {
+                target->trainingContext = MARAS::Foundation::StringUtils::TrimStd(obj["skyrimNetContext"].get<std::string>());
+            } else if (obj.contains("trainingContext") && obj["trainingContext"].is_string()) {
+                target->trainingContext = MARAS::Foundation::StringUtils::TrimStd(obj["trainingContext"].get<std::string>());
+            }
             if (obj.contains("costMultiplier") && obj["costMultiplier"].is_number()) {
                 target->costMultiplier = std::max(0.0f, obj["costMultiplier"].get<float>());
             } else if (obj.contains("multiplier") && obj["multiplier"].is_number()) {

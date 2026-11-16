@@ -41,6 +41,12 @@
 #   reads each perk's skill/level requirement directly from the BGSPerk record, grants
 #   only the perks whose requirement the child currently meets, and automatically
 #   unlocks/upgrades higher ranks (`nextPerk`) as the child levels up (Lv 10 -> Lv 50).
+#
+# SKYRIMNET CONTEXT (`skyrimnetContext:` in trainingLocations):
+#   In-world infinitive clause ("to ...") capturing the institution's setting,
+#   atmosphere, daily regimen/culture, and training discipline (beyond bare skills).
+#   Used in SkyrimNet training departure events and Stage 4 adult biography generation
+#   instead of the longer UI card `description`.
 # ==============================================================================
 
 trainingLocations:
@@ -52,6 +58,7 @@ trainingLocations:
     location: College of Winterhold
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/College of Winterhold.webp"
     description: "Apprenticed beneath the windswept spires of the College of Winterhold, initiates spend their days immersed in the ancient tomes of the Arcanaeum and rigorous elemental trials in the Hall of the Elements. Under the tutelage of senior wizards, they master tri-elemental Destruction—hurling Fireballs, Ice Storms, and Chain Lightning—while weaving Ironflesh armor, Steadfast Wards, and protective elemental cloaks to survive the deadliest arcane duels."
+    skyrimnetContext: "to apprentice at the College of Winterhold atop Skyrim's frozen northern sea-cliffs, living among scholar-mages in its stone towers while enduring rigorous arcane study in the Arcanaeum and elemental combat trials in the Hall of the Elements"
     costMultiplier: 1.95
     skillType: mage
     hmsWeights: { health: 0.20, magicka: 0.70, stamina: 0.10 }
@@ -128,6 +135,7 @@ trainingLocations:
     location: Jorrvaskr
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Jorrvaskr.webp"
     description: "Raised in the proud martial tradition of Ysgramor's Companions, young aspirants train in the courtyard behind Jorrvaskr and feast beneath its overturned longship roof in Whiterun. Tempered by daily sparring with the Circle, shield-wall drills, and hours at Eorlund Gray-Mane's forge, graduates return home clad in heavy Wolf armor, bearing a balanced Skyforge Steel blade, an iron-rimmed shield, and an unshakeable code of frontline honor."
+    skyrimnetContext: "to train with the Companions at Jorrvaskr in Whiterun, sharing mead-hall camaraderie beneath its overturned longship roof while being tempered by daily courtyard sparring, Skyforge steelwork, shield-wall drills, and Ysgramor's code of frontline honor"
     costMultiplier: 1.50
     skillType: warrior
     hmsWeights: { health: 0.70, magicka: 0.05, stamina: 0.25 }
@@ -183,6 +191,7 @@ trainingLocations:
     location: The Cistern
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Cistern - Thieves Guild.webp"
     description: "Inducted into the subterranean vaults of the Ratway Cistern beneath Riften, recruits learn the unwritten rules of shadows, coin, and leverage from the Thieves Guild's veteran larcenists. Trained to move unseen across rooftops, pick masterwork tumblers, lift purses without a whisper, and loose ambush volleys from the dark, they graduate in supple Guild leather armor armed with a silent dagger and hunting bow."
+    skyrimnetContext: "to be inducted into the Thieves Guild inside the damp subterranean vaults of Riften's Ratway Cistern, learning underworld codes, streetwise leverage, rooftop stealth, lockcraft, and silent marksmanship from veteran guild larcenists"
     costMultiplier: 1.15
     skillType: rogue
     hmsWeights: { health: 0.25, magicka: 0.05, stamina: 0.70 }
@@ -250,6 +259,7 @@ trainingLocations:
     location: The Sanctuary
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Sanctuary - Dark Brotherhood.webp"
     description: "Steeped in the dread Five Tenets of Sithis and the Night Mother within a hidden Dark Brotherhood Sanctuary, initiates undergo merciless conditioning in the art of the unseen kill. They learn to brew virulent alchemical toxins, cloak their footsteps in Muffle and Invisibility magic, and strike from the shadows with lethal precision, emerging in blood-black Shrouded armor as cold, unflinching executioners."
+    skyrimnetContext: "to be initiated into the covert ways of a hidden Dark Brotherhood Sanctuary, steeped in solemn oaths to Sithis and austere nocturnal discipline while learning shadow-craft, alchemical mixtures, Illusion, and silent precision"
     costMultiplier: 1.45
     skillType: rogue
     hmsWeights: { health: 0.25, magicka: 0.15, stamina: 0.60 }
@@ -316,6 +326,7 @@ trainingLocations:
     location: The Bards College
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Bards College.webp"
     description: "Educated in the candlelit halls of Solitude's Bards College, young skalds study ancient Nordic verse, courtly rhetoric, and the subtle art of swaying both jarls and battlefields. Combining silver-tongued Speechcraft with dueling steel, they weave Illusion enchantments—inspiring allies with Rally and Courage or sowing chaos with Fury and Pacify—while sustaining companions with Restoration healing and Oakflesh wards."
+    skyrimnetContext: "to study at the candlelit Bards College in Solitude's noble quarter, immersed in ancient Nordic skaldic verse, courtly diplomacy, musical performance, duelist bladework, and battlefield-swaying Illusion and restorative magic"
     costMultiplier: 1.30
     skillType: orator
     hmsWeights: { health: 0.35, magicka: 0.45, stamina: 0.20 }
@@ -380,6 +391,7 @@ trainingLocations:
     location: Palace of the Kings
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Palace of the Kings - Stormcloak.webp"
     description: "Hardened on the frozen flagstones of Windhelm's Palace of the Kings, recruits endure brutal Eastmarch conditioning alongside Ulfric Stormcloak's veteran Huscarls. Emphasizing raw Nordic ferocity and mobility over heavy plate, they master the crushing momentum of two-handed battleaxes, bone-jarring shield bashes, and winter survival, returning home in Stormcloak furs ready to cleave through any frontline."
+    skyrimnetContext: "to drill with Ulfric's Stormcloaks on the frostbitten stones of Windhelm's ancient Palace of the Kings, steeped in fierce Nordic rebel pride, harsh Eastmarch winter marches, and relentless two-handed shock-troop warfare"
     costMultiplier: 1.00
     skillType: warrior
     hmsWeights: { health: 0.70, magicka: 0.05, stamina: 0.25 }
@@ -432,6 +444,7 @@ trainingLocations:
     location: Castle Dour
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Castle Dour - Legionnaire.webp"
     description: "Drilled beneath the banners of the Red Diamond inside Solitude's Castle Dour, cadets are forged in the time-tested martial doctrine of the Imperial Legion. Through relentless formation marches, discipline under fire, and tactical versatility, they learn to soften enemy ranks with disciplined Imperial bow volleys before locking heavy shields and advancing with gladius-style Imperial steel."
+    skyrimnetContext: "to serve as a Legion cadet inside the grim stone barracks of Solitude's Castle Dour, forged by strict Imperial military hierarchy, relentless formation marches, tactical archery volleys, and disciplined shield-and-sword doctrine"
     costMultiplier: 1.10
     skillType: warrior
     hmsWeights: { health: 0.65, magicka: 0.05, stamina: 0.30 }
@@ -491,6 +504,7 @@ trainingLocations:
     location: Sky Haven Temple
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Sky Haven Temple.webp"
     description: "Trained high above the Karth River within the ancient halls of Sky Haven Temple, initiates study the lost dragon-hunting treatises carved by the Akaviri Dragonguard and preserved by the Blades. Outfitted in ceremonial Akaviri heavy plate with a razor-sharp Blades katana and shield, they master parrying monstrous strikes and channeling Close Wounds Restoration magic to endure the fury of dragons."
+    skyrimnetContext: "to train in austere mountain seclusion with the rebuilt Blades at Sky Haven Temple high above the Reach, studying ancient Akaviri dragon-lore carvings alongside disciplined katana swordplay, heavy plate, and restorative resilience"
     costMultiplier: 2.20
     skillType: warrior
     hmsWeights: { health: 0.65, magicka: 0.15, stamina: 0.20 }
@@ -558,6 +572,7 @@ trainingLocations:
     location: Fort Dawnguard
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Fort Dawnguard.webp"
     description: "Sequestered within the fortified stone walls of Fort Dawnguard in Dayspring Canyon, recruits are drilled by veteran vampire hunters to stalk the creatures of the night. They master the mechanical punch of the Dawnguard crossbow, close-quarters war axe combat, and sacred solar Restoration—searing the undead with Sun Fire, Vampire's Bane, and the blazing mantle of Stendarr's Aura."
+    skyrimnetContext: "to train behind the cliff-ringed stone ramparts of Fort Dawnguard in Dayspring Canyon, living under rugged watchtower vigilance with veteran monster hunters while drilling in mechanical crossbows, close-quarters axes, and sun-blessed wards"
     costMultiplier: 1.80
     skillType: ranger
     hmsWeights: { health: 0.50, magicka: 0.25, stamina: 0.25 }
@@ -631,6 +646,7 @@ trainingLocations:
     location: College of Whispers
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/College of Whispers.webp"
     description: "Sent south to the politically sanctioned halls of Cyrodiil's College of Whispers, acolytes delve into the forbidden intersections of Conjuration, soul-binding, and necromantic servitude. Unburdened by common taboos, they learn to trap souls, command risen Revenants and Dread Zombies with a necromantic staff, and freeze the living in their tracks with biting Ice Storms and Frost Cloaks."
+    skyrimnetContext: "to study south in Cyrodiil's politically sanctioned College of Whispers, immersed in cold Imperial academic pragmatism and esoteric lectures on spirit-binding, necromantic summoning, soul-craft, and winter frost magic"
     costMultiplier: 2.10
     skillType: mage
     hmsWeights: { health: 0.20, magicka: 0.70, stamina: 0.10 }
@@ -693,6 +709,7 @@ trainingLocations:
     location: "Stendarr's Beacon"
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Stendarr's Beacon.webp"
     description: "Sworn to the unyielding tenets of the God of Mercy and Righteous Rule at Stendarr's Beacon in the mountains of the Pale, novitiates are tempered into zealous witchhunters. Clad in heavy gauntlets and consecrated robes, they wade into battle with a steel mace in one hand and a Steadfast Ward in the other, fortifying their flesh with Alteration magic while banishing Daedra, witches, and the undead."
+    skyrimnetContext: "to live under austere monastic vows at Stendarr's Beacon high in the snowy mountains of the Pale, tempered by stern witchhunter sermons, unforgiving cold, mace-and-ward drills, and righteous vigils against Daedra and the undead"
     costMultiplier: 1.35
     skillType: mage
     hmsWeights: { health: 0.50, magicka: 0.40, stamina: 0.10 }
@@ -754,6 +771,7 @@ trainingLocations:
     location: Temple of Kynareth
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Temple of Kynareth.webp"
     description: "Apprenticed beneath the boughs of the sacred Gildergreen in Whiterun's Temple of Kynareth, acolytes dedicate themselves to the preservation of life, herbalism, and restorative grace. Shunning bloodshed for sanctuary, they master Grand Healing, Greater Wards, Ironflesh protection, and holy Circles of Protection, wielding a Staff of Grand Healing and rallying cries to keep their companions standing through the direst peril."
+    skyrimnetContext: "to serve as a devoted temple acolyte beneath the boughs of the sacred Gildergreen in Whiterun's Temple of Kynareth, tending the sick and wounded through quiet compassion, herbalism, sanctuary wards, and restorative prayer"
     costMultiplier: 1.85
     skillType: mage
     hmsWeights: { health: 0.30, magicka: 0.60, stamina: 0.10 }
@@ -822,6 +840,7 @@ trainingLocations:
     location: House Telvanni
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/House Telvanni.webp"
     description: "Trained in the mushroom-tower citadels of Great House Telvanni in Morrowind, apprentices are steeped in ruthlessly pragmatic Dunmeri wizardry where arcane mastery is the only law. They learn to tear open the barriers of Oblivion—binding Flame, Frost, and Storm Atronachs to their will—while manifesting mystic Bound Bows and Swords and hurling crackling bolts of Shock magic."
+    skyrimnetContext: "to apprentice in the alien mushroom-tower citadels of Morrowind's Great House Telvanni, navigating fiercely ambitious Dunmeri wizard politics where arcane mastery rules while learning Oblivion summoning, bound weaponry, and storm magic"
     costMultiplier: 2.25
     skillType: mage
     hmsWeights: { health: 0.25, magicka: 0.60, stamina: 0.15 }
@@ -886,6 +905,7 @@ trainingLocations:
     location: School of Julianos
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/School of Julianos.webp"
     description: "Tutored in logic, perception, and cognitive arcana by the monastic scholars of the School of Julianos in Cyrodiil, initiates learn that the deadliest battlefield is the mortal mind. Equipped with Master Robes of Illusion, a Staff of Frenzy, and an Elven dagger, they bend enemies to madness, terror, or docile calm with Rout, Frenzy, and Pacify before vanishing into total Invisibility."
+    skyrimnetContext: "to study under monastic philosopher-mages at Cyrodiil's School of Julianos, disciplined in cold logic, debate, rhetoric, and cognitive arcana that bend perception through Illusion magic, subtle bladework, and unseen movement"
     costMultiplier: 2.40
     skillType: mage
     hmsWeights: { health: 0.25, magicka: 0.55, stamina: 0.20 }
@@ -951,6 +971,7 @@ trainingLocations:
     location: The Synod Conclave
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/The Synod Conclave.webp"
     description: "Commissioned into the Imperial Synod Conclave in the heart of Cyrodiil, cadets undergo the rigorous martial-arcane synthesis once favored by the old Imperial Battlemages. Encased in heavy warmage plate and Ironflesh wards, they charge into the fray with an enchanted Elven Sword of Scorching in one hand and devastating barrages of Fireball, Chain Lightning, and elemental cloaks in the other."
+    skyrimnetContext: "to be commissioned into Cyrodiil's prestigious Synod Conclave in the Imperial heartland, drilled in hierarchical warmage doctrine and arcane statecraft that fuses heavy-armored swordplay with disciplined elemental Destruction"
     costMultiplier: 2.50
     skillType: mage
     hmsWeights: { health: 0.45, magicka: 0.45, stamina: 0.10 }
@@ -1021,6 +1042,7 @@ trainingLocations:
     location: Fighters Guild
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Fighters Guild.webp"
     description: "Seasoned on long-range frontier contracts and wilderness expeditions with the Fighters Guild, wardenscouts are trained to survive, track, and outmaneuver any quarry in Tamriel. Outfitted in gilded Elven light armor with a masterwork Elven bow and matching blade, they combine long-distance marksmanship, woodland stealth, field alchemy, and self-healing to control skirmishes from afar."
+    skyrimnetContext: "to season on long-range frontier expeditions and wilderness contracts with the Fighters Guild beyond Skyrim's borders, learning self-reliant campcraft, tracking, woodland stealth, field alchemy, and elven bow-and-blade skirmishing"
     costMultiplier: 1.70
     skillType: ranger
     hmsWeights: { health: 0.40, magicka: 0.10, stamina: 0.50 }
@@ -1079,6 +1101,7 @@ trainingLocations:
     location: Shrine of Meridia
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Shrine of Meridia.webp"
     description: "Consecrated atop Mount Kilkreath beneath the blinding radiance of the Lady of Infinite Energies, initiates are forged into living vessels of Meridia's wrath against all things undead and profane. Resplendent in Elven Gilded armor with an Elven Shield and a blazing solar-enchanted blade, they purge necromancers and vampires alike with Sun Fire, Vampire's Bane, Fireballs, and sacred Circles of Protection."
+    skyrimnetContext: "to undergo radiant consecration atop windy Mount Kilkreath beneath the towering Shrine of Meridia, steeped in zealous devotion to cleansing light while training in gilded armor, sword-and-shield combat, and undead-purging solar fire"
     costMultiplier: 2.75
     skillType: warrior
     hmsWeights: { health: 0.45, magicka: 0.40, stamina: 0.15 }
@@ -1149,6 +1172,7 @@ trainingLocations:
     location: Sacellum of Boethiah
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Sacellum of Boethiah.webp"
     description: "Tempered in blood and treachery high in the mountains of Eastmarch at the Sacellum of Boethiah, only those who prove their ruthless will to survive emerge from the Prince of Plots' arena. Clad in midnight-black Ebony plate and Ebonyflesh wards, they stalk their prey under Muffle and Invisibility, sowing Frenzy among rivals before striking with an Ebony Bow and a life-draining Ebony Sword of the Vampire."
+    skyrimnetContext: "to endure unforgiving high-altitude trials at the wind-lashed Sacellum of Boethiah in Eastmarch's mountains, forged in a ruthless creed of self-reliance and tactical cunning across ebony plate, shadow magic, and bow-and-blade dueling"
     costMultiplier: 3.25
     skillType: rogue
     hmsWeights: { health: 0.45, magicka: 0.25, stamina: 0.30 }
@@ -1213,6 +1237,7 @@ trainingLocations:
     location: Nightingale Hall
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Nightingale Hall.webp"
     description: "Sworn to the Evergloam within the hidden rock-cut sanctum of Nightingale Hall, initiates walk the twilight path as guardians of Nocturnal's Triad. Mantle-bound in full midnight Nightingale armor and armed with the life-siphoning Nightingale Blade and storm-charged Nightingale Bow, they glide through darkness as unseen sentinels who command Invisibility, Muffle, and masterwork Illusion."
+    skyrimnetContext: "to walk the secretive twilight path inside the hidden rock-cut sanctum of Nightingale Hall in the Rift, bound by quiet oaths to Nocturnal's Triad while mastering shadow-craft, twilight Illusion, and silent sentinel marksmanship"
     costMultiplier: 3.10
     skillType: rogue
     hmsWeights: { health: 0.35, magicka: 0.25, stamina: 0.40 }
@@ -1287,6 +1312,7 @@ trainingLocations:
     location: Shrine of Molag Bal
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Shrine of Molag Bal.webp"
     description: "Anointed in dark subjugation before the rusted altar of the Lord of Domination, initiates endure the harrowing rites of Coldharbour to break the weak and command the dead. Clad in crimson-and-black vampire plate, they crush both body and spirit with a soul-siphoning Ebony Mace of Leeching, enslaving fallen foes as Dread Zombies while unleashing freezing Ice Storms and terrifying Rout magic."
+    skyrimnetContext: "to undergo grim iron-willed conditioning at the shadowed Shrine of Molag Bal, steeped in unforgiving rites of martial authority, dark resilience, heavy mace combat, biting frost magic, and spirit-commanding Conjuration"
     costMultiplier: 2.90
     skillType: warrior
     hmsWeights: { health: 0.45, magicka: 0.40, stamina: 0.15 }
@@ -1354,6 +1380,7 @@ trainingLocations:
     location: Frostmoon Crag
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Frostmoon Crag.webp"
     description: "Reserved exclusively for werewolf-blooded youth who inherited Hircine's gift, Majni's reclusive pack beneath the frozen peaks of Solstheim teaches young lycanthropes to master the beast within in harmony with the wild. Clad in rugged hunter furs and armed with a carved Nordic bow and war axe, they stalk prey across the wilds alongside spectral wolf familiars and bolster allies with pack howls."
+    skyrimnetContext: "to live wild beneath the frozen peaks of Solstheim with Majni's reclusive werewolf pack at Frostmoon Crag, guided by moonlit pack kinship and primal instinct to master the Beastblood alongside wilderness tracking and bow-and-axe hunting"
     costMultiplier: 2.45
     skillType: ranger
     requiresBeastblood: true
@@ -1429,6 +1456,7 @@ trainingLocations:
     location: The Underforge
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/Under Forge.webp"
     description: "Closed to mortals and open only to offspring born with the Beastblood, the secret stone sanctum beneath the Skyforge is where the Companions' Inner Circle trains young werewolves to harness the unbridled fury of the Wolf Spirit. Clad in Skyforge Wolf Armor and wielding a razor-edged Skyforge Steel Battleaxe, they charge fearlessly into the fray with terrifying howls, spectral packmates, and the untamed power of the Beast Form."
+    skyrimnetContext: "to be initiated into the secret stone sanctum of Whiterun's Underforge beneath the Skyforge by the Companions' Inner Circle, embracing ancient wolf-totem rites to channel untamed Beastblood fury alongside heavy-armored battleaxe combat"
     costMultiplier: 2.35
     skillType: warrior
     requiresBeastblood: true

@@ -154,7 +154,9 @@ namespace MARAS::Bridge::SkyrimNet {
         std::string_view presumedFatherName,
         std::string_view bioFatherName,
         Projection::DispatchMaskMode maskMode,
-        bool skipTrigger);
+        bool skipTrigger,
+        std::string_view trainingClassName = {},
+        std::string_view trainingContext = {});
 
     [[nodiscard]] std::string BuildChildBecameAdultPayload(
         const Projection::ResolvedChildSecrecy& sec,

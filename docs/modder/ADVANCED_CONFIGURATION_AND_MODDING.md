@@ -133,6 +133,7 @@ Contains species-keyed name arrays (`fox`, `arctic_fox`, `hare`, `mudcrab`, `ske
 - If an entry in `childTraining/*.yaml` has an `id` matching an existing training location (e.g., `warrior` or `mage`), any fields provided in the override file **patch/replace** that entry in-place while preserving its index.
 - If an entry in `childTraining/*.yaml` has a new `id` (e.g., `morag_tong` or `psijic_monk`), it is **appended** as a new training path and automatically appears in the UI Dashboard's Adolescent Training modal!
 - **Location Images (`image`)**: Each training location specifies an `image` path (e.g., `"Data/SKSE/Plugins/MARAS/childTraining/images/College of Winterhold.webp"`). When the image file exists on disk in `Data/SKSE/Plugins/MARAS/childTraining/images/`, C++ caches it for rendering in `ChildTrainingModal.tsx`, falling back cleanly to a styled emblem placeholder if missing.
+- **SkyrimNet Event & Adult Bio Context (`skyrimnetContext`)**: Each training location can define an in-world infinitive clause (`"to ..."`) capturing the setting's atmosphere, mentorship/culture, daily regimen, and training discipline (beyond bare skill names). `SkyrimNetEventService` embeds this phrase into `ttm_child_sent_to_training` events and `ttm_child_sent_to_training.yaml` trigger prompts, and `SkyrimNetProfileService` / `ChildProfileGuidance` uses it for Stage 4 adult biography generation and graduation seed memories instead of the longer UI card `description` (falling back to `location` / `description` when omitted in custom drop-ins).
 - Every form reference (`npcClass`, `combatStyle`, `outfit`, `requirements.faction`, `requirements.quest`, `affiliation.*`, `spells[]`, `perks[]`, `items[].form`) uses standard `"__formData|<PluginName>|<0xHexFormID>"` syntax (supporting both 24-bit `.esp`/`.esm` and 12-bit light `.esl` plugins) and supports inline `#` comments to document EditorIDs and form names.
 - **Skill-Gated Perk Distribution**: `ChildVisualReconciler::ApplyAdultChildPerks` evaluates only the explicit `perks:` listed on the child's training location and Daedric blessing against each `RE::BGSPerk`'s native `data.level` and `perkConditions`, deduplicates multi-rank `BGSPerk::nextPerk` chains so only the highest qualified rank is active, and upgrades ranks automatically as the Player/child scales from Lv 10 to Lv 50.
 
@@ -144,6 +145,7 @@ trainingLocations:
     location: Raven Rock Sanctum
     image: "Data/SKSE/Plugins/MARAS/childTraining/images/morag_tong.webp"
     description: "Sanctioned Dunmeri executioner training in Solstheim, mastering dual-blade precision, shadow magic, and honourable writ assassination."
+    skyrimnetContext: "to train with the Morag Tong at Raven Rock on Solstheim in dual-blade dueling, stealth, and Illusion magic"
     costMultiplier: 2.00
     skillType: rogue
     hmsWeights: { health: 0.35, magicka: 0.25, stamina: 0.40 }

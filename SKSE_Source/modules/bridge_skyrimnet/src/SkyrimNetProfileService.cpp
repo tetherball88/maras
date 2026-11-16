@@ -104,6 +104,7 @@ namespace MARAS::Bridge::SkyrimNet {
         std::string homeLocationName;
         std::string trainingLocation;
         std::string trainingClassName;
+        std::string trainingContext;
         std::string trainingDescription;
         std::string savedChildhoodBioTemplateName;
         bool hasInheritedChildhoodIdentity = false;
@@ -635,16 +636,16 @@ namespace MARAS::Bridge::SkyrimNet {
                     currentGameDays);
 
                 const auto& catalog = MARAS::Engine::TrainingCatalogLoader::GetSingleton().GetCatalog();
-                std::int32_t trainIdx = entry.trainingClassIndex;
-                if (!catalog.IsValidClassIndex(trainIdx) && !entry.trainingLocation.empty()) {
-                    trainIdx = catalog.FindClassByLocation(entry.trainingLocation);
-                }
-                if (const auto* classSpec = catalog.FindClass(trainIdx)) {
+                data.trainingLocation = MARAS::Foundation::StringUtils::TrimStd(entry.trainingLocation);
+                if (const auto* classSpec = catalog.ResolveClassSpec(entry.trainingClassIndex, data.trainingLocation)) {
                     data.trainedInWerewolfPack = classSpec->requiresBeastblood;
                     data.trainingClassName = classSpec->className;
+                    data.trainingContext = classSpec->trainingContext;
                     data.trainingDescription = classSpec->description;
+                    if (data.trainingLocation.empty()) {
+                        data.trainingLocation = classSpec->locationName;
+                    }
                 }
-                data.trainingLocation = MARAS::Foundation::StringUtils::TrimStd(entry.trainingLocation);
                 data.savedChildhoodBioTemplateName = MARAS::Foundation::StringUtils::TrimStd(entry.savedBioTemplateName);
 
                 data.bioMotherID = entry.bioMother.raw();
@@ -836,6 +837,7 @@ namespace MARAS::Bridge::SkyrimNet {
             guidanceInput.homeLocationName = data.homeLocationName;
             guidanceInput.trainingLocation = data.trainingLocation;
             guidanceInput.trainingClassName = data.trainingClassName;
+            guidanceInput.trainingContext = data.trainingContext;
             guidanceInput.trainingDescription = data.trainingDescription;
             guidanceInput.hasInheritedChildhoodIdentity = data.hasInheritedChildhoodIdentity;
 
@@ -940,10 +942,11 @@ namespace MARAS::Bridge::SkyrimNet {
                 << " (CARRY OVER & EVOLVE INTO ADULTHOOD)\n"
                 << "CRITICAL INSTRUCTION: Below is " << taskData.childName
                 << "'s established childhood biography from before "
-                << (taskData.isFemale ? "she" : "he") << " left for training";
-            if (!taskData.trainingClassName.empty() || !taskData.trainingLocation.empty()) {
-                out << " (" << taskData.trainingClassName
-                    << (!taskData.trainingLocation.empty() ? " at " + taskData.trainingLocation : "") << ")";
+                << (taskData.isFemale ? "she" : "he") << " left home "
+                << MARAS::Domain::Lineage::FormatTrainingDeparturePhrase(
+                       taskData.trainingContext, taskData.trainingLocation);
+            if (!taskData.trainingClassName.empty()) {
+                out << " (" << taskData.trainingClassName << ")";
             }
             out << ". You MUST preserve and carry forward " << taskData.childName
                 << "'s childhood memories, core personality traits, inherited physical appearance, and family relationships, "
