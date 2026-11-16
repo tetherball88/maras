@@ -453,6 +453,7 @@ namespace MARAS::State {
         float trainingStartGameDay{ 0.0f };
         std::string savedBioTemplateName{};
         std::uint8_t savedRaceIndex{ 255 };
+        std::uint64_t skyrimNetUuid{ 0 };
 
         // 'CHD1' visual genetics & RPG progression state
         FormRawId hairColorFormId{};

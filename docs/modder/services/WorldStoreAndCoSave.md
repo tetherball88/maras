@@ -70,7 +70,7 @@ flowchart LR
 
 | Chunk FourCC | Domain Contents & Sub-Records / Extensions |
 | :--- | :--- |
-| `'NPCR'` | Registered adults, relationship edges, status history, and `AffairLedger` + inline extensions `'AGN1'`, `'PRG1'`, `'CHD1'`, `'LYC1'`, `'CHD2'`, `'FRT1'` for partner intents, secret pregnancy flags, child genetics, beastblood, lineage/blessing data, and active multi-fetus fertility delivery batches. |
+| `'NPCR'` | Registered adults, relationship edges, status history, and `AffairLedger` + inline extensions `'AGN1'`, `'PRG1'`, `'CHD1'`, `'LYC1'`, `'CHD2'`, `'FRT1'`, and `'SNU1'` for partner intents, secret pregnancy flags, child genetics, beastblood, lineage/blessing data, active multi-fetus fertility delivery batches, and persistent child SkyrimNet `EntityUUID` (`skyrimNetUuid`) continuity across despawned training and adult promotion (omitted when all zero). |
 | `'SPHR'` | 4-slot ranked `SpouseHierarchyTable`. |
 | `'AFCT'` | Permanent affection scores, timestamps, daily per-type maps, and type min/max bounds (`AffectionTable`). |
 | `'PHOU'` | Registered player houses, home markers, tenant assignments, and `stayAtHome` flags. |

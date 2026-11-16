@@ -5,6 +5,7 @@
 
 #include "maras/app/AppContext.h"
 #include "maras/app/AppLifecycleCoordinator.h"
+#include "maras/app/ChildSkyrimNetSuccession.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/RelationshipUseCases.h"
@@ -402,6 +403,12 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         }
 
                         MARAS::App::RelationshipUseCases::GetSingleton().LogStatistics();
+                        if (!isNewGame && MARAS::App::GetSkyrimNetGateway().IsAvailable()) {
+                            MARAS::AddCurrentEpochTask("PostLoad::SyncSpawnedChildrenSkyrimNetUuids", []() {
+                                std::lock_guard lock(MARAS::GetPapyrusMutex());
+                                MARAS::App::SyncSpawnedChildrenOnPostLoad();
+                            });
+                        }
                         break;
                     }
 

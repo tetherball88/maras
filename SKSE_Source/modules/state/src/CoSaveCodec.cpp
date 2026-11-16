@@ -558,6 +558,29 @@ namespace MARAS::State {
                 }
             }
 
+            // 6g. Optional Inline Extension Block 'SNU1' (omitted when no children carry skyrimNetUuid)
+            std::uint32_t snuCount = 0;
+            for (const ChildId cId : sortedChildren) {
+                if (lineage.FindChild(cId)->skyrimNetUuid != 0) {
+                    ++snuCount;
+                }
+            }
+            if (snuCount > 0) {
+                if (!writer.WritePod(CoSaveConstants::kExtChildSkyrimNetUuidSNU1) ||
+                    !writer.WritePod(snuCount)) {
+                    return false;
+                }
+                for (const ChildId cId : sortedChildren) {
+                    const ChildRecord& c = *lineage.FindChild(cId);
+                    if (c.skyrimNetUuid != 0) {
+                        if (!writer.WritePod(c.childId.raw()) ||
+                            !writer.WritePod(c.skyrimNetUuid)) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
             return true;
         }
 
@@ -2071,52 +2094,79 @@ namespace MARAS::State {
                                                             }
                                                         }
 
-                                                        // 'FRT1' (optional active fertility delivery batches)
+                                                        // 'FRT1' (optional active fertility delivery batches) and/or 'SNU1' (optional SkyrimNet child UUIDs)
+                                                        std::uint32_t nextExtMagic = 0;
                                                         if (chunk.HasRemaining(sizeof(std::uint32_t))) {
-                                                            std::uint32_t frtMagic = 0;
-                                                            if (!chunk.ReadValue(frtMagic)) {
+                                                            if (!chunk.ReadValue(nextExtMagic)) {
                                                                 return false;
                                                             }
-                                                            if (frtMagic == CoSaveConstants::kExtFertilityBatchFRT1) {
-                                                                std::uint32_t frtCount = 0;
-                                                                if (!chunk.ReadValue(frtCount) || frtCount > kMaxSerializedEntries) {
+                                                        }
+                                                        if (nextExtMagic == CoSaveConstants::kExtFertilityBatchFRT1) {
+                                                            std::uint32_t frtCount = 0;
+                                                            if (!chunk.ReadValue(frtCount) || frtCount > kMaxSerializedEntries) {
+                                                                return false;
+                                                            }
+                                                            for (std::uint32_t fIdx = 0; fIdx < frtCount; ++fIdx) {
+                                                                std::uint32_t oldMother = 0;
+                                                                std::int32_t laborTotal = 0;
+                                                                float laborStartDay = 0.0f;
+                                                                std::uint32_t bornCount = 0;
+                                                                if (!chunk.ReadValue(oldMother) ||
+                                                                    !chunk.ReadValue(laborTotal) ||
+                                                                    !chunk.ReadValue(laborStartDay) ||
+                                                                    !chunk.ReadValue(bornCount) ||
+                                                                    bornCount > kMaxSerializedEntries) {
                                                                     return false;
                                                                 }
-                                                                for (std::uint32_t fIdx = 0; fIdx < frtCount; ++fIdx) {
-                                                                    std::uint32_t oldMother = 0;
-                                                                    std::int32_t laborTotal = 0;
-                                                                    float laborStartDay = 0.0f;
-                                                                    std::uint32_t bornCount = 0;
-                                                                    if (!chunk.ReadValue(oldMother) ||
-                                                                        !chunk.ReadValue(laborTotal) ||
-                                                                        !chunk.ReadValue(laborStartDay) ||
-                                                                        !chunk.ReadValue(bornCount) ||
-                                                                        bornCount > kMaxSerializedEntries) {
+                                                                std::vector<ChildId> resolvedBorn;
+                                                                resolvedBorn.reserve(bornCount);
+                                                                for (std::uint32_t bIdx = 0; bIdx < bornCount; ++bIdx) {
+                                                                    std::uint32_t oldChild = 0;
+                                                                    if (!chunk.ReadValue(oldChild)) {
                                                                         return false;
                                                                     }
-                                                                    std::vector<ChildId> resolvedBorn;
-                                                                    resolvedBorn.reserve(bornCount);
-                                                                    for (std::uint32_t bIdx = 0; bIdx < bornCount; ++bIdx) {
-                                                                        std::uint32_t oldChild = 0;
-                                                                        if (!chunk.ReadValue(oldChild)) {
-                                                                            return false;
-                                                                        }
-                                                                        std::uint32_t newChild = 0;
-                                                                        if (ResolveActorOrSpecialRaw(resolver, oldChild, newChild, false, false, true, true)) {
-                                                                            resolvedBorn.emplace_back(newChild);
-                                                                        }
-                                                                    }
-                                                                    std::uint32_t newMother = 0;
-                                                                    if (ResolveActorOrSpecialRaw(resolver, oldMother, newMother, false, false, false, true)) {
-                                                                        ActiveDeliveryBatch batch{};
-                                                                        batch.laborTotal = laborTotal;
-                                                                        batch.laborStartGameDay = laborStartDay;
-                                                                        batch.bornChildIds = std::move(resolvedBorn);
-                                                                        stagedLineage.UpsertActiveDeliveryBatch(ActorId{ newMother }, std::move(batch));
+                                                                    std::uint32_t newChild = 0;
+                                                                    if (ResolveActorOrSpecialRaw(resolver, oldChild, newChild, false, false, true, true)) {
+                                                                        resolvedBorn.emplace_back(newChild);
                                                                     }
                                                                 }
-                                                            } else {
+                                                                std::uint32_t newMother = 0;
+                                                                if (ResolveActorOrSpecialRaw(resolver, oldMother, newMother, false, false, false, true)) {
+                                                                    ActiveDeliveryBatch batch{};
+                                                                    batch.laborTotal = laborTotal;
+                                                                    batch.laborStartGameDay = laborStartDay;
+                                                                    batch.bornChildIds = std::move(resolvedBorn);
+                                                                    stagedLineage.UpsertActiveDeliveryBatch(ActorId{ newMother }, std::move(batch));
+                                                                }
+                                                            }
+
+                                                            nextExtMagic = 0;
+                                                            if (chunk.HasRemaining(sizeof(std::uint32_t))) {
+                                                                if (!chunk.ReadValue(nextExtMagic)) {
+                                                                    return false;
+                                                                }
+                                                            }
+                                                        }
+                                                        if (nextExtMagic != 0) {
+                                                            if (nextExtMagic != CoSaveConstants::kExtChildSkyrimNetUuidSNU1) {
                                                                 return false;
+                                                            }
+                                                            std::uint32_t snuCount = 0;
+                                                            if (!chunk.ReadValue(snuCount) || snuCount > kMaxSerializedEntries) {
+                                                                return false;
+                                                            }
+                                                            for (std::uint32_t sIdx = 0; sIdx < snuCount; ++sIdx) {
+                                                                std::uint32_t oldChild = 0;
+                                                                std::uint64_t snUuid = 0;
+                                                                if (!chunk.ReadValue(oldChild) || !chunk.ReadValue(snUuid)) {
+                                                                    return false;
+                                                                }
+                                                                std::uint32_t newChild = 0;
+                                                                if (ResolveActorOrSpecialRaw(resolver, oldChild, newChild, false, false, true, true)) {
+                                                                    if (auto* c = stagedLineage.FindChildMutable(ChildId{ newChild }); c && snUuid != 0) {
+                                                                        c->skyrimNetUuid = snUuid;
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }

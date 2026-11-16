@@ -152,6 +152,10 @@ namespace MARAS::App {
             void RequestChildProfileUpdate(std::uint32_t, Foundation::ChildStage) override {}
             std::string GetActorBioTemplateName(std::uint32_t) const override { return {}; }
             std::uint64_t GetActorUUID(std::uint32_t) const override { return 0; }
+            bool IsActorSuccessionAvailable() const override { return false; }
+            std::uint64_t ResolvePlacedActorUUID(std::uint32_t) const override { return 0; }
+            bool RecordActorSuccession(std::uint32_t, std::uint32_t) override { return false; }
+            bool RecordActorSuccessionByUUID(std::uint64_t, std::uint64_t) override { return false; }
             bool RequestActorProfileUpdate(std::uint32_t, const std::string&, const std::string&) override {
                 return false;
             }

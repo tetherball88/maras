@@ -47,6 +47,17 @@ namespace MARAS::Domain::Lineage {
         std::string trainingLocation{};
         std::string trainingClassName{};
         std::string trainingDescription{};
+        bool hasInheritedChildhoodIdentity{ false };
+    };
+
+    struct ChildSeedMemorySpec {
+        bool shouldCreate{ false };
+        std::string content{};
+        float importance{ 0.75f };
+        std::string memoryType{ "EXPERIENCE" };
+        std::string emotion{ "content" };
+        std::string location{};
+        std::vector<std::string> tags{};
     };
 
     [[nodiscard]] std::string JoinNamesForProse(const std::vector<std::string>& names);
@@ -71,5 +82,7 @@ namespace MARAS::Domain::Lineage {
         float currentGameDays) noexcept;
 
     [[nodiscard]] std::string BuildChildProfileGenerationGuidance(const ChildProfileGuidanceInput& d);
+
+    [[nodiscard]] ChildSeedMemorySpec BuildChildStageSeedMemory(const ChildProfileGuidanceInput& d);
 
 }  // namespace MARAS::Domain::Lineage

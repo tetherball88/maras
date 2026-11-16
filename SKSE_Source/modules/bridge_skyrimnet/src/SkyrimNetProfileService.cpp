@@ -106,6 +106,9 @@ namespace MARAS::Bridge::SkyrimNet {
         std::string trainingClassName;
         std::string trainingDescription;
         std::string savedChildhoodBioTemplateName;
+        bool hasInheritedChildhoodIdentity = false;
+        MARAS::Domain::Lineage::ChildSeedMemorySpec seedMemory{};
+        std::vector<std::uint32_t> seedMemoryRelatedAdults;
         std::string generationGuidance;
         std::int64_t recentEventsMaxAgeSeconds = 0;
     };
@@ -609,8 +612,10 @@ namespace MARAS::Bridge::SkyrimNet {
                 }
             }
 
+            std::uint64_t recordedSkyrimNetUuid = 0;
             if (const auto perceivedOpt = omniscientView.GetPerceivedChild(MARAS::State::ChildId{ childID }); perceivedOpt.has_value()) {
                 const auto& entry = *perceivedOpt;
+                recordedSkyrimNetUuid = entry.skyrimNetUuid;
                 if (data.childName.empty() && !entry.name.empty()) {
                     data.childName = MARAS::Foundation::StringUtils::TrimStd(entry.name);
                 }
@@ -782,6 +787,23 @@ namespace MARAS::Bridge::SkyrimNet {
                 data.childName = data.isFemale ? "Daughter" : "Son";
             }
 
+            const std::string ownSuffixUpper = std::format("_{:03X}", childID & 0xFFFu);
+            const bool inheritedBySuffix =
+                recordedSkyrimNetUuid != 0 &&
+                !data.bioTemplateName.empty() &&
+                data.bioTemplateName.size() > ownSuffixUpper.size() &&
+                !MARAS::Foundation::StringUtils::CaseInsensitiveEquals(
+                    std::string_view{ data.bioTemplateName }.substr(data.bioTemplateName.size() - ownSuffixUpper.size()),
+                    ownSuffixUpper);
+            data.hasInheritedChildhoodIdentity =
+                (stage == MARAS::Foundation::ChildStage::Adult) &&
+                IsActorSuccessionAvailable() &&
+                !data.bioTemplateName.empty() &&
+                ((!data.savedChildhoodBioTemplateName.empty() &&
+                  MARAS::Foundation::StringUtils::CaseInsensitiveEquals(
+                      data.bioTemplateName, data.savedChildhoodBioTemplateName)) ||
+                 inheritedBySuffix);
+
             MARAS::Domain::Lineage::ChildProfileGuidanceInput guidanceInput;
             guidanceInput.stage = data.stage;
             guidanceInput.childName = data.childName;
@@ -815,8 +837,25 @@ namespace MARAS::Bridge::SkyrimNet {
             guidanceInput.trainingLocation = data.trainingLocation;
             guidanceInput.trainingClassName = data.trainingClassName;
             guidanceInput.trainingDescription = data.trainingDescription;
+            guidanceInput.hasInheritedChildhoodIdentity = data.hasInheritedChildhoodIdentity;
 
             data.generationGuidance = MARAS::Domain::Lineage::BuildChildProfileGenerationGuidance(guidanceInput);
+            data.seedMemory = MARAS::Domain::Lineage::BuildChildStageSeedMemory(guidanceInput);
+            if (data.seedMemory.shouldCreate) {
+                const bool hideBioFatherInSeed =
+                    !data.bioFatherKnowsPaternity ||
+                    (data.hasPaternitySecret && !data.partnerKnowsPaternity) ||
+                    data.isSingleMotherSecretFromBioFather;
+                for (const auto& adult : data.involvedAdults) {
+                    if (adult.formID == 0 || adult.formID == childID) {
+                        continue;
+                    }
+                    if (hideBioFatherInSeed && adult.formID == data.bioFatherID && !adult.isGuardian) {
+                        continue;
+                    }
+                    data.seedMemoryRelatedAdults.push_back(adult.formID);
+                }
+            }
             return data;
         }
 
@@ -928,11 +967,14 @@ namespace MARAS::Bridge::SkyrimNet {
                     return;
                 }
 
-                // 0. If this is an Adult Child (Stage 4) who previously had a spawned Young Child bio,
+                // 0. If this is an Adult Child (Stage 4) who previously had a spawned Young Child bio
+                //    and SkyrimNet v15 succession did not already inherit it,
                 //    copy the childhood .prompt file and inject childhood bio continuity context.
-                std::string childhoodCarryOver = CarryOverChildhoodBioFromDisk(taskData);
-                if (!childhoodCarryOver.empty()) {
-                    taskData.generationGuidance += "\n\n" + childhoodCarryOver;
+                if (!taskData.hasInheritedChildhoodIdentity) {
+                    std::string childhoodCarryOver = CarryOverChildhoodBioFromDisk(taskData);
+                    if (!childhoodCarryOver.empty()) {
+                        taskData.generationGuidance += "\n\n" + childhoodCarryOver;
+                    }
                 }
 
                 if (stopToken.stop_requested() || !MARAS::IsSessionEpochCurrent(taskData.sessionEpoch)) {
@@ -946,6 +988,27 @@ namespace MARAS::Bridge::SkyrimNet {
                 std::string renderedPartiesContext = RenderInvolvedPartiesContext(taskData, endpoint);
                 if (!renderedPartiesContext.empty()) {
                     taskData.generationGuidance += "\n\n" + renderedPartiesContext;
+                }
+
+                if (stopToken.stop_requested() || !MARAS::IsSessionEpochCurrent(taskData.sessionEpoch)) {
+                    return;
+                }
+
+                // 1b. Seed stage milestone memory off the game thread before submitting the profile update
+                //     so PublicRequestProfileUpdate sees the newly embedded memory immediately.
+                if (taskData.seedMemory.shouldCreate && taskData.actorUUID != 0) {
+                    if (AddActorMemory(
+                            taskData.childID,
+                            taskData.seedMemory.content,
+                            taskData.seedMemory.importance,
+                            taskData.seedMemory.memoryType,
+                            taskData.seedMemory.emotion,
+                            taskData.seedMemory.location,
+                            taskData.seedMemory.tags,
+                            taskData.seedMemoryRelatedAdults)) {
+                        MARAS_LOG_INFO("[SkyrimNetProfile] Seeded stage={} milestone memory for child {:08X} ('{}')",
+                                       static_cast<int>(taskData.stage), taskData.childID, taskData.childName);
+                    }
                 }
 
                 if (stopToken.stop_requested() || !MARAS::IsSessionEpochCurrent(taskData.sessionEpoch)) {

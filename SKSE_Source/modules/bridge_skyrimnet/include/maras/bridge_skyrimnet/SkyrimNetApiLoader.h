@@ -44,6 +44,15 @@ namespace MARAS::Bridge::SkyrimNet {
     // Resolves a SkyrimNet UUID prioritizing placed RE::Actor ref first so runtime entities register cleanly.
     [[nodiscard]] std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID);
 
+    // Checks if SkyrimNet Public API v15+ actor succession exports are available.
+    [[nodiscard]] bool IsActorSuccessionAvailable();
+
+    // Records runtime actor succession (FormID -> FormID) via SkyrimNet Public API v15+.
+    bool RecordActorSuccession(std::uint32_t fromFormID, std::uint32_t toFormID);
+
+    // Records runtime actor succession (EntityUUID -> EntityUUID) via SkyrimNet Public API v15+.
+    bool RecordActorSuccessionByUUID(std::uint64_t fromUuid, std::uint64_t toUuid);
+
     // Reads SkyrimNet plugin configuration values via PublicGetPluginConfigValue.
     [[nodiscard]] std::string GetPluginConfigValueExport(const char* plugin,
                                                            const char* path,

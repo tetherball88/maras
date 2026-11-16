@@ -4514,6 +4514,9 @@ namespace MARAS::App {
             if (!perceived.savedBioTemplateName.empty()) {
                 cObj["savedBioTemplateName"] = perceived.savedBioTemplateName;
             }
+            if (perceived.skyrimNetUuid != 0) {
+                cObj["skyrimNetUuid"] = std::format("{:016X}", perceived.skyrimNetUuid);
+            }
             if (rawChild) {
                 if (rawChild->savedRaceIndex <= 9) {
                     cObj["savedRaceIndex"] = rawChild->savedRaceIndex;

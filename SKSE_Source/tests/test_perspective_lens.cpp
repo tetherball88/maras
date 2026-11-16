@@ -983,6 +983,7 @@ MARAS_TEST(PerspectiveLens, P2_2_RefinementsAndUnloadedWerewolfProvider) {
     c1.name = "EdgeResolved";
     c1.timestamp = 42;
     c1.savedBioTemplateName = "ImperialTemplate";
+    c1.skyrimNetUuid = 0xCAFEBABE12345678ULL;
     c1.stage = ChildStage::Child;
     c1.isAdopted = false;
     c1.isBiologicalChild = true;
@@ -1049,6 +1050,7 @@ MARAS_TEST(PerspectiveLens, P2_2_RefinementsAndUnloadedWerewolfProvider) {
     MARAS_CHECK_EQ(p1->perceivedBioFather, bioFather);
     MARAS_CHECK_EQ(p1->timestamp, 42);
     MARAS_CHECK_EQ(p1->savedBioTemplateName, std::string("ImperialTemplate"));
+    MARAS_CHECK_EQ(p1->skyrimNetUuid, 0xCAFEBABE12345678ULL);
     MARAS_REQUIRE(p1->paternitySecret.has_value());
     MARAS_CHECK(p1->paternitySecret->discoveredByPartner);
 

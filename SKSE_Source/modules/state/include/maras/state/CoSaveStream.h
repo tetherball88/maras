@@ -43,6 +43,7 @@ namespace MARAS::State {
         inline constexpr std::uint32_t kExtChildBeastbloodLYC1 = MakeFourCC('L', 'Y', 'C', '1');
         inline constexpr std::uint32_t kExtChildLineageCHD2 = MakeFourCC('C', 'H', 'D', '2');
         inline constexpr std::uint32_t kExtFertilityBatchFRT1 = MakeFourCC('F', 'R', 'T', '1');
+        inline constexpr std::uint32_t kExtChildSkyrimNetUuidSNU1 = MakeFourCC('S', 'N', 'U', '1');
 
         // Optional inline extension magic inside 'DCSD' (omitted when no deceased secrecy flags exist)
         inline constexpr std::uint32_t kExtDeceasedSecrecyDCS1 = MakeFourCC('D', 'C', 'S', '1');

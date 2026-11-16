@@ -9,6 +9,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/TaskDispatcher.h"
+#include "maras/foundation/StrongIds.h"
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldStore.h"
 
@@ -22,11 +23,14 @@ namespace MARAS::Bridge::SkyrimNet {
 
     namespace {
 
+        using PublicGetVersion_t = int (*)();
         using PublicRegisterDecorator_t = bool (*)(
             const char* name,
             const char* description,
             std::function<std::string(RE::Actor*)> callback);
         using PublicFormIDToUUID_t = std::uint64_t (*)(std::uint32_t formId);
+        using PublicRecordActorSuccession_t = bool (*)(std::uint32_t fromFormId, std::uint32_t toFormId);
+        using PublicRecordActorSuccessionByUUID_t = bool (*)(std::uint64_t fromUuid, std::uint64_t toUuid);
         using PublicGetPluginConfigValue_t = std::string (*)(const char* plugin,
                                                            const char* path,
                                                            const char* defaultValue);
@@ -302,7 +306,8 @@ namespace MARAS::Bridge::SkyrimNet {
     }
 
     std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID) {
-        if (actorFormID == 0 || actorFormID == MARAS::kUnknownFatherFormID || MARAS::IsSyntheticChildID(actorFormID)) {
+        if (!IsSkyrimNetAvailable() || actorFormID == 0 || actorFormID == MARAS::kUnknownFatherFormID ||
+            MARAS::IsSyntheticChildID(actorFormID)) {
             return 0;
         }
         if (auto* fn = LookupSkyrimNetExport<PublicFormIDToUUID_t>("PublicFormIDToUUID")) {
@@ -313,7 +318,60 @@ namespace MARAS::Bridge::SkyrimNet {
                 return uuid;
             }
         }
+        if (MARAS::Foundation::IsDynamicRuntimeActorRawId(actorFormID)) {
+            return 0;
+        }
         return GetActorUUID(actorFormID);
+    }
+
+    bool IsActorSuccessionAvailable() {
+        if (!IsSkyrimNetAvailable()) {
+            return false;
+        }
+        if (auto* fnVer = LookupSkyrimNetExport<PublicGetVersion_t>("PublicGetVersion")) {
+            if (fnVer() < 15) {
+                return false;
+            }
+        }
+        return LookupSkyrimNetExport<PublicRecordActorSuccessionByUUID_t>("PublicRecordActorSuccessionByUUID") != nullptr;
+    }
+
+    bool RecordActorSuccession(std::uint32_t fromFormID, std::uint32_t toFormID) {
+        if (!IsSkyrimNetAvailable() || fromFormID == 0 || toFormID == 0 || fromFormID == toFormID ||
+            fromFormID == MARAS::kPlayerFormID || toFormID == MARAS::kPlayerFormID ||
+            MARAS::IsSyntheticChildID(fromFormID) || MARAS::IsSyntheticChildID(toFormID)) {
+            return false;
+        }
+        if (auto* fnVer = LookupSkyrimNetExport<PublicGetVersion_t>("PublicGetVersion")) {
+            if (fnVer() < 15) {
+                return false;
+            }
+        }
+        auto* fn = LookupSkyrimNetExport<PublicRecordActorSuccession_t>("PublicRecordActorSuccession");
+        if (!fn) {
+            return false;
+        }
+        const bool ok = fn(fromFormID, toFormID);
+        MARAS_LOG_INFO("[SkyrimNet] RecordActorSuccession(0x{:08X} -> 0x{:08X}) -> {}", fromFormID, toFormID, ok);
+        return ok;
+    }
+
+    bool RecordActorSuccessionByUUID(std::uint64_t fromUuid, std::uint64_t toUuid) {
+        if (!IsSkyrimNetAvailable() || fromUuid == 0 || toUuid == 0 || fromUuid == toUuid) {
+            return false;
+        }
+        if (auto* fnVer = LookupSkyrimNetExport<PublicGetVersion_t>("PublicGetVersion")) {
+            if (fnVer() < 15) {
+                return false;
+            }
+        }
+        auto* fn = LookupSkyrimNetExport<PublicRecordActorSuccessionByUUID_t>("PublicRecordActorSuccessionByUUID");
+        if (!fn) {
+            return false;
+        }
+        const bool ok = fn(fromUuid, toUuid);
+        MARAS_LOG_INFO("[SkyrimNet] RecordActorSuccessionByUUID({:016X} -> {:016X}) -> {}", fromUuid, toUuid, ok);
+        return ok;
     }
 
     std::string GetPluginConfigValueExport(const char* plugin,
@@ -787,6 +845,22 @@ namespace MARAS::Bridge::SkyrimNet {
 
             std::uint64_t GetActorUUID(std::uint32_t actorFormID) const override {
                 return MARAS::Bridge::SkyrimNet::GetActorUUID(actorFormID);
+            }
+
+            bool IsActorSuccessionAvailable() const override {
+                return MARAS::Bridge::SkyrimNet::IsActorSuccessionAvailable();
+            }
+
+            std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID) const override {
+                return MARAS::Bridge::SkyrimNet::ResolvePlacedActorUUID(actorFormID);
+            }
+
+            bool RecordActorSuccession(std::uint32_t fromFormID, std::uint32_t toFormID) override {
+                return MARAS::Bridge::SkyrimNet::RecordActorSuccession(fromFormID, toFormID);
+            }
+
+            bool RecordActorSuccessionByUUID(std::uint64_t fromUuid, std::uint64_t toUuid) override {
+                return MARAS::Bridge::SkyrimNet::RecordActorSuccessionByUUID(fromUuid, toUuid);
             }
 
             bool RequestActorProfileUpdate(std::uint32_t actorFormID,

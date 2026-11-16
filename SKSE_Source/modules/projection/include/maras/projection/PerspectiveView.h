@@ -84,6 +84,7 @@ namespace MARAS::Projection {
         std::int32_t trainingClassIndex{ -1 };
         float trainingStartGameDay{ 0.0f };
         std::string savedBioTemplateName{};
+        std::uint64_t skyrimNetUuid{ 0 };
 
         std::optional<PerceivedPaternitySecret> paternitySecret{};
 
