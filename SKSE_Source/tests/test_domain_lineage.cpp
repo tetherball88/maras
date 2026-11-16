@@ -224,6 +224,7 @@ namespace MARAS::Tests {
         spec.id = "companions";
         spec.className = "Shield-Sibling";
         spec.locationName = "Jorrvaskr";
+        spec.trainingContext = "to spar with the Companions at Jorrvaskr in Whiterun";
         spec.costMultiplier = 1.5f;
         spec.requiresBeastblood = true;
         spec.leaderFactionKeys = { "CompanionsLeader" };
@@ -231,6 +232,12 @@ namespace MARAS::Tests {
         catalog.SetData({ spec }, {});
 
         MARAS_CHECK_EQ(catalog.FindClassByLocation("jorrvaskr"), 0);
+        MARAS_REQUIRE(catalog.ResolveClassSpec(0, "") != nullptr);
+        MARAS_CHECK_EQ(catalog.ResolveClassSpec(0, "")->trainingContext,
+                       std::string("to spar with the Companions at Jorrvaskr in Whiterun"));
+        MARAS_REQUIRE(catalog.ResolveClassSpec(-1, "JORRVASKR") != nullptr);
+        MARAS_CHECK_EQ(catalog.ResolveClassSpec(-1, "JORRVASKR")->className, std::string("Shield-Sibling"));
+        MARAS_CHECK(catalog.ResolveClassSpec(-1, "Unknown Hall") == nullptr);
         MARAS_CHECK_EQ(catalog.GetEffectiveTrainingCost(0, 1000), 1500);
         MARAS_CHECK_EQ(catalog.GetDiscountedTrainingCost(0, 1000, 25), 1125);
 
@@ -1149,11 +1156,37 @@ namespace MARAS::Tests {
             evolvedInput.hasInheritedChildhoodIdentity = true;
             evolvedInput.trainingLocation = "Jorrvaskr";
             evolvedInput.trainingClassName = "Shield-Brother Vanguard";
+            evolvedInput.trainingContext =
+                "to spar with the Companions at Jorrvaskr in Whiterun, training in heavy armor and sword-and-shield combat";
+            evolvedInput.trainingDescription = "DETACHED_UI_CARD_DESCRIPTION_SHOULD_NOT_APPEAR";
 
             const std::string guidance = BuildChildProfileGenerationGuidance(evolvedInput);
             MARAS_CHECK(guidance.find("## Inherited Childhood Profile Evolution (CRITICAL)") != std::string::npos);
             MARAS_CHECK(guidance.find("Current Dynamic Bio") != std::string::npos);
             MARAS_CHECK(guidance.find("from a young child into a grown young adult") != std::string::npos);
+            MARAS_CHECK(guidance.find("sent away during adolescence to spar with the Companions at Jorrvaskr in Whiterun") != std::string::npos);
+            MARAS_CHECK(guidance.find("DETACHED_UI_CARD_DESCRIPTION_SHOULD_NOT_APPEAR") == std::string::npos);
+        }
+
+        // 6. FormatTrainingDeparturePhrase variations & fallbacks
+        {
+            MARAS_CHECK_EQ(
+                FormatTrainingDeparturePhrase(
+                    "To study elemental Destruction magic at the College of Winterhold.",
+                    "College of Winterhold"),
+                std::string("to study elemental Destruction magic at the College of Winterhold"));
+            MARAS_CHECK_EQ(
+                FormatTrainingDeparturePhrase("With the Morag Tong in Balmora", "Balmora"),
+                std::string("for training with the Morag Tong in Balmora"));
+            MARAS_CHECK_EQ(
+                FormatTrainingDeparturePhrase("apprenticing in restoration", "Temple of Kynareth"),
+                std::string("for training at Temple of Kynareth (apprenticing in restoration)"));
+            MARAS_CHECK_EQ(
+                FormatTrainingDeparturePhrase("", "The Bards College"),
+                std::string("for training at The Bards College"));
+            MARAS_CHECK_EQ(
+                FormatTrainingDeparturePhrase("", ""),
+                std::string("for training"));
         }
     }
 
@@ -1256,6 +1289,14 @@ namespace MARAS::Tests {
             MARAS_CHECK(mem.content.find("Arcane Evoker") != std::string::npos);
             MARAS_CHECK(mem.content.find("College of Winterhold") != std::string::npos);
             MARAS_CHECK(mem.content.find("Proudspire Manor") != std::string::npos);
+
+            ChildProfileGuidanceInput trainedWithContext = trained;
+            trainedWithContext.trainingContext =
+                "to study elemental Destruction magic and protective wards as an apprentice mage at the College of Winterhold";
+            const ChildSeedMemorySpec ctxMem = BuildChildStageSeedMemory(trainedWithContext);
+            MARAS_REQUIRE(ctxMem.shouldCreate);
+            MARAS_CHECK(ctxMem.content.find("During my youth, I was sent away from home to study elemental Destruction magic") != std::string::npos);
+            MARAS_CHECK(ctxMem.content.find("Arcane Evoker training at College of Winterhold") != std::string::npos);
 
             ChildProfileGuidanceInput untrained;
             untrained.stage = ChildStage::Adult;

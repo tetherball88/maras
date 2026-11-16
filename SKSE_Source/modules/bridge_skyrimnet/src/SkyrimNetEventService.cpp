@@ -6,6 +6,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/SpatialWorldIndex.h"
+#include "maras/engine/TrainingCatalogLoader.h"
 #include "maras/foundation/StringUtils.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/projection/EventDispatchPlan.h"
@@ -836,8 +837,18 @@ namespace MARAS::Bridge::SkyrimNet {
 
         const std::string resolvedName = ResolveChildDisplayName(
             childKey, childName, *worldSnap, *spatialSnap, omniscient);
-        const std::string_view resolvedLocation =
+        std::string_view resolvedLocation =
             !trainingLocation.empty() ? trainingLocation : std::string_view(perceived.trainingLocation);
+        const auto& catalog = Engine::TrainingCatalogLoader::GetSingleton().GetCatalog();
+        const auto* classSpec = catalog.ResolveClassSpec(perceived.trainingClassIndex, resolvedLocation);
+        if (resolvedLocation.empty() && classSpec != nullptr) {
+            resolvedLocation = classSpec->locationName;
+        }
+        const std::string_view rawClassName =
+            classSpec ? std::string_view(classSpec->className) : std::string_view{};
+        const std::string_view rawContext =
+            classSpec ? std::string_view(classSpec->trainingContext) : std::string_view{};
+        const bool requiresBeastblood = classSpec && classSpec->requiresBeastblood;
         const std::string motherName = ResolveActorName(sec.mother.raw(), *worldSnap, *spatialSnap);
         const std::string presumedFatherName =
             ResolveActorName(sec.presumedFather.raw(), *worldSnap, *spatialSnap);
@@ -847,6 +858,20 @@ namespace MARAS::Bridge::SkyrimNet {
         }
 
         for (const auto& leg : plan.legs) {
+            std::string_view legClassName = rawClassName;
+            std::string_view legContext = rawContext;
+            if (requiresBeastblood &&
+                leg.maskMode == Projection::DispatchMaskMode::MaskForPartner &&
+                !sec.presumedFather.IsNull()) {
+                const auto partnerView = Projection::PerspectiveView::ForActor(
+                    worldSnap, spatialSnap, sec.presumedFather, &GetEngineWerewolfStateProvider());
+                const auto partnerChild = partnerView.GetPerceivedChild(childKey);
+                if (!partnerChild.has_value() || !partnerChild->hasBeastblood) {
+                    legClassName = {};
+                    legContext = {};
+                }
+            }
+
             const std::string payload = BuildChildSentToTrainingPayload(
                 sec,
                 resolvedName,
@@ -856,7 +881,9 @@ namespace MARAS::Bridge::SkyrimNet {
                 presumedFatherName,
                 bioFatherName,
                 leg.maskMode,
-                leg.skipTrigger);
+                leg.skipTrigger,
+                legClassName,
+                legContext);
             (void)DispatchTtmLeg(leg, payload);
         }
     }

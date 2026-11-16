@@ -46,6 +46,7 @@ namespace MARAS::Domain::Lineage {
         std::string homeLocationName{};
         std::string trainingLocation{};
         std::string trainingClassName{};
+        std::string trainingContext{};
         std::string trainingDescription{};
         bool hasInheritedChildhoodIdentity{ false };
     };
@@ -61,6 +62,10 @@ namespace MARAS::Domain::Lineage {
     };
 
     [[nodiscard]] std::string JoinNamesForProse(const std::vector<std::string>& names);
+
+    [[nodiscard]] std::string FormatTrainingDeparturePhrase(
+        std::string_view trainingContext,
+        std::string_view trainingLocation);
 
     [[nodiscard]] std::string ComputeBioFatherRoleLabel(
         bool bioFatherIsGuardian,

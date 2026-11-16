@@ -42,6 +42,15 @@ namespace MARAS::Domain::Lineage {
         return -1;
     }
 
+    const TrainingClassSpec* TrainingCatalog::ResolveClassSpec(
+        std::int32_t classIndex,
+        std::string_view locationName) const noexcept {
+        if (const auto* byIndex = FindClass(classIndex)) {
+            return byIndex;
+        }
+        return FindClass(FindClassByLocation(locationName));
+    }
+
     const DaedricBlessingSpec* TrainingCatalog::FindDaedricBlessingById(std::string_view blessingId) const noexcept {
         if (blessingId.empty() || Foundation::StringUtils::CaseInsensitiveEquals(blessingId, "none")) {
             return nullptr;

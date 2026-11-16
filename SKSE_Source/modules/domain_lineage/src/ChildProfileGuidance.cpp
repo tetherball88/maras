@@ -1,9 +1,62 @@
 #include "maras/domain/lineage/ChildProfileGuidance.h"
 
+#include "maras/foundation/StringUtils.h"
+
+#include <cctype>
 #include <cmath>
 #include <sstream>
 
 namespace MARAS::Domain::Lineage {
+
+    namespace {
+
+        [[nodiscard]] std::string_view StripTrailingPunctuation(std::string_view s) noexcept {
+            while (!s.empty() && (s.back() == '.' || s.back() == ';' || s.back() == ',')) {
+                s.remove_suffix(1);
+                s = Foundation::StringUtils::TrimView(s);
+            }
+            return s;
+        }
+
+        [[nodiscard]] std::string LowercaseLeadingAscii(std::string_view s) {
+            std::string out(s);
+            if (!out.empty()) {
+                out[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[0])));
+            }
+            return out;
+        }
+
+    }  // namespace
+
+    std::string FormatTrainingDeparturePhrase(
+        std::string_view trainingContext,
+        std::string_view trainingLocation) {
+        const std::string_view ctx = StripTrailingPunctuation(Foundation::StringUtils::TrimView(trainingContext));
+        const std::string_view loc = StripTrailingPunctuation(Foundation::StringUtils::TrimView(trainingLocation));
+
+        if (!ctx.empty()) {
+            if (Foundation::StringUtils::StartsWith(ctx, "to ") ||
+                Foundation::StringUtils::StartsWith(ctx, "for ")) {
+                return LowercaseLeadingAscii(ctx);
+            }
+            if (Foundation::StringUtils::StartsWith(ctx, "at ") ||
+                Foundation::StringUtils::StartsWith(ctx, "in ") ||
+                Foundation::StringUtils::StartsWith(ctx, "with ") ||
+                Foundation::StringUtils::StartsWith(ctx, "under ") ||
+                Foundation::StringUtils::StartsWith(ctx, "beneath ")) {
+                return "for training " + LowercaseLeadingAscii(ctx);
+            }
+            if (!loc.empty() && !Foundation::StringUtils::Contains(ctx, loc)) {
+                return "for training at " + std::string(loc) + " (" + std::string(ctx) + ")";
+            }
+            return "for training (" + std::string(ctx) + ")";
+        }
+
+        if (!loc.empty()) {
+            return "for training at " + std::string(loc);
+        }
+        return "for training";
+    }
 
     std::string JoinNamesForProse(const std::vector<std::string>& names) {
         if (names.empty()) {
@@ -187,19 +240,26 @@ namespace MARAS::Domain::Lineage {
         if (!d.homeLocationName.empty()) {
             ss << "- **Family Home / Upbringing Location**: " << d.homeLocationName << ".\n";
         }
-        if (d.stage == Foundation::ChildStage::Adult && (!d.trainingLocation.empty() || !d.trainingClassName.empty())) {
+        if (d.stage == Foundation::ChildStage::Adult &&
+            (!d.trainingLocation.empty() || !d.trainingClassName.empty() || !d.trainingContext.empty())) {
             ss << "- **Completed Adolescent Training**: ";
             if (!d.trainingClassName.empty() && !d.trainingLocation.empty()) {
                 ss << d.trainingClassName << " training at " << d.trainingLocation;
             } else if (!d.trainingLocation.empty()) {
                 ss << "At " << d.trainingLocation;
-            } else {
+            } else if (!d.trainingClassName.empty()) {
                 ss << d.trainingClassName;
+            } else {
+                ss << "Adolescent apprenticeship";
             }
-            if (!d.trainingDescription.empty()) {
+            const std::string_view trimmedContext = Foundation::StringUtils::TrimView(d.trainingContext);
+            if (!trimmedContext.empty()) {
+                ss << " — sent away during adolescence "
+                   << FormatTrainingDeparturePhrase(trimmedContext, d.trainingLocation);
+            } else if (!d.trainingDescription.empty()) {
                 ss << " — " << d.trainingDescription;
             }
-            ss << " (reflect this training background in their skills, personality, background, and occupation).\n";
+            ss << ". Reflect how this setting, mentorship, daily regimen, and institutional culture shaped their skills, personality, mannerisms, worldview, background, and occupation.\n";
         }
 
         std::vector<std::string> involvedNames;
@@ -460,7 +520,7 @@ namespace MARAS::Domain::Lineage {
         }
 
         if (d.stage == Foundation::ChildStage::Adult) {
-            if (d.trainingClassName.empty() && d.trainingLocation.empty()) {
+            if (d.trainingClassName.empty() && d.trainingLocation.empty() && d.trainingContext.empty()) {
                 return spec;
             }
 
@@ -469,13 +529,23 @@ namespace MARAS::Domain::Lineage {
                 trainingPhrase = d.trainingClassName + " training at " + d.trainingLocation;
             } else if (!d.trainingClassName.empty()) {
                 trainingPhrase = d.trainingClassName + " training";
-            } else {
+            } else if (!d.trainingLocation.empty()) {
                 trainingPhrase = "training at " + d.trainingLocation;
+            } else {
+                trainingPhrase = "adolescent training";
             }
 
             std::ostringstream out;
-            out << "After completing my " << trainingPhrase
-                << ", I came of age as a young adult and set out across Skyrim, carrying the memories of my childhood";
+            const std::string_view trimmedContext = Foundation::StringUtils::TrimView(d.trainingContext);
+            if (!trimmedContext.empty()) {
+                out << "During my youth, I was sent away from home "
+                    << FormatTrainingDeparturePhrase(trimmedContext, d.trainingLocation)
+                    << ". Having completed my " << trainingPhrase
+                    << " and come of age as a young adult, I set out across Skyrim carrying that upbringing alongside the memories of my childhood";
+            } else {
+                out << "After completing my " << trainingPhrase
+                    << ", I came of age as a young adult and set out across Skyrim, carrying the memories of my childhood";
+            }
             if (!d.homeLocationName.empty()) {
                 out << " in " << d.homeLocationName;
             }

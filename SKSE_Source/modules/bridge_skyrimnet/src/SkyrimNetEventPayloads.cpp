@@ -1,5 +1,6 @@
 #include "maras/bridge_skyrimnet/SkyrimNetEventPayloads.h"
 
+#include "maras/domain/lineage/ChildProfileGuidance.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/foundation/StringUtils.h"
@@ -1153,10 +1154,12 @@ namespace MARAS::Bridge::SkyrimNet {
         std::string_view presumedFatherName,
         std::string_view bioFatherName,
         Projection::DispatchMaskMode maskMode,
-        bool skipTrigger) {
+        bool skipTrigger,
+        std::string_view trainingClassName,
+        std::string_view trainingContext) {
         const auto desc = DescribeChildGender(childGender);
-        const std::string locText =
-            !trainingLocation.empty() ? std::format(" at {}", trainingLocation) : "";
+        const std::string trainingPhrase =
+            Domain::Lineage::FormatTrainingDeparturePhrase(trainingContext, trainingLocation);
 
         std::string msg{};
         std::string_view bioField = bioFatherName;
@@ -1165,46 +1168,52 @@ namespace MARAS::Bridge::SkyrimNet {
             bioField = presumedFatherName;
             if (!motherName.empty() && !presumedFatherName.empty()) {
                 msg = std::format(
-                    "{} and {} have sent their {}, {}, away from home for training{}.",
-                    motherName, presumedFatherName, desc.relation, childName, locText);
+                    "{} and {} have sent their {}, {}, away from home {}.",
+                    motherName, presumedFatherName, desc.relation, childName, trainingPhrase);
             } else if (!presumedFatherName.empty()) {
                 msg = std::format(
-                    "{} has sent his {}, {}, away from home for training{}.",
-                    presumedFatherName, desc.relation, childName, locText);
+                    "{} has sent his {}, {}, away from home {}.",
+                    presumedFatherName, desc.relation, childName, trainingPhrase);
             } else {
                 msg = std::format(
-                    "{} has been sent away from home for training{}.",
-                    childName, locText);
+                    "{} has been sent away from home {}.",
+                    childName, trainingPhrase);
             }
         } else {
             if (sec.isSecretForAssumed && sec.isSecretForBio && !sec.presumedFather.IsNull()) {
                 msg = std::format(
-                    "{} has been sent away from home for training{}. {} continues to support {} {} believing the child is his, unaware that the true biological father is {}. Furthermore, {} has not been informed that he fathered the child.",
-                    childName, locText, presumedFatherName, desc.possPronoun, desc.relation, bioFatherName, bioFatherName);
+                    "{} has been sent away from home {}. {} continues to support {} {} believing the child is his, unaware that the true biological father is {}. Furthermore, {} has not been informed that he fathered the child.",
+                    childName, trainingPhrase, presumedFatherName, desc.possPronoun, desc.relation, bioFatherName, bioFatherName);
             } else if (sec.isSecretForAssumed && !sec.presumedFather.IsNull()) {
                 msg = std::format(
-                    "{} has been sent away from home for training{}. {} continues to support {} {} as his own, completely unaware that {} is the true biological father.",
-                    childName, locText, presumedFatherName, desc.possPronoun, desc.relation, bioFatherName);
+                    "{} has been sent away from home {}. {} continues to support {} {} as his own, completely unaware that {} is the true biological father.",
+                    childName, trainingPhrase, presumedFatherName, desc.possPronoun, desc.relation, bioFatherName);
             } else if (sec.isSecretForBio && !bioFatherName.empty()) {
-                msg = std::format(
-                    "{} has been sent away from home for training{}, arranged by {}, while the biological father {} remains unaware of his {}.",
-                    childName, locText, motherName, bioFatherName, desc.relation);
+                if (!motherName.empty()) {
+                    msg = std::format(
+                        "{} has sent her {}, {}, away from home {}. Meanwhile, the biological father {} remains unaware of his {}.",
+                        motherName, desc.relation, childName, trainingPhrase, bioFatherName, desc.relation);
+                } else {
+                    msg = std::format(
+                        "{} has been sent away from home {}. Meanwhile, the biological father {} remains unaware of his {}.",
+                        childName, trainingPhrase, bioFatherName, desc.relation);
+                }
             } else if (!motherName.empty() && !presumedFatherName.empty()) {
                 msg = std::format(
-                    "{} and {} have sent their {}, {}, away from home for training{}.",
-                    motherName, presumedFatherName, desc.relation, childName, locText);
+                    "{} and {} have sent their {}, {}, away from home {}.",
+                    motherName, presumedFatherName, desc.relation, childName, trainingPhrase);
             } else if (!motherName.empty()) {
                 msg = std::format(
-                    "{} has sent her {}, {}, away from home for training{}.",
-                    motherName, desc.relation, childName, locText);
+                    "{} has sent her {}, {}, away from home {}.",
+                    motherName, desc.relation, childName, trainingPhrase);
             } else if (!presumedFatherName.empty()) {
                 msg = std::format(
-                    "{} has sent his {}, {}, away from home for training{}.",
-                    presumedFatherName, desc.relation, childName, locText);
+                    "{} has sent his {}, {}, away from home {}.",
+                    presumedFatherName, desc.relation, childName, trainingPhrase);
             } else {
                 msg = std::format(
-                    "{} has been sent away from home for training{}.",
-                    childName, locText);
+                    "{} has been sent away from home {}.",
+                    childName, trainingPhrase);
             }
         }
 
@@ -1215,6 +1224,9 @@ namespace MARAS::Bridge::SkyrimNet {
         SetNonEmpty(j, "bioFather", bioField);
         SetNonEmpty(j, "presumedFather", presumedFatherName);
         SetNonEmpty(j, "trainingLocation", trainingLocation);
+        SetNonEmpty(j, "trainingClass", trainingClassName);
+        SetNonEmpty(j, "trainingContext", trainingContext);
+        SetNonEmpty(j, "trainingPhrase", trainingPhrase);
         SetNonEmpty(j, "gender", desc.gender);
         SetNonEmpty(j, "relation", desc.relation);
         return SafeDump(j);
