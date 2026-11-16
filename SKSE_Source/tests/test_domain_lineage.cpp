@@ -1138,6 +1138,129 @@ namespace MARAS::Tests {
                 ComputeChildRecentEventsMaxAgeSeconds(true, false, 15.0f, 15, 14.0f),
                 std::int64_t{ 0 });
         }
+
+        // 5. Inherited childhood bio evolution guidance for Stage 4 Adult
+        {
+            ChildProfileGuidanceInput evolvedInput;
+            evolvedInput.stage = ChildStage::Adult;
+            evolvedInput.childName = "Alfhild";
+            evolvedInput.isFemale = true;
+            evolvedInput.isBiologicalChild = true;
+            evolvedInput.hasInheritedChildhoodIdentity = true;
+            evolvedInput.trainingLocation = "Jorrvaskr";
+            evolvedInput.trainingClassName = "Shield-Brother Vanguard";
+
+            const std::string guidance = BuildChildProfileGenerationGuidance(evolvedInput);
+            MARAS_CHECK(guidance.find("## Inherited Childhood Profile Evolution (CRITICAL)") != std::string::npos);
+            MARAS_CHECK(guidance.find("Current Dynamic Bio") != std::string::npos);
+            MARAS_CHECK(guidance.find("from a young child into a grown young adult") != std::string::npos);
+        }
+    }
+
+    MARAS_TEST(DomainLineage, ChildStageSeedMemoryRespectsPaternitySecretsAndStage) {
+        // 1. Stage 2 biological child with normal parents
+        {
+            ChildProfileGuidanceInput in;
+            in.stage = ChildStage::Child;
+            in.childName = "Alfhild";
+            in.isBiologicalChild = true;
+            in.isAdopted = false;
+            in.motherName = "Serana";
+            in.motherIsGuardian = true;
+            in.bioFatherName = "Bjorn";
+            in.bioFatherIsGuardian = true;
+            in.guardianAName = "Serana";
+            in.guardianBName = "Bjorn";
+            in.homeLocationName = "Proudspire Manor";
+            in.siblingNames = { "Sven" };
+
+            const ChildSeedMemorySpec mem = BuildChildStageSeedMemory(in);
+            MARAS_REQUIRE(mem.shouldCreate);
+            MARAS_CHECK_EQ(mem.memoryType, std::string("RELATIONSHIP"));
+            MARAS_CHECK_EQ(mem.location, std::string("Proudspire Manor"));
+            MARAS_CHECK(mem.content.find("Serana and Bjorn") != std::string::npos);
+            MARAS_CHECK(mem.content.find("Sven") != std::string::npos);
+            MARAS_CHECK_EQ(mem.tags.size(), std::size_t{ 3 });
+        }
+
+        // 2. Stage 2 biological child: single-mother secret from bio father -> NEVER leaks bioFatherName
+        {
+            ChildProfileGuidanceInput in;
+            in.stage = ChildStage::Child;
+            in.childName = "Runa";
+            in.isBiologicalChild = true;
+            in.isAdopted = false;
+            in.motherName = "Lydia";
+            in.motherIsGuardian = true;
+            in.bioFatherName = "Farkas";
+            in.bioFatherIsGuardian = false;
+            in.guardianAName = "Lydia";
+            in.homeLocationName = "Breezehome";
+            in.isSingleMotherSecretFromBioFather = true;
+            in.bioFatherKnowsPaternity = false;
+
+            const ChildSeedMemorySpec mem = BuildChildStageSeedMemory(in);
+            MARAS_REQUIRE(mem.shouldCreate);
+            MARAS_CHECK(mem.content.find("Lydia") != std::string::npos);
+            MARAS_CHECK(mem.content.find("Farkas") == std::string::npos);
+        }
+
+        // 3. Stage 2 biological child: married mother with undiscovered paternity secret -> names presumedFather, NEVER leaks bioFather
+        {
+            ChildProfileGuidanceInput in;
+            in.stage = ChildStage::Child;
+            in.childName = "Bryn";
+            in.isBiologicalChild = true;
+            in.isAdopted = false;
+            in.motherName = "Ysolda";
+            in.motherIsGuardian = true;
+            in.bioFatherName = "Mikael";
+            in.presumedFatherName = "Nazeem";
+            in.presumedFatherIsGuardian = true;
+            in.guardianAName = "Ysolda";
+            in.guardianBName = "Nazeem";
+            in.hasPresumedFather = true;
+            in.hasPaternitySecret = true;
+            in.partnerKnowsPaternity = false;
+            in.bioFatherKnowsPaternity = false;
+            in.homeLocationName = "Whiterun";
+
+            const ChildSeedMemorySpec mem = BuildChildStageSeedMemory(in);
+            MARAS_REQUIRE(mem.shouldCreate);
+            MARAS_CHECK(mem.content.find("Ysolda") != std::string::npos);
+            MARAS_CHECK(mem.content.find("Nazeem") != std::string::npos);
+            MARAS_CHECK(mem.content.find("Mikael") == std::string::npos);
+        }
+
+        // 4. Stage 2 adopted child -> skipped (covered by adopted custody event)
+        {
+            ChildProfileGuidanceInput in;
+            in.stage = ChildStage::Child;
+            in.isAdopted = true;
+            in.isBiologicalChild = false;
+            MARAS_CHECK(!BuildChildStageSeedMemory(in).shouldCreate);
+        }
+
+        // 5. Stage 4 Adult child: trained vs untrained
+        {
+            ChildProfileGuidanceInput trained;
+            trained.stage = ChildStage::Adult;
+            trained.trainingClassName = "Arcane Evoker";
+            trained.trainingLocation = "College of Winterhold";
+            trained.homeLocationName = "Proudspire Manor";
+            const ChildSeedMemorySpec mem = BuildChildStageSeedMemory(trained);
+            MARAS_REQUIRE(mem.shouldCreate);
+            MARAS_CHECK_EQ(mem.memoryType, std::string("SKILL"));
+            MARAS_CHECK_EQ(mem.emotion, std::string("proud"));
+            MARAS_CHECK_EQ(mem.location, std::string("College of Winterhold"));
+            MARAS_CHECK(mem.content.find("Arcane Evoker") != std::string::npos);
+            MARAS_CHECK(mem.content.find("College of Winterhold") != std::string::npos);
+            MARAS_CHECK(mem.content.find("Proudspire Manor") != std::string::npos);
+
+            ChildProfileGuidanceInput untrained;
+            untrained.stage = ChildStage::Adult;
+            MARAS_CHECK(!BuildChildStageSeedMemory(untrained).shouldCreate);
+        }
     }
 
 }  // namespace MARAS::Tests

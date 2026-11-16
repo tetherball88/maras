@@ -3,6 +3,7 @@
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/BanterSceneCoordinator.h"
+#include "maras/app/ChildSkyrimNetSuccession.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
@@ -681,6 +682,12 @@ namespace MARAS::App {
             Domain::Lineage::EvaluateChildBeastbloodInheritance(rec, motherWW, fatherWW);
         }
 
+        if (rec.skyrimNetUuid == 0 && hasSynthErase && synthFormID != 0 &&
+            !IsSyntheticId(synthFormID) && synthFormID != childID &&
+            GetSkyrimNetGateway().IsAvailable()) {
+            rec.skyrimNetUuid = GetSkyrimNetGateway().ResolvePlacedActorUUID(synthFormID);
+        }
+
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& lineageW = ws.lineage.Write();
             if (hasSynthErase) {
@@ -713,6 +720,16 @@ namespace MARAS::App {
             InitializeAndApplyChildVisualsAndRPG(childID);
             if (auto refreshed = GetChildEntry(childID)) {
                 rec = *refreshed;
+            }
+            const std::uint64_t resolvedUuid = ResolveAndLinkSpawnedChildIdentity(
+                childID, rec.stage, rec.skyrimNetUuid, 0, rec.name);
+            if (resolvedUuid != 0 && resolvedUuid != rec.skyrimNetUuid) {
+                rec.skyrimNetUuid = resolvedUuid;
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    if (auto* mutableRec = ws.lineage.Write().FindChildMutable(State::ChildId{ childID })) {
+                        mutableRec->skyrimNetUuid = resolvedUuid;
+                    }
+                });
             }
         }
 
@@ -2865,14 +2882,7 @@ namespace MARAS::App {
         RE::FormID targetChildID = childID;
         const bool wasPhysicalChild = !IsSyntheticId(childID);
         if (wasPhysicalChild) {
-            if (GetSkyrimNetGateway().IsAvailable()) {
-                const std::string bioTpl = GetSkyrimNetGateway().GetActorBioTemplateName(childID);
-                if (!bioTpl.empty()) {
-                    rec.savedBioTemplateName = bioTpl;
-                    MARAS_LOG_INFO("[Training] Captured SkyrimNet bioTemplate='{}' for child {:08X}",
-                                   bioTpl, childID);
-                }
-            }
+            CaptureChildIdentityBeforeDespawn(childID, rec);
 
             if (const RE::FormID critterID = GetCritter(childID); critterID != 0) {
                 (void)ChildSpawnService::GetSingleton().DisableAndDeleteActor(critterID);

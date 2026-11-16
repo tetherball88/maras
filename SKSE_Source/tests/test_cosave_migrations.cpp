@@ -175,6 +175,7 @@ namespace MARAS::Tests {
                 young.trainingStartGameDay = 12.5f;
                 young.savedBioTemplateName = "NordChildF";
                 young.savedRaceIndex = 0;
+                young.skyrimNetUuid = 0x1122334455667788ULL;
                 young.hairColorFormId = FormRawId{ 0x000A0430u };
                 young.eyesPartFormId = FormRawId{ 0x00051500u };
                 young.hairPartFormId = FormRawId{ 0x00051501u };
@@ -205,6 +206,7 @@ namespace MARAS::Tests {
                 grad.stage = ChildStage::Adult;
                 grad.gender = 0;
                 grad.rpgApplied = true;
+                grad.skyrimNetUuid = 0x8877665544332211ULL;
                 state.lineage.Write().UpsertChild(grad);
 
                 state.lineage.Write().AddPendingChild(
@@ -1601,6 +1603,7 @@ namespace MARAS::Tests {
             c.bioFather = ActorId::Player();
             c.stage = ChildStage::Infant;
             c.name = "BatchBaby";
+            c.skyrimNetUuid = 0x0102030405060708ULL;
             fullSrc.lineage.Write().UpsertChild(c);
 
             ActiveDeliveryBatch batch{};
@@ -1632,8 +1635,9 @@ namespace MARAS::Tests {
         MARAS_REQUIRE(SaveWorldState(fullSrc, fullWriter));
 
         // 3. Unknown 'XXXX' trailing extension magic and 1..3 byte extension truncations fail & roll back
-        const std::array<std::pair<std::uint32_t, std::uint32_t>, 5> extPairs{ {
+        const std::array<std::pair<std::uint32_t, std::uint32_t>, 6> extPairs{ {
             { CoSaveConstants::kChunkNPCR, CoSaveConstants::kExtFertilityBatchFRT1 },
+            { CoSaveConstants::kChunkNPCR, CoSaveConstants::kExtChildSkyrimNetUuidSNU1 },
             { CoSaveConstants::kChunkDCSD, CoSaveConstants::kExtDeceasedSecrecyDCS1 },
             { CoSaveConstants::kChunkMKMK, CoSaveConstants::kExtRelationshipStateREL1 },
             { CoSaveConstants::kChunkPLCH, CoSaveConstants::kExtPlayerChildrenStatePLC1 },
@@ -1778,6 +1782,132 @@ namespace MARAS::Tests {
         MARAS_CHECK_EQ(rep.retiredSceneMarkers[0], dynMarker);
         MARAS_CHECK(loaded.cooldowns->movedSceneActors.empty());
         MARAS_CHECK(loaded.household->IsCellSharedWithPlayer(sharedCell));
+    }
+
+    MARAS_TEST(CoSaveMigrations, SNU1ChildSkyrimNetUuidExtensionRoundTripAndOmission) {
+        auto findNpcrPayload = [](const std::vector<CoSaveRecordChunk>& recs) -> std::vector<std::uint8_t> {
+            for (const auto& r : recs) {
+                if (r.type == CoSaveConstants::kChunkNPCR) {
+                    return r.payload;
+                }
+            }
+            return {};
+        };
+        auto payloadContainsTag = [](const std::vector<std::uint8_t>& bytes, std::uint32_t tag) -> bool {
+            std::array<std::uint8_t, sizeof(std::uint32_t)> needle{};
+            std::memcpy(needle.data(), &tag, sizeof(tag));
+            return std::search(bytes.begin(), bytes.end(), needle.begin(), needle.end()) != bytes.end();
+        };
+
+        const ActorId liveMother{ 0x02002010u };
+        const ActorId remappedMother{ 0x05002010u };
+        const ChildId trainingSynthChild{ 0xFF700101u };
+        const ChildId liveDynamicChild{ 0xFF800101u };
+        const ChildId savedPlacedChild{ 0x02001050u };
+        const ChildId remappedPlacedChild{ 0x05001050u };
+        const ChildId orphanedDynChild{ 0xFF800999u };
+
+        // 1. Omission: when all children have skyrimNetUuid == 0, 'SNU1' is omitted from 'NPCR'
+        {
+            WorldState ws{};
+            ChildRecord c{};
+            c.childId = trainingSynthChild;
+            c.stage = ChildStage::Training;
+            c.name = "NoUuidChild";
+            ws.lineage.Write().UpsertChild(c);
+
+            InMemoryCoSaveWriter w{};
+            MARAS_REQUIRE(SaveWorldState(ws, w));
+            const auto npcr = findNpcrPayload(w.Records());
+            MARAS_REQUIRE(!npcr.empty());
+            MARAS_CHECK(!payloadContainsTag(npcr, CoSaveConstants::kExtChildSkyrimNetUuidSNU1));
+        }
+
+        auto runRoundTrip = [&](bool withFertilityBatch) {
+            WorldState src{};
+            ActorProfileRecord mom{};
+            mom.refId = liveMother.AsRefId();
+            mom.baseId = BaseId{ 0x02002011u };
+            mom.isRegisteredAdult = true;
+            src.actors.Write().Upsert(mom);
+
+            ChildRecord synRec{};
+            synRec.childId = trainingSynthChild;
+            synRec.stage = ChildStage::Training;
+            synRec.name = "SynthTrainee";
+            synRec.bioMother = liveMother;
+            synRec.bioFather = ActorId::Player();
+            synRec.skyrimNetUuid = 0xAA00000000000001ULL;
+            src.lineage.Write().UpsertChild(synRec);
+
+            ChildRecord dynRec{};
+            dynRec.childId = liveDynamicChild;
+            dynRec.stage = ChildStage::Adult;
+            dynRec.name = "LiveDynAdult";
+            dynRec.bioMother = liveMother;
+            dynRec.bioFather = ActorId::Player();
+            dynRec.skyrimNetUuid = 0xBB00000000000002ULL;
+            src.lineage.Write().UpsertChild(dynRec);
+
+            ChildRecord placedRec{};
+            placedRec.childId = savedPlacedChild;
+            placedRec.stage = ChildStage::Child;
+            placedRec.name = "PlacedChild";
+            placedRec.guardians.Assign(ActorId::Player(), liveMother);
+            placedRec.skyrimNetUuid = 0xCC00000000000003ULL;
+            src.lineage.Write().UpsertChild(placedRec);
+
+            ChildRecord orphanRec{};
+            orphanRec.childId = orphanedDynChild;
+            orphanRec.stage = ChildStage::Child;
+            orphanRec.name = "OrphanDynChild";
+            orphanRec.skyrimNetUuid = 0xDD00000000000004ULL;
+            src.lineage.Write().UpsertChild(orphanRec);
+
+            if (withFertilityBatch) {
+                ActiveDeliveryBatch batch{};
+                batch.laborTotal = 1;
+                batch.laborStartGameDay = 8.0f;
+                batch.bornChildIds = { trainingSynthChild };
+                src.lineage.Write().UpsertActiveDeliveryBatch(liveMother, batch);
+            }
+
+            InMemoryCoSaveWriter w{};
+            MARAS_REQUIRE(SaveWorldState(src, w));
+            const auto npcr = findNpcrPayload(w.Records());
+            MARAS_REQUIRE(!npcr.empty());
+            MARAS_CHECK(payloadContainsTag(npcr, CoSaveConstants::kExtChildSkyrimNetUuidSNU1));
+            MARAS_CHECK_EQ(payloadContainsTag(npcr, CoSaveConstants::kExtFertilityBatchFRT1), withFertilityBatch);
+
+            MockFormIdResolver resolver{};
+            resolver.remapTable[liveMother.raw()] = remappedMother.raw();
+            resolver.remapTable[savedPlacedChild.raw()] = remappedPlacedChild.raw();
+            resolver.baseIds[remappedMother] = BaseId{ 0x05002011u };
+            resolver.missingDynamicRefs.insert(orphanedDynChild.AsActorId().AsRefId());
+
+            WorldState loaded{};
+            InMemoryCoSaveReader reader(w.Records());
+            const CoSaveLoadReport rep = LoadWorldState(loaded, reader, resolver);
+            MARAS_REQUIRE(rep.allChunksSucceeded);
+
+            const auto* loadedSyn = loaded.lineage->FindChild(trainingSynthChild);
+            MARAS_REQUIRE(loadedSyn != nullptr);
+            MARAS_CHECK_EQ(loadedSyn->skyrimNetUuid, 0xAA00000000000001ULL);
+
+            const auto* loadedDyn = loaded.lineage->FindChild(liveDynamicChild);
+            MARAS_REQUIRE(loadedDyn != nullptr);
+            MARAS_CHECK_EQ(loadedDyn->skyrimNetUuid, 0xBB00000000000002ULL);
+
+            const auto* loadedPlaced = loaded.lineage->FindChild(remappedPlacedChild);
+            MARAS_REQUIRE(loadedPlaced != nullptr);
+            MARAS_CHECK_EQ(loadedPlaced->skyrimNetUuid, 0xCC00000000000003ULL);
+
+            MARAS_CHECK(loaded.lineage->FindChild(orphanedDynChild) == nullptr);
+        };
+
+        // 2. Round-trip both WITHOUT 'FRT1' and WITH 'FRT1'
+        runRoundTrip(false);
+        runRoundTrip(true);
     }
 
 }  // namespace MARAS::Tests

@@ -249,6 +249,7 @@ add_library(maras_app OBJECT
     modules/app/src/AsyncLlmBatchRunner.cpp
     modules/app/src/BanterSceneCoordinator.cpp
     modules/app/src/ChildInteractionCoordinator.cpp
+    modules/app/src/ChildSkyrimNetSuccession.cpp
     modules/app/src/DialogueOutcomeCoordinator.cpp
     modules/app/src/FertilityLifecycleCoordinator.cpp
     modules/app/src/HouseholdUseCases.cpp
@@ -313,6 +314,7 @@ target_compile_features(maras_bridge_skyrimnet PUBLIC cxx_std_23)
 target_include_directories(maras_bridge_skyrimnet
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_skyrimnet/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules/bridge_skyrimnet/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/skyrimnet
 )
 target_link_libraries(maras_bridge_skyrimnet PRIVATE maras_app maras_engine)
 target_precompile_headers(maras_bridge_skyrimnet REUSE_FROM maras_pch_engine)

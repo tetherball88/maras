@@ -120,6 +120,16 @@ namespace MARAS::Domain::Lineage {
                << "Write the profile, occupation, skills, aspirations, and speech_style specifically for a young child in Skyrim, NOT an adult.\n";
         }
 
+        if (d.stage == Foundation::ChildStage::Adult && d.hasInheritedChildhoodIdentity) {
+            ss << "\n## Inherited Childhood Profile Evolution (CRITICAL)\n"
+               << "- `Current Dynamic Bio` is " << d.childName
+               << "'s established childhood profile from before leaving for training. "
+               << "You MUST evolve `summary`, `interject_summary`, `appearance`, `occupation`, `skills`, "
+               << "`speech_style`, `aspirations`, `background`, `personality`, and `relationships` from a young child "
+               << "into a grown young adult while preserving " << d.childName
+               << "'s childhood memories, core personality traits, inherited physical features, and family relationships.\n";
+        }
+
         ss << "\n## Narrative Time & Gameplay Time-Compression Rules (CRITICAL)\n"
            << "- Short Tamrielic calendar intervals in `Recent Events` between pregnancy, birth, growing from infancy into a young child, or completing adolescent training (whether hours, a single day, days, or months in-game) are **gameplay time-scale abstractions** for playability—NOT literal rapid aging in-universe.\n"
            << "- **NEVER** state or imply that " << d.childName << " grew up rapidly in a single day or a short period, **NEVER** invent a magical or supernatural growth anomaly, accelerated aging, or time distortion to explain `Recent Events` dates, and **NEVER** state that " << d.childName << " lacks memories of infancy or early childhood or suddenly appeared at " << pronounPoss << " current age.\n"
@@ -354,6 +364,136 @@ namespace MARAS::Domain::Lineage {
         }
 
         return ss.str();
+    }
+
+    ChildSeedMemorySpec BuildChildStageSeedMemory(const ChildProfileGuidanceInput& d) {
+        ChildSeedMemorySpec spec{};
+
+        if (d.stage == Foundation::ChildStage::Child) {
+            if (d.isAdopted || !d.isBiologicalChild) {
+                return spec;
+            }
+
+            const bool hideBioFather =
+                !d.bioFatherKnowsPaternity ||
+                (d.hasPaternitySecret && !d.partnerKnowsPaternity) ||
+                d.isSingleMotherSecretFromBioFather;
+
+            std::vector<std::string> raisedBy;
+            auto pushUnique = [&](const std::string& name) {
+                if (name.empty()) {
+                    return;
+                }
+                for (const auto& existing : raisedBy) {
+                    if (existing == name) {
+                        return;
+                    }
+                }
+                raisedBy.push_back(name);
+            };
+
+            if (!d.guardianAName.empty() && !(hideBioFather && d.guardianAName == d.bioFatherName)) {
+                pushUnique(d.guardianAName);
+            }
+            if (!d.guardianBName.empty() && !(hideBioFather && d.guardianBName == d.bioFatherName)) {
+                pushUnique(d.guardianBName);
+            }
+            pushUnique(d.motherName);
+
+            bool mentionPresumedFatherAsFather = false;
+            if (d.hasPaternitySecret && !d.partnerKnowsPaternity && !d.presumedFatherName.empty()) {
+                bool inRaisedBy = false;
+                for (const auto& existing : raisedBy) {
+                    if (existing == d.presumedFatherName) {
+                        inRaisedBy = true;
+                        break;
+                    }
+                }
+                if (!inRaisedBy) {
+                    mentionPresumedFatherAsFather = true;
+                }
+            }
+
+            bool mentionBioFatherAsFather = false;
+            if (!hideBioFather && !d.bioFatherName.empty()) {
+                if (d.bioFatherIsGuardian) {
+                    pushUnique(d.bioFatherName);
+                } else {
+                    bool inRaisedBy = false;
+                    for (const auto& existing : raisedBy) {
+                        if (existing == d.bioFatherName) {
+                            inRaisedBy = true;
+                            break;
+                        }
+                    }
+                    if (!inRaisedBy) {
+                        mentionBioFatherAsFather = true;
+                    }
+                }
+            }
+
+            const std::string homeLoc = d.homeLocationName.empty() ? "Skyrim" : d.homeLocationName;
+            const std::string caretakers = raisedBy.empty() ? "my family" : JoinNamesForProse(raisedBy);
+
+            std::ostringstream out;
+            out << "I spent my early childhood growing up from infancy in " << homeLoc
+                << ", raised by " << caretakers;
+            if (mentionPresumedFatherAsFather) {
+                out << ", knowing " << d.presumedFatherName << " as my father";
+            } else if (mentionBioFatherAsFather) {
+                out << ", knowing " << d.bioFatherName << " as my father";
+            }
+            out << ".";
+            if (!d.siblingNames.empty()) {
+                out << " Growing up alongside " << JoinNamesForProse(d.siblingNames)
+                    << " shaped my earliest days at home.";
+            }
+
+            spec.shouldCreate = true;
+            spec.content = out.str();
+            spec.importance = 0.75f;
+            spec.memoryType = "RELATIONSHIP";
+            spec.emotion = "content";
+            spec.location = homeLoc;
+            spec.tags = { "childhood", "family", "upbringing" };
+            return spec;
+        }
+
+        if (d.stage == Foundation::ChildStage::Adult) {
+            if (d.trainingClassName.empty() && d.trainingLocation.empty()) {
+                return spec;
+            }
+
+            std::string trainingPhrase;
+            if (!d.trainingClassName.empty() && !d.trainingLocation.empty()) {
+                trainingPhrase = d.trainingClassName + " training at " + d.trainingLocation;
+            } else if (!d.trainingClassName.empty()) {
+                trainingPhrase = d.trainingClassName + " training";
+            } else {
+                trainingPhrase = "training at " + d.trainingLocation;
+            }
+
+            std::ostringstream out;
+            out << "After completing my " << trainingPhrase
+                << ", I came of age as a young adult and set out across Skyrim, carrying the memories of my childhood";
+            if (!d.homeLocationName.empty()) {
+                out << " in " << d.homeLocationName;
+            }
+            out << " and my family.";
+
+            spec.shouldCreate = true;
+            spec.content = out.str();
+            spec.importance = 0.8f;
+            spec.memoryType = "SKILL";
+            spec.emotion = "proud";
+            spec.location = !d.trainingLocation.empty()
+                ? d.trainingLocation
+                : (!d.homeLocationName.empty() ? d.homeLocationName : "Skyrim");
+            spec.tags = { "training", "adulthood", "graduation" };
+            return spec;
+        }
+
+        return spec;
     }
 
 }  // namespace MARAS::Domain::Lineage

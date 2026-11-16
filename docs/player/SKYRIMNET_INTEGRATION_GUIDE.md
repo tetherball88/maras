@@ -119,6 +119,7 @@ When two NPCs get together, get married, or break up through Matchmaking while y
 - M.A.R.A.S generates **two distinct, first-person episodic memories**—one written in **Partner A's voice** and one written in **Partner B's voice**—complete with **where** it happened, **how they felt**, and **emotional tags**, and injects them directly into SkyrimNet's long-term memory database!
 - **What That Means in Gameplay**: You can walk into the Bannered Mare three days later, ask Ysolda *"So, how did things start between you and Mikael?"*, and she will actually tell you the story from her memory!
 - **Read & Edit Memories in the Dashboard**: When running **LLM Matchmaking** in the M.A.R.A.S Dashboard (`Alt + B`), you can preview both NPCs' generated memories—and even **rewrite or edit them yourself** before clicking Apply! ✍️✨
+- **Continuous Childhood-to-Adulthood Memories & Biographies (SkyrimNet v15+)**: When your spawned young children leave for guild training and later return as adult followers and adventurers, M.A.R.A.S links their childhood and adult identities so they keep all their childhood memories, conversations, diaries, and evolving character biography—alongside a memory of completing their guild training! 🌱⚔️
 
 ---
 

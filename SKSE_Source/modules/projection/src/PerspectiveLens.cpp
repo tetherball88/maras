@@ -452,6 +452,7 @@ namespace MARAS::Projection {
         out.trainingClassIndex = child.trainingClassIndex;
         out.trainingStartGameDay = child.trainingStartGameDay;
         out.savedBioTemplateName = child.savedBioTemplateName;
+        out.skyrimNetUuid = child.skyrimNetUuid;
         out.hideSecretFromViewer = ctx.hideSecretFromViewer;
         out.hasUndiscoveredPaternitySecret =
             (!ctx.isBioSameAsPresumed && !ctx.hideSecretFromViewer && ctx.rawHasUndiscoveredSecret);
