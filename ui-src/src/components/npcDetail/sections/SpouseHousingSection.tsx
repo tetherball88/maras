@@ -23,13 +23,15 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
 
   const npc = npcProfiles.get(npcId)
 
-  const hasChildrenWithPlayer = Array.from(children.values()).some(
-    (c) =>
+  const hasChildrenWithPlayer = Array.from(children.values()).some((c) => {
+    if (c.stage === 'unborn' || c.stage === 'training' || c.stage === 'adult') {
+      return false
+    }
+    return (
       (areSameFormId(c.guardianAId, PLAYER_FORM_ID) && areSameFormId(c.guardianBId, npcId)) ||
-      (areSameFormId(c.guardianBId, PLAYER_FORM_ID) && areSameFormId(c.guardianAId, npcId)) ||
-      (areSameFormId(c.bioMotherId, PLAYER_FORM_ID) && areSameFormId(c.bioFatherId, npcId)) ||
-      (areSameFormId(c.bioFatherId, PLAYER_FORM_ID) && areSameFormId(c.bioMotherId, npcId)),
-  )
+      (areSameFormId(c.guardianBId, PLAYER_FORM_ID) && areSameFormId(c.guardianAId, npcId))
+    )
+  })
 
   const availableHomes = [
     ...(hasChildrenWithPlayer ? [] : [{ value: 'Unset', label: 'Unset (No assigned house)' }]),

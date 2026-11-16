@@ -262,7 +262,22 @@ namespace MARAS::Domain::Lineage {
                 out.guardianDiff.addedB = guardianId;
                 out.guardianDiff.changed = true;
             } else {
-                out.guardianDiff = rec->guardians.Assign(rec->guardians.slotA, guardianId);
+                const ActorId keepAnchor = rec->guardians.HasGuardian(ActorId::Player())
+                    ? ActorId::Player()
+                    : rec->guardians.slotA;
+                out.guardianDiff = rec->guardians.Assign(keepAnchor, guardianId);
+            }
+            if (rec->guardians.IsSoleGuardian(ActorId::Player()) &&
+                rec->stage != Foundation::ChildStage::Unborn &&
+                rec->stage != Foundation::ChildStage::Adult) {
+                const ActorId leadSpouse = ws.GetHighestRankingSurvivingPlayerSpouse();
+                if (!leadSpouse.IsNull() && leadSpouse != guardianId) {
+                    const State::GuardianSetDiff extra = rec->guardians.Assign(ActorId::Player(), leadSpouse);
+                    if (extra.changed) {
+                        out.guardianDiff.changed = true;
+                        out.affectedActors.push_back(leadSpouse);
+                    }
+                }
             }
             if (!guardianId.IsPlayer() && !ws.actors.Read().Find(guardianId.AsRefId())) {
                 State::ActorProfileRecord prof{};
@@ -272,13 +287,93 @@ namespace MARAS::Domain::Lineage {
                 ws.actors.Write().Upsert(std::move(prof));
             }
         } else {
-            out.guardianDiff = rec->guardians.Remove(guardianId);
+            if (!guardianId.IsPlayer() &&
+                rec->guardians.HasGuardian(guardianId) &&
+                rec->guardians.OtherGuardian(guardianId).IsPlayer() &&
+                rec->stage != Foundation::ChildStage::Unborn &&
+                rec->stage != Foundation::ChildStage::Adult) {
+                const ActorId fallbackSpouse = ws.GetHighestRankingSurvivingPlayerSpouse(guardianId);
+                if (!fallbackSpouse.IsNull()) {
+                    out.guardianDiff = rec->guardians.Assign(ActorId::Player(), fallbackSpouse);
+                } else if (ws.IsMarried(ActorId::Player(), guardianId) &&
+                           !ws.deceased.Read().IsDeceased(guardianId)) {
+                    return out;
+                } else {
+                    out.guardianDiff = rec->guardians.Remove(guardianId);
+                }
+            } else {
+                out.guardianDiff = rec->guardians.Remove(guardianId);
+            }
         }
 
         if (!out.guardianDiff.changed) {
             return out;
         }
         out.changed = true;
+
+        (void)ws.SyncChildHouseholdState(childId);
+        if (!out.guardianDiff.removedA.IsNull()) out.affectedActors.push_back(out.guardianDiff.removedA);
+        if (!out.guardianDiff.removedB.IsNull()) out.affectedActors.push_back(out.guardianDiff.removedB);
+        if (!out.guardianDiff.addedA.IsNull()) out.affectedActors.push_back(out.guardianDiff.addedA);
+        if (!out.guardianDiff.addedB.IsNull()) out.affectedActors.push_back(out.guardianDiff.addedB);
+        return out;
+    }
+
+    ChildGuardianMutationOutcome ApplySetChildGuardiansPair(
+        State::WorldState& ws,
+        ChildId childId,
+        ActorId guardianA,
+        ActorId guardianB,
+        const State::IActorMetadataProvider& meta) {
+        ChildGuardianMutationOutcome out{};
+        if (childId.IsNull()) {
+            return out;
+        }
+
+        auto* rec = ws.lineage.Write().FindChildMutable(childId);
+        if (!rec) {
+            return out;
+        }
+
+        if (guardianA.IsUnknownFather()) {
+            guardianA = ActorId{};
+        }
+        if (guardianB.IsUnknownFather()) {
+            guardianB = ActorId{};
+        }
+        if (!guardianA.IsNull() && guardianA == guardianB) {
+            guardianB = ActorId{};
+        }
+
+        if (rec->stage != Foundation::ChildStage::Unborn &&
+            rec->stage != Foundation::ChildStage::Adult &&
+            ((guardianA.IsPlayer() && guardianB.IsNull()) ||
+             (guardianB.IsPlayer() && guardianA.IsNull()))) {
+            const ActorId leadSpouse = ws.GetHighestRankingSurvivingPlayerSpouse();
+            if (!leadSpouse.IsNull()) {
+                if (guardianA.IsPlayer()) {
+                    guardianB = leadSpouse;
+                } else {
+                    guardianA = leadSpouse;
+                }
+            }
+        }
+
+        out.guardianDiff = rec->guardians.Assign(guardianA, guardianB);
+        if (!out.guardianDiff.changed) {
+            return out;
+        }
+        out.changed = true;
+
+        for (const ActorId gid : { rec->guardians.slotA, rec->guardians.slotB }) {
+            if (!gid.IsNull() && !gid.IsPlayer() && !ws.actors.Read().Find(gid.AsRefId())) {
+                State::ActorProfileRecord prof{};
+                prof.refId = gid.AsRefId();
+                prof.baseId = meta.GetActorBaseId(gid);
+                prof.isRegisteredAdult = true;
+                ws.actors.Write().Upsert(std::move(prof));
+            }
+        }
 
         (void)ws.SyncChildHouseholdState(childId);
         if (!out.guardianDiff.removedA.IsNull()) out.affectedActors.push_back(out.guardianDiff.removedA);

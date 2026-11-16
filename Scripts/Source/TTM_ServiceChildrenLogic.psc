@@ -188,7 +188,7 @@ Function AdoptChild(Actor child, Actor spouseToAdopWith = none, Location houseTo
     TTM_Debug.debug("TTM_ServiceChildrenLogic: AdoptChild: child = " + child)
 
     ; Select co-parent spouse if not yet set
-    if (spouseToAdopWith == none && !forceSingleParent)
+    if (spouseToAdopWith == none && (!forceSingleParent || MARAS.GetStatusCount("married") > 0))
         if (bioMother != none && MARAS.IsNPCStatus(bioMother, "married"))
             spouseToAdopWith = bioMother
         elseif (bioFather != none && MARAS.IsNPCStatus(bioFather, "married"))
@@ -255,7 +255,7 @@ EndFunction
 Function AdoptChildGlobal(Actor child, Actor spouseToAdoptWith = none, Form houseToMove = none) global
     TTM_ServiceChildrenLogic logic = TTM_Data.GetChildLogicQuest() as TTM_ServiceChildrenLogic
     if (logic)
-        bool forceSingle = (spouseToAdoptWith == none)
+        bool forceSingle = (spouseToAdoptWith == none) && (MARAS.GetStatusCount("married") == 0)
         logic.AdoptChild(child, spouseToAdoptWith, houseToMove as Location, forceSingleParent = forceSingle)
     endif
 EndFunction

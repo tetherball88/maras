@@ -634,9 +634,6 @@ video {
 .z-30 {
   z-index: 30;
 }
-.z-40 {
-  z-index: 40;
-}
 .z-50 {
   z-index: 50;
 }
@@ -1949,9 +1946,6 @@ video {
 }
 .p-\[0\.875rem\] {
   padding: 0.875rem;
-}
-.p-\[1\.0rem\] {
-  padding: 1.0rem;
 }
 .p-\[1\.25rem\] {
   padding: 1.25rem;

@@ -20,6 +20,7 @@ namespace MARAS::Domain::Household {
         std::vector<ActorId> movedAdults{};
         std::vector<ChildId> movedChildren{};
         std::vector<ChildId> changedHouseChildren{};
+        std::vector<ChildId> newlyHousedChildren{};
         std::vector<std::uint32_t> skippedChildCustody{};
         std::vector<ActorId> dirtyActors{};
     };

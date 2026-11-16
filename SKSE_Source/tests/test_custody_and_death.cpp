@@ -599,4 +599,125 @@ namespace MARAS::Tests {
         MARAS_CHECK(ws.lineage->FindActiveDeliveryBatch(unregNpc) == nullptr);
     }
 
+    MARAS_TEST(CustodyAndDeath, PolygamyBirthDivorceAndWidowSpouseHouseholdContinuity) {
+        const ActorId spouseA{ 0x00081001u };
+        const ActorId spouseX{ 0x00081002u };
+        const ActorId outsideLover{ 0x00081003u };
+        const HouseId houseA{ 0x00082001u };
+        const HouseId houseX{ 0x00082002u };
+
+        MockFormIdResolver meta{};
+        meta.sexes[ActorId::Player()] = ActorSex::Male;
+        meta.sexes[spouseA] = ActorSex::Female;
+        meta.sexes[spouseX] = ActorSex::Female;
+        meta.sexes[outsideLover] = ActorSex::Female;
+        DeterministicRng rng{ 777u };
+
+        // 1. Polygamy + unmarried outside birth awarded to Player -> co-parented with Lead Spouse in houseA
+        {
+            WorldState ws{};
+            ws.settings.Write().enablePlayerPolygamy = true;
+            ws.settings.Write().childCustodyPlayerPolicy = ChildCustodyPlayerPolicy::AlwaysWithPlayer;
+            ws.household.Write().RegisterHouse(houseA, RefId{ 0x00082101u }, true);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseA, 5.0f, ActorId::Player(), meta);
+            ws.household.Write().AssignTenant(spouseA.raw(), houseA, /*stayAtHome=*/true, /*isChildTenant=*/false);
+
+            const ChildId loveChild{ 0xFF700901u };
+            ChildRecord rec{};
+            rec.childId = loveChild;
+            rec.stage = ChildStage::Infant;
+            rec.bioMother = outsideLover;
+            rec.bioFather = ActorId::Player();
+            ws.lineage.Write().UpsertChild(rec);
+
+            (void)ws.ApplyBirthCustodyRules(loveChild, outsideLover, ActorId{}, ActorId::Player(), meta, rng);
+            const auto* stored = ws.lineage->FindChild(loveChild);
+            MARAS_REQUIRE(stored != nullptr);
+            MARAS_CHECK(stored->guardians.HasSameSet(ActorId::Player(), spouseA));
+            MARAS_CHECK_EQ(ws.household->GetTenantHouse(loveChild.raw()), houseA);
+        }
+
+        // 2. Polygamy + divorce when Player wins custody -> moves to remaining housed spouseA in houseA
+        {
+            WorldState ws{};
+            ws.settings.Write().enablePlayerPolygamy = true;
+            ws.settings.Write().childCustodyPlayerPolicy = ChildCustodyPlayerPolicy::AlwaysWithPlayer;
+            ws.household.Write().RegisterHouse(houseA, RefId{ 0x00082101u }, true);
+            ws.household.Write().RegisterHouse(houseX, RefId{ 0x00082102u }, true);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseA, 5.0f, ActorId::Player(), meta);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseX, 8.0f, ActorId::Player(), meta);
+            ws.household.Write().AssignTenant(spouseA.raw(), houseA, false, false);
+            ws.household.Write().AssignTenant(spouseX.raw(), houseX, true, false);
+
+            const ChildId divChild{ 0x00083001u };
+            ChildRecord rec{};
+            rec.childId = divChild;
+            rec.stage = ChildStage::Child;
+            rec.bioMother = spouseX;
+            rec.bioFather = ActorId::Player();
+            rec.guardians.Assign(ActorId::Player(), spouseX);
+            ws.lineage.Write().UpsertChild(rec);
+            (void)ws.SyncChildHouseholdState(divChild, houseX);
+
+            (void)ws.PromoteToDivorced(ActorId::Player(), spouseX, 20.0f, ActorId::Player(), meta, &rng);
+            const auto* stored = ws.lineage->FindChild(divChild);
+            MARAS_REQUIRE(stored != nullptr);
+            MARAS_CHECK(stored->guardians.HasSameSet(ActorId::Player(), spouseA));
+            MARAS_CHECK_EQ(ws.household->GetTenantHouse(divChild.raw()), houseA);
+        }
+
+        // 3. Polygamy + divorce when remaining spouseA is unhoused -> spouseA co-housed in child's houseX with stayAtHome=false
+        {
+            WorldState ws{};
+            ws.settings.Write().enablePlayerPolygamy = true;
+            ws.settings.Write().childCustodyPlayerPolicy = ChildCustodyPlayerPolicy::AlwaysWithPlayer;
+            ws.household.Write().RegisterHouse(houseX, RefId{ 0x00082102u }, true);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseA, 5.0f, ActorId::Player(), meta);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseX, 8.0f, ActorId::Player(), meta);
+            ws.household.Write().AssignTenant(spouseX.raw(), houseX, true, false);
+
+            const ChildId divChild{ 0x00083002u };
+            ChildRecord rec{};
+            rec.childId = divChild;
+            rec.stage = ChildStage::Child;
+            rec.guardians.Assign(ActorId::Player(), spouseX);
+            ws.lineage.Write().UpsertChild(rec);
+            (void)ws.SyncChildHouseholdState(divChild, houseX);
+
+            (void)ws.PromoteToDivorced(ActorId::Player(), spouseX, 20.0f, ActorId::Player(), meta, &rng);
+            const auto* stored = ws.lineage->FindChild(divChild);
+            MARAS_REQUIRE(stored != nullptr);
+            MARAS_CHECK(stored->guardians.HasSameSet(ActorId::Player(), spouseA));
+            MARAS_CHECK_EQ(ws.household->GetTenantHouse(divChild.raw()), houseX);
+            MARAS_CHECK_EQ(ws.household->GetTenantHouse(spouseA.raw()), houseX);
+            MARAS_CHECK(!ws.household->GetTenantStayAtHome(spouseA.raw()));
+        }
+
+        // 4. Polygamy + death when surviving Lead Spouse is unhoused -> co-housed in child's house with stayAtHome=false
+        {
+            WorldState ws{};
+            ws.settings.Write().enablePlayerPolygamy = true;
+            ws.household.Write().RegisterHouse(houseA, RefId{ 0x00082101u }, true);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseA, 5.0f, ActorId::Player(), meta);
+            (void)ws.PromoteToMarried(ActorId::Player(), spouseX, 8.0f, ActorId::Player(), meta);
+            ws.household.Write().AssignTenant(spouseA.raw(), houseA, true, false);
+
+            const ChildId orphanStep{ 0x00083003u };
+            ChildRecord rec{};
+            rec.childId = orphanStep;
+            rec.stage = ChildStage::Child;
+            rec.guardians.Assign(ActorId::Player(), spouseA);
+            ws.lineage.Write().UpsertChild(rec);
+            (void)ws.SyncChildHouseholdState(orphanStep, houseA);
+
+            (void)ws.RecordActorDeath(spouseA, 30.0f, false, ActorId{}, meta);
+            const auto* stored = ws.lineage->FindChild(orphanStep);
+            MARAS_REQUIRE(stored != nullptr);
+            MARAS_CHECK(stored->guardians.HasSameSet(ActorId::Player(), spouseX));
+            MARAS_CHECK_EQ(ws.household->GetTenantHouse(orphanStep.raw()), houseA);
+            MARAS_CHECK_EQ(ws.household->GetTenantHouse(spouseX.raw()), houseA);
+            MARAS_CHECK(!ws.household->GetTenantStayAtHome(spouseX.raw()));
+        }
+    }
+
 }  // namespace MARAS::Tests

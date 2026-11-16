@@ -33479,9 +33479,12 @@ Defaulting to \`null\`.`;
     const children = useMarasStore((s) => s.children);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const npc = npcProfiles.get(npcId);
-    const hasChildrenWithPlayer = Array.from(children.values()).some(
-      (c) => areSameFormId(c.guardianAId, PLAYER_FORM_ID) && areSameFormId(c.guardianBId, npcId) || areSameFormId(c.guardianBId, PLAYER_FORM_ID) && areSameFormId(c.guardianAId, npcId) || areSameFormId(c.bioMotherId, PLAYER_FORM_ID) && areSameFormId(c.bioFatherId, npcId) || areSameFormId(c.bioFatherId, PLAYER_FORM_ID) && areSameFormId(c.bioMotherId, npcId)
-    );
+    const hasChildrenWithPlayer = Array.from(children.values()).some((c) => {
+      if (c.stage === "unborn" || c.stage === "training" || c.stage === "adult") {
+        return false;
+      }
+      return areSameFormId(c.guardianAId, PLAYER_FORM_ID) && areSameFormId(c.guardianBId, npcId) || areSameFormId(c.guardianBId, PLAYER_FORM_ID) && areSameFormId(c.guardianAId, npcId);
+    });
     const availableHomes = [
       ...hasChildrenWithPlayer ? [] : [{ value: "Unset", label: "Unset (No assigned house)" }],
       ...playerHomes.map((h) => ({
@@ -34689,6 +34692,7 @@ Defaulting to \`null\`.`;
     const isLoadingAllNpcs = useMarasStore((s) => s.isLoadingAllNpcs);
     const fetchAllSkyrimNpcs = useMarasStore((s) => s.fetchAllSkyrimNpcs);
     const children = useMarasStore((s) => s.children);
+    const relationships = useMarasStore((s) => s.relationships);
     const updateChild = useMarasStore((s) => s.updateChild);
     const setPaternitySecretEdges = useMarasStore((s) => s.setPaternitySecretEdges);
     const revealSecretsInUI = useMarasStore((s) => Boolean(s.settings.revealSecretsInUI));
@@ -34795,6 +34799,22 @@ Defaulting to \`null\`.`;
           return presumedFatherId;
       }
     };
+    const playerHasMarriedSpouse = reactExports.useMemo(
+      () => relationships.some(
+        (r2) => r2.status === RelationshipStatus.Married && (areSameFormId(r2.actorA, PLAYER_FORM_ID) || areSameFormId(r2.actorB, PLAYER_FORM_ID))
+      ),
+      [relationships]
+    );
+    const canClearActiveSlot = reactExports.useMemo(() => {
+      if (!activeSlot || !getCurrentSlotFormId(activeSlot)) return false;
+      if ((activeSlot === "guardianA" || activeSlot === "guardianB") && playerHasMarriedSpouse && (childRecord == null ? void 0 : childRecord.stage) !== "unborn" && (childRecord == null ? void 0 : childRecord.stage) !== "adult") {
+        const otherGuardianId = activeSlot === "guardianA" ? gBId : gAId;
+        if (otherGuardianId && areSameFormId(otherGuardianId, PLAYER_FORM_ID)) {
+          return false;
+        }
+      }
+      return true;
+    }, [activeSlot, gAId, gBId, playerHasMarriedSpouse, childRecord == null ? void 0 : childRecord.stage]);
     const filteredCandidates = reactExports.useMemo(() => {
       if (!activeSlot) return [];
       const meta = SLOT_META[activeSlot];
@@ -35127,7 +35147,7 @@ Defaulting to \`null\`.`;
           )
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-h-[12rem] overflow-y-auto space-y-[0.25rem] pr-[0.25rem]", children: [
-          getCurrentSlotFormId(activeSlot) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          canClearActiveSlot && /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
               type: "button",

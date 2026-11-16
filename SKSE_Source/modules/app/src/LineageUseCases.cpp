@@ -181,93 +181,6 @@ namespace MARAS::App {
             std::unordered_map<RE::FormID, Entry> entries_{};
         };
 
-        struct PendingMarriageAdoptionsState {
-            std::mutex mutex;
-            std::unordered_set<RE::FormID> childIDs;
-        };
-
-        PendingMarriageAdoptionsState& GetPendingMarriageAdoptionsState() {
-            static PendingMarriageAdoptionsState instance;
-            return instance;
-        }
-
-        void MarkMarriageAdoptionPending(RE::FormID childID) {
-            auto& state = GetPendingMarriageAdoptionsState();
-            std::lock_guard lock(state.mutex);
-            state.childIDs.insert(childID);
-        }
-
-        void ClearMarriageAdoptionPending(RE::FormID childID) {
-            auto& state = GetPendingMarriageAdoptionsState();
-            std::lock_guard lock(state.mutex);
-            state.childIDs.erase(childID);
-        }
-
-        bool IsMarriageAdoptionPending(RE::FormID childID) {
-            auto& state = GetPendingMarriageAdoptionsState();
-            std::lock_guard lock(state.mutex);
-            return state.childIDs.contains(childID);
-        }
-
-        void ClearAllPendingMarriageAdoptions() {
-            auto& state = GetPendingMarriageAdoptionsState();
-            std::lock_guard lock(state.mutex);
-            state.childIDs.clear();
-        }
-
-        class MarriageAdoptionCallback final : public RE::BSScript::IStackCallbackFunctor {
-        public:
-            MarriageAdoptionCallback(RE::FormID childID, RE::FormID spouseID)
-                : childID_(childID), spouseID_(spouseID), epoch_(GetSessionEpoch()) {}
-            ~MarriageAdoptionCallback() override = default;
-
-            void operator()(RE::BSScript::Variable /*a_result*/) override {
-                if (!IsSessionEpochCurrent(epoch_)) {
-                    return;
-                }
-                ClearMarriageAdoptionPending(childID_);
-                const RE::FormID cID = childID_;
-                const RE::FormID spID = spouseID_;
-                const SessionEpoch expectedEpoch = epoch_;
-                AddEpochTask(expectedEpoch, "MarriageAdoptionCallback::CompleteAdoption", [cID, spID, expectedEpoch]() {
-                    std::lock_guard lock(GetPapyrusMutex());
-                    if (!IsSessionEpochCurrent(expectedEpoch)) {
-                        return;
-                    }
-                    const auto snap = State::WorldStore::GetSingleton().Snapshot();
-                    const auto* edge = snap->relationships->FindEdge(
-                        State::CanonicalPairKey{ State::ActorId::Player(), State::ActorId{ spID } });
-                    if (!edge || edge->status != Foundation::RelationshipStatus::Married) {
-                        return;
-                    }
-                    const auto* childRec = snap->lineage->FindChild(State::ChildId{ cID });
-                    if (!childRec) {
-                        return;
-                    }
-                    if (!childRec->guardians.HasGuardian(State::ActorId::Player())) {
-                        LineageUseCases::GetSingleton().RegisterChildActor(
-                            cID,
-                            kPlayerFormID,
-                            spID,
-                            0,
-                            childRec->bioMother.raw(),
-                            childRec->bioFather.raw(),
-                            0,
-                            static_cast<std::uint8_t>(childRec->stage),
-                            childRec->isAdopted,
-                            true);
-                    }
-                });
-            }
-
-            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>& /*a_object*/) override {}
-
-        private:
-            RE::FormID childID_{ 0 };
-            RE::FormID spouseID_{ 0 };
-            SessionEpoch epoch_{ 0 };
-        };
-
         [[nodiscard]] bool IsSyntheticId(RE::FormID id) noexcept {
             return Foundation::IsSyntheticChildRawId(id);
         }
@@ -529,7 +442,6 @@ namespace MARAS::App {
     // =========================================================================
 
     void LineageUseCases::FinalizeCoSaveLoad(bool loadedAny) {
-        ClearAllPendingMarriageAdoptions();
         if (!loadedAny) {
             return;
         }
@@ -561,7 +473,6 @@ namespace MARAS::App {
     }
 
     void LineageUseCases::Revert() {
-        ClearAllPendingMarriageAdoptions();
         State::WorldStore::GetSingleton().Modify([](State::WorldState& ws) {
             ws.lineage.Write().Clear();
             ws.deceased.Write().Clear();
@@ -615,7 +526,6 @@ namespace MARAS::App {
         if (childID == 0) {
             return false;
         }
-        ClearMarriageAdoptionPending(childID);
 
         std::string blockReason;
         if (IsChildBlockedFromAdoption(childID, &blockReason)) {
@@ -723,6 +633,35 @@ namespace MARAS::App {
             const RE::FormID soleCustodian = ResolveSingleCustodianCandidate(
                 *preSnap, rec, rec.guardians.slotA.raw(), rec.guardians.slotB.raw());
             rec.guardians.Assign(State::ActorId{ soleCustodian }, State::ActorId{});
+        }
+
+        if (rec.stage != Foundation::ChildStage::Unborn && rec.stage != Foundation::ChildStage::Adult &&
+            rec.guardians.IsSoleGuardian(State::ActorId::Player()) && preSnap && preSnap->hierarchy &&
+            preSnap->relationships && preSnap->deceased) {
+            State::ActorId leadSpouse{};
+            for (int rank = 0; rank < static_cast<int>(State::SpouseHierarchyTable::kSlotCount); ++rank) {
+                const State::ActorId cand = preSnap->hierarchy->GetSpouseAtSlot(static_cast<std::size_t>(rank));
+                if (!cand.IsNull() && !preSnap->deceased->IsDeceased(cand) &&
+                    preSnap->relationships->GetStatus(State::ActorId::Player(), cand) ==
+                        Foundation::RelationshipStatus::Married) {
+                    leadSpouse = cand;
+                    break;
+                }
+            }
+            if (leadSpouse.IsNull()) {
+                auto married = preSnap->relationships->GetPartnersWithStatus(
+                    State::ActorId::Player(), Foundation::RelationshipStatus::Married);
+                std::sort(married.begin(), married.end());
+                for (const State::ActorId cand : married) {
+                    if (!cand.IsNull() && !preSnap->deceased->IsDeceased(cand)) {
+                        leadSpouse = cand;
+                        break;
+                    }
+                }
+            }
+            if (!leadSpouse.IsNull()) {
+                (void)rec.guardians.Assign(State::ActorId::Player(), leadSpouse);
+            }
         }
 
         if (!rec.guardians.slotA.IsNull()) {
@@ -843,7 +782,6 @@ namespace MARAS::App {
         if (childID == 0) {
             return false;
         }
-        ClearMarriageAdoptionPending(childID);
 
         std::optional<State::ChildRecord> preRec;
         Domain::Lineage::ChildGuardianMutationOutcome outcome{};
@@ -892,6 +830,39 @@ namespace MARAS::App {
         return true;
     }
 
+    namespace {
+        void FinalizeGuardianMutation(
+            LineageUseCases& self,
+            RE::FormID childID,
+            const State::ChildRecord& updatedRec,
+            const Domain::Lineage::ChildGuardianMutationOutcome& outcome,
+            const std::string& eventType,
+            RE::FormID otherID,
+            const std::string& reason) {
+            const RE::FormID gA = updatedRec.guardians.slotA.raw();
+            const RE::FormID gB = updatedRec.guardians.slotB.raw();
+            self.SyncChildHouseholdState(childID, gA, gB);
+            self.UpdateChildBothParentsFaction(childID);
+            for (const auto actor : outcome.affectedActors) {
+                if (!actor.IsNull() && !actor.IsPlayer()) {
+                    self.UpdateSpouseChildrenFaction(actor.raw());
+                }
+            }
+            self.UpdateAllSpousesChildrenFaction();
+
+            self.SendChildEvent(eventType, childID, gA, gB, otherID, reason);
+
+            GetUiBridgeGateway().OnChildUpdated(updatedRec);
+            GetUiBridgeGateway().SendOverviewData();
+            GetUiBridgeGateway().SendNPCDetail(childID);
+            for (const auto actor : outcome.affectedActors) {
+                if (!actor.IsNull() && !actor.IsPlayer()) {
+                    GetUiBridgeGateway().SendNPCDetail(actor.raw());
+                }
+            }
+        }
+    }  // namespace
+
     bool LineageUseCases::SetChildGuardian(RE::FormID childID, RE::FormID guardianID, bool isAdd) {
         if (childID == 0 || guardianID == 0) {
             return false;
@@ -909,7 +880,6 @@ namespace MARAS::App {
             outcome = Domain::Lineage::ApplySetChildGuardian(
                 ws, State::ChildId{ childID }, State::ActorId{ guardianID }, isAdd, *meta);
             if (outcome.changed) {
-                ws.SyncChildHouseholdState(State::ChildId{ childID });
                 if (const auto* rec = ws.lineage.Read().FindChild(State::ChildId{ childID })) {
                     updatedRec = *rec;
                 }
@@ -920,28 +890,47 @@ namespace MARAS::App {
             return false;
         }
 
-        const RE::FormID gA = updatedRec->guardians.slotA.raw();
-        const RE::FormID gB = updatedRec->guardians.slotB.raw();
-        SyncChildHouseholdState(childID, gA, gB);
-        UpdateChildBothParentsFaction(childID);
-        for (const auto actor : outcome.affectedActors) {
-            if (!actor.IsNull() && !actor.IsPlayer()) {
-                UpdateSpouseChildrenFaction(actor.raw());
+        const std::string tag = isAdd ? "guardian_added" : "guardian_removed";
+        FinalizeGuardianMutation(*this, childID, *updatedRec, outcome, tag, guardianID, tag);
+        return true;
+    }
+
+    bool LineageUseCases::SetChildGuardians(RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID) {
+        if (childID == 0) {
+            return false;
+        }
+        if (guardianAID != 0) {
+            RelationshipUseCases::GetSingleton().EnsureRegistered(guardianAID);
+        }
+        if (guardianBID != 0 && guardianBID != guardianAID) {
+            RelationshipUseCases::GetSingleton().EnsureRegistered(guardianBID);
+        }
+
+        const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
+        auto meta = CaptureWorldActorMetadata(preSnap, { guardianAID, guardianBID });
+
+        Domain::Lineage::ChildGuardianMutationOutcome outcome{};
+        std::optional<State::ChildRecord> updatedRec;
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            outcome = Domain::Lineage::ApplySetChildGuardiansPair(
+                ws,
+                State::ChildId{ childID },
+                State::ActorId{ guardianAID },
+                State::ActorId{ guardianBID },
+                *meta);
+            if (outcome.changed) {
+                if (const auto* rec = ws.lineage.Read().FindChild(State::ChildId{ childID })) {
+                    updatedRec = *rec;
+                }
             }
-        }
-        UpdateAllSpousesChildrenFaction();
+        });
 
-        SendChildEvent(
-            isAdd ? "guardian_added" : "guardian_removed",
-            childID, gA, gB, guardianID,
-            isAdd ? "guardian_added" : "guardian_removed");
-
-        GetUiBridgeGateway().OnChildUpdated(*updatedRec);
-        GetUiBridgeGateway().SendOverviewData();
-        GetUiBridgeGateway().SendNPCDetail(childID);
-        if (!Utils::MatchesActor(guardianID, kPlayerFormID)) {
-            GetUiBridgeGateway().SendNPCDetail(guardianID);
+        if (!outcome.changed || !updatedRec.has_value()) {
+            return false;
         }
+
+        FinalizeGuardianMutation(
+            *this, childID, *updatedRec, outcome, "guardians_changed", 0, "custody_updated");
         return true;
     }
 
@@ -1206,87 +1195,6 @@ namespace MARAS::App {
         }
     }
 
-    void LineageUseCases::ClearPendingMarriageAdoptions() {
-        ClearAllPendingMarriageAdoptions();
-    }
-
-    void LineageUseCases::DispatchPlayerSpouseMarriageAdoptions(
-        RE::FormID spouseID,
-        std::unordered_set<RE::FormID>& skippedChildIds) {
-        if (spouseID == 0 || Utils::MatchesActor(spouseID, kPlayerFormID)) {
-            return;
-        }
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        for (const auto& [cKey, rec] : snap->lineage->AllChildren()) {
-            if (rec.stage == Foundation::ChildStage::Adult || rec.stage == Foundation::ChildStage::Unborn) {
-                continue;
-            }
-            const RE::FormID cID = cKey.raw();
-            if (IsSyntheticId(cID)) {
-                continue;
-            }
-            const State::ActorId spouseActorId{ spouseID };
-            if (!rec.guardians.HasGuardian(spouseActorId) ||
-                rec.guardians.HasGuardian(State::ActorId::Player())) {
-                continue;
-            }
-            const RE::FormID otherGuardianID = rec.guardians.OtherGuardian(spouseActorId).raw();
-            const bool otherGuardianDead = (otherGuardianID != 0) && IsActorDeadInWorld(otherGuardianID);
-            const bool canLinkPlayerAsCoParent =
-                (otherGuardianID == 0) ||
-                Utils::MatchesActor(otherGuardianID, spouseID) ||
-                otherGuardianDead;
-            if (!canLinkPlayerAsCoParent) {
-                continue;
-            }
-            if (IsMarriageAdoptionPending(cID)) {
-                skippedChildIds.insert(cID);
-                continue;
-            }
-            auto* childActor = RE::TESForm::LookupByID<RE::Actor>(cID);
-            if (!childActor) {
-                childActor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(cID);
-            }
-            auto* spouseActor = RE::TESForm::LookupByID<RE::Actor>(spouseID);
-            if (!spouseActor) {
-                spouseActor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(spouseID);
-            }
-            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            if (childActor && spouseActor && vm) {
-                MarkMarriageAdoptionPending(cID);
-                MARAS_LOG_INFO(
-                    "DispatchPlayerSpouseMarriageAdoptions: Dispatching Papyrus AdoptChildGlobal for spawned child {:08X} ('{}') with spouse {:08X}",
-                    cID, rec.name, spouseID);
-                if (otherGuardianID != 0 && !Utils::MatchesActor(otherGuardianID, spouseID)) {
-                    UpdateSpouseChildrenFaction(otherGuardianID);
-                }
-                const SessionEpoch expectedEpoch = GetSessionEpoch();
-                DispatchPostLock(
-                    expectedEpoch,
-                    [cID, spouseID]() {
-                        auto* innerVm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-                        auto* cActor = cID != 0 ? RE::TESForm::LookupByID<RE::Actor>(cID) : nullptr;
-                        auto* spActor = spouseID != 0 ? RE::TESForm::LookupByID<RE::Actor>(spouseID) : nullptr;
-                        if (!innerVm || !cActor || !spActor) {
-                            ClearMarriageAdoptionPending(cID);
-                            return;
-                        }
-                        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(
-                            new MarriageAdoptionCallback(cID, spouseID));
-                        RE::TESForm* houseArg = nullptr;
-                        auto args = RE::MakeFunctionArguments(
-                            std::move(cActor), std::move(spActor), std::move(houseArg));
-                        if (!innerVm->DispatchStaticCall(
-                                "TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, callback)) {
-                            ClearMarriageAdoptionPending(cID);
-                        }
-                    },
-                    "EvaluateChildCustodyOnMarriage::AdoptChildGlobal");
-                skippedChildIds.insert(cID);
-            }
-        }
-    }
-
     void LineageUseCases::SyncChildHouseholdState(
         RE::FormID childID,
         RE::FormID guardianAID,
@@ -1333,109 +1241,79 @@ namespace MARAS::App {
         }
     }
 
-    void LineageUseCases::RefreshCustodyChildrenAfterTransition(
+    void LineageUseCases::HandleMarriageCustodySideEffects(
         const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
         const State::WorldStateSnapshot& postSnap,
-        const std::unordered_set<RE::FormID>& skippedChildIds) {
-        std::unordered_set<RE::FormID> spousesToRefresh;
-        for (const auto& [cID, preRec] : preChildren) {
-            if (skippedChildIds.contains(cID)) {
-                continue;
+        RE::FormID actorA,
+        RE::FormID actorB) {
+        const bool playerInvolved =
+            Utils::MatchesActor(actorA, kPlayerFormID) || Utils::MatchesActor(actorB, kPlayerFormID);
+        if (playerInvolved) {
+            const RE::FormID spouseID = Utils::MatchesActor(actorA, kPlayerFormID) ? actorB : actorA;
+            if (spouseID != 0 && postSnap.household) {
+                const RE::FormID postSpouseHouse = postSnap.household->GetTenantHouse(spouseID).raw();
+                if (postSpouseHouse != 0) {
+                    HouseholdEngineOps::GetSingleton().UpdateSpouseHomeMarker(spouseID, postSpouseHouse);
+                    FactionReconciler::GetSingleton().ReconcileActor(spouseID);
+                    PackageReconciler::GetSingleton().ReconcileActor(spouseID);
+                    GetUiBridgeGateway().SendNPCDetail(spouseID);
+                }
             }
-            const auto* postRec = postSnap.lineage->FindChild(State::ChildId{ cID });
+        }
+
+        for (const auto& [cID, preRec] : preChildren) {
+            const auto* postRec = postSnap.lineage ? postSnap.lineage->FindChild(State::ChildId{ cID }) : nullptr;
             if (!postRec) {
                 continue;
             }
             const auto gDiff = Utils::DiffGuardianSets(
                 preRec.guardians.slotA.raw(), preRec.guardians.slotB.raw(),
                 postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
-            if (!gDiff.changed) {
+            const bool paternityCleared =
+                (preRec.paternitySecret.HasActiveSecret() && !postRec->paternitySecret.HasActiveSecret()) ||
+                (preRec.presumedFather != postRec->presumedFather);
+            if (!gDiff.changed && !paternityCleared) {
                 continue;
             }
-            if (!preRec.guardians.slotA.IsNull()) {
-                spousesToRefresh.insert(preRec.guardians.slotA.raw());
-            }
-            if (!preRec.guardians.slotB.IsNull()) {
-                spousesToRefresh.insert(preRec.guardians.slotB.raw());
-            }
-            if (!postRec->guardians.slotA.IsNull()) {
-                spousesToRefresh.insert(postRec->guardians.slotA.raw());
-            }
-            if (!postRec->guardians.slotB.IsNull()) {
-                spousesToRefresh.insert(postRec->guardians.slotB.raw());
-            }
 
-            SyncChildHouseholdState(
-                cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
-            UpdateChildBothParentsFaction(cID);
-            SendChildEvent(
-                "guardians_changed", cID,
-                postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(),
-                0, "marriage_custody_sync");
-            GetUiBridgeGateway().OnChildUpdated(*postRec);
-        }
-        for (const RE::FormID sp : spousesToRefresh) {
-            if (sp != 0 && !Utils::MatchesActor(sp, kPlayerFormID)) {
-                UpdateSpouseChildrenFaction(sp);
-            }
-        }
-    }
-
-    void LineageUseCases::EvaluateChildCustodyOnMarriage(RE::FormID actorA, RE::FormID actorB) {
-        if (actorA == 0 || actorB == 0) {
-            return;
-        }
-        const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
-        std::unordered_map<RE::FormID, State::ChildRecord> preChildren;
-        for (const auto& [k, v] : preSnap->lineage->AllChildren()) {
-            preChildren.emplace(k.raw(), v);
-        }
-
-        std::unordered_set<RE::FormID> skippedChildIds;
-        if (Utils::MatchesActor(actorA, kPlayerFormID) || Utils::MatchesActor(actorB, kPlayerFormID)) {
-            const RE::FormID spouseID = Utils::MatchesActor(actorA, kPlayerFormID) ? actorB : actorA;
-            DispatchPlayerSpouseMarriageAdoptions(spouseID, skippedChildIds);
-        }
-
-        auto meta = CaptureWorldActorMetadata(preSnap, { actorA, actorB });
-        State::WorldMutationResult mut{};
-        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            mut = ws.EvaluateCustodyOnMarriage(State::ActorId{ actorA }, State::ActorId{ actorB }, *meta);
-        });
-
-        if (mut.changed) {
-            const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
-            for (const auto& [cID, preRec] : preChildren) {
-                if (skippedChildIds.contains(cID)) {
-                    continue;
-                }
-                const auto* postRec = postSnap->lineage->FindChild(State::ChildId{ cID });
-                if (!postRec) {
-                    continue;
-                }
-                const auto gDiff = Utils::DiffGuardianSets(
-                    preRec.guardians.slotA.raw(), preRec.guardians.slotB.raw(),
-                    postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
-                if (!gDiff.changed) {
-                    continue;
-                }
-                SyncChildHouseholdState(
-                    cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
+            if (gDiff.changed) {
                 UpdateChildBothParentsFaction(cID);
+                if (postRec->stage != Foundation::ChildStage::Unborn &&
+                    postRec->stage != Foundation::ChildStage::Adult) {
+                    const RE::FormID childHouseID =
+                        postSnap.household ? postSnap.household->GetTenantHouse(cID).raw() : 0;
+                    if (postRec->guardians.HasGuardian(State::ActorId::Player())) {
+                        if (childHouseID != 0) {
+                            SyncChildHouseholdState(
+                                cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(), childHouseID);
+                        } else {
+                            // Step-child with unhoused spouse remains in spouse's home until spouse is housed.
+                            UpdateNonPlayerChildPackageOverride(cID);
+                            if (!IsSyntheticId(cID)) {
+                                FactionReconciler::GetSingleton().ReconcileActor(cID);
+                            }
+                        }
+                    } else {
+                        SyncChildHouseholdState(
+                            cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
+                    }
+                }
                 SendChildEvent(
                     "guardians_changed", cID,
                     postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(),
-                    0, "marriage_custody");
-                GetUiBridgeGateway().OnChildUpdated(*postRec);
+                    gDiff.PrimaryRemoved().raw(), "marriage");
             }
-            if (!Utils::MatchesActor(actorA, kPlayerFormID)) {
-                UpdateSpouseChildrenFaction(actorA);
-            }
-            if (!Utils::MatchesActor(actorB, kPlayerFormID)) {
-                UpdateSpouseChildrenFaction(actorB);
-            }
-            GetUiBridgeGateway().SendOverviewData();
+
+            GetUiBridgeGateway().OnChildUpdated(*postRec);
         }
+
+        if (!Utils::MatchesActor(actorA, kPlayerFormID)) {
+            UpdateSpouseChildrenFaction(actorA);
+        }
+        if (!Utils::MatchesActor(actorB, kPlayerFormID)) {
+            UpdateSpouseChildrenFaction(actorB);
+        }
+        GetUiBridgeGateway().SendOverviewData();
     }
 
     void LineageUseCases::HandleDivorceCustodySideEffects(
@@ -1446,6 +1324,7 @@ namespace MARAS::App {
         const RE::FormID formerSpouseID = Utils::MatchesActor(actorA, kPlayerFormID)
             ? actorB
             : (Utils::MatchesActor(actorB, kPlayerFormID) ? actorA : 0);
+        std::unordered_set<RE::FormID> extraSpousesToRefresh;
 
         for (const auto& [cID, preRec] : preChildren) {
             const auto* postRec = postSnap.lineage->FindChild(State::ChildId{ cID });
@@ -1464,9 +1343,30 @@ namespace MARAS::App {
             }
 
             if (gDiff.changed) {
-                SyncChildHouseholdState(
-                    cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
                 UpdateChildBothParentsFaction(cID);
+                if (postRec->guardians.HasGuardian(State::ActorId::Player())) {
+                    const RE::FormID newCoSpouse = postRec->guardians.OtherGuardian(State::ActorId::Player()).raw();
+                    const RE::FormID childHouseID =
+                        postSnap.household ? postSnap.household->GetTenantHouse(cID).raw() : 0;
+                    if (newCoSpouse != 0 && postSnap.household) {
+                        extraSpousesToRefresh.insert(newCoSpouse);
+                        if (childHouseID != 0 && postSnap.household->GetTenantHouse(newCoSpouse).raw() == childHouseID) {
+                            HouseholdEngineOps::GetSingleton().UpdateSpouseHomeMarker(newCoSpouse, childHouseID);
+                            FactionReconciler::GetSingleton().ReconcileActor(newCoSpouse);
+                            PackageReconciler::GetSingleton().ReconcileActor(newCoSpouse);
+                            GetUiBridgeGateway().SendNPCDetail(newCoSpouse);
+                        }
+                    }
+                    SyncChildHouseholdState(
+                        cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(), childHouseID);
+                    if (childHouseID != 0 && !IsSyntheticId(cID)) {
+                        PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(
+                            cID, childHouseID, true);
+                    }
+                } else {
+                    SyncChildHouseholdState(
+                        cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
+                }
                 const RE::FormID removedOther =
                     !gDiff.PrimaryRemoved().IsNull() ? gDiff.PrimaryRemoved().raw() : formerSpouseID;
                 SendChildEvent(
@@ -1516,6 +1416,11 @@ namespace MARAS::App {
         if (!Utils::MatchesActor(actorB, kPlayerFormID)) {
             UpdateSpouseChildrenFaction(actorB);
         }
+        for (const RE::FormID sp : extraSpousesToRefresh) {
+            if (sp != 0 && !Utils::MatchesActor(sp, kPlayerFormID)) {
+                UpdateSpouseChildrenFaction(sp);
+            }
+        }
 
         if (!Utils::MatchesActor(actorA, kPlayerFormID)) {
             PaternityWorkflowCoordinator::GetSingleton().EvaluateBioFatherStepIn(actorA, actorB);
@@ -1550,82 +1455,6 @@ namespace MARAS::App {
         }
     }
 
-    void LineageUseCases::SyncAllMarriedCouplesChildCustody() {
-        const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
-        std::unordered_set<RE::FormID> skippedChildIds;
-        for (const auto& key : preSnap->relationships->GetAdjacentPairs(State::ActorId::Player())) {
-            const auto* edge = preSnap->relationships->FindEdge(key);
-            if (!edge || edge->status != Foundation::RelationshipStatus::Married) {
-                continue;
-            }
-            const RE::FormID spouseID = key.Other(State::ActorId::Player()).raw();
-            DispatchPlayerSpouseMarriageAdoptions(spouseID, skippedChildIds);
-        }
-
-        std::unordered_map<RE::FormID, State::ChildRecord> preChildren;
-        for (const auto& [k, v] : preSnap->lineage->AllChildren()) {
-            preChildren.emplace(k.raw(), v);
-        }
-
-        auto meta = CaptureWorldActorMetadata(preSnap);
-        auto rng = MakeEngineRng();
-        State::WorldMutationResult mut{};
-        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            mut = ws.SyncAllMarriedCouplesChildCustody(*meta, rng);
-        });
-
-        if (mut.changed) {
-            const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
-            std::unordered_set<RE::FormID> spousesToRefresh;
-            for (const auto& [cID, preRec] : preChildren) {
-                if (skippedChildIds.contains(cID)) {
-                    continue;
-                }
-                const auto* postRec = postSnap->lineage->FindChild(State::ChildId{ cID });
-                if (!postRec) {
-                    continue;
-                }
-                const auto gDiff = Utils::DiffGuardianSets(
-                    preRec.guardians.slotA.raw(), preRec.guardians.slotB.raw(),
-                    postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
-                if (!gDiff.changed) {
-                    continue;
-                }
-                if (!preRec.guardians.slotA.IsNull()) {
-                    spousesToRefresh.insert(preRec.guardians.slotA.raw());
-                }
-                if (!preRec.guardians.slotB.IsNull()) {
-                    spousesToRefresh.insert(preRec.guardians.slotB.raw());
-                }
-                if (!postRec->guardians.slotA.IsNull()) {
-                    spousesToRefresh.insert(postRec->guardians.slotA.raw());
-                }
-                if (!postRec->guardians.slotB.IsNull()) {
-                    spousesToRefresh.insert(postRec->guardians.slotB.raw());
-                }
-
-                RE::FormID childHouseID = 0;
-                if (const auto* st = postSnap->household->FindChildState(State::ChildId{ cID })) {
-                    childHouseID = st->currentHouseId.raw();
-                }
-                SyncChildHouseholdState(
-                    cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(), childHouseID);
-                UpdateChildBothParentsFaction(cID);
-                SendChildEvent(
-                    "guardians_changed", cID,
-                    postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(),
-                    0, "marriage_custody_sync");
-                GetUiBridgeGateway().OnChildUpdated(*postRec);
-            }
-            for (const RE::FormID sp : spousesToRefresh) {
-                if (sp != 0 && !Utils::MatchesActor(sp, kPlayerFormID)) {
-                    UpdateSpouseChildrenFaction(sp);
-                }
-            }
-            GetUiBridgeGateway().SendOverviewData();
-        }
-    }
-
     void LineageUseCases::HandleDeathCustodySideEffects(
         const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
         const State::WorldStateSnapshot& postSnap,
@@ -1641,7 +1470,6 @@ namespace MARAS::App {
             if (!postRec) {
                 // Unborn fetus died with deceased mother
                 if (preRec.stage == Foundation::ChildStage::Unborn) {
-                    ClearMarriageAdoptionPending(cID);
                     OnChildRemovedFromHousehold(cID);
                     if (!preRec.guardians.slotA.IsNull()) {
                         spousesToRefresh.insert(preRec.guardians.slotA.raw());
@@ -1707,7 +1535,14 @@ namespace MARAS::App {
                     SyncChildHouseholdState(
                         cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(), targetHouseID);
                     if (targetHouseID != 0) {
-                        HouseholdUseCases::GetSingleton().RelocateFamilyUnit(cID, targetHouseID, false);
+                        HouseholdUseCases::GetSingleton().RelocateFamilyUnit(cID, targetHouseID, true);
+                        if (!IsSyntheticId(cID)) {
+                            PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(
+                                cID, targetHouseID, true);
+                        }
+                        HouseholdEngineOps::GetSingleton().UpdateSpouseHomeMarker(reassignedSpouse, targetHouseID);
+                        PackageReconciler::GetSingleton().ReconcileActor(reassignedSpouse);
+                        GetUiBridgeGateway().SendNPCDetail(reassignedSpouse);
                     }
                     spousesToRefresh.insert(reassignedSpouse);
                     SendChildEvent(
@@ -3336,7 +3171,6 @@ namespace MARAS::App {
 
         // 3. Engine, SkyrimNet & UI cleanup outside lock
         if (wasYoungChild) {
-            ClearMarriageAdoptionPending(victimId);
             OnChildRemovedFromHousehold(victimId);
             ClearAdoptableFactionDirect(victimId);
             RemoveChildSandboxAroundParentLinkedRef(victimId);
@@ -3360,7 +3194,6 @@ namespace MARAS::App {
         }
 
         if (wasAdultChild) {
-            ClearMarriageAdoptionPending(victimId);
             OnChildRemovedFromHousehold(victimId);
             HouseholdUseCases::GetSingleton().UnregisterAdultChild(victimId);
             if (!IsSyntheticId(victimId)) {
