@@ -10,6 +10,7 @@
 #include "maras/bridge_skyrimnet/SkyrimNetDecisions.h"
 #include "maras/bridge_skyrimnet/SkyrimNetEventService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetMemoryService.h"
+#include "maras/domain/lineage/ChildProfileGuidance.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
@@ -999,49 +1000,21 @@ namespace MARAS::Bridge::SkyrimNet {
                     if (effectiveChildBioFatherID != 0 &&
                         effectiveChildBioFatherID != MARAS::kUnknownFatherFormID) {
                         const bool isGuard = asChild.guardians.HasGuardian(asChild.perceivedBioFather);
-                        std::string bioFatherRole;
-                        if (hasPaternitySecret) {
-                            if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                                bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity; Presumed Father Also Unaware)";
-                            } else if (!partnerKnowsPaternity && bioFatherKnowsPaternity) {
-                                bioFatherRole = "True Biological Father (Paternity Secret — Secretly Knows Truth; Presumed Father Unaware)";
-                            } else if (partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                                bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity; Presumed Father Knows)";
-                            } else {
-                                bioFatherRole = isGuard
-                                    ? "True Biological Father & Household Guardian (Paternity Known to Both Fathers)"
-                                    : "True Biological Father (Paternity Known to Both Fathers)";
-                            }
-                        } else if (isSingleMotherSecretFromBioFather) {
-                            bioFatherRole = "True Biological Father (Paternity Secret — Unaware of Paternity)";
-                        } else {
-                            bioFatherRole = isGuard
-                                ? "Biological Father & Household Guardian"
-                                : "Biological Father (Non-Custodial)";
-                        }
+                        const std::string bioFatherRole = MARAS::Domain::Lineage::ComputeBioFatherRoleLabel(
+                            isGuard,
+                            hasPaternitySecret,
+                            isSingleMotherSecretFromBioFather,
+                            partnerKnowsPaternity,
+                            bioFatherKnowsPaternity);
                         addBioGenAdult(
                             effectiveChildBioFatherID, "bio_father", bioFatherRole, isGuard, bioFatherKnowsPaternity);
                     }
                     if (hasPresumedFather) {
                         const bool isGuard = asChild.guardians.HasGuardian(asChild.presumedFather);
-                        std::string presFatherRole;
-                        if (!partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                            presFatherRole = isGuard
-                                ? "Presumed Father & Household Guardian (Believes Child Is Biologically His; Bio Father Also Unaware)"
-                                : "Presumed Father (Believes Child Is Biologically His; Bio Father Also Unaware)";
-                        } else if (!partnerKnowsPaternity && bioFatherKnowsPaternity) {
-                            presFatherRole = isGuard
-                                ? "Presumed Father & Household Guardian (Believes Child Is Biologically His; Bio Father Secretly Knows)"
-                                : "Presumed Father (Believes Child Is Biologically His; Bio Father Secretly Knows)";
-                        } else if (partnerKnowsPaternity && !bioFatherKnowsPaternity) {
-                            presFatherRole = isGuard
-                                ? "Presumed Father & Household Guardian (Knows Child Was Fathered by Bio Father; Bio Father Unaware)"
-                                : "Former Presumed Father / Mother's Partner (Knows Child Was Fathered by Bio Father; Non-Custodial; Bio Father Unaware)";
-                        } else {
-                            presFatherRole = isGuard
-                                ? "Presumed Father & Household Guardian / Step-Father Figure (Both Fathers Know True Paternity)"
-                                : "Former Presumed Father / Mother's Partner (Both Fathers Know True Paternity; Non-Custodial)";
-                        }
+                        const std::string presFatherRole = MARAS::Domain::Lineage::ComputePresumedFatherRoleLabel(
+                            isGuard,
+                            partnerKnowsPaternity,
+                            bioFatherKnowsPaternity);
                         addBioGenAdult(
                             presFatherID, "presumed_father", presFatherRole, isGuard, partnerKnowsPaternity);
                     }
@@ -1055,6 +1028,15 @@ namespace MARAS::Bridge::SkyrimNet {
                 }
                 parentage["bio_generation_adults"] = std::move(bioGenAdults);
                 parentage["recent_events_participants"] = std::move(recentEventsParticipants);
+                const std::int64_t maxEventAgeSec = MARAS::Domain::Lineage::ComputeChildRecentEventsMaxAgeSeconds(
+                    asChild.isBiologicalChild,
+                    asChild.isAdopted,
+                    asChild.birthTimestamp,
+                    asChild.timestamp,
+                    currentDay);
+                if (maxEventAgeSec > 0) {
+                    parentage["recent_events_max_age_seconds"] = maxEventAgeSec;
+                }
 
                 j["parents"] = std::move(parentage);
             }

@@ -690,6 +690,7 @@ namespace MARAS::App {
                     ws.household.Write().EvictTenant(synthFormID);
                     ws.household.Write().EraseChildState(synthKey);
                     ws.household.Write().EraseChildFactionSnapshot(synthKey);
+                    ws.household.Write().EraseAdultChildTravel(synthKey);
                 }
             }
             lineageW.UpsertChild(rec);
@@ -1213,11 +1214,16 @@ namespace MARAS::App {
         if (rec->stage == Foundation::ChildStage::Adult) {
             OnChildRemovedFromHousehold(childID);
             if (!IsSyntheticId(childID)) {
-                RemoveChildSandboxAroundParentLinkedRef(childID);
-                PackageReconciler::GetSingleton().ReconcileActor(childID);
+                if (!HouseholdUseCases::GetSingleton().AssignOrUpdateDestination(childID, false)) {
+                    RemoveChildSandboxAroundParentLinkedRef(childID);
+                    PackageReconciler::GetSingleton().ReconcileActor(childID);
+                }
+            } else {
+                HouseholdUseCases::GetSingleton().UnregisterAdultChild(childID);
             }
             return;
         }
+        HouseholdUseCases::GetSingleton().UnregisterAdultChild(childID);
         if (rec->stage == Foundation::ChildStage::Unborn) {
             return;
         }
@@ -1250,6 +1256,12 @@ namespace MARAS::App {
             Utils::MatchesActor(actorA, kPlayerFormID) || Utils::MatchesActor(actorB, kPlayerFormID);
         if (playerInvolved) {
             const RE::FormID spouseID = Utils::MatchesActor(actorA, kPlayerFormID) ? actorB : actorA;
+            if (spouseID != 0 && postSnap.lineage) {
+                if (const auto* adultChildRec = postSnap.lineage->FindChild(State::ChildId{ spouseID });
+                    adultChildRec && adultChildRec->stage == Foundation::ChildStage::Adult) {
+                    HouseholdUseCases::GetSingleton().UnregisterAdultChild(spouseID);
+                }
+            }
             if (spouseID != 0 && postSnap.household) {
                 const RE::FormID postSpouseHouse = postSnap.household->GetTenantHouse(spouseID).raw();
                 if (postSpouseHouse != 0) {
@@ -1324,6 +1336,12 @@ namespace MARAS::App {
         const RE::FormID formerSpouseID = Utils::MatchesActor(actorA, kPlayerFormID)
             ? actorB
             : (Utils::MatchesActor(actorB, kPlayerFormID) ? actorA : 0);
+        if (formerSpouseID != 0 && postSnap.lineage) {
+            if (const auto* adultChildRec = postSnap.lineage->FindChild(State::ChildId{ formerSpouseID });
+                adultChildRec && adultChildRec->stage == Foundation::ChildStage::Adult) {
+                HouseholdUseCases::GetSingleton().AssignOrUpdateDestination(formerSpouseID, false);
+            }
+        }
         std::unordered_set<RE::FormID> extraSpousesToRefresh;
 
         for (const auto& [cID, preRec] : preChildren) {
@@ -1627,12 +1645,20 @@ namespace MARAS::App {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
         if (!rec) {
+            HouseholdUseCases::GetSingleton().UnregisterAdultChild(childID);
             ChildSpawnService::GetSingleton().RemoveChildSandboxAroundParentLinkedRef(childID);
             PackageReconciler::GetSingleton().UnregisterActor(childID);
             return;
         }
-        if (rec->stage == Foundation::ChildStage::Adult ||
-            rec->guardians.HasGuardian(State::ActorId::Player())) {
+        if (rec->stage == Foundation::ChildStage::Adult) {
+            if (!HouseholdUseCases::GetSingleton().AssignOrUpdateDestination(childID, false)) {
+                ChildSpawnService::GetSingleton().RemoveChildSandboxAroundParentLinkedRef(childID);
+                PackageReconciler::GetSingleton().ReconcileActor(childID);
+            }
+            return;
+        }
+        HouseholdUseCases::GetSingleton().UnregisterAdultChild(childID);
+        if (rec->guardians.HasGuardian(State::ActorId::Player())) {
             ChildSpawnService::GetSingleton().RemoveChildSandboxAroundParentLinkedRef(childID);
             PackageReconciler::GetSingleton().ReconcileActor(childID);
             return;

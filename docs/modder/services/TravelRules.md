@@ -11,15 +11,15 @@ Autonomous travel for graduated Stage 4 (`ChildStage::Adult`) children is split 
 
 ## Travel Eligibility
 
-An adult child is travel-eligible (`IsTravelEligibleAdultChild`) only when **all** of the following hold:
+Shared pure eligibility rules in `TravelRules` (`domain_household`) govern tick evaluation, destination assignment, tenant removal, and load recovery. An adult child is travel-eligible only when **all** of the following hold:
 
-1. `childID` is non-null and non-synthetic (`!IsSyntheticChildRawId`).
-2. `lineage` contains the record with `stage == ChildStage::Adult`.
-3. The actor is living (`!IsDeceased`).
-4. The actor is not registered as a tenant in any player home (`GetTenantHouse(childID).IsNull()`).
-5. The actor is not married to the Player (`RelationshipStatus::Married` stops travel).
+1. The identifier is non-null and non-synthetic (`0xFF700000..0xFF7FFFFF` synthetic records are excluded).
+2. `LineageTable` contains the record at `ChildStage::Adult`.
+3. The actor is living (absent from `DeceasedTable`).
+4. The actor is not registered as a tenant in any player home.
+5. The actor is not married to the Player (`RelationshipStatus::Married` suppresses travel).
 
-Ineligible adults found inside `AllAdultChildTravel` are evicted during `TickAdultChildTravel` or `AssignOrUpdateDestination` and have their `PackageReconciler` override stripped.
+Ineligible adults found inside `AllAdultChildTravel` (including deceased, housed, or newly Player-married Stage 4 actors) are evicted during `TickAdultChildTravel`, `ReassertAllTravelOnLoad`, or `AssignOrUpdateDestination` and have their `PackageReconciler` override stripped. Conversely, when a Stage 4 adult divorces the Player or is removed from a player house, they regain travel eligibility and receive an independent destination.
 
 ---
 
@@ -53,7 +53,8 @@ flowchart LR
 ```
 
 - **Two-Pass Arrival Detection**: Static inn markers far away or unindexed in `SpatialActorSnapshot` may not have full 3D/sample parity on every frame; therefore `TickAdultChildTravel` evaluates `SpatialActorSnapshot` inside `WorldStore::Modify` and then inspects unloaded/static markers via `HasActorReachedTravelDestination` *outside* both `WorldStore::Modify` and `travelMutex_` before committing newly arrived timestamps.
-- **Custody Cleanup on Assignment**: Whenever a Stage 4 adult receives a fresh travel destination (`AssignOrUpdateDestination`), `HouseholdUseCases` invokes `LineageUseCases::OnChildRemovedFromHousehold(childID)` so lingering Hearthfire/child household custody flags are cleared before `PackageReconciler::ReconcileActor(childID)` applies `AdultChildTravel` (`0xDD3`).
+- **Unassigned Adult Discovery**: On each evaluation tick, `EvaluateTravelTick` also scans `LineageTable` (and any existing travel record with a null target marker) to surface unassigned eligible Stage 4 adults—such as newly spawned adult children, adults divorced from the Player, or adults evicted from a player house—so `TickAdultChildTravel` assigns their initial destination without waiting for a save reload.
+- **Custody Cleanup on Assignment**: Whenever a Stage 4 adult receives a fresh travel destination (`AssignOrUpdateDestination`), `HouseholdUseCases` invokes `LineageUseCases::OnChildRemovedFromHousehold(childID)` only when lingering young-child household state, tenancy, or `'CFSN'` faction snapshots are present, avoiding redundant `PackageReconciler` unregister churn on 2–4 day rotations while still ensuring lingering Hearthfire custody flags clear before `PackageReconciler::ReconcileActor(childID)` applies `AdultChildTravel` (`0xDD3`).
 
 ---
 

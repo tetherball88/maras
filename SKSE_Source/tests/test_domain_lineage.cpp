@@ -1,6 +1,7 @@
 #include "TestHarness.h"
 
 #include "maras/domain/lineage/ChildGrowthRules.h"
+#include "maras/domain/lineage/ChildProfileGuidance.h"
 #include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/domain/lineage/FertilityRules.h"
 #include "maras/domain/lineage/LineageRules.h"
@@ -967,6 +968,176 @@ namespace MARAS::Tests {
         MARAS_CHECK(remPlayer.changed);
         MARAS_CHECK(ws.lineage.Read().FindChild(cid)->guardians.IsSoleGuardian(spouseB));
         MARAS_CHECK(ws.household.Read().GetTenantHouse(cid.raw()).IsNull());
+    }
+
+    MARAS_TEST(DomainLineage, ChildProfileGuidanceTimeCompressionAndExPartnerIsolation) {
+        // 1. Stage 2 Child raised by Serana & Bjorn (no presumed father):
+        //    Enforces gameplay time-compression, scopes Involved Parties strictly to Serana and Bjorn,
+        //    excludes uninvolved ex-partners, and omits Presumed Father rules.
+        {
+            ChildProfileGuidanceInput input;
+            input.stage = ChildStage::Child;
+            input.childName = "Alfhild";
+            input.raceName = "Nord";
+            input.isFemale = true;
+            input.isBiologicalChild = true;
+            input.motherName = "Serana";
+            input.motherRace = "Nord";
+            input.motherIsGuardian = true;
+            input.bioFatherName = "Bjorn";
+            input.bioFatherRace = "Nord";
+            input.bioFatherIsGuardian = true;
+            input.guardianAName = "Serana";
+            input.guardianBName = "Bjorn";
+            input.homeLocationName = "Proudspire Manor";
+
+            const std::string guidance = BuildChildProfileGenerationGuidance(input);
+            MARAS_CHECK(guidance.find("## Narrative Time & Gameplay Time-Compression Rules (CRITICAL)") != std::string::npos);
+            MARAS_CHECK(guidance.find("gameplay time-scale abstractions") != std::string::npos);
+            MARAS_CHECK(guidance.find("grew up rapidly in a single day") != std::string::npos);
+            MARAS_CHECK(guidance.find("magical or supernatural growth anomaly") != std::string::npos);
+            MARAS_CHECK(guidance.find("lacks memories of infancy") != std::string::npos);
+
+            MARAS_CHECK(guidance.find("## Scope of Involved Parties & Exclusion of Uninvolved Ex-Partners (CRITICAL)") != std::string::npos);
+            MARAS_CHECK(guidance.find("Serana and Bjorn") != std::string::npos);
+            MARAS_CHECK(guidance.find("Exclude Uninvolved Ex-Partners") != std::string::npos);
+            MARAS_CHECK(guidance.find("stepfather, stepmother, or guardian") != std::string::npos);
+            MARAS_CHECK(guidance.find("Stale Parent Bio Warning") != std::string::npos);
+            MARAS_CHECK(guidance.find("post-birth household interactions") != std::string::npos);
+
+            MARAS_CHECK(guidance.find("**Presumed Father (Mother's Partner)**") == std::string::npos);
+            MARAS_CHECK(guidance.find("Upbringing Impact**:") == std::string::npos);
+            MARAS_CHECK(guidance.find("Paternity Secret & Knowledge Permutation Rules") == std::string::npos);
+        }
+
+        // 2. Active paternity secret permutations & role labels when presumed father IS involved
+        {
+            const std::string bioRoleUnawareBoth =
+                ComputeBioFatherRoleLabel(false, true, false, false, false);
+            const std::string bioRoleBioKnows =
+                ComputeBioFatherRoleLabel(false, true, false, false, true);
+            const std::string bioRolePartnerKnows =
+                ComputeBioFatherRoleLabel(false, true, false, true, false);
+            const std::string bioRoleBothKnowGuard =
+                ComputeBioFatherRoleLabel(true, true, false, true, true);
+            const std::string bioRoleSingleSecret =
+                ComputeBioFatherRoleLabel(false, false, true, true, false);
+
+            MARAS_CHECK(bioRoleUnawareBoth.find("Unaware of Paternity; Presumed Father Also Unaware") != std::string::npos);
+            MARAS_CHECK(bioRoleBioKnows.find("Secretly Knows Truth; Presumed Father Unaware") != std::string::npos);
+            MARAS_CHECK(bioRolePartnerKnows.find("Unaware of Paternity; Presumed Father Knows") != std::string::npos);
+            MARAS_CHECK(bioRoleBothKnowGuard.find("Household Guardian (Paternity Known to Both Fathers)") != std::string::npos);
+            MARAS_CHECK(bioRoleSingleSecret.find("Paternity Secret — Unaware of Paternity") != std::string::npos);
+
+            const std::string presRoleUnaware =
+                ComputePresumedFatherRoleLabel(true, false, false);
+            const std::string presRoleBioKnows =
+                ComputePresumedFatherRoleLabel(true, false, true);
+            const std::string presRolePartnerKnowsNonGuard =
+                ComputePresumedFatherRoleLabel(false, true, false);
+            const std::string presRoleBothKnowGuard =
+                ComputePresumedFatherRoleLabel(true, true, true);
+
+            MARAS_CHECK(presRoleUnaware.find("Believes Child Is Biologically His; Bio Father Also Unaware") != std::string::npos);
+            MARAS_CHECK(presRoleBioKnows.find("Believes Child Is Biologically His; Bio Father Secretly Knows") != std::string::npos);
+            MARAS_CHECK(presRolePartnerKnowsNonGuard.find("Non-Custodial; Bio Father Unaware") != std::string::npos);
+            MARAS_CHECK(presRoleBothKnowGuard.find("Step-Father Figure (Both Fathers Know True Paternity)") != std::string::npos);
+
+            ChildProfileGuidanceInput secInput;
+            secInput.stage = ChildStage::Child;
+            secInput.childName = "Bryn";
+            secInput.isFemale = false;
+            secInput.isBiologicalChild = true;
+            secInput.motherName = "Ysolda";
+            secInput.motherIsGuardian = true;
+            secInput.bioFatherName = "Mikael";
+            secInput.presumedFatherName = "Nazeem";
+            secInput.presumedFatherIsGuardian = true;
+            secInput.motherPresumedRelStatus = "Married";
+            secInput.guardianAName = "Ysolda";
+            secInput.guardianBName = "Nazeem";
+            secInput.hasPresumedFather = true;
+            secInput.hasPaternitySecret = true;
+
+            // Permutation 1: Neither knows
+            secInput.partnerKnowsPaternity = false;
+            secInput.bioFatherKnowsPaternity = false;
+            const std::string p1 = BuildChildProfileGenerationGuidance(secInput);
+            MARAS_CHECK(p1.find("**Presumed Father (Mother's Partner)**: Nazeem") != std::string::npos);
+            MARAS_CHECK(p1.find("Ysolda, Mikael, and Nazeem") != std::string::npos);
+            MARAS_CHECK(p1.find("NEITHER Presumed Father (Nazeem) NOR Biological Father (Mikael) Knows") != std::string::npos);
+
+            // Permutation 2: Only bio father knows
+            secInput.partnerKnowsPaternity = false;
+            secInput.bioFatherKnowsPaternity = true;
+            const std::string p2 = BuildChildProfileGenerationGuidance(secInput);
+            MARAS_CHECK(p2.find("ONLY Biological Father (Mikael) Knows; Presumed Father (Nazeem) Does NOT Know") != std::string::npos);
+
+            // Permutation 3: Only presumed father knows
+            secInput.partnerKnowsPaternity = true;
+            secInput.bioFatherKnowsPaternity = false;
+            const std::string p3 = BuildChildProfileGenerationGuidance(secInput);
+            MARAS_CHECK(p3.find("ONLY Presumed Father (Nazeem) Knows; Biological Father (Mikael) Does NOT Know") != std::string::npos);
+
+            // Permutation 4: Both know
+            secInput.partnerKnowsPaternity = true;
+            secInput.bioFatherKnowsPaternity = true;
+            const std::string p4 = BuildChildProfileGenerationGuidance(secInput);
+            MARAS_CHECK(p4.find("BOTH Presumed Father (Nazeem) AND Biological Father (Mikael) Know") != std::string::npos);
+        }
+
+        // 3. Stage 4 Adult with Beastblood & pack training: multi-year framing + adult lycanthropy guidance
+        {
+            ChildProfileGuidanceInput adultInput;
+            adultInput.stage = ChildStage::Adult;
+            adultInput.childName = "Skorri";
+            adultInput.isFemale = false;
+            adultInput.isBiologicalChild = true;
+            adultInput.hasBeastblood = true;
+            adultInput.trainedInWerewolfPack = true;
+            adultInput.trainingLocation = "Glenmoril Cove";
+            adultInput.trainingClassName = "Pack Hunter";
+            adultInput.trainingDescription = "Honed predatory instincts with the pack.";
+            adultInput.motherName = "Aela";
+            adultInput.motherIsGuardian = true;
+            adultInput.bioFatherName = "Dragonborn";
+            adultInput.bioFatherIsGuardian = true;
+            adultInput.guardianAName = "Aela";
+            adultInput.guardianBName = "Dragonborn";
+
+            const std::string guidance = BuildChildProfileGenerationGuidance(adultInput);
+            MARAS_CHECK(guidance.find("GROWN YOUNG ADULT son") != std::string::npos);
+            MARAS_CHECK(guidance.find("a full childhood followed by years of adolescent training into young adulthood") != std::string::npos);
+            MARAS_CHECK(guidance.find("**Completed Adolescent Training**: Pack Hunter training at Glenmoril Cove") != std::string::npos);
+            MARAS_CHECK(guidance.find("**LYCANTHROPY / HIRCINE'S BEASTBLOOD**") != std::string::npos);
+            MARAS_CHECK(guidance.find("honed through pack training at Glenmoril Cove") != std::string::npos);
+        }
+
+        // 4. ComputeChildRecentEventsMaxAgeSeconds boundaries & sentinels
+        {
+            // Biological child: 1.0 day + 120s buffer = 86520s
+            MARAS_CHECK_EQ(
+                ComputeChildRecentEventsMaxAgeSeconds(true, false, 10.5f, 10, 11.5f),
+                std::int64_t{ 86520 });
+
+            // Adopted child without birthTimestamp: uses registeredTimestampDays + 120s buffer
+            MARAS_CHECK_EQ(
+                ComputeChildRecentEventsMaxAgeSeconds(false, true, 0.0f, 10, 12.0f),
+                std::int64_t{ 172920 });
+
+            // Unset timestamps -> 0 sentinel
+            MARAS_CHECK_EQ(
+                ComputeChildRecentEventsMaxAgeSeconds(true, false, 0.0f, 0, 20.0f),
+                std::int64_t{ 0 });
+            MARAS_CHECK_EQ(
+                ComputeChildRecentEventsMaxAgeSeconds(false, true, 0.0f, 0, 20.0f),
+                std::int64_t{ 0 });
+
+            // Clock earlier than birth/registration -> 0 sentinel
+            MARAS_CHECK_EQ(
+                ComputeChildRecentEventsMaxAgeSeconds(true, false, 15.0f, 15, 14.0f),
+                std::int64_t{ 0 });
+        }
     }
 
 }  // namespace MARAS::Tests

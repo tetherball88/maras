@@ -1,0 +1,79 @@
+{% if render_mode == "ttm_child_parent_bio" %}
+#### Summary
+{{ render_character_profile("bio_summary", actorUUID) }}
+#### Background
+{{ render_character_profile("bio_background", actorUUID) }}
+#### Personality
+{{ render_character_profile("bio_personality", actorUUID) }}
+#### Appearance
+{{ render_character_profile("bio_appearance", actorUUID) }}
+#### Occupation
+{{ render_character_profile("bio_occupation", actorUUID) }}
+#### Skills & Abilities
+{{ render_character_profile("bio_skills", actorUUID) }}
+{% if ttm_is_registered(actorUUID) %}
+{% set _p = ttm_npc_relationship_profile(actorUUID) %}
+{% set _npcName = decnpc(actorUUID).name %}
+{% set _spouses = [] %}
+{% set _fiancees = [] %}
+{% set _datingPartners = [] %}
+{% set _lovers = [] %}
+{% if existsIn(_p, "current_relationships") %}
+{% for rel in _p.current_relationships %}
+{% if not (existsIn(rel, "is_secret_affair") and rel.is_secret_affair) %}
+{% if rel.status == "married" %}
+{% set _spouses = append(_spouses, rel.partner.name) %}
+{% elif rel.status == "engaged" %}
+{% set _fiancees = append(_fiancees, rel.partner.name) %}
+{% elif rel.status == "dating" %}
+{% set _datingPartners = append(_datingPartners, rel.partner.name) %}
+{% elif rel.status == "lover" %}
+{% set _lovers = append(_lovers, rel.partner.name) %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% set _coSpouses = [] %}
+{% if existsIn(_p, "player_relationship_status") and _p.player_relationship_status == "married" and existsIn(_p, "player_co_partners") %}
+{% for rel in _p.player_co_partners %}
+{% if existsIn(rel, "player_relationship_status") and rel.player_relationship_status == "married" %}
+{% set _coSpouses = append(_coSpouses, rel.person.name) %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% set _hasFamily = existsIn(_p, "family") and length(_p.family) > 0 %}
+{% set _hasCurrentStatus = _hasFamily or length(_spouses) > 0 or length(_fiancees) > 0 or length(_datingPartners) > 0 or length(_lovers) > 0 or length(_coSpouses) > 0 %}
+{% if _hasCurrentStatus %}
+#### Current Family & Household Status
+Note: Live household and marital status below supersedes any outdated spouse, partner, or faction mentions in {{_npcName}}'s older prose blocks above.
+{% if length(_spouses) > 0 %}
+{{_npcName}} is currently married to {{join(_spouses, ", ")}}.
+{% endif %}
+{% if length(_fiancees) > 0 %}
+{{_npcName}} is currently engaged to {{join(_fiancees, ", ")}}.
+{% endif %}
+{% if length(_datingPartners) > 0 %}
+{{_npcName}} is currently dating {{join(_datingPartners, ", ")}}.
+{% endif %}
+{% if length(_lovers) > 0 %}
+{{_npcName}} is currently lovers with {{join(_lovers, ", ")}}.
+{% endif %}
+{% if length(_coSpouses) > 0 %}
+{{_npcName}} and {{join(_coSpouses, ", ")}} share a marriage to {{player.name}} as co-spouses.
+{% endif %}
+{% if _hasFamily %}
+{% for group in _p.family %}
+{% if existsIn(group, "other_parent") %}
+{{_npcName}} and {{group.other_parent.name}} are co-parenting {{group.children_names_summary}}.
+{% else %}
+{{_npcName}} is raising {{group.children_names_summary}} as a single parent.
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+
+#### Memories
+{{ render_character_profile("bio_long_term_memories", actorUUID) }}
+{% include "submodules/character_bio/7100_memories.prompt" %}
+{% endif %}

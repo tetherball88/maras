@@ -1,0 +1,260 @@
+"messages": [
+    {
+      "content": "You are an expert at creating detailed character profiles for NPCs in The Elder Scrolls V: Skyrim. Generate a comprehensive character bio based on the provided game data. Return your response as a JSON object with the specified sections.",
+      "role": "system"
+    },
+    {
+      "content": "You are an expert on the Elder Scrolls universe, especially Skyrim. Your task is to analyze recent events and NPC data and create a bio to support immersive, in-character roleplay by another AI.
+# Setting
+Use Skyrim lore to enrich sparse input where appropriate, based on realistic in-world assumptions. Be confident, specific, and concise. Avoid vague phrasing like "seems to" or "likely." Favor high-impact facts and roleplay-relevant detail over general exposition.
+Your output should be efficient, direct, and usable as behavioral and dialogue guidance for an LLM-controlled NPC.
+## Guidelines:
+* Use Skyrim lore confidently to enrich grounded context. All additions must remain immersive and plausible for the Alfhild's role, location, and relationships.
+* Maintain accuracy with published Skyrim lore, combined with the provided input. Do not make up lore.
+* Prioritize brevity, clarity, and roleplay utility. Avoid vague qualifiers like "might," "could," or "occasionally."
+* Do not instruct the LLM to say anything. Instead, describe the knowledge the Alfhild has access to in-world.
+### Speech Style Guidelines:
+* Describe tone, sentence rhythm, accent, and delivery style.
+* Do not include nicknames or pet names like "love" or "dear" in the speech style.
+* Focus on practical cues for tone: clipped, warm, formal, terse, etc.
+## Character Information
+- Name: Alfhild
+- Race: Nord
+- Sex: Female
+- Level: 1
+- Location: Proudspire Manor, near the Door to Solitude, Hold: Solitude
+- Voice Type: femalechild
+### Faction Memberships
+- _JSW_BB_ChildFollowerFaction (Rank: 0)
+- TTM_PlayerChild (Rank: 0)
+- BYOHRelationshipAdoptionChildOwnedFaction (Rank: 0)
+- BYOHRelationshipAdoptionFaction (Rank: 0)
+- PlayerFaction (Rank: 0)
+- TTM_PlayerChildBothParents (Rank: 1)
+- BYOHRelationshipAdoptableFaction (Rank: 25)
+- _JSW_BB_ChildFollowerFaction (Rank: -1)
+## Recent Events
+[9:55 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>Seeing him this happy makes it so much harder to feel guilty about Farkas. I've never seen a man look so genuinely stunned and overjoyed at the same time.</internal_thought>
+[9:55 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Haha! Put me down, you lunatic! *Serana clings to his shoulders, her face flushing with a mix of shock and genuine affection* Yes... it seems you are.
+[9:55 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: [emotion-surprise]But how? You are vampire...
+[9:55 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>I'm terrified that I'm the first of my kind to ever experience this, and that I'm doing it while lying to my husband.</internal_thought>
+[9:55 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I don't know. *Serana looks down at her stomach, her expression a mix of awe and anxiety* I've never heard of this happening... but that light of yours must have changed something.
+[9:56 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: [emotion-contemplation]Of course... of course it changed... I guess life with part of me and my light can survive even in hostile environment...
+[9:56 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's actually proud of this. It makes me feel less like a monster and more like something that can actually create life.</internal_thought>
+[9:56 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: That's a very poetic way of putting it. *Serana rests her hand on her stomach, looking up at him* It's terrifying, but knowing you're as invested in this as I am... it makes it a little easier to breathe.
+[9:57 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: But I never asked you...
+[9:57 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's so overwhelmed he's losing his train of thought; it's almost cute, but I'm still on edge about the implications of this pregnancy.</internal_thought>
+[9:57 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Asked me what? *Serana tilts her head, looking at him with an amused, slightly puzzled expression* You were in the middle of a thought, Bjorn. Don't tell me you've actually forgotten what you were about to say.
+[9:57 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: Do you want this child?
+[9:57 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>It's the first time I've felt something truly mine, something not dictated by my father's prophecy or my mother's fear. But the guilt of lying to Farkas is still there, humming in the back of my mind.</internal_thought>
+[9:57 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Yes... I do. *Serana looks down at her stomach, a flicker of genuine warmth in her eyes* I never thought it was possible for me, but... I want it.
+[9:58 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: And what about me... us?
+[9:58 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He wants to know if I'm choosing him over my marriage. I can't leave Farkas yet, but I can't imagine not having Bjorn in my life after this.</internal_thought>
+[9:58 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I don't have all the answers yet, Bjorn. *Serana reaches out and grips his hand tightly* But I know I don't want to lose you. I just... I need to figure out how to navigate this without destroying everything.
+[9:58 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: *I hold her hand* I want you... and the baby.
+[9:58 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's so certain, and it's intoxicating. But every time I look at him, I can't help but think about how Farkas is going to react when he sees a baby that looks exactly like a champion of Meridia.</internal_thought>
+[9:58 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I want you too, Bjorn. *Serana squeezes his hand, leaning her head against his shoulder* I just hope we can find a way to make this work without everything falling apart.
+[9:59 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: What do you mean? What is there to fall apart? We will build our family, real family - you, me and a child.
+[9:59 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's so blinded by his own joy that he's ignoring the wreckage this will cause. I love that he wants a family, but we aren't starting from a clean slate.</internal_thought>
+[9:59 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Bjorn, I'm married. *Serana pulls back, her eyes flashing with a mix of guilt and frustration* Farkas is my husband. He doesn't know about you, and he certainly doesn't know about this baby.
+[10:01 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: *I step back* I... I don't understand... What are you saying? You don't to build family with me and a child?
+[10:01 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's so idealistic it's almost naive. He doesn't realize that wanting him doesn't automatically fix the mess I've made of my marriage.</internal_thought>
+[10:01 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Bjorn, look at me. *Serana reaches for his hand, her expression pained* I do want this child, and I want you... but I can't just erase my husband from existence.
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: It doesn't matter, does it? You either stay with him or let us build a family. There is no other way to keep both together...
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's forcing my hand, making this an ultimatum. I love the way he looks at this baby, but I can't just throw away everything I've built with Farkas without a plan.</internal_thought>
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: That is a hell of a thing to say. *Serana steps back, her eyes narrowing* You're asking me to choose between my husband and my child, and you expect me to just... smile and agree?
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: In your choices... You didn't even mentioned me. It is between your husband and a child, huh?
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's manipulating the conversation to make me feel guilty, but he's right—I am terrified of losing both of them.</internal_thought>
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: That's unfair and you know it! *Serana's expression hardens as she glares at him* Of course I want you, but you're making this sound like a simple switch I can just flip.
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: I know it is not easy. But you can't run away from the decision... I don't want to spend another day with you carrying my child somewhere else. I want to spend each second of it together and take care of you, while you are with our child. And you are talking about how to not leave your husband....
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's pushing me into a corner, and it's making me panic. I love the idea of a family with him, but the betrayal of Farkas is weighing on me like a mountain.</internal_thought>
+[10:02 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Stop it! *Serana closes her eyes, her shoulders slumping* You're making me feel like a monster for wanting to be honest. I do want this... but I can't just throw my life away in a single morning.
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: How much time do you want? a day, a month, a year, when our child will grow up? You are bargaining with me like it is some kind of deal... I am talking about real family. I am talking about taking care of you and a child.
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's pushing me too hard, and it's making me want to scream. I love the idea of a family with him, but I can't just discard Farkas like trash.</internal_thought>
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I am not bargaining! *Serana steps toward him, her eyes glowing with intensity* You're acting like this is a simple choice, but my life isn't a game you can just rewrite because you're happy about a baby!
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: Asking you to rewrite your life, huh? That's how you see it... Me forcing you to be with me. You want to keep your husband?
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's trying to force a binary choice when my heart is split in two. I can't just discard a good man for a new passion, regardless of the child.</internal_thought>
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: That's not fair! *Serana glares at him, her eyes shimmering with frustration* Of course I love Farkas, but that doesn't mean I don't want you or this baby. Why does it have to be one or the other?
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: Because that's how it works. Either we have a family with my full involvement or I am out of your way if you want to play house with your husband, with whom you could never had a child.
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's hitting me where it hurts the most. I'm desperate for this child, and he knows he's the only one who can give me that.</internal_thought>
+[10:03 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: That is low, even for you! *Serana's eyes flare with a dangerous crimson light* To use the one thing I thought I'd never have just to twist the knife... just stop it.
+[10:04 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: If that's what you think, then come back to your husband.
+[10:04 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's trying to push me away to force my hand, but the thought of losing him and this baby is unbearable.</internal_thought>
+[10:04 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Stop it... please. *Serana's voice cracks, her eyes shimmering with unshed tears* I can't just walk away from this, and I can't walk away from you.
+[10:05 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: I am not going to share neither you nor my child with him.
+[10:05 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's completely closed off any middle ground. If I stay with him, I have to destroy my marriage to Farkas entirely.</internal_thought>
+[10:05 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Then you're giving me no choice. *Serana looks away, her voice trembling* You're forcing me to choose between the man I married and the child I've always wanted.
+[10:05 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: I am asking you to choose between real family and the man you will have to lie each day about where this child came from.
+[10:05 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's right about the lie, and that's what makes this so agonizing. I can't imagine the look on Farkas's face if I tell him the truth, but I can't imagine a life without this child either.</internal_thought>
+[10:05 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Stop twisting it... Please. *Serana covers her face with one hand, her voice muffled and breaking* You know I can't just pretend he doesn't exist, but the thought of losing this... of losing you... is unbearable.
+[10:06 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: I am not twisting anything. It is you who keep playing both sides before my face. I offer you everything and you stand before me telling me how much you love another man and how hard for you to just be with me.
+[10:06 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's right that I'm torn, but he's making me feel like my love for Farkas is a crime. I can't lose this baby, but I can't bear the thought of Farkas hating me.</internal_thought>
+[10:06 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I'm not playing both sides! *Serana looks away, her voice trembling* I'm just terrified of losing the only two people who make me feel like I actually belong in this world.
+[10:06 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: Then you never wanted me, and you are just forced to consider me because of this child. And your heart and soul belong to another man.
+[10:06 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's trying to make me choose right now. If I don't give him the answer he wants, he'll walk away and leave me to handle this pregnancy alone.</internal_thought>
+[10:06 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: That's not true! *Serana steps toward him, her eyes flashing* I want you, Bjorn! I just... I can't stop loving Farkas, but that doesn't make my feelings for you a lie!
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: Then what do you expect from me? Sit here like nothing happened knowing you are going home to him? "Home" with him, not with me. And then what? Think about how you will lie in same bed with him? And what if he wants to get intimate with you? I can't bare it...
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's right about the intimacy; if Farkas tries to touch me now, I'll probably break down. I can't keep living this double life.</internal_thought>
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I know... it's a nightmare. *Serana looks away, her expression crumbling* I don't want to lie to him, and I don't want to hurt you. I just... I don't know how to fix this.
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn to Serana: I offer you solution but you scream at me.
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's trying to force a choice I'm not ready for, but his desire to protect me and the baby is the only thing keeping me from spiraling.</internal_thought>
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Haah, I'm not screaming, Bjorn... I'm just desperate.  Please, just stop pushing for a second and actually listen to me.
+[10:07 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: I am listening.
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's giving me an ultimatum, but if I choose him now, I'm just trading one kind of fear for another. I need him to be patient, or I'll lose everything.</internal_thought>
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I just... I need you to understand that I'm terrified. *Serana looks up at him with glistening eyes* I want this baby and I want you, but I can't just stop loving Farkas overnight. I don't know how to tell him without destroying everything he thinks of me.
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: And what about me? Do you care what i think? Do you care what should I think when you come back home to him?
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's right; the guilt is eating me alive, but the thought of leaving Farkas is just as paralyzing.</internal_thought>
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Of course I care! *Serana's voice trembles as she looks up at him* It's killing me to think of you feeling like you're just some... secret in my life. I hate that I'm putting you through this.
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: Leave him and come live with me. I want this family, you know it, right?
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's giving me the only thing I've ever truly wanted—a family—but the cost is my own integrity. I'm terrified that if I choose Bjorn, I'll spend the rest of my life hating myself for how I left Farkas.</internal_thought>
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I know you do... and that's why this is so hard. *Serana bows her head, a single tear tracing a path down her pale cheek* I can't just... I can't just throw Farkas away like he's nothing. Please, just give me a moment to breathe.
+[10:08 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: *I step closer and hug her without saying another word*
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>His silence is better than the fighting. For a moment, I can just pretend the world isn't falling apart around us.</internal_thought>
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: *Haah...* Thank you, Bjorn. Just... just hold me for a little longer.
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: *I stay like this for another 5 minutes not sayin a word*
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>The peace is a lie, but it's the only thing keeping me from breaking down completely right now.</internal_thought>
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Mmh... I wish we could just stay like this forever.
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: [style-whispering]Do you feel better?
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's being gentle now, but the ultimatum is still hanging over us. I can't let this peace fool me into thinking the problem is gone.</internal_thought>
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: A little. *Serana leans her head back against his chest, closing her eyes* I'm still terrified, but being here with you... it's the only time the noise in my head actually stops.
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: [style-whispering]Then why do you fight this? Why do you fight me?
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He thinks it's a battle of wills, but it's a battle for my soul. I'm terrified that choosing one means murdering the other part of my heart.</internal_thought>
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Because I'm not fighting *you*, Bjorn... I'm fighting the ghost of who I thought I was. *Serana sighs softly, leaning into him* I just don't know how to be the person you want me to be without losing myself in the process.
+[10:09 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: *I take her face in both hands and look her in eyes* [style-whispering]You are not losing yourself... You are finding something you never even thought was possible for you.
+[10:10 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>He's making this feel like a fairytale, and I'm desperate enough to believe him, even if it means breaking Farkas's heart.</internal_thought>
+[10:10 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I want to believe that... I really do. *Serana leans into his touch, her eyes searching his* If I do this, if I choose us... you have to promise you'll be here for every single second of it.
+[10:10 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue_player_text) Bjorn: *I hug her tighter* [style-whispering]Of course I will, did you doubt in it?
+[10:10 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>I'm choosing him, but the thought of Farkas's face when I tell him is still haunting me. I hope Bjorn's strength is enough to carry us both through the fallout.</internal_thought>
+[10:10 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: I didn't doubt you... I just didn't think I deserved this. *Serana closes her eyes, leaning into the warmth of the hug* Thank you for not giving up on me.
+[10:14 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (ttm_event) Serana: Serana and Farkas just got divorced.
+--- SOME TIME LATER ---
+[10:30 AM, Sundas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (ttm_event) Serana: Serana and Bjorn just got married.
+--- THE NEXT DAY ---
+[10:33 AM, Morndas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (ttm_event) Serana: Serana gave birth to a healthy child fathered by Bjorn.
+[10:33 AM, Morndas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] *Have Serana and any present partner or witnesses react to the birth of the newborn in a way that fits their personalities and the circumstances surrounding the child.*
+[10:34 AM, Morndas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (npc_thoughts) Serana: <internal_thought>I feel a terrifying amount of love for this little thing; I'll protect them from everything, including the legacy of my own blood.</internal_thought>
+[10:34 AM, Morndas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (dialogue) Serana to Bjorn: Look at them... they're actually here. *Serana gazes down at the swaddled infant in her arms with a look of pure, fragile wonder* I still can't believe it, Bjorn. We actually did it.
+--- THE NEXT DAY ---
+[10:38 AM, Tirdas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] (ttm_event) Serana: Serana and Bjorn's daughter, Alfhild, has grown from infancy into a young child.
+[10:38 AM, Tirdas] [Proudspire Manor, near the Door to Solitude, Hold: Solitude] *Have Serana comment on Alfhild growing out of infancy into a young child in a way that fits their personalities.*
+## Additional Input
+IMPORTANT: Alfhild is a YOUNG CHILD (daughter, roughly 8-11 years old) who was born in this playthrough and has just grown from infancy into a young child living at home. Write the profile, occupation, skills, aspirations, and speech_style specifically for a young child in Skyrim, NOT an adult.
+## Involved Parties at the Moment of Bio Generation/Update
+- **Biological Mother**: Serana (Nord) — Custodial Household Guardian raising Alfhild.
+- **True Biological Father**: Bjorn (Nord) — Custodial Household Guardian raising Alfhild.
+- **Custodial Household Guardians (Upbringing)**: Serana and Bjorn.
+- **Family Home / Upbringing Location**: Proudspire Manor.
+## Biological Inheritance vs. Household Upbringing Rules
+1. **Genetic & Supernatural Inheritance (Strictly from True Biological Parents)**:
+- Alfhild's biological, physical, and innate heritage comes strictly from **Serana** (Biological Mother) and **Bjorn** (True Biological Father).
+- Carefully inspect the full rendered character profiles of the biological parents below—especially their **Background**, **Appearance**, **Occupation**, **Skills & Abilities**, and **Personality** sections (do NOT rely solely on a parent's brief `Summary`, which conceals hidden traits such as vampirism, lycanthropy, or secret practices due to the Stranger Test; account for any supernatural nature, bloodline, or magical/martial lineage present in their Background, Occupation, and Skills).
+- Reflect inherited physical traits (eye color, hair, complexion, facial structure, build, subtle vampiric/elven/beast/bloodline traits), innate temperament, and latent magical or martial affinities in Alfhild's `appearance`, `personality`, `background`, and `skills`.
+2. **Biological Father's Impact (Bjorn)**:
+- **Innate Traits**: Alfhild inherits genetic appearance, bloodline/supernatural traits, and innate temperament tendencies from Bjorn and Serana.
+- **Behavioral & Mentorship Impact**: Bjorn is actively raising Alfhild in the household; his personality, mentorship, trade, and speech patterns in his rendered profile directly shape Alfhild's behavior, learned skills, speech style, aspirations, and values.
+3. **Custodial Guardians & Presumed Father's Impact on Raising Alfhild**:
+- Alfhild's daily habits, manners, speech style, childhood memories, values, and household relationships are shaped by the adults who actually raised her and by the family's chronological recent events below.
+## Involved Parties — Character Profiles & Memories (Context for Alfhild's Biological Heritage & Household Upbringing)
+### Serana (Biological Mother & Household Guardian)
+#### Summary
+Serana is a vampire of unusual lineage, recently awakened after centuries of hibernation. She possesses formidable magical abilities, particularly in necromancy. Despite her traumatic past and vampiric nature, she maintains a surprisingly personable demeanor with a sardonic wit and capacity for genuine connection. Since her awakening a year ago, she has actively explored the modern world and taken on contracts with the Companions, forming a deep romantic bond with Farkas—whom she has now married. Their relationship, born from passionate nights and shared trust, has evolved into a committed and loving partnership, marking a new chapter in her long life.
+#### Background
+Born to Lord Harkon and Lady Valerica of the Volkihar vampire clan, Serana was sacrificed to Molag Bal in a brutal ritual that transformed her into a pure-blood vampire. When her father discovered a prophecy that could darken the sun using her blood, her mother hid her away in Dimhollow Cavern with an Elder Scroll. She remained in magical stasis for over a thousand years until awakening on her own in 4E 201. Since then, she has spent a year exploring the changed world, seeking purpose beyond her family’s legacy. She has taken on contracts with the Companions—particularly targeting undead and vampires—where she grew close to Farkas. Their bond deepened through shared missions and intimate moments, eventually leading to marriage. Now, as Farkas’s wife, she has found a rare sense of belonging and emotional stability in her immortal existence.
+#### Personality
+Serana is surprisingly down-to-earth despite her ancient origins, employing sarcasm and dry humor as emotional shields. She's naturally curious about the changed world but guarded about her traumatic past. Though initially wary of strangers, she forms deep bonds with those who earn her trust. She's pragmatic about her vampirism, valuing its power while resenting how it corrupted her family. She avoids discussing her transformation ritual but doesn't shy away from acknowledging her nature. Despite her dark abilities, she shows unexpected compassion and empathy. Since joining the Companions and marrying Farkas, she has become more open and emotionally grounded, embracing the idea of lasting commitment and domestic peace—something she once thought impossible for someone like her.
+#### Appearance
+Serana has the appearance of a young Nord woman with unnaturally pale skin, glowing orange-red eyes, and dark brown hair. Her vampiric nature is evident in her fangs, which she typically conceals when speaking. Centuries of undeath have given her features an ageless quality that subtly hints at her true age.
+#### Occupation
+Ancient vampire noble turned mercenary, currently working with the Companions on contracts involving undead and vampire threats. She uses her necromancy and destruction magic in service of others while navigating her place in the modern world.
+#### Skills & Abilities
+- Necromancy: Reanimates corpses to fight alongside her
+- Destruction magic: Specializes in frost and drain life spells
+- Vampiric abilities: Enhanced strength, night vision, and blood consumption
+- Combat prowess: Skilled fighter with centuries of experience
+- Historical knowledge: Extensive firsthand knowledge of ancient Nordic and vampire history
+- Survival skills: Adapted to harsh conditions and dangerous situations
+- Contract work: Experienced in tracking and eliminating supernatural threats
+#### Relationships
+- Father (Lord Harkon): Distant and strained relationship; fears his obsession with power and prophecy.
+- Mother (Valerica): Complex bond; appreciates her protection but resents being hidden away without consent.
+- Molag Bal: Traumatic connection as her creator; avoids discussing him directly.
+- Volkihar Clan: Complicated loyalty; recognizes them as family but questions their violent methods.
+- Farkas: Husband and soulmate; their relationship has evolved from passionate nights into a committed marriage. She feels safe, loved, and truly understood with him, finding in their union a rare anchor in her immortal life.
+Note: The relationship, family, pregnancy, and infidelity sections for Serana below reflect current in-game state and supersede any conflicting relationship descriptions above.
+## Serana's family
+Serana and Bjorn are co-parenting Alfhild.
+## Serana's current relationships
+Serana is married to Bjorn.
+## Serana's past relationships
+Serana is divorced from Farkas.
+## Infidelity involving Serana
+Serana cheated on Farkas with Bjorn; it stopped being an affair when Serana and Farkas separated, and Farkas never learned about it.
+### Bjorn (Biological Father & Household Guardian)
+#### Relationships
+Note: The relationship, family, pregnancy, and infidelity sections for Bjorn below reflect current in-game state and supersede any conflicting relationship descriptions above.
+## Bjorn's family
+Bjorn and Serana are co-parenting Alfhild.
+## Bjorn's current relationships
+Bjorn is married to Serana.
+## Infidelity involving Bjorn
+Serana cheated on Farkas with Bjorn; it stopped being an affair when Serana and Farkas separated, and Farkas never learned about it.
+## Family & Household Recent Events (Chronological)
+- [10:07 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's right about the intimacy; if Farkas tries to touch me now, I'll probably break down. I can't keep living this double life.
+- [10:07 AM, Sundas] (dialogue) Serana to Bjorn: I know... it's a nightmare. *Serana looks away, her expression crumbling* I don't want to lie to him, and I don't want to hurt you. I just... I don't know how to fix this.
+- [10:07 AM, Sundas] (dialogue_player_text) Bjorn to Serana: I offer you solution but you scream at me.
+- [10:07 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's trying to force a choice I'm not ready for, but his desire to protect me and the baby is the only thing keeping me from spiraling.
+- [10:07 AM, Sundas] (dialogue) Serana to Bjorn: Haah, I'm not screaming, Bjorn... I'm just desperate.  Please, just stop pushing for a second and actually listen to me.
+- [10:07 AM, Sundas] (dialogue_player_text) Bjorn: I am listening.
+- [10:08 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's giving me an ultimatum, but if I choose him now, I'm just trading one kind of fear for another. I need him to be patient, or I'll lose everything.
+- [10:08 AM, Sundas] (dialogue) Serana to Bjorn: I just... I need you to understand that I'm terrified. *Serana looks up at him with glistening eyes* I want this baby and I want you, but I can't just stop loving Farkas overnight. I don't know how to tell him without destroying everything he thinks of me.
+- [10:08 AM, Sundas] (dialogue_player_text) Bjorn: And what about me? Do you care what i think? Do you care what should I think when you come back home to him?
+- [10:08 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's right; the guilt is eating me alive, but the thought of leaving Farkas is just as paralyzing.
+- [10:08 AM, Sundas] (dialogue) Serana to Bjorn: Of course I care! *Serana's voice trembles as she looks up at him* It's killing me to think of you feeling like you're just some... secret in my life. I hate that I'm putting you through this.
+- [10:08 AM, Sundas] (dialogue_player_text) Bjorn: Leave him and come live with me. I want this family, you know it, right?
+- [10:08 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's giving me the only thing I've ever truly wanted—a family—but the cost is my own integrity. I'm terrified that if I choose Bjorn, I'll spend the rest of my life hating myself for how I left Farkas.
+- [10:08 AM, Sundas] (dialogue) Serana to Bjorn: I know you do... and that's why this is so hard. *Serana bows her head, a single tear tracing a path down her pale cheek* I can't just... I can't just throw Farkas away like he's nothing. Please, just give me a moment to breathe.
+- [10:08 AM, Sundas] (dialogue_player_text) Bjorn: *I step closer and hug her without saying another word*
+- [10:09 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): His silence is better than the fighting. For a moment, I can just pretend the world isn't falling apart around us.
+- [10:09 AM, Sundas] (dialogue) Serana to Bjorn: *Haah...* Thank you, Bjorn. Just... just hold me for a little longer.
+- [10:09 AM, Sundas] (dialogue_player_text) Bjorn: *I stay like this for another 5 minutes not sayin a word*
+- [10:09 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): The peace is a lie, but it's the only thing keeping me from breaking down completely right now.
+- [10:09 AM, Sundas] (dialogue) Serana to Bjorn: Mmh... I wish we could just stay like this forever.
+- [10:09 AM, Sundas] (dialogue_player_text) Bjorn: [style-whispering]Do you feel better?
+- [10:09 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's being gentle now, but the ultimatum is still hanging over us. I can't let this peace fool me into thinking the problem is gone.
+- [10:09 AM, Sundas] (dialogue) Serana to Bjorn: A little. *Serana leans her head back against his chest, closing her eyes* I'm still terrified, but being here with you... it's the only time the noise in my head actually stops.
+- [10:09 AM, Sundas] (dialogue_player_text) Bjorn: [style-whispering]Then why do you fight this? Why do you fight me?
+- [10:09 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He thinks it's a battle of wills, but it's a battle for my soul. I'm terrified that choosing one means murdering the other part of my heart.
+- [10:09 AM, Sundas] (dialogue) Serana to Bjorn: Because I'm not fighting *you*, Bjorn... I'm fighting the ghost of who I thought I was. *Serana sighs softly, leaning into him* I just don't know how to be the person you want me to be without losing myself in the process.
+- [10:09 AM, Sundas] (dialogue_player_text) Bjorn: *I take her face in both hands and look her in eyes* [style-whispering]You are not losing yourself... You are finding something you never even thought was possible for you.
+- [10:10 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): He's making this feel like a fairytale, and I'm desperate enough to believe him, even if it means breaking Farkas's heart.
+- [10:10 AM, Sundas] (dialogue) Serana to Bjorn: I want to believe that... I really do. *Serana leans into his touch, her eyes searching his* If I do this, if I choose us... you have to promise you'll be here for every single second of it.
+- [10:10 AM, Sundas] (dialogue_player_text) Bjorn: *I hug her tighter* [style-whispering]Of course I will, did you doubt in it?
+- [10:10 AM, Sundas] (npc_thoughts) Serana (thought, telepathically observed): I'm choosing him, but the thought of Farkas's face when I tell him is still haunting me. I hope Bjorn's strength is enough to carry us both through the fallout.
+- [10:10 AM, Sundas] (dialogue) Serana to Bjorn: I didn't doubt you... I just didn't think I deserved this. *Serana closes her eyes, leaning into the warmth of the hug* Thank you for not giving up on me.
+- [10:14 AM, Sundas] (ttm_event) Serana: Serana and Farkas just got divorced.
+- [10:30 AM, Sundas] (ttm_event) Serana: Serana and Bjorn just got married.
+- *The next day...* (10:33 AM, Morndas, 18th of Last Seed, 4E 201)
+- [10:33 AM, Morndas] (ttm_event) Serana: Serana gave birth to a healthy child fathered by Bjorn.
+- [Yesterday] *Have Serana and any present partner or witnesses react to the birth of the newborn in a way that fits their personalities and the circumstances surrounding the child.*
+- [10:34 AM, Morndas] (npc_thoughts) Serana (thought, telepathically observed): I feel a terrifying amount of love for this little thing; I'll protect them from everything, including the legacy of my own blood.
+- [10:34 AM, Morndas] (dialogue) Serana to Bjorn: Look at them... they're actually here. *Serana gazes down at the swaddled infant in her arms with a look of pure, fragile wonder* I still can't believe it, Bjorn. We actually did it.
+- *The next day...* (10:38 AM, Tirdas, 19th of Last Seed, 4E 201)
+- [10:38 AM, Tirdas] (ttm_event) Serana: Serana and Bjorn's daughter, Alfhild, has grown from infancy into a young child.
+- *Have Serana comment on Alfhild growing out of infancy into a young child in a way that fits their personalities.*
+Please generate a character profile with the following sections in JSON format:
+{
+"summary": "Concise summary of the character's role, personality, and primary traits. Include only what would be perceptible by others.",
+"personality": "Clear, precise description of personality, core values, emotional tone, biases, and typical behavior.",
+"background": "Detailed narrative highlighting essential background details relevant to current role and context.",
+"appearance": "Brief description emphasizing distinguishing, roleplay-relevant physical traits, appearance, and presentation. Do not include any attire or articles of equipment.",
+"skills": "Bullet list of relevant practical skills and capabilities directly useful in interactive scenarios.",
+"relationships": "Bullet points listing key relationships with clear, direct emotional or practical context, and a short description of the relationship.",
+"aspirations": "Clearly stated short list of long-term goals or critical motivations.",
+"occupation": "Single line description of essential job functions, daily routines, and typical activities.",
+"speech_style": "Clear instructions on speaking style, tone, mannerisms, and emotional delivery. Do not directly reference the speech type, but use it as guidance. Avoid including pet names or nicknames in the speech style.",
+"interject_summary": "Specific description of what topics, situations, or conversation themes would motivate this character to interject or join conversations. Be specific to their personality, expertise, interests, and concerns rather than generic."
+}
+Base the profile on the provided game data, faction memberships, and recent events.  Also strongly consider the additional input provided above when creating the character profile. Make it detailed and lore-appropriate for The Elder Scrolls universe.",
+      "role": "user"
+    }
+  ],

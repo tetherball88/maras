@@ -342,6 +342,122 @@ namespace MARAS::Tests {
         MARAS_CHECK_EQ(tick2.childrenNeedingRotation.size(), std::size_t{ 3 });
     }
 
+    MARAS_TEST(DomainHousehold, TravelEligibilityAndUnassignedAdultDiscovery) {
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+
+        const ChildId newlySpawnedAdult{ 0x00038501u };
+        const ChildId nullMarkerAdult{ 0x00038502u };
+        const ChildId youngChild{ 0x00038503u };
+        const ChildId syntheticAdult{ 0xFF700002u };
+        const ChildId deceasedAdult{ 0x00038504u };
+        const ChildId housedAdult{ 0x00038505u };
+        const ChildId marriedAdult{ 0x00038506u };
+
+        auto addChild = [&](ChildId cid, ChildStage stage) {
+            ChildRecord r{};
+            r.childId = cid;
+            r.stage = stage;
+            ws.lineage.Write().UpsertChild(std::move(r));
+        };
+        addChild(newlySpawnedAdult, ChildStage::Adult);
+        addChild(nullMarkerAdult, ChildStage::Adult);
+        addChild(youngChild, ChildStage::Child);
+        addChild(syntheticAdult, ChildStage::Adult);
+        addChild(deceasedAdult, ChildStage::Adult);
+        addChild(housedAdult, ChildStage::Adult);
+        addChild(marriedAdult, ChildStage::Adult);
+
+        const HouseId house{ 0x00038600u };
+        MARAS_REQUIRE(ApplyRegisterHouse(ws, house, RefId{ 0x00038601u }, true));
+        MARAS_REQUIRE(ApplyRegisterTenant(ws, housedAdult.raw(), house, true, false));
+        (void)ws.TransitionRelationship(
+            ActorId{ marriedAdult.raw() },
+            ActorId::Player(),
+            RelationshipStatus::Married,
+            1.0f,
+            ActorId::Player(),
+            meta);
+
+        DeceasedActorRecord deadRec{};
+        deadRec.refId = RefId{ deceasedAdult.raw() };
+        deadRec.baseId = BaseId{ 0x00038650u };
+        deadRec.deathTimestamp = 5.0f;
+        ws.deceased.Write().UpsertRecord(std::move(deadRec));
+
+        ws.household.Write().UpsertAdultChildTravel(deceasedAdult, AdultChildTravelRecord{
+            .targetMarkerId = RefId{ 0x00038701u },
+            .assignedGameDay = 4.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+        ws.household.Write().UpsertAdultChildTravel(nullMarkerAdult, AdultChildTravelRecord{
+            .targetMarkerId = RefId{},
+            .assignedGameDay = 0.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+
+        const auto snap1 = ws.Snapshot();
+        MARAS_CHECK(IsTravelEligibleAdultChild(ws, newlySpawnedAdult));
+        MARAS_CHECK(IsTravelEligibleAdultChild(snap1, newlySpawnedAdult));
+        MARAS_CHECK(IsTravelEligibleAdultChild(ws, nullMarkerAdult));
+        MARAS_CHECK(IsTravelEligibleAdultChild(snap1, nullMarkerAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(ws, youngChild));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(snap1, youngChild));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(ws, syntheticAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(snap1, syntheticAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(ws, deceasedAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(snap1, deceasedAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(ws, housedAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(snap1, housedAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(ws, marriedAdult));
+        MARAS_CHECK(!IsTravelEligibleAdultChild(snap1, marriedAdult));
+
+        SpatialActorSnapshot spatial{};
+        const auto tick1 = EvaluateTravelTick(ws, 10.0f, spatial);
+        MARAS_REQUIRE_EQ(tick1.unregisteredInvalidAdults.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(tick1.unregisteredInvalidAdults[0], deceasedAdult);
+        MARAS_CHECK_EQ(tick1.childrenNeedingRotation.size(), std::size_t{ 0 });
+        MARAS_REQUIRE_EQ(tick1.unassignedEligibleAdults.size(), std::size_t{ 2 });
+        MARAS_CHECK_EQ(tick1.unassignedEligibleAdults[0], newlySpawnedAdult);
+        MARAS_CHECK_EQ(tick1.unassignedEligibleAdults[1], nullMarkerAdult);
+
+        // Assign valid travel records to newlySpawnedAdult & nullMarkerAdult, then divorce/evict the other two
+        ws.household.Write().UpsertAdultChildTravel(newlySpawnedAdult, AdultChildTravelRecord{
+            .targetMarkerId = RefId{ 0x00038702u },
+            .assignedGameDay = 10.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+        ws.household.Write().UpsertAdultChildTravel(nullMarkerAdult, AdultChildTravelRecord{
+            .targetMarkerId = RefId{ 0x00038703u },
+            .assignedGameDay = 10.0f,
+            .arrivedGameDay = -1.0f,
+            .stayDurationDays = 3.0f
+        });
+        (void)ws.PromoteToDivorced(
+            ActorId{ marriedAdult.raw() },
+            ActorId::Player(),
+            11.0f,
+            ActorId::Player(),
+            meta);
+        MARAS_REQUIRE(ApplyRemoveTenant(ws, housedAdult.raw()));
+
+        const auto snap2 = ws.Snapshot();
+        MARAS_CHECK(IsTravelEligibleAdultChild(ws, housedAdult));
+        MARAS_CHECK(IsTravelEligibleAdultChild(snap2, housedAdult));
+        MARAS_CHECK(IsTravelEligibleAdultChild(ws, marriedAdult));
+        MARAS_CHECK(IsTravelEligibleAdultChild(snap2, marriedAdult));
+
+        const auto tick2 = EvaluateTravelTick(ws, 11.0f, spatial);
+        MARAS_CHECK_EQ(tick2.unregisteredInvalidAdults.size(), std::size_t{ 0 });
+        MARAS_CHECK_EQ(tick2.childrenNeedingRotation.size(), std::size_t{ 0 });
+        MARAS_REQUIRE_EQ(tick2.unassignedEligibleAdults.size(), std::size_t{ 2 });
+        MARAS_CHECK_EQ(tick2.unassignedEligibleAdults[0], housedAdult);
+        MARAS_CHECK_EQ(tick2.unassignedEligibleAdults[1], marriedAdult);
+    }
+
     MARAS_TEST(DomainHousehold, DeceasedQueriesMaskSecretAffairsAndUndiscoveredPaternity) {
         WorldState ws{};
         const ActorId camilla{ 0x00039001u };

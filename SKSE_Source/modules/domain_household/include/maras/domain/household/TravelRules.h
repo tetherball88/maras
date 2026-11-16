@@ -35,7 +35,16 @@ namespace MARAS::Domain::Household {
         std::vector<ChildId> arrivedChildren{};
         std::vector<ChildId> childrenNeedingRotation{};
         std::vector<ChildId> unregisteredInvalidAdults{};
+        std::vector<ChildId> unassignedEligibleAdults{};
     };
+
+    [[nodiscard]] bool IsTravelEligibleAdultChild(
+        const State::WorldState& ws,
+        ChildId childId) noexcept;
+
+    [[nodiscard]] bool IsTravelEligibleAdultChild(
+        const State::WorldStateSnapshot& snap,
+        ChildId childId) noexcept;
 
     [[nodiscard]] std::vector<TravelDestinationCandidate> BuildFamilyVisitCandidates(
         const Projection::PerspectiveView& view,
