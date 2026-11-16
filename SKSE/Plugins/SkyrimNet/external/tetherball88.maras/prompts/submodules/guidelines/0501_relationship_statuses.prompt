@@ -1,4 +1,4 @@
-{% if render_mode == "full" %}
+{% if render_mode == "full" or render_mode == "transform" or render_mode == "thoughts" %}
     ### RELATIONSHIP STATUS SCALE (low to high commitment):
     0. Hookup  — one or a few sexual encounters, no ongoing bond, purely physical, may never repeat
     1. Lover   — recurring sexual partners, low emotional investment, NOT exclusive, NOT a couple
