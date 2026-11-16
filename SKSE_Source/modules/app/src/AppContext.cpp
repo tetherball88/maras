@@ -20,6 +20,11 @@ namespace MARAS::App {
             void HideDashboard() override {}
             bool IsDashboardVisible() const override { return false; }
             bool IsDashboardOpen() const override { return false; }
+            void RunAfterFocusReleased(std::function<void()> task) override {
+                if (task) {
+                    task();
+                }
+            }
             void Revert() override {}
             void SendOverviewData() override {}
             void SendSettingsData() override {}

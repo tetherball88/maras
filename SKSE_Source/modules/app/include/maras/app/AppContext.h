@@ -27,6 +27,7 @@ namespace MARAS::App {
         virtual void HideDashboard() = 0;
         virtual bool IsDashboardVisible() const = 0;
         virtual bool IsDashboardOpen() const = 0;
+        virtual void RunAfterFocusReleased(std::function<void()> task) = 0;
         virtual void Revert() = 0;
 
         virtual void SendOverviewData() = 0;

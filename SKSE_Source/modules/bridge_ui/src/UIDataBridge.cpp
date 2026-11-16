@@ -60,6 +60,25 @@ namespace MARAS::Bridge::Ui {
             return j.dump(indent, ' ', false, nlohmann::json::error_handler_t::replace);
         }
 
+        template <class Fn>
+        void CloseDashboardAndRunWhenFocusReleased(Fn&& fn) {
+            if (UIManager::GetSingleton().IsVisible()) {
+                UIManager::GetSingleton().Hide();
+            }
+            const auto expectedEpoch = MARAS::State::GetSessionEpoch();
+            if (!ModalManager::GetSingleton().HasActiveModal()) {
+                UIManager::GetSingleton().RunAfterFocusReleased(
+                    [expectedEpoch, cb = std::forward<Fn>(fn)]() mutable {
+                        if (!MARAS::State::IsSessionEpochCurrent(expectedEpoch)) {
+                            return;
+                        }
+                        cb();
+                    });
+            } else {
+                fn();
+            }
+        }
+
         [[nodiscard]] std::string GetJsonString(
             const nlohmann::json& j,
             std::string_view key,
@@ -2392,24 +2411,30 @@ namespace MARAS::Bridge::Ui {
                 MARAS_LOG_ERROR("[UIDataBridge] ProcessAddChild failed: child {:08X} Actor not found", childID);
                 return;
             }
-            MARAS_LOG_INFO("[UIDataBridge] Player adoption child {:08X} (spouse={:08X}, house={:08X}) -> AdoptChildGlobal",
+            MARAS_LOG_INFO("[UIDataBridge] Player adoption child {:08X} (spouse={:08X}, house={:08X}) -> AdoptChildGlobal (closing dashboard and waiting for focus release)",
                            childID, spouseID, explicitHouseID);
 
-            MARAS::DispatchPostLock([childID, spouseID, explicitHouseID]() {
-                auto* cActor = RE::TESForm::LookupByID<RE::Actor>(childID);
-                auto* spActor = (spouseID != 0 && spouseID != MARAS::Foundation::kPlayerRefRawId)
-                    ? RE::TESForm::LookupByID<RE::Actor>(spouseID)
-                    : nullptr;
-                auto* hForm = (explicitHouseID != 0) ? RE::TESForm::LookupByID(explicitHouseID) : nullptr;
-                auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-                if (!vm || !cActor) {
-                    MARAS_LOG_ERROR("[UIDataBridge] VM or child {:08X} unavailable for AdoptChildGlobal", childID);
-                    return;
-                }
-                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
-                auto args = RE::MakeFunctionArguments(std::move(cActor), std::move(spActor), std::move(hForm));
-                vm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, nullCallback);
-            }, "UIDataBridge::AdoptChildGlobal");
+            const auto expectedEpoch = MARAS::State::GetSessionEpoch();
+            CloseDashboardAndRunWhenFocusReleased([expectedEpoch, childID, spouseID, explicitHouseID]() {
+                MARAS::DispatchPostLock(
+                    expectedEpoch,
+                    [childID, spouseID, explicitHouseID]() {
+                        auto* cActor = RE::TESForm::LookupByID<RE::Actor>(childID);
+                        auto* spActor = (spouseID != 0 && spouseID != MARAS::Foundation::kPlayerRefRawId)
+                            ? RE::TESForm::LookupByID<RE::Actor>(spouseID)
+                            : nullptr;
+                        auto* hForm = (explicitHouseID != 0) ? RE::TESForm::LookupByID(explicitHouseID) : nullptr;
+                        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+                        if (!vm || !cActor) {
+                            MARAS_LOG_ERROR("[UIDataBridge] VM or child {:08X} unavailable for AdoptChildGlobal", childID);
+                            return;
+                        }
+                        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
+                        auto args = RE::MakeFunctionArguments(std::move(cActor), std::move(spActor), std::move(hForm));
+                        vm->DispatchStaticCall("TTM_ServiceChildrenLogic", "AdoptChildGlobal", args, nullCallback);
+                    },
+                    "UIDataBridge::AdoptChildGlobal");
+            });
             return;
         }
 
@@ -2537,10 +2562,18 @@ namespace MARAS::Bridge::Ui {
             childID = StringToFormID(GetJsonString(payload, "formId"));
         }
         if (childID != 0) {
-            MARAS_LOG_INFO("[UIDataBridge] Spawning synthetic child {:08X}", childID);
+            MARAS_LOG_INFO("[UIDataBridge] Spawning synthetic child {:08X}; closing dashboard and waiting for focus release",
+                           childID);
             std::string childIdStr = FormIDToString(childID);
             const float childIdFloat = static_cast<float>(static_cast<std::int32_t>(childID));
-            MARAS::EmitModCallbackEvent("maras_spawn_synthetic_child", std::move(childIdStr), childIdFloat, RE::FormID{ 0 });
+            CloseDashboardAndRunWhenFocusReleased(
+                [childIdStr = std::move(childIdStr), childIdFloat]() mutable {
+                    MARAS::EmitModCallbackEvent(
+                        "maras_spawn_synthetic_child",
+                        std::move(childIdStr),
+                        childIdFloat,
+                        RE::FormID{ 0 });
+                });
         }
     }
 
@@ -2992,6 +3025,10 @@ namespace MARAS::Bridge::Ui {
             bool IsDashboardOpen() const override {
                 const auto& mgr = UIManager::GetSingleton();
                 return mgr.IsInitialized() && mgr.IsVisible();
+            }
+
+            void RunAfterFocusReleased(std::function<void()> task) override {
+                UIManager::GetSingleton().RunAfterFocusReleased(std::move(task));
             }
 
             void Revert() override {
