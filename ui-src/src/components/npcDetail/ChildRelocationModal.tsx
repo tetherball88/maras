@@ -1,5 +1,6 @@
 import React from 'react'
-import { Home, AlertCircle, X, Check, Users, ArrowRight } from 'lucide-react'
+import { useTranslation } from '../../i18n'
+import { Home, AlertCircle, X, Check, ArrowRight } from 'lucide-react'
 
 interface ChildRelocationModalProps {
   isOpen: boolean
@@ -20,10 +21,12 @@ export const ChildRelocationModal: React.FC<ChildRelocationModalProps> = ({
   spouseName,
   otherChildrenNames,
 }) => {
+  const { t, tp } = useTranslation()
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-[1rem] animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-[1rem] animate-in fade-in duration-200">
       <div
         className="bg-panel border border-border-accent/40 rounded-xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden text-foreground-primary font-ui"
         onClick={(e) => e.stopPropagation()}
@@ -36,17 +39,17 @@ export const ChildRelocationModal: React.FC<ChildRelocationModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-accent-bright">
-                Confirm Household Relocation
+                {t('npcDetail.relocationModal.title')}
               </h2>
               <p className="text-[0.6875rem] text-foreground-muted">
-                Moving family unit to {targetHomeName}
+                {t('npcDetail.relocationModal.subtitle', { home: targetHomeName })}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer"
-            title="Cancel"
+            title={t('npcDetail.relocationModal.cancel')}
           >
             <X className="w-[1.25rem] h-[1.25rem]" />
           </button>
@@ -57,28 +60,34 @@ export const ChildRelocationModal: React.FC<ChildRelocationModalProps> = ({
           <div className="p-[0.75rem] bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 flex items-start gap-[0.625rem]">
             <AlertCircle className="w-[1.25rem] h-[1.25rem] text-amber-400 flex-shrink-0 mt-[0.125rem]" />
             <div className="space-y-[0.25rem]">
-              <span className="font-semibold block text-xs">Family Unit Relocation</span>
+              <span className="font-semibold block text-xs">
+                {t('npcDetail.relocationModal.warningTitle')}
+              </span>
               <p className="text-[0.6875rem] text-amber-200/90 leading-relaxed">
-                Relocating <span className="font-bold text-white">{childName}</span> will also move their co-parent and siblings to maintain household cohesion.
+                {t('npcDetail.relocationModal.warningBody', { childName })}
               </p>
             </div>
           </div>
 
           <div className="space-y-[0.5rem]">
             <span className="text-[0.6875rem] font-semibold text-foreground-muted uppercase tracking-wider block">
-              Affected Household Members
+              {t('npcDetail.relocationModal.affectedMembersHeader')}
             </span>
             <div className="bg-panel-inset border border-border-subtle rounded-lg p-[0.75rem] space-y-[0.5rem]">
               {/* Primary Child */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-foreground-muted">Selected Child:</span>
+                <span className="text-foreground-muted">
+                  {t('npcDetail.relocationModal.selectedChild')}
+                </span>
                 <span className="font-semibold text-accent-bright">{childName}</span>
               </div>
 
               {/* Spouse */}
               {spouseName && (
                 <div className="flex items-center justify-between text-xs pt-[0.375rem] border-t border-border-divider/50">
-                  <span className="text-foreground-muted">Co-Parent Spouse:</span>
+                  <span className="text-foreground-muted">
+                    {t('npcDetail.relocationModal.coParentSpouse')}
+                  </span>
                   <span className="font-semibold text-accent-bright">{spouseName}</span>
                 </div>
               )}
@@ -86,7 +95,9 @@ export const ChildRelocationModal: React.FC<ChildRelocationModalProps> = ({
               {/* Other Children */}
               {otherChildrenNames.length > 0 && (
                 <div className="flex items-start justify-between text-xs pt-[0.375rem] border-t border-border-divider/50">
-                  <span className="text-foreground-muted">Sibling(s):</span>
+                  <span className="text-foreground-muted">
+                    {tp('npcDetail.relocationModal.siblingsLabel', otherChildrenNames.length)}
+                  </span>
                   <div className="text-right">
                     {otherChildrenNames.map((name, i) => (
                       <div key={i} className="font-semibold text-accent-bright">{name}</div>
@@ -98,7 +109,7 @@ export const ChildRelocationModal: React.FC<ChildRelocationModalProps> = ({
               {/* Destination */}
               <div className="flex items-center justify-between text-xs pt-[0.375rem] border-t border-border-divider/50">
                 <span className="text-foreground-muted flex items-center gap-[0.25rem]">
-                  <span>New Residence:</span>
+                  <span>{t('npcDetail.relocationModal.newResidence')}</span>
                 </span>
                 <span className="font-bold text-status-success flex items-center gap-[0.25rem]">
                   <ArrowRight className="w-[0.875em] h-[0.875em]" />
@@ -115,14 +126,14 @@ export const ChildRelocationModal: React.FC<ChildRelocationModalProps> = ({
             onClick={onClose}
             className="px-[0.875rem] py-[0.375rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-foreground-secondary text-xs font-semibold transition-colors cursor-pointer"
           >
-            Cancel
+            {t('npcDetail.relocationModal.cancel')}
           </button>
           <button
             onClick={onConfirm}
             className="px-[1rem] py-[0.375rem] bg-accent hover:bg-accent-bright text-accent-contrast rounded text-xs font-bold shadow-lg shadow-accent/20 flex items-center gap-[0.375rem] transition-colors cursor-pointer"
           >
             <Check className="w-[1em] h-[1em]" />
-            <span>Confirm Relocation</span>
+            <span>{t('npcDetail.relocationModal.confirmBtn')}</span>
           </button>
         </div>
       </div>

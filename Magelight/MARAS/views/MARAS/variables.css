@@ -35,7 +35,7 @@
     /* =================================================================
      2. TYPOGRAPHY
      ================================================================= */
-    --font-ui: 'MARAS', sans-serif;
+    --font-ui: 'MARAS', 'Bahnschrift', 'Segoe UI', 'Yu Gothic UI', 'Microsoft YaHei UI', 'Malgun Gothic', sans-serif;
 
     /* Type scale — pick by role, not by eye:
      --text-xs   → footnotes, timestamps, badge counts, table captions

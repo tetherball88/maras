@@ -24,7 +24,7 @@ EndEvent
 
 Event OnPageReset(string a_page)
     SetCursorFillMode(TOP_TO_BOTTOM)
-    AddHeaderOption("M.A.R.A.S Dashboard")
+    AddHeaderOption(MARAS.TranslateKey("mcm.header"))
     string modPrefix = ""
     if (MARAS.GetSettingBool("toggleUIModCtrl"))
         modPrefix = "Ctrl"
@@ -43,12 +43,12 @@ Event OnPageReset(string a_page)
             modPrefix = "Alt"
         endif
     endif
-    string hotkeyLabel = "Dashboard Hotkey"
+    string hotkeyLabel = MARAS.TranslateKey("mcm.hotkey_label")
     if (modPrefix != "")
-        hotkeyLabel = "Dashboard Hotkey (" + modPrefix + "+)"
+        hotkeyLabel = MARAS.TranslateKey("mcm.hotkey_label_with_mods", modPrefix)
     endif
     AddKeyMapOption(hotkeyLabel, MARAS.GetSettingInt("toggleUIKey"), OPTION_FLAG_DISABLED)
-    _oidOpenDashboard = AddTextOption("Open M.A.R.A.S Dashboard", "OPEN")
+    _oidOpenDashboard = AddTextOption(MARAS.TranslateKey("mcm.open_label"), MARAS.TranslateKey("mcm.open_value"))
 EndEvent
 
 Event OnOptionSelect(int a_option)
@@ -59,6 +59,6 @@ EndEvent
 
 Event OnOptionHighlight(int a_option)
     if (a_option == _oidOpenDashboard)
-        SetInfoText("Closes this menu and opens the M.A.R.A.S Magelight UI Dashboard.")
+        SetInfoText(MARAS.TranslateKey("mcm.open_tooltip"))
     endif
 EndEvent

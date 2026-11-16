@@ -35,6 +35,8 @@ namespace MARAS::Bridge::Ui {
         // Outbound UI pushes
         void SendOverviewData();
         void SendSettingsData();
+        void SendLocaleData();
+        void SendLocaleDataOnMainThreadSafe();
         void SendNPCList();
         void SendNPCDetail(RE::FormID npcFormID);
         void SendMatchmakingData();
@@ -72,6 +74,7 @@ namespace MARAS::Bridge::Ui {
         // Game-thread push implementations
         void SendOverviewDataOnMainThread();
         void SendSettingsDataOnMainThread();
+        void SendLocaleDataOnMainThread();
         void SendNPCListOnMainThread();
         void SendNPCDetailOnMainThread(RE::FormID npcFormID);
         void SendMatchmakingDataOnMainThread();

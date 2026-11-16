@@ -45,6 +45,7 @@ endif()
 
 add_library(maras_foundation STATIC
     modules/foundation/src/EnumUtils.cpp
+    modules/foundation/src/LocalizationCatalog.cpp
     modules/foundation/src/Logging.cpp
 )
 target_compile_features(maras_foundation PUBLIC cxx_std_23)
@@ -202,6 +203,7 @@ add_library(maras_engine OBJECT
     modules/engine/src/HouseholdEngineOps.cpp
     modules/engine/src/IntimateThreadService.cpp
     modules/engine/src/JsonOverrideLoader.cpp
+    modules/engine/src/LocalizationService.cpp
     modules/engine/src/MarriageDifficultyLoader.cpp
     modules/engine/src/NamePoolLoader.cpp
     modules/engine/src/NPCIndexReportWriter.cpp
@@ -289,6 +291,7 @@ target_precompile_headers(maras_bridge_papyrus REUSE_FROM maras_pch_engine)
 add_library(maras_bridge_ui OBJECT
     modules/bridge_ui/src/ConfirmationModal.cpp
     modules/bridge_ui/src/HouseholdBuffsJsonBuilder.cpp
+    modules/bridge_ui/src/LocaleJsonBuilder.cpp
     modules/bridge_ui/src/ModalManager.cpp
     modules/bridge_ui/src/UIDataBridge.cpp
     modules/bridge_ui/src/UIManager.cpp
@@ -425,6 +428,7 @@ if(MARAS_BUILD_TESTS)
         tests/test_domain_lineage.cpp
         tests/test_domain_household.cpp
         tests/test_domain_agency.cpp
+        tests/test_localization.cpp
     )
     target_compile_features(maras_tests PRIVATE cxx_std_23)
     target_include_directories(maras_tests PRIVATE

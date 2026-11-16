@@ -1,6 +1,6 @@
 import React from 'react'
+import { useTranslation } from '../../i18n'
 import { useMarasStore } from '../../store/useMarasStore'
-import { areSameFormId } from '../../utils/statusAvailability'
 import {
   ChildProfileResidenceSection,
   ChildGuardiansSection,
@@ -20,6 +20,9 @@ export const ChildDetailBody: React.FC<ChildDetailBodyProps> = ({
   displayRace,
   isPlayerChild,
 }) => {
+  const { t, tp } = useTranslation()
+  void t
+  void tp
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const children = useMarasStore((s) => s.children)
 

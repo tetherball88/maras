@@ -1172,7 +1172,7 @@ Function SpawnSyntheticChild(int syntheticID)
 
     spawnedChild.EvaluatePackage()
 
-    Debug.Notification(spawnedChild.GetDisplayName() + " has arrived in Skyrim.")
+    MARAS.NotifyLocalized("hud.child_arrived_in_skyrim", spawnedChild.GetDisplayName())
     TTM_Debug.info("TTM_ServiceChildrenLogic: Successfully spawned young child actor " + spawnedChild.GetDisplayName() + " (FormID " + spawnedChild.GetFormID() + ") from synthetic ID " + syntheticID)
 EndFunction
 
@@ -1299,7 +1299,7 @@ Function SpawnAdultChild(int syntheticID)
 
     spawnedAdult.EvaluatePackage()
 
-    Debug.Notification(spawnedAdult.GetDisplayName() + " has arrived in Skyrim.")
+    MARAS.NotifyLocalized("hud.child_arrived_in_skyrim", spawnedAdult.GetDisplayName())
     TTM_Debug.info("TTM_ServiceChildrenLogic: Successfully spawned adult child actor " + spawnedAdult.GetDisplayName() + " (FormID " + spawnedAdult.GetFormID() + ") from synthetic ID " + syntheticID)
 EndFunction
 

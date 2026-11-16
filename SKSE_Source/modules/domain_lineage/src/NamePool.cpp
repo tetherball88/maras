@@ -107,9 +107,54 @@ namespace MARAS::Domain::Lineage {
         childLoaded_ = (!maleNames_.empty() || !femaleNames_.empty());
     }
 
+    void NamePool::OverlayChildNames(
+        const std::unordered_map<std::string, std::vector<std::string>>& maleNamesByRace,
+        const std::unordered_map<std::string, std::vector<std::string>>& femaleNamesByRace) {
+        auto overlay = [](const auto& src, auto& dst) {
+            for (const auto& [rawKey, vec] : src) {
+                const std::string key = NormalizeRaceKey(rawKey);
+                if (key.empty()) {
+                    continue;
+                }
+                std::vector<std::string> cleaned;
+                cleaned.reserve(vec.size());
+                for (const auto& name : vec) {
+                    const std::string trimmed = TrimStd(name);
+                    if (!trimmed.empty()) {
+                        cleaned.push_back(trimmed);
+                    }
+                }
+                if (!cleaned.empty()) {
+                    dst[key] = std::move(cleaned);
+                }
+            }
+        };
+
+        overlay(maleNamesByRace, maleNames_);
+        overlay(femaleNamesByRace, femaleNames_);
+
+        if (maleNamesByRace.contains("orsimer") || maleNamesByRace.contains("orc")) {
+            if (maleNames_.contains("orsimer")) {
+                maleNames_["orc"] = maleNames_["orsimer"];
+            }
+        }
+        if (femaleNamesByRace.contains("orsimer") || femaleNamesByRace.contains("orc")) {
+            if (femaleNames_.contains("orsimer")) {
+                femaleNames_["orc"] = femaleNames_["orsimer"];
+            }
+        }
+
+        childLoaded_ = (!maleNames_.empty() || !femaleNames_.empty());
+    }
+
     void NamePool::SetCritterNames(
         std::unordered_map<std::string, std::vector<std::string>> critterNamesByRace) {
         critterNames_.clear();
+        OverlayCritterNames(critterNamesByRace);
+    }
+
+    void NamePool::OverlayCritterNames(
+        const std::unordered_map<std::string, std::vector<std::string>>& critterNamesByRace) {
         for (const auto& [rawKey, vec] : critterNamesByRace) {
             std::string key = NormalizeCritterRaceKey(rawKey);
             if (key.empty()) {
@@ -118,12 +163,16 @@ namespace MARAS::Domain::Lineage {
             if (key.empty()) {
                 continue;
             }
-            auto& target = critterNames_[key];
+            std::vector<std::string> cleaned;
+            cleaned.reserve(vec.size());
             for (const auto& name : vec) {
                 const std::string trimmed = TrimStd(name);
                 if (!trimmed.empty()) {
-                    target.push_back(trimmed);
+                    cleaned.push_back(trimmed);
                 }
+            }
+            if (!cleaned.empty()) {
+                critterNames_[key] = std::move(cleaned);
             }
         }
         critterLoaded_ = !critterNames_.empty();

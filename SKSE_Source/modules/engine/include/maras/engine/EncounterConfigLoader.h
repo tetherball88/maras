@@ -37,16 +37,7 @@ namespace MARAS::Engine {
         }
 
         [[nodiscard]] std::optional<MARAS::Domain::Agency::EncounterTemplateSpec> FindTemplate(
-            std::string_view id) const {
-            const auto catalog = GetCatalog();
-            if (!catalog) {
-                return std::nullopt;
-            }
-            if (const auto* spec = catalog->FindTemplate(id)) {
-                return *spec;
-            }
-            return std::nullopt;
-        }
+            std::string_view id) const;
 
     private:
         EncounterConfigLoader() = default;

@@ -20,8 +20,15 @@ namespace MARAS::Domain::Lineage {
             std::unordered_map<std::string, std::vector<std::string>> maleNamesByRace,
             std::unordered_map<std::string, std::vector<std::string>> femaleNamesByRace);
 
+        void OverlayChildNames(
+            const std::unordered_map<std::string, std::vector<std::string>>& maleNamesByRace,
+            const std::unordered_map<std::string, std::vector<std::string>>& femaleNamesByRace);
+
         void SetCritterNames(
             std::unordered_map<std::string, std::vector<std::string>> critterNamesByRace);
+
+        void OverlayCritterNames(
+            const std::unordered_map<std::string, std::vector<std::string>>& critterNamesByRace);
 
         void Clear() noexcept;
 

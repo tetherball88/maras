@@ -2,6 +2,7 @@
 
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/JsonOverrideLoader.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/foundation/IRng.h"
 #include "maras/foundation/StringUtils.h"
 #include "maras/state/WorldStore.h"
@@ -171,7 +172,85 @@ namespace MARAS::Engine {
                                     const std::filesystem::path& critterNamesPath) {
         const bool childOk = LoadChildNamesFromFile(childNamesPath);
         const bool critterOk = LoadCritterNamesFromFile(critterNamesPath);
+        if (const auto locSnap = LocalizationService::GetSingleton().Snapshot()) {
+            (void)ApplyLocalizationOverlay(locSnap->GetResolvedCode());
+        }
         return childOk || critterOk;
+    }
+
+    bool NamePoolLoader::ApplyLocalizationOverlay(std::string_view langCode) {
+        const std::string_view trimmed = MARAS::Foundation::StringUtils::TrimView(langCode);
+        if (trimmed.empty() || MARAS::Foundation::StringUtils::CaseInsensitiveEquals(trimmed, "en")) {
+            return false;
+        }
+
+        const std::array<std::filesystem::path, 2> candidates = {
+            std::filesystem::path("Data/SKSE/Plugins/MARAS/localization") / std::string(trimmed) / "names.json",
+            std::filesystem::path("SKSE/Plugins/MARAS/localization") / std::string(trimmed) / "names.json"
+        };
+
+        std::filesystem::path foundPath;
+        std::error_code ec;
+        for (const auto& candidate : candidates) {
+            if (std::filesystem::exists(candidate, ec)) {
+                foundPath = candidate;
+                break;
+            }
+        }
+        if (foundPath.empty()) {
+            return false;
+        }
+
+        nlohmann::json root;
+        if (!JsonOverrideLoader::LoadJsonFile(foundPath, root, "NamePoolLoader") || !root.is_object()) {
+            return false;
+        }
+
+        std::unordered_map<std::string, std::vector<std::string>> maleOverlay;
+        std::unordered_map<std::string, std::vector<std::string>> femaleOverlay;
+        std::unordered_map<std::string, std::vector<std::string>> critterOverlay;
+
+        if (root.contains("childrenNames") && root["childrenNames"].is_object()) {
+            const auto& childrenObj = UnwrapNamesObject(root["childrenNames"]);
+            for (const auto& [raceKey, raceVal] : childrenObj.items()) {
+                if (!raceVal.is_object()) {
+                    continue;
+                }
+                if (raceVal.contains("male")) {
+                    maleOverlay.emplace(raceKey, ParseStringArray(raceVal["male"]));
+                }
+                if (raceVal.contains("female")) {
+                    femaleOverlay.emplace(raceKey, ParseStringArray(raceVal["female"]));
+                }
+            }
+        }
+
+        if (root.contains("critterNames") && root["critterNames"].is_object()) {
+            const auto& crittersObj = UnwrapNamesObject(root["critterNames"]);
+            for (const auto& [catKey, listVal] : crittersObj.items()) {
+                if (!listVal.is_array()) {
+                    continue;
+                }
+                critterOverlay.emplace(catKey, ParseStringArray(listVal));
+            }
+        }
+
+        if (maleOverlay.empty() && femaleOverlay.empty() && critterOverlay.empty()) {
+            return false;
+        }
+
+        {
+            std::unique_lock lock(poolMutex_);
+            if (!maleOverlay.empty() || !femaleOverlay.empty()) {
+                pool_.OverlayChildNames(maleOverlay, femaleOverlay);
+            }
+            if (!critterOverlay.empty()) {
+                pool_.OverlayCritterNames(critterOverlay);
+            }
+        }
+
+        MARAS_LOG_INFO("[NamePoolLoader] Applied localized name overlay from '{}'", foundPath.string());
+        return true;
     }
 
     bool NamePoolLoader::LoadChildNamesFromFile(const std::filesystem::path& customPath) {

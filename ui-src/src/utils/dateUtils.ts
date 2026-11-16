@@ -1,3 +1,4 @@
+import { t, tp } from '../i18n'
 import { RelationshipPair, StatusChangeRecord } from '../types'
 
 export function getLatestStatusRecord(pair?: RelationshipPair | null): StatusChangeRecord | undefined {
@@ -5,38 +6,38 @@ export function getLatestStatusRecord(pair?: RelationshipPair | null): StatusCha
   return pair.statusHistory[pair.statusHistory.length - 1]
 }
 
-export function formatGameDay(day?: number, currentGameDay?: number): string {
-  if (day === undefined || day === null) return ''
-  if (day < 0) return 'Historical'
+export function formatGameDay(gameDay?: number, currentGameDay?: number): string {
+  if (gameDay === undefined || gameDay === null) return ''
+  if (Number.isNaN(gameDay)) return t('utils.date.unknown')
+  if (gameDay < 0) return t('utils.date.historical')
 
   if (currentGameDay != null && currentGameDay >= 0) {
-    const diff = Math.floor(currentGameDay - day)
-    if (diff <= 0) return 'Today'
-    if (diff === 1) return '1 day ago'
-    if (diff < 7) return `${diff} days ago`
+    const days = Math.floor(currentGameDay - gameDay)
+    if (days <= 0) return t('utils.date.today')
+    if (days < 7) return tp('utils.date.daysAgo', days)
 
-    if (diff < 30) {
-      const weeks = Math.floor(diff / 7)
-      return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`
+    if (days < 30) {
+      const weeks = Math.floor(days / 7)
+      return tp('utils.date.weeksAgo', weeks)
     }
 
-    if (diff < 365) {
-      const months = Math.floor(diff / 30)
-      return months === 1 ? '1 month ago' : `${months} months ago`
+    if (days < 365) {
+      const months = Math.floor(days / 30)
+      return tp('utils.date.monthsAgo', months)
     }
 
-    const years = Math.floor(diff / 365)
-    return years === 1 ? '1 year ago' : `${years} years ago`
+    const years = Math.floor(days / 365)
+    return tp('utils.date.yearsAgo', years)
   }
 
-  return `Day ${Math.floor(day)}`
+  return t('utils.date.dayNumber', { day: Math.floor(gameDay) })
 }
 
-export function formatRelationshipDate(date?: number, prefix: string = 'Married', currentGameDay?: number): string {
+export function formatRelationshipDate(date?: number, prefix?: string, currentGameDay?: number): string {
   if (date === undefined || date === null) return ''
-  if (date < 0) return `${prefix} (Historical)`
+  const resolvedPrefix = prefix ?? t('utils.date.marriedPrefix')
+  if (date < 0) return t('utils.date.withPrefixHistorical', { prefix: resolvedPrefix })
 
   const formatted = formatGameDay(date, currentGameDay)
-  if (formatted === 'Today') return `${prefix} Today`
-  return `${prefix} ${formatted}`
+  return t('utils.date.withPrefix', { prefix: resolvedPrefix, date: formatted })
 }

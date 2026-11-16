@@ -12,6 +12,7 @@
 #include "maras/engine/ChildSpawnService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/StringUtils.h"
@@ -240,20 +241,19 @@ namespace MARAS::App {
                                 cand.bioFatherID, motherID, res.usedDecisions, res.failureDetail);
 
                             ModalRequest req;
-                            req.title = "Bio-Father Step-In Evaluation Failed";
-                            req.subtitle = "SkyrimNet LLM Request Failed";
-                            req.message =
-                                "The SkyrimNet LLM evaluation for whether the biological father steps in to marry the mother failed. Choose how to proceed:";
+                            req.title = Tr("modal.paternity_step_in.title");
+                            req.subtitle = Tr("modal.paternity_step_in.subtitle");
+                            req.message = Tr("modal.paternity_step_in.message");
                             req.tone = ModalTone::Warning;
                             req.size = ModalSize::Md;
                             req.defaultCancelButtonIndex = 2;
 
                             const std::string childDesc = cand.isPregnancy
-                                ? "Unborn Child"
-                                : (cand.childName.empty() ? "Child" : cand.childName);
+                                ? Tr("common.unborn_child_fallback")
+                                : (cand.childName.empty() ? Tr("common.child_fallback") : cand.childName);
                             req.controls.push_back(ModalControl::MakeInfoBox(
                                 "error_details",
-                                "Failure Details",
+                                Tr("modal.paternity_step_in.details_label"),
                                 std::format("{} & {} ({})\n{}", bioFatherName, motherName, childDesc, res.failureDetail),
                                 ModalTone::Warning));
                             auto& skyrimNet = GetSkyrimNetGateway();
@@ -265,9 +265,9 @@ namespace MARAS::App {
                                     res.usedDecisions ? "decisions" : "gamemaster_evaluation"),
                                 ModalTone::Default));
 
-                            req.buttons.push_back(ModalButton::Make("retry", "Retry LLM Request", ModalButtonVariant::Primary));
-                            req.buttons.push_back(ModalButton::Make("dice_roll", "Use Dice Roll Fallback", ModalButtonVariant::Secondary));
-                            req.buttons.push_back(ModalButton::Make("skip", "Skip Candidate", ModalButtonVariant::Ghost));
+                            req.buttons.push_back(ModalButton::Make("retry", Tr("modal.paternity_step_in.btn_retry"), ModalButtonVariant::Primary));
+                            req.buttons.push_back(ModalButton::Make("dice_roll", Tr("modal.paternity_step_in.btn_dice_roll"), ModalButtonVariant::Secondary));
+                            req.buttons.push_back(ModalButton::Make("skip", Tr("modal.paternity_step_in.btn_skip"), ModalButtonVariant::Ghost));
 
                             GetModalGateway().ShowModal(
                                 std::move(req),

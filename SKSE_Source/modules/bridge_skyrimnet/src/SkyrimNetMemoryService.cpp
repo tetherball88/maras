@@ -8,6 +8,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/JsonService.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/EnumUtils.h"
@@ -1350,7 +1351,7 @@ namespace MARAS::Bridge::SkyrimNet {
                         auto& svc = SkyrimNetMemoryService::GetSingleton();
                         if (!success || respStr.empty()) {
                             MARAS::App::ShowLLMRetryModal(
-                                "MARAS: Memory Generation Failed",
+                                MARAS::Tr("modal.llm_retry.eval_memory_failed"),
                                 std::format("{} & {}: LLM memory generation request failed or returned an empty response.",
                                             MARAS::ActorSvc::GetName(actorA), MARAS::ActorSvc::GetName(actorB)),
                                 MARAS::App::LLMFailureType::RequestFailed,
@@ -1374,7 +1375,7 @@ namespace MARAS::Bridge::SkyrimNet {
                         auto entries = svc.ParseGeneratedMemories(respStr, targets, relMap);
                         if (entries.empty()) {
                             MARAS::App::ShowLLMRetryModal(
-                                "MARAS: Memory Generation Failed",
+                                MARAS::Tr("modal.llm_retry.eval_memory_failed"),
                                 std::format("{} & {}: Failed to parse memories array from LLM response.",
                                             MARAS::ActorSvc::GetName(actorA), MARAS::ActorSvc::GetName(actorB)),
                                 MARAS::App::LLMFailureType::InvalidJson,

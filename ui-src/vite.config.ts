@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      '@locales-en': resolve(__dirname, '../SKSE/Plugins/MARAS/localization/en'),
     },
   },
   plugins: [
@@ -43,6 +44,71 @@ export default defineConfig({
               }))
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify(catalog))
+              return
+            } catch (err) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: String(err) }))
+              return
+            }
+          }
+
+          if (cleanUrl.startsWith('/__dev/locale/')) {
+            try {
+              const reqLang = cleanUrl.replace('/__dev/locale/', '').trim() || 'en'
+              const locRoot = resolve(__dirname, '../SKSE/Plugins/MARAS/localization')
+              const flattenObj = (node: Record<string, any>, prefix = '', out: Record<string, string> = {}) => {
+                for (const [k, v] of Object.entries(node || {})) {
+                  if (!k || k.startsWith('$comment') || k.startsWith('_comment')) continue
+                  const full = prefix ? `${prefix}.${k}` : k
+                  if (typeof v === 'string') out[full] = v
+                  else if (v && typeof v === 'object' && !Array.isArray(v)) flattenObj(v, full, out)
+                }
+                return out
+              }
+              const availableLanguages: any[] = []
+              if (fs.existsSync(locRoot)) {
+                for (const dirent of fs.readdirSync(locRoot, { withFileTypes: true })) {
+                  if (!dirent.isDirectory() || dirent.name.startsWith('.')) continue
+                  const metaPath = resolve(locRoot, dirent.name, '_meta.json')
+                  let meta: any = { code: dirent.name, name: dirent.name, nativeName: dirent.name }
+                  if (fs.existsSync(metaPath)) {
+                    meta = { ...meta, ...JSON.parse(fs.readFileSync(metaPath, 'utf8')) }
+                  }
+                  availableLanguages.push(meta)
+                }
+              }
+              const targetCode = reqLang === 'auto' ? 'en' : reqLang
+              const resolvedMeta =
+                availableLanguages.find((m) => m.code.toLowerCase() === targetCode.toLowerCase()) ||
+                availableLanguages.find((m) => m.code === 'en') || { code: 'en', name: 'English', nativeName: 'English' }
+              const strings: Record<string, string> = {}
+              const loadUiDir = (code: string) => {
+                const dir = resolve(locRoot, code)
+                if (!fs.existsSync(dir)) return
+                for (const f of fs.readdirSync(dir).sort()) {
+                  if (!f.endsWith('.json') || f.startsWith('_') || f === 'names.json' || f.endsWith('_todo.json')) continue
+                  const raw = JSON.parse(fs.readFileSync(resolve(dir, f), 'utf8'))
+                  const flat = flattenObj(raw)
+                  const isUiFile = f === 'ui.json' || f.startsWith('ui_') || f.startsWith('ui.')
+                  for (const [k, v] of Object.entries(flat)) {
+                    if (isUiFile) strings[k.startsWith('ui.') ? k.slice(3) : k] = v
+                    else if (k.startsWith('ui.')) strings[k.slice(3)] = v
+                  }
+                }
+              }
+              loadUiDir('en')
+              if (resolvedMeta.code !== 'en') loadUiDir(resolvedMeta.code)
+              res.setHeader('Content-Type', 'application/json')
+              res.end(
+                JSON.stringify({
+                  selectedLanguage: reqLang,
+                  resolvedLanguage: resolvedMeta.code,
+                  detectedSkyrimLanguage: 'en',
+                  fontFamily: resolvedMeta.fontFamily || '',
+                  availableLanguages,
+                  strings,
+                }),
+              )
               return
             } catch (err) {
               res.statusCode = 500

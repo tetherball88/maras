@@ -29,6 +29,7 @@
 #include "maras/engine/GiftMenuEventSink.h"
 #include "maras/engine/GlobalVarReconciler.h"
 #include "maras/engine/IntimateThreadService.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/MarriageDifficultyLoader.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/PackageReconciler.h"
@@ -480,6 +481,10 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         } else {
                             MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
                         }
+
+                        // Refresh localization once Skyrim.ini (sLanguage:General) is loaded, then initialize UI & catalogs
+                        MARAS::Engine::LocalizationService::GetSingleton().Reload(
+                            MARAS::App::SettingsCoordinator::GetSingleton().GetLanguage());
 
                         // Initialize UI dashboard
                         MARAS::App::GetUiBridgeGateway().InitializeDashboard();

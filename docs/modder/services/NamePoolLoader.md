@@ -20,6 +20,7 @@
 Initialized at `kDataLoaded` (`plugin.cpp`):
 - Searches `Data/SKSE/Plugins/MARAS/<file>.json` then `SKSE/Plugins/MARAS/<file>.json`.
 - Unwraps an optional top-level `"names"` object if present (`UnwrapNamesObject`), parses string arrays per race/gender category with trimming (`JsonOverrideLoader` comment-tolerant JSON parser), and ingests them into `NamePool`.
+- Applies optional per-language name overlays via `ApplyLocalizationOverlay` whenever `LocalizationService` loads or reloads an active language pack containing `Data/SKSE/Plugins/MARAS/localization/<lang>/names.json` (`childrenNames` and/or `critterNames`), replacing only the races/species defined in that language's overlay while preserving base English pools for any omitted categories.
 
 ---
 

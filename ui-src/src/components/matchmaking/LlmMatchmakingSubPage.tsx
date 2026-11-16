@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
-import { RelationshipStatus, MatchmakingOrientation } from '../../types'
+import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { SearchInput } from '../shared/SearchInput'
 import { SelectInput } from '../shared/SelectInput'
-import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { VirtualList } from '../shared/VirtualList'
+import { getStatusLabel } from '../shared/StatusBadge'
 import { getAvailableStatuses } from '../../utils/statusAvailability'
 import {
   Bot,
@@ -13,21 +13,19 @@ import {
   User,
   Check,
   HeartHandshake,
-  Sliders,
   Award,
   BookOpen,
-  Calendar,
   Settings2,
   Globe,
 } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const LlmMatchmakingSubPage: React.FC = () => {
+  const { t } = useTranslation()
   const settings = useMarasStore((s) => s.settings)
   const setActiveTab = useMarasStore((s) => s.setActiveTab)
   const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
-  const matchmakingSettings = useMarasStore((s) => s.matchmakingSettings)
-  const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings)
 
   const aiSuggestions = useMarasStore((s) => s.aiSuggestions)
   const matchmakingScanType = useMarasStore((s) => s.matchmakingScanType)
@@ -86,39 +84,74 @@ export const LlmMatchmakingSubPage: React.FC = () => {
     if (act === 'new' || act === 'create') {
       return (
         <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80">
-          New
+          {t('matchmaking.llm.actionNew')}
         </span>
       )
     }
     if (act === 'advance') {
       return (
         <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-blue-950/60 text-blue-400 border border-blue-800/80">
-          Advance
+          {t('matchmaking.llm.actionAdvance')}
         </span>
       )
     }
     if (act === 'breakup') {
       return (
         <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80">
-          Breakup
+          {t('matchmaking.llm.actionBreakup')}
         </span>
       )
     }
     if (act === 'open') {
       return (
         <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-amber-950/60 text-amber-400 border border-amber-800/80">
-          Open Pair
+          {t('matchmaking.llm.actionOpen')}
         </span>
       )
     }
     if (act === 'close') {
       return (
         <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-purple-950/60 text-purple-400 border border-purple-800/80">
-          Close Pair
+          {t('matchmaking.llm.actionClose')}
         </span>
       )
     }
     return null
+  }
+
+  const resolveTargetStatusLabel = (targetStatus?: string, suggestedStatus?: RelationshipStatus) => {
+    if (targetStatus) {
+      const lower = targetStatus.trim().toLowerCase()
+      switch (lower) {
+        case 'candidate':
+          return getStatusLabel(RelationshipStatus.Candidate)
+        case 'dating':
+          return getStatusLabel(RelationshipStatus.Dating)
+        case 'lover':
+        case 'lovers':
+          return getStatusLabel(RelationshipStatus.Lover)
+        case 'engaged':
+          return getStatusLabel(RelationshipStatus.Engaged)
+        case 'married':
+          return getStatusLabel(RelationshipStatus.Married)
+        case 'divorced':
+          return getStatusLabel(RelationshipStatus.Divorced)
+        case 'jilted':
+          return getStatusLabel(RelationshipStatus.Jilted)
+        case 'exdating':
+        case 'ex-dating':
+          return getStatusLabel(RelationshipStatus.ExDating)
+        case 'exlover':
+        case 'ex-lover':
+          return getStatusLabel(RelationshipStatus.ExLover)
+        default:
+          break
+      }
+    }
+    if (suggestedStatus !== undefined) {
+      return getStatusLabel(suggestedStatus)
+    }
+    return getStatusLabel(RelationshipStatus.Dating)
   }
 
   return (
@@ -129,23 +162,23 @@ export const LlmMatchmakingSubPage: React.FC = () => {
         <div className="flex items-center gap-[0.5rem] pb-[0.5rem] border-b border-border-divider">
           <Bot className="w-[1.25em] h-[1.25em] text-accent" />
           <div>
-            <h2 className="text-sm font-bold text-accent-bright">LLM Matchmaking Setup</h2>
-            <p className="text-[0.6875rem] text-foreground-muted">SkyrimNet NPC-NPC Matchmaker</p>
+            <h2 className="text-sm font-bold text-accent-bright">{t('matchmaking.llm.setupTitle')}</h2>
+            <p className="text-[0.6875rem] text-foreground-muted">{t('matchmaking.llm.setupSubtitle')}</p>
           </div>
         </div>
 
         {/* Target NPC Selection */}
         <div className="space-y-[0.375rem] flex-1 flex flex-col min-h-0">
           <label className="text-xs font-semibold text-foreground-secondary flex items-center justify-between">
-            <span>Target NPC:</span>
+            <span>{t('matchmaking.llm.targetNpcLabel')}</span>
             <span className="text-[0.6875rem] text-accent font-mono truncate max-w-[9rem]">
-              {targetProfile?.name || targetNpcId || 'None'}
+              {targetProfile?.name || targetNpcId || t('shared.none')}
             </span>
           </label>
 
           <SearchInput
             value={targetSearch}
-            placeholder="Search target character..."
+            placeholder={t('matchmaking.llm.searchTargetPlaceholder')}
             onChange={setTargetSearch}
           />
 
@@ -154,7 +187,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
             estimateSize={48}
             overscan={6}
             className="flex-1 min-h-0 border border-border-subtle rounded-md p-[0.375rem] bg-panel-inset overflow-y-auto"
-            emptyMessage="No matching characters found."
+            emptyMessage={t('matchmaking.llm.emptyTargetCharacters')}
             renderItem={(npc) => {
               const isSelected = targetNpcId === npc.formId
               return (
@@ -179,7 +212,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                         {npc.pluginName && (
                           <>
                             <span>•</span>
-                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${npc.pluginName}`}>
+                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={t('shared.pluginTooltip', { plugin: npc.pluginName })}>
                               {npc.pluginName}
                             </span>
                           </>
@@ -206,14 +239,18 @@ export const LlmMatchmakingSubPage: React.FC = () => {
             }`}
         >
           <Sparkles className="w-[1em] h-[1em]" />
-          <span>{isGeneratingAi ? 'Analyzing Context...' : 'Generate Target Matches'}</span>
+          <span>
+            {isGeneratingAi
+              ? t('matchmaking.llm.analyzingContext')
+              : t('matchmaking.llm.generateTargetMatches')}
+          </span>
         </button>
 
         {/* Global Matchmaking Scan */}
         <div className="pt-[0.5rem] border-t border-border-divider flex flex-col gap-[0.375rem]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground-secondary">Global Matchmaker:</span>
-            <span className="text-[0.625rem] text-foreground-muted">All Skyrim NPCs</span>
+            <span className="text-xs font-semibold text-foreground-secondary">{t('matchmaking.llm.globalMatchmakerLabel')}</span>
+            <span className="text-[0.625rem] text-foreground-muted">{t('matchmaking.llm.allSkyrimNpcs')}</span>
           </div>
           <button
             type="button"
@@ -227,7 +264,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
               }`}
           >
             <Globe className="w-[1em] h-[1em] text-accent" />
-            <span>Scan Any NPCs (World Scan)</span>
+            <span>{t('matchmaking.llm.scanAnyNpcs')}</span>
           </button>
         </div>
 
@@ -242,7 +279,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
             className="text-[0.6875rem] text-accent hover:text-accent-bright hover:underline inline-flex items-center gap-[0.25rem] cursor-pointer"
           >
             <Settings2 className="w-[0.875em] h-[0.875em]" />
-            Configure Matchmaking Rules in Settings
+            {t('matchmaking.llm.configureRulesLink')}
           </button>
         </div>
       </div>
@@ -255,13 +292,37 @@ export const LlmMatchmakingSubPage: React.FC = () => {
             <HeartHandshake className="w-[1.25em] h-[1.25em] text-accent flex-shrink-0" />
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-accent-bright truncate">
-                SkyrimNet Recommendations
+                {t('matchmaking.llm.recommendationsTitle')}
               </h2>
               <p className="text-[0.6875rem] text-foreground-muted truncate">
                 {isGlobalScan ? (
-                  <span>Showing <span className="font-semibold text-foreground-primary">World Matchmaking Scan</span> across Skyrim NPCs</span>
+                  <span>
+                    {t('matchmaking.llm.showingWorldScan', { scanType: '[[SCAN]]' })
+                      .split(/(\[\[SCAN\]\])/g)
+                      .map((part, idx) =>
+                        part === '[[SCAN]]' ? (
+                          <span key={idx} className="font-semibold text-foreground-primary">
+                            {t('matchmaking.llm.worldMatchmakingScan')}
+                          </span>
+                        ) : (
+                          <React.Fragment key={idx}>{part}</React.Fragment>
+                        ),
+                      )}
+                  </span>
                 ) : (
-                  <span>Showing partner evaluation for <span className="font-semibold text-foreground-primary">{targetProfile?.name || targetNpcId}</span></span>
+                  <span>
+                    {t('matchmaking.llm.showingPartnerEval', { name: '[[NAME]]' })
+                      .split(/(\[\[NAME\]\])/g)
+                      .map((part, idx) =>
+                        part === '[[NAME]]' ? (
+                          <span key={idx} className="font-semibold text-foreground-primary">
+                            {targetProfile?.name || targetNpcId}
+                          </span>
+                        ) : (
+                          <React.Fragment key={idx}>{part}</React.Fragment>
+                        ),
+                      )}
+                  </span>
                 )}
               </p>
             </div>
@@ -274,7 +335,9 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                 onClick={() => handleSelectAll(aiSuggestions.some((s) => !s.selected))}
                 className="px-[0.625rem] py-[0.25rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-xs text-foreground-secondary cursor-pointer transition-colors whitespace-nowrap flex-shrink-0"
               >
-                {aiSuggestions.every((s) => s.selected) ? 'Deselect All' : 'Select All'}
+                {aiSuggestions.every((s) => s.selected)
+                  ? t('matchmaking.llm.deselectAll')
+                  : t('matchmaking.llm.selectAll')}
               </button>
               <button
                 type="button"
@@ -283,7 +346,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                 className="px-[0.75rem] py-[0.25rem] bg-accent hover:bg-accent-bright disabled:opacity-50 text-panel font-semibold text-xs rounded transition-colors flex items-center gap-[0.25rem] cursor-pointer whitespace-nowrap flex-shrink-0"
               >
                 <Check className="w-[0.875em] h-[0.875em]" />
-                <span>Apply Selected</span>
+                <span>{t('matchmaking.llm.applySelected')}</span>
               </button>
             </div>
           )}
@@ -295,16 +358,16 @@ export const LlmMatchmakingSubPage: React.FC = () => {
             <Bot className="w-[2.5em] h-[2.5em] text-accent animate-pulse" />
             <div>
               <div className="text-sm font-bold text-foreground-primary">
-                Querying SkyrimNet AI Context...
+                {t('matchmaking.llm.queryingTitle')}
               </div>
               <div className="text-xs text-foreground-muted mt-[0.25rem]">
-                Evaluating character lore, relationships, hold diversity, and romance compatibility.
+                {t('matchmaking.llm.queryingSubtitle')}
               </div>
             </div>
             <div className="flex items-center gap-[0.5rem]">
-              <div className="w-2 h-2 rounded-full bg-accent animate-bounce" />
-              <div className="w-2 h-2 rounded-full bg-accent animate-bounce [animation-delay:0.2s]" />
-              <div className="w-2 h-2 rounded-full bg-accent animate-bounce [animation-delay:0.4s]" />
+              <div className="w-[0.5rem] h-[0.5rem] rounded-full bg-accent animate-bounce" />
+              <div className="w-[0.5rem] h-[0.5rem] rounded-full bg-accent animate-bounce [animation-delay:0.2s]" />
+              <div className="w-[0.5rem] h-[0.5rem] rounded-full bg-accent animate-bounce [animation-delay:0.4s]" />
             </div>
             <div className="pt-[0.5rem]">
               <button
@@ -312,7 +375,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                 onClick={() => useMarasStore.setState({ isGeneratingAiSuggestions: false })}
                 className="px-[0.75rem] py-[0.25rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-xs text-foreground-secondary cursor-pointer transition-colors"
               >
-                Cancel
+                {t('matchmaking.llm.cancelButton')}
               </button>
             </div>
           </div>
@@ -320,9 +383,21 @@ export const LlmMatchmakingSubPage: React.FC = () => {
           <div className="flex-1 flex flex-col items-center justify-center p-[2rem] text-center gap-[0.75rem] bg-panel-inset border border-border-subtle rounded-lg text-foreground-muted">
             <Sparkles className="w-[2.5em] h-[2.5em] text-accent/50" />
             <div>
-              <div className="text-sm font-semibold text-foreground-primary">No LLM Match Analysis Generated Yet</div>
+              <div className="text-sm font-semibold text-foreground-primary">
+                {t('matchmaking.llm.emptyAnalysisTitle')}
+              </div>
               <div className="text-xs max-w-[22rem] mt-[0.25rem]">
-                Select a target character on the left or click <span className="text-accent font-semibold">Scan Any NPCs (World Scan)</span> to run SkyrimNet evaluation.
+                {t('matchmaking.llm.emptyAnalysisDesc', { action: '[[ACTION]]' })
+                  .split(/(\[\[ACTION\]\])/g)
+                  .map((part, idx) =>
+                    part === '[[ACTION]]' ? (
+                      <span key={idx} className="text-accent font-semibold">
+                        {t('matchmaking.llm.scanAnyNpcs')}
+                      </span>
+                    ) : (
+                      <React.Fragment key={idx}>{part}</React.Fragment>
+                    ),
+                  )}
               </div>
             </div>
           </div>
@@ -333,7 +408,9 @@ export const LlmMatchmakingSubPage: React.FC = () => {
               const profileA = s.actorAFormId ? (npcProfiles.get(s.actorAFormId) || allNpcs.find((n) => n.formId === s.actorAFormId)) : undefined
               const candidateName = s.name || candidateProfile?.name || s.formId
               const score = s.compatibilityScore || 85
-              const memory = s.memory || s.reasoning || 'Favorable romantic connection identified by SkyrimNet.'
+              void score
+              const memory = s.memory || s.reasoning || t('matchmaking.llm.defaultReasoning')
+              void memory
               const tags = s.synergyTags || ['#RomanticSynergy', '#SkyrimLore']
 
               const primaryActor = s.actorAFormId || targetNpcId
@@ -415,7 +492,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                               ({s.formId})
                             </span>
                             <span className="text-[0.6875rem] text-foreground-secondary">
-                              • {candidateProfile?.race || 'Skyrim NPC'}
+                              • {candidateProfile?.race || t('matchmaking.llm.skyrimNpcRaceFallback')}
                             </span>
                             {candidateProfile?.pluginName && (
                               <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle">
@@ -435,23 +512,23 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                         isLoverCheating ? (
                           <span
                             className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80"
-                            title="Considered cheating: at least one partner is in a closed main relationship"
+                            title={t('matchmaking.llm.cheatingTooltip')}
                           >
-                            Cheating
+                            {t('matchmaking.llm.cheatingBadge')}
                           </span>
                         ) : (
                           <span
                             className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80"
-                            title="Allowed secondary relationship: both parties are single or in open relationships"
+                            title={t('matchmaking.llm.allowedTooltip')}
                           >
-                            Allowed
+                            {t('matchmaking.llm.allowedBadge')}
                           </span>
                         )
                       )}
 
                       <div className="px-[0.5rem] py-[0.1875rem] rounded-full border text-[0.6875rem] font-bold flex items-center gap-[0.25rem] text-accent-bright bg-accent-soft border-border-accent flex-shrink-0">
                         <Award className="w-[0.875em] h-[0.875em]" />
-                        <span>{s.targetStatus ? s.targetStatus.charAt(0).toUpperCase() + s.targetStatus.slice(1) : 'Dating'}</span>
+                        <span>{resolveTargetStatusLabel(s.targetStatus, s.suggestedStatus)}</span>
                       </div>
                     </div>
                   </div>
@@ -460,14 +537,14 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                   {s.isGeneratingMemory ? (
                     <div className="flex items-center gap-[0.5rem] text-xs text-accent-bright bg-accent-soft p-[0.625rem] rounded border border-border-accent animate-pulse">
                       <Bot className="w-[1.25em] h-[1.25em] animate-spin" />
-                      <span>Generating first-person memories from both characters' perspectives via SkyrimNet AI...</span>
+                      <span>{t('matchmaking.llm.generatingMemories')}</span>
                     </div>
                   ) : s.dualMemories && s.dualMemories.length > 0 ? (
                     <div className="space-y-[0.375rem]">
                       <div className="flex items-center justify-between text-[0.6875rem] font-semibold text-accent-bright">
                         <span className="flex items-center gap-[0.25rem]">
                           <BookOpen className="w-[1em] h-[1em]" />
-                          <span>Dual-POV Recollections (SkyrimNet Memory Records):</span>
+                          <span>{t('matchmaking.llm.dualPovTitle')}</span>
                         </span>
                         <button
                           type="button"
@@ -475,7 +552,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                           className="text-[0.625rem] text-foreground-secondary hover:text-accent-bright flex items-center gap-[0.25rem] cursor-pointer transition-colors"
                         >
                           <Sparkles className="w-[0.75em] h-[0.75em]" />
-                          <span>Regenerate Memories</span>
+                          <span>{t('matchmaking.llm.regenerateMemories')}</span>
                         </button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-[0.5rem]">
@@ -488,7 +565,15 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                               <div className="flex items-center justify-between mb-[0.25rem] text-[0.6875rem]">
                                 <span className="font-bold text-accent-bright flex items-center gap-[0.25rem]">
                                   <User className="w-[0.875em] h-[0.875em]" />
-                                  <span>{mem.actor || (memIdx === 0 ? (s.actorAName || targetProfile?.name) : candidateProfile?.name)}'s POV</span>
+                                  <span>
+                                    {t('matchmaking.llm.actorPov', {
+                                      actor:
+                                        mem.actor ||
+                                        (memIdx === 0
+                                          ? s.actorAName || targetProfile?.name || targetNpcId
+                                          : candidateProfile?.name || candidateName),
+                                    })}
+                                  </span>
                                 </span>
                                 {mem.emotion && (
                                   <span className="px-[0.375rem] py-[0.0625rem] rounded bg-accent-soft text-accent-bright font-mono uppercase text-[0.625rem] border border-border-accent/40">
@@ -501,16 +586,22 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                               </p>
                             </div>
                             <div className="pt-[0.25rem] border-t border-border-divider/50 flex items-center justify-between text-[0.625rem] text-foreground-muted">
-                              <span className="truncate max-w-[12rem]">{mem.location || 'Skyrim'}</span>
+                              <span className="truncate max-w-[12rem]">
+                                {mem.location || t('matchmaking.llm.defaultLocation')}
+                              </span>
                               {mem.importance_score !== undefined && (
-                                <span className="font-mono text-accent">Score: {(mem.importance_score * 100).toFixed(0)}%</span>
+                                <span className="font-mono text-accent">
+                                  {t('matchmaking.llm.memoryScore', {
+                                    score: (mem.importance_score * 100).toFixed(0),
+                                  })}
+                                </span>
                               )}
                             </div>
                             {mem.tags && mem.tags.length > 0 && (
                               <div className="flex items-center gap-[0.25rem] flex-wrap mt-[0.125rem]">
-                                {mem.tags.slice(0, 5).map((t, ti) => (
+                                {mem.tags.slice(0, 5).map((tagText, ti) => (
                                   <span key={ti} className="text-[0.5625rem] px-[0.25rem] py-[0.03125rem] rounded bg-panel text-foreground-muted font-mono border border-border-subtle/50">
-                                    #{t.replace(/^#/, '')}
+                                    #{tagText.replace(/^#/, '')}
                                   </span>
                                 ))}
                               </div>
@@ -523,7 +614,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                     <div className="flex items-center justify-between text-xs bg-panel-inset p-[0.5rem] rounded border border-border-subtle">
                       <span className="text-foreground-muted flex items-center gap-[0.375rem]">
                         <BookOpen className="w-[1em] h-[1em] text-foreground-secondary" />
-                        <span>No memories generated yet for this pairing.</span>
+                        <span>{t('matchmaking.llm.noMemoriesYet')}</span>
                       </span>
                       <button
                         type="button"
@@ -531,7 +622,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                         className="px-[0.625rem] py-[0.25rem] bg-accent-soft hover:bg-accent/20 text-accent-bright border border-border-accent font-semibold rounded transition-colors cursor-pointer flex items-center gap-[0.375rem] text-xs shadow-sm"
                       >
                         <Sparkles className="w-[0.875em] h-[0.875em]" />
-                        <span>Generate Memories</span>
+                        <span>{t('matchmaking.llm.generateMemories')}</span>
                       </button>
                     </div>
                   )}
@@ -552,8 +643,10 @@ export const LlmMatchmakingSubPage: React.FC = () => {
 
                     {/* Status Selector & Direct Assign */}
                     <div className="flex items-center gap-[0.5rem] flex-shrink-0 ml-auto">
-                      <span className="text-foreground-muted text-[0.6875rem]">Status:</span>
-                      <div className="w-[7.5rem]">
+                      <span className="text-foreground-muted text-[0.6875rem]">
+                        {t('matchmaking.llm.statusLabel')}
+                      </span>
+                      <div className="min-w-[8.5rem] w-auto">
                         <SelectInput
                           value={s.suggestedStatus}
                           options={suggestionOptions}
@@ -582,7 +675,7 @@ export const LlmMatchmakingSubPage: React.FC = () => {
                             : 'bg-panel-inset text-foreground-disabled border border-border-subtle cursor-not-allowed opacity-50'
                           }`}
                       >
-                        <span>Apply Match</span>
+                        <span>{t('matchmaking.llm.applyMatch')}</span>
                       </button>
                     </div>
                   </div>

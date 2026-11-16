@@ -2,6 +2,7 @@
 
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/JsonOverrideLoader.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/foundation/EnumUtils.h"
 #include "maras/foundation/StringUtils.h"
@@ -229,6 +230,18 @@ namespace MARAS::Engine {
             catalog_ = std::move(emptyCatalog);
         }
         loaded_.store(false, std::memory_order_release);
+    }
+
+    std::optional<MARAS::Domain::Agency::EncounterTemplateSpec> EncounterConfigLoader::FindTemplate(
+        std::string_view id) const {
+        const auto catalog = GetCatalog();
+        if (!catalog) {
+            return std::nullopt;
+        }
+        if (const auto* spec = catalog->FindTemplate(id)) {
+            return LocalizationService::GetSingleton().LocalizeEncounterTemplate(*spec);
+        }
+        return std::nullopt;
     }
 
 }  // namespace MARAS::Engine

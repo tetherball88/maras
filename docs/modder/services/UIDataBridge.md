@@ -5,17 +5,19 @@
 - [UIManager.h](../../../SKSE_Source/modules/bridge_ui/include/maras/bridge_ui/UIManager.h) / [UIManager.cpp](../../../SKSE_Source/modules/bridge_ui/src/UIManager.cpp)
 - [UIDataBridge.h](../../../SKSE_Source/modules/bridge_ui/include/maras/bridge_ui/UIDataBridge.h) / [UIDataBridge.cpp](../../../SKSE_Source/modules/bridge_ui/src/UIDataBridge.cpp)
 - [HouseholdBuffsJsonBuilder.h](../../../SKSE_Source/modules/bridge_ui/include/maras/bridge_ui/HouseholdBuffsJsonBuilder.h) / [HouseholdBuffsJsonBuilder.cpp](../../../SKSE_Source/modules/bridge_ui/src/HouseholdBuffsJsonBuilder.cpp)
-- [Architecture Overview](../ARCHITECTURE.md)
+- [LocaleJsonBuilder.h](../../../SKSE_Source/modules/bridge_ui/include/maras/bridge_ui/LocaleJsonBuilder.h) / [LocaleJsonBuilder.cpp](../../../SKSE_Source/modules/bridge_ui/src/LocaleJsonBuilder.cpp)
+- [Architecture Overview](../ARCHITECTURE.md) & [Localization Guide](../LOCALIZATION_GUIDE.md)
 
 ---
 
 ## 1. Purpose & Responsibility
 
-`UIManager`, `UIDataBridge`, and `HouseholdBuffsJsonBuilder` form the C++ $\leftrightarrow$ React (Ultralight / Magelight UI) transport layer for M.A.R.A.S.:
+`UIManager`, `UIDataBridge`, `HouseholdBuffsJsonBuilder`, and `LocaleJsonBuilder` form the C++ $\leftrightarrow$ React (Ultralight / Magelight UI) transport layer for M.A.R.A.S.:
 
 - **`UIManager`**: Registers the Magelight mod handle (`"MARAS"`), owns the single persistent hidden `Layer::Popup` Magelight view (`Data/Magelight/MARAS/views/MARAS/index.html`), hotkey/menu event sinks (`RE::InputEvent*`, `RE::MenuOpenCloseEvent`), UI-mode focus/pause reconciliation (`RequestUIMode` / `ReleaseUIMode`), Escape capture (`SetEscapeCapture`), offscreen prepaint, gamepad support (`kGamepadStyleKeys`), deferred new-game relationship scan deferral, `PostToGameThread` marshaling, and `RunAfterFocusReleased` callbacks.
-- **`UIDataBridge`**: Implements `IUiBridgeGateway`, registers UI JS listeners (`marasAction`), serializes read-only JSON snapshots through [`PerspectiveView`](PerspectiveView.md), executes dashboard-initiated mutations safely on the main game thread under `GetPapyrusMutex()`, pushes live change events, and writes diagnostic JSON dumps (`dumpData`, `dumpNPCIndex`).
-- **`HouseholdBuffsJsonBuilder`**: Assembles read-only household spouse-buff JSON payloads from [`WorldStore`](WorldStoreAndCoSave.md), `BonusesConfigLoader`, and [`PollingService`](PollingService.md) teammate state.
+- **`UIDataBridge`**: Implements `IUiBridgeGateway`, registers UI JS listeners (`marasAction`), pushes active localization dictionaries (`SendLocaleData`), serializes read-only JSON snapshots through [`PerspectiveView`](PerspectiveView.md), executes dashboard-initiated mutations safely on the main game thread under `GetPapyrusMutex()`, pushes live change events, and writes diagnostic JSON dumps (`dumpData`, `dumpNPCIndex`).
+- **`HouseholdBuffsJsonBuilder`**: Assembles read-only household spouse-buff JSON payloads from [`WorldStore`](WorldStoreAndCoSave.md), `BonusesConfigLoader`, `LocalizationService` display overlays, and [`PollingService`](PollingService.md) teammate state.
+- **`LocaleJsonBuilder`**: Serializes the active `LocalizationCatalog` snapshot (`selectedLanguage`, `resolvedLanguage`, `detectedSkyrimLanguage`, `fontFamily`, discovered `_meta.json` `availableLanguages`, and merged `ui_*` dictionary strings) for `window.receiveMARASLocale`.
 
 ---
 
@@ -44,4 +46,4 @@ Every query builder and JSON dump in `UIDataBridge` and `HouseholdBuffsJsonBuild
   - Exposed both to Papyrus via `IUiBridgeGateway::DumpStoredData(tag)` (`MARAS.DumpStoredData(string tag = "")`) and to the UI `dumpData` action (`ProcessDumpData` forwards optional `payload.tag`).
   - Sanitizes `tag` to `[A-Za-z0-9_-]` (capped at `48` characters); when non-empty, writes `meta.dumpTag` and exports `Data/SKSE/Plugins/MARAS/dumps/maras_dump_<tag>_<YYYY-MM-DD_HH-MM-SS>.json` (or `maras_dump_<YYYY-MM-DD_HH-MM-SS>.json` when untagged).
   - Exports `meta` (including `serializationVersion`, optional `dumpTag`, `hasSkyrimNet`, `simulateNoSkyrimNet`, `secretsMasked`, calendar timestamps), `settings`, `spouseHierarchy`, `relationshipManager`, `affectionService`, `playerHouses`, `spouseAssets`, `playerChildrenService`, `matchmakingService`, `deceasedRegistry`, `banterCoordinator`, and `adultChildTravel`, while emitting `onDataDumpCompleted` notifications strictly when triggered from the UI (`notifyUi = true`).
-- **Training Asset Resolution**: `ResolveTrainingImageSrc` caches encoded image references under `UIDataBridge::mutex_` to keep `SendPlayerTrainingEligibility` / catalog payloads lightweight.
+- **Training Asset & Localization Overlay Resolution**: `ResolveTrainingImageSrc` caches encoded image references under `UIDataBridge::mutex_` to keep `SendPlayerTrainingEligibility` / catalog payloads lightweight. Because Magelight UI enforces `NetworkPolicy::FileOnly` on `file:///` views, localization strings are pushed directly from C++ via `SendLocaleData` (`window.receiveMARASLocale`) on `ViewDomReady`, `ViewReloaded`, `uiReady`, language changes (`updateSetting` `"language"`), and live `reloadLocalization` actions, while `WorldStore` state (`ChildRecord::trainingLocation`, `AdultChildTravelRecord::destinationName`) stays language-agnostic and is overlaid via `LocalizationService` solely at UI serialization time.

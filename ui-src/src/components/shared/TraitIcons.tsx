@@ -2,6 +2,8 @@ import React from 'react'
 import { SocialClass, SkillType, Temperament, NPCProfile } from '../../types'
 import { cn } from '@/lib/utils'
 import { AppTooltip } from './AppTooltip'
+import { t as tr } from '../../i18n'
+import { useLocaleStore } from '../../store/useLocaleStore'
 
 // ==========================================
 // Generic Parsing & Label Helpers
@@ -33,14 +35,64 @@ export const parseSkillType = (val: any): SkillType =>
 export const parseTemperament = (val: any): Temperament =>
   parseTraitEnum(val, Temperament, Temperament.Proud)
 
-export const getSocialClassLabel = (sc: any): string =>
-  SocialClass[parseSocialClass(sc)] || 'Middle'
+export const getSocialClassLabel = (sc: any): string => {
+  switch (parseSocialClass(sc)) {
+    case SocialClass.Outcast:
+      return tr('enums.socialClass.outcast')
+    case SocialClass.Poverty:
+      return tr('enums.socialClass.poverty')
+    case SocialClass.Working:
+      return tr('enums.socialClass.working')
+    case SocialClass.Middle:
+      return tr('enums.socialClass.middle')
+    case SocialClass.Wealthy:
+      return tr('enums.socialClass.wealthy')
+    case SocialClass.Religious:
+      return tr('enums.socialClass.religious')
+    case SocialClass.Nobles:
+      return tr('enums.socialClass.nobles')
+    case SocialClass.Rulers:
+      return tr('enums.socialClass.rulers')
+    default:
+      return tr('enums.socialClass.middle')
+  }
+}
 
-export const getSkillTypeLabel = (st: any): string =>
-  SkillType[parseSkillType(st)] || 'Warrior'
+export const getSkillTypeLabel = (st: any): string => {
+  switch (parseSkillType(st)) {
+    case SkillType.Warrior:
+      return tr('enums.skillType.warrior')
+    case SkillType.Mage:
+      return tr('enums.skillType.mage')
+    case SkillType.Rogue:
+      return tr('enums.skillType.rogue')
+    case SkillType.Craftsman:
+      return tr('enums.skillType.craftsman')
+    case SkillType.Ranger:
+      return tr('enums.skillType.ranger')
+    case SkillType.Orator:
+      return tr('enums.skillType.orator')
+    default:
+      return tr('enums.skillType.warrior')
+  }
+}
 
-export const getTemperamentLabel = (t: any): string =>
-  Temperament[parseTemperament(t)] || 'Proud'
+export const getTemperamentLabel = (t: any): string => {
+  switch (parseTemperament(t)) {
+    case Temperament.Proud:
+      return tr('enums.temperament.proud')
+    case Temperament.Humble:
+      return tr('enums.temperament.humble')
+    case Temperament.Jealous:
+      return tr('enums.temperament.jealous')
+    case Temperament.Romantic:
+      return tr('enums.temperament.romantic')
+    case Temperament.Independent:
+      return tr('enums.temperament.independent')
+    default:
+      return tr('enums.temperament.proud')
+  }
+}
 
 // ==========================================
 // Icon URL Resolvers
@@ -151,6 +203,8 @@ const TraitIconBase = React.forwardRef<HTMLImageElement, TraitIconBaseProps>(
     },
     ref,
   ) => {
+    const revision = useLocaleStore((s) => s.revision)
+    void revision
     const dim = resolveSize(size)
 
     const imgNode = (
@@ -174,7 +228,7 @@ const TraitIconBase = React.forwardRef<HTMLImageElement, TraitIconBaseProps>(
     )
 
     if (showTooltip) {
-      return <AppTooltip content={`${category}: ${label}`}>{contentNode}</AppTooltip>
+      return <AppTooltip content={tr('shared.traitTooltip', { category, label })}>{contentNode}</AppTooltip>
     }
 
     return contentNode
@@ -198,6 +252,8 @@ export function TraitBadgeBase({
   showIconOnly = false,
   className,
 }: TraitBadgeProps & { category: string; label: string; icon: React.ReactNode }) {
+  const revision = useLocaleStore((s) => s.revision)
+  void revision
   const sizeClasses =
     size === 'sm'
       ? showIconOnly
@@ -224,7 +280,7 @@ export function TraitBadgeBase({
     </span>
   )
 
-  return <AppTooltip content={`${category}: ${label}`}>{badgeNode}</AppTooltip>
+  return <AppTooltip content={tr('shared.traitTooltip', { category, label })}>{badgeNode}</AppTooltip>
 }
 
 export const TraitBadge = TraitBadgeBase
@@ -235,11 +291,13 @@ export const TraitBadge = TraitBadgeBase
 
 export const SocialClassIcon = React.forwardRef<HTMLImageElement, SocialClassIconProps>(
   (props, ref) => {
+    const revision = useLocaleStore((s) => s.revision)
+    void revision
     const sc = parseSocialClass(props.value)
     return (
       <TraitIconBase
         ref={ref}
-        category="Social Class"
+        category={tr('shared.traitCategory.socialClass')}
         label={getSocialClassLabel(sc)}
         iconUrl={getSocialClassIconUrl(sc, props.variant)}
         {...props}
@@ -251,11 +309,13 @@ SocialClassIcon.displayName = 'SocialClassIcon'
 
 export const SkillTypeIcon = React.forwardRef<HTMLImageElement, SkillTypeIconProps>(
   (props, ref) => {
+    const revision = useLocaleStore((s) => s.revision)
+    void revision
     const st = parseSkillType(props.value)
     return (
       <TraitIconBase
         ref={ref}
-        category="Skill Class"
+        category={tr('shared.traitCategory.skillClass')}
         label={getSkillTypeLabel(st)}
         iconUrl={getSkillTypeIconUrl(st, props.variant)}
         {...props}
@@ -267,11 +327,13 @@ SkillTypeIcon.displayName = 'SkillTypeIcon'
 
 export const TemperamentIcon = React.forwardRef<HTMLImageElement, TemperamentIconProps>(
   (props, ref) => {
+    const revision = useLocaleStore((s) => s.revision)
+    void revision
     const tp = parseTemperament(props.value)
     return (
       <TraitIconBase
         ref={ref}
-        category="Temperament"
+        category={tr('shared.traitCategory.temperament')}
         label={getTemperamentLabel(tp)}
         iconUrl={getTemperamentIconUrl(tp, props.variant)}
         {...props}
@@ -298,13 +360,15 @@ export interface TemperamentBadgeProps extends TraitBadgeProps {
 }
 
 export const SocialClassBadge: React.FC<SocialClassBadgeProps> = (props) => {
+  const revision = useLocaleStore((s) => s.revision)
+  void revision
   const sc = parseSocialClass(props.value)
   const label = getSocialClassLabel(sc)
   const iconSize = props.size === 'sm' ? '0.875em' : props.size === 'md' ? '1.125em' : '1.375em'
 
   return (
     <TraitBadgeBase
-      category="Social Class"
+      category={tr('shared.traitCategory.socialClass')}
       label={label}
       icon={
         <SocialClassIcon
@@ -321,13 +385,15 @@ export const SocialClassBadge: React.FC<SocialClassBadgeProps> = (props) => {
 }
 
 export const SkillTypeBadge: React.FC<SkillTypeBadgeProps> = (props) => {
+  const revision = useLocaleStore((s) => s.revision)
+  void revision
   const st = parseSkillType(props.value)
   const label = getSkillTypeLabel(st)
   const iconSize = props.size === 'sm' ? '0.875em' : props.size === 'md' ? '1.125em' : '1.375em'
 
   return (
     <TraitBadgeBase
-      category="Skill Class"
+      category={tr('shared.traitCategory.skillClass')}
       label={label}
       icon={
         <SkillTypeIcon
@@ -344,13 +410,15 @@ export const SkillTypeBadge: React.FC<SkillTypeBadgeProps> = (props) => {
 }
 
 export const TemperamentBadge: React.FC<TemperamentBadgeProps> = (props) => {
+  const revision = useLocaleStore((s) => s.revision)
+  void revision
   const tp = parseTemperament(props.value)
   const label = getTemperamentLabel(tp)
   const iconSize = props.size === 'sm' ? '0.875em' : props.size === 'md' ? '1.125em' : '1.375em'
 
   return (
     <TraitBadgeBase
-      category="Temperament"
+      category={tr('shared.traitCategory.temperament')}
       label={label}
       icon={
         <TemperamentIcon

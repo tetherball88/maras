@@ -19,6 +19,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/IntimateThreadService.h"
 #include "maras/engine/JsonService.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/PromptStringsLoader.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -237,27 +238,26 @@ namespace MARAS::PapyrusInterface {
             return RE::BSScript::LatentStatus::kFailed;
         }
 
-        std::string fianceName = fiance ? ActorSvc::GetName(fiance->GetFormID()) : "your fiance";
+        std::string fianceName = fiance ? ActorSvc::GetName(fiance->GetFormID()) : "";
         if (fianceName.empty()) {
-            fianceName = "your fiance";
+            fianceName = MARAS::Tr("common.your_fiance_fallback");
         }
 
         App::ModalRequest req;
-        req.title = "Wedding Ceremony";
+        req.title = MARAS::Tr("modal.skip_wedding.title");
         req.subtitle = fianceName;
-        req.message = "Would you like to skip the formal Temple of Mara wedding ceremony with " + fianceName +
-                      " and marry immediately, or hold a traditional ceremony?";
+        req.message = MARAS::TrFmt("modal.skip_wedding.message", { { "fiance", fianceName } });
         req.tone = App::ModalTone::Default;
         req.size = App::ModalSize::Sm;
         req.defaultCancelButtonIndex = 1;
 
         req.controls.push_back(App::ModalControl::MakeCheckbox(
             "dont_ask_again",
-            "Remember my choice for future engagements",
+            MARAS::Tr("modal.skip_wedding.remember_choice"),
             false));
 
-        req.buttons.push_back(App::ModalButton::Make("skip_wedding", "Marry Immediately (Skip Ceremony)", App::ModalButtonVariant::Primary));
-        req.buttons.push_back(App::ModalButton::Make("hold_wedding", "Hold Wedding Ceremony", App::ModalButtonVariant::Secondary));
+        req.buttons.push_back(App::ModalButton::Make("skip_wedding", MARAS::Tr("modal.skip_wedding.btn_skip"), App::ModalButtonVariant::Primary));
+        req.buttons.push_back(App::ModalButton::Make("hold_wedding", MARAS::Tr("modal.skip_wedding.btn_hold"), App::ModalButtonVariant::Secondary));
 
         MARAS_LOG_INFO("PapyrusInterface: ShowSkipWeddingModal queuing modal for '{}'", fianceName);
 
@@ -344,7 +344,7 @@ namespace MARAS::PapyrusInterface {
         const RE::FormID targetFormID = targetActor ? targetActor->GetFormID() : 0;
         std::string targetName = targetActor ? ActorSvc::GetName(targetFormID) : "";
         if (targetName.empty()) {
-            targetName = isChild ? "Child" : "Spouse";
+            targetName = isChild ? MARAS::Tr("common.child_fallback") : MARAS::Tr("common.spouse_fallback");
         }
 
         const RE::FormID currentHouseID = (targetFormID != 0) ? houseSvc.GetTenantHouseFormID(targetFormID) : 0;
@@ -358,10 +358,10 @@ namespace MARAS::PapyrusInterface {
                 houseName = std::format("Home ({:08X})", houseID);
             }
             const auto tenants = houseSvc.GetPlayerHouseTenants(houseID);
-            std::string label = std::format("{} ({} resident{})",
-                                            houseName,
-                                            tenants.size(),
-                                            tenants.size() == 1 ? "" : "s");
+            std::string label = MARAS::TrPlural(
+                "modal.choose_home.house_option",
+                static_cast<std::int64_t>(tenants.size()),
+                { { "house", houseName } });
             std::string valStr = std::to_string(houseID);
             houseOptions.push_back({valStr, std::move(label)});
             if (defaultHouseVal.empty() || houseID == currentHouseID) {
@@ -370,35 +370,35 @@ namespace MARAS::PapyrusInterface {
         }
 
         App::ModalRequest req;
-        req.title = isChild ? "Choose Child Residence" : "Choose Spouse Residence";
+        req.title = isChild ? MARAS::Tr("modal.choose_home.title_child") : MARAS::Tr("modal.choose_home.title_spouse");
         req.subtitle = targetName;
         req.message = isChild
-            ? ("Select which player home " + targetName + " should live in.")
-            : ("Select which player home " + targetName + " should live in and how they should spend their daily schedule.");
+            ? MARAS::TrFmt("modal.choose_home.message_child", { { "actor", targetName } })
+            : MARAS::TrFmt("modal.choose_home.message_spouse", { { "actor", targetName } });
         req.tone = App::ModalTone::Default;
         req.size = App::ModalSize::Md;
         req.defaultCancelButtonIndex = 1;
 
         req.controls.push_back(App::ModalControl::MakeSelect(
             "house_id",
-            "Residence",
+            MARAS::Tr("modal.choose_home.label_residence"),
             std::move(houseOptions),
             defaultHouseVal));
 
         if (!isChild) {
             const bool currentStayAtHome = (targetFormID != 0) ? houseSvc.GetTenantStayAtHome(targetFormID) : true;
             std::vector<App::ModalSelectOption> schedOptions = {
-                {"stay", "Stay at Home (Sandbox in Residence)"},
-                {"original", "Keep Original AI Schedule"}};
+                {"stay", MARAS::Tr("modal.choose_home.schedule_stay")},
+                {"original", MARAS::Tr("modal.choose_home.schedule_original")}};
             req.controls.push_back(App::ModalControl::MakeSelect(
                 "schedule_mode",
-                "Spouse Schedule",
+                MARAS::Tr("modal.choose_home.label_schedule"),
                 std::move(schedOptions),
                 currentStayAtHome ? "stay" : "original"));
         }
 
-        req.buttons.push_back(App::ModalButton::Make("confirm", "Move to Residence", App::ModalButtonVariant::Primary));
-        req.buttons.push_back(App::ModalButton::Make("cancel", "Cancel", App::ModalButtonVariant::Secondary));
+        req.buttons.push_back(App::ModalButton::Make("confirm", MARAS::Tr("modal.choose_home.btn_move"), App::ModalButtonVariant::Primary));
+        req.buttons.push_back(App::ModalButton::Make("cancel", MARAS::Tr("modal.common.cancel"), App::ModalButtonVariant::Secondary));
 
         MARAS_LOG_INFO("PapyrusInterface: ShowChooseHomeModal queuing modal for '{}' (isChild={}, houses={})",
                        targetName, isChild, houses.size());
@@ -495,9 +495,11 @@ namespace MARAS::PapyrusInterface {
             std::string label;
             if (houseID != 0) {
                 const std::string houseName = App::HouseholdUseCases::GetHouseName(houseID);
-                label = std::format("{} — {}", spouseName, !houseName.empty() ? houseName : "Player Home");
+                const std::string resolvedHome = !houseName.empty() ? houseName : MARAS::Tr("common.player_home_fallback");
+                label = MARAS::TrFmt("modal.choose_adoption_spouse.option_with_home",
+                                     { { "spouse", spouseName }, { "home", resolvedHome } });
             } else {
-                label = std::format("{} (Not Assigned to a Player Home)", spouseName);
+                label = MARAS::TrFmt("modal.choose_adoption_spouse.option_no_home", { { "spouse", spouseName } });
             }
 
             std::string valStr = std::to_string(spouseID);
@@ -516,28 +518,28 @@ namespace MARAS::PapyrusInterface {
             return RE::BSScript::LatentStatus::kFailed;
         }
 
-        spouseOptions.push_back({"0", "None (Adopt as Single Parent)"});
+        spouseOptions.push_back({"0", MARAS::Tr("modal.choose_adoption_spouse.option_single")});
 
         const std::string childName = child ? ActorSvc::GetName(child->GetFormID()) : "";
 
         App::ModalRequest req;
-        req.title = "Adopt Child — Select Co-Parent";
-        req.subtitle = !childName.empty() ? childName : "Child Adoption";
+        req.title = MARAS::Tr("modal.choose_adoption_spouse.title");
+        req.subtitle = !childName.empty() ? childName : MARAS::Tr("modal.choose_adoption_spouse.subtitle_fallback");
         req.message = !childName.empty()
-            ? ("Choose which of your spouses will co-parent " + childName + " with you, or adopt as a single parent.")
-            : "Choose which of your spouses will co-parent this child with you, or adopt as a single parent.";
+            ? MARAS::TrFmt("modal.choose_adoption_spouse.message_named", { { "child", childName } })
+            : MARAS::Tr("modal.choose_adoption_spouse.message_unnamed");
         req.tone = App::ModalTone::Default;
         req.size = App::ModalSize::Md;
         req.defaultCancelButtonIndex = 1;
 
         req.controls.push_back(App::ModalControl::MakeSelect(
             "spouse_id",
-            "Co-Parent Spouse",
+            MARAS::Tr("modal.choose_adoption_spouse.label_spouse"),
             std::move(spouseOptions),
             defaultSpouseVal));
 
-        req.buttons.push_back(App::ModalButton::Make("confirm", "Confirm Co-Parent", App::ModalButtonVariant::Primary));
-        req.buttons.push_back(App::ModalButton::Make("single_parent", "Adopt as Single Parent", App::ModalButtonVariant::Secondary));
+        req.buttons.push_back(App::ModalButton::Make("confirm", MARAS::Tr("modal.choose_adoption_spouse.btn_confirm"), App::ModalButtonVariant::Primary));
+        req.buttons.push_back(App::ModalButton::Make("single_parent", MARAS::Tr("modal.choose_adoption_spouse.btn_single"), App::ModalButtonVariant::Secondary));
 
         MARAS_LOG_INFO("PapyrusInterface: ShowChooseAdoptionSpouseModal queuing modal (child='{}', spouses={})",
                        req.subtitle, spouses.size());
@@ -607,33 +609,35 @@ namespace MARAS::PapyrusInterface {
         }
 
         std::vector<App::ModalSelectOption> statusOptions = {
-            {"candidate", "Candidate"},
-            {"dating", "Dating"},
-            {"lover", "Lover"},
-            {"engaged", "Engaged"},
-            {"married", "Married"},
-            {"exdating", "Ex-Dating"},
-            {"exlover", "Ex-Lover"},
-            {"jilted", "Jilted"},
-            {"divorced", "Divorced"},
-            {"unregister", "Unregister from MARAS"}};
+            {"candidate", MARAS::Tr("common.status_candidate")},
+            {"dating", MARAS::Tr("common.status_dating")},
+            {"lover", MARAS::Tr("common.status_lover")},
+            {"engaged", MARAS::Tr("common.status_engaged")},
+            {"married", MARAS::Tr("common.status_married")},
+            {"exdating", MARAS::Tr("common.status_exdating")},
+            {"exlover", MARAS::Tr("common.status_exlover")},
+            {"jilted", MARAS::Tr("common.status_jilted")},
+            {"divorced", MARAS::Tr("common.status_divorced")},
+            {"unregister", MARAS::Tr("modal.debug_status.option_unregister")}};
+
+        const std::string currentStatusLabel = MARAS::TrOr("common.status_" + currentStatus, currentStatus);
 
         App::ModalRequest req;
-        req.title = "Debug Relationship Status";
+        req.title = MARAS::Tr("modal.debug_status.title");
         req.subtitle = targetName;
-        req.message = std::format("Current MARAS status with Player: '{}'. Select a new status to apply:", currentStatus);
+        req.message = MARAS::TrFmt("modal.debug_status.message", { { "status", currentStatusLabel } });
         req.tone = App::ModalTone::Default;
         req.size = App::ModalSize::Sm;
         req.defaultCancelButtonIndex = 1;
 
         req.controls.push_back(App::ModalControl::MakeSelect(
             "target_status",
-            "Target Relationship Status",
+            MARAS::Tr("modal.debug_status.label_target"),
             std::move(statusOptions),
             currentStatus));
 
-        req.buttons.push_back(App::ModalButton::Make("apply", "Apply Status", App::ModalButtonVariant::Primary));
-        req.buttons.push_back(App::ModalButton::Make("cancel", "Cancel", App::ModalButtonVariant::Secondary));
+        req.buttons.push_back(App::ModalButton::Make("apply", MARAS::Tr("modal.debug_status.btn_apply"), App::ModalButtonVariant::Primary));
+        req.buttons.push_back(App::ModalButton::Make("cancel", MARAS::Tr("modal.common.cancel"), App::ModalButtonVariant::Secondary));
 
         MARAS_LOG_INFO("PapyrusInterface: ShowDebugStatusModal queuing modal for '{}' (current='{}')",
                        targetName, currentStatus);
@@ -696,23 +700,25 @@ namespace MARAS::PapyrusInterface {
 
             switch (perceived.stage) {
                 case State::ChildStage::Unborn:
-                    item.badgeText = "Pregnancy";
+                    item.badgeText = MARAS::Tr("modal.child_migration.badge_pregnancy");
                     item.badgeTone = "warning";
                     break;
                 case State::ChildStage::Infant:
-                    item.badgeText = "Infant";
+                    item.badgeText = MARAS::Tr("modal.child_migration.badge_infant");
                     item.badgeTone = "accent";
                     break;
                 case State::ChildStage::Child:
-                    item.badgeText = perceived.isAdopted ? "Adopted" : "Child";
+                    item.badgeText = perceived.isAdopted
+                        ? MARAS::Tr("modal.child_migration.badge_adopted")
+                        : MARAS::Tr("modal.child_migration.badge_child");
                     item.badgeTone = perceived.isAdopted ? "accent" : "success";
                     break;
                 case State::ChildStage::Training:
-                    item.badgeText = "Training";
+                    item.badgeText = MARAS::Tr("modal.child_migration.badge_training");
                     item.badgeTone = "accent";
                     break;
                 case State::ChildStage::Adult:
-                    item.badgeText = "Adult Child";
+                    item.badgeText = MARAS::Tr("modal.child_migration.badge_adult");
                     item.badgeTone = "neutral";
                     break;
             }
@@ -734,11 +740,13 @@ namespace MARAS::PapyrusInterface {
                     }
                 }
                 if (guardianNames.size() >= 2) {
-                    item.subtitle = std::format("Adoptive Guardians: {} & {}", guardianNames[0], guardianNames[1]);
+                    item.subtitle = MARAS::TrFmt("modal.child_migration.sub_guardians_two",
+                                                 { { "guardianA", guardianNames[0] }, { "guardianB", guardianNames[1] } });
                 } else if (guardianNames.size() == 1) {
-                    item.subtitle = std::format("Adoptive Guardian: {}", guardianNames[0]);
+                    item.subtitle = MARAS::TrFmt("modal.child_migration.sub_guardian_one",
+                                                 { { "guardian", guardianNames[0] } });
                 } else {
-                    item.subtitle = "Adopted into Household";
+                    item.subtitle = MARAS::Tr("modal.child_migration.sub_adopted_fallback");
                 }
             } else {
                 const std::string motherName = resolveActorName(perceived.bioMother);
@@ -748,13 +756,16 @@ namespace MARAS::PapyrusInterface {
                 }
 
                 if (!motherName.empty() && !fatherName.empty()) {
-                    item.subtitle = std::format("Parents: {} & {}", motherName, fatherName);
+                    item.subtitle = MARAS::TrFmt("modal.child_migration.sub_parents_two",
+                                                 { { "mother", motherName }, { "father", fatherName } });
                 } else if (!motherName.empty()) {
-                    item.subtitle = std::format("Mother: {}", motherName);
+                    item.subtitle = MARAS::TrFmt("modal.child_migration.sub_mother_only",
+                                                 { { "mother", motherName } });
                 } else if (!fatherName.empty()) {
-                    item.subtitle = std::format("Father: {}", fatherName);
+                    item.subtitle = MARAS::TrFmt("modal.child_migration.sub_father_only",
+                                                 { { "father", fatherName } });
                 } else {
-                    item.subtitle = "Migrated Fertility Record";
+                    item.subtitle = MARAS::Tr("modal.child_migration.sub_fertility_fallback");
                 }
             }
 
@@ -772,23 +783,22 @@ namespace MARAS::PapyrusInterface {
         }
 
         App::ModalRequest req;
-        req.title = "Detected Pregnancies & Children";
-        req.subtitle = "First-Time Fertility & Adoption Migration";
-        req.message = "M.A.R.A.S migrated the following existing pregnancies, biological children, and adopted children into its household registry. "
-                      "Uncheck any stale or unwanted records you wish to discard:";
+        req.title = MARAS::Tr("modal.child_migration.title");
+        req.subtitle = MARAS::Tr("modal.child_migration.subtitle");
+        req.message = MARAS::Tr("modal.child_migration.message");
         req.tone = App::ModalTone::Default;
         req.size = App::ModalSize::Lg;
         req.defaultCancelButtonIndex = 0;
 
         req.controls.push_back(App::ModalControl::MakeChecklist(
             "migrated_children",
-            "Migrated Pregnancies & Children",
+            MARAS::Tr("modal.child_migration.checklist_label"),
             std::move(items),
             true,
-            "Unchecked entries will be removed from the M.A.R.A.S child and household registry."));
+            MARAS::Tr("modal.child_migration.checklist_desc")));
 
-        req.buttons.push_back(App::ModalButton::Make("keep_selected", "Keep Selected", App::ModalButtonVariant::Primary));
-        req.buttons.push_back(App::ModalButton::Make("discard_all", "Discard All", App::ModalButtonVariant::Secondary));
+        req.buttons.push_back(App::ModalButton::Make("keep_selected", MARAS::Tr("modal.child_migration.btn_keep"), App::ModalButtonVariant::Primary));
+        req.buttons.push_back(App::ModalButton::Make("discard_all", MARAS::Tr("modal.child_migration.btn_discard"), App::ModalButtonVariant::Secondary));
 
         MARAS_LOG_INFO("PapyrusInterface: ShowChildMigrationAuditModal queuing modal with {} migrated entries",
                        migratedChildIDs.size());
@@ -1245,6 +1255,8 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<GetMinRelRankForDial>(vm, "GetMinRelRankForDial");
         RegisterSynced<SetMinRelRankForDial>(vm, "SetMinRelRankForDial");
         RegisterSynced<DumpStoredData>(vm, "DumpStoredData");
+        RegisterSynced<NotifyLocalized>(vm, "NotifyLocalized");
+        RegisterSynced<TranslateKey>(vm, "TranslateKey");
 
         // Player children / household adoption functions
         RegisterSynced<AssignChildToHouse>(vm, "AssignChildToHouse");

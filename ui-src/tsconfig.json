@@ -17,8 +17,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@locales-en/*": ["../SKSE/Plugins/MARAS/localization/en/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../SKSE/Plugins/MARAS/localization/en/*.json"]
 }

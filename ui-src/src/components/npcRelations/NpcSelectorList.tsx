@@ -5,8 +5,10 @@ import { SearchInput } from '../shared/SearchInput'
 import { NpcTraitBadges } from '../shared/TraitIcons'
 import { VirtualList } from '../shared/VirtualList'
 import { Crown, User } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const NpcSelectorList: React.FC = () => {
+  const { t } = useTranslation()
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const relationships = useMarasStore((s) => s.relationships)
   const selectedId = useMarasStore((s) => s.selectedNpcRelationsId)
@@ -22,7 +24,7 @@ export const NpcSelectorList: React.FC = () => {
   // List of all registered NPCs including player
   const playerItem = {
     formId: PLAYER_FORM_ID,
-    name: npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)',
+    name: npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback'),
     race: npcProfiles.get(PLAYER_FORM_ID)?.race || 'Nord',
     gender: npcProfiles.get(PLAYER_FORM_ID)?.gender || 'female',
     pluginName: 'Skyrim.esm',
@@ -46,7 +48,7 @@ export const NpcSelectorList: React.FC = () => {
       <div className="p-[0.75rem] border-b border-border-divider bg-panel-raised">
         <SearchInput
           value={search}
-          placeholder="Search name, race, plugin, or Form ID..."
+          placeholder={t('npcRelations.selector.searchPlaceholder')}
           onChange={setSearch}
         />
       </div>
@@ -57,7 +59,7 @@ export const NpcSelectorList: React.FC = () => {
         estimateSize={52}
         overscan={6}
         className="flex-1 min-h-0 p-[0.5rem] overflow-y-auto"
-        emptyMessage="No characters found."
+        emptyMessage={t('npcRelations.selector.empty')}
         renderItem={(npc) => {
           const isSelected = selectedId === npc.formId
           const count = getPartnerCount(npc.formId)
@@ -90,7 +92,7 @@ export const NpcSelectorList: React.FC = () => {
                     {plugin && (
                       <>
                         <span>•</span>
-                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]" title={`Plugin: ${plugin}`}>
+                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]" title={t('shared.pluginTooltip', { plugin })}>
                           {plugin}
                         </span>
                       </>

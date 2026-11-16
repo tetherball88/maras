@@ -528,6 +528,8 @@ namespace MARAS::PapyrusInterface {
     int32_t GetMinRelRankForDial(RE::StaticFunctionTag*);
     void SetMinRelRankForDial(RE::StaticFunctionTag*, int32_t value);
     std::string DumpStoredData(RE::StaticFunctionTag*, std::string tag = "");
+    void NotifyLocalized(RE::StaticFunctionTag*, std::string key, std::string arg1 = "", std::string arg2 = "");
+    std::string TranslateKey(RE::StaticFunctionTag*, std::string key, std::string arg1 = "", std::string arg2 = "");
 
     // ========================================
     // Banter & SkyrimNet Coordination

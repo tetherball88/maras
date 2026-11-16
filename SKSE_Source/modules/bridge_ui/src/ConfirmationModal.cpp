@@ -9,6 +9,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/foundation/StringUtils.h"
@@ -222,40 +223,40 @@ namespace MARAS::Bridge::Ui {
             [[maybe_unused]] const std::string& actorAName,
             [[maybe_unused]] const std::string& actorBName) {
             if (action == "dating") {
-                return { "Confirm Relationship: Dating", "dating", ModalTone::Default, false };
+                return { MARAS::Tr("modal.confirm.title_dating"), MARAS::Tr("modal.confirm.label_dating"), ModalTone::Default, false };
             }
             if (action == "engaged" || action == "engagement") {
-                return { "Confirm Engagement", "engagement", ModalTone::Default, false };
+                return { MARAS::Tr("modal.confirm.title_engaged"), MARAS::Tr("modal.confirm.label_engaged"), ModalTone::Default, false };
             }
             if (action == "lover") {
-                return { "Confirm Secret Lover", "lover", ModalTone::Warning, false };
+                return { MARAS::Tr("modal.confirm.title_lover"), MARAS::Tr("modal.confirm.label_lover"), ModalTone::Warning, false };
             }
             if (action == "married" || action == "marry") {
-                return { "Confirm Marriage", "marriage", ModalTone::Success, false };
+                return { MARAS::Tr("modal.confirm.title_married"), MARAS::Tr("modal.confirm.label_married"), ModalTone::Success, false };
             }
             if (action == "exdating" || action == "breakup_dating") {
-                return { "Confirm Breakup (Dating)", "breakup", ModalTone::Warning, false };
+                return { MARAS::Tr("modal.confirm.title_exdating"), MARAS::Tr("modal.confirm.label_exdating"), ModalTone::Warning, false };
             }
             if (action == "jilted" || action == "breakup_engagement") {
-                return { "Confirm Broken Engagement", "breaking off the engagement", ModalTone::Warning, false };
+                return { MARAS::Tr("modal.confirm.title_jilted"), MARAS::Tr("modal.confirm.label_jilted"), ModalTone::Warning, false };
             }
             if (action == "exlover" || action == "breakup_lover") {
-                return { "Confirm Ending Lover Affair", "ending the lover relationship", ModalTone::Warning, false };
+                return { MARAS::Tr("modal.confirm.title_exlover"), MARAS::Tr("modal.confirm.label_exlover"), ModalTone::Warning, false };
             }
             if (action == "divorced" || action == "divorce") {
-                return { "Confirm Divorce", "divorce", ModalTone::Danger, false };
+                return { MARAS::Tr("modal.confirm.title_divorced"), MARAS::Tr("modal.confirm.label_divorced"), ModalTone::Danger, false };
             }
             if (action == "low_affection_divorce") {
-                return { "Confirm Divorce (Estranged)", "estranged divorce", ModalTone::Danger, false };
+                return { MARAS::Tr("modal.confirm.title_low_affection_divorce"), MARAS::Tr("modal.confirm.label_low_affection_divorce"), ModalTone::Danger, false };
             }
             if (action == "open_relationship") {
-                return { "Confirm Open Relationship", "opening the relationship", ModalTone::Warning, true };
+                return { MARAS::Tr("modal.confirm.title_open_relationship"), MARAS::Tr("modal.confirm.label_open_relationship"), ModalTone::Warning, true };
             }
             if (action == "close_relationship") {
-                return { "Confirm Closing Open Relationship", "closing the open relationship", ModalTone::Default, true };
+                return { MARAS::Tr("modal.confirm.title_close_relationship"), MARAS::Tr("modal.confirm.label_close_relationship"), ModalTone::Default, true };
             }
             return {
-                std::format("Confirm Action: {}", action),
+                MARAS::TrFmt("modal.confirm.title_fallback", { { "action", action } }),
                 std::string(action),
                 ModalTone::Default,
                 false
@@ -268,38 +269,31 @@ namespace MARAS::Bridge::Ui {
             const std::string& actorAName,
             const std::string& actorBName) {
             if (action == "low_affection_divorce") {
-                return std::format(
-                    "{} has grown estranged and is threatening to divorce {}. Accept the divorce or decline to attempt reconciliation?",
-                    actorAName,
-                    actorBName);
+                return MARAS::TrFmt(
+                    "modal.confirm.msg_low_affection_divorce",
+                    { { "actorA", actorAName }, { "actorB", actorBName } });
             }
             if (action == "open_relationship") {
-                return std::format(
-                    "Allow {} and {} to transition to an open relationship?",
-                    actorAName,
-                    actorBName);
+                return MARAS::TrFmt(
+                    "modal.confirm.msg_open_relationship",
+                    { { "actorA", actorAName }, { "actorB", actorBName } });
             }
             if (action == "close_relationship") {
-                return std::format(
-                    "Close the open relationship arrangement between {} and {}?",
-                    actorAName,
-                    actorBName);
+                return MARAS::TrFmt(
+                    "modal.confirm.msg_close_relationship",
+                    { { "actorA", actorAName }, { "actorB", actorBName } });
             }
             if (action == "exdating" || action == "breakup_dating" ||
                 action == "jilted" || action == "breakup_engagement" ||
                 action == "exlover" || action == "breakup_lover" ||
                 action == "divorced" || action == "divorce") {
-                return std::format(
-                    "Allow {} to proceed with {} involving {}?",
-                    actorAName,
-                    actionLabel,
-                    actorBName);
+                return MARAS::TrFmt(
+                    "modal.confirm.msg_breakup",
+                    { { "actorA", actorAName }, { "action", actionLabel }, { "actorB", actorBName } });
             }
-            return std::format(
-                "Allow {} and {} to enter {}?",
-                actorAName,
-                actorBName,
-                actionLabel);
+            return MARAS::TrFmt(
+                "modal.confirm.msg_enter",
+                { { "actorA", actorAName }, { "actorB", actorBName }, { "action", actionLabel } });
         }
 
         void ResolveLatentOnGameThread(
@@ -465,7 +459,7 @@ namespace MARAS::Bridge::Ui {
         ModalRequest req;
         req.modalType = "generic";
         req.title = meta.title;
-        req.subtitle = std::format("{} & {}", actorAName, actorBName);
+        req.subtitle = MARAS::TrFmt("modal.common.pair_subtitle", { { "actorA", actorAName }, { "actorB", actorBName } });
         req.tone = meta.tone;
         req.size = ModalSize::Sm;
         req.message = BuildDefaultMessage(action, meta.label, actorAName, actorBName);
@@ -480,15 +474,15 @@ namespace MARAS::Bridge::Ui {
             req.message = it->get<std::string>();
         } else if (auto itReason = paramsObj.find("reason");
                    itReason != paramsObj.end() && itReason->is_string() && !itReason->get_ref<const std::string&>().empty()) {
-            req.message.append(std::format("\n\nReason: {}", itReason->get<std::string>()));
+            req.message.append(MARAS::TrFmt("modal.common.reason_suffix", { { "reason", itReason->get<std::string>() } }));
         }
 
         const bool skyrimNetAvailable = App::GetSkyrimNetGateway().IsAvailable();
-        req.buttons.push_back(ModalButton::Make("accept", "Accept", ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("accept", MARAS::Tr("modal.common.accept"), ModalButtonVariant::Primary));
         if (skyrimNetAvailable) {
-            req.buttons.push_back(ModalButton::Make("decline_explain", "Decline (Explain)", ModalButtonVariant::Outline));
+            req.buttons.push_back(ModalButton::Make("decline_explain", MARAS::Tr("modal.common.decline_explain"), ModalButtonVariant::Outline));
         }
-        req.buttons.push_back(ModalButton::Make("cancel", "Cancel", ModalButtonVariant::Secondary));
+        req.buttons.push_back(ModalButton::Make("cancel", MARAS::Tr("modal.common.cancel"), ModalButtonVariant::Secondary));
 
         MARAS_LOG_DEBUG(
             "[ConfirmationModal] Showing modal '{}' for {:08X} ({}) & {:08X} ({}) [SkyrimNet={}]",

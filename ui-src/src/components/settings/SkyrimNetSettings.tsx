@@ -1,11 +1,14 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { useTranslation } from '../../i18n'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SectionCard } from '../shared/SectionCard'
 import { CheckCircle, AlertTriangle, Target, Brain } from 'lucide-react'
 
 export const SkyrimNetSettings: React.FC = () => {
+  const { t, tp } = useTranslation()
+  void tp
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
 
@@ -13,7 +16,7 @@ export const SkyrimNetSettings: React.FC = () => {
 
   const toggleSimSlot = (
     <label className="flex items-center gap-[0.375rem] text-xs text-foreground-secondary cursor-pointer">
-      <span>Simulate Non-SkyrimNet:</span>
+      <span>{t('settings.skyrimNet.simulateToggleLabel')}</span>
       <ToggleSwitch
         checked={Boolean(settings.simulateNoSkyrimNet)}
         onChange={(val) => updateSetting('simulateNoSkyrimNet', val)}
@@ -28,12 +31,14 @@ export const SkyrimNetSettings: React.FC = () => {
           <AlertTriangle className="w-[1.25em] h-[1.25em] text-status-warning flex-shrink-0 mt-[0.125rem]" />
           <div className="flex-1">
             <div className="font-semibold text-status-warning mb-[0.125rem]">
-              {settings.simulateNoSkyrimNet ? 'SkyrimNet Disabled (Simulation Mode)' : 'SkyrimNet.dll Not Detected'}
+              {settings.simulateNoSkyrimNet
+                ? t('settings.skyrimNet.disabledSimTitle')
+                : t('settings.skyrimNet.notDetectedTitle')}
             </div>
             <div>
               {settings.simulateNoSkyrimNet
-                ? 'Non-SkyrimNet simulation is currently active. M.A.R.A.S features operate under standard non-AI rules (Dice Roll matchmaking, vanilla proposal dialog, 2-button modals). You can disable simulation in Cheats & Debug Settings.'
-                : 'SkyrimNet is required for AI-generated dialogue, prompt actions, and response confirmation modals. Features in this section are automatically disabled per mod safety gating rules.'}
+                ? t('settings.skyrimNet.disabledSimDesc')
+                : t('settings.skyrimNet.notDetectedDesc')}
             </div>
           </div>
           {settings.simulateNoSkyrimNet && (
@@ -42,21 +47,25 @@ export const SkyrimNetSettings: React.FC = () => {
               onClick={() => updateSetting('simulateNoSkyrimNet', false)}
               className="px-2 py-1 text-xs font-medium rounded border border-status-warning/40 text-status-warning hover:bg-status-warning/20 transition-all cursor-pointer whitespace-nowrap"
             >
-              Disable Simulation
+              {t('settings.skyrimNet.disableSimBtn')}
             </button>
           )}
         </div>
       ) : (
         <div className="bg-status-success-soft border border-status-success rounded-md p-[0.625rem] text-xs text-foreground-primary flex items-center gap-[0.375rem]">
           <CheckCircle className="w-[1.125em] h-[1.125em] text-status-success" />
-          <span>SkyrimNet DLL Active — Prompt extensions & event listeners registered.</span>
+          <span>{t('settings.skyrimNet.activeBanner')}</span>
         </div>
       )}
 
-      <SectionCard title="AI Relationship Action Detection" icon={Target} actionSlot={toggleSimSlot}>
+      <SectionCard
+        title={t('settings.skyrimNet.actionDetectionTitle')}
+        icon={Target}
+        actionSlot={toggleSimSlot}
+      >
         <SettingRow
-          label="Action Distance Radius (units)"
-          description="Maximum distance in game units (~70 units ≈ 1 meter) to scan for valid partner targets. If no eligible target actor is within this radius, proposal and consideration actions remain unavailable."
+          label={t('settings.skyrimNet.actionRadiusLabel')}
+          description={t('settings.skyrimNet.actionRadiusDesc')}
           disabled={isGatedDisabled}
         >
           <input
@@ -77,10 +86,10 @@ export const SkyrimNetSettings: React.FC = () => {
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="AI Evaluation & Memory Engine" icon={Brain}>
+      <SectionCard title={t('settings.skyrimNet.evalMemoryTitle')} icon={Brain}>
         <SettingRow
-          label="Use SkyrimNet Decisions (Jev)"
-          description="When enabled, matchmaking verification, player-partner agency, paternity secret reveals, and bio-father step-in evaluations use SkyrimNet's typed Jev Decisions API (single-pass probability scoring with no broken JSON errors). Automatically falls back to the legacy Chat LLM prompt if no Decisions route is configured in SkyrimNet."
+          label={t('settings.skyrimNet.useDecisionsLabel')}
+          description={t('settings.skyrimNet.useDecisionsDesc')}
           disabled={isGatedDisabled}
         >
           <ToggleSwitch
@@ -90,8 +99,8 @@ export const SkyrimNetSettings: React.FC = () => {
           />
         </SettingRow>
         <SettingRow
-          label="LLM-Generated Memories"
-          description="When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request."
+          label={t('settings.skyrimNet.llmMemoriesLabel')}
+          description={t('settings.skyrimNet.llmMemoriesDesc')}
           disabled={isGatedDisabled}
         >
           <ToggleSwitch
@@ -104,4 +113,3 @@ export const SkyrimNetSettings: React.FC = () => {
     </div>
   )
 }
-

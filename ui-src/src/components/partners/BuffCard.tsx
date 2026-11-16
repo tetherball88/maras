@@ -1,7 +1,60 @@
 import React, { useState } from 'react'
-import { BuffItem, BuffContributor } from '../../types'
+import { BuffItem } from '../../types'
 import { Badge } from '@/components/ui/badge'
-import { ChevronDown, ChevronRight, User, Users, ShieldAlert, Sparkles, UserPlus } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, ShieldAlert, Sparkles, UserPlus } from 'lucide-react'
+import { t as tImperative, useTranslation } from '../../i18n'
+
+export function getBuffCategoryLabel(category: string): string {
+  const lower = (category || '').trim().toLowerCase()
+  switch (lower) {
+    case 'outcast':
+      return tImperative('enums.socialClass.outcast')
+    case 'poverty':
+      return tImperative('enums.socialClass.poverty')
+    case 'working':
+      return tImperative('enums.socialClass.working')
+    case 'middle':
+      return tImperative('enums.socialClass.middle')
+    case 'wealthy':
+      return tImperative('enums.socialClass.wealthy')
+    case 'religious':
+      return tImperative('enums.socialClass.religious')
+    case 'nobles':
+    case 'noble':
+      return tImperative('enums.socialClass.nobles')
+    case 'rulers':
+    case 'ruler':
+      return tImperative('enums.socialClass.rulers')
+    case 'warrior':
+      return tImperative('enums.skillType.warrior')
+    case 'mage':
+      return tImperative('enums.skillType.mage')
+    case 'rogue':
+      return tImperative('enums.skillType.rogue')
+    case 'craftsman':
+      return tImperative('enums.skillType.craftsman')
+    case 'ranger':
+      return tImperative('enums.skillType.ranger')
+    case 'orator':
+      return tImperative('enums.skillType.orator')
+    case 'spouses':
+      return tImperative('household.buffs.categories.spouses')
+    case 'children':
+      return tImperative('household.buffs.categories.children')
+    case 'followers':
+      return tImperative('household.buffs.categories.followers')
+    case 'houses':
+      return tImperative('household.buffs.categories.houses')
+    case 'synergy':
+      return tImperative('household.buffs.categories.synergy')
+    case 'permanent':
+      return tImperative('household.buffs.categories.permanent')
+    case 'follower':
+      return tImperative('household.buffs.categories.follower')
+    default:
+      return category
+  }
+}
 
 export const BUFF_ICON_MAP: Record<string, string> = {
   // Skill Types (Follower Buffs)
@@ -29,6 +82,7 @@ interface BuffCardProps {
 }
 
 export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
+  const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
 
   const iconSrc = BUFF_ICON_MAP[buff.id.toLowerCase()] || './assets/icons/buffs/bond_of_steel.png'
@@ -44,9 +98,14 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
     ? absBaseValue.toString()
     : absBaseValue.toFixed(1)
 
-  const isPercent = buff.unit === '%'
-  const valueDisplay = isPercent ? `${formattedEffectiveNum}%` : `${formattedEffectiveNum} ${buff.unit}`
-  const baseValueDisplay = isPercent ? `${formattedBaseNum}%` : `${formattedBaseNum} ${buff.unit}`
+  const formatBuffValue = (formattedNum: string) => {
+    if (buff.unit === '%') return `${formattedNum}%`
+    if (buff.unit === 'points') return t('household.buffs.unitPoints', { value: formattedNum })
+    return `${formattedNum} ${buff.unit}`
+  }
+  const valueDisplay = formatBuffValue(formattedEffectiveNum)
+  const baseValueDisplay = formatBuffValue(formattedBaseNum)
+  const categoryLabel = getBuffCategoryLabel(buff.category)
 
   const hasContributors = buff.contributors && buff.contributors.length > 0
   const hasPotentialSpouses = buff.potentialSpouses && buff.potentialSpouses.length > 0
@@ -54,10 +113,10 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
 
   const getRankName = (rank?: number) => {
     if (rank === undefined || rank === null) return ''
-    if (rank === 0) return 'Lead'
-    if (rank === 1) return '2nd'
-    if (rank === 2) return '3rd'
-    return `Rank ${rank + 1}`
+    if (rank === 0) return t('household.buffs.rankLead')
+    if (rank === 1) return t('household.buffs.rank2nd')
+    if (rank === 2) return t('household.buffs.rank3rd')
+    return t('household.buffs.rankN', { rank: rank + 1 })
   }
 
   return (
@@ -75,7 +134,7 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
           <div className="flex items-center gap-[0.75rem] min-w-0 flex-1">
             <div
               className={`relative w-[3rem] h-[3rem] rounded-md flex-shrink-0 flex items-center justify-center p-[0.25rem] border ${buff.isActive
-                  ? 'bg-accent-soft/30 border-accent/60 shadow-[0_0_12px_rgba(217,119,6,0.2)]'
+                  ? 'bg-accent-soft/30 border-accent/60 shadow-[0_0_0.75rem_rgba(217,119,6,0.2)]'
                   : 'bg-panel-inset border-border-divider opacity-60 grayscale'
                 }`}
             >
@@ -93,20 +152,20 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
               <h3 className="text-sm md:text-base font-semibold text-foreground-primary tracking-wide truncate">
                 {buff.name}
               </h3>
-              <div className="flex items-center gap-[0.375rem] mt-[0.25rem]">
+              <div className="flex items-center gap-[0.375rem] mt-[0.25rem] flex-wrap">
                 <Badge
                   variant={buff.categoryType === 'permanent' ? 'default' : 'secondary'}
                   className="text-[0.6875rem] py-0 px-[0.375rem] leading-tight"
                 >
-                  {buff.category}
+                  {categoryLabel}
                 </Badge>
                 {buff.isActive ? (
                   <Badge variant="success" className="text-[0.6875rem] py-0 px-[0.375rem] leading-tight">
-                    Active
+                    {t('household.buffs.activeBadge')}
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="text-[0.6875rem] py-0 px-[0.375rem] text-foreground-muted leading-tight">
-                    Inactive
+                    {t('household.buffs.inactiveBadge')}
                   </Badge>
                 )}
               </div>
@@ -122,7 +181,7 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
                     {valueDisplay}
                   </span>
                   <span className="text-[0.6875rem] text-foreground-muted font-mono leading-tight mt-[0.0625rem]">
-                    Base: {baseValueDisplay}
+                    {t('household.buffs.baseValue', { value: baseValueDisplay })}
                   </span>
                 </div>
                 <span className="px-[0.5rem] py-[0.1875rem] rounded bg-accent-soft text-accent-bright font-mono text-xs font-semibold border border-border-accent flex-shrink-0">
@@ -135,23 +194,23 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
                   0.00x
                 </span>
                 <span className="text-[0.6875rem] text-foreground-muted mt-[0.125rem]">
-                  Base: {baseValueDisplay}
+                  {t('household.buffs.baseValue', { value: baseValueDisplay })}
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Description Text with standardized height */}
-        <div className="text-xs text-foreground-secondary leading-relaxed bg-panel-inset/60 p-[0.5rem] rounded border border-border-divider/70 h-[3.75rem] min-h-[3.75rem] flex items-center">
-          <p className="line-clamp-2">
+        {/* Description Text with flexible height for multi-line translations */}
+        <div className="text-xs text-foreground-secondary leading-relaxed bg-panel-inset/60 p-[0.5rem] rounded border border-border-divider/70 min-h-[3.75rem] flex items-center">
+          <p>
             {buff.description}{' '}
             <strong className={buff.isActive ? 'text-accent-bright font-semibold' : 'text-foreground-primary'}>
               {buff.isActive ? valueDisplay : baseValueDisplay}
             </strong>
             {!buff.isActive && (
               <span className="text-foreground-muted italic ml-[0.25rem]">
-                (Inactive)
+                {t('household.buffs.inactiveInline')}
               </span>
             )}
           </p>
@@ -171,16 +230,17 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
               )}
               <span>
                 {hasContributors
-                  ? `Contributing Spouses (${buff.contributors.length})`
-                  : 'Spouses Overview'}
-                {hasPotentialSpouses && !hasContributors && ` • ${buff.potentialSpouses?.length} Available at Home`}
+                  ? t('household.buffs.contributingSpouses', { count: buff.contributors.length })
+                  : t('household.buffs.spousesOverview')}
+                {hasPotentialSpouses && !hasContributors &&
+                  t('household.buffs.availableAtHomeSuffix', { count: buff.potentialSpouses?.length ?? 0 })}
               </span>
             </button>
 
             <span className="text-[0.6875rem] text-foreground-muted">
               {buff.categoryType === 'permanent'
-                ? 'Scale: Rank × Affection'
-                : 'Scale: Affection'}
+                ? t('household.buffs.scaleRankAffection')
+                : t('household.buffs.scaleAffection')}
             </span>
           </div>
         )}
@@ -188,7 +248,7 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
         {!canExpand && (
           <div className="pt-[0.25rem] border-t border-border-divider/50 text-[0.6875rem] text-foreground-muted flex items-center gap-[0.375rem] min-h-[2rem]">
             <ShieldAlert className="w-[0.9em] h-[0.9em]" />
-            <span>No married spouses currently belong to this category.</span>
+            <span>{t('household.buffs.noMarriedSpouses')}</span>
           </div>
         )}
       </div>
@@ -201,7 +261,7 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
             <div className="space-y-[0.375rem]">
               <div className="text-[0.6875rem] uppercase font-semibold text-foreground-muted tracking-wider flex items-center gap-[0.375rem]">
                 <Sparkles className="w-[0.9em] h-[0.9em] text-accent" />
-                <span>Active Contributors (Multiplying Bonus)</span>
+                <span>{t('household.buffs.activeContributorsHeader')}</span>
               </div>
 
               <div className="flex flex-col gap-[0.375rem]">
@@ -235,14 +295,14 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
                       <div className="flex items-center gap-[0.375rem] flex-wrap">
                         {c.rank !== undefined && (
                           <span className="inline-flex items-center gap-[0.25rem] bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-divider">
-                            <span className="text-foreground-muted">Rank:</span>
+                            <span className="text-foreground-muted">{t('household.buffs.rankLabel')}</span>
                             <span className="text-accent font-medium font-mono">
                               {getRankName(c.rank)} (x{c.rankMultiplier?.toFixed(2)})
                             </span>
                           </span>
                         )}
                         <span className="inline-flex items-center gap-[0.25rem] bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-divider">
-                          <span className="text-foreground-muted">Affection:</span>
+                          <span className="text-foreground-muted">{t('household.buffs.affectionLabel')}</span>
                           <span className="text-foreground-primary font-medium font-mono">
                             {Math.round(c.affection)}/100 (x{c.affectionMultiplier.toFixed(2)})
                           </span>
@@ -251,7 +311,7 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
 
                       {c.isFollower && (
                         <span className="inline-flex items-center text-[0.625rem] text-status-success bg-status-success-soft px-[0.375rem] py-[0.0625rem] rounded border border-status-success/30 font-medium flex-shrink-0">
-                          Active Follower
+                          {t('household.buffs.activeFollowerBadge')}
                         </span>
                       )}
                     </div>
@@ -266,7 +326,7 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
             <div className="space-y-[0.375rem] pt-[0.25rem]">
               <div className="text-[0.6875rem] uppercase font-semibold text-foreground-muted tracking-wider flex items-center gap-[0.375rem]">
                 <UserPlus className="w-[0.9em] h-[0.9em] text-foreground-secondary" />
-                <span>Available at Home (Recruit as follower to activate)</span>
+                <span>{t('household.buffs.availableAtHomeHeader')}</span>
               </div>
 
               <div className="flex flex-col gap-[0.375rem]">
@@ -289,23 +349,23 @@ export const BuffCard: React.FC<BuffCardProps> = ({ buff, onNpcClick }) => {
                       </div>
 
                       <span className="text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-panel-raised border border-border-divider text-foreground-muted font-medium flex-shrink-0">
-                        At Home (Not Following)
+                        {t('household.buffs.atHomeNotFollowing')}
                       </span>
                     </div>
 
                     {/* Bottom Row: Detail badges */}
                     <div className="flex items-center gap-[0.375rem] text-[0.6875rem] flex-wrap">
                       <span className="inline-flex items-center gap-[0.25rem] bg-panel-raised px-[0.375rem] py-[0.0625rem] rounded border border-border-divider">
-                        <span className="text-foreground-muted">Affection:</span>
+                        <span className="text-foreground-muted">{t('household.buffs.affectionLabel')}</span>
                         <span className="text-foreground-primary font-medium font-mono">
                           {Math.round(p.affection)}/100
                         </span>
                       </span>
                       <span className="inline-flex items-center gap-[0.25rem] bg-accent-soft/30 px-[0.375rem] py-[0.0625rem] rounded border border-border-accent/40 text-accent-bright font-mono">
-                        Potential: +{p.affectionMultiplier.toFixed(2)}x
+                        {t('household.buffs.potentialMultiplier', { multiplier: p.affectionMultiplier.toFixed(2) })}
                       </span>
                       <span className="text-foreground-muted text-[0.625rem] italic">
-                        Recruit as follower to activate
+                        {t('household.buffs.recruitHint')}
                       </span>
                     </div>
                   </div>

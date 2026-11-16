@@ -3,6 +3,7 @@
 #include "maras/domain/household/SpouseBuffRules.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BonusesConfigLoader.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/PollingService.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/state/EngineSyncPlan.h"
@@ -58,12 +59,13 @@ namespace MARAS::Bridge::Ui {
                                                ? (eval.baseValue * eval.multiplier)
                                                : eval.effectiveValue;
 
+            const auto& locSvc = Engine::LocalizationService::GetSingleton();
             nlohmann::json entry = nlohmann::json::object();
             entry["id"] = eval.categoryKey;
             entry["category"] = eval.categoryKey;
             entry["categoryType"] = categoryType;
-            entry["name"] = eval.bonusName;
-            entry["description"] = eval.description;
+            entry["name"] = locSvc.ResolveBonusName(eval.categoryKey, 0, eval.bonusName);
+            entry["description"] = locSvc.ResolveBonusDescription(eval.categoryKey, 0, eval.description);
             entry["unit"] = eval.unit;
             entry["type"] = eval.bonusType;
             entry["baseValue"] = eval.baseValue;

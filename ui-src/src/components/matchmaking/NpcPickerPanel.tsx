@@ -7,6 +7,7 @@ import { NpcTraitBadges } from '../shared/TraitIcons'
 import { VirtualList } from '../shared/VirtualList'
 import { Crown, User, Heart, RefreshCw } from 'lucide-react'
 import { NPCProfile, CompactNPC } from '../../types'
+import { useTranslation } from '../../i18n'
 
 interface NpcPickerPanelProps {
   side: 'a' | 'b'
@@ -14,6 +15,7 @@ interface NpcPickerPanelProps {
 }
 
 export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) => {
+  const { t } = useTranslation()
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const relationships = useMarasStore((s) => s.relationships)
   const allSkyrimNpcs = useMarasStore((s) => s.allSkyrimNpcs)
@@ -41,7 +43,7 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
   }, [allSkyrimNpcs.length, fetchAllSkyrimNpcs])
 
   const playerProfile = npcProfiles.get(PLAYER_FORM_ID)
-  const playerName = playerProfile?.name || 'Prisoner (Player)'
+  const playerName = playerProfile?.name || t('shared.playerFallback')
   const playerRace = playerProfile?.race || 'Nord'
   const playerGender = playerProfile?.gender || 'female'
 
@@ -71,8 +73,11 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
         const partnerName =
           partnerId === PLAYER_FORM_ID
             ? playerName
-            : npcProfiles.get(partnerId)?.name || 'Unknown'
-        return `${getStatusLabel(r.status)} with ${partnerName}`
+            : npcProfiles.get(partnerId)?.name || t('shared.unknown')
+        return t('matchmaking.picker.statusWithPartner', {
+          status: getStatusLabel(r.status),
+          partner: partnerName,
+        })
       })
     : []
 
@@ -111,16 +116,18 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
           <button
             onClick={() => fetchAllSkyrimNpcs()}
             disabled={isLoadingAllNpcs}
-            title="Refresh Skyrim NPCs"
+            title={t('matchmaking.picker.refreshTooltip')}
             className="flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted hover:text-accent p-[0.125rem] rounded transition-colors cursor-pointer normal-case font-normal"
           >
             <RefreshCw className={`w-[0.875em] h-[0.875em] ${isLoadingAllNpcs ? 'animate-spin text-accent' : ''}`} />
-            <span>{isLoadingAllNpcs ? 'Refreshing...' : 'Refresh'}</span>
+            <span>
+              {isLoadingAllNpcs ? t('matchmaking.picker.refreshing') : t('matchmaking.picker.refresh')}
+            </span>
           </button>
         </div>
         <SearchInput
           value={searchInput}
-          placeholder="Search any Skyrim NPC by name, race, plugin, or Form ID..."
+          placeholder={t('matchmaking.picker.searchPlaceholder')}
           onChange={setSearchInput}
         />
       </div>
@@ -131,9 +138,9 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
           <div className="text-xs font-bold text-accent-bright flex items-center justify-between">
             <div className="flex items-center gap-[0.25rem] flex-wrap">
               <Heart className="w-[0.875em] h-[0.875em] text-accent" />
-              <span>Selected: {selectedNpc.name}</span>
+              <span>{t('matchmaking.picker.selectedLabel', { name: selectedNpc.name })}</span>
               {selectedNpc.pluginName && (
-                <span className="text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${selectedNpc.pluginName}`}>
+                <span className="text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={t('shared.pluginTooltip', { plugin: selectedNpc.pluginName })}>
                   {selectedNpc.pluginName}
                 </span>
               )}
@@ -145,7 +152,7 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
           <div className="text-[0.6875rem] text-foreground-secondary">
             {selectedRelSummary.length > 0
               ? selectedRelSummary.join(', ')
-              : 'No existing relationships'}
+              : t('matchmaking.picker.noExistingRelationships')}
           </div>
         </div>
       )}
@@ -155,7 +162,11 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
         items={displayNpcs}
         estimateSize={52}
         overscan={8}
-        emptyMessage={isLoadingAllNpcs ? 'Loading Skyrim NPCs...' : 'No matching NPCs found.'}
+        emptyMessage={
+          isLoadingAllNpcs
+            ? t('matchmaking.picker.loadingNpcs')
+            : t('matchmaking.picker.emptyNpcs')
+        }
         renderItem={(npc) => {
           const isSelected = selectedId === npc.formId
           const isDisabled = otherSelectedId === npc.formId
@@ -163,7 +174,9 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
           const profile = !isPlayer ? npcProfiles.get(npc.formId) : null
           const plugin = npc.pluginName || profile?.pluginName
           const isFemale = npc.gender === 'female'
-          const genderLabel = isFemale ? '♀ Female' : '♂ Male'
+          const genderLabel = isFemale
+            ? t('matchmaking.picker.genderFemale')
+            : t('matchmaking.picker.genderMale')
           const genderColor = isFemale ? 'text-pink-400 bg-pink-950/40 border-pink-800/40' : 'text-blue-400 bg-blue-950/40 border-blue-800/40'
 
           return (
@@ -198,7 +211,7 @@ export const NpcPickerPanel: React.FC<NpcPickerPanelProps> = ({ side, title }) =
                     {plugin && (
                       <>
                         <span>•</span>
-                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]" title={`Plugin: ${plugin}`}>
+                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]" title={t('shared.pluginTooltip', { plugin })}>
                           {plugin}
                         </span>
                       </>

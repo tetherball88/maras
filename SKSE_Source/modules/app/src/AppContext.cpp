@@ -1,6 +1,7 @@
 #include "maras/app/AppContext.h"
 
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/TaskDispatcher.h"
 
 #include <atomic>
@@ -28,6 +29,7 @@ namespace MARAS::App {
             void Revert() override {}
             void SendOverviewData() override {}
             void SendSettingsData() override {}
+            void SendLocaleData() override {}
             void SendNPCList() override {}
             void SendNPCDetail(std::uint32_t) override {}
             void SendHouseholdBuffs() override {}
@@ -272,15 +274,16 @@ namespace MARAS::App {
 
         auto& skyrimNet = GetSkyrimNetGateway();
         ModalRequest req;
-        req.title = "LLM Evaluation Failed";
+        req.title = Tr("modal.llm_retry.title");
         req.subtitle = evaluationType;
-        req.message = "Choose Retry to send the request again, or Ignore to skip this evaluation.";
+        req.message = Tr("modal.llm_retry.message_single");
         req.tone = ModalTone::Warning;
         req.size = ModalSize::Md;
         req.defaultCancelButtonIndex = 1;
 
         if (!description.empty()) {
-            req.controls.push_back(ModalControl::MakeInfoBox("error_details", "Failure Details", description, ModalTone::Warning));
+            req.controls.push_back(ModalControl::MakeInfoBox(
+                "error_details", Tr("modal.llm_retry.details_label"), description, ModalTone::Warning));
         }
         req.controls.push_back(ModalControl::MakeInfoBox(
             "error_guidance",
@@ -288,8 +291,8 @@ namespace MARAS::App {
             skyrimNet.GetLLMFailureGuidance(failureType, llmVariant),
             ModalTone::Default));
 
-        req.buttons.push_back(ModalButton::Make("retry", "Retry Request", ModalButtonVariant::Primary));
-        req.buttons.push_back(ModalButton::Make("ignore", "Ignore", ModalButtonVariant::Secondary));
+        req.buttons.push_back(ModalButton::Make("retry", Tr("modal.llm_retry.btn_retry"), ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make("ignore", Tr("modal.common.ignore"), ModalButtonVariant::Secondary));
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
         GetModalGateway().ShowModal(

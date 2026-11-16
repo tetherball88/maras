@@ -1,5 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { t } from '../../i18n'
+import { useLocaleStore } from '../../store/useLocaleStore'
 
 interface Props {
   children: ReactNode
@@ -11,6 +13,8 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
+  private unsubscribeLocale?: () => void
+
   public state: State = {
     hasError: false,
     error: null,
@@ -18,6 +22,14 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error }
+  }
+
+  public componentDidMount() {
+    this.unsubscribeLocale = useLocaleStore.subscribe(() => this.forceUpdate())
+  }
+
+  public componentWillUnmount() {
+    this.unsubscribeLocale?.()
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -39,9 +51,11 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="w-[1.75rem] h-[1.75rem]" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-foreground-primary">An error occurred in M.A.R.A.S UI</h2>
+              <h2 className="text-base font-bold text-foreground-primary">
+                {t('shared.errorBoundary.title')}
+              </h2>
               <p className="text-xs text-foreground-muted mt-[0.25rem] leading-relaxed">
-                The UI encountered an unexpected error. You can reload the view to recover state.
+                {t('shared.errorBoundary.description')}
               </p>
             </div>
             {this.state.error?.message && (
@@ -56,7 +70,7 @@ export class ErrorBoundary extends Component<Props, State> {
               className="px-[1.25rem] py-[0.5rem] bg-accent hover:bg-accent-bright text-panel font-semibold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-[0.5rem]"
             >
               <RefreshCw className="w-[1rem] h-[1rem]" />
-              <span>Reload UI</span>
+              <span>{t('shared.errorBoundary.reloadButton')}</span>
             </button>
           </div>
         </div>

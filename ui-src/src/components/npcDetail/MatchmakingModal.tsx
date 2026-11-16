@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from '../../i18n'
 import { useMarasStore } from '../../store/useMarasStore'
 import { RelationshipStatus, NPCProfile, CompactNPC } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
@@ -9,6 +10,8 @@ import { X, Sparkles, User, Check, Bot, Search, HeartHandshake, RefreshCw, BookO
 import { useAvailableStatuses, getAvailableStatuses } from '../../utils/statusAvailability'
 
 export const MatchmakingModal: React.FC = () => {
+  const { t, tp } = useTranslation()
+  void tp
   const isOpen = useMarasStore((s) => s.matchmakingModalOpen)
   const setOpen = useMarasStore((s) => s.setMatchmakingModalOpen)
   const targetNpcId = useMarasStore((s) => s.matchmakingTargetNpcId)
@@ -74,10 +77,28 @@ export const MatchmakingModal: React.FC = () => {
 
   const isSkyrimNetEnabled = Boolean(settings.hasSkyrimNet)
   const playerProfile = npcProfiles.get(PLAYER_FORM_ID)
-  const playerName = playerProfile?.name || 'Prisoner (Player)'
-  const playerRace = playerProfile?.race || 'Nord'
+  const playerName = playerProfile?.name || t('utils.player.defaultName')
+  const playerRace = playerProfile?.race || t('store.fallbackRace')
   const playerGender = playerProfile?.gender || 'female'
   const targetName = targetNpcId === PLAYER_FORM_ID ? playerName : npcProfiles.get(targetNpcId)?.name || targetNpcId
+
+  const formatActionBadge = (action?: string) => {
+    if (!action) return ''
+    switch (action) {
+      case 'new':
+        return t('npcDetail.matchmakingModal.actionNew')
+      case 'advance':
+        return t('npcDetail.matchmakingModal.actionAdvance')
+      case 'breakup':
+        return t('npcDetail.matchmakingModal.actionBreakup')
+      case 'open':
+        return t('npcDetail.matchmakingModal.actionOpen')
+      case 'close':
+        return t('npcDetail.matchmakingModal.actionClose')
+      default:
+        return action
+    }
+  }
 
   // Source list: Player (if target is not player) + all non-target, non-child Skyrim NPCs
   const candidateNpcs: Array<CompactNPC | { formId: string; name: string; race: string; gender?: CompactNPC['gender']; isChild?: boolean; pluginName?: string }> = [
@@ -125,7 +146,7 @@ export const MatchmakingModal: React.FC = () => {
             <HeartHandshake className="w-[1.25em] h-[1.25em] text-accent" />
             <div>
               <h2 className="text-base font-bold text-accent-bright">
-                Matchmaking for {targetName}
+                {t('npcDetail.matchmakingModal.title', { name: targetName })}
               </h2>
               <span className="text-xs text-foreground-muted font-mono">{targetNpcId}</span>
             </div>
@@ -148,7 +169,7 @@ export const MatchmakingModal: React.FC = () => {
               }`}
           >
             <Search className="w-[1em] h-[1em]" />
-            <span>Manual Search</span>
+            <span>{t('npcDetail.matchmakingModal.tabManual')}</span>
           </button>
 
           {/* Explicitly gated SkyrimNet tab */}
@@ -161,7 +182,7 @@ export const MatchmakingModal: React.FC = () => {
                 }`}
             >
               <Bot className="w-[1em] h-[1em] text-accent" />
-              <span>AI Suggest (SkyrimNet)</span>
+              <span>{t('npcDetail.matchmakingModal.tabAi')}</span>
             </button>
           )}
         </div>
@@ -171,20 +192,24 @@ export const MatchmakingModal: React.FC = () => {
           <div className="flex-1 flex flex-col min-h-0 p-[1rem] gap-[0.75rem]">
             <div className="flex flex-col gap-[0.25rem]">
               <div className="flex items-center justify-between text-xs text-foreground-secondary">
-                <span>Find Partner ({displayNpcs.length} available):</span>
+                <span>
+                  {t('npcDetail.matchmakingModal.findPartnerCount', {
+                    count: displayNpcs.length,
+                  })}
+                </span>
                 <button
                   onClick={() => fetchAllSkyrimNpcs()}
                   disabled={isLoadingAllNpcs}
-                  title="Refresh Skyrim NPCs"
+                  title={t('npcDetail.matchmakingModal.refreshTooltip')}
                   className="flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted hover:text-accent p-[0.125rem] rounded transition-colors cursor-pointer"
                 >
                   <RefreshCw className={`w-[1em] h-[1em] ${isLoadingAllNpcs ? 'animate-spin text-accent' : ''}`} />
-                  <span>Refresh</span>
+                  <span>{t('npcDetail.matchmakingModal.refresh')}</span>
                 </button>
               </div>
               <SearchInput
                 value={search}
-                placeholder="Search candidate partner..."
+                placeholder={t('npcDetail.matchmakingModal.searchPlaceholder')}
                 onChange={setSearch}
               />
             </div>
@@ -195,7 +220,7 @@ export const MatchmakingModal: React.FC = () => {
               estimateSize={44}
               overscan={6}
               className="flex-1 min-h-0 border border-border-subtle rounded-md p-[0.375rem] bg-panel-inset overflow-y-auto"
-              emptyMessage="No matching characters found."
+              emptyMessage={t('npcDetail.matchmakingModal.emptyMessage')}
               renderItem={(npc) => {
                 const isSelected = selectedPartnerId === npc.formId
                 return (
@@ -215,7 +240,10 @@ export const MatchmakingModal: React.FC = () => {
                           {npc.pluginName && (
                             <>
                               <span>•</span>
-                              <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${npc.pluginName}`}>
+                              <span
+                                className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle"
+                                title={t('npcDetail.shell.pluginTitle', { plugin: npc.pluginName })}
+                              >
                                 {npc.pluginName}
                               </span>
                             </>
@@ -233,7 +261,9 @@ export const MatchmakingModal: React.FC = () => {
             {selectedPartnerId && (
               <div className="p-[0.75rem] bg-panel-raised rounded-md border border-border-accent space-y-[0.5rem]">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground-primary">Assign Relationship Status:</span>
+                  <span className="text-xs font-semibold text-foreground-primary">
+                    {t('npcDetail.matchmakingModal.assignStatusLabel')}
+                  </span>
                   <span className="text-xs text-accent font-mono">
                     {candidateNpcs.find((n) => n.formId === selectedPartnerId)?.name || selectedPartnerId}
                   </span>
@@ -257,7 +287,7 @@ export const MatchmakingModal: React.FC = () => {
                       }`}
                   >
                     <Check className="w-[1em] h-[1em]" />
-                    <span>Confirm Match</span>
+                    <span>{t('npcDetail.matchmakingModal.confirmMatch')}</span>
                   </button>
                 </div>
               </div>
@@ -271,39 +301,43 @@ export const MatchmakingModal: React.FC = () => {
             {isGeneratingAi ? (
               <div className="flex-1 flex flex-col items-center justify-center p-[2rem] text-center text-foreground-muted gap-[0.5rem]">
                 <Bot className="w-[2em] h-[2em] text-accent animate-pulse" />
-                <span className="text-xs">Querying SkyrimNet AI for partner recommendations...</span>
+                <span className="text-xs">{t('npcDetail.matchmakingModal.queryingAi')}</span>
                 <button
                   type="button"
                   onClick={() => useMarasStore.setState({ isGeneratingAiSuggestions: false })}
                   className="mt-[0.5rem] px-[0.625rem] py-[0.25rem] rounded text-xs text-foreground-muted hover:text-foreground-primary bg-panel-inset hover:bg-interactive-hover border border-border-subtle cursor-pointer transition-colors"
                 >
-                  Cancel
+                  {t('npcDetail.matchmakingModal.cancel')}
                 </button>
               </div>
             ) : aiSuggestions.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-[2rem] text-center text-foreground-muted gap-[0.75rem] bg-panel-inset border border-border-subtle rounded-md">
                 <Bot className="w-[2em] h-[2em] text-accent/50" />
-                <span className="text-xs">No suggestions generated yet. Click below to query SkyrimNet AI.</span>
+                <span className="text-xs">{t('npcDetail.matchmakingModal.noSuggestionsYet')}</span>
                 <button
                   onClick={() => generateAiSuggestions(targetNpcId)}
                   disabled={isGeneratingAi}
                   className="px-[0.875rem] py-[0.375rem] bg-accent hover:bg-accent-bright text-panel font-semibold text-xs rounded transition-colors cursor-pointer flex items-center gap-[0.375rem]"
                 >
                   <Sparkles className="w-[0.875em] h-[0.875em]" />
-                  <span>Generate AI Suggestions</span>
+                  <span>{t('npcDetail.matchmakingModal.generateAiSuggestions')}</span>
                 </button>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between text-xs text-foreground-secondary bg-panel-inset p-[0.5rem] rounded border border-border-subtle">
-                  <span>SkyrimNet AI context recommendations:</span>
+                  <span>{t('npcDetail.matchmakingModal.aiRecommendationsHeader')}</span>
                   <button
                     onClick={() => generateAiSuggestions(targetNpcId)}
                     disabled={isGeneratingAi}
                     className="px-[0.5rem] py-[0.25rem] bg-accent-soft text-accent-bright hover:bg-accent/20 rounded border border-border-accent flex items-center gap-[0.25rem] transition-colors cursor-pointer text-xs"
                   >
                     <Sparkles className="w-[0.875em] h-[0.875em]" />
-                    <span>{isGeneratingAi ? 'Generating...' : 'Regenerate'}</span>
+                    <span>
+                      {isGeneratingAi
+                        ? t('npcDetail.matchmakingModal.generating')
+                        : t('npcDetail.matchmakingModal.regenerate')}
+                    </span>
                   </button>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto border border-border-subtle rounded-md p-[0.5rem] bg-panel-inset space-y-[0.5rem] pr-[0.25rem]">
@@ -336,7 +370,7 @@ export const MatchmakingModal: React.FC = () => {
                                 <span>{name}</span>
                                 {s.action && (
                                   <span className="px-[0.25rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-accent-soft text-accent-bright border border-border-accent">
-                                    {s.action}
+                                    {formatActionBadge(s.action)}
                                   </span>
                                 )}
                               </div>
@@ -352,16 +386,22 @@ export const MatchmakingModal: React.FC = () => {
                               <div className="flex items-center gap-[0.375rem]">
                                 {(s.targetStatus?.toLowerCase() === 'lover' || s.suggestedStatus === RelationshipStatus.Lover) && (
                                   isCheating ? (
-                                    <span className="px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80" title="Considered cheating: at least one partner is in a closed main relationship">
-                                      Cheating
+                                    <span
+                                      className="px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80"
+                                      title={t('statusAvailability.loverCheatingTooltip')}
+                                    >
+                                      {t('npcDetail.matchmakingModal.badgeCheating')}
                                     </span>
                                   ) : (
-                                    <span className="px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80" title="Allowed secondary relationship: both parties are single or in open relationships">
-                                      Allowed
+                                    <span
+                                      className="px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80"
+                                      title={t('statusAvailability.loverAllowedTooltip')}
+                                    >
+                                      {t('npcDetail.matchmakingModal.badgeAllowed')}
                                     </span>
                                   )
                                 )}
-                                <div className="w-[8.5rem]">
+                                <div className="min-w-[9rem] w-auto">
                                   <SelectInput
                                     value={s.suggestedStatus}
                                     options={suggestionOptions}
@@ -378,14 +418,14 @@ export const MatchmakingModal: React.FC = () => {
                         {s.isGeneratingMemory ? (
                           <div className="flex items-center gap-[0.5rem] text-[0.6875rem] text-accent-bright bg-accent-soft p-[0.5rem] rounded border border-border-accent animate-pulse">
                             <Bot className="w-[1.125em] h-[1.125em] animate-spin" />
-                            <span>Generating dual-POV recollections via SkyrimNet AI...</span>
+                            <span>{t('npcDetail.matchmakingModal.generatingMemories')}</span>
                           </div>
                         ) : s.dualMemories && s.dualMemories.length > 0 ? (
                           <div className="space-y-[0.375rem]">
                             <div className="flex items-center justify-between text-[0.625rem] font-semibold text-accent-bright">
                               <span className="flex items-center gap-[0.25rem]">
                                 <BookOpen className="w-[0.875em] h-[0.875em]" />
-                                <span>Dual-POV Recollections:</span>
+                                <span>{t('npcDetail.matchmakingModal.dualPovHeader')}</span>
                               </span>
                               <button
                                 type="button"
@@ -393,46 +433,64 @@ export const MatchmakingModal: React.FC = () => {
                                 className="text-foreground-secondary hover:text-accent-bright flex items-center gap-[0.25rem] cursor-pointer transition-colors"
                               >
                                 <Sparkles className="w-[0.75em] h-[0.75em]" />
-                                <span>Regenerate</span>
+                                <span>{t('npcDetail.matchmakingModal.regenerate')}</span>
                               </button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-[0.375rem]">
-                              {s.dualMemories.map((mem, memIdx) => (
-                                <div
-                                  key={memIdx}
-                                  className="bg-panel-inset p-[0.5rem] rounded border border-border-subtle flex flex-col justify-between gap-[0.25rem] text-[0.6875rem]"
-                                >
-                                  <div>
-                                    <div className="flex items-center justify-between mb-[0.125rem]">
-                                      <span className="font-bold text-accent-bright flex items-center gap-[0.25rem]">
-                                        <User className="w-[0.75em] h-[0.75em]" />
-                                        <span>{mem.actor || (memIdx === 0 ? 'Target' : name)}'s POV</span>
+                              {s.dualMemories.map((mem, memIdx) => {
+                                const povActor =
+                                  mem.actor ||
+                                  (memIdx === 0
+                                    ? t('npcDetail.matchmakingModal.defaultTargetActor')
+                                    : name)
+                                return (
+                                  <div
+                                    key={memIdx}
+                                    className="bg-panel-inset p-[0.5rem] rounded border border-border-subtle flex flex-col justify-between gap-[0.25rem] text-[0.6875rem]"
+                                  >
+                                    <div>
+                                      <div className="flex items-center justify-between mb-[0.125rem]">
+                                        <span className="font-bold text-accent-bright flex items-center gap-[0.25rem]">
+                                          <User className="w-[0.75em] h-[0.75em]" />
+                                          <span>
+                                            {t('npcDetail.matchmakingModal.actorPov', {
+                                              actor: povActor,
+                                            })}
+                                          </span>
+                                        </span>
+                                        {mem.emotion && (
+                                          <span className="px-[0.25rem] py-[0.03125rem] rounded bg-accent-soft text-accent-bright font-mono uppercase text-[0.5625rem] border border-border-accent/40">
+                                            {mem.emotion}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="italic text-foreground-primary leading-relaxed">
+                                        "{mem.content}"
+                                      </p>
+                                    </div>
+                                    <div className="pt-[0.125rem] border-t border-border-divider/50 flex items-center justify-between text-[0.5625rem] text-foreground-muted">
+                                      <span className="truncate max-w-[8rem]">
+                                        {mem.location ||
+                                          t('npcDetail.matchmakingModal.defaultLocation')}
                                       </span>
-                                      {mem.emotion && (
-                                        <span className="px-[0.25rem] py-[0.03125rem] rounded bg-accent-soft text-accent-bright font-mono uppercase text-[0.5625rem] border border-border-accent/40">
-                                          {mem.emotion}
+                                      {mem.importance_score !== undefined && (
+                                        <span className="font-mono text-accent">
+                                          {t('npcDetail.matchmakingModal.memoryScore', {
+                                            percent: (mem.importance_score * 100).toFixed(0),
+                                          })}
                                         </span>
                                       )}
                                     </div>
-                                    <p className="italic text-foreground-primary leading-relaxed">
-                                      "{mem.content}"
-                                    </p>
                                   </div>
-                                  <div className="pt-[0.125rem] border-t border-border-divider/50 flex items-center justify-between text-[0.5625rem] text-foreground-muted">
-                                    <span className="truncate max-w-[8rem]">{mem.location || 'Skyrim'}</span>
-                                    {mem.importance_score !== undefined && (
-                                      <span className="font-mono text-accent">Score: {(mem.importance_score * 100).toFixed(0)}%</span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           </div>
                         ) : (
                           <div className="flex items-center justify-between text-[0.6875rem] bg-panel-inset p-[0.375rem] rounded border border-border-subtle">
                             <span className="text-foreground-muted flex items-center gap-[0.25rem]">
                               <BookOpen className="w-[0.875em] h-[0.875em] text-foreground-secondary" />
-                              <span>No memories generated yet.</span>
+                              <span>{t('npcDetail.matchmakingModal.noMemoriesYet')}</span>
                             </span>
                             <button
                               type="button"
@@ -440,7 +498,7 @@ export const MatchmakingModal: React.FC = () => {
                               className="px-[0.5rem] py-[0.1875rem] bg-accent-soft hover:bg-accent/20 text-accent-bright border border-border-accent font-semibold rounded transition-colors cursor-pointer flex items-center gap-[0.25rem] text-[0.6875rem]"
                             >
                               <Sparkles className="w-[0.75em] h-[0.75em]" />
-                              <span>Generate Memories</span>
+                              <span>{t('npcDetail.matchmakingModal.generateMemories')}</span>
                             </button>
                           </div>
                         )}
@@ -458,7 +516,7 @@ export const MatchmakingModal: React.FC = () => {
                   className="px-[1rem] py-[0.375rem] bg-accent text-panel font-semibold text-xs rounded hover:bg-accent-bright transition-colors cursor-pointer flex items-center gap-[0.25rem]"
                 >
                   <Check className="w-[1em] h-[1em]" />
-                  <span>Apply Selected Suggestions</span>
+                  <span>{t('npcDetail.matchmakingModal.applySelected')}</span>
                 </button>
               </div>
             )}

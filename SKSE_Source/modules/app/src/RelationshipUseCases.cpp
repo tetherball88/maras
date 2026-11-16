@@ -23,6 +23,7 @@
 #include "maras/engine/FormUtils.h"
 #include "maras/engine/GlobalVarReconciler.h"
 #include "maras/engine/HouseholdEngineOps.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/MarriageDifficultyLoader.h"
 #include "maras/engine/NPCTypeDeterminer.h"
 #include "maras/engine/PackageReconciler.h"
@@ -1458,10 +1459,10 @@ namespace MARAS::App {
             items.reserve(playerAuditEntries.size());
 
             const std::vector<ModalSelectOption> statusSelectOptions = {
-                { "dating", "Dating" },
-                { "lover", "Lover" },
-                { "engaged", "Engaged" },
-                { "married", "Married" }
+                { "dating", Tr("common.status_dating") },
+                { "lover", Tr("common.status_lover") },
+                { "engaged", Tr("common.status_engaged") },
+                { "married", Tr("common.status_married") }
             };
 
             for (std::size_t i = 0; i < playerAuditEntries.size(); ++i) {
@@ -1469,20 +1470,20 @@ namespace MARAS::App {
                 ModalChecklistItem item;
                 item.id = std::format("rel_{}", i);
                 item.label = entry.npcName;
-                item.subtitle = std::format("Source: {}", entry.pluginName);
+                item.subtitle = TrFmt("modal.rel_audit.item_source", { { "plugin", entry.pluginName } });
                 if (entry.vanillaStatus == Foundation::RelationshipStatus::Married) {
-                    item.badgeText = "Spouse";
+                    item.badgeText = Tr("modal.rel_audit.badge_spouse");
                     item.badgeTone = "success";
                 } else if (entry.vanillaStatus == Foundation::RelationshipStatus::Dating) {
-                    item.badgeText = "Courting";
+                    item.badgeText = Tr("modal.rel_audit.badge_courting");
                     item.badgeTone = "accent";
                 } else {
-                    item.badgeText = "Lover";
+                    item.badgeText = Tr("modal.rel_audit.badge_lover");
                     item.badgeTone = "warning";
                 }
                 item.checked = entry.defaultChecked;
                 item.selectKey = "status";
-                item.selectLabel = "Import As";
+                item.selectLabel = Tr("modal.rel_audit.select_label");
                 item.selectValue = std::string(Foundation::RelationshipStatusToString(entry.targetMarasStatus));
                 item.selectOptions = statusSelectOptions;
                 items.push_back(std::move(item));
@@ -1490,22 +1491,20 @@ namespace MARAS::App {
 
             ModalRequest req;
             req.modalType = "relationship_audit";
-            req.title = "Detected Player Relationships";
-            req.subtitle = "First-Time M.A.R.A.S Relationship Scan";
-            req.message =
-                "M.A.R.A.S detected existing or plugin-defined romantic relationships between your character and the following NPCs. "
-                "Select which relationships are genuinely active in this playthrough and choose their MARAS status:";
+            req.title = Tr("modal.rel_audit.title");
+            req.subtitle = Tr("modal.rel_audit.subtitle");
+            req.message = Tr("modal.rel_audit.message");
             req.tone = ModalTone::Default;
             req.size = ModalSize::Lg;
             req.defaultCancelButtonIndex = 1;
             req.controls.push_back(ModalControl::MakeChecklist(
                 "detected_player_rels",
-                "Player-NPC Romantic Relationships",
+                Tr("modal.rel_audit.checklist_label"),
                 std::move(items),
                 true,
-                "Unchecked entries (such as pre-configured follower mod Lover records) will be ignored."));
-            req.buttons.push_back(ModalButton::Make("import_selected", "Import Selected", ModalButtonVariant::Primary));
-            req.buttons.push_back(ModalButton::Make("skip_all", "Skip All", ModalButtonVariant::Secondary));
+                Tr("modal.rel_audit.checklist_desc")));
+            req.buttons.push_back(ModalButton::Make("import_selected", Tr("modal.rel_audit.btn_import"), ModalButtonVariant::Primary));
+            req.buttons.push_back(ModalButton::Make("skip_all", Tr("modal.rel_audit.btn_skip"), ModalButtonVariant::Secondary));
 
             MARAS_LOG_INFO("ScanExistingRelationships: Queuing Player Relationship Audit Modal ({} entries, isNewGame={})",
                            playerAuditEntries.size(), isNewGame);

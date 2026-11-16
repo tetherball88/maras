@@ -3,6 +3,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/state/SessionEpoch.h"
@@ -167,17 +168,17 @@ namespace MARAS {
         switch (newStatus) {
             case Foundation::RelationshipStatus::Candidate:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_RegisterCandidate{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.register_candidate", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::Dating:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_Dating{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.dating", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::Lover:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_Lover{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.lover", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::Engaged:
@@ -187,27 +188,27 @@ namespace MARAS {
 
             case Foundation::RelationshipStatus::Married:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_Married{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.married", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::Divorced:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_Divorce{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.divorce", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::Jilted:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_Jilted{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.jilted", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::ExDating:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_ExDating{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.ex_dating", { { "actor", actorName } }));
                 break;
 
             case Foundation::RelationshipStatus::ExLover:
                 QueueNotificationIfAllowed(
-                    sendNotifications, "$TTM_MSG_ExLover{" + actorName + "}");
+                    sendNotifications, TrFmt("hud.ex_lover", { { "actor", actorName } }));
                 break;
 
             default:
@@ -287,7 +288,7 @@ namespace MARAS {
             return;
         }
         const std::string actorName = ResolveNotificationActorName(npcID);
-        QueueNotificationIfAllowed(true, "$TTM_MSG_Engagement{" + actorName + "}");
+        QueueNotificationIfAllowed(true, TrFmt("hud.engagement", { { "actor", actorName } }));
     }
 
     void RelationshipEngineReconciler::ReconcileHierarchyRankChange(RE::FormID spouseID, float rankDiff) const {
@@ -295,8 +296,8 @@ namespace MARAS {
             return;
         }
         const std::string spouseName = ResolveNotificationActorName(spouseID);
-        const char* prefix = (rankDiff > 0.0f) ? "$TTM_MSG_RankUp{" : "$TTM_MSG_RankDown{";
-        QueueNotificationIfAllowed(true, std::string(prefix) + spouseName + "}");
+        const std::string_view key = (rankDiff > 0.0f) ? "hud.rank_up" : "hud.rank_down";
+        QueueNotificationIfAllowed(true, TrFmt(key, { { "spouse", spouseName } }));
 
         if (rankDiff < 0.0f) {
             DispatchPostLock(
@@ -319,29 +320,29 @@ namespace MARAS {
         if (spouseID == 0 || affectionDiff == 0.0f || State::IsLegacyMigrationActive()) {
             return;
         }
-        std::string_view keyPrefix;
+        std::string_view key;
         if (affectionDiff > 0.0f) {
             if (level == "happy") {
-                keyPrefix = "$TTM_MSG_AffectionImproveHappy{";
+                key = "hud.affection_improve_happy";
             } else if (level == "content") {
-                keyPrefix = "$TTM_MSG_AffectionImproveContent{";
+                key = "hud.affection_improve_content";
             } else if (level == "troubled") {
-                keyPrefix = "$TTM_MSG_AffectionImproveTroubled{";
+                key = "hud.affection_improve_troubled";
             }
         } else {
             if (level == "content") {
-                keyPrefix = "$TTM_MSG_AffectionDeclineContent{";
+                key = "hud.affection_decline_content";
             } else if (level == "troubled") {
-                keyPrefix = "$TTM_MSG_AffectionDeclineTroubled{";
+                key = "hud.affection_decline_troubled";
             } else if (level == "estranged") {
-                keyPrefix = "$TTM_MSG_AffectionDeclineEstranged{";
+                key = "hud.affection_decline_estranged";
             }
         }
-        if (keyPrefix.empty()) {
+        if (key.empty()) {
             return;
         }
         const std::string spouseName = ResolveNotificationActorName(spouseID);
-        QueueNotificationIfAllowed(true, std::string(keyPrefix) + spouseName + "}");
+        QueueNotificationIfAllowed(true, TrFmt(key, { { "spouse", spouseName } }));
     }
 
     void RelationshipEngineReconciler::ApplyNoAiDialogueChanceGlobals(

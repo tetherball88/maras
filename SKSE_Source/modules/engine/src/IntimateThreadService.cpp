@@ -8,6 +8,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -507,7 +508,8 @@ namespace MARAS {
                                                                          : ActorSvc::GetName(cheaterID);
                                         std::string pName = partnerActor ? partnerActor->GetDisplayFullName()
                                                                          : ActorSvc::GetName(partnerID);
-                                        std::string msg = fmt::format("You caught {} with {}!", cName, pName);
+                                        std::string msg = TrFmt("hud.caught_cheating",
+                                                                { { "cheater", cName }, { "partner", pName } });
                                         QueueHUDMessage(std::move(msg));
                                     }
 
@@ -882,7 +884,8 @@ namespace MARAS {
                             std::string cName = cheaterActor->GetDisplayFullName();
                             std::string pName = partnerActor ? partnerActor->GetDisplayFullName()
                                                              : ActorSvc::GetName(affairPartnerID);
-                            std::string msg = fmt::format("You caught {} with {}!", cName, pName);
+                            std::string msg = TrFmt("hud.caught_cheating",
+                                                    { { "cheater", cName }, { "partner", pName } });
                             QueueHUDMessage(std::move(msg));
                         }
 

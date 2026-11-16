@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { t } from '../i18n'
 import {
   NPCProfile,
   RelationshipPair,
@@ -319,7 +320,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   isOpen: !isGameBuild,
   isInGame: isGameBuild,
   isGamePaused: !isGameBuild && Boolean(mockSettings.autoPauseOnOpen),
-  statusMsg: isGameBuild ? 'M.A.R.A.S Core Active' : 'UI Dev Mode',
+  statusMsg: isGameBuild ? t('store.status.coreActive') : t('store.status.devMode'),
   activeTab: 'overview',
   activeSubSection: 'dashboard',
 
@@ -604,7 +605,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         if (get().isGeneratingAiSuggestions) {
           console.warn('[MarasStore] Matchmaking request timed out after 30s')
           set({ isGeneratingAiSuggestions: false })
-          get().setStatusMsg('Matchmaking request timed out or returned no response.')
+          get().setStatusMsg(t('store.status.matchmakingTimeout'))
         }
       }, 30000)
     }
@@ -614,7 +615,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     const { settings, isInGame } = get()
     if (!settings.hasSkyrimNet) {
       set({ isGeneratingAiSuggestions: false })
-      get().setStatusMsg('SkyrimNet AI is not available.')
+      get().setStatusMsg(t('store.status.skyrimNetUnavailable'))
       return
     }
 
@@ -629,7 +630,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         if (get().isGeneratingAiSuggestions) {
           console.warn('[MarasStore] Global matchmaking scan timed out after 45s')
           set({ isGeneratingAiSuggestions: false })
-          get().setStatusMsg('Global matchmaking scan timed out or returned no response.')
+          get().setStatusMsg(t('store.status.globalMatchmakingTimeout'))
         }
       }, 45000)
     } else {
@@ -766,32 +767,32 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   // Teleport & Child Companion Actions
   teleportPlayerToNpc: (npcId: string) => {
     sendMarasAction('teleportPlayerToNpc', { formId: npcId })
-    set({ statusMsg: `Teleporting Player to NPC (${npcId})...` })
+    set({ statusMsg: t('store.status.teleportingPlayerToNpc', { formId: npcId }) })
   },
 
   teleportNpcToPlayer: (npcId: string) => {
     sendMarasAction('teleportNpcToPlayer', { formId: npcId })
-    set({ statusMsg: `Teleporting NPC (${npcId}) to Player...` })
+    set({ statusMsg: t('store.status.teleportingNpcToPlayer', { formId: npcId }) })
   },
 
   fleeChildrenFromCell: () => {
     sendMarasAction('fleeChildrenFromCell', {})
-    set({ statusMsg: 'Children are running away from this cell...' })
+    set({ statusMsg: t('store.status.fleeingChildren') })
   },
 
   dismissChildCritter: (npcId: string) => {
     sendMarasAction('dismissChildCritter', { formId: npcId })
-    set({ statusMsg: `Dismissing critter for child (${npcId})...` })
+    set({ statusMsg: t('store.status.dismissingCritter', { formId: npcId }) })
   },
 
   dismissChildPet: (npcId: string) => {
     sendMarasAction('dismissChildPet', { formId: npcId })
-    set({ statusMsg: `Dismissing pet for child (${npcId})...` })
+    set({ statusMsg: t('store.status.dismissingPet', { formId: npcId }) })
   },
 
   spawnChild: (childId: string) => {
     sendMarasAction('spawnChild', { childId })
-    set({ statusMsg: `Spawning child actor (${childId})...` })
+    set({ statusMsg: t('store.status.spawningChild', { childId }) })
 
     if (typeof window !== 'undefined' && !window.marasAction) {
       setTimeout(() => {
@@ -825,7 +826,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
               newProfiles,
             ),
             npcProfiles: newProfiles,
-            statusMsg: `Child (${childId}) successfully spawned into the world!`,
+            statusMsg: t('store.status.childSpawnedSuccess', { childId }),
           }
         })
       }, 300)
@@ -868,7 +869,9 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         npcProfiles: newProfiles,
         npcDetailId: state.npcDetailId === oldId ? newId : state.npcDetailId,
         selectedNpcId: state.selectedNpcId === oldId ? newId : state.selectedNpcId,
-        statusMsg: isSyntheticTarget ? `Child sent to training.` : `Child spawned successfully.`,
+        statusMsg: isSyntheticTarget
+          ? t('store.status.childSentToTraining')
+          : t('store.status.childSpawned'),
       }
     })
     sendMarasAction('fetchNPCDetail', { formId: newId })
@@ -877,7 +880,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   sendChildToTraining: (childId: string, trainingClassIndex: number) => {
     sendMarasAction('sendChildToTraining', { childId, trainingClassIndex })
-    set({ statusMsg: `Sending child (${childId}) to training...` })
+    set({ statusMsg: t('store.status.sendingChildToTraining', { childId }) })
 
     if (typeof window !== 'undefined' && !window.marasAction) {
       const TRAINING_INFO = [
@@ -935,7 +938,11 @@ export const useMarasStore = create<MarasState>((set, get) => ({
               newProfiles,
             ),
             npcProfiles: newProfiles,
-            statusMsg: `Child (${childId}) sent to ${info.location} to train as a ${info.className}!`,
+            statusMsg: t('store.status.childSentToTrainingAt', {
+              childId,
+              location: info.location,
+              className: info.className,
+            }),
           }
         })
       }, 200)
@@ -944,7 +951,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   completeChildTraining: (childId: string) => {
     sendMarasAction('completeChildTraining', { childId })
-    set({ statusMsg: `Completing training for child (${childId})...` })
+    set({ statusMsg: t('store.status.completingChildTraining', { childId }) })
 
     if (typeof window !== 'undefined' && !window.marasAction) {
       setTimeout(() => {
@@ -981,7 +988,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
               newProfiles,
             ),
             npcProfiles: newProfiles,
-            statusMsg: `Child (${childId}) has completed training and is ready to be spawned as an adult!`,
+            statusMsg: t('store.status.childCompletedTraining', { childId }),
           }
         })
       }, 200)
@@ -992,7 +999,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
     sendMarasAction('evaluateChildSecret', { childId })
     set({
       evaluatingChildId: childId,
-      statusMsg: `Evaluating paternity secret for child (${childId})...`,
+      statusMsg: t('store.status.evaluatingChildSecret', { childId }),
     })
 
     // Fallback in case LLM or backend takes long or is running standalone
@@ -1018,7 +1025,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
               state.npcProfiles,
             ),
             evaluatingChildId: null,
-            statusMsg: `Secret evaluated for child (${childId}).`,
+            statusMsg: t('store.status.childSecretEvaluated', { childId }),
           }
         })
       }, 1500)
@@ -1045,7 +1052,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   setGamePaused: (paused: boolean, skipBridge = false) => {
     set({
       isGamePaused: paused,
-      statusMsg: paused ? 'Game paused.' : 'Game unpaused.',
+      statusMsg: paused ? t('store.status.gamePaused') : t('store.status.gameUnpaused'),
     })
     if (!skipBridge) {
       sendMarasAction('setGamePaused', { paused })
@@ -1149,8 +1156,8 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         const existing = newNpcProfiles.get(item.formId)
         const profile: NPCProfile = {
           formId: item.formId,
-          name: item.name || existing?.name || `NPC ${item.formId}`,
-          race: item.race || existing?.race || 'Nord',
+          name: item.name || existing?.name || t('store.fallbackNpcName', { formId: item.formId }),
+          race: item.race || existing?.race || t('store.fallbackRace'),
           pluginName: item.pluginName || existing?.pluginName,
           socialClass: existing?.socialClass ?? item.socialClass ?? SocialClass.Middle,
           skillType: existing?.skillType ?? item.skillType ?? SkillType.Warrior,
@@ -1442,8 +1449,8 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       const currentExisting = newMap.get(formId)
       const base: NPCProfile = currentExisting || {
         formId,
-        name: updates.name || `NPC ${formId}`,
-        race: updates.race || 'Nord',
+        name: updates.name || t('store.fallbackNpcName', { formId }),
+        race: updates.race || t('store.fallbackRace'),
         socialClass: SocialClass.Middle,
         skillType: SkillType.Warrior,
         temperament: Temperament.Proud,
@@ -1557,8 +1564,8 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         }
         nextProfiles.set(formId, {
           formId,
-          name: fallbackName || `NPC ${formId}`,
-          race: compact?.race || 'Nord',
+          name: fallbackName || t('store.fallbackNpcName', { formId }),
+          race: compact?.race || t('store.fallbackRace'),
           gender: compact?.gender || 'male',
           pluginName: compact?.pluginName,
           isChild: compact?.isChild,
@@ -1651,7 +1658,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
             nextProfiles.set(formId, {
               formId,
               name: compact.name,
-              race: compact.race || 'Nord',
+              race: compact.race || t('store.fallbackRace'),
               gender: compact.gender || 'male',
               pluginName: compact.pluginName,
               isChild: compact.isChild,
@@ -1778,7 +1785,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
         ),
         hierarchyRanks: nextRanks,
         ...(shouldClosePartnerDrawer ? { npcDetailPartnerId: null } : {}),
-        statusMsg: 'Relationship record removed.',
+        statusMsg: t('store.status.relationshipRemoved'),
       }
     })
   },
@@ -1805,7 +1812,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
       const record: ChildRecord = {
         childId: child.childId,
-        name: childNpc?.name || `Child ${child.childId}`,
+        name: childNpc?.name || t('store.fallbackChildName', { childId: child.childId }),
         timestamp: state.currentGameDay,
         guardianAId: child.guardianAId,
         guardianBId: child.guardianBId || undefined,
@@ -1968,7 +1975,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       }
       return {
         npcProfiles: newProfiles,
-        statusMsg: `Relocated family unit to ${home}`,
+        statusMsg: t('store.status.relocatedFamilyUnit', { home }),
       }
     })
   },
@@ -2052,22 +2059,24 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           settings: newSettings,
           isGamePaused: paused,
           statusMsg: paused
-            ? 'Auto-pause on open enabled (Game Paused).'
-            : 'Auto-pause on open disabled (Game Unpaused).',
+            ? t('store.status.autoPauseEnabled')
+            : t('store.status.autoPauseDisabled'),
         }
       }
       if (key === 'uiFullScreen') {
         return {
           settings: newSettings,
           statusMsg: normalizedValue
-            ? 'Switched to Full Screen mode.'
-            : 'Switched to Windowed mode.',
+            ? t('store.status.fullScreenMode')
+            : t('store.status.windowedMode'),
         }
       }
       if (key === 'uiScale') {
         return {
           settings: newSettings,
-          statusMsg: `UI Scale set to ${Math.round(Number(normalizedValue) * 100)}%.`,
+          statusMsg: t('store.status.uiScaleSet', {
+            percent: Math.round(Number(normalizedValue) * 100),
+          }),
         }
       }
       if (key === 'revealSecretsInUI') {
@@ -2081,8 +2090,8 @@ export const useMarasStore = create<MarasState>((set, get) => ({
             state.npcProfiles,
           ),
           statusMsg: normalizedValue
-            ? 'All hidden secrets revealed in dashboard.'
-            : 'Undiscovered secrets hidden (Intrigue Mode).',
+            ? t('store.status.secretsRevealed')
+            : t('store.status.secretsHiddenIntrigue'),
         }
       }
       return { settings: newSettings }
@@ -2193,9 +2202,9 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       if (npcDetailPartnerId) {
         sendMarasAction('fetchNPCDetail', { formId: npcDetailPartnerId })
       }
-      set({ statusMsg: 'Dashboard data refreshed from SKSE.' })
+      set({ statusMsg: t('store.status.refreshedSkse') })
     } else {
-      set({ statusMsg: 'Dashboard data refreshed (Standalone Mode).' })
+      set({ statusMsg: t('store.status.refreshedStandalone') })
     }
   },
 

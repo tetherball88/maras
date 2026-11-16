@@ -1,5 +1,6 @@
 import React, { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useTranslation } from '../../i18n'
 
 export interface VirtualListProps<T> {
   items: T[]
@@ -19,11 +20,13 @@ export function VirtualList<T>({
   overscan = 6,
   getItemKey,
   renderItem,
-  emptyMessage = 'No matching items found.',
+  emptyMessage,
   renderEmpty,
   className = 'flex-1 min-h-0 overflow-y-auto p-[0.5rem]',
   itemClassName = 'pb-[0.25rem]',
 }: VirtualListProps<T>) {
+  const { t } = useTranslation()
+  const resolvedEmptyMessage = emptyMessage ?? t('shared.emptyList')
   const parentRef = useRef<HTMLDivElement>(null)
 
   const rowVirtualizer = useVirtualizer({
@@ -40,7 +43,7 @@ export function VirtualList<T>({
     return (
       <div className={className}>
         <div className="text-center py-[2rem] text-xs text-foreground-muted">
-          {emptyMessage}
+          {resolvedEmptyMessage}
         </div>
       </div>
     )

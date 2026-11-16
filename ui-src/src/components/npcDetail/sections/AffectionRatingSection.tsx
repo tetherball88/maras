@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { SliderInput } from '../../shared/SliderInput'
@@ -13,15 +14,23 @@ export const AffectionRatingSection: React.FC<AffectionRatingSectionProps> = ({
   npcId,
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
   const affectionData = useMarasStore((s) => s.affectionData)
   const updateAffection = useMarasStore((s) => s.updateAffection)
 
   const affectionObj = affectionData.get(npcId)
   const currentAffection = affectionObj?.permanent ?? 0
 
+  const lastInteractionText =
+    affectionObj?.daysSinceLastInteraction != null
+      ? Math.round(affectionObj.daysSinceLastInteraction) === 0
+        ? t('utils.date.today')
+        : tp('utils.date.daysAgo', Math.round(affectionObj.daysSinceLastInteraction))
+      : t('utils.date.unknown')
+
   return (
     <SectionCard
-      title="Affection Rating"
+      title={t('npcDetail.affection.title')}
       icon={Heart}
       subtitle={`${Math.round(currentAffection)}%`}
       className={className}
@@ -36,14 +45,13 @@ export const AffectionRatingSection: React.FC<AffectionRatingSectionProps> = ({
           className="w-full"
         />
         <div className="flex items-center justify-between text-[0.6875rem] text-foreground-muted pt-[0.25rem]">
-          <span>Decay Mult: {Number((affectionObj?.decayMultiplier ?? 1.0).toFixed(2))}x</span>
           <span>
-            Last Interaction:{' '}
-            {affectionObj?.daysSinceLastInteraction != null
-              ? Math.round(affectionObj.daysSinceLastInteraction) === 0
-                ? 'Today'
-                : `${Math.round(affectionObj.daysSinceLastInteraction)} days ago`
-              : 'Unknown'}
+            {t('npcDetail.affection.decayMult', {
+              mult: Number((affectionObj?.decayMultiplier ?? 1.0).toFixed(2)),
+            })}
+          </span>
+          <span>
+            {t('npcDetail.affection.lastInteraction', { time: lastInteractionText })}
           </span>
         </div>
       </div>

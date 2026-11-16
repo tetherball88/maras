@@ -25,6 +25,7 @@
 #include "maras/engine/FormCache.h"
 #include "maras/engine/GlobalVarReconciler.h"
 #include "maras/engine/HouseholdEngineOps.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/PackageReconciler.h"
 #include "maras/engine/PlayerChildrenEngineOps.h"
@@ -1436,9 +1437,10 @@ namespace MARAS::App {
                         GetSkyrimNetGateway().RecordPaternityReveal(cID, "divorce_revealed");
                     }
                 }
-                const std::string notifyMsg = std::format(
-                    "Paternity secret for {} has been resolved following breakup.",
-                    postRec->name.empty() ? "Child" : postRec->name);
+                const std::string fallbackChild = Tr("common.child_fallback");
+                const std::string notifyMsg = TrFmt(
+                    "hud.paternity_resolved_breakup",
+                    { { "child", postRec->name.empty() ? std::string_view(fallbackChild) : std::string_view(postRec->name) } });
                 QueueHUDMessage(notifyMsg);
             }
 
@@ -2933,10 +2935,14 @@ namespace MARAS::App {
             paidTuitionGold, appliedDiscountPercent,
             appliedDiscountReason.empty() ? "None" : appliedDiscountReason);
 
-        QueueHUDMessage(std::format("{} has been sent to {} to train as a {}.",
-                                    rec.name.empty() ? "Child" : rec.name,
-                                    rec.trainingLocation,
-                                    spec->className));
+        const auto& locSvc = Engine::LocalizationService::GetSingleton();
+        const std::string hudChildName = rec.name.empty() ? Tr("common.child_fallback") : rec.name;
+        const std::string hudLocation = locSvc.ResolveTrainingLocation(spec->id, rec.trainingLocation);
+        const std::string hudClassName = locSvc.ResolveTrainingClassName(spec->id, spec->className);
+        QueueHUDMessage(TrFmt("hud.child_sent_to_training",
+                              { { "child", hudChildName },
+                                { "location", hudLocation },
+                                { "className", hudClassName } }));
 
         AffectionEventCoordinator::GetSingleton().OnChildMilestone(targetChildID, "training");
         SendChildEvent(
@@ -2972,10 +2978,21 @@ namespace MARAS::App {
         const std::string className = std::string(GetTrainingClassName(rec.trainingClassIndex));
         MARAS_LOG_INFO("[Training] Child {:08X} ('{}') graduated to Stage 4 (Adult)", childID, rec.name);
 
-        QueueHUDMessage(std::format("{} has completed {} training at {} and is ready to return as an adult!",
-                                    rec.name.empty() ? "Your child" : rec.name,
-                                    className.empty() ? "adolescent" : className,
-                                    rec.trainingLocation.empty() ? "their academy" : rec.trainingLocation));
+        const auto& catalog = Engine::TrainingCatalogLoader::GetSingleton().GetCatalog();
+        const auto& locSvc = Engine::LocalizationService::GetSingleton();
+        const auto* gradSpec = catalog.ResolveClassSpec(rec.trainingClassIndex, rec.trainingLocation);
+        const std::string hudChildName = rec.name.empty() ? Tr("common.your_child_fallback") : rec.name;
+        const std::string hudClassName = gradSpec
+            ? locSvc.ResolveTrainingClassName(gradSpec->id, className)
+            : (className.empty() ? Tr("common.adolescent_fallback") : className);
+        const std::string hudLocation = gradSpec
+            ? locSvc.ResolveTrainingLocation(gradSpec->id, rec.trainingLocation)
+            : (rec.trainingLocation.empty() ? Tr("common.their_academy_fallback") : rec.trainingLocation);
+
+        QueueHUDMessage(TrFmt("hud.child_completed_training",
+                              { { "child", hudChildName },
+                                { "className", hudClassName },
+                                { "location", hudLocation } }));
 
         AffectionEventCoordinator::GetSingleton().OnChildMilestone(childID, "adult");
         SendChildEvent(

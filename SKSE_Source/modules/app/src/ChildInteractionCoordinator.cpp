@@ -6,6 +6,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/PlayerChildrenEngineOps.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -102,8 +103,7 @@ namespace MARAS::App {
                 if (!itemName || itemName[0] == '\0') {
                     return;
                 }
-                QueueHUDMessage(addedCount > 1 ? std::format("{} ({}) Added", itemName, addedCount)
-                                               : std::format("{} Added", itemName));
+                QueueHUDMessage(TrPlural("hud.item_added", addedCount, { { "item", itemName } }));
             };
             if (auto* levItem = form->As<RE::TESLevItem>()) {
                 const std::uint16_t calcLevel = player ? player->GetLevel() : 1;
@@ -312,7 +312,9 @@ namespace MARAS::App {
         const std::string critterName = LineageUseCases::GetSingleton().PickRandomCritterName(newCritter);
         const std::string childName = ActorSvc::GetName(child->GetFormID());
         if (!childName.empty() && !critterName.empty()) {
-            newCritter->SetDisplayName(std::format("{}'s {}", childName, critterName).c_str(), true);
+            const std::string petDisplayName =
+                TrFmt("pet.possessive_name", { { "child", childName }, { "critter", critterName } });
+            newCritter->SetDisplayName(petDisplayName.c_str(), true);
         }
 
         State::WorldStore::GetSingleton().Modify(

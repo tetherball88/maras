@@ -14,6 +14,7 @@
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
@@ -1244,7 +1245,7 @@ namespace MARAS::Bridge::SkyrimNet {
                                 state->childName, state->motherName, res.failureDetail);
 
                             MARAS::App::ShowLLMRetryModal(
-                                "Paternity Secret Evaluation",
+                                MARAS::Tr("modal.llm_retry.eval_paternity_secret"),
                                 fullDescription,
                                 res.failureType,
                                 std::move(retryAction),

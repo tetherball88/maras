@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../i18n'
 import { useMarasStore } from '../../store/useMarasStore'
 import { categorizePartners } from '../../utils/partnerCategories'
 import { isActorChild } from '../../utils/childUtils'
@@ -14,6 +15,9 @@ interface NpcDetailBodyProps {
 }
 
 export const NpcDetailBody: React.FC<NpcDetailBodyProps> = ({ npcId }) => {
+  const { t, tp } = useTranslation()
+  void t
+  void tp
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const relationships = useMarasStore((s) => s.relationships)
   const cheatingRecords = useMarasStore((s) => s.cheatingRecords)

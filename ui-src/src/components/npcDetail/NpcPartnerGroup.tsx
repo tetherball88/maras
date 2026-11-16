@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../i18n'
 import { RelationshipPair, RelationshipStatus, AffairStatus, AffairStage } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { StatusBadge } from '../shared/StatusBadge'
@@ -6,7 +7,7 @@ import { AffectionBar } from '../shared/AffectionBar'
 import { AppTooltip } from '../shared/AppTooltip'
 import { useMarasStore } from '../../store/useMarasStore'
 import { confirmRemoveRelationship } from '../../store/useModalStore'
-import { Heart, User, Crown, AlertTriangle, Shield, Clock, Flame, Trash2 } from 'lucide-react'
+import { Heart, User, Crown, AlertTriangle, Flame, Trash2 } from 'lucide-react'
 
 interface NpcPartnerGroupProps {
   title: string
@@ -25,6 +26,8 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
   currentNpcId,
   onSelectPartner,
 }) => {
+  const { t, tp } = useTranslation()
+  void tp
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const affectionData = useMarasStore((s) => s.affectionData)
   const cheatingRecords = useMarasStore((s) => s.cheatingRecords)
@@ -32,8 +35,8 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
 
   const currentNpcName =
     currentNpcId === PLAYER_FORM_ID
-      ? npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
-      : npcProfiles.get(currentNpcId)?.name || `NPC ${currentNpcId}`
+      ? npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
+      : npcProfiles.get(currentNpcId)?.name || t('store.fallbackNpcName', { formId: currentNpcId })
 
   const validRelationships = relationships.filter((r) => {
     const partnerId = r.actorA === currentNpcId ? r.actorB : r.actorA
@@ -55,8 +58,12 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
           const partnerId = r.actorA === currentNpcId ? r.actorB : r.actorA
           const isPlayer = partnerId === PLAYER_FORM_ID
           const partnerProfile = isPlayer ? npcProfiles.get(PLAYER_FORM_ID) : npcProfiles.get(partnerId)
-          const partnerName = isPlayer ? (npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)') : partnerProfile?.name || `NPC ${partnerId}`
-          const partnerRace = isPlayer ? (npcProfiles.get(PLAYER_FORM_ID)?.race || 'Nord') : partnerProfile?.race || 'Nord'
+          const partnerName = isPlayer
+            ? npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
+            : partnerProfile?.name || t('store.fallbackNpcName', { formId: partnerId })
+          const partnerRace = isPlayer
+            ? npcProfiles.get(PLAYER_FORM_ID)?.race || t('store.fallbackRace')
+            : partnerProfile?.race || t('store.fallbackRace')
           const partnerPlugin = isPlayer ? (npcProfiles.get(PLAYER_FORM_ID)?.pluginName || 'Skyrim.esm') : partnerProfile?.pluginName
           const isPlayerInvolved = currentNpcId === PLAYER_FORM_ID || partnerId === PLAYER_FORM_ID
           const targetNpcId = currentNpcId === PLAYER_FORM_ID ? partnerId : currentNpcId
@@ -102,7 +109,10 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
                     {partnerPlugin && (
                       <>
                         <span>•</span>
-                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]" title={`Plugin: ${partnerPlugin}`}>
+                        <span
+                          className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]"
+                          title={t('npcDetail.shell.pluginTitle', { plugin: partnerPlugin })}
+                        >
                           {partnerPlugin}
                         </span>
                       </>
@@ -122,28 +132,40 @@ export const NpcPartnerGroup: React.FC<NpcPartnerGroupProps> = ({
                 {partnerCheatedOnMeRecords.length > 0 && (
                   <span className="text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]">
                     <AlertTriangle className="w-[0.875em] h-[0.875em]" />
-                    <span>Cheated ({partnerCheatedOnMeRecords.length})</span>
+                    <span>
+                      {t('npcDetail.partnerGroup.cheatedCount', {
+                        count: partnerCheatedOnMeRecords.length,
+                      })}
+                    </span>
                   </span>
                 )}
                 {affairRecords.length > 0 && !isUnofficialAffair && (
                   <span className="text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold flex items-center gap-[0.25rem]">
                     <Flame className="w-[0.875em] h-[0.875em]" />
-                    <span>{isTalkingAffair ? 'Affair (Talking)' : `Affair (${affairIncidents})`}</span>
+                    <span>
+                      {isTalkingAffair
+                        ? t('npcDetail.partnerGroup.affairTalking')
+                        : t('npcDetail.partnerGroup.affairCount', { count: affairIncidents })}
+                    </span>
                   </span>
                 )}
                 {isUnofficialAffair && (
                   <span className="text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]">
                     <Flame className="w-[0.875em] h-[0.875em]" />
-                    <span>Affair Partner{affairIncidents > 1 ? ` (${affairIncidents})` : ''}</span>
+                    <span>
+                      {affairIncidents > 1
+                        ? t('npcDetail.partnerGroup.affairPartnerCount', { count: affairIncidents })
+                        : t('npcDetail.partnerGroup.affairPartner')}
+                    </span>
                   </span>
                 )}
                 {r.isOpen && (
                   <span className="text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">
-                    Open
+                    {t('npcDetail.partnerGroup.openBadge')}
                   </span>
                 )}
                 {!isUnofficialAffair && <StatusBadge status={r.status} />}
-                <AppTooltip content="Remove Relationship Record">
+                <AppTooltip content={t('npcDetail.partnerGroup.removeRelationshipTooltip')}>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()

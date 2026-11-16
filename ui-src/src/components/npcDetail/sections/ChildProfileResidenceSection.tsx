@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { SelectInput } from '../../shared/SelectInput'
@@ -8,7 +9,7 @@ import { PLAYER_FORM_ID } from '../../../data/mockData'
 import { Baby, Home, GraduationCap, Swords, AlertTriangle, UserPlus, CheckCircle2 } from 'lucide-react'
 import { formatGameDay } from '../../../utils/dateUtils'
 import { areSameFormId } from '../../../utils/statusAvailability'
-import { resolveIsFemale, getChildGenderNouns } from '../../../utils/childUtils'
+import { resolveIsFemale } from '../../../utils/childUtils'
 import { RelationshipStatus, ChildStage, TrainingCatalogItem } from '../../../types'
 
 interface ChildProfileResidenceSectionProps {
@@ -26,6 +27,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   isPlayerChild,
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const relationships = useMarasStore((s) => s.relationships)
   const children = useMarasStore((s) => s.children)
@@ -49,7 +51,6 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   const hasRefID = childRecord?.hasRefID ?? npc?.hasRefID ?? !npcId.startsWith('FF7')
   const hasBeastblood = Boolean(childRecord?.hasBeastblood || npc?.hasBeastblood)
   const isFemale = resolveIsFemale(childRecord, npc)
-  const { sonOrDaughter } = getChildGenderNouns(isFemale)
 
   const isPlayerParent = childRecord && (areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) || areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID))
   const isPlayerChildResolved = isPlayerChild !== undefined ? isPlayerChild : Boolean(isPlayerParent)
@@ -67,7 +68,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
     : false
 
   const spouseProfile = isSpouse && coParentId ? npcProfiles.get(coParentId) : null
-  const spouseName = spouseProfile?.name || (isSpouse ? 'Spouse' : null)
+  const spouseName = spouseProfile?.name || (isSpouse ? t('npcDetail.childResidence.fallbackSpouse') : null)
 
   // Other children sharing this spouse / relationship
   const uniqueOtherChildren = (isSpouse && coParentId)
@@ -80,7 +81,10 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
     : []
 
   const otherChildrenNames = uniqueOtherChildren.map(
-    (c) => npcProfiles.get(c.childId)?.name || c.name || `Child ${c.childId}`,
+    (c) =>
+      npcProfiles.get(c.childId)?.name ||
+      c.name ||
+      t('store.fallbackChildName', { childId: c.childId }),
   )
 
   // Relocation modal state
@@ -92,7 +96,9 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   const hasSpouseCoParent = Boolean(isSpouse && coParentId)
 
   const availableHomes = [
-    ...(hasSpouseCoParent && !isCurrentlyUnset ? [] : [{ value: 'Unset', label: 'Unset (Original Location)' }]),
+    ...(hasSpouseCoParent && !isCurrentlyUnset
+      ? []
+      : [{ value: 'Unset', label: t('npcDetail.childResidence.unsetOriginalLocation') }]),
     ...playerHomes.map((h) => ({
       value: h.name,
       label: h.locationName ? `${h.name} (${h.locationName})` : h.name,
@@ -132,30 +138,97 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
   }
 
   const targetHomeLabel = pendingHome === 'Unset'
-    ? 'Unset (Original Location)'
+    ? t('npcDetail.childResidence.unsetOriginalLocation')
     : playerHomes.find((h) => h.name === pendingHome)?.locationName
       ? `${pendingHome} (${playerHomes.find((h) => h.name === pendingHome)?.locationName})`
       : pendingHome || ''
 
+  const expectedLabel =
+    isFemale === true
+      ? t('npcDetail.childResidence.statusExpectedDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.statusExpectedSon')
+        : t('npcDetail.childResidence.statusExpectedChild')
+
+  const infantLabel =
+    isFemale === true
+      ? t('npcDetail.childResidence.statusInfantDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.statusInfantSon')
+        : t('npcDetail.childResidence.statusInfantChild')
+
+  const inTrainingBaseLabel =
+    isFemale === true
+      ? t('npcDetail.childResidence.statusInTrainingDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.statusInTrainingSon')
+        : t('npcDetail.childResidence.statusInTrainingChild')
+
+  const adultBaseLabel = hasRefID
+    ? isFemale === true
+      ? t('npcDetail.childResidence.statusAdultDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.statusAdultSon')
+        : t('npcDetail.childResidence.statusAdultChild')
+    : isFemale === true
+      ? t('npcDetail.childResidence.statusAdultReadyDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.statusAdultReadySon')
+        : t('npcDetail.childResidence.statusAdultReadyChild')
+
+  const unspawnedStatusLabel =
+    isFemale === true
+      ? t('npcDetail.childResidence.statusUnspawnedDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.statusUnspawnedSon')
+        : t('npcDetail.childResidence.statusUnspawnedChild')
+
+  const adoptedStatusLabel =
+    isFemale === true
+      ? t('utils.child.adoptedDaughter')
+      : isFemale === false
+        ? t('utils.child.adoptedSon')
+        : t('utils.child.adoptedChild')
+
+  const biologicalStatusLabel =
+    isFemale === true
+      ? t('utils.child.biologicalDaughter')
+      : isFemale === false
+        ? t('utils.child.biologicalSon')
+        : t('utils.child.biologicalChild')
+
+  const unspawnedYoungTitle =
+    isFemale === true
+      ? t('npcDetail.childResidence.unspawnedYoungDaughter')
+      : isFemale === false
+        ? t('npcDetail.childResidence.unspawnedYoungSon')
+        : t('npcDetail.childResidence.unspawnedYoungChild')
+
   return (
     <>
-      <SectionCard title="Child Profile & Residence" icon={Baby} className={className}>
+      <SectionCard title={t('npcDetail.childResidence.title')} icon={Baby} className={className}>
         <div className="pt-[0.25rem] space-y-[0.75rem] text-xs">
           <div className="grid grid-cols-2 gap-[0.75rem]">
             <div>
-              <span className="text-foreground-muted block mb-[0.125rem]">Full Name</span>
+              <span className="text-foreground-muted block mb-[0.125rem]">
+                {t('npcDetail.childResidence.fullName')}
+              </span>
               <span className="font-semibold text-foreground-primary text-sm">{displayName}</span>
             </div>
 
             <div>
-              <span className="text-foreground-muted block mb-[0.125rem]">Race</span>
+              <span className="text-foreground-muted block mb-[0.125rem]">
+                {t('npcDetail.childResidence.race')}
+              </span>
               <span className="font-semibold text-foreground-primary">{displayRace}</span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-[0.75rem] pt-[0.5rem] border-t border-border-divider">
             <div>
-              <span className="text-foreground-muted block mb-[0.125rem]">Status</span>
+              <span className="text-foreground-muted block mb-[0.125rem]">
+                {t('npcDetail.childResidence.status')}
+              </span>
               <span
                 className={`inline-flex items-center gap-[0.25rem] px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-bold ${stage === 'unborn'
                   ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30'
@@ -176,18 +249,18 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               >
                 {stage === 'unborn' ? (
                   <>
-                    <span>🤰 Expected {sonOrDaughter} (In Gestation)</span>
+                    <span>{expectedLabel}</span>
                   </>
                 ) : stage === 'infant' ? (
                   <>
                     <Baby className="w-[0.875em] h-[0.875em]" />
-                    <span>Newborn Infant {sonOrDaughter}</span>
+                    <span>{infantLabel}</span>
                   </>
                 ) : stage === 'training' ? (
                   <>
                     <GraduationCap className="w-[0.875em] h-[0.875em]" />
                     <span>
-                      In Training ({sonOrDaughter})
+                      {inTrainingBaseLabel}
                       {(childRecord?.trainingClassName || npc?.trainingClassName)
                         ? ` — ${childRecord?.trainingClassName || npc?.trainingClassName}`
                         : ''}
@@ -200,7 +273,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   <>
                     <Swords className="w-[0.875em] h-[0.875em]" />
                     <span>
-                      {hasRefID ? `Adult ${sonOrDaughter}` : `Adult ${sonOrDaughter} (Ready to Spawn)`}
+                      {adultBaseLabel}
                       {(childRecord?.trainingClassName || npc?.trainingClassName)
                         ? ` — ${childRecord?.trainingClassName || npc?.trainingClassName}`
                         : ''}
@@ -208,18 +281,20 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   </>
                 ) : !hasRefID ? (
                   <>
-                    <span>🧸 {sonOrDaughter} (Unspawned Record)</span>
+                    <span>{unspawnedStatusLabel}</span>
                   </>
                 ) : !childRecord ? (
-                  'Eligible for Adoption'
+                  t('npcDetail.childResidence.eligibleForAdoption')
                 ) : childRecord.isAdopted !== false ? (
-                  `Adopted ${sonOrDaughter}`
+                  adoptedStatusLabel
                 ) : (
-                  `Biological ${sonOrDaughter}`
+                  biologicalStatusLabel
                 )}
                 {stage === 'unborn' ? (
                   childRecord?.conceptionTimestamp != null && childRecord.conceptionTimestamp > 0
-                    ? ` (Conceived ${formatGameDay(childRecord.conceptionTimestamp, currentGameDay)})`
+                    ? ` ${t('npcDetail.childResidence.conceivedSuffix', {
+                        date: formatGameDay(childRecord.conceptionTimestamp, currentGameDay),
+                      })}`
                     : ''
                 ) : (
                   childRecord?.timestamp != null && childRecord.timestamp > 0
@@ -230,16 +305,18 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               {hasBeastblood && (
                 <span
                   className="inline-flex items-center gap-[0.25rem] ml-[0.375rem] px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-bold bg-amber-600/20 text-amber-200 border border-amber-500/40"
-                  title="Carries Hircine's Beastblood (inherited from a werewolf biological parent)"
+                  title={t('npcDetail.childResidence.beastbloodInheritedTooltip')}
                 >
-                  <span>🐺 Beastblood</span>
+                  <span>{t('npcDetail.shell.badgeBeastblood')}</span>
                 </span>
               )}
             </div>
 
             {hasSpouseCoParent && spouseName && (
               <div>
-                <span className="text-foreground-muted block mb-[0.125rem]">Household Co-Parent</span>
+                <span className="text-foreground-muted block mb-[0.125rem]">
+                  {t('npcDetail.childResidence.householdCoParent')}
+                </span>
                 <span className="font-semibold text-accent-bright">{spouseName}</span>
               </div>
             )}
@@ -251,9 +328,11 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               <div className="p-[0.625rem] bg-pink-500/10 border border-pink-500/30 rounded flex items-center gap-[0.625rem] text-pink-300">
                 <span className="text-base flex-shrink-0">🤰</span>
                 <div>
-                  <div className="font-semibold text-xs text-pink-200">In Gestation (Womb Care)</div>
+                  <div className="font-semibold text-xs text-pink-200">
+                    {t('npcDetail.childResidence.inGestationTitle')}
+                  </div>
                   <div className="text-[0.6875rem] text-pink-200/80 mt-[0.0625rem]">
-                    This child is currently developing in maternal gestation. Household assignment will be configured upon birth.
+                    {t('npcDetail.childResidence.inGestationDesc')}
                   </div>
                 </div>
               </div>
@@ -261,9 +340,11 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               <div className="p-[0.625rem] bg-cyan-500/10 border border-cyan-500/30 rounded flex items-center gap-[0.625rem] text-cyan-300">
                 <Baby className="w-[1.25em] h-[1.25em] flex-shrink-0 text-cyan-400" />
                 <div>
-                  <div className="font-semibold text-xs text-cyan-200">Swaddled Newborn Infant</div>
+                  <div className="font-semibold text-xs text-cyan-200">
+                    {t('npcDetail.childResidence.swaddledInfantTitle')}
+                  </div>
                   <div className="text-[0.6875rem] text-cyan-200/80 mt-[0.0625rem]">
-                    This infant is currently carried and swaddled in maternal care. A physical household bed and sandbox assignment will become available once the child grows into a small child.
+                    {t('npcDetail.childResidence.swaddledInfantDesc')}
                   </div>
                 </div>
               </div>
@@ -274,8 +355,14 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                 const elapsedDays = Math.max(0, currentGameDay - startDay)
                 const progressPct = Math.min(100, Math.round((elapsedDays / durationDays) * 100))
                 const remainingDays = Math.max(0, Math.ceil(durationDays - elapsedDays))
-                const trainClass = childRecord?.trainingClassName || npc?.trainingClassName || 'Warrior'
-                const trainLoc = childRecord?.trainingLocation || npc?.trainingLocation || 'Skyrim Academy'
+                const trainClass =
+                  childRecord?.trainingClassName ||
+                  npc?.trainingClassName ||
+                  t('npcDetail.childResidence.defaultTrainingClass')
+                const trainLoc =
+                  childRecord?.trainingLocation ||
+                  npc?.trainingLocation ||
+                  t('npcDetail.childResidence.defaultTrainingLocation')
                 return (
                   <div className="p-[0.75rem] bg-purple-500/10 border border-purple-500/30 rounded space-y-[0.5rem] text-purple-300">
                     <div className="flex items-start justify-between gap-[0.5rem]">
@@ -283,12 +370,18 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                         <GraduationCap className="w-[1.25em] h-[1.25em] flex-shrink-0 text-purple-400" />
                         <div>
                           <div className="font-semibold text-xs text-purple-200">
-                            Training as {trainClass} at {trainLoc}
+                            {t('npcDetail.childResidence.trainingAsAt', {
+                              className: trainClass,
+                              location: trainLoc,
+                            })}
                           </div>
                           <div className="text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]">
                             {remainingDays > 0
-                              ? `${remainingDays} day(s) remaining (${Math.floor(elapsedDays)} / ${durationDays} days)`
-                              : `Training duration completed (${durationDays} days)`}
+                              ? tp('npcDetail.childResidence.trainingDaysRemaining', remainingDays, {
+                                  elapsed: Math.floor(elapsedDays),
+                                  duration: durationDays,
+                                })
+                              : tp('npcDetail.childResidence.trainingCompletedDuration', durationDays)}
                           </div>
                         </div>
                       </div>
@@ -297,7 +390,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                         className="text-xs font-semibold text-purple-100 bg-purple-600/30 hover:bg-purple-600/45 border border-purple-400/50 px-[0.625rem] py-[0.3125rem] rounded transition-colors flex items-center gap-[0.3125rem] cursor-pointer flex-shrink-0"
                       >
                         <CheckCircle2 className="w-[0.95em] h-[0.95em] text-purple-300" />
-                        <span>Complete Training Early</span>
+                        <span>{t('npcDetail.childResidence.completeTrainingEarly')}</span>
                       </button>
                     </div>
                     <div className="w-full h-[0.375rem] bg-panel-inset rounded-full overflow-hidden border border-purple-500/20">
@@ -315,10 +408,14 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   <Swords className="w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" />
                   <div>
                     <div className="font-semibold text-xs text-amber-200">
-                      Training Complete — Ready to Spawn Adult {(childRecord?.trainingClassName || npc?.trainingClassName) ? `(${childRecord?.trainingClassName || npc?.trainingClassName})` : ''}
+                      {childRecord?.trainingClassName || npc?.trainingClassName
+                        ? t('npcDetail.childResidence.trainingCompleteReadyWithClass', {
+                            className: childRecord?.trainingClassName || npc?.trainingClassName,
+                          })
+                        : t('npcDetail.childResidence.trainingCompleteReady')}
                     </div>
                     <div className="text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]">
-                      This offspring has completed their training and reached adulthood. Spawn their adult actor to send them out into Skyrim as an independent traveling adventurer available for hire.
+                      {t('npcDetail.childResidence.trainingCompleteDesc')}
                     </div>
                   </div>
                 </div>
@@ -327,7 +424,7 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   className="text-xs font-semibold text-amber-100 bg-amber-600/30 hover:bg-amber-600/45 border border-amber-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0"
                 >
                   <Swords className="w-[1em] h-[1em] text-amber-300" />
-                  <span>Spawn Adult</span>
+                  <span>{t('npcDetail.shell.spawnAdult')}</span>
                 </button>
               </div>
             ) : stage === 'adult' ? (
@@ -335,10 +432,12 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                 <Swords className="w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" />
                 <div>
                   <div className="font-semibold text-xs text-amber-200">
-                    Independent Traveling Adventurer — {npc?.currentHome || 'Traveling Skyrim'}
+                    {t('npcDetail.childResidence.independentAdventurerTitle', {
+                      location: npc?.currentHome || t('npcDetail.childResidence.travelingSkyrim'),
+                    })}
                   </div>
                   <div className="text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]">
-                    Travels independently between Skyrim&apos;s inns, cities, and family homes, and is available to be hired as a follower.
+                    {t('npcDetail.childResidence.independentAdventurerDesc')}
                   </div>
                 </div>
               </div>
@@ -347,9 +446,9 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                 <div className="flex items-center gap-[0.625rem]">
                   <AlertTriangle className="w-[1.25em] h-[1.25em] flex-shrink-0 text-emerald-400" />
                   <div>
-                    <div className="font-semibold text-xs text-emerald-200">Unspawned Young {sonOrDaughter}</div>
+                    <div className="font-semibold text-xs text-emerald-200">{unspawnedYoungTitle}</div>
                     <div className="text-[0.6875rem] text-emerald-200/80 mt-[0.0625rem]">
-                      Spawn this young child into the world to assign a household bed and AI sandbox, or send them directly to adolescent training below.
+                      {t('npcDetail.childResidence.unspawnedYoungDesc')}
                     </div>
                   </div>
                 </div>
@@ -358,25 +457,31 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   className="text-xs font-semibold text-emerald-100 bg-emerald-600/30 hover:bg-emerald-600/45 border border-emerald-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0"
                 >
                   <UserPlus className="w-[1em] h-[1em] text-emerald-300" />
-                  <span>Spawn Child</span>
+                  <span>{t('npcDetail.shell.spawnChild')}</span>
                 </button>
               </div>
             ) : isPlayerChildResolved && hasSpouseCoParent ? (
               <div>
-                <span className="text-foreground-muted block mb-[0.125rem]">Assigned Residence</span>
+                <span className="text-foreground-muted block mb-[0.125rem]">
+                  {t('npcDetail.childResidence.assignedResidence')}
+                </span>
                 <span className="font-medium text-accent-bright flex items-center gap-[0.25rem]">
                   <Home className="w-[0.875em] h-[0.875em] text-accent" />
-                  <span>{npc?.currentHome || spouseProfile?.currentHome || 'Unassigned'}</span>
+                  <span>
+                    {npc?.currentHome ||
+                      spouseProfile?.currentHome ||
+                      t('npcDetail.childResidence.unassigned')}
+                  </span>
                 </span>
                 <p className="text-[0.625rem] text-foreground-muted mt-[0.25rem]">
-                  Residence is controlled by co-parent ({spouseName})&apos;s assigned home.
+                  {t('npcDetail.childResidence.controlledByCoParent', { spouseName })}
                 </p>
               </div>
             ) : isPlayerChildResolved ? (
               <>
                 <label className="text-foreground-muted block mb-[0.125rem] font-medium flex items-center gap-[0.25rem]">
                   <Home className="w-[0.875em] h-[0.875em] text-accent" />
-                  <span>Assigned Residence</span>
+                  <span>{t('npcDetail.childResidence.assignedResidence')}</span>
                 </label>
                 <SelectInput
                   value={currentHomeValue}
@@ -387,10 +492,20 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
               </>
             ) : (
               <div>
-                <span className="text-foreground-muted block mb-[0.125rem]">Assigned Home</span>
+                <span className="text-foreground-muted block mb-[0.125rem]">
+                  {t('npcDetail.childResidence.assignedHome')}
+                </span>
                 <span className="font-medium text-accent-bright flex items-center gap-[0.25rem]">
                   <Home className="w-[0.875em] h-[0.875em] text-accent" />
-                  <span>{npc?.currentHome || npc?.originalHome || (childRecord?.guardianAId && childRecord.guardianAId !== '00000000' ? (npcProfiles.get(childRecord.guardianAId)?.currentHome || npcProfiles.get(childRecord.guardianAId)?.originalHome) : undefined) || 'Following Custodial Parent'}</span>
+                  <span>
+                    {npc?.currentHome ||
+                      npc?.originalHome ||
+                      (childRecord?.guardianAId && childRecord.guardianAId !== '00000000'
+                        ? npcProfiles.get(childRecord.guardianAId)?.currentHome ||
+                          npcProfiles.get(childRecord.guardianAId)?.originalHome
+                        : undefined) ||
+                      t('npcDetail.childResidence.followingCustodialParent')}
+                  </span>
                 </span>
               </div>
             )}
@@ -405,12 +520,12 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
             const playerGold = playerFactions?.playerGold ?? 999999
             const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14)
 
-            const isEntryUnlocked = (t: TrainingCatalogItem): boolean => {
-              if (t.requirementMet !== undefined) {
-                return Boolean(t.requirementMet)
+            const isEntryUnlocked = (item: TrainingCatalogItem): boolean => {
+              if (item.requirementMet !== undefined) {
+                return Boolean(item.requirementMet)
               }
-              if (t.factionKey && playerFactions) {
-                return Boolean(playerFactions[t.factionKey])
+              if (item.factionKey && playerFactions) {
+                return Boolean(playerFactions[item.factionKey])
               }
               return true
             }
@@ -421,10 +536,13 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                   <div>
                     <span className="font-semibold text-foreground-primary flex items-center gap-[0.375rem]">
                       <GraduationCap className="w-[1em] h-[1em] text-purple-400" />
-                      <span>Adolescent Training &amp; Class Path</span>
+                      <span>{t('npcDetail.childResidence.trainingSectionTitle')}</span>
                     </span>
                     <p className="text-[0.6875rem] text-foreground-muted mt-[0.125rem]">
-                      Enroll {displayName} in one of {trainingCatalog.length} academies, guilds, or Daedric covenants ({durationDays} day curriculum).
+                      {tp('npcDetail.childResidence.trainingEnrollDesc', durationDays, {
+                        name: displayName,
+                        catalogCount: trainingCatalog.length,
+                      })}
                     </p>
                   </div>
                   <button
@@ -432,13 +550,17 @@ export const ChildProfileResidenceSection: React.FC<ChildProfileResidenceSection
                     className="text-xs font-semibold px-[0.875rem] py-[0.4375rem] rounded border transition-colors flex items-center gap-[0.375rem] flex-shrink-0 text-purple-100 bg-purple-600/25 hover:bg-purple-600/40 border-purple-500/45 cursor-pointer"
                   >
                     <GraduationCap className="w-[0.95em] h-[0.95em] text-purple-300" />
-                    <span>{hasRefID ? 'Despawn Child & Send to Training' : 'Send to Training'}</span>
+                    <span>
+                      {hasRefID
+                        ? t('npcDetail.childResidence.despawnAndTrainBtn')
+                        : t('npcDetail.trainingModal.sendToTrainingBtn')}
+                    </span>
                   </button>
                 </div>
 
                 {hasRefID && (
                   <p className="text-[0.625rem] text-foreground-muted">
-                    Sending a spawned child to training will despawn their young child actor, preserve their SkyrimNet childhood biography, and allow you to spawn their adult actor after {durationDays} day(s).
+                    {tp('npcDetail.childResidence.despawnTrainingHelp', durationDays)}
                   </p>
                 )}
 

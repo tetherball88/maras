@@ -1,15 +1,17 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { LayoutDashboard, Home, HeartHandshake, Settings } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const tabs = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'household', label: 'My Household', icon: Home },
-  { id: 'matchmaking', label: 'Matchmaking', icon: HeartHandshake },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'overview', label: 'Overview', labelKey: 'layout.nav.overview', icon: LayoutDashboard },
+  { id: 'household', label: 'My Household', labelKey: 'layout.nav.household', icon: Home },
+  { id: 'matchmaking', label: 'Matchmaking', labelKey: 'layout.nav.matchmaking', icon: HeartHandshake },
+  { id: 'settings', label: 'Settings', labelKey: 'layout.nav.settings', icon: Settings },
 ]
 
 export const TopTabBar: React.FC = () => {
+  const { t } = useTranslation()
   const activeTab = useMarasStore((s) => s.activeTab)
   const setActiveTab = useMarasStore((s) => s.setActiveTab)
 
@@ -28,7 +30,7 @@ export const TopTabBar: React.FC = () => {
               }`}
           >
             <Icon className={`w-[1.125em] h-[1.125em] ${isActive ? 'text-accent' : 'text-foreground-muted'}`} />
-            <span>{tab.label}</span>
+            <span>{t(tab.labelKey, undefined, tab.label)}</span>
           </button>
         )
       })}

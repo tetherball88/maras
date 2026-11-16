@@ -6,8 +6,11 @@ import { PartnerListItem } from './PartnerListItem'
 import { getStatusLabel, StatusIcon } from '../shared/StatusBadge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const PartnerList: React.FC = () => {
+  const { revision } = useTranslation()
+  void revision
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const affectionData = useMarasStore((s) => s.affectionData)

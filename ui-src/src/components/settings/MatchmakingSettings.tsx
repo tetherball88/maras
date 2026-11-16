@@ -1,5 +1,6 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { useTranslation } from '../../i18n'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SliderInput } from '../shared/SliderInput'
@@ -31,6 +32,7 @@ const DEFAULT_CHANCES: Record<DiceRollChanceKey, number> = {
 }
 
 export const MatchmakingSettings: React.FC = () => {
+  const { t, tp } = useTranslation()
   const settings = useMarasStore((s) => s.settings)
   const matchmakingSettings = useMarasStore((s) => s.matchmakingSettings)
   const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings)
@@ -40,6 +42,7 @@ export const MatchmakingSettings: React.FC = () => {
 
   const hasSkyrimNet = Boolean(settings.hasSkyrimNet)
   const useLLM = hasSkyrimNet && (matchmakingSettings.useLLM ?? true)
+  const cooldownDays = matchmakingSettings.npcCooldownDays ?? 14
 
   const isKeyActive = (k: DiceRollChanceKey): boolean => {
     if (k === 'diceRollChanceNewLoverCheating') return Boolean(matchmakingSettings.allowCheating)
@@ -228,24 +231,31 @@ export const MatchmakingSettings: React.FC = () => {
     updateMatchmakingSettings(updates)
   }
 
+  const unitPercent = t('settings.matchmaking.unitPercent')
+  const unitDaysShort = t('settings.matchmaking.unitDaysShort')
+
   return (
     <div className="space-y-[1rem]">
       {/* Section 1: Scheduled Auto Matchmaking */}
       <SectionCard
-        title={useLLM ? 'Scheduled AI Matchmaking' : 'Scheduled Auto Matchmaking'}
+        title={
+          useLLM
+            ? t('settings.matchmaking.scheduledAiTitle')
+            : t('settings.matchmaking.scheduledAutoTitle')
+        }
         icon={useLLM ? Bot : Dices}
         subtitle={
           useLLM
-            ? 'Evaluates romantic prospects in the background using SkyrimNet LLM'
-            : 'Evaluates romantic prospects in the background using algorithmic Dice Roll chances'
+            ? t('settings.matchmaking.scheduledAiSubtitle')
+            : t('settings.matchmaking.scheduledAutoSubtitle')
         }
       >
         <SettingRow
-          label="Auto Scheduled Matchmaking"
+          label={t('settings.matchmaking.autoScheduledLabel')}
           description={
             useLLM
-              ? 'Periodically evaluate the world NPC roster in the background using SkyrimNet LLM.'
-              : 'Periodically evaluate the world NPC roster in the background using algorithmic Dice Roll probability.'
+              ? t('settings.matchmaking.autoScheduledAiDesc')
+              : t('settings.matchmaking.autoScheduledDiceDesc')
           }
         >
           <ToggleSwitch
@@ -256,8 +266,8 @@ export const MatchmakingSettings: React.FC = () => {
 
         {hasSkyrimNet && (
           <SettingRow
-            label="Use SkyrimNet AI Matchmaking"
-            description="When enabled, scheduled matchmaking uses SkyrimNet AI to evaluate pairings. When disabled, the algorithmic Dice Roll system is used instead (with AI verification and memory generation)."
+            label={t('settings.matchmaking.useAiLabel')}
+            description={t('settings.matchmaking.useAiDesc')}
           >
             <ToggleSwitch
               checked={matchmakingSettings.useLLM ?? true}
@@ -269,8 +279,8 @@ export const MatchmakingSettings: React.FC = () => {
         {hasSkyrimNet && (
           <>
             <SettingRow
-              label="Evaluation Step"
-              description="When enabled, candidate pairs from scheduled matchmaking undergo a secondary LLM narrative evaluation before being applied."
+              label={t('settings.matchmaking.evaluationStepLabel')}
+              description={t('settings.matchmaking.evaluationStepDesc')}
             >
               <ToggleSwitch
                 checked={matchmakingSettings.evaluationStep ?? true}
@@ -279,8 +289,8 @@ export const MatchmakingSettings: React.FC = () => {
             </SettingRow>
 
             <SettingRow
-              label="LLM-Generated Memories"
-              description="When enabled, matchmaking uses SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, matchmaking memories are built programmatically without sending an LLM request."
+              label={t('settings.matchmaking.llmMemoriesLabel')}
+              description={t('settings.matchmaking.llmMemoriesDesc')}
             >
               <ToggleSwitch
                 checked={matchmakingSettings.generateMemories ?? true}
@@ -291,8 +301,8 @@ export const MatchmakingSettings: React.FC = () => {
         )}
 
         <SettingRow
-          label="Review Matchmaking Results in Modal"
-          description="When enabled, presents an interactive checklist modal to review, adjust, or reject proposed NPC pairings before they are applied in-game."
+          label={t('settings.matchmaking.confirmResultsLabel')}
+          description={t('settings.matchmaking.confirmResultsDesc')}
         >
           <ToggleSwitch
             checked={matchmakingSettings.confirmResults ?? false}
@@ -301,22 +311,22 @@ export const MatchmakingSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Evaluation Interval"
-          description={`Number of in-game days between automated matchmaking evaluations (${matchmakingSettings.intervalDays} days).`}
+          label={t('settings.matchmaking.intervalDaysLabel')}
+          description={tp('settings.matchmaking.intervalDaysDesc', matchmakingSettings.intervalDays)}
         >
           <SliderInput
             value={matchmakingSettings.intervalDays}
             min={1}
             max={30}
             step={1}
-            unit="d"
+            unit={unitDaysShort}
             onChange={(val) => updateMatchmakingSettings({ intervalDays: Math.round(val) })}
           />
         </SettingRow>
 
         <SettingRow
-          label="Max Suggestions Per Cycle"
-          description={`Maximum number of NPC pair changes proposed per automated run (${matchmakingSettings.maxSuggestions} suggestions).`}
+          label={t('settings.matchmaking.maxSuggestionsLabel')}
+          description={tp('settings.matchmaking.maxSuggestionsDesc', matchmakingSettings.maxSuggestions)}
         >
           <SliderInput
             value={matchmakingSettings.maxSuggestions}
@@ -329,15 +339,15 @@ export const MatchmakingSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="NPC Relationship Cooldown"
-          description={`Number of in-game days an NPC must wait after a scheduled relationship change before they can be changed again (${matchmakingSettings.npcCooldownDays ?? 14} days).`}
+          label={t('settings.matchmaking.npcCooldownLabel')}
+          description={tp('settings.matchmaking.npcCooldownDesc', cooldownDays)}
         >
           <SliderInput
-            value={matchmakingSettings.npcCooldownDays ?? 14}
+            value={cooldownDays}
             min={1}
             max={60}
             step={1}
-            unit="d"
+            unit={unitDaysShort}
             onChange={(val) => updateMatchmakingSettings({ npcCooldownDays: Math.round(val) })}
           />
         </SettingRow>
@@ -346,7 +356,7 @@ export const MatchmakingSettings: React.FC = () => {
       {/* Section 2: Dice Roll Chances (Visible when not in LLM mode) */}
       {!useLLM && (
         <SectionCard
-          title="Dice Roll Matchmaking Chances"
+          title={t('settings.matchmaking.diceChancesTitle')}
           icon={Dices}
           actionSlot={
             <div className="flex items-center gap-2">
@@ -354,69 +364,69 @@ export const MatchmakingSettings: React.FC = () => {
                 type="button"
                 onClick={handleRestoreDefaultChances}
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded bg-panel-inset hover:bg-accent-faint text-foreground-secondary hover:text-accent-bright border border-border-subtle hover:border-border-accent transition-colors cursor-pointer"
-                title="Restore default chance distribution"
+                title={t('settings.matchmaking.restoreDefaultsTooltip')}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Restore Defaults</span>
+                <span>{t('settings.matchmaking.restoreDefaultsBtn')}</span>
               </button>
               <span className="text-xs font-mono font-semibold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/50">
-                Total: {totalPercent}%
+                {t('settings.matchmaking.totalPercentBadge', { percent: totalPercent })}
               </span>
             </div>
           }
         >
           <div className="text-muted-foreground text-[0.75rem] mb-2 px-1">
-            Configure the relative probability weights for each matchmaking action. Sliders auto-normalize to ensure the total is always 100%.
+            {t('settings.matchmaking.diceChancesIntro')}
           </div>
 
           <SettingRow
-            label="New Dating Pair"
-            description="Probability of initiating a new Dating relationship between two eligible single NPCs."
+            label={t('settings.matchmaking.chanceNewDatingLabel')}
+            description={t('settings.matchmaking.chanceNewDatingDesc')}
           >
             <SliderInput
               value={chances.diceRollChanceNewDating}
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               onChange={(val) => handleChanceChange('diceRollChanceNewDating', val)}
             />
           </SettingRow>
 
           <SettingRow
-            label="New Engaged Pair"
-            description="Probability of initiating a direct Engagement between two eligible single NPCs."
+            label={t('settings.matchmaking.chanceNewEngagedLabel')}
+            description={t('settings.matchmaking.chanceNewEngagedDesc')}
           >
             <SliderInput
               value={chances.diceRollChanceNewEngaged}
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               onChange={(val) => handleChanceChange('diceRollChanceNewEngaged', val)}
             />
           </SettingRow>
 
           <SettingRow
-            label="New Lover (Allowed / Open)"
-            description="Probability of establishing a secondary Lover relationship where partners allow it (single or open main pair)."
+            label={t('settings.matchmaking.chanceNewLoverAllowedLabel')}
+            description={t('settings.matchmaking.chanceNewLoverAllowedDesc')}
           >
             <SliderInput
               value={chances.diceRollChanceNewLoverAllowed}
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               onChange={(val) => handleChanceChange('diceRollChanceNewLoverAllowed', val)}
             />
           </SettingRow>
 
           <SettingRow
-            label="New Lover (Cheating / Infidelity)"
+            label={t('settings.matchmaking.chanceNewLoverCheatingLabel')}
             description={
               matchmakingSettings.allowCheating
-                ? 'Probability of establishing a secondary Lover relationship that constitutes infidelity (closed main pair).'
-                : 'Disabled because Allow Cheating / Infidelity is turned off below.'
+                ? t('settings.matchmaking.chanceNewLoverCheatingDesc')
+                : t('settings.matchmaking.chanceNewLoverCheatingDisabledDesc')
             }
           >
             <SliderInput
@@ -424,32 +434,32 @@ export const MatchmakingSettings: React.FC = () => {
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               disabled={!matchmakingSettings.allowCheating}
               onChange={(val) => handleChanceChange('diceRollChanceNewLoverCheating', val)}
             />
           </SettingRow>
 
           <SettingRow
-            label="Advance Existing Relationship"
-            description="Probability of progressing an existing relationship (Dating to Engaged, Engaged to Married, Lover to Dating)."
+            label={t('settings.matchmaking.chanceAdvanceLabel')}
+            description={t('settings.matchmaking.chanceAdvanceDesc')}
           >
             <SliderInput
               value={chances.diceRollChanceAdvance}
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               onChange={(val) => handleChanceChange('diceRollChanceAdvance', val)}
             />
           </SettingRow>
 
           <SettingRow
-            label="Breakup / Divorce"
+            label={t('settings.matchmaking.chanceBreakupLabel')}
             description={
               matchmakingSettings.allowBreakups
-                ? 'Probability of dissolving an existing relationship (Dating to Ex-Dating, Married to Divorced, etc.).'
-                : 'Disabled because Allow AI Breakups is turned off below.'
+                ? t('settings.matchmaking.chanceBreakupDesc')
+                : t('settings.matchmaking.chanceBreakupDisabledDesc')
             }
           >
             <SliderInput
@@ -457,18 +467,18 @@ export const MatchmakingSettings: React.FC = () => {
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               disabled={!matchmakingSettings.allowBreakups}
               onChange={(val) => handleChanceChange('diceRollChanceBreakup', val)}
             />
           </SettingRow>
 
           <SettingRow
-            label="Open / Close Status"
+            label={t('settings.matchmaking.chanceOpenCloseLabel')}
             description={
               matchmakingSettings.allowOpenClose
-                ? 'Probability of modifying relationship exclusivity (opening an exclusive pair or closing an open pair).'
-                : 'Disabled because Allow Open / Close Modifications is turned off below.'
+                ? t('settings.matchmaking.chanceOpenCloseDesc')
+                : t('settings.matchmaking.chanceOpenCloseDisabledDesc')
             }
           >
             <SliderInput
@@ -476,7 +486,7 @@ export const MatchmakingSettings: React.FC = () => {
               min={0}
               max={100}
               step={1}
-              unit="%"
+              unit={unitPercent}
               disabled={!matchmakingSettings.allowOpenClose}
               onChange={(val) => handleChanceChange('diceRollChanceOpenClose', val)}
             />
@@ -485,30 +495,45 @@ export const MatchmakingSettings: React.FC = () => {
       )}
 
       {/* Section 3: Matchmaking Rules & Constraints */}
-      <SectionCard title="Matchmaking Rules & Constraints" icon={HeartHandshake}>
+      <SectionCard title={t('settings.matchmaking.rulesTitle')} icon={HeartHandshake}>
         <SettingRow
-          label="Pairing Orientation"
-          description="Constrain partner suggestions to specific gender combinations across automated and manual evaluation."
+          label={t('settings.matchmaking.orientationLabel')}
+          description={t('settings.matchmaking.orientationDesc')}
         >
           <SelectInput
             value={matchmakingSettings.orientation ?? MatchmakingOrientation.Heterosexual}
             options={[
-              { value: MatchmakingOrientation.Any, label: 'Any (All Orientations)' },
-              { value: MatchmakingOrientation.Heterosexual, label: 'Heterosexual (Male + Female)' },
-              { value: MatchmakingOrientation.Homosexual, label: 'Homosexual (Same-Sex)' },
-              { value: MatchmakingOrientation.Gay, label: 'Gay (Male + Male)' },
-              { value: MatchmakingOrientation.Lesbian, label: 'Lesbian (Female + Female)' },
-              { value: MatchmakingOrientation.HeteroAndGay, label: 'Hetero + Gay (Male + Female, Male + Male)' },
-              { value: MatchmakingOrientation.HeteroAndLesbian, label: 'Hetero + Lesbian (Male + Female, Female + Female)' },
+              { value: MatchmakingOrientation.Any, label: t('settings.matchmaking.orientationAny') },
+              {
+                value: MatchmakingOrientation.Heterosexual,
+                label: t('settings.matchmaking.orientationHeterosexual'),
+              },
+              {
+                value: MatchmakingOrientation.Homosexual,
+                label: t('settings.matchmaking.orientationHomosexual'),
+              },
+              { value: MatchmakingOrientation.Gay, label: t('settings.matchmaking.orientationGay') },
+              {
+                value: MatchmakingOrientation.Lesbian,
+                label: t('settings.matchmaking.orientationLesbian'),
+              },
+              {
+                value: MatchmakingOrientation.HeteroAndGay,
+                label: t('settings.matchmaking.orientationHeteroAndGay'),
+              },
+              {
+                value: MatchmakingOrientation.HeteroAndLesbian,
+                label: t('settings.matchmaking.orientationHeteroAndLesbian'),
+              },
             ]}
             onChange={(val) => updateMatchmakingSettings({ orientation: parseInt(val, 10) })}
-            className="w-[18rem] text-xs"
+            className="min-w-[18rem] max-w-[24rem] w-auto text-xs"
           />
         </SettingRow>
 
         <SettingRow
-          label="Allow Cheating / Infidelity"
-          description="Permit proposing secondary lover relationships for NPCs who are already in exclusive/closed main partnerships."
+          label={t('settings.matchmaking.allowCheatingLabel')}
+          description={t('settings.matchmaking.allowCheatingDesc')}
         >
           <ToggleSwitch
             checked={matchmakingSettings.allowCheating}
@@ -517,8 +542,8 @@ export const MatchmakingSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Allow AI Breakups"
-          description="Permit proposing breakups, divorces, and separations for existing relationships when appropriate."
+          label={t('settings.matchmaking.allowBreakupsLabel')}
+          description={t('settings.matchmaking.allowBreakupsDesc')}
         >
           <ToggleSwitch
             checked={matchmakingSettings.allowBreakups}
@@ -527,8 +552,8 @@ export const MatchmakingSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Allow Open / Close Modifications"
-          description="Permit proposing opening exclusive relationships or making open relationships exclusive."
+          label={t('settings.matchmaking.allowOpenCloseLabel')}
+          description={t('settings.matchmaking.allowOpenCloseDesc')}
         >
           <ToggleSwitch
             checked={matchmakingSettings.allowOpenClose}
@@ -539,13 +564,13 @@ export const MatchmakingSettings: React.FC = () => {
 
       {/* Section 5: Manual Matchmaking Actions */}
       <SectionCard
-        title="Manual Matchmaking Actions"
+        title={t('settings.matchmaking.manualActionsTitle')}
         icon={Globe}
-        subtitle="Trigger immediate AI evaluations across all Skyrim NPCs without waiting for interval timers"
+        subtitle={t('settings.matchmaking.manualActionsSubtitle')}
       >
         <SettingRow
-          label="Manual World Scan"
-          description="Evaluate romantic prospects across all Skyrim NPCs immediately and open the AI dashboard to review and apply matches."
+          label={t('settings.matchmaking.manualWorldScanLabel')}
+          description={t('settings.matchmaking.manualWorldScanDesc')}
         >
           <button
             type="button"
@@ -558,7 +583,7 @@ export const MatchmakingSettings: React.FC = () => {
             className="px-[0.875rem] py-[0.375rem] bg-accent hover:bg-accent-bright disabled:opacity-50 text-panel font-semibold text-xs rounded transition-colors cursor-pointer flex items-center gap-[0.375rem]"
           >
             <Globe className="w-[0.875em] h-[0.875em]" />
-            <span>Run World Scan Now</span>
+            <span>{t('settings.matchmaking.runWorldScanBtn')}</span>
           </button>
         </SettingRow>
       </SectionCard>

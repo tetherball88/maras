@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { Crown } from 'lucide-react'
@@ -10,12 +11,14 @@ interface PlayerPolicySectionProps {
 export const PlayerPolicySection: React.FC<PlayerPolicySectionProps> = ({
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
+  void tp
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
 
   return (
     <SectionCard
-      title="Player Relationship Policy & Polygamy"
+      title={t('npcDetail.playerPolicy.title')}
       icon={Crown}
       className={className}
     >
@@ -23,11 +26,10 @@ export const PlayerPolicySection: React.FC<PlayerPolicySectionProps> = ({
         <div className="flex justify-between items-center bg-panel-raised p-[0.625rem] rounded border border-border-subtle">
           <div>
             <div className="font-semibold text-foreground-primary">
-              Polygamy Mode
+              {t('npcDetail.playerPolicy.polygamyMode')}
             </div>
             <div className="text-[0.6875rem] text-foreground-muted">
-              Allows player to have multiple concurrent spouses and main-tier
-              partners.
+              {t('npcDetail.playerPolicy.polygamyDesc')}
             </div>
           </div>
           <button
@@ -37,13 +39,14 @@ export const PlayerPolicySection: React.FC<PlayerPolicySectionProps> = ({
                 : 'bg-panel-inset text-foreground-muted border-border-divider hover:bg-interactive-hover'
               }`}
           >
-            {settings.enablePolygamy ? 'Enabled' : 'Disabled'}
+            {settings.enablePolygamy
+              ? t('npcDetail.playerPolicy.enabled')
+              : t('npcDetail.playerPolicy.disabled')}
           </button>
         </div>
 
         <p className="text-[0.6875rem] text-foreground-muted italic">
-          When Polygamy is enabled, forming new Main-tier relationships will not
-          auto-break existing casual Lover connections for the Player.
+          {t('npcDetail.playerPolicy.polygamyNote')}
         </p>
       </div>
     </SectionCard>

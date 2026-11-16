@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { SelectInput } from '../../shared/SelectInput'
@@ -16,6 +17,8 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
   npcId,
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
+  void tp
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const playerHomes = useMarasStore((s) => s.playerHomes)
   const children = useMarasStore((s) => s.children)
@@ -34,7 +37,9 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
   })
 
   const availableHomes = [
-    ...(hasChildrenWithPlayer ? [] : [{ value: 'Unset', label: 'Unset (No assigned house)' }]),
+    ...(hasChildrenWithPlayer
+      ? []
+      : [{ value: 'Unset', label: t('npcDetail.spouseHousing.unsetNoHouse') }]),
     ...playerHomes.map((h) => ({
       value: h.name,
       label: h.locationName ? `${h.name} (${h.locationName})` : h.name,
@@ -45,13 +50,13 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
   const hasOriginalHome = Boolean(npc?.originalHome)
 
   return (
-    <SectionCard title="Assigned Residence & Housing" icon={Home} className={className}>
+    <SectionCard title={t('npcDetail.spouseHousing.title')} icon={Home} className={className}>
       <div className="pt-[0.25rem] space-y-[0.5rem] text-xs">
         <div className="flex flex-col sm:flex-row items-stretch gap-[0.75rem]">
           {/* 1. Assigned Player House Dropdown */}
           <div className="flex-1 min-w-0 space-y-[0.25rem]">
             <label className="text-foreground-muted block text-xs font-medium">
-              Assigned Player Home
+              {t('npcDetail.spouseHousing.assignedPlayerHome')}
             </label>
             <SelectInput
               value={
@@ -75,15 +80,19 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
                   htmlFor="stay-at-home-toggle"
                   className="text-foreground-muted block text-xs font-medium cursor-pointer"
                 >
-                  Stay at Assigned Home
+                  {t('npcDetail.spouseHousing.stayAtAssignedHome')}
                 </label>
                 <span className="text-[0.6875rem] text-foreground-muted hidden lg:inline truncate">
-                  {npc?.stayAtHome !== false ? 'Sandboxes at home' : 'Original routine'}
+                  {npc?.stayAtHome !== false
+                    ? t('npcDetail.spouseHousing.sandboxesAtHome')
+                    : t('npcDetail.spouseHousing.originalRoutine')}
                 </span>
               </div>
               <div className="flex h-8 w-full items-center justify-between rounded-md border border-border-subtle bg-panel-inset px-3 py-1 text-xs">
                 <span className="text-[0.6875rem] text-foreground-secondary truncate mr-2">
-                  {npc?.stayAtHome !== false ? 'Stay at home' : 'Normal routine'}
+                  {npc?.stayAtHome !== false
+                    ? t('npcDetail.spouseHousing.stayAtHome')
+                    : t('npcDetail.spouseHousing.normalRoutine')}
                 </span>
                 <ToggleSwitch
                   checked={npc?.stayAtHome !== false}
@@ -99,7 +108,7 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
           {hasOriginalHome && (
             <div className="flex-1 min-w-0 space-y-[0.25rem]">
               <label className="text-foreground-muted block text-xs font-medium">
-                Original Home
+                {t('npcDetail.spouseHousing.originalHome')}
               </label>
               <div className="flex h-8 w-full items-center justify-between rounded-md border border-border-subtle bg-panel-inset px-3 py-1 text-xs">
                 <span
@@ -121,11 +130,13 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
                       }`}
                     title={
                       hasChildrenWithPlayer
-                        ? 'Cannot send spouse away while you have children together'
-                        : "Free from player's house (Return to original home)"
+                        ? t('npcDetail.spouseHousing.cannotReturnWithChildrenTooltip')
+                        : t('npcDetail.spouseHousing.returnToOriginalTooltip')
                     }
                   >
-                    {hasChildrenWithPlayer ? 'Locked' : 'Return'}
+                    {hasChildrenWithPlayer
+                      ? t('npcDetail.spouseHousing.locked')
+                      : t('npcDetail.spouseHousing.returnBtn')}
                   </button>
                 )}
               </div>
@@ -136,11 +147,13 @@ export const SpouseHousingSection: React.FC<SpouseHousingSectionProps> = ({
         {/* Warning note if spouse has children and cannot be returned */}
         {hasChildrenWithPlayer && (hasAssignedHome ? (
           <p className="text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]">
-            * Cannot return spouse to original home while you have children together. Move them to a different player home instead.
+            {t('npcDetail.spouseHousing.cannotReturnWarning')}
           </p>
-        ) : (<p className="text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]">
-          * When child will grow and be spawned in game world you will have to select house for them, and their mother, your spouse, will move there.
-        </p>))}
+        ) : (
+          <p className="text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]">
+            {t('npcDetail.spouseHousing.unassignedChildrenWarning')}
+          </p>
+        ))}
       </div>
     </SectionCard>
   )

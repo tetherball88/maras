@@ -3,7 +3,10 @@ import { useMarasStore } from '../../store/useMarasStore'
 import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { Heart, Crown, HeartOff, UserCheck, Flame } from 'lucide-react'
+import { useTranslation } from '../../i18n'
+
 export const StatCards: React.FC = () => {
+  const { t } = useTranslation()
   const relationships = useMarasStore((s) => s.relationships)
 
   const getCount = (status: RelationshipStatus) => {
@@ -14,11 +17,11 @@ export const StatCards: React.FC = () => {
   }
 
   const stats = [
-    { label: 'Married', count: getCount(RelationshipStatus.Married), icon: Crown, color: 'text-accent-bright' },
-    { label: 'Dating', count: getCount(RelationshipStatus.Dating), icon: Heart, color: 'text-status-success' },
-    { label: 'Lovers', count: getCount(RelationshipStatus.Lover), icon: Flame, color: 'text-accent' },
-    { label: 'Engaged', count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: 'text-status-warning' },
-    { label: 'Divorced', count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: 'text-status-danger' },
+    { label: t('overview.stats.married'), count: getCount(RelationshipStatus.Married), icon: Crown, color: 'text-accent-bright' },
+    { label: t('overview.stats.dating'), count: getCount(RelationshipStatus.Dating), icon: Heart, color: 'text-status-success' },
+    { label: t('overview.stats.lovers'), count: getCount(RelationshipStatus.Lover), icon: Flame, color: 'text-accent' },
+    { label: t('overview.stats.engaged'), count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: 'text-status-warning' },
+    { label: t('overview.stats.divorced'), count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: 'text-status-danger' },
   ]
 
   return (

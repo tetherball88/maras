@@ -3,6 +3,7 @@
 #include "maras/app/AppContext.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/TaskDispatcher.h"
 
 #include <mutex>
@@ -30,10 +31,9 @@ namespace MARAS::App {
         auto& skyrimNet = GetSkyrimNetGateway();
         ModalRequest modalReq;
         modalReq.modalType = "generic";
-        modalReq.title = "LLM Evaluation Failed";
+        modalReq.title = Tr("modal.llm_retry.title");
         modalReq.subtitle = request.batchTypeName;
-        modalReq.message =
-            "Some LLM evaluations in this batch failed. Choose Retry to resend failed requests, or Ignore to skip them.";
+        modalReq.message = Tr("modal.llm_retry.message_batch");
         modalReq.tone = ModalTone::Warning;
         modalReq.size = ModalSize::Md;
         modalReq.defaultCancelButtonIndex = 1;
@@ -41,7 +41,7 @@ namespace MARAS::App {
         if (!request.description.empty()) {
             modalReq.controls.push_back(ModalControl::MakeInfoBox(
                 "error_details",
-                "Failed Evaluations",
+                Tr("modal.llm_retry.failed_list_label"),
                 request.description,
                 ModalTone::Warning));
         }
@@ -57,13 +57,13 @@ namespace MARAS::App {
         if (!guidanceBody.empty()) {
             modalReq.controls.push_back(ModalControl::MakeInfoBox(
                 "error_guidance",
-                guidanceTitle.empty() ? std::string("Troubleshooting Guidance") : guidanceTitle,
+                guidanceTitle.empty() ? Tr("modal.llm_retry.guidance_fallback_label") : guidanceTitle,
                 guidanceBody,
                 ModalTone::Default));
         }
 
-        modalReq.buttons.push_back(ModalButton::Make("retry", "Retry Failed", ModalButtonVariant::Primary));
-        modalReq.buttons.push_back(ModalButton::Make("ignore", "Ignore", ModalButtonVariant::Secondary));
+        modalReq.buttons.push_back(ModalButton::Make("retry", Tr("modal.llm_retry.btn_retry_failed"), ModalButtonVariant::Primary));
+        modalReq.buttons.push_back(ModalButton::Make("ignore", Tr("modal.common.ignore"), ModalButtonVariant::Secondary));
 
         GetModalGateway().ShowModal(
             std::move(modalReq),

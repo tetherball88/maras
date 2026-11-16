@@ -334,6 +334,26 @@ export interface MarasSettings {
   uiFullScreen?: boolean
   uiScale?: number
   autoPauseOnOpen?: boolean
+  language?: string
+  resolvedLanguage?: string
+}
+
+export interface LocaleMeta {
+  code: string
+  name: string
+  nativeName: string
+  author?: string
+  marasVersion?: string
+  fontFamily?: string
+}
+
+export interface LocalePayload {
+  selectedLanguage: string
+  resolvedLanguage: string
+  detectedSkyrimLanguage?: string
+  fontFamily?: string
+  availableLanguages: LocaleMeta[]
+  strings: Record<string, string>
 }
 
 export enum MatchmakingOrientation {
