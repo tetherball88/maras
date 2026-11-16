@@ -92,23 +92,6 @@ namespace MARAS::App {
             return false;
         }
 
-        [[nodiscard]] bool IsEligibleRelocationAdult(
-            const State::WorldStateSnapshot& snap,
-            State::ActorId adultId) noexcept {
-            if (adultId.IsNull() || adultId.IsPlayer() || adultId.IsUnknownFather()) {
-                return false;
-            }
-            if (Domain::Household::IsDeceased(snap, adultId)) {
-                return false;
-            }
-            if (snap.relationships &&
-                Foundation::IsActivePartnerStatus(
-                    snap.relationships->GetStatus(adultId, State::ActorId::Player()))) {
-                return true;
-            }
-            return HasLivingChildWithPlayer(snap, adultId);
-        }
-
         [[nodiscard]] bool HasActorReachedTravelDestination(
             RE::Actor* actor,
             const State::AdultChildTravelRecord& rec) {
@@ -452,16 +435,11 @@ namespace MARAS::App {
             return false;
         }
 
-        ReconcileTenantEngineAdded(tenantFormID, playerHouseFormID, isChild);
-        if (previousHouseID != playerHouseFormID && !Foundation::IsSyntheticChildRawId(tenantFormID)) {
-            if (isChild) {
-                PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(
-                    tenantFormID, playerHouseFormID, true);
-            } else {
-                HouseholdEngineOps::GetSingleton().MoveActorToHouse(
-                    tenantFormID, playerHouseFormID, true);
-            }
+        if (isChild && previousHouseID != playerHouseFormID && !Foundation::IsSyntheticChildRawId(tenantFormID)) {
+            PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(
+                tenantFormID, playerHouseFormID, true);
         }
+        ReconcileTenantEngineAdded(tenantFormID, playerHouseFormID, isChild);
         GlobalVarReconciler::GetSingleton().ReconcileGlobals();
 
         MARAS_LOG_INFO(
@@ -592,124 +570,49 @@ namespace MARAS::App {
             return relocatedMembers;
         }
 
-        std::vector<State::ActorId> adultsToMove;
-        std::vector<State::ChildId> childrenToMove;
-        std::vector<std::pair<RE::FormID, bool>> adultStayPrefs;
+        Domain::Household::RelocateFamilyOutcome outcome{};
+        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+            outcome = Domain::Household::ApplyRelocateFamilyUnit(
+                ws, npcFormID, State::HouseId{ playerHouseFormID }, moveParents);
+        });
 
-        {
-            const auto snap = State::WorldStore::GetSingleton().Snapshot();
-            if (!snap->household || !snap->household->FindHouse(State::HouseId{ playerHouseFormID })) {
-                MARAS_LOG_WARN(
-                    "HouseholdUseCases::RelocateFamilyUnit: target house {:08X} is not registered",
-                    playerHouseFormID);
-                return relocatedMembers;
-            }
-
-            State::ActorId coParent{};
-            bool groupBySolePlayer = false;
-
-            const auto* anchorChild = snap->lineage
-                                          ? snap->lineage->FindChild(State::ChildId{ npcFormID })
-                                          : nullptr;
-            if (anchorChild && anchorChild->stage != Foundation::ChildStage::Adult) {
-                if (!anchorChild->guardians.HasGuardian(State::ActorId::Player())) {
-                    MARAS_LOG_WARN(
-                        "HouseholdUseCases::RelocateFamilyUnit: child {:08X} is not in player custody",
-                        npcFormID);
-                    return relocatedMembers;
-                }
-                coParent = anchorChild->guardians.OtherGuardian(State::ActorId::Player());
-                groupBySolePlayer = coParent.IsNull();
-                if (moveParents && IsEligibleRelocationAdult(*snap, coParent)) {
-                    adultsToMove.push_back(coParent);
-                }
-            } else {
-                const State::ActorId anchorActor{ npcFormID };
-                if (!IsEligibleRelocationAdult(*snap, anchorActor)) {
-                    MARAS_LOG_WARN(
-                        "HouseholdUseCases::RelocateFamilyUnit: adult {:08X} is ineligible for player family relocation",
-                        npcFormID);
-                    return relocatedMembers;
-                }
-                coParent = anchorActor;
-                if (moveParents) {
-                    adultsToMove.push_back(anchorActor);
-                }
-            }
-
-            const bool coParentValid = !coParent.IsNull() && !coParent.IsPlayer() && !coParent.IsUnknownFather();
-            if (snap->lineage) {
-                for (const auto& [cid, rec] : snap->lineage->AllChildren()) {
-                    if (rec.stage == Foundation::ChildStage::Adult ||
-                        rec.stage == Foundation::ChildStage::Unborn) {
-                        continue;
-                    }
-                    if (!rec.guardians.HasGuardian(State::ActorId::Player())) {
-                        continue;
-                    }
-                    if (Domain::Household::IsDeceased(*snap, cid.AsActorId())) {
-                        continue;
-                    }
-                    bool includeChild = false;
-                    if (groupBySolePlayer) {
-                        includeChild = rec.guardians.IsSoleGuardian(State::ActorId::Player());
-                    } else if (coParentValid) {
-                        includeChild = rec.guardians.HasSameSet(State::ActorId::Player(), coParent) ||
-                                       (cid.raw() == npcFormID);
-                    }
-                    if (includeChild) {
-                        childrenToMove.push_back(cid);
-                    }
-                }
-            }
-
-            std::sort(childrenToMove.begin(), childrenToMove.end(), [](State::ChildId a, State::ChildId b) {
-                return a.raw() < b.raw();
-            });
-
-            for (const State::ActorId aid : adultsToMove) {
-                const bool hadTenant = !snap->household->GetTenantHouse(aid.raw()).IsNull();
-                const bool keepStayAtHome = hadTenant ? snap->household->GetTenantStayAtHome(aid.raw()) : true;
-                adultStayPrefs.emplace_back(aid.raw(), keepStayAtHome);
-            }
+        if (!outcome.targetHouseExists) {
+            MARAS_LOG_WARN(
+                "HouseholdUseCases::RelocateFamilyUnit: target house {:08X} is not registered",
+                playerHouseFormID);
+            return relocatedMembers;
         }
-
-        if (adultsToMove.empty() && childrenToMove.empty()) {
+        if (outcome.ineligibleAdultAnchor) {
+            MARAS_LOG_WARN(
+                "HouseholdUseCases::RelocateFamilyUnit: adult {:08X} is ineligible for player family relocation",
+                npcFormID);
+            return relocatedMembers;
+        }
+        if (!outcome.skippedChildCustody.empty() &&
+            outcome.movedAdults.empty() && outcome.movedChildren.empty()) {
+            MARAS_LOG_WARN(
+                "HouseholdUseCases::RelocateFamilyUnit: child {:08X} is not in player custody",
+                npcFormID);
             return relocatedMembers;
         }
 
-        std::vector<RE::FormID> committedAdults;
-        std::vector<State::ChildId> committedChildren;
-
-        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            const State::HouseId targetHouse{ playerHouseFormID };
-            for (const auto& [adultRaw, stayPref] : adultStayPrefs) {
-                if (ws.household.Write().AssignTenant(adultRaw, targetHouse, stayPref, false)) {
-                    committedAdults.push_back(adultRaw);
-                }
-            }
-            for (const State::ChildId cid : childrenToMove) {
-                const auto* rec = ws.lineage.Read().FindChild(cid);
-                if (!rec || !rec->guardians.HasGuardian(State::ActorId::Player())) {
-                    continue;
-                }
-                if (ws.household.Write().AssignTenant(cid.raw(), targetHouse, true, true)) {
-                    committedChildren.push_back(cid);
-                }
-            }
-        });
-
-        for (const RE::FormID adultID : committedAdults) {
-            ReconcileTenantEngineAdded(adultID, playerHouseFormID, false);
-            HouseholdEngineOps::GetSingleton().MoveActorToHouse(adultID, playerHouseFormID, true);
-            relocatedMembers.push_back(adultID);
+        std::unordered_set<std::uint32_t> changedChildSet;
+        changedChildSet.reserve(outcome.changedHouseChildren.size());
+        for (const State::ChildId cid : outcome.changedHouseChildren) {
+            changedChildSet.insert(cid.raw());
         }
 
-        for (const State::ChildId cid : committedChildren) {
+        for (const State::ActorId adultId : outcome.movedAdults) {
+            ReconcileTenantEngineAdded(adultId.raw(), playerHouseFormID, false);
+            relocatedMembers.push_back(adultId.raw());
+        }
+
+        for (const State::ChildId cid : outcome.movedChildren) {
             if (!cid.IsSynthetic()) {
-                ReconcileTenantEngineAdded(cid.raw(), playerHouseFormID, true);
+                const bool shouldMove = changedChildSet.contains(cid.raw());
                 PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(
-                    cid.raw(), playerHouseFormID, true);
+                    cid.raw(), playerHouseFormID, shouldMove);
+                ReconcileTenantEngineAdded(cid.raw(), playerHouseFormID, true);
             }
             relocatedMembers.push_back(cid.raw());
         }
@@ -719,8 +622,8 @@ namespace MARAS::App {
             GetUiBridgeGateway().SendOverviewData();
             MARAS_LOG_INFO(
                 "HouseholdUseCases::RelocateFamilyUnit: relocated {} adult(s) and {} child(ren) (anchor={:08X}) to house {:08X} (moveParents={})",
-                committedAdults.size(),
-                committedChildren.size(),
+                outcome.movedAdults.size(),
+                outcome.movedChildren.size(),
                 npcFormID,
                 playerHouseFormID,
                 moveParents);

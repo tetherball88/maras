@@ -38,6 +38,7 @@
 - **Faction Preservation (`'CFSN'` `childFactionSnapshots`)**:
   - Before overriding a Stage 2 child's crime/family factions with `TT_MARAS.esp` custody factions, M.A.R.A.S. captures the child's pre-existing `crimeFactionId` and faction ranks into `HouseholdTable::childFactionSnapshots` (persisted in `'CFSN'`).
   - Upon graduation to **Stage 4 (`Adult`)**, the snapshot restores authentic native crime/home-city factions while stripping child-only MARAS custody factions, and clears the snapshot entry cleanly.
+  - When a Player-guarded child enters a player home via `OnChildAddedToHousehold` with a resolved house, `LineageUseCases` delegates to `HouseholdUseCases::RelocateFamilyUnit(..., moveParents = true)` so unhoused co-guardian spouses (with `stayAtHome = false` default) and full-custody siblings are co-housed alongside the newly added child and UI details refresh for co-relocated members. If the child is not yet Player-guarded in `LineageTable`, it falls back directly to assigning the child tenant and placing their house marker.
   - Note: Child visual genetics, 22-path training classes, 12 Daedric blessings, and RaceMenu scaling are handled by [`ChildGrowthAndVisuals`](ChildGrowthAndVisuals.md), while profile creation routes through [`SkyrimNetProfileService`](SkyrimNetProfileService.md) when SkyrimNet is available.
 
 ---

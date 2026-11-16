@@ -1088,7 +1088,7 @@ namespace MARAS::State {
                             childHouse = childState->currentHouseId;
                         }
                         if (!childHouse.IsNull() && household->GetTenantHouse(spouse.raw()).IsNull()) {
-                            household.Write().AssignTenant(spouse.raw(), childHouse, /*stayAtHome=*/true, /*isChildTenant=*/false);
+                            household.Write().AssignTenant(spouse.raw(), childHouse, /*stayAtHome=*/false, /*isChildTenant=*/false);
                         }
                         result.Merge(SyncChildHouseholdState(cId, childHouse));
                     }

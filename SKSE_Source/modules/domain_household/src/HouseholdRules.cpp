@@ -1,5 +1,6 @@
 #include "maras/domain/household/HouseholdRules.h"
 
+#include "maras/domain/household/DeceasedQueries.h"
 #include "maras/foundation/Logging.h"
 
 #include <algorithm>
@@ -13,6 +14,46 @@ namespace MARAS::Domain::Household {
                 std::find(list.begin(), list.end(), actor) == list.end()) {
                 list.push_back(actor);
             }
+        }
+
+        [[nodiscard]] bool HasLivingChildWithPlayer(
+            const State::WorldStateSnapshot& snap,
+            ActorId actorId) noexcept {
+            if (!snap.lineage || actorId.IsNull() || actorId.IsPlayer()) {
+                return false;
+            }
+            for (const auto& [cid, rec] : snap.lineage->AllChildren()) {
+                (void)cid;
+                if (rec.stage == Foundation::ChildStage::Adult ||
+                    rec.stage == Foundation::ChildStage::Unborn) {
+                    continue;
+                }
+                if (IsDeceased(snap, rec.childId.AsActorId())) {
+                    continue;
+                }
+                if (rec.guardians.HasGuardian(ActorId::Player()) &&
+                    rec.guardians.HasGuardian(actorId)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool IsEligibleRelocationAdult(
+            const State::WorldStateSnapshot& snap,
+            ActorId adultId) noexcept {
+            if (adultId.IsNull() || adultId.IsPlayer() || adultId.IsUnknownFather()) {
+                return false;
+            }
+            if (IsDeceased(snap, adultId)) {
+                return false;
+            }
+            if (snap.relationships &&
+                Foundation::IsActivePartnerStatus(
+                    snap.relationships->GetStatus(adultId, ActorId::Player()))) {
+                return true;
+            }
+            return HasLivingChildWithPlayer(snap, adultId);
         }
     }  // namespace
 
@@ -101,7 +142,7 @@ namespace MARAS::Domain::Household {
         State::WorldState& ws,
         std::uint32_t anchorRawId,
         HouseId targetHouseId,
-        bool stayAtHome) {
+        bool moveParents) {
         RelocateFamilyOutcome out{};
         out.targetHouseId = targetHouseId;
         if (anchorRawId == 0 || targetHouseId.IsNull() || !ws.household.Read().FindHouse(targetHouseId)) {
@@ -109,53 +150,89 @@ namespace MARAS::Domain::Household {
         }
         out.targetHouseExists = true;
 
+        const auto snap = ws.Snapshot();
+
         ActorId coParent{};
         bool groupBySolePlayer = false;
         std::vector<ActorId> candidateAdults;
         std::vector<ChildId> candidateChildren;
 
         const auto* anchorChild = ws.lineage.Read().FindChild(ChildId{ anchorRawId });
-        if (anchorChild && anchorChild->stage != Foundation::ChildStage::Adult) {
+        const bool isAnchorChild =
+            (anchorChild != nullptr && anchorChild->stage != Foundation::ChildStage::Adult);
+        if (isAnchorChild) {
             if (!anchorChild->guardians.HasGuardian(ActorId::Player())) {
                 out.skippedChildCustody.push_back(anchorRawId);
                 return out;
             }
             coParent = anchorChild->guardians.OtherGuardian(ActorId::Player());
             groupBySolePlayer = coParent.IsNull();
-            if (!coParent.IsNull()) {
+            if (moveParents && IsEligibleRelocationAdult(snap, coParent)) {
                 candidateAdults.push_back(coParent);
             }
         } else {
             const ActorId anchorActor{ anchorRawId };
-            candidateAdults.push_back(anchorActor);
+            if (!IsEligibleRelocationAdult(snap, anchorActor)) {
+                out.ineligibleAdultAnchor = true;
+                return out;
+            }
             coParent = anchorActor;
+            if (moveParents) {
+                candidateAdults.push_back(anchorActor);
+            }
         }
 
-        const bool coParentValid = !coParent.IsNull() && !coParent.IsPlayer();
+        const bool coParentValid = !coParent.IsNull() && !coParent.IsPlayer() && !coParent.IsUnknownFather();
         for (const auto& [cid, rec] : ws.lineage.Read().AllChildren()) {
-            if (rec.stage == Foundation::ChildStage::Adult || rec.stage == Foundation::ChildStage::Unborn) {
+            if (rec.stage == Foundation::ChildStage::Adult ||
+                rec.stage == Foundation::ChildStage::Unborn) {
                 continue;
             }
             if (!rec.guardians.HasGuardian(ActorId::Player())) {
                 continue;
             }
+            if (IsDeceased(snap, cid.AsActorId())) {
+                continue;
+            }
             if (groupBySolePlayer) {
-                if (rec.guardians.IsSoleGuardian(ActorId::Player())) {
+                if (rec.guardians.IsSoleGuardian(ActorId::Player()) || cid.raw() == anchorRawId) {
                     candidateChildren.push_back(cid);
                 }
             } else if (coParentValid) {
-                if (rec.guardians.HasSameSet(ActorId::Player(), coParent)) {
-                    candidateChildren.push_back(cid);
-                } else if (rec.childId.raw() == anchorRawId) {
+                if (rec.guardians.HasSameSet(ActorId::Player(), coParent) ||
+                    rec.childId.raw() == anchorRawId) {
                     candidateChildren.push_back(cid);
                 }
+            } else if (cid.raw() == anchorRawId) {
+                candidateChildren.push_back(cid);
             }
         }
 
+        std::sort(candidateChildren.begin(), candidateChildren.end(), [](ChildId a, ChildId b) {
+            return a.raw() < b.raw();
+        });
+
+        struct PlannedAdultMove {
+            ActorId actorId;
+            bool stayAtHome;
+        };
+        std::vector<PlannedAdultMove> plannedAdults;
+        plannedAdults.reserve(candidateAdults.size());
         for (ActorId adult : candidateAdults) {
-            if (ws.household.Write().AssignTenant(adult.raw(), targetHouseId, stayAtHome, /*isChildTenant=*/false)) {
-                out.movedAdults.push_back(adult);
-                MarkUniqueActor(out.dirtyActors, adult);
+            const bool hadTenant = !ws.household.Read().GetTenantHouse(adult.raw()).IsNull();
+            // Unhoused co-parents pulled in via a child anchor default to their original schedule
+            // (stayAtHome = false); unhoused adults relocated directly default to stayAtHome = true.
+            const bool adultStay = hadTenant
+                ? ws.household.Read().GetTenantStayAtHome(adult.raw())
+                : !isAnchorChild;
+            plannedAdults.push_back(PlannedAdultMove{ adult, adultStay });
+        }
+
+        for (const auto& plan : plannedAdults) {
+            if (ws.household.Write().AssignTenant(
+                    plan.actorId.raw(), targetHouseId, plan.stayAtHome, /*isChildTenant=*/false)) {
+                out.movedAdults.push_back(plan.actorId);
+                MarkUniqueActor(out.dirtyActors, plan.actorId);
             }
         }
 
@@ -165,8 +242,16 @@ namespace MARAS::Domain::Household {
                 out.skippedChildCustody.push_back(cid.raw());
                 continue;
             }
+            const HouseId prevHouse = ws.household.Read().GetTenantHouse(cid.raw());
+            const auto* prevChildState = ws.household.Read().FindChildState(cid);
+            const bool hadMarker =
+                (prevChildState != nullptr && !prevChildState->homeMarkerId.IsNull());
+
             if (ws.household.Write().AssignTenant(cid.raw(), targetHouseId, /*stayAtHome=*/true, /*isChildTenant=*/true)) {
                 out.movedChildren.push_back(cid);
+                if (prevHouse != targetHouseId || !hadMarker) {
+                    out.changedHouseChildren.push_back(cid);
+                }
                 if (!cid.IsSynthetic()) {
                     MarkUniqueActor(out.dirtyActors, ActorId{ cid.raw() });
                 }

@@ -2108,9 +2108,14 @@ namespace MARAS::App {
             return false;
         }
 
-        RE::FormID resolvedHouseID = houseID;
+        RE::FormID resolvedHouseID = 0;
+        if (houseID != 0 && preSnap->household->FindHouse(State::HouseId{ houseID })) {
+            resolvedHouseID = houseID;
+        }
         if (resolvedHouseID == 0) {
-            if (const auto* existing = preSnap->household->FindChildState(State::ChildId{ childID })) {
+            if (const auto* existing = preSnap->household->FindChildState(State::ChildId{ childID });
+                existing && !existing->currentHouseId.IsNull() &&
+                preSnap->household->FindHouse(existing->currentHouseId)) {
                 resolvedHouseID = existing->currentHouseId.raw();
             }
         }
@@ -2122,22 +2127,16 @@ namespace MARAS::App {
         }
 
         bool isNewToHousehold = false;
-        State::ChildHouseholdRecord savedState{};
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& hh = ws.household.Write();
             const State::ChildId cid{ childID };
-            if (const auto* existing = hh.FindChildState(cid)) {
-                savedState = *existing;
-            } else {
+            if (!hh.FindChildState(cid)) {
                 isNewToHousehold = true;
-                savedState.childId = cid;
-                savedState.isNewlyAdopted = true;
+                State::ChildHouseholdRecord initRec{};
+                initRec.childId = cid;
+                initRec.isNewlyAdopted = true;
+                hh.UpsertChildState(std::move(initRec));
             }
-            if (resolvedHouseID != 0) {
-                savedState.currentHouseId = State::HouseId{ resolvedHouseID };
-                hh.AssignTenant(childID, State::HouseId{ resolvedHouseID }, /*stayAtHome=*/true, /*isChildTenant=*/true);
-            }
-            hh.UpsertChildState(savedState);
         });
 
         auto& ops = PlayerChildrenEngineOps::GetSingleton();
@@ -2146,7 +2145,23 @@ namespace MARAS::App {
             ops.ClearChildExternalFactions(childID);
         }
         if (resolvedHouseID != 0) {
-            ops.MoveChildAndMarkerToHouse(childID, resolvedHouseID, isNewToHousehold);
+            const auto relocated = HouseholdUseCases::GetSingleton().RelocateFamilyUnit(
+                childID, resolvedHouseID, /*moveParents=*/true);
+            if (relocated.empty()) {
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    ws.household.Write().AssignTenant(
+                        childID, State::HouseId{ resolvedHouseID }, /*stayAtHome=*/true, /*isChildTenant=*/true);
+                });
+                ops.MoveChildAndMarkerToHouse(childID, resolvedHouseID, isNewToHousehold);
+                PackageReconciler::GetSingleton().ReconcileActor(childID);
+                GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+            } else {
+                for (const RE::FormID fid : relocated) {
+                    if (fid != childID) {
+                        GetUiBridgeGateway().SendNPCDetail(fid);
+                    }
+                }
+            }
         } else if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
             if (auto* marker = ops.GetOrCreateChildHomeMarker(childActor)) {
                 State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
