@@ -296,6 +296,28 @@ namespace MARAS::PapyrusInterface {
         return RE::BSScript::LatentStatus::kStarted;
     }
 
+    namespace {
+
+        template <class FormT>
+        void DispatchLatentFormResultAfterFocusRelease(
+            SessionEpoch expectedEpoch,
+            RE::BSScript::Internal::VirtualMachine* vm,
+            RE::VMStackID stackID,
+            RE::FormID formId,
+            const char* contextTag) {
+            if (!App::GetUiBridgeGateway().IsDashboardVisible() &&
+                !App::GetModalGateway().HasActiveModal()) {
+                App::GetUiBridgeGateway().RunAfterFocusReleased(
+                    [expectedEpoch, vm, stackID, formId, contextTag]() {
+                        DispatchLatentFormResult<FormT>(expectedEpoch, vm, stackID, formId, contextTag);
+                    });
+            } else {
+                DispatchLatentFormResult<FormT>(expectedEpoch, vm, stackID, formId, contextTag);
+            }
+        }
+
+    }  // namespace
+
     RE::BSScript::LatentStatus ShowChooseHomeModal(RE::BSScript::Internal::VirtualMachine* vm,
                                                    RE::VMStackID stackID,
                                                    RE::StaticFunctionTag*,
@@ -388,7 +410,8 @@ namespace MARAS::PapyrusInterface {
                     return;
                 }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
-                    DispatchLatentFormResult<RE::BGSLocation>(expectedEpoch, vm, stackID, 0, "ShowChooseHomeModal");
+                    DispatchLatentFormResultAfterFocusRelease<RE::BGSLocation>(
+                        expectedEpoch, vm, stackID, 0, "ShowChooseHomeModal");
                     return;
                 }
 
@@ -425,7 +448,8 @@ namespace MARAS::PapyrusInterface {
                     }
                 }
 
-                DispatchLatentFormResult<RE::BGSLocation>(expectedEpoch, vm, stackID, resolvedHouseID, "ShowChooseHomeModal");
+                DispatchLatentFormResultAfterFocusRelease<RE::BGSLocation>(
+                    expectedEpoch, vm, stackID, resolvedHouseID, "ShowChooseHomeModal");
             });
 
         return RE::BSScript::LatentStatus::kStarted;
@@ -525,7 +549,8 @@ namespace MARAS::PapyrusInterface {
                     return;
                 }
                 if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "confirm")) {
-                    DispatchLatentFormResult<RE::Actor>(expectedEpoch, vm, stackID, 0, "ShowChooseAdoptionSpouseModal");
+                    DispatchLatentFormResultAfterFocusRelease<RE::Actor>(
+                        expectedEpoch, vm, stackID, 0, "ShowChooseAdoptionSpouseModal");
                     return;
                 }
 
@@ -539,7 +564,8 @@ namespace MARAS::PapyrusInterface {
                     }
                 }
 
-                DispatchLatentFormResult<RE::Actor>(expectedEpoch, vm, stackID, selectedSpouseID, "ShowChooseAdoptionSpouseModal");
+                DispatchLatentFormResultAfterFocusRelease<RE::Actor>(
+                    expectedEpoch, vm, stackID, selectedSpouseID, "ShowChooseAdoptionSpouseModal");
             });
 
         return RE::BSScript::LatentStatus::kStarted;
