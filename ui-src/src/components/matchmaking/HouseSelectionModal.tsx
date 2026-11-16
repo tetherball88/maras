@@ -2,6 +2,7 @@ import React from 'react'
 import { Home, Baby, Heart, X, Check, MapPin } from 'lucide-react'
 import { PlayerHouse } from '../../types'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useTranslation } from '../../i18n'
 
 export interface HouseOccupantInfo extends PlayerHouse {
   childrenCount: number
@@ -25,6 +26,8 @@ export const HouseSelectionModal: React.FC<HouseSelectionModalProps> = ({
   spouseName,
   houses,
 }) => {
+  const { t, tp } = useTranslation()
+
   if (!isOpen) return null
 
   return (
@@ -41,19 +44,19 @@ export const HouseSelectionModal: React.FC<HouseSelectionModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-accent-bright">
-                Select Residence for {childName}
+                {t('matchmaking.houseModal.title', { childName })}
               </h2>
               <p className="text-xs text-foreground-muted">
                 {spouseName
-                  ? `Assign a home for ${childName} and ${spouseName}. ${spouseName} will live here with their own schedule.`
-                  : `Choose which of your properties ${childName} will reside in.`}
+                  ? t('matchmaking.houseModal.subtitleWithSpouse', { childName, spouseName })
+                  : t('matchmaking.houseModal.subtitleSolo', { childName })}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer"
-            title="Cancel"
+            title={t('matchmaking.houseModal.cancelButton')}
           >
             <X className="w-[1.25rem] h-[1.25rem]" />
           </button>
@@ -95,9 +98,7 @@ export const HouseSelectionModal: React.FC<HouseSelectionModalProps> = ({
                     >
                       <Baby className="w-[0.875rem] h-[0.875rem]" />
                       <span>
-                        {house.childrenCount === 1
-                          ? '1 Child'
-                          : `${house.childrenCount} Children`}
+                        {tp('matchmaking.houseModal.childrenCount', house.childrenCount)}
                       </span>
                     </span>
 
@@ -109,9 +110,7 @@ export const HouseSelectionModal: React.FC<HouseSelectionModalProps> = ({
                     >
                       <Heart className="w-[0.875rem] h-[0.875rem]" />
                       <span>
-                        {house.spousesCount === 1
-                          ? '1 Spouse'
-                          : `${house.spousesCount} Spouses`}
+                        {tp('matchmaking.houseModal.spousesCount', house.spousesCount)}
                       </span>
                     </span>
                   </div>
@@ -122,14 +121,14 @@ export const HouseSelectionModal: React.FC<HouseSelectionModalProps> = ({
                   className="px-[0.875rem] py-[0.5rem] rounded-md text-xs font-semibold bg-accent hover:bg-accent-bright text-panel transition-colors flex items-center gap-[0.375rem] flex-shrink-0 cursor-pointer shadow-sm group-hover:scale-102"
                 >
                   <Check className="w-[0.875rem] h-[0.875rem]" />
-                  <span>Choose House</span>
+                  <span>{t('matchmaking.houseModal.chooseHouse')}</span>
                 </button>
               </div>
             ))}
 
             {houses.length === 0 && (
               <div className="p-[2rem] text-center text-xs text-foreground-muted bg-panel-inset border border-border-subtle rounded-lg">
-                No player houses registered.
+                {t('matchmaking.houseModal.emptyHouses')}
               </div>
             )}
           </div>
@@ -141,7 +140,7 @@ export const HouseSelectionModal: React.FC<HouseSelectionModalProps> = ({
             onClick={onClose}
             className="px-[0.875rem] py-[0.375rem] text-xs font-semibold text-foreground-secondary hover:text-foreground-primary bg-panel-inset hover:bg-panel-inset/80 border border-border-divider rounded-md transition-colors cursor-pointer"
           >
-            Cancel
+            {t('matchmaking.houseModal.cancelButton')}
           </button>
         </div>
       </div>

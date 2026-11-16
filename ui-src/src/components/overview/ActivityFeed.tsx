@@ -5,12 +5,14 @@ import { formatGameDay } from '../../utils/dateUtils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Activity, Clock, ArrowRight } from 'lucide-react'
 import { PLAYER_FORM_ID } from '../../data/mockData'
+import { useTranslation } from '../../i18n'
 
 interface ActivityFeedProps {
   limit?: number
 }
 
 export const ActivityFeed: React.FC<ActivityFeedProps> = ({ limit = 5 }) => {
+  const { t, tp } = useTranslation()
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
@@ -49,8 +51,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ limit = 5 }) => {
   })
 
   const getName = (id: string) => {
-    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
-    return npcProfiles.get(id)?.name || 'Unknown NPC'
+    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
+    return npcProfiles.get(id)?.name || t('shared.unknownNpc')
   }
 
   const renderActorName = (actorId: string) => {
@@ -80,15 +82,17 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ limit = 5 }) => {
     <div className="bg-panel border border-border-subtle rounded-lg p-[1rem] flex flex-col gap-[0.75rem] h-full">
       <div className="flex items-center justify-between border-b border-border-divider pb-[0.5rem]">
         <h3 className="text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]">
-          <Activity className="w-[1.125em] h-[1.125em] text-accent" /> Recent Activity Feed
+          <Activity className="w-[1.125em] h-[1.125em] text-accent" /> {t('overview.activity.title')}
         </h3>
         <div className="flex items-center gap-[0.75rem]">
-          <span className="text-xs text-foreground-muted">{events.length} Events</span>
+          <span className="text-xs text-foreground-muted">
+            {tp('overview.activity.eventsCount', events.length)}
+          </span>
           <button
             onClick={() => setActiveSubSection('activity')}
             className="text-xs text-accent hover:text-accent-bright hover:underline flex items-center gap-[0.25rem] transition-colors cursor-pointer font-medium"
           >
-            View Full Feed <ArrowRight className="w-[0.875em] h-[0.875em]" />
+            {t('overview.activity.viewFullFeed')} <ArrowRight className="w-[0.875em] h-[0.875em]" />
           </button>
         </div>
       </div>
@@ -96,7 +100,9 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ limit = 5 }) => {
       <ScrollArea className="h-[16rem] pr-[0.5rem]">
         <div className="space-y-[0.5rem]">
           {events.length === 0 ? (
-            <div className="text-xs text-foreground-muted text-center py-[2rem]">No relationship history recorded</div>
+            <div className="text-xs text-foreground-muted text-center py-[2rem]">
+              {t('overview.activity.empty')}
+            </div>
           ) : (
             events.slice(0, limit).map((ev, idx) => {
               const toLabel = getStatusLabel(ev.toStatus)

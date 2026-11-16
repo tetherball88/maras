@@ -1,5 +1,6 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { useTranslation } from '../../i18n'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SliderInput } from '../shared/SliderInput'
@@ -7,6 +8,7 @@ import { SectionCard } from '../shared/SectionCard'
 import { Baby, GraduationCap } from 'lucide-react'
 
 export const ChildrenSettings: React.FC = () => {
+  const { t, tp } = useTranslation()
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
   const trainingDays = settings.childTrainingDurationDays ?? 14
@@ -14,38 +16,38 @@ export const ChildrenSettings: React.FC = () => {
 
   return (
     <div className="space-y-[1rem]">
-      <SectionCard title="Child Training & Adulthood" icon={GraduationCap}>
+      <SectionCard title={t('settings.children.trainingTitle')} icon={GraduationCap}>
         <SettingRow
-          label="Training Duration (Days)"
-          description={`Number of in-game days required for a child in Stage 3 (Training) to graduate to Stage 4 (Adult) (${trainingDays} day${trainingDays === 1 ? '' : 's'}). You can also complete training early from the child's profile.`}
+          label={t('settings.children.trainingDurationLabel')}
+          description={tp('settings.children.trainingDurationDesc', trainingDays)}
         >
           <SliderInput
             value={trainingDays}
             min={1}
             max={120}
             step={1}
-            unit="d"
+            unit={t('settings.children.unitDaysShort')}
             onChange={(val) => updateSetting('childTrainingDurationDays', Math.round(val))}
           />
         </SettingRow>
 
         <SettingRow
-          label="Training Tuition Cost (Gold)"
-          description={`Gold required to send a player child away for adolescent training (${trainingCost} gold). Set to 0 for free training.`}
+          label={t('settings.children.trainingCostLabel')}
+          description={t('settings.children.trainingCostDesc', { cost: trainingCost })}
         >
           <SliderInput
             value={trainingCost}
             min={0}
             max={10000}
             step={100}
-            unit="g"
+            unit={t('settings.children.unitGoldShort')}
             onChange={(val) => updateSetting('childTrainingCost', Math.round(val))}
           />
         </SettingRow>
 
         <SettingRow
-          label="Require Faction Membership for Guild Training"
-          description="When enabled, sending a player child to guild, temple, or Daedric covenant training requires the Player to meet that location's membership or patronage criteria."
+          label={t('settings.children.requireFactionLabel')}
+          description={t('settings.children.requireFactionDesc')}
         >
           <ToggleSwitch
             checked={settings.childTrainingRequireFaction ?? true}
@@ -54,10 +56,10 @@ export const ChildrenSettings: React.FC = () => {
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="Children & Household Pet Settings" icon={Baby}>
+      <SectionCard title={t('settings.children.petAndCustodyTitle')} icon={Baby}>
         <SettingRow
-          label="Global Ban Critters"
-          description="Globally disable kid critter adoption events (foxes, hares, mudcrabs) for all children."
+          label={t('settings.children.globalBanCritterLabel')}
+          description={t('settings.children.globalBanCritterDesc')}
         >
           <ToggleSwitch
             checked={!!settings.globalBanCritter}
@@ -66,8 +68,8 @@ export const ChildrenSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Global Ban Pets"
-          description="Globally disable household pet adoption events (dogs) for all children."
+          label={t('settings.children.globalBanPetLabel')}
+          description={t('settings.children.globalBanPetDesc')}
         >
           <ToggleSwitch
             checked={!!settings.globalBanPet}
@@ -76,8 +78,8 @@ export const ChildrenSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Prioritize Biological Parent"
-          description="When divorcing, if only one partner is the biological parent, award custody to them (overrides gender and player rules)."
+          label={t('settings.children.prioritizeBioParentLabel')}
+          description={t('settings.children.prioritizeBioParentDesc')}
         >
           <ToggleSwitch
             checked={settings.childCustodyPrioritizeBioParent !== false}
@@ -86,31 +88,35 @@ export const ChildrenSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Gender Custody Policy"
-          description="Determines which parent retains child custody upon divorce when biological rules do not decide."
+          label={t('settings.children.genderCustodyLabel')}
+          description={t('settings.children.genderCustodyDesc')}
         >
           <select
             value={settings.childCustodyGenderPolicy ?? 0}
-            onChange={(e) => updateSetting('childCustodyGenderPolicy' as any, parseInt(e.target.value, 10))}
-            className="bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent"
+            onChange={(e) =>
+              updateSetting('childCustodyGenderPolicy' as any, parseInt(e.target.value, 10))
+            }
+            className="min-w-[13rem] w-auto bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent"
           >
-            <option value={0}>Stay with Mother (Default)</option>
-            <option value={1}>Stay with Father</option>
+            <option value={0}>{t('settings.children.custodyStayMother')}</option>
+            <option value={1}>{t('settings.children.custodyStayFather')}</option>
           </select>
         </SettingRow>
 
         <SettingRow
-          label="Player Custody Override"
-          description="Overrides gender custody in divorces involving the Player."
+          label={t('settings.children.playerCustodyLabel')}
+          description={t('settings.children.playerCustodyDesc')}
         >
           <select
             value={settings.childCustodyPlayerPolicy ?? 0}
-            onChange={(e) => updateSetting('childCustodyPlayerPolicy' as any, parseInt(e.target.value, 10))}
-            className="bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent"
+            onChange={(e) =>
+              updateSetting('childCustodyPlayerPolicy' as any, parseInt(e.target.value, 10))
+            }
+            className="min-w-[13rem] w-auto bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent"
           >
-            <option value={0}>Use Gender Custody (Default)</option>
-            <option value={1}>Always with Player</option>
-            <option value={2}>Never with Player</option>
+            <option value={0}>{t('settings.children.custodyUseGender')}</option>
+            <option value={1}>{t('settings.children.custodyAlwaysPlayer')}</option>
+            <option value={2}>{t('settings.children.custodyNeverPlayer')}</option>
           </select>
         </SettingRow>
       </SectionCard>

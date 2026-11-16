@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { PLAYER_FORM_ID } from '../../../data/mockData'
@@ -22,43 +23,12 @@ interface CandidateNpcOption {
   pluginName?: string
 }
 
-const SLOT_META: Record<
-  ParentSlotKey,
-  {
-    title: string
-    filterLabel: string
-    genderFilter?: 'male' | 'female'
-  }
-> = {
-  guardianA: {
-    title: 'Guardian A',
-    filterLabel: 'All Adult NPCs',
-  },
-  guardianB: {
-    title: 'Guardian B',
-    filterLabel: 'All Adult NPCs',
-  },
-  bioMother: {
-    title: 'Biological Mother',
-    filterLabel: 'Females Only',
-    genderFilter: 'female',
-  },
-  bioFather: {
-    title: 'Biological Father',
-    filterLabel: 'Males Only',
-    genderFilter: 'male',
-  },
-  presumedFather: {
-    title: 'Presumed Father',
-    filterLabel: 'Males Only',
-    genderFilter: 'male',
-  },
-}
-
 export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
   npcId,
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
+  void tp
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const allSkyrimNpcs = useMarasStore((s) => s.allSkyrimNpcs)
@@ -72,6 +42,42 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
 
   const [activeSlot, setActiveSlot] = useState<ParentSlotKey | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  const slotMeta: Record<
+    ParentSlotKey,
+    {
+      title: string
+      filterLabel: string
+      genderFilter?: 'male' | 'female'
+    }
+  > = useMemo(
+    () => ({
+      guardianA: {
+        title: t('npcDetail.guardians.slotGuardianA'),
+        filterLabel: t('npcDetail.guardians.filterAllAdults'),
+      },
+      guardianB: {
+        title: t('npcDetail.guardians.slotGuardianB'),
+        filterLabel: t('npcDetail.guardians.filterAllAdults'),
+      },
+      bioMother: {
+        title: t('npcDetail.guardians.slotBioMother'),
+        filterLabel: t('npcDetail.guardians.filterFemalesOnly'),
+        genderFilter: 'female',
+      },
+      bioFather: {
+        title: t('npcDetail.guardians.slotBioFather'),
+        filterLabel: t('npcDetail.guardians.filterMalesOnly'),
+        genderFilter: 'male',
+      },
+      presumedFather: {
+        title: t('npcDetail.guardians.slotPresumedFather'),
+        filterLabel: t('npcDetail.guardians.filterMalesOnly'),
+        genderFilter: 'male',
+      },
+    }),
+    [t],
+  )
 
   useEffect(() => {
     setActiveSlot(null)
@@ -112,7 +118,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
     setPaternitySecretEdges(childRecord.childId, newBio, newPartner, newPreg)
   }
 
-  const playerName = npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
+  const playerName = npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
   const playerProfile = npcProfiles.get(PLAYER_FORM_ID)
 
   const cleanId = (id?: string) => (id && id !== '00000000' && id !== '00700000') ? id : undefined
@@ -143,7 +149,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
       }
       return {
         formId: id,
-        name: fallbackName || `NPC ${id}`,
+        name: fallbackName || t('store.fallbackNpcName', { formId: id }),
         gender: undefined,
       }
     }
@@ -214,7 +220,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
 
   const filteredCandidates = useMemo(() => {
     if (!activeSlot) return []
-    const meta = SLOT_META[activeSlot]
+    const meta = slotMeta[activeSlot]
     const seen = new Set<string>()
     const list: CandidateNpcOption[] = []
 
@@ -232,7 +238,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
     pushCandidate({
       formId: PLAYER_FORM_ID,
       name: playerName,
-      race: playerProfile?.race || 'Nord',
+      race: playerProfile?.race || t('store.fallbackRace'),
       gender: playerProfile?.gender || 'male',
       pluginName: 'Skyrim.esm',
     })
@@ -275,7 +281,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
       : list
 
     return matched.slice(0, 60)
-  }, [activeSlot, npcProfiles, allSkyrimNpcs, children, npcId, playerName, playerProfile, searchQuery])
+  }, [activeSlot, slotMeta, npcProfiles, allSkyrimNpcs, children, npcId, playerName, playerProfile, searchQuery, t])
 
   const handleSelectCandidate = (slot: ParentSlotKey, candidate: CandidateNpcOption | null) => {
     if (!childRecord) return
@@ -322,17 +328,17 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
   }
 
   return (
-    <SectionCard title="Parents & Guardians" icon={Users} className={className}>
+    <SectionCard title={t('npcDetail.guardians.title')} icon={Users} className={className}>
       <div className="pt-[0.25rem] space-y-[0.75rem] text-xs">
         {/* Guardians Row (2 slots) */}
         <div>
           <span className="text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]">
-            Custodial Guardians (Click to Swap)
+            {t('npcDetail.guardians.custodialHeader')}
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-[0.75rem]">
             {([
-              { slot: 'guardianA' as const, profile: parentAProfile, fallbackLabel: 'Guardian A' },
-              { slot: 'guardianB' as const, profile: parentBProfile, fallbackLabel: 'Guardian B' },
+              { slot: 'guardianA' as const, profile: parentAProfile, fallbackLabel: t('npcDetail.guardians.slotGuardianA') },
+              { slot: 'guardianB' as const, profile: parentBProfile, fallbackLabel: t('npcDetail.guardians.slotGuardianB') },
             ]).map(({ slot, profile, fallbackLabel }) => {
               const isSelectedSlot = activeSlot === slot
               const isPlayerParent = Boolean(profile?.formId && areSameFormId(profile.formId, PLAYER_FORM_ID))
@@ -370,30 +376,32 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                           }`}
                           title={
                             roleInfo.isPregnancySecretForPartner
-                              ? 'Partner does not even know the mother is pregnant yet'
+                              ? t('npcDetail.guardians.secretPregnancyTooltip')
                               : roleInfo.isSecretForPartner
-                                ? 'Partner believes the child is theirs'
-                                : 'Secret from parent'
+                                ? t('npcDetail.guardians.secretPartnerTooltip')
+                                : t('npcDetail.guardians.secretGenericTooltip')
                           }
                         >
                           {roleInfo.isPregnancySecretForPartner
-                            ? 'Unaware of Pregnancy'
+                            ? t('npcDetail.guardians.badgeUnawarePregnancy')
                             : roleInfo.isSecretForPartner
-                              ? 'Secret from Partner'
-                              : 'Secret'}
+                              ? t('npcDetail.guardians.badgeSecretFromPartner')
+                              : t('npcDetail.guardians.badgeSecret')}
                         </span>
                       )}
                     </div>
                     {profile ? (
                       <span className="font-bold text-accent-bright text-xs truncate block">{profile.name}</span>
                     ) : (
-                      <span className="italic text-foreground-muted text-xs block">Unassigned — Click to assign</span>
+                      <span className="italic text-foreground-muted text-xs block">
+                        {t('npcDetail.guardians.unassignedClickToAssign')}
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-[0.375rem] flex-shrink-0 ml-[0.5rem]">
                     <span className="text-[0.625rem] text-foreground-muted flex items-center gap-[0.25rem]">
                       <RefreshCw className="w-[0.75em] h-[0.75em]" />
-                      Swap
+                      {t('npcDetail.guardians.swap')}
                     </span>
                     {profile?.formId && !isPlayerParent && (
                       <button
@@ -403,9 +411,9 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                           openNpcDetail(profile.formId)
                         }}
                         className="px-[0.375rem] py-[0.125rem] rounded bg-panel-raised hover:bg-accent/20 text-[0.625rem] text-accent border border-border-subtle flex items-center gap-[0.25rem] transition-colors cursor-pointer"
-                        title="Open NPC Profile"
+                        title={t('npcDetail.guardians.openProfileTooltip')}
                       >
-                        <span>Profile</span>
+                        <span>{t('npcDetail.guardians.profileBtn')}</span>
                         <ExternalLink className="w-[0.75em] h-[0.75em]" />
                       </button>
                     )}
@@ -420,8 +428,8 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
         <div className="pt-[0.5rem] border-t border-border-divider">
           <span className="text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]">
             {showPresumedFatherSlot
-              ? 'Biological & Presumed Parents (Click to Swap)'
-              : 'Biological Parents (Click to Swap)'}
+              ? t('npcDetail.guardians.bioAndPresumedHeader')
+              : t('npcDetail.guardians.bioHeader')}
           </span>
           <div className={`grid grid-cols-1 ${showPresumedFatherSlot ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-[0.5rem]`}>
             {/* Slot 3: Biological Mother (Females Only) */}
@@ -438,7 +446,9 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-[0.25rem]">
-                    <span className="text-[0.625rem] text-accent font-medium">Biological Mother</span>
+                    <span className="text-[0.625rem] text-accent font-medium">
+                      {t('npcDetail.guardians.slotBioMother')}
+                    </span>
                     <div className="flex items-center gap-[0.25rem]">
                       <RefreshCw className="w-[0.75em] h-[0.75em] text-foreground-muted" />
                       {bioMotherProfile?.formId && !isPlayerBioMom && (
@@ -449,7 +459,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                             openNpcDetail(bioMotherProfile.formId)
                           }}
                           className="p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer"
-                          title="Open Biological Mother Profile"
+                          title={t('npcDetail.guardians.openBioMotherTooltip')}
                         >
                           <ExternalLink className="w-[0.75em] h-[0.75em]" />
                         </button>
@@ -459,7 +469,9 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   {bioMotherProfile ? (
                     <span className="text-foreground-primary font-medium truncate">{bioMotherProfile.name}</span>
                   ) : (
-                    <span className="text-foreground-muted italic text-[0.6875rem]">Unassigned (♀)</span>
+                    <span className="text-foreground-muted italic text-[0.6875rem]">
+                      {t('npcDetail.guardians.unassignedFemale')}
+                    </span>
                   )}
                 </div>
               )
@@ -480,13 +492,15 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                 >
                   <div className="flex items-center justify-between gap-[0.25rem] flex-wrap">
                     <div className="flex items-center gap-[0.25rem]">
-                      <span className="text-[0.625rem] text-accent font-medium">Biological Father</span>
+                      <span className="text-[0.625rem] text-accent font-medium">
+                        {t('npcDetail.guardians.slotBioFather')}
+                      </span>
                       {childRecord?.isSecretForBioFather && (
                         <span
                           className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold uppercase tracking-wider"
-                          title="Biological father is unaware that he fathered this child"
+                          title={t('npcDetail.guardians.secretBioFatherTooltip')}
                         >
-                          Secret From Him
+                          {t('npcDetail.guardians.badgeSecretFromHim')}
                         </span>
                       )}
                     </div>
@@ -500,7 +514,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                             openNpcDetail(bioFatherProfile.formId)
                           }}
                           className="p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer"
-                          title="Open Biological Father Profile"
+                          title={t('npcDetail.guardians.openBioFatherTooltip')}
                         >
                           <ExternalLink className="w-[0.75em] h-[0.75em]" />
                         </button>
@@ -510,7 +524,9 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   {bioFatherProfile ? (
                     <span className="text-foreground-primary font-medium truncate">{bioFatherProfile.name}</span>
                   ) : (
-                    <span className="text-foreground-muted italic text-[0.6875rem]">Unassigned (♂)</span>
+                    <span className="text-foreground-muted italic text-[0.6875rem]">
+                      {t('npcDetail.guardians.unassignedMale')}
+                    </span>
                   )}
                 </div>
               )
@@ -531,28 +547,30 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                 >
                   <div className="flex items-center justify-between gap-[0.25rem] flex-wrap">
                     <div className="flex items-center gap-[0.25rem]">
-                      <span className="text-[0.625rem] text-purple-300 font-medium">Presumed Father</span>
+                      <span className="text-[0.625rem] text-purple-300 font-medium">
+                        {t('npcDetail.guardians.slotPresumedFather')}
+                      </span>
                       {presumedFatherProfile && (
                         isPregnancySecretForPartner ? (
                           <span
                             className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase tracking-wider"
-                            title="Partner does not even know the mother is pregnant yet"
+                            title={t('npcDetail.guardians.secretPregnancyTooltip')}
                           >
-                            Unaware of Pregnancy
+                            {t('npcDetail.guardians.badgeUnawarePregnancy')}
                           </span>
                         ) : isSecretForPartner ? (
                           <span
                             className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider"
-                            title="Partner believes the child is his biological child"
+                            title={t('npcDetail.guardians.secretPresumedBioTooltip')}
                           >
-                            Secret From Partner
+                            {t('npcDetail.guardians.badgeSecretFromPartner')}
                           </span>
                         ) : childRecord?.discoveredByPartner ? (
                           <span
                             className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold uppercase tracking-wider"
-                            title="Partner has discovered the true paternity"
+                            title={t('npcDetail.guardians.truthKnownTooltip')}
                           >
-                            Truth Known
+                            {t('npcDetail.guardians.badgeTruthKnown')}
                           </span>
                         ) : null
                       )}
@@ -567,7 +585,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                             openNpcDetail(presumedFatherProfile.formId)
                           }}
                           className="p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer"
-                          title="Open Presumed Father Profile"
+                          title={t('npcDetail.guardians.openPresumedFatherTooltip')}
                         >
                           <ExternalLink className="w-[0.75em] h-[0.75em]" />
                         </button>
@@ -577,7 +595,9 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   {presumedFatherProfile ? (
                     <span className="text-foreground-primary font-medium truncate">{presumedFatherProfile.name}</span>
                   ) : (
-                    <span className="text-foreground-muted italic text-[0.6875rem]">None / Unassigned (♂)</span>
+                    <span className="text-foreground-muted italic text-[0.6875rem]">
+                      {t('npcDetail.guardians.noneUnassignedMale')}
+                    </span>
                   )}
                 </div>
               )
@@ -591,10 +611,10 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-[0.375rem]">
                 <span className="text-xs font-bold text-accent-bright">
-                  Swap {SLOT_META[activeSlot].title}
+                  {t('npcDetail.guardians.swapSlotTitle', { slot: slotMeta[activeSlot].title })}
                 </span>
                 <span className="text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-accent/15 text-accent border border-accent/30 font-medium">
-                  {SLOT_META[activeSlot].filterLabel}
+                  {slotMeta[activeSlot].filterLabel}
                 </span>
               </div>
               <button
@@ -604,7 +624,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   setSearchQuery('')
                 }}
                 className="p-[0.25rem] rounded text-foreground-muted hover:text-foreground-primary hover:bg-panel-raised transition-colors cursor-pointer"
-                title="Close picker"
+                title={t('npcDetail.guardians.closePickerTooltip')}
               >
                 <X className="w-[0.875em] h-[0.875em]" />
               </button>
@@ -616,7 +636,9 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${SLOT_META[activeSlot].filterLabel.toLowerCase()} by name, race, plugin, or FormID...`}
+                placeholder={t('npcDetail.guardians.searchPlaceholder', {
+                  filter: slotMeta[activeSlot].filterLabel.toLowerCase(),
+                })}
                 autoFocus
                 className="w-full pl-[1.75rem] pr-[0.5rem] py-[0.375rem] bg-panel-raised border border-border-subtle rounded text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
               />
@@ -629,18 +651,20 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   onClick={() => handleSelectCandidate(activeSlot, null)}
                   className="w-full px-[0.5rem] py-[0.375rem] rounded bg-rose-950/30 hover:bg-rose-950/50 border border-rose-500/30 text-rose-300 text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer"
                 >
-                  <span>Clear / Unassign {SLOT_META[activeSlot].title}</span>
-                  <span className="text-[0.625rem] uppercase">None</span>
+                  <span>
+                    {t('npcDetail.guardians.clearUnassignSlot', { slot: slotMeta[activeSlot].title })}
+                  </span>
+                  <span className="text-[0.625rem] uppercase">{t('npcDetail.guardians.none')}</span>
                 </button>
               )}
 
               {isLoadingAllNpcs && filteredCandidates.length === 0 ? (
                 <div className="text-foreground-muted italic py-[0.5rem] text-center">
-                  Loading NPCs...
+                  {t('npcDetail.guardians.loadingNpcs')}
                 </div>
               ) : filteredCandidates.length === 0 ? (
                 <div className="text-foreground-muted italic py-[0.5rem] text-center">
-                  No matching NPCs found.
+                  {t('npcDetail.guardians.noMatchingNpcs')}
                 </div>
               ) : (
                 filteredCandidates.map((cand) => {
@@ -667,12 +691,12 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                         <span className="font-medium truncate">{cand.name}</span>
                         {isPlayer && (
                           <span className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase flex-shrink-0">
-                            Player
+                            {t('npcDetail.guardians.badgePlayer')}
                           </span>
                         )}
                         {isCurrent && (
                           <span className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-accent/30 text-accent-bright font-semibold uppercase flex-shrink-0">
-                            Current
+                            {t('npcDetail.guardians.badgeCurrent')}
                           </span>
                         )}
                       </div>
@@ -694,9 +718,11 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-[0.6875rem] font-semibold text-foreground-muted uppercase tracking-wider flex items-center gap-[0.375rem]">
                 <Lock className="w-[0.875em] h-[0.875em] text-purple-400" />
-                Paternity Secrecy Controls
+                {t('npcDetail.guardians.secrecyControlsTitle')}
               </span>
-              <span className="text-[0.625rem] text-foreground-muted">Manual Control</span>
+              <span className="text-[0.625rem] text-foreground-muted">
+                {t('npcDetail.guardians.manualControl')}
+              </span>
             </div>
 
             <div className={isSecretForPartner && isSecretForBio ? "grid grid-cols-1 sm:grid-cols-2 gap-[0.5rem]" : "grid grid-cols-1 gap-[0.5rem]"}>
@@ -711,12 +737,12 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   />
                   <div className="text-left space-y-[0.125rem]">
                     <span className="text-xs font-semibold text-foreground-primary group-hover:text-purple-300 transition-colors block">
-                      Secret from Partner
+                      {t('npcDetail.guardians.secretFromPartnerLabel')}
                     </span>
                     <span className="text-[0.6875rem] text-foreground-muted block leading-tight">
                       {isPregnancySecretForPartner
-                        ? 'True biological parentage is hidden from partner (who is also unaware of the pregnancy).'
-                        : 'Partner believes the child is theirs; true biological parentage is hidden from them.'}
+                        ? t('npcDetail.guardians.secretFromPartnerPregDesc')
+                        : t('npcDetail.guardians.secretFromPartnerDesc')}
                     </span>
                   </div>
                 </label>
@@ -733,10 +759,10 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   />
                   <div className="text-left space-y-[0.125rem]">
                     <span className="text-xs font-semibold text-foreground-primary group-hover:text-amber-300 transition-colors block">
-                      Pregnancy Unannounced to Partner
+                      {t('npcDetail.guardians.pregnancyUnannouncedLabel')}
                     </span>
                     <span className="text-[0.6875rem] text-foreground-muted block leading-tight">
-                      Partner does not even know the mother is pregnant yet (revealed when she tells him or when her belly shows).
+                      {t('npcDetail.guardians.pregnancyUnannouncedDesc')}
                     </span>
                   </div>
                 </label>
@@ -753,10 +779,10 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                   />
                   <div className="text-left space-y-[0.125rem]">
                     <span className="text-xs font-semibold text-foreground-primary group-hover:text-indigo-300 transition-colors block">
-                      Secret from Biological Father
+                      {t('npcDetail.guardians.secretFromBioFatherLabel')}
                     </span>
                     <span className="text-[0.6875rem] text-foreground-muted block leading-tight">
-                      Biological father is unaware that he fathered this child.
+                      {t('npcDetail.guardians.secretFromBioFatherDesc')}
                     </span>
                   </div>
                 </label>

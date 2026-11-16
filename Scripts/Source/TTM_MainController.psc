@@ -593,7 +593,7 @@ Function MigrateOldNpcHomeMarkers()
             endif
             i += 1
         endwhile
-        Debug.Notification("MARAS: Checked "+npcs.Length+" NPCs and migrated " + count + " home markers.")
+        MARAS.NotifyLocalized("hud.legacy_migrated_home_markers", npcs.Length as string, count as string)
     endif
 
     StorageUtil.SetIntValue(none, "TTM_NewNpcHomeMarkers", 1)
@@ -628,7 +628,7 @@ Function MigrateSettingsToCpp()
     endif
 
     MARAS.MarkSettingsMigrated()
-    Debug.Notification("MARAS: Settings migrated to native storage.")
+    MARAS.NotifyLocalized("hud.legacy_migrated_settings")
 EndFunction
 
 Function RegisterSkyrimNetEventSchema()

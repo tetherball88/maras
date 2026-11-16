@@ -18,6 +18,7 @@
 #include "maras/engine/FormUtils.h"
 #include "maras/engine/HouseholdEngineOps.h"
 #include "maras/engine/JsonService.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SkseSerializationCallbacks.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -606,16 +607,16 @@ namespace MARAS::App {
             modal.modalTone = (templateId == "open_date_away") ? "ai" : "danger";
             modal.modalSize = "md";
             modal.defaultCancelButtonIndex = 0;
-            modal.modalTitle = std::format("A Note from {}", partnerName);
+            modal.modalTitle = TrFmt("modal.encounter_fallback.title", { { "partner", partnerName } });
             modal.modalSubtitle = std::string(locationName);
-            modal.envelopeMessage = std::format("You find an unsigned note left behind for {}, mentioning {}.",
-                                                playerName, locationName);
+            modal.envelopeMessage = TrFmt("modal.encounter_fallback.envelope",
+                                          { { "player", playerName }, { "location", locationName } });
             modal.infoBoxId = "partner_note";
-            modal.infoBoxTitle = "Parchment Contents";
-            modal.letterBody = std::format("{} stepped out to meet someone at {}. - {}",
-                                           partnerName, locationName, partnerName);
+            modal.infoBoxTitle = Tr("modal.encounter_fallback.infobox_title");
+            modal.letterBody = TrFmt("modal.encounter_fallback.body",
+                                     { { "partner", partnerName }, { "location", locationName } });
             modal.buttonId = "close";
-            modal.buttonLabel = "Put Note Away";
+            modal.buttonLabel = Tr("modal.encounter_fallback.btn_close");
             return modal;
         }
 
@@ -1105,7 +1106,7 @@ namespace MARAS::App {
         };
 
         RunLlmBatch<ScheduledPayload>(
-            "Scheduled NPC Matchmaking",
+            Tr("modal.llm_retry.batch_scheduled_matchmaking"),
             "gamemaster_evaluation",
             { ScheduledPayload{ std::move(ctx), {} } },
             std::move(callbacks),
@@ -1283,7 +1284,7 @@ namespace MARAS::App {
         };
 
         RunLlmBatch<ManualTask>(
-            "Manual NPC Matchmaking",
+            Tr("modal.llm_retry.batch_manual_matchmaking"),
             "gamemaster_evaluation",
             std::move(payloads),
             std::move(callbacks),
@@ -1384,7 +1385,7 @@ namespace MARAS::App {
         };
 
         RunLlmBatch<GlobalTask>(
-            "Global NPC Matchmaking",
+            Tr("modal.llm_retry.batch_global_matchmaking"),
             "gamemaster_evaluation",
             { GlobalTask{ std::move(ctx), {} } },
             std::move(callbacks),
@@ -1603,7 +1604,7 @@ namespace MARAS::App {
         };
 
         RunLlmBatch<VerifyTask>(
-            "Matchmaking Verification",
+            Tr("modal.llm_retry.batch_matchmaking_verify"),
             "gamemaster_evaluation",
             std::move(tasks),
             std::move(callbacks),
@@ -1635,12 +1636,14 @@ namespace MARAS::App {
             const auto& r = results[i];
             ModalChecklistItem item{};
             item.id = std::format("pair_{}", i);
-            item.label = std::format("{} & {}", r.actorAName, r.actorBName);
+            item.label = TrFmt("modal.common.pair_subtitle", { { "actorA", r.actorAName }, { "actorB", r.actorBName } });
             item.subtitle = std::format("{} -> {}", r.action, r.targetStatus);
             item.description = r.skipped ? r.skipReason : r.memory;
             item.checked = !r.skipped;
             item.checkboxDisabled = r.skipped;
-            item.badgeText = r.skipped ? "Skipped" : (r.isCheating ? "Cheating" : "Approved");
+            item.badgeText = r.skipped
+                ? Tr("modal.matchmaking_review.badge_skipped")
+                : (r.isCheating ? Tr("modal.matchmaking_review.badge_cheating") : Tr("modal.matchmaking_review.badge_approved"));
             item.badgeTone = r.skipped ? "default" : (r.isCheating ? "warning" : "success");
             if (!r.skipped) {
                 anyEligible = true;
@@ -1655,23 +1658,25 @@ namespace MARAS::App {
 
         ModalRequest req{};
         req.modalType = "generic";
-        req.title = "Review NPC Matchmaking Results";
-        req.subtitle = opts.isGlobal ? "Scheduled / Global Matchmaking" : "Manual Matchmaking";
-        req.message = "Select which proposed relationship changes to apply.";
+        req.title = Tr("modal.matchmaking_review.title");
+        req.subtitle = opts.isGlobal
+            ? Tr("modal.matchmaking_review.subtitle_global")
+            : Tr("modal.matchmaking_review.subtitle_manual");
+        req.message = Tr("modal.matchmaking_review.message");
         req.tone = ModalTone::Ai;
         req.size = ModalSize::Lg;
         req.defaultCancelButtonIndex = 1;
         req.controls.push_back(ModalControl::MakeChecklist(
             "selected_matches",
-            "Proposed Changes",
+            Tr("modal.matchmaking_review.checklist_label"),
             std::move(items),
             /*showSelectAllToggle=*/true));
 
-        ModalButton applyBtn = ModalButton::Make("apply", "Apply Selected", ModalButtonVariant::Primary);
+        ModalButton applyBtn = ModalButton::Make("apply", Tr("modal.matchmaking_review.btn_apply"), ModalButtonVariant::Primary);
         applyBtn.requireChecklistId = "selected_matches";
         applyBtn.minCheckedCount = 1;
         req.buttons.push_back(std::move(applyBtn));
-        req.buttons.push_back(ModalButton::Make("discard", "Discard All", ModalButtonVariant::Secondary));
+        req.buttons.push_back(ModalButton::Make("discard", Tr("modal.matchmaking_review.btn_discard"), ModalButtonVariant::Secondary));
 
         const SessionEpoch expectedEpoch = GetSessionEpoch();
         auto sharedResults = std::make_shared<std::vector<MatchmakingResult>>(std::move(results));
@@ -1821,7 +1826,7 @@ namespace MARAS::App {
         task.contextJson = BuildMemoryBatchContextJson(*sharedResults, *snap, opts.currentGameDay);
 
         RunLlmBatch<MemoryBatchTask>(
-            "Matchmaking Memory Generation",
+            Tr("modal.llm_retry.batch_memory_generation"),
             "gamemaster_evaluation",
             { std::move(task) },
             std::move(callbacks),
@@ -2191,7 +2196,7 @@ namespace MARAS::App {
         };
 
         RunLlmBatch<PartnerAgencyBatchItem>(
-            "Player-Partner Agency",
+            Tr("modal.llm_retry.batch_partner_agency"),
             "gamemaster_evaluation",
             std::move(llmTasks),
             std::move(callbacks),
@@ -2323,7 +2328,7 @@ namespace MARAS::App {
                 req.tone));
             req.buttons.push_back(ModalButton::Make(
                 rendered.buttonId.empty() ? std::string("close") : rendered.buttonId,
-                rendered.buttonLabel.empty() ? std::string("Put Note Away") : rendered.buttonLabel,
+                rendered.buttonLabel.empty() ? Tr("modal.encounter_fallback.btn_close") : rendered.buttonLabel,
                 ModalButtonVariant::Primary));
 
             GetModalGateway().ShowModal(std::move(req), nullptr);

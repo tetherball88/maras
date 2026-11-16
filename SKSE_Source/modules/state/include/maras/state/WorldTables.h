@@ -983,6 +983,7 @@ namespace MARAS::State {
         bool toggleUIModCtrl{ false };
         bool toggleUIModShift{ false };
         bool toggleUIModAlt{ true };
+        std::string language{ "auto" };
 
         bool enableConfirmationModal{ true };
         std::int32_t actionsCooldown{ 10 };

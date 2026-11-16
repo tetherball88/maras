@@ -7,6 +7,7 @@
 #include "maras/bridge_skyrimnet/SkyrimNetMemoryService.h"
 #include "maras/bridge_skyrimnet/SkyrimNetProfileService.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/state/SpatialActorSnapshot.h"
@@ -43,12 +44,12 @@ namespace MARAS::Bridge::SkyrimNet {
 
         std::string GetModelSlotDisplayName(std::string_view llmVariant) {
             if (llmVariant == "memory") {
-                return "Memory";
+                return MARAS::Tr("modal.llm_guidance.slot_memory");
             }
             if (llmVariant == "decisions") {
-                return "Decisions";
+                return MARAS::Tr("modal.llm_guidance.slot_decisions");
             }
-            return "GameMaster";
+            return MARAS::Tr("modal.llm_guidance.slot_gamemaster");
         }
 
     }  // namespace
@@ -465,29 +466,20 @@ namespace MARAS::Bridge::SkyrimNet {
     std::string GetLLMFailureGuidanceTitle(MARAS::App::LLMFailureType failureType) {
         switch (failureType) {
             case MARAS::App::LLMFailureType::InvalidJson:
-                return "What Does This Mean? (Broken JSON Response)";
+                return MARAS::Tr("modal.llm_guidance.title_invalid_json");
             case MARAS::App::LLMFailureType::RequestFailed:
             default:
-                return "What Does This Mean? (HTTP / Connection Failure)";
+                return MARAS::Tr("modal.llm_guidance.title_request_failed");
         }
     }
 
     std::string GetLLMFailureGuidance(MARAS::App::LLMFailureType failureType, std::string_view llmVariant) {
         const std::string slotName = GetModelSlotDisplayName(llmVariant);
         if (failureType == MARAS::App::LLMFailureType::InvalidJson) {
-            return fmt::format(
-                "Your AI model replied, but its response was formatted incorrectly (broken JSON) and could not be read.\n\n"
-                "• Why this happens: M.A.R.A.S requires the AI to reply in a strict structured data format. Even good models occasionally make a formatting mistake, and clicking Retry usually fixes it.\n"
-                "• Seeing this error too often? If this happens frequently, the AI model assigned to your '{}' slot in SkyrimNet is incapable of returning valid JSON reliably most of the time. Consider switching that slot in SkyrimNet to a more capable model.",
-                slotName);
+            return MARAS::TrFmt("modal.llm_guidance.body_invalid_json", { { "slot", slotName } });
         }
 
-        return fmt::format(
-            "SkyrimNet could not get a response from your AI provider for the '{}' model slot (HTTP / network error or empty reply).\n\n"
-            "• Cloud AI (OpenRouter, OpenAI, etc.): The service may have timed out, hit a rate limit, run out of API credits, or your API key / model name in SkyrimNet may be invalid.\n"
-            "• Local AI (Ollama, KoboldCPP, LM Studio): Your local AI server may be offline, still loading a model, or overloaded.\n"
-            "• What to do: Click Retry to send the request again. If it keeps failing, check your internet connection or SkyrimNet provider settings.",
-            slotName);
+        return MARAS::TrFmt("modal.llm_guidance.body_request_failed", { { "slot", slotName } });
     }
 
     std::string GetLLMBatchFailureGuidance(bool hasRequestFailure,
@@ -495,11 +487,7 @@ namespace MARAS::Bridge::SkyrimNet {
                                             std::string_view llmVariant) {
         if (hasRequestFailure && hasInvalidJson) {
             const std::string slotName = GetModelSlotDisplayName(llmVariant);
-            return fmt::format(
-                "Some AI requests failed to connect, while others returned unreadable data:\n\n"
-                "• HTTP / Connection Failed: SkyrimNet could not reach your AI provider or received an empty reply (timeout, rate limit, out of API credits, invalid API key, or local AI server offline).\n"
-                "• Broken JSON Response: The AI model in your SkyrimNet '{}' slot replied with broken formatting. If you see broken JSON errors too often, your '{}' model is incapable of returning valid JSON reliably and should be changed to a stronger model.",
-                slotName, slotName);
+            return MARAS::TrFmt("modal.llm_guidance.body_mixed_batch", { { "slot", slotName } });
         }
         if (hasInvalidJson) {
             return GetLLMFailureGuidance(MARAS::App::LLMFailureType::InvalidJson, llmVariant);

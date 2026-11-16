@@ -1,10 +1,13 @@
 #include "maras/app/SettingsCoordinator.h"
 
+#include "maras/app/AppContext.h"
 #include "maras/domain/relationships/InfidelityRules.h"
 #include "maras/engine/BuffReconciler.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/GlobalVarReconciler.h"
+#include "maras/engine/LocalizationService.h"
+#include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/StringUtils.h"
 #include "maras/state/WorldTables.h"
@@ -358,12 +361,22 @@ namespace MARAS::App {
                 file << "ToggleUI = Alt+B\n";
                 file << "\n[Logging]\n";
                 file << "LogLevel = 1\n";
+                file << "\n[Localization]\n";
+                file << "Language = auto\n";
             }
         }
 
         char buffer[256] = {};
         GetPrivateProfileStringA("Hotkeys", "ToggleUI", "Alt+B", buffer, sizeof(buffer), iniPath.string().c_str());
         ParseKeyCombo(std::string(buffer), baseline);
+
+        char langBuffer[64] = {};
+        GetPrivateProfileStringA("Localization", "Language", "auto", langBuffer, sizeof(langBuffer), iniPath.string().c_str());
+        std::string iniLanguage = Foundation::StringUtils::TrimStd(langBuffer);
+        if (iniLanguage.empty() || Foundation::StringUtils::CaseInsensitiveEquals(iniLanguage, "auto")) {
+            iniLanguage = "auto";
+        }
+        baseline.language = iniLanguage;
 
         const std::int32_t rawLogLevel = GetPrivateProfileIntA(
             "Logging", "LogLevel", baseline.defaultLogLevel, iniPath.string().c_str());
@@ -381,12 +394,15 @@ namespace MARAS::App {
             s.toggleUIModCtrl = baseline.toggleUIModCtrl;
             s.toggleUIModShift = baseline.toggleUIModShift;
             s.toggleUIModAlt = baseline.toggleUIModAlt;
+            s.language = baseline.language;
             s.defaultLogLevel = iniLogLevel;
             s.logLevel = iniLogLevel;
         });
 
-        MARAS_LOG_INFO("[SettingsCoordinator] Loaded INI settings (logLevel={}, hotkey={:02X}, alt={}, ctrl={}, shift={})",
-                       iniLogLevel, baseline.toggleUIKey, baseline.toggleUIModAlt,
+        Engine::LocalizationService::GetSingleton().Initialize(baseline.language);
+
+        MARAS_LOG_INFO("[SettingsCoordinator] Loaded INI settings (logLevel={}, language='{}', hotkey={:02X}, alt={}, ctrl={}, shift={})",
+                       iniLogLevel, baseline.language, baseline.toggleUIKey, baseline.toggleUIModAlt,
                        baseline.toggleUIModCtrl, baseline.toggleUIModShift);
     }
 
@@ -483,6 +499,46 @@ namespace MARAS::App {
         MARAS_LOG_INFO("[SettingsCoordinator] SetGlobalPetBanned -> {}", banned);
     }
 
+    void SettingsCoordinator::SetLanguage(std::string_view code) {
+        std::string normalized = Foundation::StringUtils::TrimStd(code);
+        if (normalized.empty() || Foundation::StringUtils::CaseInsensitiveEquals(normalized, "auto")) {
+            normalized = "auto";
+        }
+
+        auto& store = State::WorldStore::GetSingleton();
+        State::SettingsData baseline = store.GetIniBaselineSettings();
+        baseline.language = normalized;
+        store.SetIniBaselineSettings(baseline);
+
+        store.Modify([&normalized](State::WorldState& ws) {
+            ws.settings.Write().language = normalized;
+        });
+
+        const std::filesystem::path iniPath = std::filesystem::current_path() / "Data/SKSE/Plugins/MARAS.ini";
+        std::error_code ec;
+        std::filesystem::create_directories(iniPath.parent_path(), ec);
+        WritePrivateProfileStringA("Localization", "Language", normalized.c_str(), iniPath.string().c_str());
+
+        Engine::LocalizationService::GetSingleton().Reload(normalized);
+        Engine::NamePoolLoader::GetSingleton().Initialize();
+        GetUiBridgeGateway().SendLocaleData();
+
+        MARAS_LOG_INFO("[SettingsCoordinator] SetLanguage -> '{}' (resolved='{}')",
+                       normalized,
+                       Engine::LocalizationService::GetSingleton().Snapshot()->GetResolvedCode());
+    }
+
+    void SettingsCoordinator::ReloadLocalization() {
+        const std::string selected = GetLanguage();
+        Engine::LocalizationService::GetSingleton().Reload(selected);
+        Engine::NamePoolLoader::GetSingleton().Initialize();
+        GetUiBridgeGateway().SendLocaleData();
+
+        MARAS_LOG_INFO("[SettingsCoordinator] Reloaded localization (selected='{}', resolved='{}')",
+                       selected,
+                       Engine::LocalizationService::GetSingleton().Snapshot()->GetResolvedCode());
+    }
+
     void SettingsCoordinator::ApplyPostLoadEngineSideEffects() {
         const auto s = Snapshot();
         Engine::ApplyLogLevel(s->logLevel);
@@ -527,6 +583,8 @@ namespace MARAS::App {
         j["toggleUIModCtrl"] = s->toggleUIModCtrl;
         j["toggleUIModShift"] = s->toggleUIModShift;
         j["toggleUIModAlt"] = s->toggleUIModAlt;
+        j["language"] = s->language;
+        j["resolvedLanguage"] = Engine::LocalizationService::GetSingleton().Snapshot()->GetResolvedCode();
         j["enableConfirmationModal"] = s->enableConfirmationModal;
         j["actionsCooldown"] = s->actionsCooldown;
         j["actionsDeclineCooldown"] = s->actionsDeclineCooldown;

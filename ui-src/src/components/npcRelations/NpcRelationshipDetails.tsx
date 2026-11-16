@@ -8,11 +8,12 @@ import { formatRelationshipDate, getLatestStatusRecord } from '../../utils/dateU
 import { AffectionBar } from '../shared/AffectionBar'
 import { AppTooltip } from '../shared/AppTooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { GitFork, Heart, Calendar, Shield, Baby, Trash2 } from 'lucide-react'
+import { GitFork, Heart, Calendar, Baby, Trash2 } from 'lucide-react'
 import { resolveIsFemale, getChildGenderNouns } from '../../utils/childUtils'
-import { areSameFormId } from '../../utils/statusAvailability'
+import { useTranslation } from '../../i18n'
 
 export const NpcRelationshipDetails: React.FC = () => {
+  const { t, tp } = useTranslation()
   const selectedId = useMarasStore((s) => s.selectedNpcRelationsId)
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
   const relationships = useMarasStore((s) => s.relationships)
@@ -27,13 +28,13 @@ export const NpcRelationshipDetails: React.FC = () => {
       <div className="flex-1 bg-panel border border-border-subtle rounded-lg flex items-center justify-center p-[2rem] text-center text-foreground-muted">
         <div className="flex flex-col items-center gap-[0.5rem]">
           <GitFork className="w-[2em] h-[2em] text-accent" />
-          <span>Select an NPC from the list to view their relationship breakdown</span>
+          <span>{t('npcRelations.details.emptyPrompt')}</span>
         </div>
       </div>
     )
   }
 
-  const playerDisplayName = npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
+  const playerDisplayName = npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
 
   const selectedNpc =
     selectedId === PLAYER_FORM_ID
@@ -53,12 +54,12 @@ export const NpcRelationshipDetails: React.FC = () => {
 
   const getName = (id: string) => {
     if (id === PLAYER_FORM_ID) return playerDisplayName
-    return npcProfiles.get(id)?.name || 'Unknown NPC'
+    return npcProfiles.get(id)?.name || t('shared.unknownNpc')
   }
 
   const getRace = (id: string) => {
     if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.race || 'Nord'
-    return npcProfiles.get(id)?.race || 'Unknown'
+    return npcProfiles.get(id)?.race || t('shared.unknown')
   }
 
   // Status order for grouping
@@ -88,7 +89,10 @@ export const NpcRelationshipDetails: React.FC = () => {
             )}
           </h2>
           <div className="text-xs text-foreground-secondary mt-[0.125rem]">
-            {selectedNpc?.race} • {isChild ? `Household ${sonOrDaughter} Dependent` : `${rels.length} Tracked Relationship Pair${rels.length === 1 ? '' : 's'}`}
+            {selectedNpc?.race} •{' '}
+            {isChild
+              ? t('npcRelations.details.householdDependent', { noun: sonOrDaughter })
+              : tp('npcRelations.details.trackedPairs', rels.length)}
           </div>
         </div>
 
@@ -97,9 +101,9 @@ export const NpcRelationshipDetails: React.FC = () => {
             <button
               onClick={() => openNpcDetail(selectedId)}
               className="text-xs text-accent-bright bg-accent-soft hover:bg-accent/20 px-[0.5rem] py-[0.25rem] rounded border border-border-accent transition-colors flex items-center gap-[0.25rem] cursor-pointer font-semibold"
-              title={`View details for ${selectedNpc?.name}`}
+              title={t('npcRelations.details.viewFullPageTooltip', { name: selectedNpc?.name || selectedId })}
             >
-              <span>View Full Page</span>
+              <span>{t('npcRelations.details.viewFullPage')}</span>
             </button>
           </div>
         )}
@@ -114,21 +118,26 @@ export const NpcRelationshipDetails: React.FC = () => {
                 <Baby className="w-[1.75em] h-[1.75em]" />
               </div>
               <div className="text-sm font-semibold text-foreground-primary">
-                Household {sonOrDaughter} Dependent
+                {t('npcRelations.details.householdDependent', { noun: sonOrDaughter })}
               </div>
               <div className="text-xs text-foreground-muted max-w-md">
-                {selectedNpc?.name || `NPC ${selectedId}`} is registered as a {sonOrDaughter.toLowerCase()} dependent. Children cannot participate in tracked romantic relationships.
+                {t('npcRelations.details.childDependentDesc', {
+                  name: selectedNpc?.name || t('shared.npcWithId', { id: selectedId }),
+                  nounLower: sonOrDaughter.toLowerCase(),
+                })}
               </div>
               <button
                 onClick={() => openNpcDetail(selectedId)}
                 className="mt-[0.5rem] px-[0.75rem] py-[0.375rem] text-xs font-semibold bg-accent-soft text-accent-bright border border-border-accent rounded hover:bg-accent/20 transition-colors cursor-pointer"
               >
-                View {sonOrDaughter} Profile & Guardians →
+                {t('npcRelations.details.viewChildProfile', { noun: sonOrDaughter })}
               </button>
             </div>
           ) : rels.length === 0 ? (
             <div className="text-center py-[4rem] text-foreground-muted text-sm italic">
-              No active or historical relationships recorded for {selectedNpc?.name}.
+              {t('npcRelations.details.noRelationshipsForNpc', {
+                name: selectedNpc?.name || t('shared.npcWithId', { id: selectedId }),
+              })}
             </div>
           ) : (
             statusOrder.map((status) => {
@@ -162,7 +171,7 @@ export const NpcRelationshipDetails: React.FC = () => {
                           key={idx}
                           onClick={() => openNpcDetail(otherId)}
                           className="bg-panel-raised border border-border-subtle rounded-md p-[0.75rem] flex items-center justify-between gap-[1rem] transition-all cursor-pointer hover:border-border-strong hover:bg-interactive-hover"
-                          title={`Click to view full page for ${otherName}`}
+                          title={t('npcRelations.details.clickToViewTooltip', { name: otherName })}
                         >
                           <div className="flex items-center gap-[0.75rem] min-w-0 flex-1">
                             <div className="p-[0.5rem] rounded-full bg-accent-soft text-accent flex-shrink-0">
@@ -200,12 +209,12 @@ export const NpcRelationshipDetails: React.FC = () => {
 
                           <div className="flex-shrink-0 flex items-center gap-[0.5rem]">
                             <StatusBadge status={r.status} />
-                            <AppTooltip content="Remove Relationship Record">
+                            <AppTooltip content={t('npcRelations.details.removeTooltip')}>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   confirmRemoveRelationship(
-                                    selectedNpc?.name || `NPC ${selectedId}`,
+                                    selectedNpc?.name || t('shared.npcWithId', { id: selectedId }),
                                     otherName,
                                     () => removeRelationship(selectedId, otherId),
                                   )

@@ -6,6 +6,7 @@
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/HouseholdEngineOps.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/state/WorldStore.h"
@@ -46,13 +47,13 @@ namespace MARAS {
         void QueueStoppedSharingHudMessage(RE::FormID npcFormId, std::string_view reason) {
             const std::string spouseName = ActorSvc::GetName(npcFormId);
             if (reason == "divorce") {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDivorce{{{}}}", spouseName));
+                QueueHUDMessage(TrFmt("hud.spouse_shared_home_stopped_divorce", { { "spouse", spouseName } }));
             } else if (reason == "deceased") {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedDeceased{{{}}}", spouseName));
+                QueueHUDMessage(TrFmt("hud.spouse_shared_home_stopped_deceased", { { "spouse", spouseName } }));
             } else if (reason == "affection") {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedAffection{{{}}}", spouseName));
+                QueueHUDMessage(TrFmt("hud.spouse_shared_home_stopped_affection", { { "spouse", spouseName } }));
             } else {
-                QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHomeStoppedOther{{{}}}", spouseName));
+                QueueHUDMessage(TrFmt("hud.spouse_shared_home_stopped_other", { { "spouse", spouseName } }));
             }
         }
 
@@ -205,7 +206,7 @@ namespace MARAS {
                     Utils::AddToFaction(npcFormId, FormCache::GetSingleton().GetSpouseNoInitialHouseFaction(), 0);
                 });
             }
-            QueueHUDMessage(std::format("$TTM_MSG_SpouseNoHome{{{}}}", ActorSvc::GetName(npcFormId)));
+            QueueHUDMessage(TrFmt("hud.spouse_no_home", { { "spouse", ActorSvc::GetName(npcFormId) } }));
             return false;
         }
 
@@ -244,9 +245,9 @@ namespace MARAS {
         if (cellName.empty()) {
             cellName = HouseholdEngineOps::GetHouseName(homeCell);
         }
-        QueueHUDMessage(std::format("$TTM_MSG_SpouseSharedHome{{{}}}{{{}}}",
-                                    ActorSvc::GetName(npcFormId),
-                                    cellName));
+        QueueHUDMessage(TrFmt("hud.spouse_shared_home",
+                              { { "spouse", ActorSvc::GetName(npcFormId) },
+                                { "home", cellName } }));
 
         MARAS_LOG_INFO("BedOwnershipReconciler::ApplyShareHomeWithPlayer: NPC {:08X} shared home {:08X}",
                        npcFormId, homeCell);

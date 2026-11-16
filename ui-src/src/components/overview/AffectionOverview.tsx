@@ -6,8 +6,10 @@ import { AffectionBar } from '../shared/AffectionBar'
 import { StatusBadge } from '../shared/StatusBadge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Heart } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const AffectionOverview: React.FC = () => {
+  const { t, tp } = useTranslation()
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const affectionData = useMarasStore((s) => s.affectionData)
@@ -41,15 +43,19 @@ export const AffectionOverview: React.FC = () => {
     <div className="bg-panel border border-border-subtle rounded-lg p-[1rem] flex flex-col gap-[0.75rem] h-full">
       <div className="flex items-center justify-between border-b border-border-divider pb-[0.5rem]">
         <h3 className="text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]">
-          <Heart className="w-[1.125em] h-[1.125em] text-accent" /> Affection Health
+          <Heart className="w-[1.125em] h-[1.125em] text-accent" /> {t('overview.affection.title')}
         </h3>
-        <span className="text-xs text-foreground-muted">{partners.length} Partners Tracked</span>
+        <span className="text-xs text-foreground-muted">
+          {tp('overview.affection.partnersTracked', partners.length)}
+        </span>
       </div>
 
       <ScrollArea className="h-[16rem] pr-[0.5rem]">
         <div className="space-y-[0.5rem]">
           {partners.length === 0 ? (
-            <div className="text-xs text-foreground-muted text-center py-[2rem]">No active partners</div>
+            <div className="text-xs text-foreground-muted text-center py-[2rem]">
+              {t('overview.affection.empty')}
+            </div>
           ) : (
             partners.map(({ partnerId, npc, status, affection }) => (
               <div
@@ -64,7 +70,7 @@ export const AffectionOverview: React.FC = () => {
                     {npc?.pluginName && (
                       <>
                         <span>•</span>
-                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[4.5rem]" title={`Plugin: ${npc.pluginName}`}>
+                        <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[4.5rem]" title={t('shared.pluginTooltip', { plugin: npc.pluginName })}>
                           {npc.pluginName}
                         </span>
                       </>

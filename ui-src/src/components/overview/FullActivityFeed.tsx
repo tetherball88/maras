@@ -16,10 +16,12 @@ import {
 } from 'lucide-react'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { RelationshipStatus } from '../../types'
+import { useTranslation } from '../../i18n'
 
 type FilterCategory = 'all' | 'union' | 'romance' | 'ended'
 
 export const FullActivityFeed: React.FC = () => {
+  const { t, tp, revision } = useTranslation()
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
@@ -66,12 +68,13 @@ export const FullActivityFeed: React.FC = () => {
   }, [relationships])
 
   const getName = (id: string) => {
-    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
-    return npcProfiles.get(id)?.name || `NPC ${id}`
+    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
+    return npcProfiles.get(id)?.name || t('shared.npcWithId', { id })
   }
 
   // Filter events based on search term & category selection
   const filteredEvents = useMemo(() => {
+    void revision
     return allEvents.filter((ev) => {
       const nameA = getName(ev.actorA).toLowerCase()
       const nameB = getName(ev.actorB).toLowerCase()
@@ -106,7 +109,7 @@ export const FullActivityFeed: React.FC = () => {
 
       return true
     })
-  }, [allEvents, searchTerm, selectedCategory, npcProfiles])
+  }, [allEvents, searchTerm, selectedCategory, npcProfiles, revision])
 
   // Count stats
   const unionCount = useMemo(
@@ -168,24 +171,24 @@ export const FullActivityFeed: React.FC = () => {
           <button
             onClick={() => setActiveSubSection('dashboard')}
             className="p-[0.5rem] rounded-md bg-panel-raised border border-border-subtle text-foreground-muted hover:text-accent-bright hover:bg-accent-soft transition-colors cursor-pointer"
-            title="Back to Dashboard"
+            title={t('overview.fullActivity.backTooltip')}
           >
             <ArrowLeft className="w-[1.125em] h-[1.125em]" />
           </button>
           <div>
             <h2 className="text-lg font-bold text-foreground-primary flex items-center gap-[0.5rem]">
               <Activity className="w-[1.25em] h-[1.25em] text-accent" />
-              Full Activity Feed & Relationship History
+              {t('overview.fullActivity.title')}
             </h2>
             <p className="text-xs text-foreground-muted">
-              Chronological ledger of relationship milestone transitions across Skyrim
+              {t('overview.fullActivity.subtitle')}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-[0.5rem]">
           <span className="text-xs font-semibold px-[0.625rem] py-[0.25rem] bg-accent-soft text-accent-bright rounded-full border border-accent/20">
-            {allEvents.length} Total Events
+            {tp('overview.fullActivity.totalEvents', allEvents.length)}
           </span>
         </div>
       </div>
@@ -195,7 +198,7 @@ export const FullActivityFeed: React.FC = () => {
         {/* Category Filters */}
         <div className="flex items-center gap-[0.375rem] flex-wrap w-full md:w-auto">
           <span className="text-xs text-foreground-muted flex items-center gap-[0.25rem] mr-[0.25rem]">
-            <Filter className="w-[0.875em] h-[0.875em]" /> Filter:
+            <Filter className="w-[0.875em] h-[0.875em]" /> {t('overview.fullActivity.filterLabel')}
           </span>
 
           <button
@@ -205,7 +208,7 @@ export const FullActivityFeed: React.FC = () => {
               : 'bg-panel-raised text-foreground-secondary hover:bg-interactive-hover'
               }`}
           >
-            All ({allEvents.length})
+            {t('overview.fullActivity.filterAll', { count: allEvents.length })}
           </button>
 
           <button
@@ -215,7 +218,7 @@ export const FullActivityFeed: React.FC = () => {
               : 'bg-panel-raised text-foreground-secondary hover:bg-interactive-hover'
               }`}
           >
-            <StatusIcon status={RelationshipStatus.Engaged} /> Marriages & Engagements ({unionCount})
+            <StatusIcon status={RelationshipStatus.Engaged} /> {t('overview.fullActivity.filterUnion', { count: unionCount })}
           </button>
 
           <button
@@ -225,7 +228,7 @@ export const FullActivityFeed: React.FC = () => {
               : 'bg-panel-raised text-foreground-secondary hover:bg-interactive-hover'
               }`}
           >
-            <StatusIcon status={RelationshipStatus.Lover} /> Dating & Lovers ({romanceCount})
+            <StatusIcon status={RelationshipStatus.Lover} /> {t('overview.fullActivity.filterRomance', { count: romanceCount })}
           </button>
 
           <button
@@ -235,7 +238,7 @@ export const FullActivityFeed: React.FC = () => {
               : 'bg-panel-raised text-foreground-secondary hover:bg-interactive-hover'
               }`}
           >
-            <StatusIcon status={RelationshipStatus.ExLover} /> Divorced & Ended ({endedCount})
+            <StatusIcon status={RelationshipStatus.ExLover} /> {t('overview.fullActivity.filterEnded', { count: endedCount })}
           </button>
         </div>
 
@@ -246,7 +249,7 @@ export const FullActivityFeed: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by actor or status..."
+            placeholder={t('overview.fullActivity.searchPlaceholder')}
             className="w-full bg-panel-inset border border-border-subtle rounded-md pl-[2rem] pr-[2rem] py-[0.375rem] text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
           />
           {searchTerm && (
@@ -268,8 +271,8 @@ export const FullActivityFeed: React.FC = () => {
               <Activity className="w-[2.5rem] h-[2.5rem] text-foreground-muted opacity-40" />
               <p className="text-sm text-foreground-muted font-medium">
                 {searchTerm || selectedCategory !== 'all'
-                  ? 'No relationship activity matching your current filter'
-                  : 'No relationship activity history recorded yet'}
+                  ? t('overview.fullActivity.emptyFiltered')
+                  : t('overview.fullActivity.emptyAll')}
               </p>
               {(searchTerm || selectedCategory !== 'all') && (
                 <button
@@ -279,7 +282,7 @@ export const FullActivityFeed: React.FC = () => {
                   }}
                   className="text-xs text-accent hover:underline flex items-center gap-[0.25rem]"
                 >
-                  Reset filters
+                  {t('overview.fullActivity.resetFilters')}
                 </button>
               )}
             </div>
@@ -288,6 +291,7 @@ export const FullActivityFeed: React.FC = () => {
               {filteredEvents.map((ev) => {
                 const fromLabel = getStatusLabel(ev.fromStatus)
                 const toLabel = getStatusLabel(ev.toStatus)
+                void toLabel
 
                 return (
                   <div
@@ -308,7 +312,7 @@ export const FullActivityFeed: React.FC = () => {
                         <div className="flex items-center gap-[0.375rem] text-foreground-muted text-xs">
                           {ev.timestamp < 0 ? (
                             <span className="bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem] text-foreground-secondary">
-                              Pre-existing
+                              {t('overview.fullActivity.preExisting')}
                             </span>
                           ) : (
                             <span className="bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem]">
@@ -328,7 +332,11 @@ export const FullActivityFeed: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-[0.25rem] bg-panel-inset px-[0.5rem] py-[0.125rem] rounded border border-border-subtle">
                         <Calendar className="w-[0.75em] h-[0.75em]" />
-                        <span>{ev.timestamp < 0 ? 'Historical' : `Day ${Math.floor(ev.timestamp)}`}</span>
+                        <span>
+                          {ev.timestamp < 0
+                            ? t('overview.fullActivity.historical')
+                            : t('overview.fullActivity.dayNumber', { day: Math.floor(ev.timestamp) })}
+                        </span>
                       </div>
                     </div>
                   </div>

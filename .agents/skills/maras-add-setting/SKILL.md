@@ -22,8 +22,8 @@ Whenever adding, removing, or renaming a configuration setting, update **all** a
    - Include in outgoing payloads (`SendOverviewData` and/or `SendMatchmakingSettings`).
    - Handle incoming updates (`ProcessUpdateSetting` and/or `ProcessUpdateMatchmakingSettings`, ensuring `SettingsCoordinator` updates `WorldStore` cleanly and checking `.is_boolean()` / `.is_number()` / `.is_string()` before extracting from `nlohmann::json`).
 
-4. **UI Dashboard React Frontend (`ui-src/`):**
-   - Update TypeScript interfaces (`ui-src/src/types/`), Zustand store defaults/handlers (`ui-src/src/store/useMarasStore.ts`), browser mock defaults (`ui-src/src/store/uiBridge.ts`), and settings tab UI controls.
+4. **UI Dashboard React Frontend & Localization (`ui-src/` & `SKSE/Plugins/MARAS/localization/en/`):**
+   - Update TypeScript interfaces (`ui-src/src/types.ts`), Zustand store defaults/handlers (`ui-src/src/store/useMarasStore.ts`), browser mock defaults (`ui-src/src/store/uiBridge.ts`), settings tab UI controls (`useTranslation()`), and English localization entries in `SKSE/Plugins/MARAS/localization/en/ui_settings.json`.
    - Note: Legacy MCM (`TTM_MCM_*.psc`) is **retired**—never add new settings to MCM.
 
 5. **Papyrus Native API (if exposed to `.psc` scripts):**

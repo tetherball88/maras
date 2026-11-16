@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { t } from '../i18n'
 import {
   ModalPayload,
   ModalControl,
@@ -263,14 +264,17 @@ export function confirmRemoveRelationship(
   useModalStore.getState().showModal(
     {
       modalId: 'confirm_remove_relationship',
-      title: 'Remove Relationship Record?',
-      subtitle: `${actorAName} & ${actorBName}`,
-      message: 'Are you sure you want to permanently remove this relationship record, its status history, and any associated affair records from M.A.R.A.S tracking?\n\nBoth NPCs will remain registered as Candidates.',
+      title: t('store.modal.removeRelationshipTitle'),
+      subtitle: t('store.modal.removeRelationshipSubtitle', {
+        actorA: actorAName,
+        actorB: actorBName,
+      }),
+      message: t('store.modal.removeRelationshipMessage'),
       size: 'sm',
       tone: 'danger',
       buttons: [
-        { id: 'remove', label: 'Remove Record', variant: 'danger' },
-        { id: 'cancel', label: 'Cancel', variant: 'secondary' },
+        { id: 'remove', label: t('store.modal.removeRecordBtn'), variant: 'danger' },
+        { id: 'cancel', label: t('store.modal.cancelBtn'), variant: 'secondary' },
       ],
     },
     (buttonId) => {
@@ -289,14 +293,14 @@ export function confirmRemoveChild(
   useModalStore.getState().showModal(
     {
       modalId: 'confirm_remove_child',
-      title: 'Remove Child Record?',
-      subtitle: `${childName} (${childId})`,
-      message: 'Are you sure you want to permanently remove this child record from M.A.R.A.S household and family tracking?\n\nThis will clear their guardian and lineage assignments in M.A.R.A.S.',
+      title: t('store.modal.removeChildTitle'),
+      subtitle: t('store.modal.removeChildSubtitle', { childName, childId }),
+      message: t('store.modal.removeChildMessage'),
       size: 'sm',
       tone: 'danger',
       buttons: [
-        { id: 'remove', label: 'Remove Child Record', variant: 'danger' },
-        { id: 'cancel', label: 'Cancel', variant: 'secondary' },
+        { id: 'remove', label: t('store.modal.removeChildBtn'), variant: 'danger' },
+        { id: 'cancel', label: t('store.modal.cancelBtn'), variant: 'secondary' },
       ],
     },
     (buttonId) => {

@@ -46,7 +46,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
    * This source code is licensed under the MIT license found in the
    * LICENSE file in the root directory of this source tree.
    */
-  var l$1 = Symbol.for("react.element"), n$1 = Symbol.for("react.portal"), p$2 = Symbol.for("react.fragment"), q$1 = Symbol.for("react.strict_mode"), r$1 = Symbol.for("react.profiler"), t = Symbol.for("react.provider"), u = Symbol.for("react.context"), v$1 = Symbol.for("react.forward_ref"), w = Symbol.for("react.suspense"), x = Symbol.for("react.memo"), y = Symbol.for("react.lazy"), z$1 = Symbol.iterator;
+  var l$1 = Symbol.for("react.element"), n$1 = Symbol.for("react.portal"), p$2 = Symbol.for("react.fragment"), q$1 = Symbol.for("react.strict_mode"), r$1 = Symbol.for("react.profiler"), t$1 = Symbol.for("react.provider"), u = Symbol.for("react.context"), v$1 = Symbol.for("react.forward_ref"), w = Symbol.for("react.suspense"), x = Symbol.for("react.memo"), y = Symbol.for("react.lazy"), z$1 = Symbol.iterator;
   function A$1(a) {
     if (null === a || "object" !== typeof a) return null;
     a = z$1 && a[z$1] || a["@@iterator"];
@@ -217,7 +217,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   };
   react_production_min.createContext = function(a) {
     a = { $$typeof: u, _currentValue: a, _currentValue2: a, _threadCount: 0, Provider: null, Consumer: null, _defaultValue: null, _globalName: null };
-    a.Provider = { $$typeof: t, _context: a };
+    a.Provider = { $$typeof: t$1, _context: a };
     return a.Consumer = a;
   };
   react_production_min.createElement = M$1;
@@ -7196,6 +7196,1576 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     return useBoundStore;
   };
   const create = (createState) => createState ? createImpl(createState) : createImpl;
+  const bridge = {
+    actionBlockedDefault: "Operation could not proceed due to relationship rules.",
+    actionBlockedStatus: "Action Blocked: {reason}",
+    localizationReloaded: "Localization reloaded ({lang})."
+  };
+  const enums = {
+    relationshipStatus: {
+      candidate: "Candidate",
+      engaged: "Engaged",
+      married: "Married",
+      divorced: "Divorced",
+      jilted: "Jilted",
+      dating: "Dating",
+      lover: "Lover",
+      exDating: "Ex-Dating",
+      exLover: "Ex-Lover",
+      unknown: "Unknown"
+    },
+    socialClass: {
+      outcast: "Outcast",
+      poverty: "Poverty",
+      working: "Working",
+      middle: "Middle",
+      wealthy: "Wealthy",
+      religious: "Religious",
+      nobles: "Nobles",
+      rulers: "Rulers"
+    },
+    skillType: {
+      warrior: "Warrior",
+      mage: "Mage",
+      rogue: "Rogue",
+      craftsman: "Craftsman",
+      ranger: "Ranger",
+      orator: "Orator"
+    },
+    temperament: {
+      proud: "Proud",
+      humble: "Humble",
+      jealous: "Jealous",
+      romantic: "Romantic",
+      independent: "Independent"
+    }
+  };
+  const shared = {
+    searchPlaceholder: "Search...",
+    emptyList: "No matching items found.",
+    statusTooltip: "Status: {label}",
+    traitTooltip: "{category}: {label}",
+    traitCategory: {
+      socialClass: "Social Class",
+      skillClass: "Skill Class",
+      temperament: "Temperament"
+    },
+    errorBoundary: {
+      title: "An error occurred in M.A.R.A.S UI",
+      description: "The UI encountered an unexpected error. You can reload the view to recover state.",
+      reloadButton: "Reload UI"
+    },
+    placeholder: {
+      scheduled: "This module is scheduled for implementation in Phase {phase}.",
+      description: "The foundation shell is active. Select another tab or proceed with Phase {phase} build out."
+    },
+    playerFallback: "Prisoner (Player)",
+    unknownNpc: "Unknown NPC",
+    npcWithId: "NPC {id}",
+    noHomeSet: "No Home Set",
+    pluginTooltip: "Plugin: {plugin}",
+    unknown: "Unknown",
+    none: "None"
+  };
+  const layout = {
+    nav: {
+      overview: "Overview",
+      household: "My Household",
+      matchmaking: "Matchmaking",
+      settings: "Settings"
+    },
+    subNav: {
+      overview: {
+        dashboard: "Dashboard",
+        activity: "Activity Feed",
+        browse: "Browse NPCs",
+        allPairs: "All Pairs"
+      },
+      household: {
+        all: "Partners",
+        children: "Children",
+        buffs: "Household Buffs"
+      },
+      matchmaking: {
+        manualMatch: "Manual Match",
+        llmMatch: "LLM Matchmaking",
+        adoption: "Child Adoption"
+      },
+      settings: {
+        general: "General",
+        confirmations: "Confirmations",
+        matchmaking: "Matchmaking",
+        partnerAgency: "Partner Agency",
+        scenes: "NPC Scenes",
+        children: "Children & Pets",
+        fertility: "Fertility",
+        aiDialogue: "AI Dialogues",
+        skyrimNet: "SkyrimNet",
+        cheats: "Cheats & Debug"
+      }
+    },
+    sidebar: {
+      navigation: "Navigation",
+      expandTooltip: "Expand Sidebar",
+      collapseTooltip: "Collapse Sidebar"
+    },
+    header: {
+      brandTitle: "M.A.R.A.S",
+      brandSubtitle: "Marriage & Relationship Alignment System",
+      secretsRevealedTooltip: "All Secrets Revealed — Showing all hidden affairs and paternity secrets. Click to hide undiscovered secrets (Intrigue Mode).",
+      secretsHiddenTooltip: "Secrets Hidden (Intrigue Mode) — Undiscovered affairs and paternity secrets are masked as if no secrets exist. Click to reveal all secrets.",
+      secretsButton: "Secrets",
+      reloadTooltip: "Reload Data — Refresh all relationships, NPC profiles, children, household buffs, and settings from SKSE.",
+      reloadButton: "Reload",
+      sendKidsTooltip: "Make all children in your current cell run away until you leave the cell (they flee through the nearest door; children still stuck next to you after ~12 seconds are moved out of the way). Useful before an intimate scene.",
+      sendKidsEmptyTooltip: "No children to send away.",
+      sendKidsButton: "Send Kids",
+      scaleDecreaseTooltip: "Decrease UI & Font Scale (-5%)",
+      scaleResetTooltip: "Accessibility UI & Font Scale — Click to reset to 100%",
+      scaleIncreaseTooltip: "Increase UI & Font Scale (+5%)",
+      gamePausedTooltip: "Game Paused — Skyrim world time and AI are paused while you browse. Click to unpause the game.",
+      pauseGameTooltip: "Pause Game — Click to pause Skyrim while the dashboard is open.",
+      pausedButton: "Paused",
+      pauseButton: "Pause",
+      windowedModeTooltip: "Windowed Mode — Restore centered dashboard window",
+      fullScreenModeTooltip: "Full Screen Mode — Expand dashboard to fill the screen",
+      closeTooltip: "Close UI (Esc)"
+    },
+    footer: {
+      statusCoreActive: "M.A.R.A.S Core Active",
+      statusDevMode: "UI Dev Mode",
+      statusReady: "Ready",
+      liveSkseMode: "Live SKSE Mode",
+      standaloneMockMode: "Standalone Mock Mode",
+      logTestSignal: "Log Test Signal",
+      version: "v{version}"
+    }
+  };
+  const overview = {
+    stats: {
+      married: "Married",
+      dating: "Dating",
+      lovers: "Lovers",
+      engaged: "Engaged",
+      divorced: "Divorced"
+    },
+    hierarchy: {
+      title: "Spouse Hierarchy (Top 3 Ranks)",
+      subtitle: "Managed via Marriage & Spouse Assets",
+      rank1: "1st Spouse",
+      rank2: "2nd Spouse",
+      rank3: "3rd Spouse",
+      unassignedSlot: "Unassigned Rank Slot"
+    },
+    affection: {
+      title: "Affection Health",
+      partnersTracked_one: "{count} Partner Tracked",
+      partnersTracked_other: "{count} Partners Tracked",
+      empty: "No active partners"
+    },
+    activity: {
+      title: "Recent Activity Feed",
+      eventsCount_one: "{count} Event",
+      eventsCount_other: "{count} Events",
+      viewFullFeed: "View Full Feed",
+      empty: "No relationship history recorded"
+    },
+    fullActivity: {
+      backTooltip: "Back to Dashboard",
+      title: "Full Activity Feed & Relationship History",
+      subtitle: "Chronological ledger of relationship milestone transitions across Skyrim",
+      totalEvents_one: "{count} Total Event",
+      totalEvents_other: "{count} Total Events",
+      filterLabel: "Filter:",
+      filterAll: "All ({count})",
+      filterUnion: "Marriages & Engagements ({count})",
+      filterRomance: "Dating & Lovers ({count})",
+      filterEnded: "Divorced & Ended ({count})",
+      searchPlaceholder: "Search by actor or status...",
+      emptyFiltered: "No relationship activity matching your current filter",
+      emptyAll: "No relationship activity history recorded yet",
+      resetFilters: "Reset filters",
+      preExisting: "Pre-existing",
+      historical: "Historical",
+      dayNumber: "Day {day}"
+    }
+  };
+  const household = {
+    children: {
+      emptyTitle: "No Children in Household",
+      emptyDescription: "Your household does not have any adopted or natural children registered yet.",
+      openAdoption: "Open Child Adoption",
+      headerTitle: "Household Children",
+      adoptMore: "Adopt More",
+      childFallbackName: "Child {id}",
+      defaultHomePlayer: "Breezehome",
+      withCustodialParent: "With Custodial Parent",
+      daughterTitle: "Daughter",
+      sonTitle: "Son",
+      daughterBadge: "♀ Daughter",
+      sonBadge: "♂ Son",
+      stageUnbornBadge: "🤰 Expecting / Unborn {noun}",
+      stageInfantBadge: "Newborn Infant {noun}",
+      stageTrainingBadge: "In Training ({noun})",
+      stageAdultFollowerBadge: "Adult Follower ({noun})",
+      stageAdultUnsummonedBadge: "Adult {noun} (Unsummoned)",
+      stageUnspawnedBadge: "🧸 {noun} (Unspawned)",
+      detailGestation: "🤰 In Gestation (Maternal Care)",
+      detailInfant: "In Arms / Swaddled (Mother's Care)",
+      detailTraining: "Training at {location}",
+      defaultAcademy: "Skyrim Academy",
+      detailAdultUnsummoned: "Ready to Summon via Follower Dialogue / MCM",
+      parentsPlayerAndPartner: "Parents: Player & {partner}",
+      guardianSolePlayer: "Guardian: Player (Sole Guardian)",
+      custodyOther: "Custody: {parent}",
+      otherParentFallback: "Other Parent",
+      conceivedDate: "Conceived {date}",
+      removeTooltip: "Remove Child Record",
+      viewDetailsTooltip: "View Child Details"
+    },
+    buffs: {
+      title: "Household Buffs Summary",
+      activeCountBadge: "{count} Active",
+      subtitle: "Bonuses granted by your spouses: permanent household perks scaled by hierarchy rank and affection, plus combat bonuses when travelling together.",
+      permanentStatLabel: "Permanent:",
+      followerStatLabel: "Follower:",
+      refreshButton: "Refresh",
+      searchPlaceholder: "Search by buff, class, or spouse...",
+      hideInactive: "Hide Inactive Buffs",
+      permanentSectionTitle: "Permanent Household Buffs",
+      permanentSectionHint: "Active 24/7 from married spouses based on Social Class",
+      emptyPermanent: "No permanent buffs match the current filter.",
+      followerSectionTitle: "Follower Combat Buffs",
+      followerSectionHint: "Granted when married spouse travels with you as an active follower",
+      emptyFollower: "No follower buffs match the current filter.",
+      categories: {
+        spouses: "Spouses",
+        children: "Children",
+        followers: "Followers",
+        houses: "Houses",
+        synergy: "Synergy",
+        permanent: "Permanent",
+        follower: "Follower"
+      },
+      unitPoints: "{value} points",
+      rankLead: "Lead",
+      rank2nd: "2nd",
+      rank3rd: "3rd",
+      rankN: "Rank {rank}",
+      activeBadge: "Active",
+      inactiveBadge: "Inactive",
+      inactiveInline: "(Inactive)",
+      baseValue: "Base: {value}",
+      contributingSpouses: "Contributing Spouses ({count})",
+      spousesOverview: "Spouses Overview",
+      availableAtHomeSuffix: " • {count} Available at Home",
+      scaleRankAffection: "Scale: Rank × Affection",
+      scaleAffection: "Scale: Affection",
+      noMarriedSpouses: "No married spouses currently belong to this category.",
+      activeContributorsHeader: "Active Contributors (Multiplying Bonus)",
+      rankLabel: "Rank:",
+      affectionLabel: "Affection:",
+      activeFollowerBadge: "Active Follower",
+      availableAtHomeHeader: "Available at Home (Recruit as follower to activate)",
+      atHomeNotFollowing: "At Home (Not Following)",
+      potentialMultiplier: "Potential: +{multiplier}x",
+      recruitHint: "Recruit as follower to activate"
+    }
+  };
+  const partners = {
+    removeRecordTooltip: "Remove Relationship Record (Reset to Candidate)"
+  };
+  const npcRelations = {
+    allPairs: {
+      npcShortFallback: "NPC ({id})",
+      allStatuses: "All Statuses",
+      title: "All NPC Relationship Pairs",
+      pairsCount: "{filtered} / {total} Pairs",
+      searchPlaceholder: "Search by NPC name...",
+      emptyTitle: "No relationship pairs found",
+      emptySubtitle: "Try adjusting your search query or status filter.",
+      removeTooltip: "Remove Relationship Record",
+      protagonist: "Protagonist",
+      npcProfile: "NPC Profile"
+    },
+    selector: {
+      searchPlaceholder: "Search name, race, plugin, or Form ID...",
+      empty: "No characters found."
+    },
+    details: {
+      emptyPrompt: "Select an NPC from the list to view their relationship breakdown",
+      householdDependent: "Household {noun} Dependent",
+      trackedPairs_one: "{count} Tracked Relationship Pair",
+      trackedPairs_other: "{count} Tracked Relationship Pairs",
+      viewFullPage: "View Full Page",
+      viewFullPageTooltip: "View details for {name}",
+      childDependentDesc: "{name} is registered as a {nounLower} dependent. Children cannot participate in tracked romantic relationships.",
+      viewChildProfile: "View {noun} Profile & Guardians →",
+      noRelationshipsForNpc: "No active or historical relationships recorded for {name}.",
+      clickToViewTooltip: "Click to view full page for {name}",
+      removeTooltip: "Remove Relationship Record"
+    }
+  };
+  const matchmaking = {
+    manual: {
+      selectNpcA: "Select NPC A",
+      selectNpcB: "Select NPC B"
+    },
+    picker: {
+      statusWithPartner: "{status} with {partner}",
+      refreshTooltip: "Refresh Skyrim NPCs",
+      refreshing: "Refreshing...",
+      refresh: "Refresh",
+      searchPlaceholder: "Search any Skyrim NPC by name, race, plugin, or Form ID...",
+      selectedLabel: "Selected: {name}",
+      noExistingRelationships: "No existing relationships",
+      loadingNpcs: "Loading Skyrim NPCs...",
+      emptyNpcs: "No matching NPCs found.",
+      genderFemale: "♀ Female",
+      genderMale: "♂ Male"
+    },
+    statusAssignment: {
+      selectPrompt: "Select {npcA} on the left and {npcB} on the right to configure their relationship status.",
+      npcALabel: "NPC A",
+      npcBLabel: "NPC B",
+      currentLabel: "Current:",
+      openBadge: "Open",
+      selectNewStatus: "Select New Status",
+      allowedBadge: "Allowed",
+      cheatingBadge: "Cheating",
+      statusAssigned: "Status Assigned!",
+      applyStatusChange: "Apply Status Change",
+      removeRecord: "Remove Relationship Record"
+    },
+    llm: {
+      actionNew: "New",
+      actionAdvance: "Advance",
+      actionBreakup: "Breakup",
+      actionOpen: "Open Pair",
+      actionClose: "Close Pair",
+      setupTitle: "LLM Matchmaking Setup",
+      setupSubtitle: "SkyrimNet NPC-NPC Matchmaker",
+      targetNpcLabel: "Target NPC:",
+      searchTargetPlaceholder: "Search target character...",
+      emptyTargetCharacters: "No matching characters found.",
+      analyzingContext: "Analyzing Context...",
+      generateTargetMatches: "Generate Target Matches",
+      globalMatchmakerLabel: "Global Matchmaker:",
+      allSkyrimNpcs: "All Skyrim NPCs",
+      scanAnyNpcs: "Scan Any NPCs (World Scan)",
+      configureRulesLink: "Configure Matchmaking Rules in Settings",
+      recommendationsTitle: "SkyrimNet Recommendations",
+      showingWorldScan: "Showing {scanType} across Skyrim NPCs",
+      worldMatchmakingScan: "World Matchmaking Scan",
+      showingPartnerEval: "Showing partner evaluation for {name}",
+      deselectAll: "Deselect All",
+      selectAll: "Select All",
+      applySelected: "Apply Selected",
+      queryingTitle: "Querying SkyrimNet AI Context...",
+      queryingSubtitle: "Evaluating character lore, relationships, hold diversity, and romance compatibility.",
+      cancelButton: "Cancel",
+      emptyAnalysisTitle: "No LLM Match Analysis Generated Yet",
+      emptyAnalysisDesc: "Select a target character on the left or click {action} to run SkyrimNet evaluation.",
+      defaultReasoning: "Favorable romantic connection identified by SkyrimNet.",
+      skyrimNpcRaceFallback: "Skyrim NPC",
+      cheatingBadge: "Cheating",
+      cheatingTooltip: "Considered cheating: at least one partner is in a closed main relationship",
+      allowedBadge: "Allowed",
+      allowedTooltip: "Allowed secondary relationship: both parties are single or in open relationships",
+      generatingMemories: "Generating first-person memories from both characters' perspectives via SkyrimNet AI...",
+      dualPovTitle: "Dual-POV Recollections (SkyrimNet Memory Records):",
+      regenerateMemories: "Regenerate Memories",
+      actorPov: "{actor}'s POV",
+      defaultLocation: "Skyrim",
+      memoryScore: "Score: {score}%",
+      noMemoriesYet: "No memories generated yet for this pairing.",
+      generateMemories: "Generate Memories",
+      statusLabel: "Status:",
+      applyMatch: "Apply Match"
+    },
+    adoption: {
+      singleParentBadge: "Single Parent",
+      spouseBadge: "Spouse: {name}",
+      singleBadge: "Single",
+      bioParents: "Biological Parents",
+      bioMother: "Biological Mother",
+      bioFather: "Biological Father",
+      spouseIsBioMotherNamed: "Spouse ({name}) is Bio Mother",
+      spouseIsBioMother: "Spouse is Bio Mother",
+      spouseIsBioFatherNamed: "Spouse ({name}) is Bio Father",
+      spouseIsBioFather: "Spouse is Bio Father",
+      childrenHeader: "Skyrim Children",
+      childrenSubheader: "Select child to assign adoption",
+      searchChildPlaceholder: "Search by name, race, or location...",
+      filterAll: "All",
+      filterAvailable: "Available",
+      filterAdopted: "Adopted",
+      filterBiological: "Biological",
+      parentsPair: "Parents: {parentA} and {parentB}",
+      parentSingle: "Parent: {parent}",
+      adoptedNounBadge: "Adopted {noun} {symbol}",
+      biologicalNounBadge: "Biological {noun} {symbol}",
+      blockedTitleFallback: "Blocked from adoption",
+      blockedBadge: "Blocked {symbol}",
+      availableBadge: "Available {symbol}",
+      emptyChildren: "No children match search filter.",
+      inspectChildTooltip: "Inspect Child Profile",
+      raceLabel: "Race:",
+      residenceLabel: "Residence:",
+      defaultResidence: "Skyrim",
+      originalBioParentLabel: "Original Bio Parent:",
+      hasFamilyStatus: "Has Family",
+      adoptionBlockedStatus: "Adoption Blocked",
+      eligibleStatus: "Eligible for Adoption",
+      selectAdoptiveParentHeader: "Select Adoptive Parent NPC:",
+      searchParentPlaceholder: "Filter adult NPCs/parents/plugins...",
+      cannotAdoptTitle: "Cannot Adopt {name}",
+      cannotAdoptFallback: "This child is currently unavailable for adoption.",
+      noHomesWarningTitle: "No Homes Owned",
+      noHomesWarningDesc: "The Dragonborn must purchase or acquire at least one property before adopting children into the household.",
+      bioParentAndGuardian: "Biological Parent & Guardian",
+      currentGuardian: "Current Guardian",
+      cannotAdoptTooltipFallback: "Cannot adopt this child",
+      requiresOwnedHomeTooltip: "Requires an owned home to adopt",
+      noHomeOwnedButton: "No Home Owned",
+      adoptChildButton: "Adopt {name}",
+      noAdultsTitle: "No Adult NPCs Found",
+      noAdultsSubtitle: "Try adjusting your search query.",
+      noChildSelectedTitle: "No Child Selected",
+      noChildSelectedSubtitle: "Select a child from the left column to assign adoption."
+    },
+    houseModal: {
+      title: "Select Residence for {childName}",
+      subtitleWithSpouse: "Assign a home for {childName} and {spouseName}. {spouseName} will live here with their own schedule.",
+      subtitleSolo: "Choose which of your properties {childName} will reside in.",
+      cancelButton: "Cancel",
+      childrenCount_one: "{count} Child",
+      childrenCount_other: "{count} Children",
+      spousesCount_one: "{count} Spouse",
+      spousesCount_other: "{count} Spouses",
+      chooseHouse: "Choose House",
+      emptyHouses: "No player houses registered."
+    }
+  };
+  const modals = {
+    selectedCount: "{checked} / {total} Selected",
+    selectAll: "Select All",
+    deselectAll: "Deselect All",
+    filterItems: "Filter items...",
+    emptyChecklist: "No matching items found.",
+    defaultTitle: "M.A.R.A.S Confirmation",
+    keyboardHint: "Navigate: {navKeys} {tabKey} • Select: {selectKeys}"
+  };
+  const npcDetail = {
+    shell: {
+      backTooltip: "Back to Previous Page",
+      pluginTitle: "Plugin: {plugin}",
+      polygamyEnabled: "Polygamy: Enabled",
+      polygamyDisabled: "Polygamy: Disabled",
+      badgeCheated: "Cheated",
+      badgeAffairPartner: "Affair Partner",
+      stageExpecting: "🤰 Expecting / Unborn",
+      stageInfant: "🍼 Newborn Infant",
+      stageInTraining: "🎓 In Training",
+      stageAdultOffspring: "⚔️ Adult Offspring",
+      stageChildUnspawned: "🧸 Child (Unspawned)",
+      stageChild: "Child",
+      beastbloodTooltip: "Carries Hircine's Beastblood (Lycanthropy)",
+      badgeBeastblood: "🐺 Beastblood",
+      teleportPlayerToTooltip: "Teleport Player to NPC location",
+      teleportPlayerTo: "Teleport Player To",
+      teleportNpcToPlayerTooltip: "Teleport NPC to Player location",
+      teleportNpcToPlayer: "Teleport NPC To Player",
+      spawnChildTooltip: "Spawn physical child actor into the world (PlaceAtMe persistent)",
+      spawnChild: "Spawn Child",
+      spawnAdultTooltip: "Spawn physical adult child actor into the world (PlaceAtMe persistent) and carry over childhood SkyrimNet bio",
+      spawnAdult: "Spawn Adult",
+      evaluatingSecretTooltip: "Evaluating paternity secret via SkyrimNet LLM...",
+      evaluateSecretTooltip: "Evaluate secret via SkyrimNet AI",
+      evaluatingSecret: "Evaluating...",
+      evaluateSecret: "Evaluate Secret",
+      removeChildTooltip: "Permanently remove this child record from M.A.R.A.S household and family tracking",
+      removeChild: "Remove Child Record",
+      matchmakingTooltip: "Open Matchmaking Modal",
+      matchmaking: "Matchmaking"
+    },
+    partnerPanel: {
+      fallbackNpc: "NPC",
+      affairPartner: "Affair Partner",
+      closeTooltip: "Close Partner Panel",
+      openFullPage: "Open Full NPC Page",
+      relationshipStatusTitle: "Relationship Status",
+      removeRelationshipTooltip: "Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate",
+      removeRelationshipBtn: "Remove Relationship Record",
+      lastSeen: "Last Seen: {time}",
+      relationshipPolicyTitle: "Relationship Policy",
+      pairOpenStatus: "Pair Open Status:",
+      openRelationship: "Open Relationship",
+      closedMonogamous: "Closed (Monogamous)",
+      cheatingRecordsHeader: "Cheating / Affair Records:",
+      affairTypeLover: "Lover",
+      affairTypeDating: "Dating",
+      affairTypeCasual: "Casual",
+      affairStatusOngoing: "Ongoing",
+      affairStatusEndedBreakup: "Ended (Breakup)",
+      affairStatusEndedVictimSplit: "Ended (Divorce/Split)",
+      affairStatusAllowed: "Allowed (Open)",
+      affairStatusEndedConfronted: "Ended (Confronted)",
+      stageTalking: "Talking Stage",
+      stagePhysical: "Physical Affair",
+      affairIncidentSummary_one: "{cheater}'s affair with {partner}: {count} incident (Day {day})",
+      affairIncidentSummary_other: "{cheater}'s affair with {partner}: {count} incidents (Day {day})",
+      cheatingOn: "Cheating on: {victim}",
+      visibilitySecret: "Secret",
+      visibilityPublic: "Public",
+      childrenSectionTitle: "Children & Offspring ({count})",
+      noChildrenRecorded: "No children recorded for this relationship pair.",
+      otherRelationshipsTitle: "Other Relationships"
+    },
+    partnerGroup: {
+      cheatedCount: "Cheated ({count})",
+      affairTalking: "Affair (Talking)",
+      affairCount: "Affair ({count})",
+      affairPartnerCount: "Affair Partner ({count})",
+      affairPartner: "Affair Partner",
+      openBadge: "Open",
+      removeRelationshipTooltip: "Remove Relationship Record"
+    },
+    matchmakingModal: {
+      title: "Matchmaking for {name}",
+      tabManual: "Manual Search",
+      tabAi: "AI Suggest (SkyrimNet)",
+      findPartnerCount: "Find Partner ({count} available):",
+      refreshTooltip: "Refresh Skyrim NPCs",
+      refresh: "Refresh",
+      searchPlaceholder: "Search candidate partner...",
+      emptyMessage: "No matching characters found.",
+      assignStatusLabel: "Assign Relationship Status:",
+      confirmMatch: "Confirm Match",
+      queryingAi: "Querying SkyrimNet AI for partner recommendations...",
+      cancel: "Cancel",
+      noSuggestionsYet: "No suggestions generated yet. Click below to query SkyrimNet AI.",
+      generateAiSuggestions: "Generate AI Suggestions",
+      aiRecommendationsHeader: "SkyrimNet AI context recommendations:",
+      generating: "Generating...",
+      regenerate: "Regenerate",
+      actionNew: "new",
+      actionAdvance: "advance",
+      actionBreakup: "breakup",
+      actionOpen: "open",
+      actionClose: "close",
+      badgeCheating: "Cheating",
+      badgeAllowed: "Allowed",
+      generatingMemories: "Generating dual-POV recollections via SkyrimNet AI...",
+      dualPovHeader: "Dual-POV Recollections:",
+      defaultTargetActor: "Target",
+      actorPov: "{actor}'s POV",
+      defaultLocation: "Skyrim",
+      memoryScore: "Score: {percent}%",
+      noMemoriesYet: "No memories generated yet.",
+      generateMemories: "Generate Memories",
+      applySelected: "Apply Selected Suggestions"
+    },
+    relocationModal: {
+      title: "Confirm Household Relocation",
+      subtitle: "Moving family unit to {home}",
+      cancel: "Cancel",
+      warningTitle: "Family Unit Relocation",
+      warningBody: "Relocating {childName} will also move their co-parent and siblings to maintain household cohesion.",
+      affectedMembersHeader: "Affected Household Members",
+      selectedChild: "Selected Child:",
+      coParentSpouse: "Co-Parent Spouse:",
+      siblingsLabel_one: "Sibling:",
+      siblingsLabel_other: "Siblings:",
+      newResidence: "New Residence:",
+      confirmBtn: "Confirm Relocation"
+    },
+    trainingModal: {
+      title: "Send {childName} to Adolescent Training",
+      subtitle_one: "Choose an organization, academy, or Daedric covenant ({count} day training curriculum)",
+      subtitle_other: "Choose an organization, academy, or Daedric covenant ({count} day training curriculum)",
+      yourGold: "Your Gold: {gold}",
+      close: "Close",
+      searchPlaceholder: "Search training location, class, or patron...",
+      despawnNotice_one: "Despawns young child actor & unlocks adult adventurer after {count} day",
+      despawnNotice_other: "Despawns young child actor & unlocks adult adventurer after {count} days",
+      noLocationsMatch: 'No training locations match "{query}".',
+      requiresBeastbloodBadge: "🐺 Requires Beastblood",
+      parentAffiliation: "Parent Affiliation",
+      discountBadge: "-{percent}% {reason}",
+      beastbloodBlockedReason: "Requires {childName} to carry Hircine's Beastblood (inherited from a werewolf parent)",
+      factionBlockedReason: "Requires Player membership/patronage: {faction}",
+      insufficientGold: "Insufficient gold ({playerGold} / {cost}g)",
+      costGold: "{cost} Gold",
+      tuitionRate: "Tuition ({rate}x rate)",
+      tuitionRateDiscounted: "Tuition ({rate}x rate · -{percent}%)",
+      noTuitionCost: "No Tuition Cost",
+      lockedBtn: "Locked",
+      sendToTrainingBtn: "Send to Training",
+      showingCount: "Showing {shown} of {total} training locations",
+      cancel: "Cancel"
+    },
+    affection: {
+      title: "Affection Rating",
+      decayMult: "Decay Mult: {mult}x",
+      lastInteraction: "Last Interaction: {time}"
+    },
+    aiPackage: {
+      title: "AI Process Package",
+      currentActiveLabel: "Current Active AI Package"
+    },
+    critterPet: {
+      title: "Critter & Pet Management",
+      globalBanTitle: "Global Ban Override Active",
+      globalBanBoth: "Critters & Pets are globally banned for all children.",
+      globalBanCritters: "Critters are globally banned for all children.",
+      globalBanPets: "Pets are globally banned for all children.",
+      adoptedCritter: "Adopted Critter",
+      dismissCritterTooltip: "Disables and removes critter actor from the game",
+      dismissCritterBtn: "Dismiss & Remove Critter",
+      banCritterTitle: "Ban Critter Adoption",
+      banCritterDesc: "No active critter. Prevent wild critter adoption dialogue events (foxes, hares, mudcrabs) for this child.",
+      adoptedPet: "Adopted Household Pet",
+      dismissPetTooltip: "Unbinds pet from child while keeping pet alive in world",
+      dismissPetBtn: "Dismiss Pet",
+      banPetTitle: "Ban Pet Adoption",
+      banPetDesc: "No active pet. Prevent household pet adoption dialogue events (dogs) for this child."
+    },
+    guardians: {
+      title: "Parents & Guardians",
+      custodialHeader: "Custodial Guardians (Click to Swap)",
+      slotGuardianA: "Guardian A",
+      slotGuardianB: "Guardian B",
+      slotBioMother: "Biological Mother",
+      slotBioFather: "Biological Father",
+      slotPresumedFather: "Presumed Father",
+      filterAllAdults: "All Adult NPCs",
+      filterFemalesOnly: "Females Only",
+      filterMalesOnly: "Males Only",
+      secretPregnancyTooltip: "Partner does not even know the mother is pregnant yet",
+      secretPartnerTooltip: "Partner believes the child is theirs",
+      secretGenericTooltip: "Secret from parent",
+      secretPresumedBioTooltip: "Partner believes the child is his biological child",
+      secretBioFatherTooltip: "Biological father is unaware that he fathered this child",
+      truthKnownTooltip: "Partner has discovered the true paternity",
+      badgeUnawarePregnancy: "Unaware of Pregnancy",
+      badgeSecretFromPartner: "Secret from Partner",
+      badgeSecret: "Secret",
+      badgeSecretFromHim: "Secret From Him",
+      badgeTruthKnown: "Truth Known",
+      unassignedClickToAssign: "Unassigned — Click to assign",
+      swap: "Swap",
+      openProfileTooltip: "Open NPC Profile",
+      profileBtn: "Profile",
+      bioAndPresumedHeader: "Biological & Presumed Parents (Click to Swap)",
+      bioHeader: "Biological Parents (Click to Swap)",
+      openBioMotherTooltip: "Open Biological Mother Profile",
+      unassignedFemale: "Unassigned (♀)",
+      openBioFatherTooltip: "Open Biological Father Profile",
+      unassignedMale: "Unassigned (♂)",
+      openPresumedFatherTooltip: "Open Presumed Father Profile",
+      noneUnassignedMale: "None / Unassigned (♂)",
+      swapSlotTitle: "Swap {slot}",
+      closePickerTooltip: "Close picker",
+      searchPlaceholder: "Search {filter} by name, race, plugin, or FormID...",
+      clearUnassignSlot: "Clear / Unassign {slot}",
+      none: "None",
+      loadingNpcs: "Loading NPCs...",
+      noMatchingNpcs: "No matching NPCs found.",
+      badgePlayer: "Player",
+      badgeCurrent: "Current",
+      secrecyControlsTitle: "Paternity Secrecy Controls",
+      manualControl: "Manual Control",
+      secretFromPartnerLabel: "Secret from Partner",
+      secretFromPartnerPregDesc: "True biological parentage is hidden from partner (who is also unaware of the pregnancy).",
+      secretFromPartnerDesc: "Partner believes the child is theirs; true biological parentage is hidden from them.",
+      pregnancyUnannouncedLabel: "Pregnancy Unannounced to Partner",
+      pregnancyUnannouncedDesc: "Partner does not even know the mother is pregnant yet (revealed when she tells him or when her belly shows).",
+      secretFromBioFatherLabel: "Secret from Biological Father",
+      secretFromBioFatherDesc: "Biological father is unaware that he fathered this child."
+    },
+    childResidence: {
+      title: "Child Profile & Residence",
+      fallbackSpouse: "Spouse",
+      unsetOriginalLocation: "Unset (Original Location)",
+      fullName: "Full Name",
+      race: "Race",
+      status: "Status",
+      statusExpectedDaughter: "🤰 Expected Daughter (In Gestation)",
+      statusExpectedSon: "🤰 Expected Son (In Gestation)",
+      statusExpectedChild: "🤰 Expected Child (In Gestation)",
+      statusInfantDaughter: "Newborn Infant Daughter",
+      statusInfantSon: "Newborn Infant Son",
+      statusInfantChild: "Newborn Infant Child",
+      statusInTrainingDaughter: "In Training (Daughter)",
+      statusInTrainingSon: "In Training (Son)",
+      statusInTrainingChild: "In Training (Child)",
+      statusAdultDaughter: "Adult Daughter",
+      statusAdultSon: "Adult Son",
+      statusAdultChild: "Adult Child",
+      statusAdultReadyDaughter: "Adult Daughter (Ready to Spawn)",
+      statusAdultReadySon: "Adult Son (Ready to Spawn)",
+      statusAdultReadyChild: "Adult Child (Ready to Spawn)",
+      statusUnspawnedDaughter: "🧸 Daughter (Unspawned Record)",
+      statusUnspawnedSon: "🧸 Son (Unspawned Record)",
+      statusUnspawnedChild: "🧸 Child (Unspawned Record)",
+      eligibleForAdoption: "Eligible for Adoption",
+      conceivedSuffix: "(Conceived {date})",
+      beastbloodInheritedTooltip: "Carries Hircine's Beastblood (inherited from a werewolf biological parent)",
+      householdCoParent: "Household Co-Parent",
+      inGestationTitle: "In Gestation (Womb Care)",
+      inGestationDesc: "This child is currently developing in maternal gestation. Household assignment will be configured upon birth.",
+      swaddledInfantTitle: "Swaddled Newborn Infant",
+      swaddledInfantDesc: "This infant is currently carried and swaddled in maternal care. A physical household bed and sandbox assignment will become available once the child grows into a small child.",
+      defaultTrainingClass: "Warrior",
+      defaultTrainingLocation: "Skyrim Academy",
+      trainingAsAt: "Training as {className} at {location}",
+      trainingDaysRemaining_one: "{count} day remaining ({elapsed} / {duration} days)",
+      trainingDaysRemaining_other: "{count} days remaining ({elapsed} / {duration} days)",
+      trainingCompletedDuration_one: "Training duration completed ({count} day)",
+      trainingCompletedDuration_other: "Training duration completed ({count} days)",
+      completeTrainingEarly: "Complete Training Early",
+      trainingCompleteReady: "Training Complete — Ready to Spawn Adult",
+      trainingCompleteReadyWithClass: "Training Complete — Ready to Spawn Adult ({className})",
+      trainingCompleteDesc: "This offspring has completed their training and reached adulthood. Spawn their adult actor to send them out into Skyrim as an independent traveling adventurer available for hire.",
+      independentAdventurerTitle: "Independent Traveling Adventurer — {location}",
+      travelingSkyrim: "Traveling Skyrim",
+      independentAdventurerDesc: "Travels independently between Skyrim's inns, cities, and family homes, and is available to be hired as a follower.",
+      unspawnedYoungDaughter: "Unspawned Young Daughter",
+      unspawnedYoungSon: "Unspawned Young Son",
+      unspawnedYoungChild: "Unspawned Young Child",
+      unspawnedYoungDesc: "Spawn this young child into the world to assign a household bed and AI sandbox, or send them directly to adolescent training below.",
+      assignedResidence: "Assigned Residence",
+      unassigned: "Unassigned",
+      controlledByCoParent: "Residence is controlled by co-parent ({spouseName})'s assigned home.",
+      assignedHome: "Assigned Home",
+      followingCustodialParent: "Following Custodial Parent",
+      trainingSectionTitle: "Adolescent Training & Class Path",
+      trainingEnrollDesc_one: "Enroll {name} in one of {catalogCount} academies, guilds, or Daedric covenants ({count} day curriculum).",
+      trainingEnrollDesc_other: "Enroll {name} in one of {catalogCount} academies, guilds, or Daedric covenants ({count} day curriculum).",
+      despawnAndTrainBtn: "Despawn Child & Send to Training",
+      despawnTrainingHelp_one: "Sending a spawned child to training will despawn their young child actor, preserve their SkyrimNet childhood biography, and allow you to spawn their adult actor after {count} day.",
+      despawnTrainingHelp_other: "Sending a spawned child to training will despawn their young child actor, preserve their SkyrimNet childhood biography, and allow you to spawn their adult actor after {count} days."
+    },
+    householdChildren: {
+      title: "Household Children & Offspring ({count})"
+    },
+    playerPolicy: {
+      title: "Player Relationship Policy & Polygamy",
+      polygamyMode: "Polygamy Mode",
+      polygamyDesc: "Allows player to have multiple concurrent spouses and main-tier partners.",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      polygamyNote: "When Polygamy is enabled, forming new Main-tier relationships will not auto-break existing casual Lover connections for the Player."
+    },
+    characteristics: {
+      title: "Profile Characteristics",
+      socialClass: "Social Class",
+      skillType: "Skill Type",
+      temperament: "Temperament"
+    },
+    hierarchy: {
+      title: "Spouse Hierarchy Rank",
+      rank1: "1st Rank",
+      rank2: "2nd Rank",
+      rank3: "3rd Rank",
+      rankN: "Rank #{rank}",
+      unranked: "Unranked",
+      optionUnranked: "Unranked (4th+)",
+      optionRank1: "1st Rank Spouse",
+      optionRank2: "2nd Rank Spouse",
+      optionRank3: "3rd Rank Spouse",
+      description: "Determines household priority & living arrangement order."
+    },
+    spouseHousing: {
+      title: "Assigned Residence & Housing",
+      unsetNoHouse: "Unset (No assigned house)",
+      assignedPlayerHome: "Assigned Player Home",
+      stayAtAssignedHome: "Stay at Assigned Home",
+      sandboxesAtHome: "Sandboxes at home",
+      originalRoutine: "Original routine",
+      stayAtHome: "Stay at home",
+      normalRoutine: "Normal routine",
+      originalHome: "Original Home",
+      cannotReturnWithChildrenTooltip: "Cannot send spouse away while you have children together",
+      returnToOriginalTooltip: "Free from player's house (Return to original home)",
+      locked: "Locked",
+      returnBtn: "Return",
+      cannotReturnWarning: "* Cannot return spouse to original home while you have children together. Move them to a different player home instead.",
+      unassignedChildrenWarning: "* When child will grow and be spawned in game world you will have to select house for them, and their mother, your spouse, will move there."
+    },
+    trackedRelationships: {
+      title: "Tracked Relationships & Partners",
+      groupPrimary: "Primary Partners (Spouse / Engaged / Dating)",
+      groupOpen: "Open Relationship Partners",
+      groupLovers: "Lovers",
+      groupCheating: "Cheating / Affairs",
+      groupCandidates: "Prospective Candidates",
+      groupFormer: "Former Relationships (Exes)"
+    }
+  };
+  const utils = {
+    date: {
+      unknown: "Unknown",
+      historical: "Historical",
+      today: "Today",
+      dayNumber: "Day {day}",
+      daysAgo_one: "{count} day ago",
+      daysAgo_other: "{count} days ago",
+      weeksAgo_one: "{count} week ago",
+      weeksAgo_other: "{count} weeks ago",
+      monthsAgo_one: "{count} month ago",
+      monthsAgo_other: "{count} months ago",
+      yearsAgo_one: "{count} year ago",
+      yearsAgo_other: "{count} years ago",
+      marriedPrefix: "Married",
+      withPrefixHistorical: "{prefix} (Historical)",
+      withPrefix: "{prefix} {date}"
+    },
+    child: {
+      daughter: "Daughter",
+      son: "Son",
+      child: "Child",
+      girl: "Girl",
+      boy: "Boy",
+      stepdaughter: "Stepdaughter",
+      stepson: "Stepson",
+      stepchild: "Stepchild",
+      adoptedDaughter: "Adopted Daughter",
+      adoptedSon: "Adopted Son",
+      adoptedChild: "Adopted Child",
+      biologicalDaughter: "Biological Daughter",
+      biologicalSon: "Biological Son",
+      biologicalChild: "Biological Child",
+      sharedBiologicalDaughter: "Shared Biological Daughter",
+      sharedBiologicalSon: "Shared Biological Son",
+      sharedBiologicalChild: "Shared Biological Child",
+      biologicalDaughterSecretFather: "Biological Daughter (Secret from Father)",
+      biologicalSonSecretFather: "Biological Son (Secret from Father)",
+      biologicalChildSecretFather: "Biological Child (Secret from Father)",
+      daughterSecret: "Daughter (Secret)",
+      sonSecret: "Son (Secret)",
+      childSecret: "Child (Secret)",
+      presumedDaughter: "Presumed Daughter",
+      presumedSon: "Presumed Son",
+      presumedChild: "Presumed Child",
+      presumedDaughterSecret: "Presumed Daughter (Secret)",
+      presumedSonSecret: "Presumed Son (Secret)",
+      presumedChildSecret: "Presumed Child (Secret)",
+      presumedDaughterGuardianSecret: "Presumed Daughter (Guardian • Secret)",
+      presumedSonGuardianSecret: "Presumed Son (Guardian • Secret)",
+      presumedChildGuardianSecret: "Presumed Child (Guardian • Secret)",
+      presumedDaughterSecretPartner: "Presumed Daughter (Secret from Partner)",
+      presumedSonSecretPartner: "Presumed Son (Secret from Partner)",
+      presumedChildSecretPartner: "Presumed Child (Secret from Partner)",
+      formerPresumedDaughter: "Former Presumed Daughter",
+      formerPresumedSon: "Former Presumed Son",
+      formerPresumedChild: "Former Presumed Child",
+      formerPresumed: "Former Presumed",
+      stepOrBioDaughter: "Stepdaughter / Daughter",
+      stepOrBioSon: "Stepson / Son",
+      stepOrBioChild: "Stepchild / Child",
+      unawareOfPregnancyPresumedFather: "Unaware of Pregnancy (Presumed Father)",
+      unawareOfPregnancy: "Unaware of Pregnancy",
+      pregnancyWith: "Pregnancy (with {partner})",
+      pregnantMother: "Pregnancy ({mother})",
+      pregnancy: "Pregnancy",
+      roleAdoptiveFather: "Adoptive Father",
+      roleAdoptiveMother: "Adoptive Mother",
+      roleCurrentGuardian: "Current Guardian",
+      roleBiologicalMother: "Biological Mother",
+      roleBiologicalFather: "Biological Father",
+      rolePresumedFatherGuardian: "Presumed Father (Guardian)",
+      roleStepFather: "Step-father",
+      roleStepMother: "Step-mother",
+      roleStepParent: "Step-parent",
+      roleStepMotherSecret: "Step-mother (secret)",
+      roleStepParentSecret: "Step-parent (secret)"
+    },
+    player: {
+      defaultName: "Prisoner (Player)",
+      defaultRace: "Nord",
+      fallbackNpcShort: "NPC ({shortId})"
+    }
+  };
+  const statusAvailability = {
+    player: "Player",
+    selfRelationship: "An actor cannot form a relationship with themselves.",
+    childrenBlocked: "Children cannot enter adult relationships.",
+    alreadyStatus: "Already {status}.",
+    alreadyLovers: "{nameA} and {nameB} are already lovers.",
+    alreadyActiveRelationship: "{nameA} and {nameB} already have an active relationship ({status}).",
+    divorceRequiresMarried: "Can only divorce if currently Married.",
+    jiltRequiresEngaged: "Can only be jilted if currently Engaged.",
+    exDatingRequiresDating: "Can only transition to Ex-Dating if currently Dating.",
+    exLoverRequiresLover: "Can only transition to Ex-Lover if currently Lovers.",
+    alreadyEngagedOrMarried: "{nameA} and {nameB} are already engaged or married.",
+    alreadyMarried: "{nameA} and {nameB} are already married.",
+    playerPolygamyDisabledMain: "Cannot enter another main relationship: Polygamy is disabled in settings.",
+    npcHasCommittedPartner: "{name} already has a committed main partner ({partnerName}).",
+    playerPolygamyDisabledMarriage: "Cannot enter another engagement/marriage: Polygamy is disabled in settings.",
+    npcAlreadyEngagedOrMarriedTo: "{name} is already engaged or married to {partnerName}.",
+    playerDatingSomeoneElse: "Cannot propose engagement to this actor while dating someone else.",
+    npcDatingSomeoneElse: "{name} is dating {partnerName} and can only get engaged to their dating partner.",
+    selectBothActors: "Select both actors first.",
+    loverCheatingLabel: "Lover (Cheating)",
+    loverAllowedLabel: "Lover (Allowed)",
+    loverCheatingTooltip: "Considered cheating: at least one party has a closed main relationship.",
+    loverAllowedTooltip: "Allowed secondary relationship: both parties are single or in open relationships.",
+    candidateNotAssignable: "Current status (Candidate cannot be manually assigned)."
+  };
+  const store = {
+    fallbackNpcName: "NPC {formId}",
+    fallbackChildName: "Child {childId}",
+    fallbackRace: "Nord",
+    modal: {
+      removeRelationshipTitle: "Remove Relationship Record?",
+      removeRelationshipSubtitle: "{actorA} & {actorB}",
+      removeRelationshipMessage: "Are you sure you want to permanently remove this relationship record, its status history, and any associated affair records from M.A.R.A.S tracking?\n\nBoth NPCs will remain registered as Candidates.",
+      removeRecordBtn: "Remove Record",
+      cancelBtn: "Cancel",
+      removeChildTitle: "Remove Child Record?",
+      removeChildSubtitle: "{childName} ({childId})",
+      removeChildMessage: "Are you sure you want to permanently remove this child record from M.A.R.A.S household and family tracking?\n\nThis will clear their guardian and lineage assignments in M.A.R.A.S.",
+      removeChildBtn: "Remove Child Record"
+    },
+    status: {
+      coreActive: "M.A.R.A.S Core Active",
+      devMode: "UI Dev Mode",
+      matchmakingTimeout: "Matchmaking request timed out or returned no response.",
+      skyrimNetUnavailable: "SkyrimNet AI is not available.",
+      globalMatchmakingTimeout: "Global matchmaking scan timed out or returned no response.",
+      teleportingPlayerToNpc: "Teleporting Player to NPC ({formId})...",
+      teleportingNpcToPlayer: "Teleporting NPC ({formId}) to Player...",
+      fleeingChildren: "Children are running away from this cell...",
+      dismissingCritter: "Dismissing critter for child ({formId})...",
+      dismissingPet: "Dismissing pet for child ({formId})...",
+      spawningChild: "Spawning child actor ({childId})...",
+      childSpawnedSuccess: "Child ({childId}) successfully spawned into the world!",
+      childSentToTraining: "Child sent to training.",
+      childSpawned: "Child spawned successfully.",
+      sendingChildToTraining: "Sending child ({childId}) to training...",
+      childSentToTrainingAt: "Child ({childId}) sent to {location} to train as a {className}!",
+      completingChildTraining: "Completing training for child ({childId})...",
+      childCompletedTraining: "Child ({childId}) has completed training and is ready to be spawned as an adult!",
+      evaluatingChildSecret: "Evaluating paternity secret for child ({childId})...",
+      childSecretEvaluated: "Secret evaluated for child ({childId}).",
+      gamePaused: "Game paused.",
+      gameUnpaused: "Game unpaused.",
+      relationshipRemoved: "Relationship record removed.",
+      relocatedFamilyUnit: "Relocated family unit to {home}",
+      autoPauseEnabled: "Auto-pause on open enabled (Game Paused).",
+      autoPauseDisabled: "Auto-pause on open disabled (Game Unpaused).",
+      fullScreenMode: "Switched to Full Screen mode.",
+      windowedMode: "Switched to Windowed mode.",
+      uiScaleSet: "UI Scale set to {percent}%.",
+      secretsRevealed: "All hidden secrets revealed in dashboard.",
+      secretsHiddenIntrigue: "Undiscovered secrets hidden (Intrigue Mode).",
+      refreshedSkse: "Dashboard data refreshed from SKSE.",
+      refreshedStandalone: "Dashboard data refreshed (Standalone Mode)."
+    }
+  };
+  const enDashboard = {
+    bridge,
+    enums,
+    shared,
+    layout,
+    overview,
+    household,
+    partners,
+    npcRelations,
+    matchmaking,
+    modals,
+    npcDetail,
+    utils,
+    statusAvailability,
+    store
+  };
+  const settings = {
+    general: {
+      interfaceTitle: "Interface & Accessibility",
+      languageLabel: "Language",
+      languageDesc: "Select the display language for the M.A.R.A.S dashboard, modals, notifications, and in-game text.",
+      languageAuto: "Auto (Skyrim: {lang})",
+      reloadLocalizationLabel: "Reload Localization",
+      reloadLocalizationDesc: "Re-read localization JSON files from Data/SKSE/Plugins/MARAS/localization/ without restarting Skyrim.",
+      reloadLocalizationBtn: "Reload Localization",
+      autoPauseLabel: "Auto-Pause Game on Dashboard Open",
+      autoPauseDesc: "Automatically pause Skyrim whenever the M.A.R.A.S dashboard is opened. You can also pause or unpause at any time using the Pause button in the top-right header bar.",
+      fullScreenLabel: "Full Screen Mode",
+      fullScreenDesc: "Open the M.A.R.A.S dashboard in full-screen mode instead of a centered window.",
+      uiScaleLabel: "UI & Font Scale (Accessibility)",
+      uiScaleDesc: "Scale all fonts, icons, cards, and UI elements proportionally across the dashboard and modals ({percent}%).",
+      modSettingsTitle: "General Mod Settings",
+      skipWeddingLabel: "Skip Wedding Ceremony",
+      skipWeddingDesc: "Immediately complete marriages without scheduling a ceremony at the Temple of Mara.",
+      affectionDecayLabel: "Affection Decay Multiplier",
+      affectionDecayDesc: "Scale daily affection decay rate when not interacting ({mult}x).",
+      lonelinessThresholdLabel: "Loneliness Threshold (Days)",
+      lonelinessThresholdDesc: "Master time unit (L = {days}d): days without meaningful interaction before daily affection decay begins, and base unit scaling all Player Partner Agency intervals (scan every {scanDays}d, talking-to-physical affair escalation after {escalationDays}d).",
+      enablePolygamyLabel: "Enable Polygamy",
+      enablePolygamyDesc: "Allow marrying multiple spouses and establishing rank hierarchies.",
+      disablePolygamyQuestLabel: "Disable Polygamy Quest",
+      disablePolygamyQuestDesc: "Prevent 'The Flame Divides Not' quest from starting. If currently running, stops and resets the quest.",
+      hotkeyModifiersLabel: "Toggle Dashboard Hotkey Modifiers",
+      hotkeyModifiersDesc: "Require Ctrl / Shift / Alt keys in combination with your configured toggle key.",
+      modCtrl: "Ctrl",
+      modShift: "Shift",
+      modAlt: "Alt",
+      unitMultiplier: "x",
+      unitDaysShort: "d"
+    },
+    confirmations: {
+      bannerTitle: "In-Game Confirmation Modals",
+      bannerDesc: "Confirmation dialogs require confirmation before major relationship changes take effect.",
+      bannerSkyrimNet: 'SkyrimNet is detected: Modals will include a third "Decline (Explain)" button allowing freeform dialogue responses.',
+      bannerStandard: 'Modals display standard "Accept" and "Cancel" options.',
+      generalTitle: "General Confirmation Rules",
+      enableMasterLabel: "Enable Confirmation Modals",
+      enableMasterDesc: "Master toggle for all in-game confirmation popups. If disabled, all relationship transitions are auto-accepted without prompts.",
+      playerNpcLabel: "Player-NPC Confirmations",
+      playerNpcDesc: "Show confirmation modals when the player character is directly involved.",
+      npcNpcLabel: "NPC-NPC Confirmations",
+      npcNpcDesc: "Show confirmation modals when interactions occur between two NPCs without player involvement.",
+      statusChangeTitle: "Status Change Confirmations",
+      confirmDatingLabel: "Confirm: Dating Proposals",
+      confirmDatingDesc: "Require confirmation modal when proposing or entering a dating relationship.",
+      confirmEngagementLabel: "Confirm: Engagement Proposals",
+      confirmEngagementDesc: "Require confirmation modal when proposing or accepting an engagement.",
+      confirmLoverLabel: "Confirm: Lover Proposals",
+      confirmLoverDesc: "Require confirmation modal when proposing or becoming lovers.",
+      confirmMarryLabel: "Confirm: Marriage Proposals",
+      confirmMarryDesc: "Require confirmation modal when proposing or accepting a marriage proposal.",
+      breakupTitle: "Breakup & Divorce Confirmations",
+      breakupDatingLabel: "Confirm: Breakup Dating",
+      breakupDatingDesc: "Require confirmation modal when breaking up a dating relationship.",
+      breakupEngagementLabel: "Confirm: Breakup Engagement",
+      breakupEngagementDesc: "Require confirmation modal when breaking off an engagement.",
+      breakupLoverLabel: "Confirm: Breakup Lover",
+      breakupLoverDesc: "Require confirmation modal when ending a lover relationship.",
+      divorceLabel: "Confirm: Divorce Action",
+      divorceDesc: "Require confirmation modal when an NPC or partner requests divorce.",
+      lowAffectionDivorceLabel: "Confirm: Low Affection Divorce",
+      lowAffectionDivorceDesc: "Require confirmation modal during low affection divorce questline.",
+      openRelTitle: "Open Relationship Confirmations",
+      openRelLabel: "Confirm: Open Relationship",
+      openRelDesc: "Require confirmation modal when opening an existing relationship.",
+      closeRelLabel: "Confirm: Close Relationship",
+      closeRelDesc: "Require confirmation modal when closing an open relationship."
+    },
+    matchmaking: {
+      scheduledAiTitle: "Scheduled AI Matchmaking",
+      scheduledAutoTitle: "Scheduled Auto Matchmaking",
+      scheduledAiSubtitle: "Evaluates romantic prospects in the background using SkyrimNet LLM",
+      scheduledAutoSubtitle: "Evaluates romantic prospects in the background using algorithmic Dice Roll chances",
+      autoScheduledLabel: "Auto Scheduled Matchmaking",
+      autoScheduledAiDesc: "Periodically evaluate the world NPC roster in the background using SkyrimNet LLM.",
+      autoScheduledDiceDesc: "Periodically evaluate the world NPC roster in the background using algorithmic Dice Roll probability.",
+      useAiLabel: "Use SkyrimNet AI Matchmaking",
+      useAiDesc: "When enabled, scheduled matchmaking uses SkyrimNet AI to evaluate pairings. When disabled, the algorithmic Dice Roll system is used instead (with AI verification and memory generation).",
+      evaluationStepLabel: "Evaluation Step",
+      evaluationStepDesc: "When enabled, candidate pairs from scheduled matchmaking undergo a secondary LLM narrative evaluation before being applied.",
+      llmMemoriesLabel: "LLM-Generated Memories",
+      llmMemoriesDesc: "When enabled, matchmaking uses SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, matchmaking memories are built programmatically without sending an LLM request.",
+      confirmResultsLabel: "Review Matchmaking Results in Modal",
+      confirmResultsDesc: "When enabled, presents an interactive checklist modal to review, adjust, or reject proposed NPC pairings before they are applied in-game.",
+      intervalDaysLabel: "Evaluation Interval",
+      intervalDaysDesc_one: "Number of in-game days between automated matchmaking evaluations ({count} day).",
+      intervalDaysDesc_other: "Number of in-game days between automated matchmaking evaluations ({count} days).",
+      maxSuggestionsLabel: "Max Suggestions Per Cycle",
+      maxSuggestionsDesc_one: "Maximum number of NPC pair changes proposed per automated run ({count} suggestion).",
+      maxSuggestionsDesc_other: "Maximum number of NPC pair changes proposed per automated run ({count} suggestions).",
+      npcCooldownLabel: "NPC Relationship Cooldown",
+      npcCooldownDesc_one: "Number of in-game days an NPC must wait after a scheduled relationship change before they can be changed again ({count} day).",
+      npcCooldownDesc_other: "Number of in-game days an NPC must wait after a scheduled relationship change before they can be changed again ({count} days).",
+      diceChancesTitle: "Dice Roll Matchmaking Chances",
+      restoreDefaultsTooltip: "Restore default chance distribution",
+      restoreDefaultsBtn: "Restore Defaults",
+      totalPercentBadge: "Total: {percent}%",
+      diceChancesIntro: "Configure the relative probability weights for each matchmaking action. Sliders auto-normalize to ensure the total is always 100%.",
+      chanceNewDatingLabel: "New Dating Pair",
+      chanceNewDatingDesc: "Probability of initiating a new Dating relationship between two eligible single NPCs.",
+      chanceNewEngagedLabel: "New Engaged Pair",
+      chanceNewEngagedDesc: "Probability of initiating a direct Engagement between two eligible single NPCs.",
+      chanceNewLoverAllowedLabel: "New Lover (Allowed / Open)",
+      chanceNewLoverAllowedDesc: "Probability of establishing a secondary Lover relationship where partners allow it (single or open main pair).",
+      chanceNewLoverCheatingLabel: "New Lover (Cheating / Infidelity)",
+      chanceNewLoverCheatingDesc: "Probability of establishing a secondary Lover relationship that constitutes infidelity (closed main pair).",
+      chanceNewLoverCheatingDisabledDesc: "Disabled because Allow Cheating / Infidelity is turned off below.",
+      chanceAdvanceLabel: "Advance Existing Relationship",
+      chanceAdvanceDesc: "Probability of progressing an existing relationship (Dating to Engaged, Engaged to Married, Lover to Dating).",
+      chanceBreakupLabel: "Breakup / Divorce",
+      chanceBreakupDesc: "Probability of dissolving an existing relationship (Dating to Ex-Dating, Married to Divorced, etc.).",
+      chanceBreakupDisabledDesc: "Disabled because Allow AI Breakups is turned off below.",
+      chanceOpenCloseLabel: "Open / Close Status",
+      chanceOpenCloseDesc: "Probability of modifying relationship exclusivity (opening an exclusive pair or closing an open pair).",
+      chanceOpenCloseDisabledDesc: "Disabled because Allow Open / Close Modifications is turned off below.",
+      rulesTitle: "Matchmaking Rules & Constraints",
+      orientationLabel: "Pairing Orientation",
+      orientationDesc: "Constrain partner suggestions to specific gender combinations across automated and manual evaluation.",
+      orientationAny: "Any (All Orientations)",
+      orientationHeterosexual: "Heterosexual (Male + Female)",
+      orientationHomosexual: "Homosexual (Same-Sex)",
+      orientationGay: "Gay (Male + Male)",
+      orientationLesbian: "Lesbian (Female + Female)",
+      orientationHeteroAndGay: "Hetero + Gay (Male + Female, Male + Male)",
+      orientationHeteroAndLesbian: "Hetero + Lesbian (Male + Female, Female + Female)",
+      allowCheatingLabel: "Allow Cheating / Infidelity",
+      allowCheatingDesc: "Permit proposing secondary lover relationships for NPCs who are already in exclusive/closed main partnerships.",
+      allowBreakupsLabel: "Allow AI Breakups",
+      allowBreakupsDesc: "Permit proposing breakups, divorces, and separations for existing relationships when appropriate.",
+      allowOpenCloseLabel: "Allow Open / Close Modifications",
+      allowOpenCloseDesc: "Permit proposing opening exclusive relationships or making open relationships exclusive.",
+      manualActionsTitle: "Manual Matchmaking Actions",
+      manualActionsSubtitle: "Trigger immediate AI evaluations across all Skyrim NPCs without waiting for interval timers",
+      manualWorldScanLabel: "Manual World Scan",
+      manualWorldScanDesc: "Evaluate romantic prospects across all Skyrim NPCs immediately and open the AI dashboard to review and apply matches.",
+      runWorldScanBtn: "Run World Scan Now",
+      unitDaysShort: "d",
+      unitPercent: "%"
+    },
+    partnerAgency: {
+      daysFormatted: "{days}d",
+      unitMultiplier: "x",
+      unitPercent: "%",
+      unitDaysShort: "d",
+      unitMultiplierL: "x L",
+      engineTitle: "Player Partner Agency & Infidelity Engine",
+      engineSubtitle: "Dedicated Tier 2 agency (2-stage affairs, open-relationship lovers, breakups, force-greet intents & home-arrival events) for all active player main partners",
+      enableCheatingLabel: "Enable Partner Cheating Agency",
+      enableCheatingDesc: "Independently evaluate the player's closed-relationship partners (Dating, Engaged, Married) for secret infidelity (2-stage Talking/Physical affairs, affair breakups, confessions, and home-arrival cheating scenarios), regardless of whether generic NPC matchmaking is enabled.",
+      enableOpenRelLabel: "Enable Partner Open-Relationship Agency",
+      enableOpenRelDesc: "Independently evaluate the player's partners for open-relationship agency (seeking consensual side lovers, open-lover breakups, proposing to open or close the relationship, and home-arrival open-relationship scenarios), regardless of whether generic NPC matchmaking is enabled.",
+      useAiStage2Label: "Use SkyrimNet AI Evaluation (Stage 2)",
+      useAiStage2Desc: "When a partner passes a Stage 1 probability check, ask SkyrimNet AI to evaluate whether they act on it and pick the most fitting local candidate. When disabled, weighted dice rolls select from the shortlisted candidates.",
+      confirmResultsLabel: "Review Partner Agency Results in Modal",
+      confirmResultsDesc: "Present an interactive confirmation modal before applying any new side-lover relationship or breakup initiated by a player partner.",
+      enableForceGreetsLabel: "Enable Partner Force-Greet Intents",
+      enableForceGreetsDesc: "Allow player partners to queue relationship conversations (suggesting an open or closed relationship, or confessing guilt after ending an affair; expires after {days} [{mult}x L] if ignored).",
+      enableHomeArrivalLabel: "Enable Home-Arrival Events & Letters",
+      enableHomeArrivalDesc: "Evaluate active side-lover scenarios and handwritten note modals (open-lover inn dates, suspicious talking-stage letters, or in-house encounters) when arriving at a partner's home.",
+      temptationTitle: "Temptation, Desire & Breakup Rules",
+      temptationSubtitle: "Configure probability multipliers, roll caps, and loyalty anchors for player partners",
+      temptationMultLabel: "Global Temptation Multiplier",
+      temptationMultDesc: "Scales calculated Stage 1 cheating temptation probabilities across all closed player partners ({mult}x).",
+      openDesireMultLabel: "Open Lover Desire Multiplier",
+      openDesireMultDesc: "Scales Stage 1 desire for open-relationship player partners to pursue consensual side lovers ({mult}x).",
+      breakupMultLabel: "Side-Lover Breakup Multiplier",
+      breakupMultDesc: "Scales probability of player partners ending existing secret affairs or open-relationship side flings after {days} ({mult}x).",
+      maxRollCapLabel: "Max Temptation Roll Cap",
+      maxRollCapDesc: "Maximum Stage 1 temptation probability per check ({cap}%).",
+      maxSecretLoversLabel: "Max Secret Lovers Per Partner",
+      maxSecretLoversDesc: "Maximum concurrent ongoing secret affair lovers a single player partner can have ({count}).",
+      allowWhenHappyLabel: "Allow Infidelity When Happy (75–100 Affection)",
+      allowWhenHappyDesc: "When disabled, partners in the Happy affection tier are completely immune unless Revenge (player caught cheating) is triggered.",
+      enableNeglectLabel: "Enable Neglect Penalty",
+      enableNeglectDesc: "Increase temptation when the player goes several days without meaningful affection interaction (starts after {troubledDays} [{troubledMult}x L] for Troubled/Estranged partners, or after {contentDays} [{contentMult}x L] for Content partners).",
+      enableRevengeLabel: "Enable Revenge Penalty (Player Infidelity)",
+      enableRevengeDesc: "Significantly increase temptation (+20%, amplified by Jealous/Proud temperaments) when the partner has an ongoing exposed affair against them by the player.",
+      enableHierarchyLabel: "Enable Polygamy Hierarchy Factor",
+      enableHierarchyDesc: "Apply a minor temptation increase for lower-ranked spouses in polygamous households (Rank 1: 0%, Rank 2: +3%, Rank 3: +5%, Rank 4+: +7%).",
+      enableChildrenAnchorLabel: "Enable Shared Children Loyalty Anchor",
+      enableChildrenAnchorDesc: "Reduce temptation (-12% if sharing children with the player, and hard-immune while pregnant) to reflect family commitment.",
+      multipliersTitle: "Day-Threshold Multipliers (Relative to Loneliness Threshold L)",
+      multipliersSubtitle: "All Partner Agency and Affection time windows scale from Base Loneliness Threshold (L = {days})",
+      baseLonelinessLabel: "Base Loneliness Threshold (L)",
+      baseLonelinessDesc_one: "Master time unit (L = {count} day) from which all Partner Agency and Affection day thresholds below are calculated.",
+      baseLonelinessDesc_other: "Master time unit (L = {count} days) from which all Partner Agency and Affection day thresholds below are calculated.",
+      scanIntervalLabel: "Partner Agency Scan Interval",
+      scanIntervalDesc: "How often scheduled Partner Agency evaluations run ({mult}x L = {days}).",
+      lonelinessDecayLabel: "Loneliness Decay & Open-Lover Loneliness Onset",
+      lonelinessDecayDesc: "Days without player interaction before daily affection loneliness decay and open-partner loneliness desire begin ({mult}x L = {days}).",
+      recentAttentionLabel: "Recent Attention & Guilt Window",
+      recentAttentionDesc: "Window after spending time with the player where partners receive breakup boosts with side lovers, guilt confession eligibility, and neglect mitigation ({mult}x L = {days}).",
+      veryRecentVisitLabel: "Very Recent Visit Window (Open Partners)",
+      veryRecentVisitDesc: "Window after a player visit where open-relationship partners have reduced desire to seek a new side lover ({mult}x L = {days}).",
+      neglectTroubledLabel: "Neglect Growth Onset (Troubled / Estranged)",
+      neglectTroubledDesc: "Days without player interaction before neglect temptation starts growing for Troubled/Estranged (<50 affection) partners ({mult}x L = {days}).",
+      neglectContentLabel: "Neglect Growth Onset (Content Partners)",
+      neglectContentDesc: "Days without player interaction before Content (50–74 affection) partners lose immunity and begin accumulating neglect temptation ({mult}x L = {days}).",
+      prolongedAbsenceLabel: "Prolonged Absence Penalty Onset (Affair Breakups)",
+      prolongedAbsenceDesc: "Days of player absence after which a cheating partner becomes less likely (-10%) to break off an ongoing secret affair ({mult}x L = {days}).",
+      talkingEscalationLabel: "Affair Talking -> Physical Escalation",
+      talkingEscalationDesc: "Duration of an unresolved Talking affair before it deterministically escalates to a Physical affair ({mult}x L = {days}).",
+      minSideFlingAgeLabel: "Min Side-Lover Age Before Breakup",
+      minSideFlingAgeDesc: "Minimum duration a secret affair or open-relationship side fling must last before breakup rolls are evaluated ({mult}x L = {days}).",
+      intentTtlLabel: "Pending Force-Greet Intent TTL",
+      intentTtlDesc: "How long a queued partner conversation intent (SuggestOpen, SuggestClose, ConfessTalking, ConfessPhysical) waits for the player before expiring ({mult}x L = {days}).",
+      homeCooldownLabel: "Home-Arrival Event Location Cooldown",
+      homeCooldownDesc: "Minimum cooldown per home location between triggered side-lover arrival scenarios ({mult}x L = {days}).",
+      affairFatigueLabel: "Affair Fatigue & Open Fling Novelty Fade Onset",
+      affairFatigueDesc: "Duration of a secret affair or open fling before novelty fades and breakup likelihood increases with age ({mult}x L = {days}).",
+      romanticAttendedLabel: "Romantic Partner Attended Breakup Window",
+      romanticAttendedDesc: "Window after player interaction where a Romantic partner gets a 1.25x boost to breaking off a secret affair out of devotion ({mult}x L = {days}).",
+      suggestOpenNeglectLabel: "Suggest Open Relationship Neglect Onset",
+      suggestOpenNeglectDesc: "Days without player interaction before neglect begins adding bonus probability to proposing an open relationship ({mult}x L = {days})."
+    },
+    scenes: {
+      bannerTitle: "NPC Banter & Romance Scenes",
+      bannerDesc: "When entering locations, M.A.R.A.S dynamically selects eligible NPC couples to play immersive voiced (if you are using SkyrimNet) interaction scenes that reflect their current relationship status or illicit affairs.",
+      generalTitle: "General Scene Rules",
+      enableMasterLabel: "Enable NPC Scenes",
+      enableMasterDesc: "Master toggle for all relationship and encounter scenes. If disabled, no couples will be coordinated or prompted into scenes.",
+      cooldownLabel: "Scene Cooldown",
+      cooldownDesc: "Minimum game hours that must pass before another NPC scene can trigger (default 24 hours = at most one scene per day).",
+      unitHours: " hrs",
+      relationshipTitle: "Relationship Scenes",
+      datingLabel: "Dating Scenes",
+      datingDesc: "Enable conversational scenes between NPCs who are actively dating.",
+      loverLabel: "Lover Scenes",
+      loverDesc: "Enable intimate and affectionate banter scenes between established lovers.",
+      engagedLabel: "Engagement Scenes",
+      engagedDesc: "Enable scenes between betrothed couples planning their union.",
+      marriedLabel: "Married Scenes",
+      marriedDesc: "Enable domestic and affectionate scenes between married spouses.",
+      complexTitle: "Complex & Affair Scenes",
+      openRelLabel: "Open Relationship Scenes",
+      openRelDesc: "Enable scenes between partners in open relationships discussing their dynamic or other partners.",
+      cheatingSecretLabel: "Cheating: Secret Affair Scenes",
+      cheatingSecretDesc: "Enable clandestine dialogue between unfaithful partners meeting in secret.",
+      cheatingDiscoveredLabel: "Cheating: Discovered Scenes",
+      cheatingDiscoveredDesc: "Enable dramatic confrontation scenes when an affair is discovered by a primary partner.",
+      cheatingCaughtLabel: "Cheating: Caught in the Act Scenes",
+      cheatingCaughtDesc: "Enable walk-in encounters where cheaters are caught mid-act (requires sex framework and interior bed).",
+      interiorsTitle: "Allowed Locations: Interiors",
+      locTempleLabel: "Temples (LocTypeTemple)",
+      locTempleDesc: "Allow scenes inside temples and sacred places of worship.",
+      locStoreLabel: "Stores & Shops (LocTypeStore)",
+      locStoreDesc: "Allow scenes inside merchant shops, apothecaries, and trade stalls.",
+      locStewardLabel: "Jarl & Steward Dwellings (LocTypeStewardsDwelling)",
+      locStewardDesc: "Allow scenes inside jarl keeps, steward chambers, and court palaces.",
+      locInnLabel: "Taverns & Inns (LocTypeInn)",
+      locInnDesc: "Allow scenes inside taverns, inns, and public drinking houses.",
+      locHouseLabel: "Private Houses (LocTypeHouse)",
+      locHouseDesc: "Allow scenes inside residential homes and civilian quarters.",
+      locBarracksLabel: "Barracks (LocTypeBarracks)",
+      locBarracksDesc: "Allow scenes inside city guard barracks and military quarters.",
+      locGuildLabel: "Guild Halls (LocTypeGuild)",
+      locGuildDesc: "Allow scenes inside guild halls, sanctuaries, and faction headquarters.",
+      playerHousesTitle: "Allowed Locations: Player Houses",
+      locPlayerHouseLabel: "Player Homes (LocTypePlayerHouse)",
+      locPlayerHouseDesc: "Allow scenes inside purchased player-owned homes (e.g., Breezehome, Proudspire).",
+      locHomesteadLabel: "Hearthfire Homesteads (BYOH_LocTypeHomestead)",
+      locHomesteadDesc: "Allow scenes inside player-built Hearthfire manors (e.g., Lakeview, Heljarchen, Windstad).",
+      outdoorsTitle: "Allowed Locations: Streets & Outdoors",
+      locTownLabel: "Towns (LocTypeTown)",
+      locTownDesc: "Allow outdoor street scenes in towns (e.g., Riverwood, Falkreath, Dawnstar).",
+      locSettlementLabel: "Settlements & Villages (LocTypeSettlement)",
+      locSettlementDesc: "Allow outdoor street scenes in small settlements, mining camps, and mills.",
+      locStrongholdLabel: "Orc Strongholds (LocTypeOrcStronghold)",
+      locStrongholdDesc: "Allow outdoor scenes inside Orc strongholds (e.g., Dushnikh Yal, Narzulbur).",
+      locCityLabel: "Major Cities (LocTypeCity)",
+      locCityDesc: "Allow outdoor street scenes in major walled cities (e.g., Whiterun, Solitude, Windhelm).",
+      locLumberMillLabel: "Lumber Mills (LocTypeLumberMill)",
+      locLumberMillDesc: "Allow outdoor scenes around operating lumber mills.",
+      locFarmLabel: "Farms (LocTypeFarm)",
+      locFarmDesc: "Allow outdoor scenes around rural farms and agrarian homesteads."
+    },
+    children: {
+      trainingTitle: "Child Training & Adulthood",
+      trainingDurationLabel: "Training Duration (Days)",
+      trainingDurationDesc_one: "Number of in-game days required for a child in Stage 3 (Training) to graduate to Stage 4 (Adult) ({count} day). You can also complete training early from the child's profile.",
+      trainingDurationDesc_other: "Number of in-game days required for a child in Stage 3 (Training) to graduate to Stage 4 (Adult) ({count} days). You can also complete training early from the child's profile.",
+      unitDaysShort: "d",
+      trainingCostLabel: "Training Tuition Cost (Gold)",
+      trainingCostDesc: "Gold required to send a player child away for adolescent training ({cost} gold). Set to 0 for free training.",
+      unitGoldShort: "g",
+      requireFactionLabel: "Require Faction Membership for Guild Training",
+      requireFactionDesc: "When enabled, sending a player child to guild, temple, or Daedric covenant training requires the Player to meet that location's membership or patronage criteria.",
+      petAndCustodyTitle: "Children & Household Pet Settings",
+      globalBanCritterLabel: "Global Ban Critters",
+      globalBanCritterDesc: "Globally disable kid critter adoption events (foxes, hares, mudcrabs) for all children.",
+      globalBanPetLabel: "Global Ban Pets",
+      globalBanPetDesc: "Globally disable household pet adoption events (dogs) for all children.",
+      prioritizeBioParentLabel: "Prioritize Biological Parent",
+      prioritizeBioParentDesc: "When divorcing, if only one partner is the biological parent, award custody to them (overrides gender and player rules).",
+      genderCustodyLabel: "Gender Custody Policy",
+      genderCustodyDesc: "Determines which parent retains child custody upon divorce when biological rules do not decide.",
+      custodyStayMother: "Stay with Mother (Default)",
+      custodyStayFather: "Stay with Father",
+      playerCustodyLabel: "Player Custody Override",
+      playerCustodyDesc: "Overrides gender custody in divorces involving the Player.",
+      custodyUseGender: "Use Gender Custody (Default)",
+      custodyAlwaysPlayer: "Always with Player",
+      custodyNeverPlayer: "Never with Player"
+    },
+    fertility: {
+      formulasTitle: "Paternity Daily Evaluation Formulas (Shared)",
+      subtleFormulaTitle: "Subtle Physical Trait Formula",
+      formulaBadge: "Base + (Days × Daily) ≤ Max",
+      subtleBaseTooltip: "Initial discovery probability on day 0 of birth (0–100%)",
+      formulaBaseLabel: "Base",
+      unitPercent: "%",
+      formulaDaysLabel: "Days",
+      subtleDailyTooltip: "Daily probability increase added per day since birth (e.g. 2.0% / day)",
+      unitPercentPerDay: "%/day",
+      formulaMaxCapPrefix: ", max cap:",
+      subtleMaxTooltip: "Maximum upper probability cap for subtle discovery (0–100%)",
+      formulaMaxLabel: "Max",
+      subtleFormulaHelp: "Standard subtle tick: gradual physical trait resemblance increases each day the child grows.",
+      phenotypeBirthLabel: "Phenotype Mismatch Birth Evaluation Chance",
+      phenotypeBirthDesc: "Probability to immediately trigger a paternity secret evaluation upon birth when child has distinct racial/visual discrepancies with presumed father.",
+      phenotypeFormulaTitle: "Phenotype Mismatch Daily Formula",
+      phenotypeInactiveBadge: "Inactive (Birth Chance is 100%)",
+      phenotypeInactiveBadgeTooltip: "Because birth evaluation chance is 100%, phenotype secrets are evaluated immediately upon birth and will not trigger daily growth.",
+      phenotypeDisabledTooltip: "Disabled: secret evaluates immediately at birth (100%)",
+      phenotypeBaseTooltip: "Base starting probability when distinct visual/racial discrepancy exists (0–100%)",
+      phenotypeDailyTooltip: "Daily probability increase when visual differences become more glaring each day (e.g. 4.0% / day)",
+      phenotypeMaxTooltip: "Maximum upper probability cap for phenotype mismatch (0–100%)",
+      phenotypeInactiveHelp: "Daily formula is inactive because Birth Evaluation Chance is set to 100% (paternity secrets are evaluated immediately at birth). Lower the birth evaluation chance above to allow daily growth.",
+      phenotypeActiveHelp: "Accelerated daily tick: glaring visual differences between biological and presumed father become noticeable much faster.",
+      aiMethodTitle: "SkyrimNet AI Evaluation Method",
+      optOutLlmLabel: "Opt Out of LLM (Use Dice Rolls)",
+      optOutLlmDesc: "When enabled, bypasses SkyrimNet LLM evaluation for paternity secrets and uses the deterministic dice-roll method below.",
+      activeDiceTitle: "Active Dice-Roll Evaluation Rules",
+      fallbackDiceTitle: "Fallback Dice-Roll Evaluation Rules",
+      paternityDiceTitle: "Paternity Dice-Roll Evaluation Rules",
+      revealChanceLabel: "Paternity Reveal Chance",
+      revealChanceFallbackDesc: "Probability that paternity secret is revealed when fallback triggers (e.g. if SkyrimNet evaluation fails). Phenotype mismatches always reveal immediately (100%).",
+      revealChanceDirectDesc: "Probability that paternity secret is revealed when evaluation triggers without LLM. Phenotype mismatches always reveal immediately (100%).",
+      breakupChanceLabel: "Presumed Father Breakup / Divorce Chance",
+      breakupChanceDesc: "When paternity secret is revealed, probability that the presumed father breaks up or divorces the mother upon discovering he is not the biological father.",
+      bioStepInChanceLabel: "Biological Father Step-In Chance",
+      bioStepInChanceDesc: "If breakup/divorce occurs and the biological father is available to marry, probability that he steps in, marries the mother, and becomes the child's recognized parent."
+    },
+    aiDialogue: {
+      title: "AI Dialogue & Interactions",
+      targetGenderLabel: "Allowed Dialogue Target Gender",
+      targetGenderDesc: "Filter which NPCs can initiate dynamic romance dialogues.",
+      genderOpposite: "Opposite Gender Only",
+      genderSame: "Same Gender Only",
+      genderAll: "All Genders",
+      minRelRankLabel: "Minimum Relationship Rank for Dialogue",
+      minRelRankDesc: "Required RelationshipRank integer (-4 to 4) for dialogue initiation ({rank})."
+    },
+    skyrimNet: {
+      simulateToggleLabel: "Simulate Non-SkyrimNet:",
+      disabledSimTitle: "SkyrimNet Disabled (Simulation Mode)",
+      notDetectedTitle: "SkyrimNet.dll Not Detected",
+      disabledSimDesc: "Non-SkyrimNet simulation is currently active. M.A.R.A.S features operate under standard non-AI rules (Dice Roll matchmaking, vanilla proposal dialog, 2-button modals). You can disable simulation in Cheats & Debug Settings.",
+      notDetectedDesc: "SkyrimNet is required for AI-generated dialogue, prompt actions, and response confirmation modals. Features in this section are automatically disabled per mod safety gating rules.",
+      disableSimBtn: "Disable Simulation",
+      activeBanner: "SkyrimNet DLL Active — Prompt extensions & event listeners registered.",
+      actionDetectionTitle: "AI Relationship Action Detection",
+      actionRadiusLabel: "Action Distance Radius (units)",
+      actionRadiusDesc: "Maximum distance in game units (~70 units ≈ 1 meter) to scan for valid partner targets. If no eligible target actor is within this radius, proposal and consideration actions remain unavailable.",
+      evalMemoryTitle: "AI Evaluation & Memory Engine",
+      useDecisionsLabel: "Use SkyrimNet Decisions (Jev)",
+      useDecisionsDesc: "When enabled, matchmaking verification, player-partner agency, paternity secret reveals, and bio-father step-in evaluations use SkyrimNet's typed Jev Decisions API (single-pass probability scoring with no broken JSON errors). Automatically falls back to the legacy Chat LLM prompt if no Decisions route is configured in SkyrimNet.",
+      llmMemoriesLabel: "LLM-Generated Memories",
+      llmMemoriesDesc: "When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request."
+    },
+    cheats: {
+      debugTitle: "Cheats, Debug & Logging",
+      alwaysSuccessLabel: "Cheat: Always Success Marriage",
+      alwaysSuccessDesc: "Bypass marriage difficulty calculations and guarantee 100% proposal acceptance.",
+      debugSpellLabel: "Cheat: Add Debug Inspection Spell",
+      debugSpellDesc: "Grant player the M.A.R.A.S Debug Spell to inspect NPC stats in-game.",
+      simulateNoSkyrimNetLabel: "Debug: Simulate Non-SkyrimNet Environment",
+      simulateNoSkyrimNetDesc: "Force M.A.R.A.S to simulate SkyrimNet being absent. Disables AI dialogue events, prompts, and LLM matchmaking, enabling traditional non-AI fallbacks without disabling SkyrimNet.esp/dll.",
+      logLevelLabel: "SKSE Logging Verbosity Level",
+      logLevelDesc: "Configure spdlog output threshold for C++ plugin logs.",
+      logLevelTrace: "Trace",
+      logLevelDebug: "Debug",
+      logLevelInfo: "Info",
+      logLevelWarning: "Warning",
+      logLevelError: "Error",
+      logLevelNone: "None",
+      logDestLabel: "Log Output Destination",
+      logDestDesc: "Select where plugin log messages are written.",
+      logDestFile: "Log File",
+      logDestConsole: "Console",
+      logDestScreen: "Floating Screen",
+      exportTitle: "Data Export & Diagnostics",
+      dumpDataLabel: "Dump All Stored Data to JSON",
+      dumpDataDesc: "Export all MARAS relationship pairs, NPC profiles, affection values, child registry, household tenancy, spouse hierarchy, and settings into a timestamped JSON file (Data/SKSE/Plugins/MARAS/dumps/).",
+      dumpingDataBtn: "Dumping Data...",
+      dumpDataBtn: "Dump Data to JSON",
+      dumpDataSuccess: "Data Dump Successful",
+      dumpDataFailed: "Data Dump Failed",
+      savedFilePrefix: "Saved File:",
+      fullPathPrefix: "Full Path:",
+      dumpDataUnknownError: "An unknown error occurred while saving dump file.",
+      dumpNpcIndexLabel: "Dump NPC Index Results",
+      dumpNpcIndexDesc: "Export all indexed NPCs (Base & Ref FormIDs, Names, EditorIDs, Races, Sex, Child status, loaded state, and INI rules) currently cached in the M.A.R.A.S NPC Index to a timestamped file (Data/SKSE/Plugins/MARAS/dumps/).",
+      dumpingNpcIndexBtn: "Dumping Index...",
+      dumpNpcIndexBtn: "Dump NPC Index",
+      dumpNpcIndexSuccess: "NPC Index Dump Successful",
+      dumpNpcIndexFailed: "NPC Index Dump Failed",
+      totalIndexedNpcsPrefix: "Total Indexed NPCs:",
+      dumpNpcIndexUnknownError: "An unknown error occurred while saving NPC index dump."
+    }
+  };
+  const enSettings = {
+    settings
+  };
+  function flattenStrings(node, prefix = "", out = {}) {
+    for (const [key, val] of Object.entries(node || {})) {
+      if (!key || key.startsWith("$comment") || key.startsWith("_comment")) continue;
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (typeof val === "string") {
+        out[fullKey] = val;
+      } else if (val && typeof val === "object" && !Array.isArray(val)) {
+        flattenStrings(val, fullKey, out);
+      }
+    }
+    return out;
+  }
+  const BASE_EN_STRINGS = Object.freeze({
+    ...flattenStrings(enDashboard),
+    ...flattenStrings(enSettings)
+  });
+  const DEFAULT_EN_META = {
+    code: "en",
+    name: "English",
+    nativeName: "English"
+  };
+  function applyDocumentFontOverride(fontFamily, resolvedLang) {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    {
+      root.lang = resolvedLang;
+    }
+    const trimmed = (fontFamily || "").trim();
+    if (trimmed) {
+      root.style.setProperty("--font-ui", trimmed);
+    } else {
+      root.style.removeProperty("--font-ui");
+    }
+  }
+  const useLocaleStore = create((set) => ({
+    selectedLanguage: "auto",
+    resolvedLanguage: "en",
+    detectedSkyrimLanguage: "en",
+    fontFamily: "",
+    availableLanguages: [DEFAULT_EN_META],
+    dict: { ...BASE_EN_STRINGS },
+    revision: 0,
+    applyLocalePayload: (payload) => {
+      set((state) => {
+        const nextResolved = (payload.resolvedLanguage || state.resolvedLanguage || "en").trim() || "en";
+        const nextSelected = (payload.selectedLanguage || state.selectedLanguage || "auto").trim() || "auto";
+        const nextDetected = (payload.detectedSkyrimLanguage || state.detectedSkyrimLanguage || "en").trim() || "en";
+        const nextFont = typeof payload.fontFamily === "string" ? payload.fontFamily : state.fontFamily;
+        const nextLangs = Array.isArray(payload.availableLanguages) && payload.availableLanguages.length > 0 ? payload.availableLanguages : state.availableLanguages;
+        const nextDict = {
+          ...BASE_EN_STRINGS,
+          ...payload.strings && typeof payload.strings === "object" ? payload.strings : {}
+        };
+        applyDocumentFontOverride(nextFont, nextResolved);
+        return {
+          selectedLanguage: nextSelected,
+          resolvedLanguage: nextResolved,
+          detectedSkyrimLanguage: nextDetected,
+          fontFamily: nextFont,
+          availableLanguages: nextLangs,
+          dict: nextDict,
+          revision: state.revision + 1
+        };
+      });
+    }
+  }));
+  const pluralRulesCache = /* @__PURE__ */ new Map();
+  function getPluralRules(langCode) {
+    const normalized = (langCode || "en").replace("_", "-");
+    const cached = pluralRulesCache.get(normalized);
+    if (cached) return cached;
+    try {
+      const rules = new Intl.PluralRules(normalized);
+      pluralRulesCache.set(normalized, rules);
+      return rules;
+    } catch {
+      const fallback = new Intl.PluralRules("en");
+      pluralRulesCache.set(normalized, fallback);
+      return fallback;
+    }
+  }
+  function interpolateTemplate(tmpl, vars) {
+    if (!tmpl || !vars) {
+      if (!tmpl) return "";
+      return tmpl.replace(/\{\{/g, "{").replace(/\}\}/g, "}");
+    }
+    let out = "";
+    const len = tmpl.length;
+    let i = 0;
+    while (i < len) {
+      const ch2 = tmpl[i];
+      if (ch2 === "{") {
+        if (i + 1 < len && tmpl[i + 1] === "{") {
+          out += "{";
+          i += 2;
+          continue;
+        }
+        const closePos = tmpl.indexOf("}", i + 1);
+        if (closePos > i + 1) {
+          const token = tmpl.slice(i + 1, closePos);
+          if (/^[A-Za-z0-9_.-]+$/.test(token)) {
+            const val = vars[token];
+            if (val !== void 0 && val !== null) {
+              out += String(val);
+            } else {
+              out += tmpl.slice(i, closePos + 1);
+            }
+            i = closePos + 1;
+            continue;
+          }
+        }
+        out += "{";
+        i += 1;
+        continue;
+      }
+      if (ch2 === "}" && i + 1 < len && tmpl[i + 1] === "}") {
+        out += "}";
+        i += 2;
+        continue;
+      }
+      out += ch2;
+      i += 1;
+    }
+    return out;
+  }
+  function t(key, vars, fallback) {
+    const dict = useLocaleStore.getState().dict;
+    const raw = dict[key] ?? BASE_EN_STRINGS[key] ?? fallback ?? key;
+    return interpolateTemplate(raw, vars);
+  }
+  function tp(keyStem, count2, vars, fallbackOther) {
+    const { dict, resolvedLanguage } = useLocaleStore.getState();
+    const category = getPluralRules(resolvedLanguage).select(count2);
+    const catKey = `${keyStem}_${category}`;
+    const otherKey = `${keyStem}_other`;
+    const raw = dict[catKey] ?? dict[otherKey] ?? dict[keyStem] ?? BASE_EN_STRINGS[catKey] ?? BASE_EN_STRINGS[otherKey] ?? BASE_EN_STRINGS[keyStem] ?? fallbackOther ?? keyStem;
+    const mergedVars = vars && vars.count !== void 0 ? vars : { ...vars || {}, count: count2 };
+    return interpolateTemplate(raw, mergedVars);
+  }
+  function useTranslation() {
+    const revision = useLocaleStore((s) => s.revision);
+    const resolvedLanguage = useLocaleStore((s) => s.resolvedLanguage);
+    const selectedLanguage = useLocaleStore((s) => s.selectedLanguage);
+    const detectedSkyrimLanguage = useLocaleStore((s) => s.detectedSkyrimLanguage);
+    const availableLanguages = useLocaleStore((s) => s.availableLanguages);
+    const translate = reactExports.useCallback(
+      (key, vars, fallback) => {
+        return t(key, vars, fallback);
+      },
+      [revision]
+    );
+    const translatePlural = reactExports.useCallback(
+      (keyStem, count2, vars, fallbackOther) => {
+        return tp(keyStem, count2, vars, fallbackOther);
+      },
+      [revision]
+    );
+    return {
+      t: translate,
+      tp: translatePlural,
+      lang: resolvedLanguage,
+      selectedLanguage,
+      detectedSkyrimLanguage,
+      availableLanguages,
+      revision
+    };
+  }
   var RelationshipStatus = /* @__PURE__ */ ((RelationshipStatus2) => {
     RelationshipStatus2[RelationshipStatus2["Candidate"] = 0] = "Candidate";
     RelationshipStatus2[RelationshipStatus2["Engaged"] = 1] = "Engaged";
@@ -10608,14 +12178,17 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     useModalStore.getState().showModal(
       {
         modalId: "confirm_remove_relationship",
-        title: "Remove Relationship Record?",
-        subtitle: `${actorAName} & ${actorBName}`,
-        message: "Are you sure you want to permanently remove this relationship record, its status history, and any associated affair records from M.A.R.A.S tracking?\n\nBoth NPCs will remain registered as Candidates.",
+        title: t("store.modal.removeRelationshipTitle"),
+        subtitle: t("store.modal.removeRelationshipSubtitle", {
+          actorA: actorAName,
+          actorB: actorBName
+        }),
+        message: t("store.modal.removeRelationshipMessage"),
         size: "sm",
         tone: "danger",
         buttons: [
-          { id: "remove", label: "Remove Record", variant: "danger" },
-          { id: "cancel", label: "Cancel", variant: "secondary" }
+          { id: "remove", label: t("store.modal.removeRecordBtn"), variant: "danger" },
+          { id: "cancel", label: t("store.modal.cancelBtn"), variant: "secondary" }
         ]
       },
       (buttonId) => {
@@ -10629,14 +12202,14 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     useModalStore.getState().showModal(
       {
         modalId: "confirm_remove_child",
-        title: "Remove Child Record?",
-        subtitle: `${childName} (${childId})`,
-        message: "Are you sure you want to permanently remove this child record from M.A.R.A.S household and family tracking?\n\nThis will clear their guardian and lineage assignments in M.A.R.A.S.",
+        title: t("store.modal.removeChildTitle"),
+        subtitle: t("store.modal.removeChildSubtitle", { childName, childId }),
+        message: t("store.modal.removeChildMessage"),
         size: "sm",
         tone: "danger",
         buttons: [
-          { id: "remove", label: "Remove Child Record", variant: "danger" },
-          { id: "cancel", label: "Cancel", variant: "secondary" }
+          { id: "remove", label: t("store.modal.removeChildBtn"), variant: "danger" },
+          { id: "cancel", label: t("store.modal.cancelBtn"), variant: "secondary" }
         ]
       },
       (buttonId) => {
@@ -10659,21 +12232,65 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     }
     return raw;
   }
+  async function fetchDevLocale(langCode) {
+    if (typeof window === "undefined" || window.marasAction) return null;
+    try {
+      const res = await fetch(`/__dev/locale/${encodeURIComponent(langCode || "auto")}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        useLocaleStore.getState().applyLocalePayload(data);
+        return data;
+      }
+    } catch {
+    }
+    return null;
+  }
   function sendMarasAction(action, payload = {}) {
     const jsonStr = JSON.stringify({ action, payload });
     if (typeof window !== "undefined" && window.marasAction) {
       window.marasAction(jsonStr);
     } else {
       console.log(`[Standalone Mock Action] ${action}:`, payload);
+      if (action === "updateSetting" && (payload == null ? void 0 : payload.key) === "language" && typeof payload.value === "string") {
+        void fetchDevLocale(payload.value);
+      }
+    }
+  }
+  function reloadLocalization() {
+    if (typeof window !== "undefined" && window.marasAction) {
+      sendMarasAction("reloadLocalization");
+      const resolved = useLocaleStore.getState().resolvedLanguage || "en";
+      useMarasStore.getState().setStatusMsg(t("bridge.localizationReloaded", { lang: resolved }));
+    } else {
+      const selected = useLocaleStore.getState().selectedLanguage || "auto";
+      void fetchDevLocale(selected).then((loaded) => {
+        const resolved = (loaded == null ? void 0 : loaded.resolvedLanguage) || useLocaleStore.getState().resolvedLanguage || "en";
+        useMarasStore.getState().setStatusMsg(t("bridge.localizationReloaded", { lang: resolved }));
+      });
     }
   }
   function initializeUIBridge() {
     if (typeof window === "undefined") return;
+    window.receiveMARASLocale = (raw) => {
+      var _a2;
+      const data = parsePayload(raw);
+      if (!data || typeof data !== "object") return;
+      console.log("[UIBridge] receiveMARASLocale:", {
+        selected: data.selectedLanguage,
+        resolved: data.resolvedLanguage,
+        available: ((_a2 = data.availableLanguages) == null ? void 0 : _a2.length) ?? 0
+      });
+      useLocaleStore.getState().applyLocalePayload(data);
+    };
+    if (!window.marasAction) {
+      void fetchDevLocale("auto");
+    }
     window.receiveMARASOverview = (raw) => {
       const data = parsePayload(raw);
       if (!data || typeof data !== "object") return;
       console.log("[UIBridge] receiveMARASOverview payload:", data);
-      const store = useMarasStore.getState();
+      const store2 = useMarasStore.getState();
       if (data.children && data.npcProfiles) {
         const childNameMap = /* @__PURE__ */ new Map();
         data.children.forEach((c) => {
@@ -10687,7 +12304,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           }
         });
       }
-      store.setLiveGameData({
+      store2.setLiveGameData({
         currentGameDay: data.currentGameDay,
         npcProfiles: data.npcProfiles,
         relationships: data.relationships,
@@ -10756,9 +12373,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const list = parsePayload(rawList);
       if (!Array.isArray(list)) return;
       console.log("[UIBridge] receiveNPCList:", list);
-      const store = useMarasStore.getState();
+      const store2 = useMarasStore.getState();
       const profiles = list.map((item) => {
-        const existing = store.npcProfiles.get(item.formId);
+        const existing = store2.npcProfiles.get(item.formId);
         return {
           formId: item.formId,
           name: item.name,
@@ -10785,27 +12402,27 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           pendingIntent: item.pendingIntent ?? (existing == null ? void 0 : existing.pendingIntent)
         };
       });
-      store.setLiveGameData({ npcProfiles: profiles });
+      store2.setLiveGameData({ npcProfiles: profiles });
     };
     window.receiveNPCDetail = (rawDetail) => {
       const detail = parsePayload(rawDetail);
       console.log("[UIBridge] receiveNPCDetail:", detail);
-      const store = useMarasStore.getState();
+      const store2 = useMarasStore.getState();
       if (detail && detail.formId) {
-        const existing = store.npcProfiles.get(detail.formId);
+        const existing = store2.npcProfiles.get(detail.formId);
         let resolvedName = detail.name;
         if (!resolvedName || resolvedName.startsWith("NPC_")) {
           if ((existing == null ? void 0 : existing.name) && !existing.name.startsWith("NPC_")) {
             resolvedName = existing.name;
           } else {
-            const childMatch = store.children.get(detail.formId);
+            const childMatch = store2.children.get(detail.formId);
             if (childMatch && childMatch.name && !childMatch.name.startsWith("NPC_")) {
               resolvedName = childMatch.name;
             }
           }
         }
-        const isChild = Boolean((existing == null ? void 0 : existing.isChild) ?? detail.isChild ?? store.children.has(detail.formId));
-        store.updateNPCProfile(
+        const isChild = Boolean((existing == null ? void 0 : existing.isChild) ?? detail.isChild ?? store2.children.has(detail.formId));
+        store2.updateNPCProfile(
           detail.formId,
           {
             name: resolvedName,
@@ -10836,7 +12453,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           // skipBridge = true (incoming from C++)
         );
         if (detail.affection && typeof detail.affection.permanent === "number") {
-          store.updateAffection(detail.formId, detail.affection.permanent, true);
+          store2.updateAffection(detail.formId, detail.affection.permanent, true);
         }
       }
     };
@@ -10910,9 +12527,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const data = parsePayload(raw);
       if (!data) return;
       console.log("[UIBridge] onDataDumpCompleted:", data);
-      const store = useMarasStore.getState();
-      store.setIsDumpingData(false);
-      store.setLastDumpResult({
+      const store2 = useMarasStore.getState();
+      store2.setIsDumpingData(false);
+      store2.setLastDumpResult({
         success: !!data.success,
         fileName: data.fileName,
         filePath: data.filePath,
@@ -10925,9 +12542,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const data = parsePayload(raw);
       if (!data) return;
       console.log("[UIBridge] onNPCIndexDumpCompleted:", data);
-      const store = useMarasStore.getState();
-      store.setIsDumpingNPCIndex(false);
-      store.setLastNPCIndexDumpResult({
+      const store2 = useMarasStore.getState();
+      store2.setIsDumpingNPCIndex(false);
+      store2.setLastNPCIndexDumpResult({
         success: !!data.success,
         fileName: data.fileName,
         filePath: data.filePath,
@@ -10941,18 +12558,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const data = parsePayload(raw);
       if (!data) return;
       console.warn("[UIBridge] onActionRejected:", data);
-      const store = useMarasStore.getState();
-      const reason = data.reason || "Operation could not proceed due to relationship rules.";
-      store.setStatusMsg(`Action Blocked: ${reason}`);
+      const store2 = useMarasStore.getState();
+      const reason = data.reason || t("bridge.actionBlockedDefault");
+      store2.setStatusMsg(t("bridge.actionBlockedStatus", { reason }));
     };
     window.receiveMatchmakingResults = (rawResultsOrPayload, isGlobal) => {
       const parsed = parsePayload(rawResultsOrPayload);
       const results = Array.isArray(parsed) ? parsed : (parsed == null ? void 0 : parsed.results) || [];
       const resolvedIsGlobal = typeof isGlobal === "boolean" ? isGlobal : !Array.isArray(parsed) ? parsed == null ? void 0 : parsed.isGlobal : void 0;
       console.log("[UIBridge] receiveMatchmakingResults:", results, resolvedIsGlobal);
-      const store = useMarasStore.getState();
+      const store2 = useMarasStore.getState();
       if (typeof resolvedIsGlobal === "boolean") {
-        store.setMatchmakingScanType(resolvedIsGlobal ? "global" : "target");
+        store2.setMatchmakingScanType(resolvedIsGlobal ? "global" : "target");
       }
       const formatted = (results || []).map((item) => ({
         formId: item.formId || item.actorBFormId,
@@ -10969,22 +12586,83 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         memory: item.memory || item.reasoning || "",
         synergyTags: item.synergyTags || ["#AIContext", "#SkyrimLore"]
       }));
-      store.setAiSuggestions(formatted);
+      store2.setAiSuggestions(formatted);
     };
     window.receiveMatchmakingSettings = (rawSettings) => {
-      const settings = parsePayload(rawSettings);
-      console.log("[UIBridge] receiveMatchmakingSettings:", settings);
-      const store = useMarasStore.getState();
-      store.setMatchmakingSettings(settings);
+      const settings2 = parsePayload(rawSettings);
+      console.log("[UIBridge] receiveMatchmakingSettings:", settings2);
+      const store2 = useMarasStore.getState();
+      store2.setMatchmakingSettings(settings2);
     };
     window.receiveGeneratedMemories = (raw) => {
       const data = parsePayload(raw);
       if (!data) return;
       console.log("[UIBridge] receiveGeneratedMemories:", data);
-      const store = useMarasStore.getState();
-      store.receiveGeneratedMemories(data);
+      const store2 = useMarasStore.getState();
+      store2.receiveGeneratedMemories(data);
     };
     console.log("[UIBridge] Window callbacks initialized successfully");
+  }
+  const falsyToString = (value) => typeof value === "boolean" ? `${value}` : value === 0 ? "0" : value;
+  const cx = clsx;
+  const cva = (base, config) => (props) => {
+    var _config_compoundVariants;
+    if ((config === null || config === void 0 ? void 0 : config.variants) == null) return cx(base, props === null || props === void 0 ? void 0 : props.class, props === null || props === void 0 ? void 0 : props.className);
+    const { variants, defaultVariants } = config;
+    const getVariantClassNames = Object.keys(variants).map((variant) => {
+      const variantProp = props === null || props === void 0 ? void 0 : props[variant];
+      const defaultVariantProp = defaultVariants === null || defaultVariants === void 0 ? void 0 : defaultVariants[variant];
+      if (variantProp === null) return null;
+      const variantKey = falsyToString(variantProp) || falsyToString(defaultVariantProp);
+      return variants[variant][variantKey];
+    });
+    const propsWithoutUndefined = props && Object.entries(props).reduce((acc, param) => {
+      let [key, value] = param;
+      if (value === void 0) {
+        return acc;
+      }
+      acc[key] = value;
+      return acc;
+    }, {});
+    const getCompoundVariantClassNames = config === null || config === void 0 ? void 0 : (_config_compoundVariants = config.compoundVariants) === null || _config_compoundVariants === void 0 ? void 0 : _config_compoundVariants.reduce((acc, param) => {
+      let { class: cvClass, className: cvClassName, ...compoundVariantOptions } = param;
+      return Object.entries(compoundVariantOptions).every((param2) => {
+        let [key, value] = param2;
+        return Array.isArray(value) ? value.includes({
+          ...defaultVariants,
+          ...propsWithoutUndefined
+        }[key]) : {
+          ...defaultVariants,
+          ...propsWithoutUndefined
+        }[key] === value;
+      }) ? [
+        ...acc,
+        cvClass,
+        cvClassName
+      ] : acc;
+    }, []);
+    return cx(base, getVariantClassNames, getCompoundVariantClassNames, props === null || props === void 0 ? void 0 : props.class, props === null || props === void 0 ? void 0 : props.className);
+  };
+  const badgeVariants = cva(
+    "inline-flex items-center rounded-full border px-[0.625rem] py-[0.125rem] text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2",
+    {
+      variants: {
+        variant: {
+          default: "border-border-accent bg-accent-soft text-accent-bright",
+          secondary: "border-border-subtle bg-panel-raised text-foreground-secondary",
+          outline: "border-border-subtle text-foreground-primary",
+          success: "border-status-success bg-status-success-soft text-status-success",
+          danger: "border-status-danger bg-status-danger-soft text-status-danger",
+          warning: "border-status-warning bg-status-warning-soft text-status-warning"
+        }
+      },
+      defaultVariants: {
+        variant: "default"
+      }
+    }
+  );
+  function Badge({ className, variant, ...props }) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: cn(badgeVariants({ variant }), className), ...props });
   }
   var __defProp$q = Object.defineProperty;
   var __name$q = (target, value) => __defProp$q(target, "name", { value, configurable: true });
@@ -14749,25 +16427,25 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   const getStatusLabel = (status) => {
     switch (status) {
       case RelationshipStatus.Candidate:
-        return "Candidate";
+        return t("enums.relationshipStatus.candidate");
       case RelationshipStatus.Dating:
-        return "Dating";
+        return t("enums.relationshipStatus.dating");
       case RelationshipStatus.Lover:
-        return "Lover";
+        return t("enums.relationshipStatus.lover");
       case RelationshipStatus.Engaged:
-        return "Engaged";
+        return t("enums.relationshipStatus.engaged");
       case RelationshipStatus.Married:
-        return "Married";
+        return t("enums.relationshipStatus.married");
       case RelationshipStatus.Divorced:
-        return "Divorced";
+        return t("enums.relationshipStatus.divorced");
       case RelationshipStatus.Jilted:
-        return "Jilted";
+        return t("enums.relationshipStatus.jilted");
       case RelationshipStatus.ExDating:
-        return "Ex-Dating";
+        return t("enums.relationshipStatus.exDating");
       case RelationshipStatus.ExLover:
-        return "Ex-Lover";
+        return t("enums.relationshipStatus.exLover");
       default:
-        return "Unknown";
+        return t("enums.relationshipStatus.unknown");
     }
   };
   const getStatusIconUrl = (status) => {
@@ -14814,6 +16492,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   };
   const StatusIcon = React$2.forwardRef(
     ({ status, size: size2 = "2em", showTooltip = true, className, style, alt, ...props }, ref) => {
+      useLocaleStore((s) => s.revision);
       const label = getStatusLabel(status);
       const iconUrl = getStatusIconUrl(status);
       const borderColorClass = getStatusBorderColorClass(status);
@@ -14833,13 +16512,14 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         }
       );
       if (showTooltip) {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `Status: ${label}`, children: imgNode });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t("shared.statusTooltip", { label }), children: imgNode });
       }
       return imgNode;
     }
   );
   StatusIcon.displayName = "StatusIcon";
   const StatusBadge = ({ status, className = "" }) => {
+    useLocaleStore((s) => s.revision);
     getStatusLabel(status);
     if (status === RelationshipStatus.Married) ;
     else if (status === RelationshipStatus.Dating || status === RelationshipStatus.Lover) ;
@@ -14859,7 +16539,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     return areSameFormId(id2, PLAYER_FORM_ID) || areSameFormId(id2, "00000014") || areSameFormId(id2, "0x00000014");
   }
   function getActorDisplayName(id2, npcProfiles) {
-    if (isPlayerFormId(id2)) return "Player";
+    if (isPlayerFormId(id2)) return t("statusAvailability.player");
     const profile = npcProfiles.get(id2) || Array.from(npcProfiles.values()).find((p2) => areSameFormId(p2.formId, id2));
     if ((profile == null ? void 0 : profile.name) && profile.name !== "None") return profile.name;
     return id2;
@@ -14879,12 +16559,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   ];
   function checkRelationshipStatusAvailability(actorA, actorB, targetStatus, context) {
     if (areSameFormId(actorA, actorB)) {
-      return { available: false, reason: "An actor cannot form a relationship with themselves." };
+      return { available: false, reason: t("statusAvailability.selfRelationship") };
     }
     const profileA = context.npcProfiles.get(actorA) || Array.from(context.npcProfiles.values()).find((p2) => areSameFormId(p2.formId, actorA));
     const profileB = context.npcProfiles.get(actorB) || Array.from(context.npcProfiles.values()).find((p2) => areSameFormId(p2.formId, actorB));
     if ((profileA == null ? void 0 : profileA.isChild) || (profileB == null ? void 0 : profileB.isChild)) {
-      return { available: false, reason: "Children cannot enter adult relationships." };
+      return { available: false, reason: t("statusAvailability.childrenBlocked") };
     }
     const nameA = getActorDisplayName(actorA, context.npcProfiles);
     const nameB = getActorDisplayName(actorB, context.npcProfiles);
@@ -14893,7 +16573,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     );
     const directStatus = directPair ? directPair.status : RelationshipStatus.Candidate;
     if (targetStatus === directStatus) {
-      return { available: false, reason: `Already ${getStatusLabel(directStatus)}.` };
+      return {
+        available: false,
+        reason: t("statusAvailability.alreadyStatus", { status: getStatusLabel(directStatus) })
+      };
     }
     const evaluateLoverType = () => {
       const isActorInExclusiveMain = (actorId) => {
@@ -14909,12 +16592,19 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     };
     if (targetStatus === RelationshipStatus.Lover) {
       if (directStatus === RelationshipStatus.Lover) {
-        return { available: false, reason: `${nameA} and ${nameB} are already lovers.` };
+        return {
+          available: false,
+          reason: t("statusAvailability.alreadyLovers", { nameA, nameB })
+        };
       }
       if (isMainTierStatus(directStatus)) {
         return {
           available: false,
-          reason: `${nameA} and ${nameB} already have an active relationship (${getStatusLabel(directStatus)}).`
+          reason: t("statusAvailability.alreadyActiveRelationship", {
+            nameA,
+            nameB,
+            status: getStatusLabel(directStatus)
+          })
         };
       }
       const loverType = evaluateLoverType();
@@ -14922,44 +16612,48 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     }
     if (targetStatus === RelationshipStatus.Divorced) {
       if (directStatus !== RelationshipStatus.Married) {
-        return { available: false, reason: "Can only divorce if currently Married." };
+        return { available: false, reason: t("statusAvailability.divorceRequiresMarried") };
       }
       return { available: true };
     }
     if (targetStatus === RelationshipStatus.Jilted) {
       if (directStatus !== RelationshipStatus.Engaged) {
-        return { available: false, reason: "Can only be jilted if currently Engaged." };
+        return { available: false, reason: t("statusAvailability.jiltRequiresEngaged") };
       }
       return { available: true };
     }
     if (targetStatus === RelationshipStatus.ExDating) {
       if (directStatus !== RelationshipStatus.Dating) {
-        return { available: false, reason: "Can only transition to Ex-Dating if currently Dating." };
+        return { available: false, reason: t("statusAvailability.exDatingRequiresDating") };
       }
       return { available: true };
     }
     if (targetStatus === RelationshipStatus.ExLover) {
       if (directStatus !== RelationshipStatus.Lover) {
-        return { available: false, reason: "Can only transition to Ex-Lover if currently Lovers." };
+        return { available: false, reason: t("statusAvailability.exLoverRequiresLover") };
       }
       return { available: true };
     }
     if (targetStatus === RelationshipStatus.Dating && isMainTierStatus(directStatus)) {
       return {
         available: false,
-        reason: `${nameA} and ${nameB} already have an active relationship (${getStatusLabel(directStatus)}).`
+        reason: t("statusAvailability.alreadyActiveRelationship", {
+          nameA,
+          nameB,
+          status: getStatusLabel(directStatus)
+        })
       };
     }
     if (targetStatus === RelationshipStatus.Engaged && (directStatus === RelationshipStatus.Engaged || directStatus === RelationshipStatus.Married)) {
       return {
         available: false,
-        reason: `${nameA} and ${nameB} are already engaged or married.`
+        reason: t("statusAvailability.alreadyEngagedOrMarried", { nameA, nameB })
       };
     }
     if (targetStatus === RelationshipStatus.Married && directStatus === RelationshipStatus.Married) {
       return {
         available: false,
-        reason: `${nameA} and ${nameB} are already married.`
+        reason: t("statusAvailability.alreadyMarried", { nameA, nameB })
       };
     }
     const validateActorWithOtherPartners = (selfId, otherId, name) => {
@@ -14977,20 +16671,20 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             if (isMainTierStatus(r2.status)) {
               return {
                 available: false,
-                reason: isPlayer ? "Cannot enter another main relationship: Polygamy is disabled in settings." : `${name} already has a committed main partner (${partnerName}).`
+                reason: isPlayer ? t("statusAvailability.playerPolygamyDisabledMain") : t("statusAvailability.npcHasCommittedPartner", { name, partnerName })
               };
             }
           } else if (targetStatus === RelationshipStatus.Engaged) {
             if (r2.status === RelationshipStatus.Engaged || r2.status === RelationshipStatus.Married) {
               return {
                 available: false,
-                reason: isPlayer ? "Cannot enter another engagement/marriage: Polygamy is disabled in settings." : `${name} is already engaged or married to ${partnerName}.`
+                reason: isPlayer ? t("statusAvailability.playerPolygamyDisabledMarriage") : t("statusAvailability.npcAlreadyEngagedOrMarriedTo", { name, partnerName })
               };
             }
             if (r2.status === RelationshipStatus.Dating) {
               return {
                 available: false,
-                reason: isPlayer ? "Cannot propose engagement to this actor while dating someone else." : `${name} is dating ${partnerName} and can only get engaged to their dating partner.`
+                reason: isPlayer ? t("statusAvailability.playerDatingSomeoneElse") : t("statusAvailability.npcDatingSomeoneElse", { name, partnerName })
               };
             }
           }
@@ -15005,11 +16699,11 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     return { available: true };
   }
   function getAvailableStatuses(actorA, actorB, context) {
-    const store = useMarasStore.getState();
+    const store2 = useMarasStore.getState();
     const ctx = {
-      relationships: (context == null ? void 0 : context.relationships) ?? store.relationships,
-      npcProfiles: (context == null ? void 0 : context.npcProfiles) ?? store.npcProfiles,
-      enablePolygamy: (context == null ? void 0 : context.enablePolygamy) ?? store.settings.enablePolygamy
+      relationships: (context == null ? void 0 : context.relationships) ?? store2.relationships,
+      npcProfiles: (context == null ? void 0 : context.npcProfiles) ?? store2.npcProfiles,
+      enablePolygamy: (context == null ? void 0 : context.enablePolygamy) ?? store2.settings.enablePolygamy
     };
     if (!actorA || !actorB) {
       return ASSIGNABLE_STATUSES.map((st) => ({
@@ -15018,7 +16712,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         label: getStatusLabel(st),
         enabled: false,
         disabled: true,
-        tooltip: "Select both actors first."
+        tooltip: t("statusAvailability.selectBothActors")
       }));
     }
     const directPair = ctx.relationships.find(
@@ -15030,12 +16724,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const isCurrent = st === currentStatus;
       let label = getStatusLabel(st);
       if (st === RelationshipStatus.Lover && res.available) {
-        label = res.loverType === "cheating" ? "Lover (Cheating)" : "Lover (Allowed)";
+        label = res.loverType === "cheating" ? t("statusAvailability.loverCheatingLabel") : t("statusAvailability.loverAllowedLabel");
       }
       let tooltip = res.reason;
       if (res.available) {
         if (st === RelationshipStatus.Lover) {
-          tooltip = res.loverType === "cheating" ? "Considered cheating: at least one party has a closed main relationship." : "Allowed secondary relationship: both parties are single or in open relationships.";
+          tooltip = res.loverType === "cheating" ? t("statusAvailability.loverCheatingTooltip") : t("statusAvailability.loverAllowedTooltip");
         }
       }
       return {
@@ -15053,10 +16747,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       options2.unshift({
         status: RelationshipStatus.Candidate,
         value: RelationshipStatus.Candidate,
-        label: "Candidate",
+        label: getStatusLabel(RelationshipStatus.Candidate),
         enabled: false,
         disabled: true,
-        tooltip: "Current status (Candidate cannot be manually assigned).",
+        tooltip: t("statusAvailability.candidateNotAssignable"),
         isCurrent: true
       });
     }
@@ -15066,13 +16760,14 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const enablePolygamy = useMarasStore((s) => s.settings.enablePolygamy);
+    const localeRevision = useLocaleStore((s) => s.revision);
     return reactExports.useMemo(() => {
       return getAvailableStatuses(actorA, actorB, {
         relationships,
         npcProfiles,
         enablePolygamy
       });
-    }, [actorA, actorB, relationships, npcProfiles, enablePolygamy]);
+    }, [actorA, actorB, relationships, npcProfiles, enablePolygamy, localeRevision]);
   }
   function resolveIsFemale(child, npc) {
     const g = (child == null ? void 0 : child.gender) ?? (npc == null ? void 0 : npc.gender);
@@ -15080,11 +16775,31 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     if (g === "male") return false;
     return void 0;
   }
+  function selectGenderedText(isFemale, femaleText, maleText, neutralText) {
+    if (isFemale === true) return femaleText;
+    if (isFemale === false) return maleText;
+    return neutralText;
+  }
   function getChildGenderNouns(isFemale) {
-    const sonOrDaughter = isFemale !== void 0 ? isFemale ? "Daughter" : "Son" : "Child";
-    const childNoun = isFemale !== void 0 ? isFemale ? "Daughter" : "Son" : "Child";
-    const stepNoun = isFemale !== void 0 ? isFemale ? "Stepdaughter" : "Stepson" : "Stepchild";
-    const boyOrGirl = isFemale !== void 0 ? isFemale ? "Girl" : "Boy" : "Child";
+    const sonOrDaughter = selectGenderedText(
+      isFemale,
+      t("utils.child.daughter"),
+      t("utils.child.son"),
+      t("utils.child.child")
+    );
+    const childNoun = sonOrDaughter;
+    const stepNoun = selectGenderedText(
+      isFemale,
+      t("utils.child.stepdaughter"),
+      t("utils.child.stepson"),
+      t("utils.child.stepchild")
+    );
+    const boyOrGirl = selectGenderedText(
+      isFemale,
+      t("utils.child.girl"),
+      t("utils.child.boy"),
+      t("utils.child.child")
+    );
     const genderSymbol = isFemale !== void 0 ? isFemale ? "♀" : "♂" : "";
     return { sonOrDaughter, childNoun, stepNoun, boyOrGirl, genderSymbol };
   }
@@ -15102,11 +16817,23 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   function getChildRelationshipStatus(child, actorIdOrA, actorBId) {
     const isAdopted = child.isAdopted !== false;
     const isFemale = resolveIsFemale(child);
-    const { sonOrDaughter, childNoun, stepNoun } = getChildGenderNouns(isFemale);
+    const { sonOrDaughter, stepNoun } = getChildGenderNouns(isFemale);
+    const adoptedLabel = selectGenderedText(
+      isFemale,
+      t("utils.child.adoptedDaughter"),
+      t("utils.child.adoptedSon"),
+      t("utils.child.adoptedChild")
+    );
+    const presumedBadgeLabel = selectGenderedText(
+      isFemale,
+      t("utils.child.presumedDaughter"),
+      t("utils.child.presumedSon"),
+      t("utils.child.presumedChild")
+    );
     if (isAdopted) {
       return {
-        statusLabel: `Adopted ${childNoun}`,
-        badgeLabel: `Adopted ${sonOrDaughter}`,
+        statusLabel: adoptedLabel,
+        badgeLabel: adoptedLabel,
         badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
       };
     }
@@ -15120,7 +16847,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const isPresumedB = Boolean(presumedFather && areSameFormId(presumedFather, actorBId));
       if (isBioA && isBioB) {
         return {
-          statusLabel: `Shared Biological ${sonOrDaughter}`,
+          statusLabel: selectGenderedText(
+            isFemale,
+            t("utils.child.sharedBiologicalDaughter"),
+            t("utils.child.sharedBiologicalSon"),
+            t("utils.child.sharedBiologicalChild")
+          ),
           badgeLabel: sonOrDaughter,
           badgeStyle: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
         };
@@ -15129,13 +16861,23 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         const isSecretPartner2 = child.isSecretForPartner ?? child.isSecret;
         if (isSecretPartner2) {
           return {
-            statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
-            badgeLabel: `Presumed ${sonOrDaughter}`,
+            statusLabel: selectGenderedText(
+              isFemale,
+              t("utils.child.presumedDaughterSecret"),
+              t("utils.child.presumedSonSecret"),
+              t("utils.child.presumedChildSecret")
+            ),
+            badgeLabel: presumedBadgeLabel,
             badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
           };
         }
         return {
-          statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+          statusLabel: selectGenderedText(
+            isFemale,
+            t("utils.child.stepOrBioDaughter"),
+            t("utils.child.stepOrBioSon"),
+            t("utils.child.stepOrBioChild")
+          ),
           badgeLabel: stepNoun,
           badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
         };
@@ -15144,20 +16886,30 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         const isSecretPartner2 = child.isSecretForPartner ?? child.isSecret;
         if (isSecretPartner2) {
           return {
-            statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
-            badgeLabel: `Presumed ${sonOrDaughter}`,
+            statusLabel: selectGenderedText(
+              isFemale,
+              t("utils.child.presumedDaughterSecret"),
+              t("utils.child.presumedSonSecret"),
+              t("utils.child.presumedChildSecret")
+            ),
+            badgeLabel: presumedBadgeLabel,
             badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
           };
         }
         return {
-          statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+          statusLabel: selectGenderedText(
+            isFemale,
+            t("utils.child.stepOrBioDaughter"),
+            t("utils.child.stepOrBioSon"),
+            t("utils.child.stepOrBioChild")
+          ),
           badgeLabel: stepNoun,
           badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
         };
       }
       return {
-        statusLabel: `Adopted ${childNoun}`,
-        badgeLabel: `Adopted ${sonOrDaughter}`,
+        statusLabel: adoptedLabel,
+        badgeLabel: adoptedLabel,
         badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
       };
     }
@@ -15168,13 +16920,28 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     if (isBioMotherMatch || isBioFatherMatch) {
       if (isBioFatherMatch && child.isSecretForBioFather) {
         return {
-          statusLabel: `Biological ${sonOrDaughter} (Secret from Father)`,
-          badgeLabel: `${sonOrDaughter} (Secret)`,
+          statusLabel: selectGenderedText(
+            isFemale,
+            t("utils.child.biologicalDaughterSecretFather"),
+            t("utils.child.biologicalSonSecretFather"),
+            t("utils.child.biologicalChildSecretFather")
+          ),
+          badgeLabel: selectGenderedText(
+            isFemale,
+            t("utils.child.daughterSecret"),
+            t("utils.child.sonSecret"),
+            t("utils.child.childSecret")
+          ),
           badgeStyle: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
         };
       }
       return {
-        statusLabel: `Biological ${sonOrDaughter}`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t("utils.child.biologicalDaughter"),
+          t("utils.child.biologicalSon"),
+          t("utils.child.biologicalChild")
+        ),
         badgeLabel: sonOrDaughter,
         badgeStyle: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
       };
@@ -15184,15 +16951,25 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     if (isPresumedFatherMatch) {
       if (isPregSecretPartner) {
         return {
-          statusLabel: `Unaware of Pregnancy (Presumed Father)`,
-          badgeLabel: `Unaware of Pregnancy`,
+          statusLabel: t("utils.child.unawareOfPregnancyPresumedFather"),
+          badgeLabel: t("utils.child.unawareOfPregnancy"),
           badgeStyle: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
         };
       }
       if (isSecretPartner) {
         return {
-          statusLabel: isGuardianMatch ? `Presumed ${sonOrDaughter} (Guardian • Secret)` : `Presumed ${sonOrDaughter} (Secret from Partner)`,
-          badgeLabel: `Presumed ${sonOrDaughter}`,
+          statusLabel: isGuardianMatch ? selectGenderedText(
+            isFemale,
+            t("utils.child.presumedDaughterGuardianSecret"),
+            t("utils.child.presumedSonGuardianSecret"),
+            t("utils.child.presumedChildGuardianSecret")
+          ) : selectGenderedText(
+            isFemale,
+            t("utils.child.presumedDaughterSecretPartner"),
+            t("utils.child.presumedSonSecretPartner"),
+            t("utils.child.presumedChildSecretPartner")
+          ),
+          badgeLabel: presumedBadgeLabel,
           badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
         };
       }
@@ -15204,15 +16981,25 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         };
       }
       return {
-        statusLabel: `Former Presumed ${sonOrDaughter}`,
-        badgeLabel: `Former Presumed`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t("utils.child.formerPresumedDaughter"),
+          t("utils.child.formerPresumedSon"),
+          t("utils.child.formerPresumedChild")
+        ),
+        badgeLabel: t("utils.child.formerPresumed"),
         badgeStyle: "bg-sky-500/20 text-sky-300 border border-sky-500/30"
       };
     }
     if (isSecretPartner) {
       return {
-        statusLabel: `Presumed ${sonOrDaughter} (Secret from Partner)`,
-        badgeLabel: `Presumed ${sonOrDaughter}`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t("utils.child.presumedDaughterSecretPartner"),
+          t("utils.child.presumedSonSecretPartner"),
+          t("utils.child.presumedChildSecretPartner")
+        ),
+        badgeLabel: presumedBadgeLabel,
         badgeStyle: "bg-purple-500/20 text-purple-300 border border-purple-500/30"
       };
     }
@@ -15227,7 +17014,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     const isMale = parentGender === "male";
     if (child.isAdopted !== false) {
       return {
-        roleLabel: isMale ? "Adoptive Father" : isFemale ? "Adoptive Mother" : "Current Guardian",
+        roleLabel: isMale ? t("utils.child.roleAdoptiveFather") : isFemale ? t("utils.child.roleAdoptiveMother") : t("utils.child.roleCurrentGuardian"),
         badgeStyle: "text-amber-300"
       };
     }
@@ -15236,7 +17023,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     const isPresumedFather = Boolean(child.presumedFatherId && areSameFormId(parentFormId, child.presumedFatherId));
     if (isBioMother) {
       return {
-        roleLabel: "Biological Mother",
+        roleLabel: t("utils.child.roleBiologicalMother"),
         isSecret: false,
         badgeStyle: "text-emerald-300"
       };
@@ -15244,7 +17031,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     if (isBioFather) {
       const isSecretBio = child.isSecretForBioFather ?? false;
       return {
-        roleLabel: "Biological Father",
+        roleLabel: t("utils.child.roleBiologicalFather"),
         isSecret: isSecretBio,
         isSecretForBioFather: isSecretBio,
         badgeStyle: "text-emerald-300"
@@ -15255,7 +17042,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     if (isPresumedFather) {
       if (isSecretPartner) {
         return {
-          roleLabel: "Presumed Father (Guardian)",
+          roleLabel: t("utils.child.rolePresumedFatherGuardian"),
           isSecret: true,
           isSecretForPartner: true,
           isPregnancySecretForPartner: isPregSecretPartner,
@@ -15263,13 +17050,13 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         };
       }
       return {
-        roleLabel: "Step-father",
+        roleLabel: t("utils.child.roleStepFather"),
         badgeStyle: "text-sky-300"
       };
     }
     if (isSecretPartner) {
       return {
-        roleLabel: isMale ? "Presumed Father (Guardian)" : isFemale ? "Step-mother (secret)" : "Step-parent (secret)",
+        roleLabel: isMale ? t("utils.child.rolePresumedFatherGuardian") : isFemale ? t("utils.child.roleStepMotherSecret") : t("utils.child.roleStepParentSecret"),
         isSecret: true,
         isSecretForPartner: true,
         isPregnancySecretForPartner: isPregSecretPartner,
@@ -15277,7 +17064,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       };
     }
     return {
-      roleLabel: isMale ? "Step-father" : isFemale ? "Step-mother" : "Step-parent",
+      roleLabel: isMale ? t("utils.child.roleStepFather") : isFemale ? t("utils.child.roleStepMother") : t("utils.child.roleStepParent"),
       badgeStyle: "text-sky-300"
     };
   }
@@ -15457,7 +17244,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     isOpen: !isGameBuild,
     isInGame: isGameBuild,
     isGamePaused: !isGameBuild,
-    statusMsg: "M.A.R.A.S Core Active",
+    statusMsg: t("store.status.coreActive"),
     activeTab: "overview",
     activeSubSection: "dashboard",
     // NPC Detail Screen State
@@ -15613,18 +17400,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     setAiSuggestions: (suggestions) => {
       set({ aiSuggestions: suggestions, isGeneratingAiSuggestions: false });
     },
-    setMatchmakingSettings: (settings) => {
+    setMatchmakingSettings: (settings2) => {
       set((state) => ({
-        matchmakingSettings: { ...state.matchmakingSettings, ...settings }
+        matchmakingSettings: { ...state.matchmakingSettings, ...settings2 }
       }));
     },
-    updateMatchmakingSettings: (settings) => {
+    updateMatchmakingSettings: (settings2) => {
       set((state) => ({
-        matchmakingSettings: { ...state.matchmakingSettings, ...settings }
+        matchmakingSettings: { ...state.matchmakingSettings, ...settings2 }
       }));
       pendingMatchmakingSettingsUpdates = {
         ...pendingMatchmakingSettingsUpdates,
-        ...settings
+        ...settings2
       };
       if (matchmakingSettingsDebounceTimer) {
         clearTimeout(matchmakingSettingsDebounceTimer);
@@ -15641,8 +17428,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }, 300);
     },
     generateAiSuggestions: (npcId) => {
-      const { settings, isInGame: isInGame2 } = get();
-      if (!settings.hasSkyrimNet) return;
+      const { settings: settings2, isInGame: isInGame2 } = get();
+      if (!settings2.hasSkyrimNet) return;
       flushAllPendingDebouncedActions();
       set({ isGeneratingAiSuggestions: true, aiSuggestions: [], matchmakingScanType: "target", matchmakingTargetNpcId: npcId });
       sendMarasAction("skyrimNetMatchSuggest", { formId: npcId });
@@ -15707,16 +17494,16 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           if (get().isGeneratingAiSuggestions) {
             console.warn("[MarasStore] Matchmaking request timed out after 30s");
             set({ isGeneratingAiSuggestions: false });
-            get().setStatusMsg("Matchmaking request timed out or returned no response.");
+            get().setStatusMsg(t("store.status.matchmakingTimeout"));
           }
         }, 3e4);
       }
     },
     generateGlobalAiSuggestions: (autoApply = false) => {
-      const { settings, isInGame: isInGame2 } = get();
-      if (!settings.hasSkyrimNet) {
+      const { settings: settings2, isInGame: isInGame2 } = get();
+      if (!settings2.hasSkyrimNet) {
         set({ isGeneratingAiSuggestions: false });
-        get().setStatusMsg("SkyrimNet AI is not available.");
+        get().setStatusMsg(t("store.status.skyrimNetUnavailable"));
         return;
       }
       flushAllPendingDebouncedActions();
@@ -15727,7 +17514,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           if (get().isGeneratingAiSuggestions) {
             console.warn("[MarasStore] Global matchmaking scan timed out after 45s");
             set({ isGeneratingAiSuggestions: false });
-            get().setStatusMsg("Global matchmaking scan timed out or returned no response.");
+            get().setStatusMsg(t("store.status.globalMatchmakingTimeout"));
           }
         }, 45e3);
       } else {
@@ -15756,8 +17543,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       }
     },
     generateMatchMemories: (targetFormId, partnerFormId, targetStatus, action) => {
-      const { settings, isInGame: isInGame2 } = get();
-      if (!settings.hasSkyrimNet) return;
+      const { settings: settings2, isInGame: isInGame2 } = get();
+      if (!settings2.hasSkyrimNet) return;
       set((state) => ({
         aiSuggestions: state.aiSuggestions.map(
           (s) => s.formId === partnerFormId ? { ...s, isGeneratingMemory: true } : s
@@ -15850,27 +17637,27 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     // Teleport & Child Companion Actions
     teleportPlayerToNpc: (npcId) => {
       sendMarasAction("teleportPlayerToNpc", { formId: npcId });
-      set({ statusMsg: `Teleporting Player to NPC (${npcId})...` });
+      set({ statusMsg: t("store.status.teleportingPlayerToNpc", { formId: npcId }) });
     },
     teleportNpcToPlayer: (npcId) => {
       sendMarasAction("teleportNpcToPlayer", { formId: npcId });
-      set({ statusMsg: `Teleporting NPC (${npcId}) to Player...` });
+      set({ statusMsg: t("store.status.teleportingNpcToPlayer", { formId: npcId }) });
     },
     fleeChildrenFromCell: () => {
       sendMarasAction("fleeChildrenFromCell", {});
-      set({ statusMsg: "Children are running away from this cell..." });
+      set({ statusMsg: t("store.status.fleeingChildren") });
     },
     dismissChildCritter: (npcId) => {
       sendMarasAction("dismissChildCritter", { formId: npcId });
-      set({ statusMsg: `Dismissing critter for child (${npcId})...` });
+      set({ statusMsg: t("store.status.dismissingCritter", { formId: npcId }) });
     },
     dismissChildPet: (npcId) => {
       sendMarasAction("dismissChildPet", { formId: npcId });
-      set({ statusMsg: `Dismissing pet for child (${npcId})...` });
+      set({ statusMsg: t("store.status.dismissingPet", { formId: npcId }) });
     },
     spawnChild: (childId) => {
       sendMarasAction("spawnChild", { childId });
-      set({ statusMsg: `Spawning child actor (${childId})...` });
+      set({ statusMsg: t("store.status.spawningChild", { childId }) });
       if (typeof window !== "undefined" && !window.marasAction) {
         setTimeout(() => {
           set((state) => {
@@ -15901,7 +17688,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                 newProfiles
               ),
               npcProfiles: newProfiles,
-              statusMsg: `Child (${childId}) successfully spawned into the world!`
+              statusMsg: t("store.status.childSpawnedSuccess", { childId })
             };
           });
         }, 300);
@@ -15943,7 +17730,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           npcProfiles: newProfiles,
           npcDetailId: state.npcDetailId === oldId ? newId : state.npcDetailId,
           selectedNpcId: state.selectedNpcId === oldId ? newId : state.selectedNpcId,
-          statusMsg: isSyntheticTarget ? `Child sent to training.` : `Child spawned successfully.`
+          statusMsg: isSyntheticTarget ? t("store.status.childSentToTraining") : t("store.status.childSpawned")
         };
       });
       sendMarasAction("fetchNPCDetail", { formId: newId });
@@ -15951,7 +17738,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     sendChildToTraining: (childId, trainingClassIndex) => {
       sendMarasAction("sendChildToTraining", { childId, trainingClassIndex });
-      set({ statusMsg: `Sending child (${childId}) to training...` });
+      set({ statusMsg: t("store.status.sendingChildToTraining", { childId }) });
       if (typeof window !== "undefined" && !window.marasAction) {
         const TRAINING_INFO = [
           { className: "Mage", location: "College of Winterhold" },
@@ -16006,7 +17793,11 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                 newProfiles
               ),
               npcProfiles: newProfiles,
-              statusMsg: `Child (${childId}) sent to ${info.location} to train as a ${info.className}!`
+              statusMsg: t("store.status.childSentToTrainingAt", {
+                childId,
+                location: info.location,
+                className: info.className
+              })
             };
           });
         }, 200);
@@ -16014,7 +17805,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     completeChildTraining: (childId) => {
       sendMarasAction("completeChildTraining", { childId });
-      set({ statusMsg: `Completing training for child (${childId})...` });
+      set({ statusMsg: t("store.status.completingChildTraining", { childId }) });
       if (typeof window !== "undefined" && !window.marasAction) {
         setTimeout(() => {
           set((state) => {
@@ -16048,7 +17839,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                 newProfiles
               ),
               npcProfiles: newProfiles,
-              statusMsg: `Child (${childId}) has completed training and is ready to be spawned as an adult!`
+              statusMsg: t("store.status.childCompletedTraining", { childId })
             };
           });
         }, 200);
@@ -16058,7 +17849,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       sendMarasAction("evaluateChildSecret", { childId });
       set({
         evaluatingChildId: childId,
-        statusMsg: `Evaluating paternity secret for child (${childId})...`
+        statusMsg: t("store.status.evaluatingChildSecret", { childId })
       });
       if (typeof window !== "undefined" && !window.marasAction) {
         setTimeout(() => {
@@ -16082,7 +17873,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                 state.npcProfiles
               ),
               evaluatingChildId: null,
-              statusMsg: `Secret evaluated for child (${childId}).`
+              statusMsg: t("store.status.childSecretEvaluated", { childId })
             };
           });
         }, 1500);
@@ -16104,7 +17895,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     setGamePaused: (paused, skipBridge = false) => {
       set({
         isGamePaused: paused,
-        statusMsg: paused ? "Game paused." : "Game unpaused."
+        statusMsg: paused ? t("store.status.gamePaused") : t("store.status.gameUnpaused")
       });
       if (!skipBridge) {
         sendMarasAction("setGamePaused", { paused });
@@ -16190,8 +17981,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           const existing = newNpcProfiles.get(item.formId);
           const profile = {
             formId: item.formId,
-            name: item.name || (existing == null ? void 0 : existing.name) || `NPC ${item.formId}`,
-            race: item.race || (existing == null ? void 0 : existing.race) || "Nord",
+            name: item.name || (existing == null ? void 0 : existing.name) || t("store.fallbackNpcName", { formId: item.formId }),
+            race: item.race || (existing == null ? void 0 : existing.race) || t("store.fallbackRace"),
             pluginName: item.pluginName || (existing == null ? void 0 : existing.pluginName),
             socialClass: (existing == null ? void 0 : existing.socialClass) ?? item.socialClass ?? SocialClass.Middle,
             skillType: (existing == null ? void 0 : existing.skillType) ?? item.skillType ?? SkillType.Warrior,
@@ -16431,8 +18222,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         const currentExisting = newMap.get(formId);
         const base = currentExisting || {
           formId,
-          name: updates.name || `NPC ${formId}`,
-          race: updates.race || "Nord",
+          name: updates.name || t("store.fallbackNpcName", { formId }),
+          race: updates.race || t("store.fallbackRace"),
           socialClass: SocialClass.Middle,
           skillType: SkillType.Warrior,
           temperament: Temperament.Proud
@@ -16518,8 +18309,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           }
           nextProfiles.set(formId, {
             formId,
-            name: fallbackName || `NPC ${formId}`,
-            race: (compact == null ? void 0 : compact.race) || "Nord",
+            name: fallbackName || t("store.fallbackNpcName", { formId }),
+            race: (compact == null ? void 0 : compact.race) || t("store.fallbackRace"),
             gender: (compact == null ? void 0 : compact.gender) || "male",
             pluginName: compact == null ? void 0 : compact.pluginName,
             isChild: compact == null ? void 0 : compact.isChild,
@@ -16599,7 +18390,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
               nextProfiles.set(formId, {
                 formId,
                 name: compact.name,
-                race: compact.race || "Nord",
+                race: compact.race || t("store.fallbackRace"),
                 gender: compact.gender || "male",
                 pluginName: compact.pluginName,
                 isChild: compact.isChild,
@@ -16696,7 +18487,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           ),
           hierarchyRanks: nextRanks,
           ...shouldClosePartnerDrawer ? { npcDetailPartnerId: null } : {},
-          statusMsg: "Relationship record removed."
+          statusMsg: t("store.status.relationshipRemoved")
         };
       });
     },
@@ -16711,7 +18502,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         const guardianBNpc = child.guardianBId ? state.npcProfiles.get(child.guardianBId) : void 0;
         const record = {
           childId: child.childId,
-          name: (childNpc == null ? void 0 : childNpc.name) || `Child ${child.childId}`,
+          name: (childNpc == null ? void 0 : childNpc.name) || t("store.fallbackChildName", { childId: child.childId }),
           timestamp: state.currentGameDay,
           guardianAId: child.guardianAId,
           guardianBId: child.guardianBId || void 0,
@@ -16856,7 +18647,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         }
         return {
           npcProfiles: newProfiles,
-          statusMsg: `Relocated family unit to ${home}`
+          statusMsg: t("store.status.relocatedFamilyUnit", { home })
         };
       });
     },
@@ -16932,19 +18723,21 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           return {
             settings: newSettings,
             isGamePaused: paused,
-            statusMsg: paused ? "Auto-pause on open enabled (Game Paused)." : "Auto-pause on open disabled (Game Unpaused)."
+            statusMsg: paused ? t("store.status.autoPauseEnabled") : t("store.status.autoPauseDisabled")
           };
         }
         if (key === "uiFullScreen") {
           return {
             settings: newSettings,
-            statusMsg: normalizedValue ? "Switched to Full Screen mode." : "Switched to Windowed mode."
+            statusMsg: normalizedValue ? t("store.status.fullScreenMode") : t("store.status.windowedMode")
           };
         }
         if (key === "uiScale") {
           return {
             settings: newSettings,
-            statusMsg: `UI Scale set to ${Math.round(Number(normalizedValue) * 100)}%.`
+            statusMsg: t("store.status.uiScaleSet", {
+              percent: Math.round(Number(normalizedValue) * 100)
+            })
           };
         }
         if (key === "revealSecretsInUI") {
@@ -16957,7 +18750,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
               Boolean(newSettings.revealSecretsInUI),
               state.npcProfiles
             ),
-            statusMsg: normalizedValue ? "All hidden secrets revealed in dashboard." : "Undiscovered secrets hidden (Intrigue Mode)."
+            statusMsg: normalizedValue ? t("store.status.secretsRevealed") : t("store.status.secretsHiddenIntrigue")
           };
         }
         return { settings: newSettings };
@@ -17027,9 +18820,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         if (npcDetailPartnerId) {
           sendMarasAction("fetchNPCDetail", { formId: npcDetailPartnerId });
         }
-        set({ statusMsg: "Dashboard data refreshed from SKSE." });
+        set({ statusMsg: t("store.status.refreshedSkse") });
       } else {
-        set({ statusMsg: "Dashboard data refreshed (Standalone Mode)." });
+        set({ statusMsg: t("store.status.refreshedStandalone") });
       }
     },
     logTestSignal: () => {
@@ -18196,47 +19989,48 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     ]
   ]);
   const mainNavTabs = [
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "household", label: "My Household", icon: House },
-    { id: "matchmaking", label: "Matchmaking", icon: HeartHandshake },
-    { id: "settings", label: "Settings", icon: Settings }
+    { id: "overview", label: "Overview", labelKey: "layout.nav.overview", icon: LayoutDashboard },
+    { id: "household", label: "My Household", labelKey: "layout.nav.household", icon: House },
+    { id: "matchmaking", label: "Matchmaking", labelKey: "layout.nav.matchmaking", icon: HeartHandshake },
+    { id: "settings", label: "Settings", labelKey: "layout.nav.settings", icon: Settings }
   ];
   const subNavConfig = {
     overview: [
-      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { id: "activity", label: "Activity Feed", icon: Activity },
-      { id: "browse", label: "Browse NPCs", icon: Network },
-      { id: "allPairs", label: "All Pairs", icon: Sparkles }
+      { id: "dashboard", label: "Dashboard", labelKey: "layout.subNav.overview.dashboard", icon: LayoutDashboard },
+      { id: "activity", label: "Activity Feed", labelKey: "layout.subNav.overview.activity", icon: Activity },
+      { id: "browse", label: "Browse NPCs", labelKey: "layout.subNav.overview.browse", icon: Network },
+      { id: "allPairs", label: "All Pairs", labelKey: "layout.subNav.overview.allPairs", icon: Sparkles }
     ],
     household: [
-      { id: "all", label: "Partners", icon: Users },
-      { id: "children", label: "Children", icon: Baby },
-      { id: "buffs", label: "Household Buffs", icon: Zap }
+      { id: "all", label: "Partners", labelKey: "layout.subNav.household.all", icon: Users },
+      { id: "children", label: "Children", labelKey: "layout.subNav.household.children", icon: Baby },
+      { id: "buffs", label: "Household Buffs", labelKey: "layout.subNav.household.buffs", icon: Zap }
     ],
     matchmaking: [
-      { id: "manualMatch", label: "Manual Match", icon: Sparkles },
-      { id: "llmMatch", label: "LLM Matchmaking", icon: Bot },
-      { id: "adoption", label: "Child Adoption", icon: Baby }
+      { id: "manualMatch", label: "Manual Match", labelKey: "layout.subNav.matchmaking.manualMatch", icon: Sparkles },
+      { id: "llmMatch", label: "LLM Matchmaking", labelKey: "layout.subNav.matchmaking.llmMatch", icon: Bot },
+      { id: "adoption", label: "Child Adoption", labelKey: "layout.subNav.matchmaking.adoption", icon: Baby }
     ],
     settings: [
-      { id: "general", label: "General", icon: SlidersVertical },
-      { id: "confirmations", label: "Confirmations", icon: SquareCheckBig },
-      { id: "matchmaking", label: "Matchmaking", icon: HeartHandshake },
-      { id: "partnerAgency", label: "Partner Agency", icon: Heart },
-      { id: "scenes", label: "NPC Scenes", icon: Clapperboard },
-      { id: "children", label: "Children & Pets", icon: Baby },
-      { id: "fertility", label: "Fertility", icon: Dna },
-      { id: "aiDialogue", label: "AI Dialogues", icon: Bot },
-      { id: "skyrimNet", label: "SkyrimNet", icon: ShieldAlert },
-      { id: "cheats", label: "Cheats & Debug", icon: Wrench }
+      { id: "general", label: "General", labelKey: "layout.subNav.settings.general", icon: SlidersVertical },
+      { id: "confirmations", label: "Confirmations", labelKey: "layout.subNav.settings.confirmations", icon: SquareCheckBig },
+      { id: "matchmaking", label: "Matchmaking", labelKey: "layout.subNav.settings.matchmaking", icon: HeartHandshake },
+      { id: "partnerAgency", label: "Partner Agency", labelKey: "layout.subNav.settings.partnerAgency", icon: Heart },
+      { id: "scenes", label: "NPC Scenes", labelKey: "layout.subNav.settings.scenes", icon: Clapperboard },
+      { id: "children", label: "Children & Pets", labelKey: "layout.subNav.settings.children", icon: Baby },
+      { id: "fertility", label: "Fertility", labelKey: "layout.subNav.settings.fertility", icon: Dna },
+      { id: "aiDialogue", label: "AI Dialogues", labelKey: "layout.subNav.settings.aiDialogue", icon: Bot },
+      { id: "skyrimNet", label: "SkyrimNet", labelKey: "layout.subNav.settings.skyrimNet", icon: ShieldAlert },
+      { id: "cheats", label: "Cheats & Debug", labelKey: "layout.subNav.settings.cheats", icon: Wrench }
     ]
   };
   const Sidebar = () => {
+    const { t: t2 } = useTranslation();
     const activeTab = useMarasStore((s) => s.activeTab);
     const setActiveTab = useMarasStore((s) => s.setActiveTab);
     const activeSubSection = useMarasStore((s) => s.activeSubSection);
     const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const [isCollapsed, setIsCollapsed] = reactExports.useState(false);
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       "aside",
@@ -18244,22 +20038,30 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         className: `flex-shrink-0 bg-panel border-r border-border-divider flex flex-col justify-between transition-all duration-300 ease-in-out ${isCollapsed ? "w-[3.5rem] p-[0.375rem]" : "w-[13.5rem] p-[0.75rem]"}`,
         children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.375rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between px-[0.25rem] mb-[0.25rem]", children: [
-            !isCollapsed && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs uppercase tracking-wider font-semibold text-foreground-muted", children: "Navigation" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: isCollapsed ? "Expand Sidebar" : "Collapse Sidebar", side: "right", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
+            !isCollapsed && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs uppercase tracking-wider font-semibold text-foreground-muted", children: t2("layout.sidebar.navigation") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              AppTooltip,
               {
-                onClick: () => setIsCollapsed(!isCollapsed),
-                className: "p-[0.25rem] rounded text-foreground-muted hover:text-accent-bright hover:bg-accent-soft cursor-pointer transition-colors ml-auto",
-                children: isCollapsed ? /* @__PURE__ */ jsxRuntimeExports.jsx(PanelLeftOpen, { className: "w-[1.25em] h-[1.25em]" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(PanelLeftClose, { className: "w-[1.25em] h-[1.25em]" })
+                content: isCollapsed ? t2("layout.sidebar.expandTooltip") : t2("layout.sidebar.collapseTooltip"),
+                side: "right",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    onClick: () => setIsCollapsed(!isCollapsed),
+                    className: "p-[0.25rem] rounded text-foreground-muted hover:text-accent-bright hover:bg-accent-soft cursor-pointer transition-colors ml-auto",
+                    children: isCollapsed ? /* @__PURE__ */ jsxRuntimeExports.jsx(PanelLeftOpen, { className: "w-[1.25em] h-[1.25em]" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(PanelLeftClose, { className: "w-[1.25em] h-[1.25em]" })
+                  }
+                )
               }
-            ) })
+            )
           ] }),
           mainNavTabs.map((tab) => {
             const TabIcon = tab.icon;
             const isTabActive = activeTab === tab.id;
+            const tabLabel = t2(tab.labelKey, void 0, tab.label);
             const rawSubItems = subNavConfig[tab.id] || [];
             const subItems = rawSubItems.filter((sub) => {
-              if (sub.id === "llmMatch" && !settings.hasSkyrimNet) return false;
+              if (sub.id === "llmMatch" && !settings2.hasSkyrimNet) return false;
               return true;
             });
             const tabButton = /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -18269,15 +20071,16 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                 className: `flex items-center gap-[0.625rem] rounded-md text-sm font-medium transition-all duration-150 cursor-pointer ${isCollapsed ? "justify-center p-[0.625rem]" : "px-[0.75rem] py-[0.5rem]"} ${isTabActive ? "bg-accent-soft text-accent-bright font-semibold border-l-2 border-accent shadow-sm" : "text-foreground-secondary hover:text-foreground-primary hover:bg-interactive-hover"}`,
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(TabIcon, { className: `w-[1.125em] h-[1.125em] flex-shrink-0 ${isTabActive ? "text-accent" : "text-foreground-muted"}` }),
-                  !isCollapsed && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate flex-1 text-left", children: tab.label })
+                  !isCollapsed && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate flex-1 text-left", children: tabLabel })
                 ]
               }
             );
             return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.125rem]", children: [
-              isCollapsed ? /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: tab.label, side: "right", children: tabButton }) : tabButton,
+              isCollapsed ? /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: tabLabel, side: "right", children: tabButton }) : tabButton,
               !isCollapsed && isTabActive && subItems.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "ml-[1.25rem] pl-[0.5rem] border-l border-border-divider flex flex-col gap-[0.125rem] my-[0.125rem]", children: subItems.map((sub) => {
                 const SubIcon = sub.icon;
                 const isSubActive = activeSubSection === sub.id;
+                const subLabel = t2(sub.labelKey, void 0, sub.label);
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "button",
                   {
@@ -18285,7 +20088,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                     className: `flex items-center gap-[0.5rem] px-[0.625rem] py-[0.375rem] rounded-md text-xs transition-all duration-150 cursor-pointer ${isSubActive ? "bg-panel-inset text-accent-bright font-semibold text-accent" : "text-foreground-muted hover:text-foreground-primary hover:bg-interactive-hover"}`,
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(SubIcon, { className: `w-[0.875em] h-[0.875em] flex-shrink-0 ${isSubActive ? "text-accent" : "text-foreground-muted"}` }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: sub.label })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: subLabel })
                     ]
                   },
                   sub.id
@@ -18299,6 +20102,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   };
   const DashboardLayout = ({ children, style }) => {
     var _a2;
+    const { t: t2 } = useTranslation();
     const closeUi = useMarasStore((s) => s.closeUi);
     const refreshData = useMarasStore((s) => s.refreshData);
     const fleeChildrenFromCell = useMarasStore((s) => s.fleeChildrenFromCell);
@@ -18324,9 +20128,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const next = Math.round(Math.min(1.5, Math.max(0.75, uiScale + delta)) * 100) / 100;
       updateSetting("uiScale", next);
     };
-    const currentTabObj = mainNavTabs.find((t2) => t2.id === activeTab);
+    const currentTabObj = mainNavTabs.find((tab) => tab.id === activeTab);
     const currentSubObj = (_a2 = subNavConfig[activeTab]) == null ? void 0 : _a2.find((s) => s.id === activeSubSection);
     const ActiveTabIcon = (currentTabObj == null ? void 0 : currentTabObj.icon) || Sparkles;
+    const resolvedStatusMsg = statusMsg === "M.A.R.A.S Core Active" ? t2("layout.footer.statusCoreActive") : statusMsg === "UI Dev Mode" ? t2("layout.footer.statusDevMode") : statusMsg || t2("layout.footer.statusReady");
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
@@ -18342,16 +20147,17 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("h1", { className: "text-xl font-bold tracking-wide text-accent-bright flex items-center gap-[0.375rem] leading-tight", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-                      " M.A.R.A.S"
+                      " ",
+                      t2("layout.header.brandTitle")
                     ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-secondary leading-tight", children: "Marriage & Relationship Alignment System" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-secondary leading-tight", children: t2("layout.header.brandSubtitle") })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       AppTooltip,
                       {
                         side: "bottom",
-                        content: revealSecretsInUI ? "All Secrets Revealed — Showing all hidden affairs and paternity secrets. Click to hide undiscovered secrets (Intrigue Mode)." : "Secrets Hidden (Intrigue Mode) — Undiscovered affairs and paternity secrets are masked as if no secrets exist. Click to reveal all secrets.",
+                        content: revealSecretsInUI ? t2("layout.header.secretsRevealedTooltip") : t2("layout.header.secretsHiddenTooltip"),
                         children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                           "button",
                           {
@@ -18360,7 +20166,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                             className: `h-[2rem] px-[0.625rem] rounded-md border transition-all cursor-pointer flex items-center justify-center gap-[0.3125rem] text-xs font-semibold shadow-raised ${revealSecretsInUI ? "text-accent-bright bg-accent/25 border-border-accent shadow-glow hover:bg-accent/35" : "text-foreground-primary bg-panel-raised border-border-strong hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft"}`,
                             children: [
                               revealSecretsInUI ? /* @__PURE__ */ jsxRuntimeExports.jsx(Eye, { className: "w-[1rem] h-[1rem] text-accent-bright shrink-0" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(EyeOff, { className: "w-[1rem] h-[1rem] text-accent shrink-0" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Secrets" })
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("layout.header.secretsButton") })
                             ]
                           }
                         )
@@ -18370,7 +20176,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                       AppTooltip,
                       {
                         side: "bottom",
-                        content: "Reload Data — Refresh all relationships, NPC profiles, children, household buffs, and settings from SKSE.",
+                        content: t2("layout.header.reloadTooltip"),
                         children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                           "button",
                           {
@@ -18384,7 +20190,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                                   className: `w-[1rem] h-[1rem] text-accent shrink-0 transition-transform duration-500 ${isSpinningRefresh ? "rotate-180 text-accent-bright" : ""}`
                                 }
                               ),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Reload" })
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("layout.header.reloadButton") })
                             ]
                           }
                         )
@@ -18394,7 +20200,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                       AppTooltip,
                       {
                         side: "bottom",
-                        content: hasChildren ? "Make all children in your current cell run away until you leave the cell (they flee through the nearest door; children still stuck next to you after ~12 seconds are moved out of the way). Useful before an intimate scene." : "No children to send away.",
+                        content: hasChildren ? t2("layout.header.sendKidsTooltip") : t2("layout.header.sendKidsEmptyTooltip"),
                         children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                           "button",
                           {
@@ -18404,7 +20210,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                             className: "h-[2rem] px-[0.625rem] rounded-md border transition-all cursor-pointer flex items-center justify-center gap-[0.3125rem] text-xs font-semibold text-foreground-primary bg-panel-raised border-border-strong shadow-raised hover:text-accent-bright hover:border-border-accent hover:bg-accent-soft disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:text-foreground-primary disabled:hover:border-border-strong disabled:hover:bg-panel-raised",
                             children: [
                               /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1rem] h-[1rem] text-accent shrink-0" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Send Kids" })
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("layout.header.sendKidsButton") })
                             ]
                           }
                         ) })
@@ -18414,15 +20220,15 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                 ] }),
                 currentTabObj && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-[2rem] flex items-center gap-[0.5rem] bg-panel-inset px-[0.75rem] rounded-md border border-border-subtle text-xs font-medium", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(ActiveTabIcon, { className: "w-[1em] h-[1em] text-accent" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-semibold", children: currentTabObj.label }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-semibold", children: t2(currentTabObj.labelKey, void 0, currentTabObj.label) }),
                   currentSubObj && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "/" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary", children: currentSubObj.label })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary", children: t2(currentSubObj.labelKey, void 0, currentSubObj.label) })
                   ] })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-[2rem] flex items-center bg-panel-raised border border-border-strong rounded-md p-[0.125rem] shadow-raised", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { side: "bottom", content: "Decrease UI & Font Scale (-5%)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { side: "bottom", content: t2("layout.header.scaleDecreaseTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "button",
                       {
                         type: "button",
@@ -18436,7 +20242,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                       AppTooltip,
                       {
                         side: "bottom",
-                        content: "Accessibility UI & Font Scale — Click to reset to 100%",
+                        content: t2("layout.header.scaleResetTooltip"),
                         children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                           "button",
                           {
@@ -18451,7 +20257,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                         )
                       }
                     ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { side: "bottom", content: "Increase UI & Font Scale (+5%)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { side: "bottom", content: t2("layout.header.scaleIncreaseTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "button",
                       {
                         type: "button",
@@ -18466,7 +20272,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                     AppTooltip,
                     {
                       side: "bottom",
-                      content: isGamePaused ? "Game Paused — Skyrim world time and AI are paused while you browse. Click to unpause the game." : "Pause Game — Click to pause Skyrim while the dashboard is open.",
+                      content: isGamePaused ? t2("layout.header.gamePausedTooltip") : t2("layout.header.pauseGameTooltip"),
                       children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                         "button",
                         {
@@ -18480,7 +20286,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                                 className: `w-[1rem] h-[1rem] shrink-0 ${isGamePaused ? "text-accent-bright" : "text-accent"}`
                               }
                             ),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGamePaused ? "Paused" : "Pause" })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGamePaused ? t2("layout.header.pausedButton") : t2("layout.header.pauseButton") })
                           ]
                         }
                       )
@@ -18490,7 +20296,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                     AppTooltip,
                     {
                       side: "bottom",
-                      content: uiFullScreen ? "Windowed Mode — Restore centered dashboard window" : "Full Screen Mode — Expand dashboard to fill the screen",
+                      content: uiFullScreen ? t2("layout.header.windowedModeTooltip") : t2("layout.header.fullScreenModeTooltip"),
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "button",
                         {
@@ -18502,7 +20308,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                       )
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Close UI (Esc)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("layout.header.closeTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
                       type: "button",
@@ -18520,9 +20326,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
               /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "px-[1.25rem] py-[0.5rem] bg-panel border-t border-border-divider flex items-center justify-between text-xs text-foreground-muted", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-[0.5rem] h-[0.5rem] rounded-full inline-block ${isInGame2 ? "bg-status-success" : "bg-accent"}` }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: statusMsg }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: resolvedStatusMsg }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-border-divider", children: "|" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: isInGame2 ? "text-status-success font-semibold" : "text-accent-bright", children: isInGame2 ? "Live SKSE Mode" : "Standalone Mock Mode" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: isInGame2 ? "text-status-success font-semibold" : "text-accent-bright", children: isInGame2 ? t2("layout.footer.liveSkseMode") : t2("layout.footer.standaloneMockMode") })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -18532,11 +20338,11 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
                       className: "flex items-center gap-[0.25rem] hover:text-accent cursor-pointer transition-colors",
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(Terminal, { className: "w-[1em] h-[1em]" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Log Test Signal" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("layout.footer.logTestSignal") })
                       ]
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "v1.0.0" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("layout.footer.version", { version: "1.0.0" }) })
                 ] })
               ] })
             ]
@@ -18544,46 +20350,6 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         )
       }
     );
-  };
-  const falsyToString = (value) => typeof value === "boolean" ? `${value}` : value === 0 ? "0" : value;
-  const cx = clsx;
-  const cva = (base, config) => (props) => {
-    var _config_compoundVariants;
-    if ((config === null || config === void 0 ? void 0 : config.variants) == null) return cx(base, props === null || props === void 0 ? void 0 : props.class, props === null || props === void 0 ? void 0 : props.className);
-    const { variants, defaultVariants } = config;
-    const getVariantClassNames = Object.keys(variants).map((variant) => {
-      const variantProp = props === null || props === void 0 ? void 0 : props[variant];
-      const defaultVariantProp = defaultVariants === null || defaultVariants === void 0 ? void 0 : defaultVariants[variant];
-      if (variantProp === null) return null;
-      const variantKey = falsyToString(variantProp) || falsyToString(defaultVariantProp);
-      return variants[variant][variantKey];
-    });
-    const propsWithoutUndefined = props && Object.entries(props).reduce((acc, param) => {
-      let [key, value] = param;
-      if (value === void 0) {
-        return acc;
-      }
-      acc[key] = value;
-      return acc;
-    }, {});
-    const getCompoundVariantClassNames = config === null || config === void 0 ? void 0 : (_config_compoundVariants = config.compoundVariants) === null || _config_compoundVariants === void 0 ? void 0 : _config_compoundVariants.reduce((acc, param) => {
-      let { class: cvClass, className: cvClassName, ...compoundVariantOptions } = param;
-      return Object.entries(compoundVariantOptions).every((param2) => {
-        let [key, value] = param2;
-        return Array.isArray(value) ? value.includes({
-          ...defaultVariants,
-          ...propsWithoutUndefined
-        }[key]) : {
-          ...defaultVariants,
-          ...propsWithoutUndefined
-        }[key] === value;
-      }) ? [
-        ...acc,
-        cvClass,
-        cvClassName
-      ] : acc;
-    }, []);
-    return cx(base, getVariantClassNames, getCompoundVariantClassNames, props === null || props === void 0 ? void 0 : props.class, props === null || props === void 0 ? void 0 : props.className);
   };
   const modalTemplateRegistry = /* @__PURE__ */ new Map();
   function getModalTemplate(modalType) {
@@ -21623,17 +23389,19 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   };
   const SearchInput = ({
     value,
-    placeholder = "Search...",
+    placeholder,
     onChange,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
+    const resolvedPlaceholder = placeholder ?? t2("shared.searchPlaceholder");
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `relative w-full ${className}`, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[0.875em] h-[0.875em] text-foreground-muted absolute left-[0.5rem] top-1/2 -translate-y-1/2 z-10" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         Input,
         {
           type: "text",
-          placeholder,
+          placeholder: resolvedPlaceholder,
           value,
           onChange: (e) => onChange(e.target.value),
           className: "pl-[1.75rem]"
@@ -22160,6 +23928,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   );
   ModalChecklistRow.displayName = "ModalChecklistRow";
   const ChecklistControlSection = ({ control }) => {
+    const { t: t2 } = useTranslation();
     const checklistValue = useModalStore(
       (s) => s.controlValues[control.id]
     );
@@ -22191,12 +23960,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
           control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold uppercase tracking-wide text-foreground-secondary", children: control.label }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.5rem] py-[0.125rem] rounded-full bg-panel-inset border border-border-subtle text-xs text-accent-bright font-semibold", children: [
-            checkedCount,
-            " / ",
-            totalCount,
-            " Selected"
-          ] })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.5rem] py-[0.125rem] rounded-full bg-panel-inset border border-border-subtle text-xs text-accent-bright font-semibold", children: t2("modals.selectedCount", { checked: checkedCount, total: totalCount }) })
         ] }),
         control.showSelectAllToggle !== false && totalCount > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx(
           Button,
@@ -22206,7 +23970,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             size: "sm",
             onClick: () => setAllChecklistItems(control.id, !allChecked),
             className: "text-xs h-[1.75rem] px-[0.625rem]",
-            children: allChecked ? "Deselect All" : "Select All"
+            children: allChecked ? t2("modals.deselectAll") : t2("modals.selectAll")
           }
         )
       ] }),
@@ -22216,10 +23980,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         {
           value: filterQuery,
           onChange: setFilterQuery,
-          placeholder: "Filter items..."
+          placeholder: t2("modals.filterItems")
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-[20rem] overflow-y-auto pr-[0.25rem] flex flex-col gap-[0.5rem]", children: filteredItems.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] rounded-md bg-panel-inset border border-border-divider text-center text-xs text-foreground-muted", children: control.emptyMessage || "No matching items found." }) : filteredItems.map((item) => {
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-[20rem] overflow-y-auto pr-[0.25rem] flex flex-col gap-[0.5rem]", children: filteredItems.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] rounded-md bg-panel-inset border border-border-divider text-center text-xs text-foreground-muted", children: control.emptyMessage || t2("modals.emptyChecklist") }) : filteredItems.map((item) => {
         const itemState = checklistValue == null ? void 0 : checklistValue.items[item.id];
         const isChecked = (itemState == null ? void 0 : itemState.checked) ?? Boolean(item.checked);
         const currentSelectVal = (itemState == null ? void 0 : itemState.selectValue) ?? item.selectValue;
@@ -22319,16 +24083,22 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     return null;
   };
   const GenericModalContent = ({ modal }) => {
+    const { t: t2 } = useTranslation();
     const controlValues = useModalStore((s) => s.controlValues);
     const isSubmitting = useModalStore((s) => s.isSubmitting);
     const submitModal = useModalStore((s) => s.submitModal);
     const tone = modal.tone || "default";
     const paragraphs = modal.message ? modal.message.split("\n").filter((line) => line.trim().length > 0) : [];
+    const keyboardHintSegments = t2("modals.keyboardHint", {
+      navKeys: "[WASD / Arrows]",
+      tabKey: "[Tab]",
+      selectKeys: "[Enter / Space / E]"
+    }).split(/(\[[^\]]+\])/g);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "px-[1.25rem] py-[1rem] border-b border-border-divider bg-panel-raised flex items-center gap-[0.875rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: toneIconContainerVariants({ tone }), children: renderToneIcon(tone, "w-[1.25em] h-[1.25em]") }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col min-w-0", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-bold text-accent-bright leading-tight truncate", children: modal.title || "M.A.R.A.S Confirmation" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-bold text-accent-bright leading-tight truncate", children: modal.title || t2("modals.defaultTitle") }),
           modal.subtitle && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted truncate mt-[0.125rem]", children: modal.subtitle })
         ] })
       ] }),
@@ -22346,7 +24116,16 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         ) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "px-[1.25rem] py-[0.875rem] bg-panel-raised border-t border-border-divider flex items-center justify-between gap-[0.75rem] flex-wrap", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted select-none", children: "Navigate: WASD / Arrows / Tab • Select: Enter / Space / E" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted select-none flex items-center gap-[0.25rem] flex-wrap", children: keyboardHintSegments.map(
+          (seg, idx) => seg.startsWith("[") && seg.endsWith("]") ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "kbd",
+            {
+              className: "px-[0.3125rem] py-[0.0625rem] rounded bg-panel-inset border border-border-subtle font-mono text-[0.6875rem] text-foreground-secondary",
+              children: seg
+            },
+            idx
+          ) : /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.Fragment, { children: seg }, idx)
+        ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end gap-[0.625rem] flex-wrap ml-auto", children: modal.buttons.map((btn, idx) => {
           let requirementUnmet = false;
           if (btn.requireChecklistId && (btn.minCheckedCount ?? 0) > 0) {
@@ -22566,6 +24345,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     );
   };
   const StatCards = () => {
+    const { t: t2 } = useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const getCount = (status) => {
       return relationships.filter(
@@ -22573,11 +24353,11 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       ).length;
     };
     const stats = [
-      { label: "Married", count: getCount(RelationshipStatus.Married), icon: Crown, color: "text-accent-bright" },
-      { label: "Dating", count: getCount(RelationshipStatus.Dating), icon: Heart, color: "text-status-success" },
-      { label: "Lovers", count: getCount(RelationshipStatus.Lover), icon: Flame, color: "text-accent" },
-      { label: "Engaged", count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: "text-status-warning" },
-      { label: "Divorced", count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: "text-status-danger" }
+      { label: t2("overview.stats.married"), count: getCount(RelationshipStatus.Married), icon: Crown, color: "text-accent-bright" },
+      { label: t2("overview.stats.dating"), count: getCount(RelationshipStatus.Dating), icon: Heart, color: "text-status-success" },
+      { label: t2("overview.stats.lovers"), count: getCount(RelationshipStatus.Lover), icon: Flame, color: "text-accent" },
+      { label: t2("overview.stats.engaged"), count: getCount(RelationshipStatus.Engaged), icon: UserCheck, color: "text-status-warning" },
+      { label: t2("overview.stats.divorced"), count: getCount(RelationshipStatus.Divorced), icon: HeartOff, color: "text-status-danger" }
     ];
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-[0.75rem]", children: stats.map((stat, i) => {
       const Icon2 = stat.icon;
@@ -22757,9 +24537,62 @@ Defaulting to \`null\`.`;
   const parseSocialClass = (val) => parseTraitEnum(val, SocialClass, SocialClass.Middle);
   const parseSkillType = (val) => parseTraitEnum(val, SkillType, SkillType.Warrior);
   const parseTemperament = (val) => parseTraitEnum(val, Temperament, Temperament.Proud);
-  const getSocialClassLabel = (sc2) => SocialClass[parseSocialClass(sc2)] || "Middle";
-  const getSkillTypeLabel = (st) => SkillType[parseSkillType(st)] || "Warrior";
-  const getTemperamentLabel = (t2) => Temperament[parseTemperament(t2)] || "Proud";
+  const getSocialClassLabel = (sc2) => {
+    switch (parseSocialClass(sc2)) {
+      case SocialClass.Outcast:
+        return t("enums.socialClass.outcast");
+      case SocialClass.Poverty:
+        return t("enums.socialClass.poverty");
+      case SocialClass.Working:
+        return t("enums.socialClass.working");
+      case SocialClass.Middle:
+        return t("enums.socialClass.middle");
+      case SocialClass.Wealthy:
+        return t("enums.socialClass.wealthy");
+      case SocialClass.Religious:
+        return t("enums.socialClass.religious");
+      case SocialClass.Nobles:
+        return t("enums.socialClass.nobles");
+      case SocialClass.Rulers:
+        return t("enums.socialClass.rulers");
+      default:
+        return t("enums.socialClass.middle");
+    }
+  };
+  const getSkillTypeLabel = (st) => {
+    switch (parseSkillType(st)) {
+      case SkillType.Warrior:
+        return t("enums.skillType.warrior");
+      case SkillType.Mage:
+        return t("enums.skillType.mage");
+      case SkillType.Rogue:
+        return t("enums.skillType.rogue");
+      case SkillType.Craftsman:
+        return t("enums.skillType.craftsman");
+      case SkillType.Ranger:
+        return t("enums.skillType.ranger");
+      case SkillType.Orator:
+        return t("enums.skillType.orator");
+      default:
+        return t("enums.skillType.warrior");
+    }
+  };
+  const getTemperamentLabel = (t$12) => {
+    switch (parseTemperament(t$12)) {
+      case Temperament.Proud:
+        return t("enums.temperament.proud");
+      case Temperament.Humble:
+        return t("enums.temperament.humble");
+      case Temperament.Jealous:
+        return t("enums.temperament.jealous");
+      case Temperament.Romantic:
+        return t("enums.temperament.romantic");
+      case Temperament.Independent:
+        return t("enums.temperament.independent");
+      default:
+        return t("enums.temperament.proud");
+    }
+  };
   const CUSTOM_ICON_NAMES = {
     nobles: "noble",
     rulers: "ruler",
@@ -22812,6 +24645,7 @@ Defaulting to \`null\`.`;
       alt,
       ...props
     }, ref) => {
+      useLocaleStore((s) => s.revision);
       const dim = resolveSize(size2);
       const imgNode = /* @__PURE__ */ jsxRuntimeExports.jsx(
         "img",
@@ -22829,7 +24663,7 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
       ] }) : imgNode;
       if (showTooltip) {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `${category}: ${label}`, children: contentNode });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t("shared.traitTooltip", { category, label }), children: contentNode });
       }
       return contentNode;
     }
@@ -22843,6 +24677,7 @@ Defaulting to \`null\`.`;
     showIconOnly = false,
     className
   }) {
+    useLocaleStore((s) => s.revision);
     const sizeClasses = size2 === "sm" ? showIconOnly ? "p-[0.125rem]" : "text-[0.6875rem] px-[0.375rem] py-[0.125rem] gap-[0.25rem]" : size2 === "md" ? showIconOnly ? "p-[0.25rem]" : "text-xs px-[0.5rem] py-[0.25rem] gap-[0.375rem]" : showIconOnly ? "p-[0.5rem]" : "text-sm px-[0.75rem] py-[0.375rem] gap-[0.5rem]";
     const badgeNode = /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "span",
@@ -22858,16 +24693,17 @@ Defaulting to \`null\`.`;
         ]
       }
     );
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: `${category}: ${label}`, children: badgeNode });
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t("shared.traitTooltip", { category, label }), children: badgeNode });
   }
   const SocialClassIcon = React$2.forwardRef(
     (props, ref) => {
+      useLocaleStore((s) => s.revision);
       const sc2 = parseSocialClass(props.value);
       return /* @__PURE__ */ jsxRuntimeExports.jsx(
         TraitIconBase,
         {
           ref,
-          category: "Social Class",
+          category: t("shared.traitCategory.socialClass"),
           label: getSocialClassLabel(sc2),
           iconUrl: getSocialClassIconUrl(sc2, props.variant),
           ...props
@@ -22878,12 +24714,13 @@ Defaulting to \`null\`.`;
   SocialClassIcon.displayName = "SocialClassIcon";
   const SkillTypeIcon = React$2.forwardRef(
     (props, ref) => {
+      useLocaleStore((s) => s.revision);
       const st = parseSkillType(props.value);
       return /* @__PURE__ */ jsxRuntimeExports.jsx(
         TraitIconBase,
         {
           ref,
-          category: "Skill Class",
+          category: t("shared.traitCategory.skillClass"),
           label: getSkillTypeLabel(st),
           iconUrl: getSkillTypeIconUrl(st, props.variant),
           ...props
@@ -22894,14 +24731,15 @@ Defaulting to \`null\`.`;
   SkillTypeIcon.displayName = "SkillTypeIcon";
   const TemperamentIcon = React$2.forwardRef(
     (props, ref) => {
-      const tp = parseTemperament(props.value);
+      useLocaleStore((s) => s.revision);
+      const tp2 = parseTemperament(props.value);
       return /* @__PURE__ */ jsxRuntimeExports.jsx(
         TraitIconBase,
         {
           ref,
-          category: "Temperament",
-          label: getTemperamentLabel(tp),
-          iconUrl: getTemperamentIconUrl(tp, props.variant),
+          category: t("shared.traitCategory.temperament"),
+          label: getTemperamentLabel(tp2),
+          iconUrl: getTemperamentIconUrl(tp2, props.variant),
           ...props
         }
       );
@@ -22909,13 +24747,14 @@ Defaulting to \`null\`.`;
   );
   TemperamentIcon.displayName = "TemperamentIcon";
   const SocialClassBadge = (props) => {
+    useLocaleStore((s) => s.revision);
     const sc2 = parseSocialClass(props.value);
     const label = getSocialClassLabel(sc2);
     const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       TraitBadgeBase,
       {
-        category: "Social Class",
+        category: t("shared.traitCategory.socialClass"),
         label,
         icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
           SocialClassIcon,
@@ -22932,13 +24771,14 @@ Defaulting to \`null\`.`;
     );
   };
   const SkillTypeBadge = (props) => {
+    useLocaleStore((s) => s.revision);
     const st = parseSkillType(props.value);
     const label = getSkillTypeLabel(st);
     const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       TraitBadgeBase,
       {
-        category: "Skill Class",
+        category: t("shared.traitCategory.skillClass"),
         label,
         icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
           SkillTypeIcon,
@@ -22955,18 +24795,19 @@ Defaulting to \`null\`.`;
     );
   };
   const TemperamentBadge = (props) => {
-    const tp = parseTemperament(props.value);
-    const label = getTemperamentLabel(tp);
+    useLocaleStore((s) => s.revision);
+    const tp2 = parseTemperament(props.value);
+    const label = getTemperamentLabel(tp2);
     const iconSize = props.size === "sm" ? "0.875em" : props.size === "md" ? "1.125em" : "1.375em";
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       TraitBadgeBase,
       {
-        category: "Temperament",
+        category: t("shared.traitCategory.temperament"),
         label,
         icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
           TemperamentIcon,
           {
-            value: tp,
+            value: tp2,
             size: iconSize,
             variant: props.variant,
             className: props.iconClassName,
@@ -22989,22 +24830,23 @@ Defaulting to \`null\`.`;
   }) => {
     const sc2 = (npc == null ? void 0 : npc.socialClass) !== void 0 ? npc.socialClass : socialClass;
     const st = (npc == null ? void 0 : npc.skillType) !== void 0 ? npc.skillType : skillType;
-    const tp = (npc == null ? void 0 : npc.temperament) !== void 0 ? npc.temperament : temperament;
+    const tp2 = (npc == null ? void 0 : npc.temperament) !== void 0 ? npc.temperament : temperament;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: cn("inline-flex items-center gap-[0.25rem] flex-wrap", className), children: [
       sc2 !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(SocialClassBadge, { value: sc2, size: size2, variant, showIconOnly }),
       st !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(SkillTypeBadge, { value: st, size: size2, variant, showIconOnly }),
-      tp !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(TemperamentBadge, { value: tp, size: size2, variant, showIconOnly })
+      tp2 !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(TemperamentBadge, { value: tp2, size: size2, variant, showIconOnly })
     ] });
   };
   const HierarchyDisplay = () => {
+    const { t: t2 } = useTranslation();
     const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const rankBadges = [
-      { rank: "1st Spouse", icon: Crown, color: "text-amber-400 border-amber-500/30" },
-      { rank: "2nd Spouse", icon: Medal, color: "text-slate-300 border-slate-400/30" },
-      { rank: "3rd Spouse", icon: Award, color: "text-amber-600 border-amber-700/30" }
+      { rank: t2("overview.hierarchy.rank1"), icon: Crown, color: "text-amber-400 border-amber-500/30" },
+      { rank: t2("overview.hierarchy.rank2"), icon: Medal, color: "text-slate-300 border-slate-400/30" },
+      { rank: t2("overview.hierarchy.rank3"), icon: Award, color: "text-amber-600 border-amber-700/30" }
     ];
     const handleCardClick = (formId) => {
       if (formId) {
@@ -23015,9 +24857,10 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-base font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Crown, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          " Spouse Hierarchy (Top 3 Ranks)"
+          " ",
+          t2("overview.hierarchy.title")
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: "Managed via Marriage & Spouse Assets" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: t2("overview.hierarchy.subtitle") })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-[0.75rem]", children: rankBadges.map((badge, idx) => {
         var _a2;
@@ -23046,15 +24889,15 @@ Defaulting to \`null\`.`;
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.race }),
                     npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: t2("shared.pluginTooltip", { plugin: npc.pluginName }), children: npc.pluginName })
                     ] }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.currentHome || "No Home Set" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.currentHome || t2("shared.noHomeSet") })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc, size: "md" })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" })
-              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "py-[1rem] text-center text-xs text-foreground-muted italic", children: "Unassigned Rank Slot" })
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "py-[1rem] text-center text-xs text-foreground-muted italic", children: t2("overview.hierarchy.unassignedSlot") })
             ]
           },
           idx
@@ -23823,6 +25666,7 @@ Defaulting to \`null\`.`;
   ));
   ScrollBar.displayName = ScrollAreaScrollbar.displayName;
   const AffectionOverview = () => {
+    const { t: t2, tp: tp2 } = useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
@@ -23830,7 +25674,7 @@ Defaulting to \`null\`.`;
     const playerRelationships = relationships.filter(
       (r2) => (r2.actorA === PLAYER_FORM_ID || r2.actorB === PLAYER_FORM_ID) && (r2.status === RelationshipStatus.Married || r2.status === RelationshipStatus.Engaged || r2.status === RelationshipStatus.Dating || r2.status === RelationshipStatus.Lover)
     );
-    const partners = playerRelationships.map((r2) => {
+    const partners2 = playerRelationships.map((r2) => {
       var _a2;
       const partnerId = r2.actorA === PLAYER_FORM_ID ? r2.actorB : r2.actorA;
       const npc = npcProfiles.get(partnerId);
@@ -23844,14 +25688,12 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          " Affection Health"
+          " ",
+          t2("overview.affection.title")
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
-          partners.length,
-          " Partners Tracked"
-        ] })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: tp2("overview.affection.partnersTracked", partners2.length) })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: partners.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: "No active partners" }) : partners.map(({ partnerId, npc, status, affection }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: partners2.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: t2("overview.affection.empty") }) : partners2.map(({ partnerId, npc, status, affection }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
           onClick: () => handleRowClick(partnerId),
@@ -23863,7 +25705,7 @@ Defaulting to \`null\`.`;
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc == null ? void 0 : npc.race }),
                 (npc == null ? void 0 : npc.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[4.5rem]", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[4.5rem]", title: t2("shared.pluginTooltip", { plugin: npc.pluginName }), children: npc.pluginName })
                 ] })
               ] })
             ] }),
@@ -23879,35 +25721,36 @@ Defaulting to \`null\`.`;
     if (!pair || !pair.statusHistory || pair.statusHistory.length === 0) return void 0;
     return pair.statusHistory[pair.statusHistory.length - 1];
   }
-  function formatGameDay(day, currentGameDay) {
-    if (day === void 0 || day === null) return "";
-    if (day < 0) return "Historical";
+  function formatGameDay(gameDay, currentGameDay) {
+    if (gameDay === void 0 || gameDay === null) return "";
+    if (Number.isNaN(gameDay)) return t("utils.date.unknown");
+    if (gameDay < 0) return t("utils.date.historical");
     if (currentGameDay != null && currentGameDay >= 0) {
-      const diff = Math.floor(currentGameDay - day);
-      if (diff <= 0) return "Today";
-      if (diff === 1) return "1 day ago";
-      if (diff < 7) return `${diff} days ago`;
-      if (diff < 30) {
-        const weeks = Math.floor(diff / 7);
-        return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+      const days = Math.floor(currentGameDay - gameDay);
+      if (days <= 0) return t("utils.date.today");
+      if (days < 7) return tp("utils.date.daysAgo", days);
+      if (days < 30) {
+        const weeks = Math.floor(days / 7);
+        return tp("utils.date.weeksAgo", weeks);
       }
-      if (diff < 365) {
-        const months = Math.floor(diff / 30);
-        return months === 1 ? "1 month ago" : `${months} months ago`;
+      if (days < 365) {
+        const months = Math.floor(days / 30);
+        return tp("utils.date.monthsAgo", months);
       }
-      const years = Math.floor(diff / 365);
-      return years === 1 ? "1 year ago" : `${years} years ago`;
+      const years = Math.floor(days / 365);
+      return tp("utils.date.yearsAgo", years);
     }
-    return `Day ${Math.floor(day)}`;
+    return t("utils.date.dayNumber", { day: Math.floor(gameDay) });
   }
-  function formatRelationshipDate(date, prefix = "Married", currentGameDay) {
+  function formatRelationshipDate(date, prefix, currentGameDay) {
     if (date === void 0 || date === null) return "";
-    if (date < 0) return `${prefix} (Historical)`;
+    const resolvedPrefix = prefix ?? t("utils.date.marriedPrefix");
+    if (date < 0) return t("utils.date.withPrefixHistorical", { prefix: resolvedPrefix });
     const formatted = formatGameDay(date, currentGameDay);
-    if (formatted === "Today") return `${prefix} Today`;
-    return `${prefix} ${formatted}`;
+    return t("utils.date.withPrefix", { prefix: resolvedPrefix, date: formatted });
   }
   const ActivityFeed = ({ limit = 5 }) => {
+    const { t: t2, tp: tp2 } = useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
@@ -23934,8 +25777,8 @@ Defaulting to \`null\`.`;
     });
     const getName = (id2) => {
       var _a2, _b;
-      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
-      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || "Unknown NPC";
+      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("shared.playerFallback");
+      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || t2("shared.unknownNpc");
     };
     const renderActorName = (actorId) => {
       const name = getName(actorId);
@@ -23963,27 +25806,26 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-sm font-semibold text-accent-bright flex items-center gap-[0.375rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          " Recent Activity Feed"
+          " ",
+          t2("overview.activity.title")
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
-            events.length,
-            " Events"
-          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: tp2("overview.activity.eventsCount", events.length) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
               onClick: () => setActiveSubSection("activity"),
               className: "text-xs text-accent hover:text-accent-bright hover:underline flex items-center gap-[0.25rem] transition-colors cursor-pointer font-medium",
               children: [
-                "View Full Feed ",
+                t2("overview.activity.viewFullFeed"),
+                " ",
                 /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRight, { className: "w-[0.875em] h-[0.875em]" })
               ]
             }
           )
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: events.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: "No relationship history recorded" }) : events.slice(0, limit).map((ev, idx) => {
+      /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-[16rem] pr-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.5rem]", children: events.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted text-center py-[2rem]", children: t2("overview.activity.empty") }) : events.slice(0, limit).map((ev, idx) => {
         const toLabel = getStatusLabel(ev.toStatus);
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
@@ -24010,6 +25852,7 @@ Defaulting to \`null\`.`;
     ] });
   };
   const FullActivityFeed = () => {
+    const { t: t2, tp: tp2, revision } = useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
@@ -24042,8 +25885,8 @@ Defaulting to \`null\`.`;
     }, [relationships]);
     const getName = (id2) => {
       var _a2, _b;
-      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
-      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || `NPC ${id2}`;
+      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("shared.playerFallback");
+      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || t2("shared.npcWithId", { id: id2 });
     };
     const filteredEvents = reactExports.useMemo(() => {
       return allEvents.filter((ev) => {
@@ -24062,7 +25905,7 @@ Defaulting to \`null\`.`;
         }
         return true;
       });
-    }, [allEvents, searchTerm, selectedCategory, npcProfiles]);
+    }, [allEvents, searchTerm, selectedCategory, npcProfiles, revision]);
     const unionCount = reactExports.useMemo(
       () => allEvents.filter(
         (e) => e.toStatus === RelationshipStatus.Married || e.toStatus === RelationshipStatus.Engaged
@@ -24111,39 +25954,33 @@ Defaulting to \`null\`.`;
             {
               onClick: () => setActiveSubSection("dashboard"),
               className: "p-[0.5rem] rounded-md bg-panel-raised border border-border-subtle text-foreground-muted hover:text-accent-bright hover:bg-accent-soft transition-colors cursor-pointer",
-              title: "Back to Dashboard",
+              title: t2("overview.fullActivity.backTooltip"),
               children: /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowLeft, { className: "w-[1.125em] h-[1.125em]" })
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-lg font-bold text-foreground-primary flex items-center gap-[0.5rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[1.25em] h-[1.25em] text-accent" }),
-              "Full Activity Feed & Relationship History"
+              t2("overview.fullActivity.title")
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted", children: "Chronological ledger of relationship milestone transitions across Skyrim" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted", children: t2("overview.fullActivity.subtitle") })
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-semibold px-[0.625rem] py-[0.25rem] bg-accent-soft text-accent-bright rounded-full border border-accent/20", children: [
-          allEvents.length,
-          " Total Events"
-        ] }) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold px-[0.625rem] py-[0.25rem] bg-accent-soft text-accent-bright rounded-full border border-accent/20", children: tp2("overview.fullActivity.totalEvents", allEvents.length) }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-subtle rounded-lg p-[0.75rem] flex flex-col md:flex-row items-center justify-between gap-[0.75rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-wrap w-full md:w-auto", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted flex items-center gap-[0.25rem] mr-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Filter, { className: "w-[0.875em] h-[0.875em]" }),
-            " Filter:"
+            " ",
+            t2("overview.fullActivity.filterLabel")
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               onClick: () => setSelectedCategory("all"),
               className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer ${selectedCategory === "all" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
-              children: [
-                "All (",
-                allEvents.length,
-                ")"
-              ]
+              children: t2("overview.fullActivity.filterAll", { count: allEvents.length })
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -24153,9 +25990,8 @@ Defaulting to \`null\`.`;
               className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "union" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.Engaged }),
-                " Marriages & Engagements (",
-                unionCount,
-                ")"
+                " ",
+                t2("overview.fullActivity.filterUnion", { count: unionCount })
               ]
             }
           ),
@@ -24166,9 +26002,8 @@ Defaulting to \`null\`.`;
               className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "romance" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.Lover }),
-                " Dating & Lovers (",
-                romanceCount,
-                ")"
+                " ",
+                t2("overview.fullActivity.filterRomance", { count: romanceCount })
               ]
             }
           ),
@@ -24179,9 +26014,8 @@ Defaulting to \`null\`.`;
               className: `px-[0.625rem] py-[0.3125rem] rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-[0.25rem] ${selectedCategory === "ended" ? "bg-accent text-white font-semibold shadow-sm" : "bg-panel-raised text-foreground-secondary hover:bg-interactive-hover"}`,
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: RelationshipStatus.ExLover }),
-                " Divorced & Ended (",
-                endedCount,
-                ")"
+                " ",
+                t2("overview.fullActivity.filterEnded", { count: endedCount })
               ]
             }
           )
@@ -24194,7 +26028,7 @@ Defaulting to \`null\`.`;
               type: "text",
               value: searchTerm,
               onChange: (e) => setSearchTerm(e.target.value),
-              placeholder: "Search by actor or status...",
+              placeholder: t2("overview.fullActivity.searchPlaceholder"),
               className: "w-full bg-panel-inset border border-border-subtle rounded-md pl-[2rem] pr-[2rem] py-[0.375rem] text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
             }
           ),
@@ -24210,7 +26044,7 @@ Defaulting to \`null\`.`;
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-panel border border-border-subtle rounded-lg p-[1rem] flex-1 flex flex-col overflow-hidden min-h-[22rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "h-full pr-[0.75rem]", children: filteredEvents.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center py-[4rem] gap-[0.75rem] text-center", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { className: "w-[2.5rem] h-[2.5rem] text-foreground-muted opacity-40" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-foreground-muted font-medium", children: searchTerm || selectedCategory !== "all" ? "No relationship activity matching your current filter" : "No relationship activity history recorded yet" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-foreground-muted font-medium", children: searchTerm || selectedCategory !== "all" ? t2("overview.fullActivity.emptyFiltered") : t2("overview.fullActivity.emptyAll") }),
         (searchTerm || selectedCategory !== "all") && /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
@@ -24219,7 +26053,7 @@ Defaulting to \`null\`.`;
               setSelectedCategory("all");
             },
             className: "text-xs text-accent hover:underline flex items-center gap-[0.25rem]",
-            children: "Reset filters"
+            children: t2("overview.fullActivity.resetFilters")
           }
         )
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.625rem]", children: filteredEvents.map((ev) => {
@@ -24239,7 +26073,7 @@ Defaulting to \`null\`.`;
                     renderActorName(ev.actorB)
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-foreground-muted text-xs", children: [
-                    ev.timestamp < 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem] text-foreground-secondary", children: "Pre-existing" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem]", children: fromLabel }),
+                    ev.timestamp < 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem] text-foreground-secondary", children: t2("overview.fullActivity.preExisting") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded text-[0.6875rem]", children: fromLabel }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "→" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: ev.toStatus })
                   ] })
@@ -24252,7 +26086,7 @@ Defaulting to \`null\`.`;
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-inset px-[0.5rem] py-[0.125rem] rounded border border-border-subtle", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Calendar, { className: "w-[0.75em] h-[0.75em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: ev.timestamp < 0 ? "Historical" : `Day ${Math.floor(ev.timestamp)}` })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: ev.timestamp < 0 ? t2("overview.fullActivity.historical") : t2("overview.fullActivity.dayNumber", { day: Math.floor(ev.timestamp) }) })
                 ] })
               ] })
             ]
@@ -24263,6 +26097,7 @@ Defaulting to \`null\`.`;
     ] });
   };
   const NpcAllPairsList = () => {
+    const { t: t2 } = useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
@@ -24272,8 +26107,8 @@ Defaulting to \`null\`.`;
     const [statusFilter, setStatusFilter] = reactExports.useState("all");
     const getActorName = (id2) => {
       var _a2, _b;
-      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
-      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || `NPC (${id2.slice(-6)})`;
+      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("shared.playerFallback");
+      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || t2("npcRelations.allPairs.npcShortFallback", { id: id2.slice(-6) });
     };
     const filteredPairs = relationships.filter((rel) => {
       if (statusFilter !== "all") {
@@ -24291,30 +26126,30 @@ Defaulting to \`null\`.`;
       return true;
     });
     const statusOptions = [
-      { value: "all", label: "All Statuses" },
-      ...Object.keys(RelationshipStatus).filter((k2) => isNaN(Number(k2))).map((key, idx) => ({
-        value: idx.toString(),
-        label: key
-      }))
+      { value: "all", label: t2("npcRelations.allPairs.allStatuses") },
+      ...Object.keys(RelationshipStatus).filter((k2) => isNaN(Number(k2))).map(
+        (key) => {
+          const statusVal = RelationshipStatus[key];
+          return {
+            value: statusVal.toString(),
+            label: getStatusLabel(statusVal)
+          };
+        }
+      )
     ];
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col h-full overflow-hidden bg-panel border border-border-subtle rounded-lg p-[1rem] gap-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-[0.75rem] border-b border-border-divider pb-[0.75rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[1.25em] h-[1.25em] text-accent" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-bold text-accent-bright", children: "All NPC Relationship Pairs" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs px-[0.5rem] py-[0.125rem] rounded bg-panel-inset text-foreground-muted border border-border-subtle font-mono", children: [
-            filteredPairs.length,
-            " / ",
-            relationships.length,
-            " Pairs"
-          ] })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-bold text-accent-bright", children: t2("npcRelations.allPairs.title") }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs px-[0.5rem] py-[0.125rem] rounded bg-panel-inset text-foreground-muted border border-border-subtle font-mono", children: t2("npcRelations.allPairs.pairsCount", { filtered: filteredPairs.length, total: relationships.length }) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] w-full sm:w-auto", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SearchInput,
             {
               value: search,
-              placeholder: "Search by NPC name...",
+              placeholder: t2("npcRelations.allPairs.searchPlaceholder"),
               onChange: setSearch,
               className: "w-full sm:w-[13rem]"
             }
@@ -24325,15 +26160,15 @@ Defaulting to \`null\`.`;
               value: statusFilter,
               options: statusOptions,
               onChange: setStatusFilter,
-              className: "w-full sm:w-[10rem]"
+              className: "w-full sm:min-w-[11rem] sm:w-auto"
             }
           )
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 min-h-0 pr-[0.5rem]", children: filteredPairs.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center py-[4rem] text-center gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { className: "w-[2em] h-[2em] text-foreground-muted" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-secondary", children: "No relationship pairs found" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted", children: "Try adjusting your search query or status filter." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-secondary", children: t2("npcRelations.allPairs.emptyTitle") }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted", children: t2("npcRelations.allPairs.emptySubtitle") })
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[0.75rem]", children: filteredPairs.map((pair, idx) => {
         const profileA = pair.actorA !== PLAYER_FORM_ID ? npcProfiles.get(pair.actorA) : null;
         const profileB = pair.actorB !== PLAYER_FORM_ID ? npcProfiles.get(pair.actorB) : null;
@@ -24352,7 +26187,7 @@ Defaulting to \`null\`.`;
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Clock, { className: "w-[0.875em] h-[0.875em]" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(dateVal, currentGameDay) })
                   ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcRelations.allPairs.removeTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
                       onClick: (e) => {
@@ -24377,9 +26212,9 @@ Defaulting to \`null\`.`;
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary truncate hover:text-accent-bright", children: nameA })
                       ] }),
                       profileA ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] flex-wrap", children: [
-                        profileA.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]", title: `Plugin: ${profileA.pluginName}`, children: profileA.pluginName }),
+                        profileA.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]", title: t2("shared.pluginTooltip", { plugin: profileA.pluginName }), children: profileA.pluginName }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc: profileA, size: "sm", showIconOnly: true })
-                      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: pair.actorA === PLAYER_FORM_ID ? "Protagonist" : "NPC Profile" })
+                      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: pair.actorA === PLAYER_FORM_ID ? t2("npcRelations.allPairs.protagonist") : t2("npcRelations.allPairs.npcProfile") })
                     ]
                   }
                 ),
@@ -24395,9 +26230,9 @@ Defaulting to \`null\`.`;
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary truncate hover:text-accent-bright", children: nameB })
                       ] }),
                       profileB ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] flex-wrap", children: [
-                        profileB.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]", title: `Plugin: ${profileB.pluginName}`, children: profileB.pluginName }),
+                        profileB.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]", title: t2("shared.pluginTooltip", { plugin: profileB.pluginName }), children: profileB.pluginName }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc: profileB, size: "sm", showIconOnly: true })
-                      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: pair.actorB === PLAYER_FORM_ID ? "Protagonist" : "NPC Profile" })
+                      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: pair.actorB === PLAYER_FORM_ID ? t2("npcRelations.allPairs.protagonist") : t2("npcRelations.allPairs.npcProfile") })
                     ]
                   }
                 )
@@ -25865,11 +27700,13 @@ Defaulting to \`null\`.`;
     overscan = 6,
     getItemKey,
     renderItem,
-    emptyMessage = "No matching items found.",
+    emptyMessage,
     renderEmpty,
     className = "flex-1 min-h-0 overflow-y-auto p-[0.5rem]",
     itemClassName = "pb-[0.25rem]"
   }) {
+    const { t: t2 } = useTranslation();
+    const resolvedEmptyMessage = emptyMessage ?? t2("shared.emptyList");
     const parentRef = reactExports.useRef(null);
     const rowVirtualizer = useVirtualizer({
       count: items.length,
@@ -25881,7 +27718,7 @@ Defaulting to \`null\`.`;
       if (renderEmpty) {
         return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className, children: renderEmpty() });
       }
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-center py-[2rem] text-xs text-foreground-muted", children: emptyMessage }) });
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-center py-[2rem] text-xs text-foreground-muted", children: resolvedEmptyMessage }) });
     }
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: parentRef, className, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -25917,6 +27754,7 @@ Defaulting to \`null\`.`;
   }
   const NpcSelectorList = () => {
     var _a2, _b, _c;
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const selectedId = useMarasStore((s) => s.selectedNpcRelationsId);
@@ -25927,7 +27765,7 @@ Defaulting to \`null\`.`;
     };
     const playerItem = {
       formId: PLAYER_FORM_ID,
-      name: ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)",
+      name: ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("shared.playerFallback"),
       race: ((_b = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b.race) || "Nord",
       gender: ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.gender) || "female",
       pluginName: "Skyrim.esm"
@@ -25944,7 +27782,7 @@ Defaulting to \`null\`.`;
         SearchInput,
         {
           value: search,
-          placeholder: "Search name, race, plugin, or Form ID...",
+          placeholder: t2("npcRelations.selector.searchPlaceholder"),
           onChange: setSearch
         }
       ) }),
@@ -25955,7 +27793,7 @@ Defaulting to \`null\`.`;
           estimateSize: 52,
           overscan: 6,
           className: "flex-1 min-h-0 p-[0.5rem] overflow-y-auto",
-          emptyMessage: "No characters found.",
+          emptyMessage: t2("npcRelations.selector.empty"),
           renderItem: (npc) => {
             const isSelected = selectedId === npc.formId;
             const count2 = getPartnerCount(npc.formId);
@@ -25978,7 +27816,7 @@ Defaulting to \`null\`.`;
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.race }),
                         plugin && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]", title: `Plugin: ${plugin}`, children: plugin })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]", title: t2("shared.pluginTooltip", { plugin }), children: plugin })
                         ] }),
                         profile && /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc: profile, size: "sm", showIconOnly: true })
                       ] })
@@ -25995,6 +27833,7 @@ Defaulting to \`null\`.`;
   };
   const NpcRelationshipDetails = () => {
     var _a2, _b, _c;
+    const { t: t2, tp: tp2 } = useTranslation();
     const selectedId = useMarasStore((s) => s.selectedNpcRelationsId);
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const relationships = useMarasStore((s) => s.relationships);
@@ -26006,10 +27845,10 @@ Defaulting to \`null\`.`;
     if (!selectedId) {
       return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 bg-panel border border-border-subtle rounded-lg flex items-center justify-center p-[2rem] text-center text-foreground-muted", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(GitFork, { className: "w-[2em] h-[2em] text-accent" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Select an NPC from the list to view their relationship breakdown" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcRelations.details.emptyPrompt") })
       ] }) });
     }
-    const playerDisplayName = ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
+    const playerDisplayName = ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("shared.playerFallback");
     const selectedNpc = selectedId === PLAYER_FORM_ID ? npcProfiles.get(PLAYER_FORM_ID) || { formId: PLAYER_FORM_ID, name: playerDisplayName, race: ((_b = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b.race) || "Nord", gender: ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.gender) || "female", isChild: false } : npcProfiles.get(selectedId);
     const childRel = children.get(selectedId);
     const isChild = !!((selectedNpc == null ? void 0 : selectedNpc.isChild) || childRel);
@@ -26021,12 +27860,12 @@ Defaulting to \`null\`.`;
     const getName = (id2) => {
       var _a3;
       if (id2 === PLAYER_FORM_ID) return playerDisplayName;
-      return ((_a3 = npcProfiles.get(id2)) == null ? void 0 : _a3.name) || "Unknown NPC";
+      return ((_a3 = npcProfiles.get(id2)) == null ? void 0 : _a3.name) || t2("shared.unknownNpc");
     };
     const getRace = (id2) => {
       var _a3, _b2;
       if (id2 === PLAYER_FORM_ID) return ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.race) || "Nord";
-      return ((_b2 = npcProfiles.get(id2)) == null ? void 0 : _b2.race) || "Unknown";
+      return ((_b2 = npcProfiles.get(id2)) == null ? void 0 : _b2.race) || t2("shared.unknown");
     };
     const statusOrder = [
       RelationshipStatus.Married,
@@ -26050,8 +27889,9 @@ Defaulting to \`null\`.`;
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-foreground-secondary mt-[0.125rem]", children: [
             selectedNpc == null ? void 0 : selectedNpc.race,
-            " • ",
-            isChild ? `Household ${sonOrDaughter} Dependent` : `${rels.length} Tracked Relationship Pair${rels.length === 1 ? "" : "s"}`
+            " •",
+            " ",
+            isChild ? t2("npcRelations.details.householdDependent", { noun: sonOrDaughter }) : tp2("npcRelations.details.trackedPairs", rels.length)
           ] })
         ] }),
         selectedId && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -26059,41 +27899,29 @@ Defaulting to \`null\`.`;
           {
             onClick: () => openNpcDetail(selectedId),
             className: "text-xs text-accent-bright bg-accent-soft hover:bg-accent/20 px-[0.5rem] py-[0.25rem] rounded border border-border-accent transition-colors flex items-center gap-[0.25rem] cursor-pointer font-semibold",
-            title: `View details for ${selectedNpc == null ? void 0 : selectedNpc.name}`,
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "View Full Page" })
+            title: t2("npcRelations.details.viewFullPageTooltip", { name: (selectedNpc == null ? void 0 : selectedNpc.name) || selectedId }),
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcRelations.details.viewFullPage") })
           }
         ) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 min-h-0 p-[1rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[1rem] pr-[0.5rem]", children: isChild ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center py-[4rem] text-center space-y-[0.75rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.75rem] rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1.75em] h-[1.75em]" }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm font-semibold text-foreground-primary", children: [
-          "Household ",
-          sonOrDaughter,
-          " Dependent"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-foreground-muted max-w-md", children: [
-          (selectedNpc == null ? void 0 : selectedNpc.name) || `NPC ${selectedId}`,
-          " is registered as a ",
-          sonOrDaughter.toLowerCase(),
-          " dependent. Children cannot participate in tracked romantic relationships."
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-primary", children: t2("npcRelations.details.householdDependent", { noun: sonOrDaughter }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted max-w-md", children: t2("npcRelations.details.childDependentDesc", {
+          name: (selectedNpc == null ? void 0 : selectedNpc.name) || t2("shared.npcWithId", { id: selectedId }),
+          nounLower: sonOrDaughter.toLowerCase()
+        }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
             onClick: () => openNpcDetail(selectedId),
             className: "mt-[0.5rem] px-[0.75rem] py-[0.375rem] text-xs font-semibold bg-accent-soft text-accent-bright border border-border-accent rounded hover:bg-accent/20 transition-colors cursor-pointer",
-            children: [
-              "View ",
-              sonOrDaughter,
-              " Profile & Guardians →"
-            ]
+            children: t2("npcRelations.details.viewChildProfile", { noun: sonOrDaughter })
           }
         )
-      ] }) : rels.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-[4rem] text-foreground-muted text-sm italic", children: [
-        "No active or historical relationships recorded for ",
-        selectedNpc == null ? void 0 : selectedNpc.name,
-        "."
-      ] }) : statusOrder.map((status) => {
+      ] }) : rels.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-center py-[4rem] text-foreground-muted text-sm italic", children: t2("npcRelations.details.noRelationshipsForNpc", {
+        name: (selectedNpc == null ? void 0 : selectedNpc.name) || t2("shared.npcWithId", { id: selectedId })
+      }) }) : statusOrder.map((status) => {
         const groupRels = rels.filter((r2) => r2.status === status);
         if (groupRels.length === 0) return null;
         return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem]", children: [
@@ -26120,7 +27948,7 @@ Defaulting to \`null\`.`;
               {
                 onClick: () => openNpcDetail(otherId),
                 className: "bg-panel-raised border border-border-subtle rounded-md p-[0.75rem] flex items-center justify-between gap-[1rem] transition-all cursor-pointer hover:border-border-strong hover:bg-interactive-hover",
-                title: `Click to view full page for ${otherName}`,
+                title: t2("npcRelations.details.clickToViewTooltip", { name: otherName }),
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] min-w-0 flex-1", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.5rem] rounded-full bg-accent-soft text-accent flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[1.125em] h-[1.125em]" }) }),
@@ -26146,13 +27974,13 @@ Defaulting to \`null\`.`;
                   hasAffectionStatus && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[8rem] flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" }) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-shrink-0 flex items-center gap-[0.5rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: r2.status }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcRelations.details.removeTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "button",
                       {
                         onClick: (e) => {
                           e.stopPropagation();
                           confirmRemoveRelationship(
-                            (selectedNpc == null ? void 0 : selectedNpc.name) || `NPC ${selectedId}`,
+                            (selectedNpc == null ? void 0 : selectedNpc.name) || t2("shared.npcWithId", { id: selectedId }),
                             otherName,
                             () => removeRelationship(selectedId, otherId)
                           );
@@ -26202,6 +28030,7 @@ Defaulting to \`null\`.`;
     onClick,
     onRemove
   }) => {
+    const { t: t2 } = useTranslation();
     const hasAffection = status === RelationshipStatus.Married || status === RelationshipStatus.Engaged || status === RelationshipStatus.Dating || status === RelationshipStatus.Lover;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
@@ -26218,14 +28047,14 @@ Defaulting to \`null\`.`;
                 npc.race,
                 ")"
               ] }),
-              npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[8rem]", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName }),
+              npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[8rem]", title: t2("shared.pluginTooltip", { plugin: npc.pluginName }), children: npc.pluginName }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc, size: "sm", showIconOnly: true })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-secondary truncate mt-[0.125rem]", children: npc.currentHome || npc.originalHome || "No Home Set" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-secondary truncate mt-[0.125rem]", children: npc.currentHome || npc.originalHome || t2("shared.noHomeSet") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-[8.5rem] flex-shrink-0 flex items-center justify-end gap-[0.375rem]", children: [
             hasAffection && /* @__PURE__ */ jsxRuntimeExports.jsx(AffectionBar, { value: affection, size: "sm" }),
-            onRemove && status !== RelationshipStatus.Candidate && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record (Reset to Candidate)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            onRemove && status !== RelationshipStatus.Candidate && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("partners.removeRecordTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
                 onClick: (e) => {
@@ -26243,6 +28072,7 @@ Defaulting to \`null\`.`;
     );
   };
   const PartnerList = () => {
+    useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
@@ -26322,6 +28152,7 @@ Defaulting to \`null\`.`;
     }) }) });
   };
   const ChildrenList = () => {
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const childrenStore = useMarasStore((s) => s.children);
@@ -26349,8 +28180,8 @@ Defaulting to \`null\`.`;
     if (children.length === 0) {
       return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center justify-center p-[2rem] text-center bg-panel rounded-lg border border-border-subtle", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] bg-accent-soft rounded-full mb-[0.75rem] text-accent", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[2rem] h-[2rem]" }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-bold text-foreground-primary", children: "No Children in Household" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-secondary max-w-[22rem] mt-[0.25rem] mb-[1.25rem]", children: "Your household does not have any adopted or natural children registered yet." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-bold text-foreground-primary", children: t2("household.children.emptyTitle") }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-secondary max-w-[22rem] mt-[0.25rem] mb-[1.25rem]", children: t2("household.children.emptyDescription") }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
           {
@@ -26361,7 +28192,7 @@ Defaulting to \`null\`.`;
             className: "flex items-center gap-[0.5rem] px-[0.875rem] py-[0.5rem] bg-accent text-white hover:bg-accent/90 rounded-md text-xs font-semibold shadow transition-colors cursor-pointer",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(HeartHandshake, { className: "w-[1.125em] h-[1.125em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Open Child Adoption" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.openAdoption") })
             ]
           }
         )
@@ -26371,7 +28202,7 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between p-[0.5rem] px-[0.75rem] bg-panel-inset rounded border border-border-divider", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] text-xs font-bold text-accent-bright", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Household Children" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.headerTitle") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted font-normal", children: [
             "(",
             children.length,
@@ -26388,7 +28219,7 @@ Defaulting to \`null\`.`;
             className: "text-[0.6875rem] font-semibold text-accent hover:underline flex items-center gap-[0.25rem] cursor-pointer",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adopt More" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.adoptMore") })
             ]
           }
         )
@@ -26397,10 +28228,10 @@ Defaulting to \`null\`.`;
         const npc = npcProfiles.get(child.childId);
         const isSelected = npcDetailId === child.childId;
         const isPlaceholderName = !(npc == null ? void 0 : npc.name) || npc.name.startsWith("NPC_");
-        const displayName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (npc == null ? void 0 : npc.name) || child.name || `Child ${child.childId}`;
+        const displayName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (npc == null ? void 0 : npc.name) || child.name || t2("household.children.childFallbackName", { id: child.childId });
         const race = (npc == null ? void 0 : npc.race) || "Nord";
         const partnerNpc = child.partnerId ? npcProfiles.get(child.partnerId) : void 0;
-        const home = (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || (partnerNpc == null ? void 0 : partnerNpc.currentHome) || (partnerNpc == null ? void 0 : partnerNpc.originalHome) || (child.isPlayerCustodian ? "Breezehome" : "With Custodial Parent");
+        const home = (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || (partnerNpc == null ? void 0 : partnerNpc.currentHome) || (partnerNpc == null ? void 0 : partnerNpc.originalHome) || (child.isPlayerCustodian ? t2("household.children.defaultHomePlayer") : t2("household.children.withCustodialParent"));
         const stage = child.stage || (npc == null ? void 0 : npc.stage) || "child";
         const hasRefID = child.hasRefID ?? (npc == null ? void 0 : npc.hasRefID) ?? !child.childId.startsWith("FF7");
         child.isEphemeral ?? (npc == null ? void 0 : npc.isEphemeral) ?? (!hasRefID || stage === "unborn" || stage === "infant" || stage === "training");
@@ -26421,32 +28252,25 @@ Defaulting to \`null\`.`;
                     race,
                     ")"
                   ] }),
-                  isFemale !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isFemale ? "bg-pink-500/20 text-pink-300 border-pink-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`, title: isFemale ? "Daughter" : "Son", children: isFemale ? "♀ Daughter" : "♂ Son" }),
-                  (npc == null ? void 0 : npc.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[8rem]", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName }),
-                  stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-pink-500/20 text-pink-300 border-pink-500/30 flex items-center gap-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "🤰 Expecting / Unborn ",
-                    sonOrDaughter
-                  ] }) }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/30 flex items-center gap-[0.25rem]", children: [
+                  isFemale !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: `text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isFemale ? "bg-pink-500/20 text-pink-300 border-pink-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`,
+                      title: isFemale ? t2("household.children.daughterTitle") : t2("household.children.sonTitle"),
+                      children: isFemale ? t2("household.children.daughterBadge") : t2("household.children.sonBadge")
+                    }
+                  ),
+                  (npc == null ? void 0 : npc.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[8rem]", title: t2("shared.pluginTooltip", { plugin: npc.pluginName }), children: npc.pluginName }),
+                  stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-pink-500/20 text-pink-300 border-pink-500/30 flex items-center gap-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.stageUnbornBadge", { noun: sonOrDaughter }) }) }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/30 flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "Newborn Infant ",
-                      sonOrDaughter
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.stageInfantBadge", { noun: sonOrDaughter }) })
                   ] }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-purple-500/20 text-purple-300 border-purple-500/30 flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "In Training (",
-                      sonOrDaughter,
-                      ")"
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.stageTrainingBadge", { noun: sonOrDaughter }) })
                   ] }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-amber-500/20 text-amber-300 border-amber-500/30 flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: hasRefID ? `Adult Follower (${sonOrDaughter})` : `Adult ${sonOrDaughter} (Unsummoned)` })
-                  ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-emerald-500/20 text-emerald-300 border-emerald-500/30", children: [
-                    "🧸 ",
-                    sonOrDaughter,
-                    " (Unspawned)"
-                  ] }) : (() => {
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: hasRefID ? t2("household.children.stageAdultFollowerBadge", { noun: sonOrDaughter }) : t2("household.children.stageAdultUnsummonedBadge", { noun: sonOrDaughter }) })
+                  ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-emerald-500/20 text-emerald-300 border-emerald-500/30", children: t2("household.children.stageUnspawnedBadge", { noun: sonOrDaughter }) }) : (() => {
                     const { badgeLabel, badgeStyle } = getChildRelationshipStatus(child, PLAYER_FORM_ID);
                     return /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "span",
@@ -26458,30 +28282,30 @@ Defaulting to \`null\`.`;
                   })()
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-foreground-secondary truncate mt-[0.25rem] flex items-center gap-[0.5rem] flex-wrap", children: [
-                  stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex items-center gap-[0.25rem] text-pink-200", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "🤰 In Gestation (Maternal Care)" }) }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem] text-cyan-200", children: [
+                  stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex items-center gap-[0.25rem] text-pink-200", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.detailGestation") }) }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem] text-cyan-200", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[0.875em] h-[0.875em] text-cyan-400" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "In Arms / Swaddled (Mother's Care)" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.detailInfant") })
                   ] }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem] text-purple-200", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.875em] h-[0.875em] text-purple-400" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "Training at ",
-                      child.trainingLocation || "Skyrim Academy"
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.detailTraining", {
+                      location: child.trainingLocation || t2("household.children.defaultAcademy")
+                    }) })
                   ] }) : stage === "adult" && !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem] text-amber-200", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[0.875em] h-[0.875em] text-amber-400" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Ready to Summon via Follower Dialogue / MCM" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.detailAdultUnsummoned") })
                   ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-foreground-muted" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: home })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: child.isPlayerCustodian ? child.parentPartnerName ? `Parents: Player & ${child.parentPartnerName}` : "Guardian: Player (Sole Guardian)" : `Custody: ${child.parentPartnerName || "Other Parent"}` }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: child.isPlayerCustodian ? child.parentPartnerName ? t2("household.children.parentsPlayerAndPartner", { partner: child.parentPartnerName }) : t2("household.children.guardianSolePlayer") : t2("household.children.custodyOther", {
+                    parent: child.parentPartnerName || t2("household.children.otherParentFallback")
+                  }) }),
                   stage === "unborn" ? child.conceptionTimestamp != null && child.conceptionTimestamp > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "Conceived ",
-                      formatGameDay(child.conceptionTimestamp, currentGameDay)
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.children.conceivedDate", {
+                      date: formatGameDay(child.conceptionTimestamp, currentGameDay)
+                    }) })
                   ] }) : child.timestamp != null && child.timestamp > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: formatGameDay(child.timestamp, currentGameDay) })
@@ -26489,7 +28313,7 @@ Defaulting to \`null\`.`;
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-shrink-0", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Child Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("household.children.removeTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
                     onClick: (e) => {
@@ -26504,7 +28328,7 @@ Defaulting to \`null\`.`;
                     children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" })
                   }
                 ) }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "View Child Details", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-[0.25rem] text-foreground-muted hover:text-accent cursor-pointer", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "w-[1.25em] h-[1.25em]" }) }) })
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("household.children.viewDetailsTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-[0.25rem] text-foreground-muted hover:text-accent cursor-pointer", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "w-[1.25em] h-[1.25em]" }) }) })
               ] })
             ]
           },
@@ -26513,26 +28337,56 @@ Defaulting to \`null\`.`;
       }) })
     ] }) });
   };
-  const badgeVariants = cva(
-    "inline-flex items-center rounded-full border px-[0.625rem] py-[0.125rem] text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2",
-    {
-      variants: {
-        variant: {
-          default: "border-border-accent bg-accent-soft text-accent-bright",
-          secondary: "border-border-subtle bg-panel-raised text-foreground-secondary",
-          outline: "border-border-subtle text-foreground-primary",
-          success: "border-status-success bg-status-success-soft text-status-success",
-          danger: "border-status-danger bg-status-danger-soft text-status-danger",
-          warning: "border-status-warning bg-status-warning-soft text-status-warning"
-        }
-      },
-      defaultVariants: {
-        variant: "default"
-      }
+  function getBuffCategoryLabel(category) {
+    const lower = (category || "").trim().toLowerCase();
+    switch (lower) {
+      case "outcast":
+        return t("enums.socialClass.outcast");
+      case "poverty":
+        return t("enums.socialClass.poverty");
+      case "working":
+        return t("enums.socialClass.working");
+      case "middle":
+        return t("enums.socialClass.middle");
+      case "wealthy":
+        return t("enums.socialClass.wealthy");
+      case "religious":
+        return t("enums.socialClass.religious");
+      case "nobles":
+      case "noble":
+        return t("enums.socialClass.nobles");
+      case "rulers":
+      case "ruler":
+        return t("enums.socialClass.rulers");
+      case "warrior":
+        return t("enums.skillType.warrior");
+      case "mage":
+        return t("enums.skillType.mage");
+      case "rogue":
+        return t("enums.skillType.rogue");
+      case "craftsman":
+        return t("enums.skillType.craftsman");
+      case "ranger":
+        return t("enums.skillType.ranger");
+      case "orator":
+        return t("enums.skillType.orator");
+      case "spouses":
+        return t("household.buffs.categories.spouses");
+      case "children":
+        return t("household.buffs.categories.children");
+      case "followers":
+        return t("household.buffs.categories.followers");
+      case "houses":
+        return t("household.buffs.categories.houses");
+      case "synergy":
+        return t("household.buffs.categories.synergy");
+      case "permanent":
+        return t("household.buffs.categories.permanent");
+      case "follower":
+        return t("household.buffs.categories.follower");
+      default:
+        return category;
     }
-  );
-  function Badge({ className, variant, ...props }) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: cn(badgeVariants({ variant }), className), ...props });
   }
   const BUFF_ICON_MAP = {
     // Skill Types (Follower Buffs)
@@ -26554,24 +28408,30 @@ Defaulting to \`null\`.`;
   };
   const BuffCard = ({ buff, onNpcClick }) => {
     var _a2, _b;
+    const { t: t2 } = useTranslation();
     const [isExpanded, setIsExpanded] = reactExports.useState(false);
     const iconSrc = BUFF_ICON_MAP[buff.id.toLowerCase()] || "./assets/icons/buffs/bond_of_steel.png";
     const absEffectiveValue = Math.abs(buff.effectiveValue);
     const formattedEffectiveNum = Number.isInteger(absEffectiveValue) ? absEffectiveValue.toString() : absEffectiveValue.toFixed(1);
     const absBaseValue = Math.abs(buff.baseValue);
     const formattedBaseNum = Number.isInteger(absBaseValue) ? absBaseValue.toString() : absBaseValue.toFixed(1);
-    const isPercent2 = buff.unit === "%";
-    const valueDisplay = isPercent2 ? `${formattedEffectiveNum}%` : `${formattedEffectiveNum} ${buff.unit}`;
-    const baseValueDisplay = isPercent2 ? `${formattedBaseNum}%` : `${formattedBaseNum} ${buff.unit}`;
+    const formatBuffValue = (formattedNum) => {
+      if (buff.unit === "%") return `${formattedNum}%`;
+      if (buff.unit === "points") return t2("household.buffs.unitPoints", { value: formattedNum });
+      return `${formattedNum} ${buff.unit}`;
+    };
+    const valueDisplay = formatBuffValue(formattedEffectiveNum);
+    const baseValueDisplay = formatBuffValue(formattedBaseNum);
+    const categoryLabel = getBuffCategoryLabel(buff.category);
     const hasContributors = buff.contributors && buff.contributors.length > 0;
     const hasPotentialSpouses = buff.potentialSpouses && buff.potentialSpouses.length > 0;
     const canExpand = hasContributors || hasPotentialSpouses;
     const getRankName = (rank) => {
       if (rank === void 0 || rank === null) return "";
-      if (rank === 0) return "Lead";
-      if (rank === 1) return "2nd";
-      if (rank === 2) return "3rd";
-      return `Rank ${rank + 1}`;
+      if (rank === 0) return t2("household.buffs.rankLead");
+      if (rank === 1) return t2("household.buffs.rank2nd");
+      if (rank === 2) return t2("household.buffs.rank3rd");
+      return t2("household.buffs.rankN", { rank: rank + 1 });
     };
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
@@ -26584,7 +28444,7 @@ Defaulting to \`null\`.`;
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    className: `relative w-[3rem] h-[3rem] rounded-md flex-shrink-0 flex items-center justify-center p-[0.25rem] border ${buff.isActive ? "bg-accent-soft/30 border-accent/60 shadow-[0_0_12px_rgba(217,119,6,0.2)]" : "bg-panel-inset border-border-divider opacity-60 grayscale"}`,
+                    className: `relative w-[3rem] h-[3rem] rounded-md flex-shrink-0 flex items-center justify-center p-[0.25rem] border ${buff.isActive ? "bg-accent-soft/30 border-accent/60 shadow-[0_0_0.75rem_rgba(217,119,6,0.2)]" : "bg-panel-inset border-border-divider opacity-60 grayscale"}`,
                     children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "img",
                       {
@@ -26600,26 +28460,23 @@ Defaulting to \`null\`.`;
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex flex-col justify-center", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm md:text-base font-semibold text-foreground-primary tracking-wide truncate", children: buff.name }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] mt-[0.25rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] mt-[0.25rem] flex-wrap", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       Badge,
                       {
                         variant: buff.categoryType === "permanent" ? "default" : "secondary",
                         className: "text-[0.6875rem] py-0 px-[0.375rem] leading-tight",
-                        children: buff.category
+                        children: categoryLabel
                       }
                     ),
-                    buff.isActive ? /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { variant: "success", className: "text-[0.6875rem] py-0 px-[0.375rem] leading-tight", children: "Active" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { variant: "secondary", className: "text-[0.6875rem] py-0 px-[0.375rem] text-foreground-muted leading-tight", children: "Inactive" })
+                    buff.isActive ? /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { variant: "success", className: "text-[0.6875rem] py-0 px-[0.375rem] leading-tight", children: t2("household.buffs.activeBadge") }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { variant: "secondary", className: "text-[0.6875rem] py-0 px-[0.375rem] text-foreground-muted leading-tight", children: t2("household.buffs.inactiveBadge") })
                   ] })
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.5rem] flex-shrink-0", children: buff.isActive ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-right flex flex-col justify-center", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-base md:text-lg font-bold text-accent-bright leading-tight", children: valueDisplay }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-muted font-mono leading-tight mt-[0.0625rem]", children: [
-                    "Base: ",
-                    baseValueDisplay
-                  ] })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted font-mono leading-tight mt-[0.0625rem]", children: t2("household.buffs.baseValue", { value: baseValueDisplay }) })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.5rem] py-[0.1875rem] rounded bg-accent-soft text-accent-bright font-mono text-xs font-semibold border border-border-accent flex-shrink-0", children: [
                   "x",
@@ -26627,17 +28484,14 @@ Defaulting to \`null\`.`;
                 ] })
               ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-right flex flex-col items-end justify-center", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-mono text-foreground-muted bg-panel-inset px-[0.375rem] py-[0.125rem] rounded border border-border-divider", children: "0.00x" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-muted mt-[0.125rem]", children: [
-                  "Base: ",
-                  baseValueDisplay
-                ] })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted mt-[0.125rem]", children: t2("household.buffs.baseValue", { value: baseValueDisplay }) })
               ] }) })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-secondary leading-relaxed bg-panel-inset/60 p-[0.5rem] rounded border border-border-divider/70 h-[3.75rem] min-h-[3.75rem] flex items-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "line-clamp-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-secondary leading-relaxed bg-panel-inset/60 p-[0.5rem] rounded border border-border-divider/70 min-h-[3.75rem] flex items-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
               buff.description,
               " ",
               /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: buff.isActive ? "text-accent-bright font-semibold" : "text-foreground-primary", children: buff.isActive ? valueDisplay : baseValueDisplay }),
-              !buff.isActive && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic ml-[0.25rem]", children: "(Inactive)" })
+              !buff.isActive && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic ml-[0.25rem]", children: t2("household.buffs.inactiveInline") })
             ] }) }),
             canExpand && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] border-t border-border-divider/50 flex items-center justify-between min-h-[2rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -26648,24 +28502,24 @@ Defaulting to \`null\`.`;
                   children: [
                     isExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { className: "w-[1em] h-[1em]" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "w-[1em] h-[1em]" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      hasContributors ? `Contributing Spouses (${buff.contributors.length})` : "Spouses Overview",
-                      hasPotentialSpouses && !hasContributors && ` • ${(_a2 = buff.potentialSpouses) == null ? void 0 : _a2.length} Available at Home`
+                      hasContributors ? t2("household.buffs.contributingSpouses", { count: buff.contributors.length }) : t2("household.buffs.spousesOverview"),
+                      hasPotentialSpouses && !hasContributors && t2("household.buffs.availableAtHomeSuffix", { count: ((_a2 = buff.potentialSpouses) == null ? void 0 : _a2.length) ?? 0 })
                     ] })
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: buff.categoryType === "permanent" ? "Scale: Rank × Affection" : "Scale: Affection" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: buff.categoryType === "permanent" ? t2("household.buffs.scaleRankAffection") : t2("household.buffs.scaleAffection") })
             ] }),
             !canExpand && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] border-t border-border-divider/50 text-[0.6875rem] text-foreground-muted flex items-center gap-[0.375rem] min-h-[2rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(ShieldAlert, { className: "w-[0.9em] h-[0.9em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "No married spouses currently belong to this category." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.noMarriedSpouses") })
             ] })
           ] }),
           isExpanded && canExpand && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel-inset/80 border-t border-border-divider p-[0.75rem] space-y-[0.5rem]", children: [
             hasContributors && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] uppercase font-semibold text-foreground-muted tracking-wider flex items-center gap-[0.375rem]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.9em] h-[0.9em] text-accent" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Active Contributors (Multiplying Bonus)" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.activeContributorsHeader") })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-[0.375rem]", children: buff.contributors.map((c) => {
                 var _a3;
@@ -26690,7 +28544,7 @@ Defaulting to \`null\`.`;
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.5rem] text-[0.6875rem]", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-wrap", children: [
                           c.rank !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.25rem] bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-divider", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Rank:" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: t2("household.buffs.rankLabel") }),
                             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-accent font-medium font-mono", children: [
                               getRankName(c.rank),
                               " (x",
@@ -26699,7 +28553,7 @@ Defaulting to \`null\`.`;
                             ] })
                           ] }),
                           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.25rem] bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-divider", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Affection:" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: t2("household.buffs.affectionLabel") }),
                             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-primary font-medium font-mono", children: [
                               Math.round(c.affection),
                               "/100 (x",
@@ -26708,7 +28562,7 @@ Defaulting to \`null\`.`;
                             ] })
                           ] })
                         ] }),
-                        c.isFollower && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex items-center text-[0.625rem] text-status-success bg-status-success-soft px-[0.375rem] py-[0.0625rem] rounded border border-status-success/30 font-medium flex-shrink-0", children: "Active Follower" })
+                        c.isFollower && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex items-center text-[0.625rem] text-status-success bg-status-success-soft px-[0.375rem] py-[0.0625rem] rounded border border-status-success/30 font-medium flex-shrink-0", children: t2("household.buffs.activeFollowerBadge") })
                       ] })
                     ]
                   },
@@ -26719,7 +28573,7 @@ Defaulting to \`null\`.`;
             hasPotentialSpouses && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem] pt-[0.25rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] uppercase font-semibold text-foreground-muted tracking-wider flex items-center gap-[0.375rem]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(UserPlus, { className: "w-[0.9em] h-[0.9em] text-foreground-secondary" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Available at Home (Recruit as follower to activate)" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.availableAtHomeHeader") })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-[0.375rem]", children: (_b = buff.potentialSpouses) == null ? void 0 : _b.map((p2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
@@ -26733,22 +28587,18 @@ Defaulting to \`null\`.`;
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-secondary truncate", children: p2.name }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-raised px-[0.25rem] py-[0.0625rem] rounded border border-border-divider flex-shrink-0", children: p2.formId })
                       ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-panel-raised border border-border-divider text-foreground-muted font-medium flex-shrink-0", children: "At Home (Not Following)" })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-panel-raised border border-border-divider text-foreground-muted font-medium flex-shrink-0", children: t2("household.buffs.atHomeNotFollowing") })
                     ] }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-[0.6875rem] flex-wrap", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.25rem] bg-panel-raised px-[0.375rem] py-[0.0625rem] rounded border border-border-divider", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Affection:" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: t2("household.buffs.affectionLabel") }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-primary font-medium font-mono", children: [
                           Math.round(p2.affection),
                           "/100"
                         ] })
                       ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-[0.25rem] bg-accent-soft/30 px-[0.375rem] py-[0.0625rem] rounded border border-border-accent/40 text-accent-bright font-mono", children: [
-                        "Potential: +",
-                        p2.affectionMultiplier.toFixed(2),
-                        "x"
-                      ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.625rem] italic", children: "Recruit as follower to activate" })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex items-center gap-[0.25rem] bg-accent-soft/30 px-[0.375rem] py-[0.0625rem] rounded border border-border-accent/40 text-accent-bright font-mono", children: t2("household.buffs.potentialMultiplier", { multiplier: p2.affectionMultiplier.toFixed(2) }) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.625rem] italic", children: t2("household.buffs.recruitHint") })
                     ] })
                   ]
                 },
@@ -27043,6 +28893,7 @@ Defaulting to \`null\`.`;
   ));
   Switch.displayName = Switch$1.displayName;
   const HouseholdBuffsPage = () => {
+    const { t: t2, revision } = useTranslation();
     const householdBuffs = useMarasStore((s) => s.householdBuffs);
     const isLoadingBuffs = useMarasStore((s) => s.isLoadingBuffs);
     const fetchHouseholdBuffs = useMarasStore((s) => s.fetchHouseholdBuffs);
@@ -27061,7 +28912,7 @@ Defaulting to \`null\`.`;
         if (!searchQuery.trim()) return true;
         const q2 = searchQuery.toLowerCase().trim();
         const matchesName = b.name.toLowerCase().includes(q2);
-        const matchesCategory = b.category.toLowerCase().includes(q2);
+        const matchesCategory = b.category.toLowerCase().includes(q2) || getBuffCategoryLabel(b.category).toLowerCase().includes(q2);
         const matchesDesc = b.description.toLowerCase().includes(q2);
         const matchesContributor = b.contributors.some((c) => c.name.toLowerCase().includes(q2));
         const matchesPotential = (_a2 = b.potentialSpouses) == null ? void 0 : _a2.some((p2) => p2.name.toLowerCase().includes(q2));
@@ -27075,11 +28926,11 @@ Defaulting to \`null\`.`;
     };
     const filteredPermanent = reactExports.useMemo(
       () => filterAndSort(permanentBuffs),
-      [permanentBuffs, searchQuery, hideInactive]
+      [permanentBuffs, searchQuery, hideInactive, revision]
     );
     const filteredFollower = reactExports.useMemo(
       () => filterAndSort(followerBuffs),
-      [followerBuffs, searchQuery, hideInactive]
+      [followerBuffs, searchQuery, hideInactive, revision]
     );
     const activePermCount = (householdBuffs == null ? void 0 : householdBuffs.activePermanentCount) ?? permanentBuffs.filter((b) => b.isActive).length;
     const activeFollCount = (householdBuffs == null ? void 0 : householdBuffs.activeFollowerCount) ?? followerBuffs.filter((b) => b.isActive).length;
@@ -27088,18 +28939,15 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[1.25em] h-[1.25em] text-accent-bright" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-lg font-bold text-foreground-primary tracking-wide", children: "Household Buffs Summary" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Badge, { variant: "default", className: "text-xs", children: [
-              activePermCount + activeFollCount,
-              " Active"
-            ] })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-lg font-bold text-foreground-primary tracking-wide", children: t2("household.buffs.title") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { variant: "default", className: "text-xs", children: t2("household.buffs.activeCountBadge", { count: activePermCount + activeFollCount }) })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-secondary mt-[0.25rem]", children: "Bonuses granted by your spouses: permanent household perks scaled by hierarchy rank and affection, plus combat bonuses when travelling together." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-secondary mt-[0.25rem]", children: t2("household.buffs.subtitle") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] flex-wrap", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] bg-panel-inset px-[0.625rem] py-[0.375rem] rounded border border-border-subtle", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Shield, { className: "w-[0.9em] h-[0.9em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: "Permanent:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: t2("household.buffs.permanentStatLabel") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-bold font-mono text-accent-bright", children: [
               activePermCount,
               " / ",
@@ -27108,7 +28956,7 @@ Defaulting to \`null\`.`;
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] bg-panel-inset px-[0.625rem] py-[0.375rem] rounded border border-border-subtle", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[0.9em] h-[0.9em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: "Follower:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: t2("household.buffs.followerStatLabel") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-bold font-mono text-accent-bright", children: [
               activeFollCount,
               " / ",
@@ -27125,7 +28973,7 @@ Defaulting to \`null\`.`;
               className: "flex items-center gap-[0.375rem] text-xs h-[2rem]",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(RotateCw, { className: `w-[0.9em] h-[0.9em] ${isLoadingBuffs ? "animate-spin text-accent" : ""}` }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Refresh" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.refreshButton") })
               ]
             }
           )
@@ -27139,14 +28987,14 @@ Defaulting to \`null\`.`;
             {
               value: searchQuery,
               onChange: (e) => setSearchQuery(e.target.value),
-              placeholder: "Search by buff, class, or spouse...",
+              placeholder: t2("household.buffs.searchPlaceholder"),
               className: "pl-[2rem] h-[2rem] text-xs bg-panel-inset border-border-subtle"
             }
           )
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.75rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.5rem] text-xs text-foreground-secondary cursor-pointer select-none", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(EyeOff, { className: "w-[0.9em] h-[0.9em] text-foreground-muted" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Hide Inactive Buffs" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.hideInactive") }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             Switch,
             {
@@ -27162,7 +29010,7 @@ Defaulting to \`null\`.`;
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Shield, { className: "w-[1em] h-[1em] text-accent" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-foreground-primary uppercase tracking-wider", children: "Permanent Household Buffs" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-foreground-primary uppercase tracking-wider", children: t2("household.buffs.permanentSectionTitle") }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
                 "(",
                 filteredPermanent.length,
@@ -27171,7 +29019,7 @@ Defaulting to \`null\`.`;
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Info, { className: "w-[0.9em] h-[0.9em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Active 24/7 from married spouses based on Social Class" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.permanentSectionHint") })
             ] })
           ] }),
           filteredPermanent.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-[0.625rem] items-stretch", children: filteredPermanent.map((buff) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -27181,13 +29029,13 @@ Defaulting to \`null\`.`;
               onNpcClick: openNpcDetail
             },
             buff.id
-          )) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1.25rem] text-center bg-panel-inset/50 rounded border border-border-divider text-xs text-foreground-muted", children: "No permanent buffs match the current filter." })
+          )) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1.25rem] text-center bg-panel-inset/50 rounded border border-border-divider text-xs text-foreground-muted", children: t2("household.buffs.emptyPermanent") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "space-y-[0.625rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between border-b border-border-divider pb-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1em] h-[1em] text-accent" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-foreground-primary uppercase tracking-wider", children: "Follower Combat Buffs" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-foreground-primary uppercase tracking-wider", children: t2("household.buffs.followerSectionTitle") }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-foreground-muted", children: [
                 "(",
                 filteredFollower.length,
@@ -27196,7 +29044,7 @@ Defaulting to \`null\`.`;
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Info, { className: "w-[0.9em] h-[0.9em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Granted when married spouse travels with you as an active follower" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("household.buffs.followerSectionHint") })
             ] })
           ] }),
           filteredFollower.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-[0.625rem] items-stretch", children: filteredFollower.map((buff) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -27206,7 +29054,7 @@ Defaulting to \`null\`.`;
               onNpcClick: openNpcDetail
             },
             buff.id
-          )) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1.25rem] text-center bg-panel-inset/50 rounded border border-border-divider text-xs text-foreground-muted", children: "No follower buffs match the current filter." })
+          )) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1.25rem] text-center bg-panel-inset/50 rounded border border-border-divider text-xs text-foreground-muted", children: t2("household.buffs.emptyFollower") })
         ] })
       ] }) })
     ] });
@@ -27226,6 +29074,7 @@ Defaulting to \`null\`.`;
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-full w-full gap-[1rem] overflow-hidden", children: renderContent() });
   };
   const NpcPickerPanel = ({ side, title }) => {
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const allSkyrimNpcs = useMarasStore((s) => s.allSkyrimNpcs);
@@ -27246,7 +29095,7 @@ Defaulting to \`null\`.`;
       }
     }, [allSkyrimNpcs.length, fetchAllSkyrimNpcs]);
     const playerProfile = npcProfiles.get(PLAYER_FORM_ID);
-    const playerName = (playerProfile == null ? void 0 : playerProfile.name) || "Prisoner (Player)";
+    const playerName = (playerProfile == null ? void 0 : playerProfile.name) || t2("shared.playerFallback");
     const playerRace = (playerProfile == null ? void 0 : playerProfile.race) || "Nord";
     const playerGender = (playerProfile == null ? void 0 : playerProfile.gender) || "female";
     const baseCandidates = [
@@ -27260,8 +29109,11 @@ Defaulting to \`null\`.`;
     const selectedRelSummary = selectedId ? relationships.filter((r2) => r2.actorA === selectedId || r2.actorB === selectedId).map((r2) => {
       var _a2;
       const partnerId = r2.actorA === selectedId ? r2.actorB : r2.actorA;
-      const partnerName = partnerId === PLAYER_FORM_ID ? playerName : ((_a2 = npcProfiles.get(partnerId)) == null ? void 0 : _a2.name) || "Unknown";
-      return `${getStatusLabel(r2.status)} with ${partnerName}`;
+      const partnerName = partnerId === PLAYER_FORM_ID ? playerName : ((_a2 = npcProfiles.get(partnerId)) == null ? void 0 : _a2.name) || t2("shared.unknown");
+      return t2("matchmaking.picker.statusWithPartner", {
+        status: getStatusLabel(r2.status),
+        partner: partnerName
+      });
     }) : [];
     const selectedNpc = selectedId === PLAYER_FORM_ID ? npcProfiles.get(PLAYER_FORM_ID) || { name: playerName, race: playerRace, gender: playerGender, pluginName: "Skyrim.esm" } : selectedId ? npcProfiles.get(selectedId) || allSkyrimNpcs.find((n2) => n2.formId === selectedId) : null;
     const handleSelectNpc = (npc) => {
@@ -27296,11 +29148,11 @@ Defaulting to \`null\`.`;
             {
               onClick: () => fetchAllSkyrimNpcs(),
               disabled: isLoadingAllNpcs,
-              title: "Refresh Skyrim NPCs",
+              title: t2("matchmaking.picker.refreshTooltip"),
               className: "flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted hover:text-accent p-[0.125rem] rounded transition-colors cursor-pointer normal-case font-normal",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: `w-[0.875em] h-[0.875em] ${isLoadingAllNpcs ? "animate-spin text-accent" : ""}` }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isLoadingAllNpcs ? "Refreshing..." : "Refresh" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isLoadingAllNpcs ? t2("matchmaking.picker.refreshing") : t2("matchmaking.picker.refresh") })
               ]
             }
           )
@@ -27309,7 +29161,7 @@ Defaulting to \`null\`.`;
           SearchInput,
           {
             value: searchInput,
-            placeholder: "Search any Skyrim NPC by name, race, plugin, or Form ID...",
+            placeholder: t2("matchmaking.picker.searchPlaceholder"),
             onChange: setSearchInput
           }
         )
@@ -27318,15 +29170,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs font-bold text-accent-bright flex items-center justify-between", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] flex-wrap", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-              "Selected: ",
-              selectedNpc.name
-            ] }),
-            selectedNpc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${selectedNpc.pluginName}`, children: selectedNpc.pluginName })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.picker.selectedLabel", { name: selectedNpc.name }) }),
+            selectedNpc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: t2("shared.pluginTooltip", { plugin: selectedNpc.pluginName }), children: selectedNpc.pluginName })
           ] }),
           "socialClass" in selectedNpc && /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc: selectedNpc, size: "sm", showIconOnly: true })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-secondary", children: selectedRelSummary.length > 0 ? selectedRelSummary.join(", ") : "No existing relationships" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-secondary", children: selectedRelSummary.length > 0 ? selectedRelSummary.join(", ") : t2("matchmaking.picker.noExistingRelationships") })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         VirtualList,
@@ -27334,7 +29183,7 @@ Defaulting to \`null\`.`;
           items: displayNpcs,
           estimateSize: 52,
           overscan: 8,
-          emptyMessage: isLoadingAllNpcs ? "Loading Skyrim NPCs..." : "No matching NPCs found.",
+          emptyMessage: isLoadingAllNpcs ? t2("matchmaking.picker.loadingNpcs") : t2("matchmaking.picker.emptyNpcs"),
           renderItem: (npc) => {
             const isSelected = selectedId === npc.formId;
             const isDisabled = otherSelectedId === npc.formId;
@@ -27342,7 +29191,7 @@ Defaulting to \`null\`.`;
             const profile = !isPlayer ? npcProfiles.get(npc.formId) : null;
             const plugin = npc.pluginName || (profile == null ? void 0 : profile.pluginName);
             const isFemale = npc.gender === "female";
-            const genderLabel = isFemale ? "♀ Female" : "♂ Male";
+            const genderLabel = isFemale ? t2("matchmaking.picker.genderFemale") : t2("matchmaking.picker.genderMale");
             const genderColor = isFemale ? "text-pink-400 bg-pink-950/40 border-pink-800/40" : "text-blue-400 bg-blue-950/40 border-blue-800/40";
             return /* @__PURE__ */ jsxRuntimeExports.jsx(
               "div",
@@ -27362,7 +29211,7 @@ Defaulting to \`null\`.`;
                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: npc.formId }),
                       plugin && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]", title: `Plugin: ${plugin}`, children: plugin })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]", title: t2("shared.pluginTooltip", { plugin }), children: plugin })
                       ] }),
                       profile && /* @__PURE__ */ jsxRuntimeExports.jsx(NpcTraitBadges, { npc: profile, size: "sm", showIconOnly: true })
                     ] })
@@ -27376,6 +29225,7 @@ Defaulting to \`null\`.`;
     ] });
   };
   const StatusAssignment = () => {
+    const { t: t2 } = useTranslation();
     const npcA = useMarasStore((s) => s.matchmakingNpcA);
     const npcB = useMarasStore((s) => s.matchmakingNpcB);
     const relationships = useMarasStore((s) => s.relationships);
@@ -27386,15 +29236,15 @@ Defaulting to \`null\`.`;
     const [successFeedback, setSuccessFeedback] = reactExports.useState(false);
     const statusOptions = useAvailableStatuses(npcA, npcB);
     if (!npcA || !npcB) {
+      const promptSegments = t2("matchmaking.statusAssignment.selectPrompt", {
+        npcA: "[[NPCA]]",
+        npcB: "[[NPCB]]"
+      }).split(/(\[\[NPCA\]\]|\[\[NPCB\]\])/g);
       return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[18rem] flex-shrink-0 bg-panel border border-border-subtle rounded-lg flex items-center justify-center p-[1.5rem] text-center text-foreground-muted", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center gap-[0.75rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(HeartHandshake, { className: "w-[2em] h-[2em] text-accent" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs", children: [
-          "Select ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "NPC A" }),
-          " on the left and ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "NPC B" }),
-          " on the right to configure their relationship status."
-        ] })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs", children: promptSegments.map(
+          (seg, idx) => seg === "[[NPCA]]" ? /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: t2("matchmaking.statusAssignment.npcALabel") }, idx) : seg === "[[NPCB]]" ? /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: t2("matchmaking.statusAssignment.npcBLabel") }, idx) : /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.Fragment, { children: seg }, idx)
+        ) })
       ] }) });
     }
     const existingRel = relationships.find(
@@ -27403,8 +29253,8 @@ Defaulting to \`null\`.`;
     const currentStatus = existingRel ? existingRel.status : RelationshipStatus.Candidate;
     const getName = (id2) => {
       var _a2, _b;
-      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
-      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || "Unknown NPC";
+      if (id2 === PLAYER_FORM_ID) return ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("shared.playerFallback");
+      return ((_b = npcProfiles.get(id2)) == null ? void 0 : _b.name) || t2("shared.unknownNpc");
     };
     const selectedOption = statusOptions.find((o) => o.status === selectedTargetStatus);
     const canAssign = selectedTargetStatus !== null && ((selectedOption == null ? void 0 : selectedOption.enabled) ?? false);
@@ -27427,13 +29277,13 @@ Defaulting to \`null\`.`;
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: getName(npcB) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.6875rem] text-foreground-muted flex items-center justify-center gap-[0.375rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Current:" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.statusAssignment.currentLabel") }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: currentStatus }),
-          (existingRel == null ? void 0 : existingRel.isOpen) && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 px-[0.25rem] py-[0.0625rem] rounded font-semibold", children: "Open" })
+          (existingRel == null ? void 0 : existingRel.isOpen) && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 px-[0.25rem] py-[0.0625rem] rounded font-semibold", children: t2("matchmaking.statusAssignment.openBadge") })
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 min-h-0 pr-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold uppercase tracking-wider text-foreground-muted mb-[0.25rem]", children: "Select New Status" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold uppercase tracking-wider text-foreground-muted mb-[0.25rem]", children: t2("matchmaking.statusAssignment.selectNewStatus") }),
         statusOptions.map((opt) => {
           const isSelected = selectedTargetStatus === opt.status;
           const btn = /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -27446,8 +29296,8 @@ Defaulting to \`null\`.`;
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.375rem] min-w-0", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(StatusIcon, { status: opt.status, size: "1em", showTooltip: false }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: opt.label }),
-                  opt.loverType === "allowed" && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80", children: "Allowed" }),
-                  opt.loverType === "cheating" && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80", children: "Cheating" })
+                  opt.loverType === "allowed" && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80", children: t2("matchmaking.statusAssignment.allowedBadge") }),
+                  opt.loverType === "cheating" && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80", children: t2("matchmaking.statusAssignment.cheatingBadge") })
                 ] }),
                 !opt.enabled && opt.tooltip && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] text-status-warning flex items-center gap-[0.125rem] max-w-[9rem] truncate ml-auto flex-shrink-0", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-[0.875em] h-[0.875em] flex-shrink-0" }),
@@ -27477,8 +29327,8 @@ Defaulting to \`null\`.`;
             className: "w-full flex items-center justify-center gap-[0.375rem]",
             children: successFeedback ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { className: "w-[1em] h-[1em] text-status-success" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Status Assigned!" })
-            ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Apply Status Change" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.statusAssignment.statusAssigned") })
+            ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.statusAssignment.applyStatusChange") })
           }
         ),
         existingRel && existingRel.status !== RelationshipStatus.Candidate && /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -27490,7 +29340,7 @@ Defaulting to \`null\`.`;
             className: "w-full flex items-center justify-center gap-[0.375rem] text-xs",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Relationship Record" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.statusAssignment.removeRecord") })
             ]
           }
         )
@@ -27498,12 +29348,11 @@ Defaulting to \`null\`.`;
     ] }) });
   };
   const LlmMatchmakingSubPage = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const setActiveTab = useMarasStore((s) => s.setActiveTab);
     const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
-    useMarasStore((s) => s.matchmakingSettings);
-    useMarasStore((s) => s.updateMatchmakingSettings);
     const aiSuggestions = useMarasStore((s) => s.aiSuggestions);
     const matchmakingScanType = useMarasStore((s) => s.matchmakingScanType);
     const isGeneratingAi = useMarasStore((s) => s.isGeneratingAiSuggestions);
@@ -27523,7 +29372,7 @@ Defaulting to \`null\`.`;
       return ((_a2 = allNpcs[0]) == null ? void 0 : _a2.formId) || "";
     });
     const [targetSearch, setTargetSearch] = reactExports.useState("");
-    const isSkyrimNetEnabled = Boolean(settings.hasSkyrimNet);
+    const isSkyrimNetEnabled = Boolean(settings2.hasSkyrimNet);
     const filteredTargetNpcs = allNpcs.filter(
       (n2) => n2.name.toLowerCase().includes(targetSearch.toLowerCase()) || n2.formId.toLowerCase().includes(targetSearch.toLowerCase()) || n2.race.toLowerCase().includes(targetSearch.toLowerCase()) || n2.pluginName && n2.pluginName.toLowerCase().includes(targetSearch.toLowerCase())
     );
@@ -27543,41 +29392,73 @@ Defaulting to \`null\`.`;
     const getActionBadge = (action) => {
       const act = (action || "new").toLowerCase();
       if (act === "new" || act === "create") {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80", children: "New" });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80", children: t2("matchmaking.llm.actionNew") });
       }
       if (act === "advance") {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-blue-950/60 text-blue-400 border border-blue-800/80", children: "Advance" });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-blue-950/60 text-blue-400 border border-blue-800/80", children: t2("matchmaking.llm.actionAdvance") });
       }
       if (act === "breakup") {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80", children: "Breakup" });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80", children: t2("matchmaking.llm.actionBreakup") });
       }
       if (act === "open") {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-amber-950/60 text-amber-400 border border-amber-800/80", children: "Open Pair" });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-amber-950/60 text-amber-400 border border-amber-800/80", children: t2("matchmaking.llm.actionOpen") });
       }
       if (act === "close") {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-purple-950/60 text-purple-400 border border-purple-800/80", children: "Close Pair" });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-purple-950/60 text-purple-400 border border-purple-800/80", children: t2("matchmaking.llm.actionClose") });
       }
       return null;
+    };
+    const resolveTargetStatusLabel = (targetStatus, suggestedStatus) => {
+      if (targetStatus) {
+        const lower = targetStatus.trim().toLowerCase();
+        switch (lower) {
+          case "candidate":
+            return getStatusLabel(RelationshipStatus.Candidate);
+          case "dating":
+            return getStatusLabel(RelationshipStatus.Dating);
+          case "lover":
+          case "lovers":
+            return getStatusLabel(RelationshipStatus.Lover);
+          case "engaged":
+            return getStatusLabel(RelationshipStatus.Engaged);
+          case "married":
+            return getStatusLabel(RelationshipStatus.Married);
+          case "divorced":
+            return getStatusLabel(RelationshipStatus.Divorced);
+          case "jilted":
+            return getStatusLabel(RelationshipStatus.Jilted);
+          case "exdating":
+          case "ex-dating":
+            return getStatusLabel(RelationshipStatus.ExDating);
+          case "exlover":
+          case "ex-lover":
+            return getStatusLabel(RelationshipStatus.ExLover);
+        }
+      }
+      if (suggestedStatus !== void 0) {
+        return getStatusLabel(suggestedStatus);
+      }
+      return getStatusLabel(RelationshipStatus.Dating);
     };
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full w-full gap-[1rem] overflow-hidden select-none font-ui", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-[23rem] flex flex-col gap-[0.75rem] bg-panel border border-border-divider rounded-lg p-[1rem] overflow-hidden flex-shrink-0", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] pb-[0.5rem] border-b border-border-divider", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[1.25em] h-[1.25em] text-accent" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: "LLM Matchmaking Setup" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: "SkyrimNet NPC-NPC Matchmaker" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: t2("matchmaking.llm.setupTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: t2("matchmaking.llm.setupSubtitle") })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem] flex-1 flex flex-col min-h-0", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-xs font-semibold text-foreground-secondary flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Target NPC:" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-accent font-mono truncate max-w-[9rem]", children: (targetProfile == null ? void 0 : targetProfile.name) || targetNpcId || "None" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.targetNpcLabel") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-accent font-mono truncate max-w-[9rem]", children: (targetProfile == null ? void 0 : targetProfile.name) || targetNpcId || t2("shared.none") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SearchInput,
             {
               value: targetSearch,
-              placeholder: "Search target character...",
+              placeholder: t2("matchmaking.llm.searchTargetPlaceholder"),
               onChange: setTargetSearch
             }
           ),
@@ -27588,7 +29469,7 @@ Defaulting to \`null\`.`;
               estimateSize: 48,
               overscan: 6,
               className: "flex-1 min-h-0 border border-border-subtle rounded-md p-[0.375rem] bg-panel-inset overflow-y-auto",
-              emptyMessage: "No matching characters found.",
+              emptyMessage: t2("matchmaking.llm.emptyTargetCharacters"),
               renderItem: (npc) => {
                 const isSelected = targetNpcId === npc.formId;
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -27610,7 +29491,7 @@ Defaulting to \`null\`.`;
                             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: npc.formId }),
                             npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: t2("shared.pluginTooltip", { plugin: npc.pluginName }), children: npc.pluginName })
                             ] })
                           ] })
                         ] })
@@ -27631,14 +29512,14 @@ Defaulting to \`null\`.`;
             className: `w-full py-[0.625rem] px-[1rem] rounded-md font-semibold text-xs flex items-center justify-center gap-[0.5rem] transition-all cursor-pointer ${!isSkyrimNetEnabled || !targetNpcId ? "bg-panel-inset text-foreground-muted cursor-not-allowed border border-border-divider" : isGeneratingAi ? "bg-accent/50 text-accent-bright animate-pulse cursor-wait" : "bg-accent hover:bg-accent-bright text-panel shadow-md"}`,
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[1em] h-[1em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGeneratingAi ? "Analyzing Context..." : "Generate Target Matches" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGeneratingAi ? t2("matchmaking.llm.analyzingContext") : t2("matchmaking.llm.generateTargetMatches") })
             ]
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.5rem] border-t border-border-divider flex flex-col gap-[0.375rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-secondary", children: "Global Matchmaker:" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted", children: "All Skyrim NPCs" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-secondary", children: t2("matchmaking.llm.globalMatchmakerLabel") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted", children: t2("matchmaking.llm.allSkyrimNpcs") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
@@ -27649,7 +29530,7 @@ Defaulting to \`null\`.`;
               className: `w-full py-[0.5rem] px-[0.75rem] rounded-md font-semibold text-xs flex items-center justify-center gap-[0.375rem] transition-all cursor-pointer border ${!isSkyrimNetEnabled ? "bg-panel-inset text-foreground-muted cursor-not-allowed border-border-divider" : isGeneratingAi ? "bg-accent/50 text-accent-bright animate-pulse cursor-wait border-border-accent" : "bg-panel-inset hover:bg-interactive-hover text-foreground-primary border-border-subtle hover:border-accent"}`,
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { className: "w-[1em] h-[1em] text-accent" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Scan Any NPCs (World Scan)" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.scanAnyNpcs") })
               ]
             }
           )
@@ -27665,7 +29546,7 @@ Defaulting to \`null\`.`;
             className: "text-[0.6875rem] text-accent hover:text-accent-bright hover:underline inline-flex items-center gap-[0.25rem] cursor-pointer",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Settings2, { className: "w-[0.875em] h-[0.875em]" }),
-              "Configure Matchmaking Rules in Settings"
+              t2("matchmaking.llm.configureRulesLink")
             ]
           }
         ) })
@@ -27675,15 +29556,12 @@ Defaulting to \`null\`.`;
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] min-w-0", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(HeartHandshake, { className: "w-[1.25em] h-[1.25em] text-accent flex-shrink-0" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright truncate", children: "SkyrimNet Recommendations" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted truncate", children: isGlobalScan ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                "Showing ",
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary", children: "World Matchmaking Scan" }),
-                " across Skyrim NPCs"
-              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                "Showing partner evaluation for ",
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary", children: (targetProfile == null ? void 0 : targetProfile.name) || targetNpcId })
-              ] }) })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright truncate", children: t2("matchmaking.llm.recommendationsTitle") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted truncate", children: isGlobalScan ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.showingWorldScan", { scanType: "[[SCAN]]" }).split(/(\[\[SCAN\]\])/g).map(
+                (part, idx) => part === "[[SCAN]]" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary", children: t2("matchmaking.llm.worldMatchmakingScan") }, idx) : /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.Fragment, { children: part }, idx)
+              ) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.showingPartnerEval", { name: "[[NAME]]" }).split(/(\[\[NAME\]\])/g).map(
+                (part, idx) => part === "[[NAME]]" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary", children: (targetProfile == null ? void 0 : targetProfile.name) || targetNpcId }, idx) : /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.Fragment, { children: part }, idx)
+              ) }) })
             ] })
           ] }),
           aiSuggestions.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] flex-shrink-0", children: [
@@ -27693,7 +29571,7 @@ Defaulting to \`null\`.`;
                 type: "button",
                 onClick: () => handleSelectAll(aiSuggestions.some((s) => !s.selected)),
                 className: "px-[0.625rem] py-[0.25rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-xs text-foreground-secondary cursor-pointer transition-colors whitespace-nowrap flex-shrink-0",
-                children: aiSuggestions.every((s) => s.selected) ? "Deselect All" : "Select All"
+                children: aiSuggestions.every((s) => s.selected) ? t2("matchmaking.llm.deselectAll") : t2("matchmaking.llm.selectAll")
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -27705,7 +29583,7 @@ Defaulting to \`null\`.`;
                 className: "px-[0.75rem] py-[0.25rem] bg-accent hover:bg-accent-bright disabled:opacity-50 text-panel font-semibold text-xs rounded transition-colors flex items-center gap-[0.25rem] cursor-pointer whitespace-nowrap flex-shrink-0",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Apply Selected" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.applySelected") })
                 ]
               }
             )
@@ -27714,13 +29592,13 @@ Defaulting to \`null\`.`;
         isGeneratingAi ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center justify-center p-[2rem] text-center gap-[0.75rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[2.5em] h-[2.5em] text-accent animate-pulse" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-bold text-foreground-primary", children: "Querying SkyrimNet AI Context..." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted mt-[0.25rem]", children: "Evaluating character lore, relationships, hold diversity, and romance compatibility." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-bold text-foreground-primary", children: t2("matchmaking.llm.queryingTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-foreground-muted mt-[0.25rem]", children: t2("matchmaking.llm.queryingSubtitle") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-2 h-2 rounded-full bg-accent animate-bounce" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-2 h-2 rounded-full bg-accent animate-bounce [animation-delay:0.2s]" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-2 h-2 rounded-full bg-accent animate-bounce [animation-delay:0.4s]" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[0.5rem] h-[0.5rem] rounded-full bg-accent animate-bounce" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[0.5rem] h-[0.5rem] rounded-full bg-accent animate-bounce [animation-delay:0.2s]" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[0.5rem] h-[0.5rem] rounded-full bg-accent animate-bounce [animation-delay:0.4s]" })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
@@ -27728,18 +29606,16 @@ Defaulting to \`null\`.`;
               type: "button",
               onClick: () => useMarasStore.setState({ isGeneratingAiSuggestions: false }),
               className: "px-[0.75rem] py-[0.25rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-xs text-foreground-secondary cursor-pointer transition-colors",
-              children: "Cancel"
+              children: t2("matchmaking.llm.cancelButton")
             }
           ) })
         ] }) : aiSuggestions.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center justify-center p-[2rem] text-center gap-[0.75rem] bg-panel-inset border border-border-subtle rounded-lg text-foreground-muted", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[2.5em] h-[2.5em] text-accent/50" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-primary", children: "No LLM Match Analysis Generated Yet" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs max-w-[22rem] mt-[0.25rem]", children: [
-              "Select a target character on the left or click ",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent font-semibold", children: "Scan Any NPCs (World Scan)" }),
-              " to run SkyrimNet evaluation."
-            ] })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-primary", children: t2("matchmaking.llm.emptyAnalysisTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs max-w-[22rem] mt-[0.25rem]", children: t2("matchmaking.llm.emptyAnalysisDesc", { action: "[[ACTION]]" }).split(/(\[\[ACTION\]\])/g).map(
+              (part, idx) => part === "[[ACTION]]" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent font-semibold", children: t2("matchmaking.llm.scanAnyNpcs") }, idx) : /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.Fragment, { children: part }, idx)
+            ) })
           ] })
         ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 min-h-0 overflow-y-auto pr-[0.375rem] space-y-[0.75rem]", children: aiSuggestions.map((s) => {
           var _a2;
@@ -27747,7 +29623,7 @@ Defaulting to \`null\`.`;
           const profileA = s.actorAFormId ? npcProfiles.get(s.actorAFormId) || allNpcs.find((n2) => n2.formId === s.actorAFormId) : void 0;
           const candidateName = s.name || (candidateProfile == null ? void 0 : candidateProfile.name) || s.formId;
           s.compatibilityScore || 85;
-          s.memory || s.reasoning || "Favorable romantic connection identified by SkyrimNet.";
+          s.memory || s.reasoning || t2("matchmaking.llm.defaultReasoning");
           const tags = s.synergyTags || ["#RomanticSynergy", "#SkyrimLore"];
           const primaryActor = s.actorAFormId || targetNpcId;
           const suggestionOptions = getAvailableStatuses(primaryActor, s.formId);
@@ -27800,7 +29676,7 @@ Defaulting to \`null\`.`;
                         ] }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-secondary", children: [
                           "• ",
-                          (candidateProfile == null ? void 0 : candidateProfile.race) || "Skyrim NPC"
+                          (candidateProfile == null ? void 0 : candidateProfile.race) || t2("matchmaking.llm.skyrimNpcRaceFallback")
                         ] }),
                         (candidateProfile == null ? void 0 : candidateProfile.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", children: candidateProfile.pluginName })
                       ] })
@@ -27812,31 +29688,31 @@ Defaulting to \`null\`.`;
                       "span",
                       {
                         className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80",
-                        title: "Considered cheating: at least one partner is in a closed main relationship",
-                        children: "Cheating"
+                        title: t2("matchmaking.llm.cheatingTooltip"),
+                        children: t2("matchmaking.llm.cheatingBadge")
                       }
                     ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "span",
                       {
                         className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80",
-                        title: "Allowed secondary relationship: both parties are single or in open relationships",
-                        children: "Allowed"
+                        title: t2("matchmaking.llm.allowedTooltip"),
+                        children: t2("matchmaking.llm.allowedBadge")
                       }
                     )),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-[0.5rem] py-[0.1875rem] rounded-full border text-[0.6875rem] font-bold flex items-center gap-[0.25rem] text-accent-bright bg-accent-soft border-border-accent flex-shrink-0", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(Award, { className: "w-[0.875em] h-[0.875em]" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: s.targetStatus ? s.targetStatus.charAt(0).toUpperCase() + s.targetStatus.slice(1) : "Dating" })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: resolveTargetStatusLabel(s.targetStatus, s.suggestedStatus) })
                     ] })
                   ] })
                 ] }),
                 s.isGeneratingMemory ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] text-xs text-accent-bright bg-accent-soft p-[0.625rem] rounded border border-border-accent animate-pulse", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[1.25em] h-[1.25em] animate-spin" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Generating first-person memories from both characters' perspectives via SkyrimNet AI..." })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.generatingMemories") })
                 ] }) : s.dualMemories && s.dualMemories.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.6875rem] font-semibold text-accent-bright", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(BookOpen, { className: "w-[1em] h-[1em]" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dual-POV Recollections (SkyrimNet Memory Records):" })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.dualPovTitle") })
                     ] }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs(
                       "button",
@@ -27846,7 +29722,7 @@ Defaulting to \`null\`.`;
                         className: "text-[0.625rem] text-foreground-secondary hover:text-accent-bright flex items-center gap-[0.25rem] cursor-pointer transition-colors",
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.75em] h-[0.75em]" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Regenerate Memories" })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.regenerateMemories") })
                         ]
                       }
                     )
@@ -27860,10 +29736,9 @@ Defaulting to \`null\`.`;
                           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-[0.25rem] text-[0.6875rem]", children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-bold text-accent-bright flex items-center gap-[0.25rem]", children: [
                               /* @__PURE__ */ jsxRuntimeExports.jsx(User, { className: "w-[0.875em] h-[0.875em]" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                                mem.actor || (memIdx === 0 ? s.actorAName || (targetProfile == null ? void 0 : targetProfile.name) : candidateProfile == null ? void 0 : candidateProfile.name),
-                                "'s POV"
-                              ] })
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.actorPov", {
+                                actor: mem.actor || (memIdx === 0 ? s.actorAName || (targetProfile == null ? void 0 : targetProfile.name) || targetNpcId : (candidateProfile == null ? void 0 : candidateProfile.name) || candidateName)
+                              }) })
                             ] }),
                             mem.emotion && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.0625rem] rounded bg-accent-soft text-accent-bright font-mono uppercase text-[0.625rem] border border-border-accent/40", children: mem.emotion })
                           ] }),
@@ -27874,16 +29749,14 @@ Defaulting to \`null\`.`;
                           ] })
                         ] }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] border-t border-border-divider/50 flex items-center justify-between text-[0.625rem] text-foreground-muted", children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate max-w-[12rem]", children: mem.location || "Skyrim" }),
-                          mem.importance_score !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-accent", children: [
-                            "Score: ",
-                            (mem.importance_score * 100).toFixed(0),
-                            "%"
-                          ] })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate max-w-[12rem]", children: mem.location || t2("matchmaking.llm.defaultLocation") }),
+                          mem.importance_score !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-accent", children: t2("matchmaking.llm.memoryScore", {
+                            score: (mem.importance_score * 100).toFixed(0)
+                          }) })
                         ] }),
-                        mem.tags && mem.tags.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.25rem] flex-wrap mt-[0.125rem]", children: mem.tags.slice(0, 5).map((t2, ti2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.03125rem] rounded bg-panel text-foreground-muted font-mono border border-border-subtle/50", children: [
+                        mem.tags && mem.tags.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.25rem] flex-wrap mt-[0.125rem]", children: mem.tags.slice(0, 5).map((tagText, ti2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.03125rem] rounded bg-panel text-foreground-muted font-mono border border-border-subtle/50", children: [
                           "#",
-                          t2.replace(/^#/, "")
+                          tagText.replace(/^#/, "")
                         ] }, ti2)) })
                       ]
                     },
@@ -27892,7 +29765,7 @@ Defaulting to \`null\`.`;
                 ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-xs bg-panel-inset p-[0.5rem] rounded border border-border-subtle", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted flex items-center gap-[0.375rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(BookOpen, { className: "w-[1em] h-[1em] text-foreground-secondary" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "No memories generated yet for this pairing." })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.noMemoriesYet") })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "button",
@@ -27902,7 +29775,7 @@ Defaulting to \`null\`.`;
                       className: "px-[0.625rem] py-[0.25rem] bg-accent-soft hover:bg-accent/20 text-accent-bright border border-border-accent font-semibold rounded transition-colors cursor-pointer flex items-center gap-[0.375rem] text-xs shadow-sm",
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em]" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Generate Memories" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.generateMemories") })
                       ]
                     }
                   )
@@ -27917,8 +29790,8 @@ Defaulting to \`null\`.`;
                     i
                   )) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] flex-shrink-0 ml-auto", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.6875rem]", children: "Status:" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[7.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.6875rem]", children: t2("matchmaking.llm.statusLabel") }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-w-[8.5rem] w-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                       SelectInput,
                       {
                         value: s.suggestedStatus,
@@ -27946,7 +29819,7 @@ Defaulting to \`null\`.`;
                         disabled: !canApply,
                         title: !canApply ? currentStatusOpt == null ? void 0 : currentStatusOpt.tooltip : void 0,
                         className: `px-[0.625rem] py-[0.25rem] rounded font-semibold text-xs transition-colors flex items-center gap-[0.25rem] whitespace-nowrap ${canApply ? "bg-accent-soft hover:bg-accent/20 text-accent-bright border border-border-accent cursor-pointer" : "bg-panel-inset text-foreground-disabled border border-border-subtle cursor-not-allowed opacity-50"}`,
-                        children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Apply Match" })
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.llm.applyMatch") })
                       }
                     )
                   ] })
@@ -27967,6 +29840,7 @@ Defaulting to \`null\`.`;
     spouseName,
     houses
   }) => {
+    const { t: t2, tp: tp2 } = useTranslation();
     if (!isOpen) return null;
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-[1rem] animate-in fade-in duration-200", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
@@ -27978,11 +29852,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.5rem] rounded-full bg-accent-soft text-accent border border-border-accent", children: /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[1.25rem] h-[1.25rem]" }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-base font-bold text-accent-bright", children: [
-                  "Select Residence for ",
-                  childName
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted", children: spouseName ? `Assign a home for ${childName} and ${spouseName}. ${spouseName} will live here with their own schedule.` : `Choose which of your properties ${childName} will reside in.` })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-bold text-accent-bright", children: t2("matchmaking.houseModal.title", { childName }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted", children: spouseName ? t2("matchmaking.houseModal.subtitleWithSpouse", { childName, spouseName }) : t2("matchmaking.houseModal.subtitleSolo", { childName }) })
               ] })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -27990,7 +29861,7 @@ Defaulting to \`null\`.`;
               {
                 onClick: onClose,
                 className: "p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer",
-                title: "Cancel",
+                title: t2("matchmaking.houseModal.cancelButton"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[1.25rem] h-[1.25rem]" })
               }
             )
@@ -28022,7 +29893,7 @@ Defaulting to \`null\`.`;
                           className: `px-[0.5rem] py-[0.1875rem] rounded-md text-[0.6875rem] font-semibold flex items-center gap-[0.25rem] border ${house.childrenCount > 0 ? "bg-accent-soft text-accent-bright border-border-accent" : "bg-panel-raised text-foreground-muted border-border-subtle"}`,
                           children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[0.875rem] h-[0.875rem]" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: house.childrenCount === 1 ? "1 Child" : `${house.childrenCount} Children` })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tp2("matchmaking.houseModal.childrenCount", house.childrenCount) })
                           ]
                         }
                       ),
@@ -28032,7 +29903,7 @@ Defaulting to \`null\`.`;
                           className: `px-[0.5rem] py-[0.1875rem] rounded-md text-[0.6875rem] font-semibold flex items-center gap-[0.25rem] border ${house.spousesCount > 0 ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-panel-raised text-foreground-muted border-border-subtle"}`,
                           children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[0.875rem] h-[0.875rem]" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: house.spousesCount === 1 ? "1 Spouse" : `${house.spousesCount} Spouses` })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tp2("matchmaking.houseModal.spousesCount", house.spousesCount) })
                           ]
                         }
                       )
@@ -28045,7 +29916,7 @@ Defaulting to \`null\`.`;
                       className: "px-[0.875rem] py-[0.5rem] rounded-md text-xs font-semibold bg-accent hover:bg-accent-bright text-panel transition-colors flex items-center gap-[0.375rem] flex-shrink-0 cursor-pointer shadow-sm group-hover:scale-102",
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { className: "w-[0.875rem] h-[0.875rem]" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Choose House" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.houseModal.chooseHouse") })
                       ]
                     }
                   )
@@ -28053,14 +29924,14 @@ Defaulting to \`null\`.`;
               },
               house.formId
             )),
-            houses.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[2rem] text-center text-xs text-foreground-muted bg-panel-inset border border-border-subtle rounded-lg", children: "No player houses registered." })
+            houses.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[2rem] text-center text-xs text-foreground-muted bg-panel-inset border border-border-subtle rounded-lg", children: t2("matchmaking.houseModal.emptyHouses") })
           ] }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.875rem] px-[1.25rem] border-t border-border-divider bg-panel-raised flex justify-end gap-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               onClick: onClose,
               className: "px-[0.875rem] py-[0.375rem] text-xs font-semibold text-foreground-secondary hover:text-foreground-primary bg-panel-inset hover:bg-panel-inset/80 border border-border-divider rounded-md transition-colors cursor-pointer",
-              children: "Cancel"
+              children: t2("matchmaking.houseModal.cancelButton")
             }
           ) })
         ]
@@ -28069,6 +29940,7 @@ Defaulting to \`null\`.`;
   };
   const AdoptionSubPage = () => {
     var _a2, _b, _c;
+    const { t: t2, revision } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const childrenStore = useMarasStore((s) => s.children);
     const relationships = useMarasStore((s) => s.relationships);
@@ -28089,7 +29961,7 @@ Defaulting to \`null\`.`;
         const profileFromMap = npcProfiles.get(c.childId);
         childMap.set(c.childId, profileFromMap || {
           formId: c.childId,
-          name: c.name || `Child ${c.childId}`,
+          name: c.name || t2("household.children.childFallbackName", { id: c.childId }),
           race: "Nord",
           isChild: true
         });
@@ -28099,7 +29971,7 @@ Defaulting to \`null\`.`;
     const getActorName = (formId) => {
       var _a3, _b2;
       if (!formId) return null;
-      if (formId === PLAYER_FORM_ID) return ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)";
+      if (formId === PLAYER_FORM_ID) return ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || t2("shared.playerFallback");
       return ((_b2 = npcProfiles.get(formId)) == null ? void 0 : _b2.name) || null;
     };
     const childrenWithAdoptionInfo = allChildren.map((child) => {
@@ -28163,7 +30035,7 @@ Defaulting to \`null\`.`;
           stayAtHome: prof == null ? void 0 : prof.stayAtHome
         };
       });
-    }, [relationships, npcProfiles]);
+    }, [relationships, npcProfiles, revision]);
     const housesWithOccupants = reactExports.useMemo(() => {
       return playerHomes.map((house) => {
         let childrenCount = 0;
@@ -28194,7 +30066,7 @@ Defaulting to \`null\`.`;
       if (!npc.isChild && npc.formId !== PLAYER_FORM_ID) {
         otherAdultMap.set(npc.formId, {
           formId: npc.formId,
-          name: npc.name || `NPC ${npc.formId}`,
+          name: npc.name || t2("shared.npcWithId", { id: npc.formId }),
           race: npc.race || "Nord",
           pluginName: npc.pluginName
         });
@@ -28222,7 +30094,7 @@ Defaulting to \`null\`.`;
       }
     });
     const allAdultCandidates = [];
-    const playerDisplayName = ((_b = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b.name) || "Prisoner (Player)";
+    const playerDisplayName = ((_b = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b.name) || t2("shared.playerFallback");
     const playerRace = ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.race) || "Nord";
     if (playerSpouses.length === 0) {
       allAdultCandidates.push({
@@ -28234,7 +30106,7 @@ Defaulting to \`null\`.`;
         partnerId: null,
         partnerName: null,
         isPlayer: true,
-        badgeLabel: "Single Parent"
+        badgeLabel: t2("matchmaking.adoption.singleParentBadge")
       });
     } else {
       if (playerSpouses.length == 0) {
@@ -28247,7 +30119,7 @@ Defaulting to \`null\`.`;
           partnerId: null,
           partnerName: null,
           isPlayer: true,
-          badgeLabel: "Single Parent"
+          badgeLabel: t2("matchmaking.adoption.singleParentBadge")
         });
       }
       playerSpouses.forEach((sp) => {
@@ -28261,7 +30133,6 @@ Defaulting to \`null\`.`;
           partnerName: sp.name,
           spouseHome: sp.currentHome,
           isPlayer: true
-          // badgeLabel: sp.currentHome ? `Assigned Home: ${sp.currentHome}` : 'No Assigned Home',
         });
       });
     }
@@ -28291,7 +30162,7 @@ Defaulting to \`null\`.`;
         partnerId,
         partnerName,
         isPlayer: false,
-        badgeLabel: partnerName ? `Spouse: ${partnerName}` : "Single"
+        badgeLabel: partnerName ? t2("matchmaking.adoption.spouseBadge", { name: partnerName }) : t2("matchmaking.adoption.singleBadge")
       });
     });
     const isGuardianCandidate = (adult) => {
@@ -28329,35 +30200,35 @@ Defaulting to \`null\`.`;
         return {
           isBio: true,
           score: 2,
-          label: "Biological Parents"
+          label: t2("matchmaking.adoption.bioParents")
         };
       }
       if (adultMatchesM) {
         return {
           isBio: true,
           score: 1,
-          label: "Biological Mother"
+          label: t2("matchmaking.adoption.bioMother")
         };
       }
       if (adultMatchesF) {
         return {
           isBio: true,
           score: 1,
-          label: "Biological Father"
+          label: t2("matchmaking.adoption.bioFather")
         };
       }
       if (partnerMatchesM) {
         return {
           isBio: true,
           score: 1,
-          label: adult.partnerName ? `Spouse (${adult.partnerName}) is Bio Mother` : "Spouse is Bio Mother"
+          label: adult.partnerName ? t2("matchmaking.adoption.spouseIsBioMotherNamed", { name: adult.partnerName }) : t2("matchmaking.adoption.spouseIsBioMother")
         };
       }
       if (partnerMatchesF) {
         return {
           isBio: true,
           score: 1,
-          label: adult.partnerName ? `Spouse (${adult.partnerName}) is Bio Father` : "Spouse is Bio Father"
+          label: adult.partnerName ? t2("matchmaking.adoption.spouseIsBioFatherNamed", { name: adult.partnerName }) : t2("matchmaking.adoption.spouseIsBioFather")
         };
       }
       return null;
@@ -28396,7 +30267,7 @@ Defaulting to \`null\`.`;
         }
         return 0;
       });
-    }, [allAdultCandidates, searchParentQuery, selectedChildInfo]);
+    }, [allAdultCandidates, searchParentQuery, selectedChildInfo, revision]);
     const availableUnassignedCount = childrenWithAdoptionInfo.filter((item) => item.isUnassigned && !item.isBlocked).length;
     const adoptedChildrenCount = childrenWithAdoptionInfo.filter((item) => item.isAdopted).length;
     const biologicalChildrenCount = childrenWithAdoptionInfo.filter((item) => item.isBiological).length;
@@ -28474,8 +30345,8 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] pb-[0.5rem] border-b border-border-divider", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1.25em] h-[1.25em] text-accent" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: "Skyrim Children" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: "Select child to assign adoption" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: t2("matchmaking.adoption.childrenHeader") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: t2("matchmaking.adoption.childrenSubheader") })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem]", children: [
@@ -28483,7 +30354,7 @@ Defaulting to \`null\`.`;
             SearchInput,
             {
               value: searchChildQuery,
-              placeholder: "Search by name, race, or location...",
+              placeholder: t2("matchmaking.adoption.searchChildPlaceholder"),
               onChange: setSearchChildQuery
             }
           ),
@@ -28494,7 +30365,7 @@ Defaulting to \`null\`.`;
                 onClick: () => setFilterStatus("all"),
                 className: `py-[0.375rem] px-[0.5rem] rounded border font-semibold transition-colors cursor-pointer text-[0.6875rem] flex items-center justify-between ${filterStatus === "all" ? "bg-accent text-panel border-accent" : "bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle"}`,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "All" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.filterAll") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "opacity-80", children: [
                     "(",
                     childrenWithAdoptionInfo.length,
@@ -28509,7 +30380,7 @@ Defaulting to \`null\`.`;
                 onClick: () => setFilterStatus("available"),
                 className: `py-[0.375rem] px-[0.5rem] rounded border font-semibold transition-colors cursor-pointer text-[0.6875rem] flex items-center justify-between ${filterStatus === "available" ? "bg-status-success text-panel border-status-success" : "bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle"}`,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Available" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.filterAvailable") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "opacity-80", children: [
                     "(",
                     availableUnassignedCount,
@@ -28524,7 +30395,7 @@ Defaulting to \`null\`.`;
                 onClick: () => setFilterStatus("adopted"),
                 className: `py-[0.375rem] px-[0.5rem] rounded border font-semibold transition-colors cursor-pointer text-[0.6875rem] flex items-center justify-between ${filterStatus === "adopted" ? "bg-accent-soft text-accent-bright border-border-accent" : "bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle"}`,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adopted" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.filterAdopted") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "opacity-80", children: [
                     "(",
                     adoptedChildrenCount,
@@ -28539,7 +30410,7 @@ Defaulting to \`null\`.`;
                 onClick: () => setFilterStatus("biological"),
                 className: `py-[0.375rem] px-[0.5rem] rounded border font-semibold transition-colors cursor-pointer text-[0.6875rem] flex items-center justify-between ${filterStatus === "biological" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" : "bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle"}`,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Biological" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.filterBiological") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "opacity-80", children: [
                     "(",
                     biologicalChildrenCount,
@@ -28557,6 +30428,7 @@ Defaulting to \`null\`.`;
             const isSelected = selectedChildId === child.formId;
             const isFemale = resolveIsFemale(item.childRecord, child);
             const { sonOrDaughter } = getChildGenderNouns(isFemale);
+            const genderSymbol = isFemale ? "♀" : "♂";
             return /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
@@ -28578,15 +30450,21 @@ Defaulting to \`null\`.`;
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: child.currentHome || child.race }),
                         child.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${child.pluginName}`, children: child.pluginName })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: t2("shared.pluginTooltip", { plugin: child.pluginName }), children: child.pluginName })
                         ] }),
                         item.isAdopted && ((_a3 = item.childRecord) == null ? void 0 : _a3.timestamp) != null && item.childRecord.timestamp > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "ml-[0.25rem]", children: [
                           "• ",
                           formatGameDay(item.childRecord.timestamp, currentGameDay)
                         ] }),
                         item.isBiological && (item.parentAName || item.parentBName) && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "ml-[0.25rem] text-emerald-400/90 truncate max-w-[10rem]", children: [
-                          "• ",
-                          item.parentAName && item.parentBName ? `Parents: ${item.parentAName} and ${item.parentBName}` : `Parent: ${item.parentAName || item.parentBName}`
+                          "•",
+                          " ",
+                          item.parentAName && item.parentBName ? t2("matchmaking.adoption.parentsPair", {
+                            parentA: item.parentAName,
+                            parentB: item.parentBName
+                          }) : t2("matchmaking.adoption.parentSingle", {
+                            parent: item.parentAName || item.parentBName || ""
+                          })
                         ] }),
                         item.isBlocked && item.blockedReason && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "ml-[0.25rem] text-amber-400/90 truncate max-w-[14rem]", title: item.blockedReason, children: [
                           "• ",
@@ -28595,36 +30473,20 @@ Defaulting to \`null\`.`;
                       ] })
                     ] })
                   ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.25rem] shrink-0 whitespace-nowrap", children: item.isAdopted ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-accent-soft text-accent-bright border border-border-accent whitespace-nowrap", children: [
-                    "Adopted ",
-                    sonOrDaughter,
-                    " ",
-                    isFemale ? "♀" : "♂"
-                  ] }) : item.isBiological ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap", children: [
-                    "Biological ",
-                    sonOrDaughter,
-                    " ",
-                    isFemale ? "♀" : "♂"
-                  ] }) : item.isBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-[0.25rem] shrink-0 whitespace-nowrap", children: item.isAdopted ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-accent-soft text-accent-bright border border-border-accent whitespace-nowrap", children: t2("matchmaking.adoption.adoptedNounBadge", { noun: sonOrDaughter, symbol: genderSymbol }) }) : item.isBiological ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap", children: t2("matchmaking.adoption.biologicalNounBadge", { noun: sonOrDaughter, symbol: genderSymbol }) }) : item.isBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "span",
                     {
                       className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 whitespace-nowrap",
-                      title: item.blockedReason || "Blocked from adoption",
-                      children: [
-                        "Blocked ",
-                        isFemale ? "♀" : "♂"
-                      ]
+                      title: item.blockedReason || t2("matchmaking.adoption.blockedTitleFallback"),
+                      children: t2("matchmaking.adoption.blockedBadge", { symbol: genderSymbol })
                     }
-                  ) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-status-success-soft text-status-success border border-status-success whitespace-nowrap", children: [
-                    "Available ",
-                    isFemale ? "♀" : "♂"
-                  ] }) })
+                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-status-success-soft text-status-success border border-status-success whitespace-nowrap", children: t2("matchmaking.adoption.availableBadge", { symbol: genderSymbol }) }) })
                 ]
               },
               child.formId
             );
           }),
-          filteredChildren.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] text-center text-xs text-foreground-muted", children: "No children match search filter." })
+          filteredChildren.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] text-center text-xs text-foreground-muted", children: t2("matchmaking.adoption.emptyChildren") })
         ] }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 flex flex-col gap-[0.75rem] bg-panel border border-border-divider rounded-lg p-[1rem] overflow-hidden", children: selectedChildInfo ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
@@ -28639,14 +30501,21 @@ Defaulting to \`null\`.`;
                   {
                     onClick: () => openNpcDetail(selectedChildInfo.profile.formId),
                     className: "text-foreground-muted hover:text-accent p-[0.125rem] rounded cursor-pointer transition-colors",
-                    title: "Inspect Child Profile",
+                    title: t2("matchmaking.adoption.inspectChildTooltip"),
                     children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.875em] h-[0.875em]" })
                   }
                 ),
                 (() => {
                   const isF = resolveIsFemale(selectedChildInfo.childRecord, selectedChildInfo.profile);
                   if (isF === void 0) return null;
-                  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isF ? "bg-pink-500/20 text-pink-300 border-pink-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`, title: isF ? "Daughter" : "Son", children: isF ? "♀ Daughter" : "♂ Son" });
+                  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: `text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isF ? "bg-pink-500/20 text-pink-300 border-pink-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`,
+                      title: isF ? t2("household.children.daughterTitle") : t2("household.children.sonTitle"),
+                      children: isF ? t2("household.children.daughterBadge") : t2("household.children.sonBadge")
+                    }
+                  );
                 })()
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] flex-wrap", children: [
@@ -28655,22 +30524,25 @@ Defaulting to \`null\`.`;
                   selectedChildInfo.profile.formId,
                   ")"
                 ] }),
-                selectedChildInfo.profile.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${selectedChildInfo.profile.pluginName}`, children: selectedChildInfo.profile.pluginName })
+                selectedChildInfo.profile.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: t2("shared.pluginTooltip", { plugin: selectedChildInfo.profile.pluginName }), children: selectedChildInfo.profile.pluginName })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-foreground-secondary flex items-center gap-[0.625rem] mt-[0.125rem] flex-wrap", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                  "Race: ",
+                  t2("matchmaking.adoption.raceLabel"),
+                  " ",
                   /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "text-foreground-primary", children: selectedChildInfo.profile.race })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                  "Residence: ",
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "text-foreground-primary", children: selectedChildInfo.profile.currentHome || "Skyrim" })
+                  t2("matchmaking.adoption.residenceLabel"),
+                  " ",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "text-foreground-primary", children: selectedChildInfo.profile.currentHome || t2("matchmaking.adoption.defaultResidence") })
                 ] }),
                 selectedChildInfo.isAdopted && selectedChildInfo.bioParentName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "Original Bio Parent: ",
+                    t2("matchmaking.adoption.originalBioParentLabel"),
+                    " ",
                     /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "text-foreground-primary", children: selectedChildInfo.bioParentName })
                   ] })
                 ] })
@@ -28679,25 +30551,25 @@ Defaulting to \`null\`.`;
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "shrink-0 whitespace-nowrap", children: selectedChildInfo.isAdopted || selectedChildInfo.isBiological ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold bg-accent-soft text-accent-bright border border-border-accent flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Heart, { className: "w-[1em] h-[1em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Has Family" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.hasFamilyStatus") })
           ] }) : selectedChildInfo.isBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-[1em] h-[1em] text-amber-400" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adoption Blocked" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.adoptionBlockedStatus") })
           ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold bg-status-success-soft text-status-success border border-status-success flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(ShieldCheck, { className: "w-[1em] h-[1em]" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Eligible for Adoption" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("matchmaking.adoption.eligibleStatus") })
           ] }) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between pt-[0.25rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(User, { className: "w-[1.125em] h-[1.125em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-xs font-bold text-foreground-primary uppercase tracking-wider", children: "Select Adoptive Parent NPC:" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-xs font-bold text-foreground-primary uppercase tracking-wider", children: t2("matchmaking.adoption.selectAdoptiveParentHeader") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[14rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             SearchInput,
             {
               value: searchParentQuery,
-              placeholder: "Filter adult NPCs/parents/plugins...",
+              placeholder: t2("matchmaking.adoption.searchParentPlaceholder"),
               onChange: setSearchParentQuery
             }
           ) })
@@ -28705,18 +30577,15 @@ Defaulting to \`null\`.`;
         selectedChildInfo.isBlocked && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-[0.625rem] shadow-sm", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-[1.25rem] h-[1.25rem] flex-shrink-0 text-amber-400" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold block", children: [
-              "Cannot Adopt ",
-              selectedChildInfo.profile.name
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: selectedChildInfo.blockedReason || "This child is currently unavailable for adoption." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block", children: t2("matchmaking.adoption.cannotAdoptTitle", { name: selectedChildInfo.profile.name }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: selectedChildInfo.blockedReason || t2("matchmaking.adoption.cannotAdoptFallback") })
           ] })
         ] }),
         playerHomes.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-[0.625rem] shadow-sm", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-[1.25rem] h-[1.25rem] flex-shrink-0 text-amber-400" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block", children: "No Homes Owned" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: "The Dragonborn must purchase or acquire at least one property before adopting children into the household." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block", children: t2("matchmaking.adoption.noHomesWarningTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: t2("matchmaking.adoption.noHomesWarningDesc") })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 min-h-0 pr-[0.375rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.625rem]", children: [
@@ -28755,12 +30624,13 @@ Defaulting to \`null\`.`;
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: adult.formId }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                          "Race: ",
+                          t2("matchmaking.adoption.raceLabel"),
+                          " ",
                           /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "text-foreground-secondary", children: adult.race })
                         ] }),
                         adult.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${adult.pluginName}`, children: adult.pluginName })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: t2("shared.pluginTooltip", { plugin: adult.pluginName }), children: adult.pluginName })
                         ] })
                       ] })
                     ] })
@@ -28771,27 +30641,27 @@ Defaulting to \`null\`.`;
                       className: `px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold flex items-center gap-[0.25rem] whitespace-nowrap ${isBioParent ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-accent-soft text-accent-bright border border-border-accent"}`,
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(ShieldCheck, { className: "w-[1em] h-[1em]" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: isBioParent ? "Biological Parent & Guardian" : "Current Guardian" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: isBioParent ? t2("matchmaking.adoption.bioParentAndGuardian") : t2("matchmaking.adoption.currentGuardian") })
                       ]
                     }
-                  ) : selectedChildInfo.isBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: selectedChildInfo.blockedReason || "Cannot adopt this child", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  ) : selectedChildInfo.isBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: selectedChildInfo.blockedReason || t2("matchmaking.adoption.cannotAdoptTooltipFallback"), children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "button",
                     {
                       disabled: true,
                       className: "px-[0.875rem] py-[0.375rem] bg-panel-inset text-foreground-muted font-semibold text-xs rounded border border-border-divider flex items-center gap-[0.375rem] cursor-not-allowed opacity-60 whitespace-nowrap",
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-[1em] h-[1em] text-amber-400" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: "Adoption Blocked" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: t2("matchmaking.adoption.adoptionBlockedStatus") })
                       ]
                     }
-                  ) }) }) : adult.isPlayer && playerHomes.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Requires an owned home to adopt", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  ) }) }) : adult.isPlayer && playerHomes.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("matchmaking.adoption.requiresOwnedHomeTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "button",
                     {
                       disabled: true,
                       className: "px-[0.875rem] py-[0.375rem] bg-panel-inset text-foreground-muted font-semibold text-xs rounded border border-border-divider flex items-center gap-[0.375rem] cursor-not-allowed opacity-60 whitespace-nowrap",
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[1em] h-[1em]" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: "No Home Owned" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: t2("matchmaking.adoption.noHomeOwnedButton") })
                       ]
                     }
                   ) }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -28801,10 +30671,7 @@ Defaulting to \`null\`.`;
                       className: `px-[0.875rem] py-[0.375rem] font-semibold text-xs rounded transition-colors cursor-pointer flex items-center gap-[0.375rem] shadow-sm shrink-0 whitespace-nowrap ${isBioParent ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-accent hover:bg-accent-bright text-panel"}`,
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(CirclePlus, { className: "w-[1em] h-[1em] shrink-0" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "whitespace-nowrap", children: [
-                          "Adopt ",
-                          selectedChildInfo.profile.name
-                        ] })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: t2("matchmaking.adoption.adoptChildButton", { name: selectedChildInfo.profile.name }) })
                       ]
                     }
                   ) })
@@ -28815,14 +30682,14 @@ Defaulting to \`null\`.`;
           }),
           filteredAdults.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[2rem] text-center text-xs text-foreground-muted bg-panel-inset border border-border-subtle rounded-lg space-y-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { className: "w-[2em] h-[2em] text-accent/50 mx-auto" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: "No Adult NPCs Found" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Try adjusting your search query." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: t2("matchmaking.adoption.noAdultsTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: t2("matchmaking.adoption.noAdultsSubtitle") })
           ] })
         ] }) }, selectedChildId)
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center justify-center text-center p-[2rem] text-foreground-muted gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[2.5em] h-[2.5em] text-accent/50" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-primary", children: "No Child Selected" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs", children: "Select a child from the left column to assign adoption." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-semibold text-foreground-primary", children: t2("matchmaking.adoption.noChildSelectedTitle") }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs", children: t2("matchmaking.adoption.noChildSelectedSubtitle") })
       ] }) }),
       houseModalState && /* @__PURE__ */ jsxRuntimeExports.jsx(
         HouseSelectionModal,
@@ -28847,18 +30714,19 @@ Defaulting to \`null\`.`;
     ] });
   };
   const MatchmakingPage = () => {
+    const { t: t2 } = useTranslation();
     const activeSubSection = useMarasStore((s) => s.activeSubSection);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     if (activeSubSection === "adoption") {
       return /* @__PURE__ */ jsxRuntimeExports.jsx(AdoptionSubPage, {});
     }
-    if (activeSubSection === "llmMatch" && settings.hasSkyrimNet) {
+    if (activeSubSection === "llmMatch" && settings2.hasSkyrimNet) {
       return /* @__PURE__ */ jsxRuntimeExports.jsx(LlmMatchmakingSubPage, {});
     }
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-full w-full gap-[1rem] overflow-hidden", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(NpcPickerPanel, { side: "a", title: "Select NPC A" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(NpcPickerPanel, { side: "a", title: t2("matchmaking.manual.selectNpcA") }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(StatusAssignment, {}),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(NpcPickerPanel, { side: "b", title: "Select NPC B" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(NpcPickerPanel, { side: "b", title: t2("matchmaking.manual.selectNpcB") })
     ] });
   };
   const SettingRow = ({
@@ -29685,22 +31553,59 @@ Defaulting to \`null\`.`;
     ] });
   };
   const GeneralSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2, selectedLanguage, detectedSkyrimLanguage, availableLanguages } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    const uiScale = settings.uiScale ?? 1;
+    const uiScale = settings2.uiScale ?? 1;
     const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings);
-    const lonelinessDays = settings.lonelinessThresholdDays ?? 2;
+    const lonelinessDays = settings2.lonelinessThresholdDays ?? 2;
+    const languageOptions = [
+      {
+        value: "auto",
+        label: t2("settings.general.languageAuto", {
+          lang: (detectedSkyrimLanguage || "en").toUpperCase()
+        })
+      },
+      ...availableLanguages.map((m2) => ({
+        value: m2.code,
+        label: m2.nativeName && m2.nativeName !== m2.name ? `${m2.nativeName} (${m2.name})` : m2.nativeName || m2.name || m2.code
+      }))
+    ];
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Interface & Accessibility", icon: Monitor, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.general.interfaceTitle"), icon: Monitor, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Auto-Pause Game on Dashboard Open",
-            description: "Automatically pause Skyrim whenever the M.A.R.A.S dashboard is opened. You can also pause or unpause at any time using the Pause button in the top-right header bar.",
+            label: t2("settings.general.languageLabel"),
+            description: t2("settings.general.languageDesc"),
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SelectInput,
+              {
+                className: "min-w-[13rem] w-auto",
+                value: settings2.language || selectedLanguage || "auto",
+                options: languageOptions,
+                onChange: (val) => updateSetting("language", val)
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: t2("settings.general.reloadLocalizationLabel"),
+            description: t2("settings.general.reloadLocalizationDesc"),
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "secondary", size: "sm", onClick: () => reloadLocalization(), children: t2("settings.general.reloadLocalizationBtn") })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SettingRow,
+          {
+            label: t2("settings.general.autoPauseLabel"),
+            description: t2("settings.general.autoPauseDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: Boolean(settings.autoPauseOnOpen),
+                checked: Boolean(settings2.autoPauseOnOpen),
                 onChange: (val) => updateSetting("autoPauseOnOpen", val)
               }
             )
@@ -29709,12 +31614,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Full Screen Mode",
-            description: "Open the M.A.R.A.S dashboard in full-screen mode instead of a centered window.",
+            label: t2("settings.general.fullScreenLabel"),
+            description: t2("settings.general.fullScreenDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: Boolean(settings.uiFullScreen),
+                checked: Boolean(settings2.uiFullScreen),
                 onChange: (val) => updateSetting("uiFullScreen", val)
               }
             )
@@ -29723,8 +31628,10 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "UI & Font Scale (Accessibility)",
-            description: `Scale all fonts, icons, cards, and UI elements proportionally across the dashboard and modals (${Math.round(uiScale * 100)}%).`,
+            label: t2("settings.general.uiScaleLabel"),
+            description: t2("settings.general.uiScaleDesc", {
+              percent: Math.round(uiScale * 100)
+            }),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
@@ -29732,23 +31639,23 @@ Defaulting to \`null\`.`;
                 min: 0.75,
                 max: 1.5,
                 step: 0.05,
-                unit: "x",
+                unit: t2("settings.general.unitMultiplier"),
                 onChange: (val) => updateSetting("uiScale", val)
               }
             )
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "General Mod Settings", icon: SlidersVertical, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.general.modSettingsTitle"), icon: SlidersVertical, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Skip Wedding Ceremony",
-            description: "Immediately complete marriages without scheduling a ceremony at the Temple of Mara.",
+            label: t2("settings.general.skipWeddingLabel"),
+            description: t2("settings.general.skipWeddingDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.skipWedding,
+                checked: settings2.skipWedding,
                 onChange: (val) => updateSetting("skipWedding", val)
               }
             )
@@ -29757,16 +31664,18 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Affection Decay Multiplier",
-            description: `Scale daily affection decay rate when not interacting (${Number(settings.affectionDecayMult.toFixed(2))}x).`,
+            label: t2("settings.general.affectionDecayLabel"),
+            description: t2("settings.general.affectionDecayDesc", {
+              mult: Number(settings2.affectionDecayMult.toFixed(2))
+            }),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
-                value: settings.affectionDecayMult,
+                value: settings2.affectionDecayMult,
                 min: 0,
                 max: 2,
                 step: 0.1,
-                unit: "x",
+                unit: t2("settings.general.unitMultiplier"),
                 onChange: (val) => updateSetting("affectionDecayMult", val)
               }
             )
@@ -29775,8 +31684,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Loneliness Threshold (Days)",
-            description: `Master time unit (L = ${lonelinessDays}d): days without meaningful interaction before daily affection decay begins, and base unit scaling all Player Partner Agency intervals (scan every ${Math.max(1, Math.round(lonelinessDays * 1.5))}d, talking-to-physical affair escalation after ${Math.round(lonelinessDays * 2)}d).`,
+            label: t2("settings.general.lonelinessThresholdLabel"),
+            description: t2("settings.general.lonelinessThresholdDesc", {
+              days: lonelinessDays,
+              scanDays: Math.max(1, Math.round(lonelinessDays * 1.5)),
+              escalationDays: Math.round(lonelinessDays * 2)
+            }),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
@@ -29784,7 +31697,7 @@ Defaulting to \`null\`.`;
                 min: 1,
                 max: 14,
                 step: 1,
-                unit: "d",
+                unit: t2("settings.general.unitDaysShort"),
                 onChange: (val) => {
                   const days = Math.round(val);
                   updateSetting("lonelinessThresholdDays", days);
@@ -29797,12 +31710,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Enable Polygamy",
-            description: "Allow marrying multiple spouses and establishing rank hierarchies.",
+            label: t2("settings.general.enablePolygamyLabel"),
+            description: t2("settings.general.enablePolygamyDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enablePolygamy,
+                checked: settings2.enablePolygamy,
                 onChange: (val) => updateSetting("enablePolygamy", val)
               }
             )
@@ -29811,12 +31724,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Disable Polygamy Quest",
-            description: "Prevent 'The Flame Divides Not' quest from starting. If currently running, stops and resets the quest.",
+            label: t2("settings.general.disablePolygamyQuestLabel"),
+            description: t2("settings.general.disablePolygamyQuestDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: !!settings.disablePolygamyQuest,
+                checked: !!settings2.disablePolygamyQuest,
                 onChange: (val) => updateSetting("disablePolygamyQuest", val)
               }
             )
@@ -29825,44 +31738,44 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Toggle Dashboard Hotkey Modifiers",
-            description: "Require Ctrl / Shift / Alt keys in combination with your configured toggle key.",
+            label: t2("settings.general.hotkeyModifiersLabel"),
+            description: t2("settings.general.hotkeyModifiersDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem] text-xs text-foreground-primary", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "input",
                   {
                     type: "checkbox",
-                    checked: settings.toggleUIModCtrl,
+                    checked: settings2.toggleUIModCtrl,
                     onChange: (e) => updateSetting("toggleUIModCtrl", e.target.checked),
                     className: "accent-accent"
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Ctrl" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.general.modCtrl") })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "input",
                   {
                     type: "checkbox",
-                    checked: settings.toggleUIModShift,
+                    checked: settings2.toggleUIModShift,
                     onChange: (e) => updateSetting("toggleUIModShift", e.target.checked),
                     className: "accent-accent"
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Shift" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.general.modShift") })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.25rem] cursor-pointer", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "input",
                   {
                     type: "checkbox",
-                    checked: settings.toggleUIModAlt,
+                    checked: settings2.toggleUIModAlt,
                     onChange: (e) => updateSetting("toggleUIModAlt", e.target.checked),
                     className: "accent-accent"
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Alt" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.general.modAlt") })
               ] })
             ] })
           }
@@ -29871,27 +31784,28 @@ Defaulting to \`null\`.`;
     ] });
   };
   const ConfirmationSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    const masterEnabled = settings.enableConfirmationModal ?? true;
+    const masterEnabled = settings2.enableConfirmationModal ?? true;
     const isMasterDisabled = !masterEnabled;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel-raised border border-border-divider rounded-md p-[0.75rem] text-xs text-foreground-secondary flex items-start gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Info, { className: "w-[1.25em] h-[1.25em] text-accent flex-shrink-0 mt-[0.125rem]" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 space-y-[0.25rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: "In-Game Confirmation Modals" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: t2("settings.confirmations.bannerTitle") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            "Confirmation dialogs require confirmation before major relationship changes take effect.",
-            settings.hasSkyrimNet ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent-bright block mt-[0.125rem]", children: 'SkyrimNet is detected: Modals will include a third "Decline (Explain)" button allowing freeform dialogue responses.' }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mt-[0.125rem]", children: 'Modals display standard "Accept" and "Cancel" options.' })
+            t2("settings.confirmations.bannerDesc"),
+            settings2.hasSkyrimNet ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent-bright block mt-[0.125rem]", children: t2("settings.confirmations.bannerSkyrimNet") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mt-[0.125rem]", children: t2("settings.confirmations.bannerStandard") })
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "General Confirmation Rules", icon: Users, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.confirmations.generalTitle"), icon: Users, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Enable Confirmation Modals",
-            description: "Master toggle for all in-game confirmation popups. If disabled, all relationship transitions are auto-accepted without prompts.",
+            label: t2("settings.confirmations.enableMasterLabel"),
+            description: t2("settings.confirmations.enableMasterDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
@@ -29904,13 +31818,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Player-NPC Confirmations",
-            description: "Show confirmation modals when the player character is directly involved.",
+            label: t2("settings.confirmations.playerNpcLabel"),
+            description: t2("settings.confirmations.playerNpcDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableConfirmPlayerNpc,
+                checked: settings2.enableConfirmPlayerNpc,
                 onChange: (val) => updateSetting("enableConfirmPlayerNpc", val),
                 disabled: isMasterDisabled
               }
@@ -29920,13 +31834,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "NPC-NPC Confirmations",
-            description: "Show confirmation modals when interactions occur between two NPCs without player involvement.",
+            label: t2("settings.confirmations.npcNpcLabel"),
+            description: t2("settings.confirmations.npcNpcDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableConfirmNpcNpc,
+                checked: settings2.enableConfirmNpcNpc,
                 onChange: (val) => updateSetting("enableConfirmNpcNpc", val),
                 disabled: isMasterDisabled
               }
@@ -29934,17 +31848,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Status Change Confirmations", icon: HeartHandshake, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.confirmations.statusChangeTitle"), icon: HeartHandshake, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Dating Proposals",
-            description: "Require confirmation modal when proposing or entering a dating relationship.",
+            label: t2("settings.confirmations.confirmDatingLabel"),
+            description: t2("settings.confirmations.confirmDatingDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmStatusChange_Dating,
+                checked: settings2.confirmStatusChange_Dating,
                 onChange: (val) => updateSetting("confirmStatusChange_Dating", val),
                 disabled: isMasterDisabled
               }
@@ -29954,13 +31868,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Engagement Proposals",
-            description: "Require confirmation modal when proposing or accepting an engagement.",
+            label: t2("settings.confirmations.confirmEngagementLabel"),
+            description: t2("settings.confirmations.confirmEngagementDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmStatusChange_Engagement,
+                checked: settings2.confirmStatusChange_Engagement,
                 onChange: (val) => updateSetting("confirmStatusChange_Engagement", val),
                 disabled: isMasterDisabled
               }
@@ -29970,13 +31884,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Lover Proposals",
-            description: "Require confirmation modal when proposing or becoming lovers.",
+            label: t2("settings.confirmations.confirmLoverLabel"),
+            description: t2("settings.confirmations.confirmLoverDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmStatusChange_Lover,
+                checked: settings2.confirmStatusChange_Lover,
                 onChange: (val) => updateSetting("confirmStatusChange_Lover", val),
                 disabled: isMasterDisabled
               }
@@ -29986,13 +31900,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Marriage Proposals",
-            description: "Require confirmation modal when proposing or accepting a marriage proposal.",
+            label: t2("settings.confirmations.confirmMarryLabel"),
+            description: t2("settings.confirmations.confirmMarryDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmStatusChange_Marry,
+                checked: settings2.confirmStatusChange_Marry,
                 onChange: (val) => updateSetting("confirmStatusChange_Marry", val),
                 disabled: isMasterDisabled
               }
@@ -30000,17 +31914,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Breakup & Divorce Confirmations", icon: UserMinus, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.confirmations.breakupTitle"), icon: UserMinus, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Breakup Dating",
-            description: "Require confirmation modal when breaking up a dating relationship.",
+            label: t2("settings.confirmations.breakupDatingLabel"),
+            description: t2("settings.confirmations.breakupDatingDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmBreakup_Dating,
+                checked: settings2.confirmBreakup_Dating,
                 onChange: (val) => updateSetting("confirmBreakup_Dating", val),
                 disabled: isMasterDisabled
               }
@@ -30020,13 +31934,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Breakup Engagement",
-            description: "Require confirmation modal when breaking off an engagement.",
+            label: t2("settings.confirmations.breakupEngagementLabel"),
+            description: t2("settings.confirmations.breakupEngagementDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmBreakup_Engagement,
+                checked: settings2.confirmBreakup_Engagement,
                 onChange: (val) => updateSetting("confirmBreakup_Engagement", val),
                 disabled: isMasterDisabled
               }
@@ -30036,13 +31950,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Breakup Lover",
-            description: "Require confirmation modal when ending a lover relationship.",
+            label: t2("settings.confirmations.breakupLoverLabel"),
+            description: t2("settings.confirmations.breakupLoverDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmBreakup_Lover,
+                checked: settings2.confirmBreakup_Lover,
                 onChange: (val) => updateSetting("confirmBreakup_Lover", val),
                 disabled: isMasterDisabled
               }
@@ -30052,13 +31966,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Divorce Action",
-            description: "Require confirmation modal when an NPC or partner requests divorce.",
+            label: t2("settings.confirmations.divorceLabel"),
+            description: t2("settings.confirmations.divorceDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmDivorce,
+                checked: settings2.confirmDivorce,
                 onChange: (val) => updateSetting("confirmDivorce", val),
                 disabled: isMasterDisabled
               }
@@ -30068,13 +31982,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Low Affection Divorce",
-            description: "Require confirmation modal during low affection divorce questline.",
+            label: t2("settings.confirmations.lowAffectionDivorceLabel"),
+            description: t2("settings.confirmations.lowAffectionDivorceDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmDivorceDuringLowAffectionQuest,
+                checked: settings2.confirmDivorceDuringLowAffectionQuest,
                 onChange: (val) => updateSetting("confirmDivorceDuringLowAffectionQuest", val),
                 disabled: isMasterDisabled
               }
@@ -30082,17 +31996,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Open Relationship Confirmations", icon: Lock, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.confirmations.openRelTitle"), icon: Lock, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Open Relationship",
-            description: "Require confirmation modal when opening an existing relationship.",
+            label: t2("settings.confirmations.openRelLabel"),
+            description: t2("settings.confirmations.openRelDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmOpenRelationship,
+                checked: settings2.confirmOpenRelationship,
                 onChange: (val) => updateSetting("confirmOpenRelationship", val),
                 disabled: isMasterDisabled
               }
@@ -30102,13 +32016,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Confirm: Close Relationship",
-            description: "Require confirmation modal when closing an open relationship.",
+            label: t2("settings.confirmations.closeRelLabel"),
+            description: t2("settings.confirmations.closeRelDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.confirmCloseRelationship,
+                checked: settings2.confirmCloseRelationship,
                 onChange: (val) => updateSetting("confirmCloseRelationship", val),
                 disabled: isMasterDisabled
               }
@@ -30137,14 +32051,16 @@ Defaulting to \`null\`.`;
     diceRollChanceOpenClose: 5
   };
   const MatchmakingSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2, tp: tp2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const matchmakingSettings = useMarasStore((s) => s.matchmakingSettings);
     const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings);
     const generateGlobalAiSuggestions = useMarasStore((s) => s.generateGlobalAiSuggestions);
     const setActiveTab = useMarasStore((s) => s.setActiveTab);
     const setActiveSubSection = useMarasStore((s) => s.setActiveSubSection);
-    const hasSkyrimNet = Boolean(settings.hasSkyrimNet);
+    const hasSkyrimNet = Boolean(settings2.hasSkyrimNet);
     const useLLM = hasSkyrimNet && (matchmakingSettings.useLLM ?? true);
+    const cooldownDays = matchmakingSettings.npcCooldownDays ?? 14;
     const isKeyActive = (k2) => {
       if (k2 === "diceRollChanceNewLoverCheating") return Boolean(matchmakingSettings.allowCheating);
       if (k2 === "diceRollChanceBreakup") return Boolean(matchmakingSettings.allowBreakups);
@@ -30302,19 +32218,21 @@ Defaulting to \`null\`.`;
       }
       updateMatchmakingSettings(updates);
     };
+    const unitPercent = t2("settings.matchmaking.unitPercent");
+    const unitDaysShort = t2("settings.matchmaking.unitDaysShort");
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         SectionCard,
         {
-          title: useLLM ? "Scheduled AI Matchmaking" : "Scheduled Auto Matchmaking",
+          title: useLLM ? t2("settings.matchmaking.scheduledAiTitle") : t2("settings.matchmaking.scheduledAutoTitle"),
           icon: useLLM ? Bot : Dices,
-          subtitle: useLLM ? "Evaluates romantic prospects in the background using SkyrimNet LLM" : "Evaluates romantic prospects in the background using algorithmic Dice Roll chances",
+          subtitle: useLLM ? t2("settings.matchmaking.scheduledAiSubtitle") : t2("settings.matchmaking.scheduledAutoSubtitle"),
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Auto Scheduled Matchmaking",
-                description: useLLM ? "Periodically evaluate the world NPC roster in the background using SkyrimNet LLM." : "Periodically evaluate the world NPC roster in the background using algorithmic Dice Roll probability.",
+                label: t2("settings.matchmaking.autoScheduledLabel"),
+                description: useLLM ? t2("settings.matchmaking.autoScheduledAiDesc") : t2("settings.matchmaking.autoScheduledDiceDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30327,8 +32245,8 @@ Defaulting to \`null\`.`;
             hasSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Use SkyrimNet AI Matchmaking",
-                description: "When enabled, scheduled matchmaking uses SkyrimNet AI to evaluate pairings. When disabled, the algorithmic Dice Roll system is used instead (with AI verification and memory generation).",
+                label: t2("settings.matchmaking.useAiLabel"),
+                description: t2("settings.matchmaking.useAiDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30342,8 +32260,8 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SettingRow,
                 {
-                  label: "Evaluation Step",
-                  description: "When enabled, candidate pairs from scheduled matchmaking undergo a secondary LLM narrative evaluation before being applied.",
+                  label: t2("settings.matchmaking.evaluationStepLabel"),
+                  description: t2("settings.matchmaking.evaluationStepDesc"),
                   children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     ToggleSwitch,
                     {
@@ -30356,8 +32274,8 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SettingRow,
                 {
-                  label: "LLM-Generated Memories",
-                  description: "When enabled, matchmaking uses SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, matchmaking memories are built programmatically without sending an LLM request.",
+                  label: t2("settings.matchmaking.llmMemoriesLabel"),
+                  description: t2("settings.matchmaking.llmMemoriesDesc"),
                   children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     ToggleSwitch,
                     {
@@ -30371,8 +32289,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Review Matchmaking Results in Modal",
-                description: "When enabled, presents an interactive checklist modal to review, adjust, or reject proposed NPC pairings before they are applied in-game.",
+                label: t2("settings.matchmaking.confirmResultsLabel"),
+                description: t2("settings.matchmaking.confirmResultsDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30385,8 +32303,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Evaluation Interval",
-                description: `Number of in-game days between automated matchmaking evaluations (${matchmakingSettings.intervalDays} days).`,
+                label: t2("settings.matchmaking.intervalDaysLabel"),
+                description: tp2("settings.matchmaking.intervalDaysDesc", matchmakingSettings.intervalDays),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30394,7 +32312,7 @@ Defaulting to \`null\`.`;
                     min: 1,
                     max: 30,
                     step: 1,
-                    unit: "d",
+                    unit: unitDaysShort,
                     onChange: (val) => updateMatchmakingSettings({ intervalDays: Math.round(val) })
                   }
                 )
@@ -30403,8 +32321,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Max Suggestions Per Cycle",
-                description: `Maximum number of NPC pair changes proposed per automated run (${matchmakingSettings.maxSuggestions} suggestions).`,
+                label: t2("settings.matchmaking.maxSuggestionsLabel"),
+                description: tp2("settings.matchmaking.maxSuggestionsDesc", matchmakingSettings.maxSuggestions),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30421,16 +32339,16 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "NPC Relationship Cooldown",
-                description: `Number of in-game days an NPC must wait after a scheduled relationship change before they can be changed again (${matchmakingSettings.npcCooldownDays ?? 14} days).`,
+                label: t2("settings.matchmaking.npcCooldownLabel"),
+                description: tp2("settings.matchmaking.npcCooldownDesc", cooldownDays),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
-                    value: matchmakingSettings.npcCooldownDays ?? 14,
+                    value: cooldownDays,
                     min: 1,
                     max: 60,
                     step: 1,
-                    unit: "d",
+                    unit: unitDaysShort,
                     onChange: (val) => updateMatchmakingSettings({ npcCooldownDays: Math.round(val) })
                   }
                 )
@@ -30442,7 +32360,7 @@ Defaulting to \`null\`.`;
       !useLLM && /* @__PURE__ */ jsxRuntimeExports.jsxs(
         SectionCard,
         {
-          title: "Dice Roll Matchmaking Chances",
+          title: t2("settings.matchmaking.diceChancesTitle"),
           icon: Dices,
           actionSlot: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -30451,26 +32369,22 @@ Defaulting to \`null\`.`;
                 type: "button",
                 onClick: handleRestoreDefaultChances,
                 className: "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded bg-panel-inset hover:bg-accent-faint text-foreground-secondary hover:text-accent-bright border border-border-subtle hover:border-border-accent transition-colors cursor-pointer",
-                title: "Restore default chance distribution",
+                title: t2("settings.matchmaking.restoreDefaultsTooltip"),
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(RotateCcw, { className: "w-3.5 h-3.5" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Restore Defaults" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.matchmaking.restoreDefaultsBtn") })
                 ]
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-mono font-semibold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/50", children: [
-              "Total: ",
-              totalPercent,
-              "%"
-            ] })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-mono font-semibold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/50", children: t2("settings.matchmaking.totalPercentBadge", { percent: totalPercent }) })
           ] }),
           children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-muted-foreground text-[0.75rem] mb-2 px-1", children: "Configure the relative probability weights for each matchmaking action. Sliders auto-normalize to ensure the total is always 100%." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-muted-foreground text-[0.75rem] mb-2 px-1", children: t2("settings.matchmaking.diceChancesIntro") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "New Dating Pair",
-                description: "Probability of initiating a new Dating relationship between two eligible single NPCs.",
+                label: t2("settings.matchmaking.chanceNewDatingLabel"),
+                description: t2("settings.matchmaking.chanceNewDatingDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30478,7 +32392,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => handleChanceChange("diceRollChanceNewDating", val)
                   }
                 )
@@ -30487,8 +32401,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "New Engaged Pair",
-                description: "Probability of initiating a direct Engagement between two eligible single NPCs.",
+                label: t2("settings.matchmaking.chanceNewEngagedLabel"),
+                description: t2("settings.matchmaking.chanceNewEngagedDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30496,7 +32410,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => handleChanceChange("diceRollChanceNewEngaged", val)
                   }
                 )
@@ -30505,8 +32419,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "New Lover (Allowed / Open)",
-                description: "Probability of establishing a secondary Lover relationship where partners allow it (single or open main pair).",
+                label: t2("settings.matchmaking.chanceNewLoverAllowedLabel"),
+                description: t2("settings.matchmaking.chanceNewLoverAllowedDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30514,7 +32428,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => handleChanceChange("diceRollChanceNewLoverAllowed", val)
                   }
                 )
@@ -30523,8 +32437,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "New Lover (Cheating / Infidelity)",
-                description: matchmakingSettings.allowCheating ? "Probability of establishing a secondary Lover relationship that constitutes infidelity (closed main pair)." : "Disabled because Allow Cheating / Infidelity is turned off below.",
+                label: t2("settings.matchmaking.chanceNewLoverCheatingLabel"),
+                description: matchmakingSettings.allowCheating ? t2("settings.matchmaking.chanceNewLoverCheatingDesc") : t2("settings.matchmaking.chanceNewLoverCheatingDisabledDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30532,7 +32446,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     disabled: !matchmakingSettings.allowCheating,
                     onChange: (val) => handleChanceChange("diceRollChanceNewLoverCheating", val)
                   }
@@ -30542,8 +32456,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Advance Existing Relationship",
-                description: "Probability of progressing an existing relationship (Dating to Engaged, Engaged to Married, Lover to Dating).",
+                label: t2("settings.matchmaking.chanceAdvanceLabel"),
+                description: t2("settings.matchmaking.chanceAdvanceDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30551,7 +32465,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => handleChanceChange("diceRollChanceAdvance", val)
                   }
                 )
@@ -30560,8 +32474,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Breakup / Divorce",
-                description: matchmakingSettings.allowBreakups ? "Probability of dissolving an existing relationship (Dating to Ex-Dating, Married to Divorced, etc.)." : "Disabled because Allow AI Breakups is turned off below.",
+                label: t2("settings.matchmaking.chanceBreakupLabel"),
+                description: matchmakingSettings.allowBreakups ? t2("settings.matchmaking.chanceBreakupDesc") : t2("settings.matchmaking.chanceBreakupDisabledDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30569,7 +32483,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     disabled: !matchmakingSettings.allowBreakups,
                     onChange: (val) => handleChanceChange("diceRollChanceBreakup", val)
                   }
@@ -30579,8 +32493,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Open / Close Status",
-                description: matchmakingSettings.allowOpenClose ? "Probability of modifying relationship exclusivity (opening an exclusive pair or closing an open pair)." : "Disabled because Allow Open / Close Modifications is turned off below.",
+                label: t2("settings.matchmaking.chanceOpenCloseLabel"),
+                description: matchmakingSettings.allowOpenClose ? t2("settings.matchmaking.chanceOpenCloseDesc") : t2("settings.matchmaking.chanceOpenCloseDisabledDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30588,7 +32502,7 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     disabled: !matchmakingSettings.allowOpenClose,
                     onChange: (val) => handleChanceChange("diceRollChanceOpenClose", val)
                   }
@@ -30598,27 +32512,42 @@ Defaulting to \`null\`.`;
           ]
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Matchmaking Rules & Constraints", icon: HeartHandshake, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.matchmaking.rulesTitle"), icon: HeartHandshake, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Pairing Orientation",
-            description: "Constrain partner suggestions to specific gender combinations across automated and manual evaluation.",
+            label: t2("settings.matchmaking.orientationLabel"),
+            description: t2("settings.matchmaking.orientationDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SelectInput,
               {
                 value: matchmakingSettings.orientation ?? MatchmakingOrientation.Heterosexual,
                 options: [
-                  { value: MatchmakingOrientation.Any, label: "Any (All Orientations)" },
-                  { value: MatchmakingOrientation.Heterosexual, label: "Heterosexual (Male + Female)" },
-                  { value: MatchmakingOrientation.Homosexual, label: "Homosexual (Same-Sex)" },
-                  { value: MatchmakingOrientation.Gay, label: "Gay (Male + Male)" },
-                  { value: MatchmakingOrientation.Lesbian, label: "Lesbian (Female + Female)" },
-                  { value: MatchmakingOrientation.HeteroAndGay, label: "Hetero + Gay (Male + Female, Male + Male)" },
-                  { value: MatchmakingOrientation.HeteroAndLesbian, label: "Hetero + Lesbian (Male + Female, Female + Female)" }
+                  { value: MatchmakingOrientation.Any, label: t2("settings.matchmaking.orientationAny") },
+                  {
+                    value: MatchmakingOrientation.Heterosexual,
+                    label: t2("settings.matchmaking.orientationHeterosexual")
+                  },
+                  {
+                    value: MatchmakingOrientation.Homosexual,
+                    label: t2("settings.matchmaking.orientationHomosexual")
+                  },
+                  { value: MatchmakingOrientation.Gay, label: t2("settings.matchmaking.orientationGay") },
+                  {
+                    value: MatchmakingOrientation.Lesbian,
+                    label: t2("settings.matchmaking.orientationLesbian")
+                  },
+                  {
+                    value: MatchmakingOrientation.HeteroAndGay,
+                    label: t2("settings.matchmaking.orientationHeteroAndGay")
+                  },
+                  {
+                    value: MatchmakingOrientation.HeteroAndLesbian,
+                    label: t2("settings.matchmaking.orientationHeteroAndLesbian")
+                  }
                 ],
                 onChange: (val) => updateMatchmakingSettings({ orientation: parseInt(val, 10) }),
-                className: "w-[18rem] text-xs"
+                className: "min-w-[18rem] max-w-[24rem] w-auto text-xs"
               }
             )
           }
@@ -30626,8 +32555,8 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Allow Cheating / Infidelity",
-            description: "Permit proposing secondary lover relationships for NPCs who are already in exclusive/closed main partnerships.",
+            label: t2("settings.matchmaking.allowCheatingLabel"),
+            description: t2("settings.matchmaking.allowCheatingDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
@@ -30640,8 +32569,8 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Allow AI Breakups",
-            description: "Permit proposing breakups, divorces, and separations for existing relationships when appropriate.",
+            label: t2("settings.matchmaking.allowBreakupsLabel"),
+            description: t2("settings.matchmaking.allowBreakupsDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
@@ -30654,8 +32583,8 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Allow Open / Close Modifications",
-            description: "Permit proposing opening exclusive relationships or making open relationships exclusive.",
+            label: t2("settings.matchmaking.allowOpenCloseLabel"),
+            description: t2("settings.matchmaking.allowOpenCloseDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
@@ -30669,14 +32598,14 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         SectionCard,
         {
-          title: "Manual Matchmaking Actions",
+          title: t2("settings.matchmaking.manualActionsTitle"),
           icon: Globe,
-          subtitle: "Trigger immediate AI evaluations across all Skyrim NPCs without waiting for interval timers",
+          subtitle: t2("settings.matchmaking.manualActionsSubtitle"),
           children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             SettingRow,
             {
-              label: "Manual World Scan",
-              description: "Evaluate romantic prospects across all Skyrim NPCs immediately and open the AI dashboard to review and apply matches.",
+              label: t2("settings.matchmaking.manualWorldScanLabel"),
+              description: t2("settings.matchmaking.manualWorldScanDesc"),
               children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
@@ -30686,11 +32615,11 @@ Defaulting to \`null\`.`;
                     setActiveTab("matchmaking");
                     setActiveSubSection("llmMatch");
                   },
-                  disabled: !settings.hasSkyrimNet,
+                  disabled: !settings2.hasSkyrimNet,
                   className: "px-[0.875rem] py-[0.375rem] bg-accent hover:bg-accent-bright disabled:opacity-50 text-panel font-semibold text-xs rounded transition-colors cursor-pointer flex items-center gap-[0.375rem]",
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Run World Scan Now" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.matchmaking.runWorldScanBtn") })
                   ]
                 }
               )
@@ -30701,15 +32630,17 @@ Defaulting to \`null\`.`;
     ] });
   };
   const PartnerAgencySettings = () => {
+    const { t: t2, tp: tp2 } = useTranslation();
     const matchmakingSettings = useMarasStore((s) => s.matchmakingSettings);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    const hasSkyrimNet = Boolean(settings.hasSkyrimNet) && !Boolean(settings.simulateNoSkyrimNet);
-    const lonelinessDays = matchmakingSettings.lonelinessThresholdDays ?? settings.lonelinessThresholdDays ?? 2;
+    const hasSkyrimNet = Boolean(settings2.hasSkyrimNet) && !Boolean(settings2.simulateNoSkyrimNet);
+    const lonelinessDays = matchmakingSettings.lonelinessThresholdDays ?? settings2.lonelinessThresholdDays ?? 2;
     const fmtDays = (mult) => {
       const days = lonelinessDays * mult;
-      return Number.isInteger(days) ? `${days}d` : `${days.toFixed(1)}d`;
+      const formatted = Number.isInteger(days) ? String(days) : days.toFixed(1);
+      return t2("settings.partnerAgency.daysFormatted", { days: formatted });
     };
     const multScanInterval = matchmakingSettings.multPartnerAgencyScanInterval ?? 1.5;
     const multLonelinessDecay = matchmakingSettings.multLonelinessDecayStart ?? 1;
@@ -30725,19 +32656,23 @@ Defaulting to \`null\`.`;
     const multAffairFatigue = matchmakingSettings.multAffairFatigueStart ?? 5;
     const multRomanticAttended = matchmakingSettings.multRomanticAttendedBreakup ?? 1.5;
     const multSuggestOpenNeglect = matchmakingSettings.multSuggestOpenNeglectMin ?? 2;
+    const unitMultiplier = t2("settings.partnerAgency.unitMultiplier");
+    const unitPercent = t2("settings.partnerAgency.unitPercent");
+    const unitDaysShort = t2("settings.partnerAgency.unitDaysShort");
+    const unitMultiplierL = t2("settings.partnerAgency.unitMultiplierL");
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         SectionCard,
         {
-          title: "Player Partner Agency & Infidelity Engine",
+          title: t2("settings.partnerAgency.engineTitle"),
           icon: Heart,
-          subtitle: "Dedicated Tier 2 agency (2-stage affairs, open-relationship lovers, breakups, force-greet intents & home-arrival events) for all active player main partners",
+          subtitle: t2("settings.partnerAgency.engineSubtitle"),
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Partner Cheating Agency",
-                description: "Independently evaluate the player's closed-relationship partners (Dating, Engaged, Married) for secret infidelity (2-stage Talking/Physical affairs, affair breakups, confessions, and home-arrival cheating scenarios), regardless of whether generic NPC matchmaking is enabled.",
+                label: t2("settings.partnerAgency.enableCheatingLabel"),
+                description: t2("settings.partnerAgency.enableCheatingDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30750,8 +32685,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Partner Open-Relationship Agency",
-                description: "Independently evaluate the player's partners for open-relationship agency (seeking consensual side lovers, open-lover breakups, proposing to open or close the relationship, and home-arrival open-relationship scenarios), regardless of whether generic NPC matchmaking is enabled.",
+                label: t2("settings.partnerAgency.enableOpenRelLabel"),
+                description: t2("settings.partnerAgency.enableOpenRelDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30764,8 +32699,8 @@ Defaulting to \`null\`.`;
             hasSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Use SkyrimNet AI Evaluation (Stage 2)",
-                description: "When a partner passes a Stage 1 probability check, ask SkyrimNet AI to evaluate whether they act on it and pick the most fitting local candidate. When disabled, weighted dice rolls select from the shortlisted candidates.",
+                label: t2("settings.partnerAgency.useAiStage2Label"),
+                description: t2("settings.partnerAgency.useAiStage2Desc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30778,8 +32713,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Review Partner Agency Results in Modal",
-                description: "Present an interactive confirmation modal before applying any new side-lover relationship or breakup initiated by a player partner.",
+                label: t2("settings.partnerAgency.confirmResultsLabel"),
+                description: t2("settings.partnerAgency.confirmResultsDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30792,8 +32727,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Partner Force-Greet Intents",
-                description: `Allow player partners to queue relationship conversations (suggesting an open or closed relationship, or confessing guilt after ending an affair; expires after ${fmtDays(multIntentTTL)} [${multIntentTTL}x L] if ignored).`,
+                label: t2("settings.partnerAgency.enableForceGreetsLabel"),
+                description: t2("settings.partnerAgency.enableForceGreetsDesc", {
+                  days: fmtDays(multIntentTTL),
+                  mult: multIntentTTL
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30806,8 +32744,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Home-Arrival Events & Letters",
-                description: "Evaluate active side-lover scenarios and handwritten note modals (open-lover inn dates, suspicious talking-stage letters, or in-house encounters) when arriving at a partner's home.",
+                label: t2("settings.partnerAgency.enableHomeArrivalLabel"),
+                description: t2("settings.partnerAgency.enableHomeArrivalDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30823,15 +32761,17 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         SectionCard,
         {
-          title: "Temptation, Desire & Breakup Rules",
+          title: t2("settings.partnerAgency.temptationTitle"),
           icon: SlidersVertical,
-          subtitle: "Configure probability multipliers, roll caps, and loyalty anchors for player partners",
+          subtitle: t2("settings.partnerAgency.temptationSubtitle"),
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Global Temptation Multiplier",
-                description: `Scales calculated Stage 1 cheating temptation probabilities across all closed player partners (${(matchmakingSettings.playerPartnerCheatingChanceMultiplier ?? 1).toFixed(1)}x).`,
+                label: t2("settings.partnerAgency.temptationMultLabel"),
+                description: t2("settings.partnerAgency.temptationMultDesc", {
+                  mult: (matchmakingSettings.playerPartnerCheatingChanceMultiplier ?? 1).toFixed(1)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30839,8 +32779,10 @@ Defaulting to \`null\`.`;
                     min: 0.1,
                     max: 3,
                     step: 0.1,
-                    unit: "x",
-                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingChanceMultiplier: Number(val.toFixed(1)) })
+                    unit: unitMultiplier,
+                    onChange: (val) => updateMatchmakingSettings({
+                      playerPartnerCheatingChanceMultiplier: Number(val.toFixed(1))
+                    })
                   }
                 )
               }
@@ -30848,8 +32790,12 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Open Lover Desire Multiplier",
-                description: `Scales Stage 1 desire for open-relationship player partners to pursue consensual side lovers (${(matchmakingSettings.playerPartnerAgencyOpenLoverChanceMultiplier ?? 1).toFixed(1)}x).`,
+                label: t2("settings.partnerAgency.openDesireMultLabel"),
+                description: t2("settings.partnerAgency.openDesireMultDesc", {
+                  mult: (matchmakingSettings.playerPartnerAgencyOpenLoverChanceMultiplier ?? 1).toFixed(
+                    1
+                  )
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30857,8 +32803,10 @@ Defaulting to \`null\`.`;
                     min: 0.1,
                     max: 3,
                     step: 0.1,
-                    unit: "x",
-                    onChange: (val) => updateMatchmakingSettings({ playerPartnerAgencyOpenLoverChanceMultiplier: Number(val.toFixed(1)) })
+                    unit: unitMultiplier,
+                    onChange: (val) => updateMatchmakingSettings({
+                      playerPartnerAgencyOpenLoverChanceMultiplier: Number(val.toFixed(1))
+                    })
                   }
                 )
               }
@@ -30866,8 +32814,13 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Side-Lover Breakup Multiplier",
-                description: `Scales probability of player partners ending existing secret affairs or open-relationship side flings after ${fmtDays(multMinSideFlingAge)} (${(matchmakingSettings.playerPartnerAgencyBreakupChanceMultiplier ?? 1).toFixed(1)}x).`,
+                label: t2("settings.partnerAgency.breakupMultLabel"),
+                description: t2("settings.partnerAgency.breakupMultDesc", {
+                  days: fmtDays(multMinSideFlingAge),
+                  mult: (matchmakingSettings.playerPartnerAgencyBreakupChanceMultiplier ?? 1).toFixed(
+                    1
+                  )
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30875,8 +32828,10 @@ Defaulting to \`null\`.`;
                     min: 0.1,
                     max: 3,
                     step: 0.1,
-                    unit: "x",
-                    onChange: (val) => updateMatchmakingSettings({ playerPartnerAgencyBreakupChanceMultiplier: Number(val.toFixed(1)) })
+                    unit: unitMultiplier,
+                    onChange: (val) => updateMatchmakingSettings({
+                      playerPartnerAgencyBreakupChanceMultiplier: Number(val.toFixed(1))
+                    })
                   }
                 )
               }
@@ -30884,8 +32839,10 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Max Temptation Roll Cap",
-                description: `Maximum Stage 1 temptation probability per check (${matchmakingSettings.playerPartnerCheatingMaxRollCap ?? 65}%).`,
+                label: t2("settings.partnerAgency.maxRollCapLabel"),
+                description: t2("settings.partnerAgency.maxRollCapDesc", {
+                  cap: matchmakingSettings.playerPartnerCheatingMaxRollCap ?? 65
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30893,7 +32850,7 @@ Defaulting to \`null\`.`;
                     min: 5,
                     max: 100,
                     step: 5,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingMaxRollCap: Math.round(val) })
                   }
                 )
@@ -30902,8 +32859,10 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Max Secret Lovers Per Partner",
-                description: `Maximum concurrent ongoing secret affair lovers a single player partner can have (${matchmakingSettings.playerPartnerCheatingMaxSecretLovers ?? 1}).`,
+                label: t2("settings.partnerAgency.maxSecretLoversLabel"),
+                description: t2("settings.partnerAgency.maxSecretLoversDesc", {
+                  count: matchmakingSettings.playerPartnerCheatingMaxSecretLovers ?? 1
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -30912,7 +32871,9 @@ Defaulting to \`null\`.`;
                     max: 3,
                     step: 1,
                     unit: "",
-                    onChange: (val) => updateMatchmakingSettings({ playerPartnerCheatingMaxSecretLovers: Math.round(val) })
+                    onChange: (val) => updateMatchmakingSettings({
+                      playerPartnerCheatingMaxSecretLovers: Math.round(val)
+                    })
                   }
                 )
               }
@@ -30920,8 +32881,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Allow Infidelity When Happy (75–100 Affection)",
-                description: "When disabled, partners in the Happy affection tier are completely immune unless Revenge (player caught cheating) is triggered.",
+                label: t2("settings.partnerAgency.allowWhenHappyLabel"),
+                description: t2("settings.partnerAgency.allowWhenHappyDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30934,8 +32895,13 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Neglect Penalty",
-                description: `Increase temptation when the player goes several days without meaningful affection interaction (starts after ${fmtDays(multNeglectGrowth)} [${multNeglectGrowth}x L] for Troubled/Estranged partners, or after ${fmtDays(multContentNeglect)} [${multContentNeglect}x L] for Content partners).`,
+                label: t2("settings.partnerAgency.enableNeglectLabel"),
+                description: t2("settings.partnerAgency.enableNeglectDesc", {
+                  troubledDays: fmtDays(multNeglectGrowth),
+                  troubledMult: multNeglectGrowth,
+                  contentDays: fmtDays(multContentNeglect),
+                  contentMult: multContentNeglect
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30948,8 +32914,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Revenge Penalty (Player Infidelity)",
-                description: "Significantly increase temptation (+20%, amplified by Jealous/Proud temperaments) when the partner has an ongoing exposed affair against them by the player.",
+                label: t2("settings.partnerAgency.enableRevengeLabel"),
+                description: t2("settings.partnerAgency.enableRevengeDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30962,8 +32928,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Polygamy Hierarchy Factor",
-                description: "Apply a minor temptation increase for lower-ranked spouses in polygamous households (Rank 1: 0%, Rank 2: +3%, Rank 3: +5%, Rank 4+: +7%).",
+                label: t2("settings.partnerAgency.enableHierarchyLabel"),
+                description: t2("settings.partnerAgency.enableHierarchyDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30976,8 +32942,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Enable Shared Children Loyalty Anchor",
-                description: "Reduce temptation (-12% if sharing children with the player, and hard-immune while pregnant) to reflect family commitment.",
+                label: t2("settings.partnerAgency.enableChildrenAnchorLabel"),
+                description: t2("settings.partnerAgency.enableChildrenAnchorDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ToggleSwitch,
                   {
@@ -30993,15 +32959,15 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         SectionCard,
         {
-          title: "Day-Threshold Multipliers (Relative to Loneliness Threshold L)",
+          title: t2("settings.partnerAgency.multipliersTitle"),
           icon: Clock,
-          subtitle: `All Partner Agency and Affection time windows scale from Base Loneliness Threshold (L = ${lonelinessDays}d)`,
+          subtitle: t2("settings.partnerAgency.multipliersSubtitle", { days: fmtDays(1) }),
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Base Loneliness Threshold (L)",
-                description: `Master time unit (L = ${lonelinessDays} days) from which all Partner Agency and Affection day thresholds below are calculated.`,
+                label: t2("settings.partnerAgency.baseLonelinessLabel"),
+                description: tp2("settings.partnerAgency.baseLonelinessDesc", lonelinessDays),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31009,7 +32975,7 @@ Defaulting to \`null\`.`;
                     min: 1,
                     max: 14,
                     step: 1,
-                    unit: "d",
+                    unit: unitDaysShort,
                     onChange: (val) => {
                       const days = Math.round(val);
                       updateSetting("lonelinessThresholdDays", days);
@@ -31022,8 +32988,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Partner Agency Scan Interval",
-                description: `How often scheduled Partner Agency evaluations run (${multScanInterval}x L = ${fmtDays(multScanInterval)}).`,
+                label: t2("settings.partnerAgency.scanIntervalLabel"),
+                description: t2("settings.partnerAgency.scanIntervalDesc", {
+                  mult: multScanInterval,
+                  days: fmtDays(multScanInterval)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31031,8 +33000,10 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
-                    onChange: (val) => updateMatchmakingSettings({ multPartnerAgencyScanInterval: Number(val.toFixed(2)) })
+                    unit: unitMultiplierL,
+                    onChange: (val) => updateMatchmakingSettings({
+                      multPartnerAgencyScanInterval: Number(val.toFixed(2))
+                    })
                   }
                 )
               }
@@ -31040,8 +33011,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Loneliness Decay & Open-Lover Loneliness Onset",
-                description: `Days without player interaction before daily affection loneliness decay and open-partner loneliness desire begin (${multLonelinessDecay}x L = ${fmtDays(multLonelinessDecay)}).`,
+                label: t2("settings.partnerAgency.lonelinessDecayLabel"),
+                description: t2("settings.partnerAgency.lonelinessDecayDesc", {
+                  mult: multLonelinessDecay,
+                  days: fmtDays(multLonelinessDecay)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31049,7 +33023,7 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multLonelinessDecayStart: Number(val.toFixed(2)) })
                   }
                 )
@@ -31058,8 +33032,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Recent Attention & Guilt Window",
-                description: `Window after spending time with the player where partners receive breakup boosts with side lovers, guilt confession eligibility, and neglect mitigation (${multRecentAttention}x L = ${fmtDays(multRecentAttention)}).`,
+                label: t2("settings.partnerAgency.recentAttentionLabel"),
+                description: t2("settings.partnerAgency.recentAttentionDesc", {
+                  mult: multRecentAttention,
+                  days: fmtDays(multRecentAttention)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31067,7 +33044,7 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multRecentAttentionWindow: Number(val.toFixed(2)) })
                   }
                 )
@@ -31076,8 +33053,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Very Recent Visit Window (Open Partners)",
-                description: `Window after a player visit where open-relationship partners have reduced desire to seek a new side lover (${multVeryRecentVisit}x L = ${fmtDays(multVeryRecentVisit)}).`,
+                label: t2("settings.partnerAgency.veryRecentVisitLabel"),
+                description: t2("settings.partnerAgency.veryRecentVisitDesc", {
+                  mult: multVeryRecentVisit,
+                  days: fmtDays(multVeryRecentVisit)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31085,7 +33065,7 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multVeryRecentVisitWindow: Number(val.toFixed(2)) })
                   }
                 )
@@ -31094,8 +33074,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Neglect Growth Onset (Troubled / Estranged)",
-                description: `Days without player interaction before neglect temptation starts growing for Troubled/Estranged (<50 affection) partners (${multNeglectGrowth}x L = ${fmtDays(multNeglectGrowth)}).`,
+                label: t2("settings.partnerAgency.neglectTroubledLabel"),
+                description: t2("settings.partnerAgency.neglectTroubledDesc", {
+                  mult: multNeglectGrowth,
+                  days: fmtDays(multNeglectGrowth)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31103,7 +33086,7 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multNeglectGrowthStart: Number(val.toFixed(2)) })
                   }
                 )
@@ -31112,8 +33095,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Neglect Growth Onset (Content Partners)",
-                description: `Days without player interaction before Content (50–74 affection) partners lose immunity and begin accumulating neglect temptation (${multContentNeglect}x L = ${fmtDays(multContentNeglect)}).`,
+                label: t2("settings.partnerAgency.neglectContentLabel"),
+                description: t2("settings.partnerAgency.neglectContentDesc", {
+                  mult: multContentNeglect,
+                  days: fmtDays(multContentNeglect)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31121,7 +33107,7 @@ Defaulting to \`null\`.`;
                     min: 0.5,
                     max: 6,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multContentNeglectStart: Number(val.toFixed(2)) })
                   }
                 )
@@ -31130,8 +33116,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Prolonged Absence Penalty Onset (Affair Breakups)",
-                description: `Days of player absence after which a cheating partner becomes less likely (-10%) to break off an ongoing secret affair (${multProlongedAbsence}x L = ${fmtDays(multProlongedAbsence)}).`,
+                label: t2("settings.partnerAgency.prolongedAbsenceLabel"),
+                description: t2("settings.partnerAgency.prolongedAbsenceDesc", {
+                  mult: multProlongedAbsence,
+                  days: fmtDays(multProlongedAbsence)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31139,8 +33128,10 @@ Defaulting to \`null\`.`;
                     min: 0.5,
                     max: 6,
                     step: 0.25,
-                    unit: "x L",
-                    onChange: (val) => updateMatchmakingSettings({ multProlongedAbsencePenalty: Number(val.toFixed(2)) })
+                    unit: unitMultiplierL,
+                    onChange: (val) => updateMatchmakingSettings({
+                      multProlongedAbsencePenalty: Number(val.toFixed(2))
+                    })
                   }
                 )
               }
@@ -31148,8 +33139,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Affair Talking -> Physical Escalation",
-                description: `Duration of an unresolved Talking affair before it deterministically escalates to a Physical affair (${multTalkingEscalation}x L = ${fmtDays(multTalkingEscalation)}).`,
+                label: t2("settings.partnerAgency.talkingEscalationLabel"),
+                description: t2("settings.partnerAgency.talkingEscalationDesc", {
+                  mult: multTalkingEscalation,
+                  days: fmtDays(multTalkingEscalation)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31157,8 +33151,10 @@ Defaulting to \`null\`.`;
                     min: 0.5,
                     max: 6,
                     step: 0.25,
-                    unit: "x L",
-                    onChange: (val) => updateMatchmakingSettings({ multAffairTalkingEscalation: Number(val.toFixed(2)) })
+                    unit: unitMultiplierL,
+                    onChange: (val) => updateMatchmakingSettings({
+                      multAffairTalkingEscalation: Number(val.toFixed(2))
+                    })
                   }
                 )
               }
@@ -31166,8 +33162,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Min Side-Lover Age Before Breakup",
-                description: `Minimum duration a secret affair or open-relationship side fling must last before breakup rolls are evaluated (${multMinSideFlingAge}x L = ${fmtDays(multMinSideFlingAge)}).`,
+                label: t2("settings.partnerAgency.minSideFlingAgeLabel"),
+                description: t2("settings.partnerAgency.minSideFlingAgeDesc", {
+                  mult: multMinSideFlingAge,
+                  days: fmtDays(multMinSideFlingAge)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31175,8 +33174,10 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
-                    onChange: (val) => updateMatchmakingSettings({ multMinSideFlingAgeForBreakup: Number(val.toFixed(2)) })
+                    unit: unitMultiplierL,
+                    onChange: (val) => updateMatchmakingSettings({
+                      multMinSideFlingAgeForBreakup: Number(val.toFixed(2))
+                    })
                   }
                 )
               }
@@ -31184,8 +33185,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Pending Force-Greet Intent TTL",
-                description: `How long a queued partner conversation intent (SuggestOpen, SuggestClose, ConfessTalking, ConfessPhysical) waits for the player before expiring (${multIntentTTL}x L = ${fmtDays(multIntentTTL)}).`,
+                label: t2("settings.partnerAgency.intentTtlLabel"),
+                description: t2("settings.partnerAgency.intentTtlDesc", {
+                  mult: multIntentTTL,
+                  days: fmtDays(multIntentTTL)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31193,7 +33197,7 @@ Defaulting to \`null\`.`;
                     min: 0.5,
                     max: 6,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multPartnerIntentTTL: Number(val.toFixed(2)) })
                   }
                 )
@@ -31202,8 +33206,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Home-Arrival Event Location Cooldown",
-                description: `Minimum cooldown per home location between triggered side-lover arrival scenarios (${multHomeCooldown}x L = ${fmtDays(multHomeCooldown)}).`,
+                label: t2("settings.partnerAgency.homeCooldownLabel"),
+                description: t2("settings.partnerAgency.homeCooldownDesc", {
+                  mult: multHomeCooldown,
+                  days: fmtDays(multHomeCooldown)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31211,7 +33218,7 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multHomeArrivalCooldown: Number(val.toFixed(2)) })
                   }
                 )
@@ -31220,8 +33227,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Affair Fatigue & Open Fling Novelty Fade Onset",
-                description: `Duration of a secret affair or open fling before novelty fades and breakup likelihood increases with age (${multAffairFatigue}x L = ${fmtDays(multAffairFatigue)}).`,
+                label: t2("settings.partnerAgency.affairFatigueLabel"),
+                description: t2("settings.partnerAgency.affairFatigueDesc", {
+                  mult: multAffairFatigue,
+                  days: fmtDays(multAffairFatigue)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31229,7 +33239,7 @@ Defaulting to \`null\`.`;
                     min: 1,
                     max: 15,
                     step: 0.5,
-                    unit: "x L",
+                    unit: unitMultiplierL,
                     onChange: (val) => updateMatchmakingSettings({ multAffairFatigueStart: Number(val.toFixed(2)) })
                   }
                 )
@@ -31238,8 +33248,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Romantic Partner Attended Breakup Window",
-                description: `Window after player interaction where a Romantic partner gets a 1.25x boost to breaking off a secret affair out of devotion (${multRomanticAttended}x L = ${fmtDays(multRomanticAttended)}).`,
+                label: t2("settings.partnerAgency.romanticAttendedLabel"),
+                description: t2("settings.partnerAgency.romanticAttendedDesc", {
+                  mult: multRomanticAttended,
+                  days: fmtDays(multRomanticAttended)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31247,8 +33260,10 @@ Defaulting to \`null\`.`;
                     min: 0.25,
                     max: 5,
                     step: 0.25,
-                    unit: "x L",
-                    onChange: (val) => updateMatchmakingSettings({ multRomanticAttendedBreakup: Number(val.toFixed(2)) })
+                    unit: unitMultiplierL,
+                    onChange: (val) => updateMatchmakingSettings({
+                      multRomanticAttendedBreakup: Number(val.toFixed(2))
+                    })
                   }
                 )
               }
@@ -31256,8 +33271,11 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Suggest Open Relationship Neglect Onset",
-                description: `Days without player interaction before neglect begins adding bonus probability to proposing an open relationship (${multSuggestOpenNeglect}x L = ${fmtDays(multSuggestOpenNeglect)}).`,
+                label: t2("settings.partnerAgency.suggestOpenNeglectLabel"),
+                description: t2("settings.partnerAgency.suggestOpenNeglectDesc", {
+                  mult: multSuggestOpenNeglect,
+                  days: fmtDays(multSuggestOpenNeglect)
+                }),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
@@ -31265,8 +33283,10 @@ Defaulting to \`null\`.`;
                     min: 0.5,
                     max: 6,
                     step: 0.25,
-                    unit: "x L",
-                    onChange: (val) => updateMatchmakingSettings({ multSuggestOpenNeglectMin: Number(val.toFixed(2)) })
+                    unit: unitMultiplierL,
+                    onChange: (val) => updateMatchmakingSettings({
+                      multSuggestOpenNeglectMin: Number(val.toFixed(2))
+                    })
                   }
                 )
               }
@@ -31277,24 +33297,25 @@ Defaulting to \`null\`.`;
     ] });
   };
   const ScenesSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    const masterEnabled = settings.enableScenes ?? true;
+    const masterEnabled = settings2.enableScenes ?? true;
     const isMasterDisabled = !masterEnabled;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel-raised border border-border-divider rounded-md p-[0.75rem] text-xs text-foreground-secondary flex items-start gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Info, { className: "w-[1.25em] h-[1.25em] text-accent flex-shrink-0 mt-[0.125rem]" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 space-y-[0.25rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: "NPC Banter & Romance Scenes" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "When entering locations, M.A.R.A.S dynamically selects eligible NPC couples to play immersive voiced(if you are using SkyrimNet) interaction scenes that reflect their current relationship status or illicit affairs." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: t2("settings.scenes.bannerTitle") }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: t2("settings.scenes.bannerDesc") })
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "General Scene Rules", icon: Clapperboard, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.scenes.generalTitle"), icon: Clapperboard, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Enable NPC Scenes",
-            description: "Master toggle for all relationship and encounter scenes. If disabled, no couples will be coordinated or prompted into scenes.",
+            label: t2("settings.scenes.enableMasterLabel"),
+            description: t2("settings.scenes.enableMasterDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
@@ -31307,17 +33328,17 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Scene Cooldown",
-            description: "Minimum game hours that must pass before another NPC scene can trigger (default 24 hours = at most one scene per day).",
+            label: t2("settings.scenes.cooldownLabel"),
+            description: t2("settings.scenes.cooldownDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
-                value: settings.scenesCooldownHours ?? 24,
+                value: settings2.scenesCooldownHours ?? 24,
                 min: 0,
                 max: 168,
                 step: 1,
-                unit: " hrs",
+                unit: t2("settings.scenes.unitHours"),
                 disabled: isMasterDisabled,
                 onChange: (val) => updateSetting("scenesCooldownHours", val)
               }
@@ -31325,17 +33346,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Relationship Scenes", icon: HeartHandshake, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.scenes.relationshipTitle"), icon: HeartHandshake, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Dating Scenes",
-            description: "Enable conversational scenes between NPCs who are actively dating.",
+            label: t2("settings.scenes.datingLabel"),
+            description: t2("settings.scenes.datingDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_Dating ?? true,
+                checked: settings2.enableScenes_Dating ?? true,
                 onChange: (val) => updateSetting("enableScenes_Dating", val),
                 disabled: isMasterDisabled
               }
@@ -31345,13 +33366,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Lover Scenes",
-            description: "Enable intimate and affectionate banter scenes between established lovers.",
+            label: t2("settings.scenes.loverLabel"),
+            description: t2("settings.scenes.loverDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_Lover ?? true,
+                checked: settings2.enableScenes_Lover ?? true,
                 onChange: (val) => updateSetting("enableScenes_Lover", val),
                 disabled: isMasterDisabled
               }
@@ -31361,13 +33382,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Engagement Scenes",
-            description: "Enable scenes between betrothed couples planning their union.",
+            label: t2("settings.scenes.engagedLabel"),
+            description: t2("settings.scenes.engagedDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_Engaged ?? true,
+                checked: settings2.enableScenes_Engaged ?? true,
                 onChange: (val) => updateSetting("enableScenes_Engaged", val),
                 disabled: isMasterDisabled
               }
@@ -31377,13 +33398,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Married Scenes",
-            description: "Enable domestic and affectionate scenes between married spouses.",
+            label: t2("settings.scenes.marriedLabel"),
+            description: t2("settings.scenes.marriedDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_Married ?? true,
+                checked: settings2.enableScenes_Married ?? true,
                 onChange: (val) => updateSetting("enableScenes_Married", val),
                 disabled: isMasterDisabled
               }
@@ -31391,17 +33412,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Complex & Affair Scenes", icon: Flame, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.scenes.complexTitle"), icon: Flame, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Open Relationship Scenes",
-            description: "Enable scenes between partners in open relationships discussing their dynamic or other partners.",
+            label: t2("settings.scenes.openRelLabel"),
+            description: t2("settings.scenes.openRelDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_OpenRelationship ?? true,
+                checked: settings2.enableScenes_OpenRelationship ?? true,
                 onChange: (val) => updateSetting("enableScenes_OpenRelationship", val),
                 disabled: isMasterDisabled
               }
@@ -31411,13 +33432,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Cheating: Secret Affair Scenes",
-            description: "Enable clandestine dialogue between unfaithful partners meeting in secret.",
+            label: t2("settings.scenes.cheatingSecretLabel"),
+            description: t2("settings.scenes.cheatingSecretDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_Cheating ?? true,
+                checked: settings2.enableScenes_Cheating ?? true,
                 onChange: (val) => updateSetting("enableScenes_Cheating", val),
                 disabled: isMasterDisabled
               }
@@ -31427,13 +33448,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Cheating: Discovered Scenes",
-            description: "Enable dramatic confrontation scenes when an affair is discovered by a primary partner.",
+            label: t2("settings.scenes.cheatingDiscoveredLabel"),
+            description: t2("settings.scenes.cheatingDiscoveredDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_CheatingDiscovered ?? true,
+                checked: settings2.enableScenes_CheatingDiscovered ?? true,
                 onChange: (val) => updateSetting("enableScenes_CheatingDiscovered", val),
                 disabled: isMasterDisabled
               }
@@ -31443,13 +33464,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Cheating: Caught in the Act Scenes",
-            description: "Enable walk-in encounters where cheaters are caught mid-act (requires sex framework and interior bed).",
+            label: t2("settings.scenes.cheatingCaughtLabel"),
+            description: t2("settings.scenes.cheatingCaughtDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_CheatingCaught ?? true,
+                checked: settings2.enableScenes_CheatingCaught ?? true,
                 onChange: (val) => updateSetting("enableScenes_CheatingCaught", val),
                 disabled: isMasterDisabled
               }
@@ -31457,17 +33478,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Allowed Locations: Interiors", icon: Building, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.scenes.interiorsTitle"), icon: Building, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Temples (LocTypeTemple)",
-            description: "Allow scenes inside temples and sacred places of worship.",
+            label: t2("settings.scenes.locTempleLabel"),
+            description: t2("settings.scenes.locTempleDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeTemple ?? true,
+                checked: settings2.enableScenes_LocTypeTemple ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeTemple", val),
                 disabled: isMasterDisabled
               }
@@ -31477,13 +33498,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Stores & Shops (LocTypeStore)",
-            description: "Allow scenes inside merchant shops, apothecaries, and trade stalls.",
+            label: t2("settings.scenes.locStoreLabel"),
+            description: t2("settings.scenes.locStoreDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeStore ?? true,
+                checked: settings2.enableScenes_LocTypeStore ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeStore", val),
                 disabled: isMasterDisabled
               }
@@ -31493,13 +33514,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Jarl & Steward Dwellings (LocTypeStewardsDwelling)",
-            description: "Allow scenes inside jarl keeps, steward chambers, and court palaces.",
+            label: t2("settings.scenes.locStewardLabel"),
+            description: t2("settings.scenes.locStewardDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeStewardsDwelling ?? true,
+                checked: settings2.enableScenes_LocTypeStewardsDwelling ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeStewardsDwelling", val),
                 disabled: isMasterDisabled
               }
@@ -31509,13 +33530,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Taverns & Inns (LocTypeInn)",
-            description: "Allow scenes inside taverns, inns, and public drinking houses.",
+            label: t2("settings.scenes.locInnLabel"),
+            description: t2("settings.scenes.locInnDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeInn ?? true,
+                checked: settings2.enableScenes_LocTypeInn ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeInn", val),
                 disabled: isMasterDisabled
               }
@@ -31525,13 +33546,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Private Houses (LocTypeHouse)",
-            description: "Allow scenes inside residential homes and civilian quarters.",
+            label: t2("settings.scenes.locHouseLabel"),
+            description: t2("settings.scenes.locHouseDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeHouse ?? true,
+                checked: settings2.enableScenes_LocTypeHouse ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeHouse", val),
                 disabled: isMasterDisabled
               }
@@ -31541,13 +33562,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Barracks (LocTypeBarracks)",
-            description: "Allow scenes inside city guard barracks and military quarters.",
+            label: t2("settings.scenes.locBarracksLabel"),
+            description: t2("settings.scenes.locBarracksDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeBarracks ?? true,
+                checked: settings2.enableScenes_LocTypeBarracks ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeBarracks", val),
                 disabled: isMasterDisabled
               }
@@ -31557,13 +33578,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Guild Halls (LocTypeGuild)",
-            description: "Allow scenes inside guild halls, sanctuaries, and faction headquarters.",
+            label: t2("settings.scenes.locGuildLabel"),
+            description: t2("settings.scenes.locGuildDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeGuild ?? true,
+                checked: settings2.enableScenes_LocTypeGuild ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeGuild", val),
                 disabled: isMasterDisabled
               }
@@ -31571,17 +33592,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Allowed Locations: Player Houses", icon: House, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.scenes.playerHousesTitle"), icon: House, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Player Homes (LocTypePlayerHouse)",
-            description: "Allow scenes inside purchased player-owned homes (e.g., Breezehome, Proudspire).",
+            label: t2("settings.scenes.locPlayerHouseLabel"),
+            description: t2("settings.scenes.locPlayerHouseDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypePlayerHouse ?? true,
+                checked: settings2.enableScenes_LocTypePlayerHouse ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypePlayerHouse", val),
                 disabled: isMasterDisabled
               }
@@ -31591,13 +33612,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Hearthfire Homesteads (BYOH_LocTypeHomestead)",
-            description: "Allow scenes inside player-built Hearthfire manors (e.g., Lakeview, Heljarchen, Windstad).",
+            label: t2("settings.scenes.locHomesteadLabel"),
+            description: t2("settings.scenes.locHomesteadDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_BYOH_LocTypeHomestead ?? true,
+                checked: settings2.enableScenes_BYOH_LocTypeHomestead ?? true,
                 onChange: (val) => updateSetting("enableScenes_BYOH_LocTypeHomestead", val),
                 disabled: isMasterDisabled
               }
@@ -31605,17 +33626,17 @@ Defaulting to \`null\`.`;
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Allowed Locations: Streets & Outdoors", icon: MapPin, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.scenes.outdoorsTitle"), icon: MapPin, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Towns (LocTypeTown)",
-            description: "Allow outdoor street scenes in towns (e.g., Riverwood, Falkreath, Dawnstar).",
+            label: t2("settings.scenes.locTownLabel"),
+            description: t2("settings.scenes.locTownDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeTown ?? true,
+                checked: settings2.enableScenes_LocTypeTown ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeTown", val),
                 disabled: isMasterDisabled
               }
@@ -31625,13 +33646,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Settlements & Villages (LocTypeSettlement)",
-            description: "Allow outdoor street scenes in small settlements, mining camps, and mills.",
+            label: t2("settings.scenes.locSettlementLabel"),
+            description: t2("settings.scenes.locSettlementDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeSettlement ?? true,
+                checked: settings2.enableScenes_LocTypeSettlement ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeSettlement", val),
                 disabled: isMasterDisabled
               }
@@ -31641,13 +33662,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Orc Strongholds (LocTypeOrcStronghold)",
-            description: "Allow outdoor scenes inside Orc strongholds (e.g., Dushnikh Yal, Narzulbur).",
+            label: t2("settings.scenes.locStrongholdLabel"),
+            description: t2("settings.scenes.locStrongholdDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeOrcStronghold ?? true,
+                checked: settings2.enableScenes_LocTypeOrcStronghold ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeOrcStronghold", val),
                 disabled: isMasterDisabled
               }
@@ -31657,13 +33678,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Major Cities (LocTypeCity)",
-            description: "Allow outdoor street scenes in major walled cities (e.g., Whiterun, Solitude, Windhelm).",
+            label: t2("settings.scenes.locCityLabel"),
+            description: t2("settings.scenes.locCityDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeCity ?? true,
+                checked: settings2.enableScenes_LocTypeCity ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeCity", val),
                 disabled: isMasterDisabled
               }
@@ -31673,13 +33694,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Lumber Mills (LocTypeLumberMill)",
-            description: "Allow outdoor scenes around operating lumber mills.",
+            label: t2("settings.scenes.locLumberMillLabel"),
+            description: t2("settings.scenes.locLumberMillDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeLumberMill ?? true,
+                checked: settings2.enableScenes_LocTypeLumberMill ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeLumberMill", val),
                 disabled: isMasterDisabled
               }
@@ -31689,13 +33710,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Farms (LocTypeFarm)",
-            description: "Allow outdoor scenes around rural farms and agrarian homesteads.",
+            label: t2("settings.scenes.locFarmLabel"),
+            description: t2("settings.scenes.locFarmDesc"),
             disabled: isMasterDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.enableScenes_LocTypeFarm ?? true,
+                checked: settings2.enableScenes_LocTypeFarm ?? true,
                 onChange: (val) => updateSetting("enableScenes_LocTypeFarm", val),
                 disabled: isMasterDisabled
               }
@@ -31706,17 +33727,18 @@ Defaulting to \`null\`.`;
     ] });
   };
   const ChildrenSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2, tp: tp2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    const trainingDays = settings.childTrainingDurationDays ?? 14;
-    const trainingCost = settings.childTrainingCost ?? 2e3;
+    const trainingDays = settings2.childTrainingDurationDays ?? 14;
+    const trainingCost = settings2.childTrainingCost ?? 2e3;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Child Training & Adulthood", icon: GraduationCap, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.children.trainingTitle"), icon: GraduationCap, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Training Duration (Days)",
-            description: `Number of in-game days required for a child in Stage 3 (Training) to graduate to Stage 4 (Adult) (${trainingDays} day${trainingDays === 1 ? "" : "s"}). You can also complete training early from the child's profile.`,
+            label: t2("settings.children.trainingDurationLabel"),
+            description: tp2("settings.children.trainingDurationDesc", trainingDays),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
@@ -31724,7 +33746,7 @@ Defaulting to \`null\`.`;
                 min: 1,
                 max: 120,
                 step: 1,
-                unit: "d",
+                unit: t2("settings.children.unitDaysShort"),
                 onChange: (val) => updateSetting("childTrainingDurationDays", Math.round(val))
               }
             )
@@ -31733,8 +33755,8 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Training Tuition Cost (Gold)",
-            description: `Gold required to send a player child away for adolescent training (${trainingCost} gold). Set to 0 for free training.`,
+            label: t2("settings.children.trainingCostLabel"),
+            description: t2("settings.children.trainingCostDesc", { cost: trainingCost }),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
@@ -31742,7 +33764,7 @@ Defaulting to \`null\`.`;
                 min: 0,
                 max: 1e4,
                 step: 100,
-                unit: "g",
+                unit: t2("settings.children.unitGoldShort"),
                 onChange: (val) => updateSetting("childTrainingCost", Math.round(val))
               }
             )
@@ -31751,28 +33773,28 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Require Faction Membership for Guild Training",
-            description: "When enabled, sending a player child to guild, temple, or Daedric covenant training requires the Player to meet that location's membership or patronage criteria.",
+            label: t2("settings.children.requireFactionLabel"),
+            description: t2("settings.children.requireFactionDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.childTrainingRequireFaction ?? true,
+                checked: settings2.childTrainingRequireFaction ?? true,
                 onChange: (val) => updateSetting("childTrainingRequireFaction", val)
               }
             )
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Children & Household Pet Settings", icon: Baby, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.children.petAndCustodyTitle"), icon: Baby, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Global Ban Critters",
-            description: "Globally disable kid critter adoption events (foxes, hares, mudcrabs) for all children.",
+            label: t2("settings.children.globalBanCritterLabel"),
+            description: t2("settings.children.globalBanCritterDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: !!settings.globalBanCritter,
+                checked: !!settings2.globalBanCritter,
                 onChange: (val) => updateSetting("globalBanCritter", val)
               }
             )
@@ -31781,12 +33803,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Global Ban Pets",
-            description: "Globally disable household pet adoption events (dogs) for all children.",
+            label: t2("settings.children.globalBanPetLabel"),
+            description: t2("settings.children.globalBanPetDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: !!settings.globalBanPet,
+                checked: !!settings2.globalBanPet,
                 onChange: (val) => updateSetting("globalBanPet", val)
               }
             )
@@ -31795,12 +33817,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Prioritize Biological Parent",
-            description: "When divorcing, if only one partner is the biological parent, award custody to them (overrides gender and player rules).",
+            label: t2("settings.children.prioritizeBioParentLabel"),
+            description: t2("settings.children.prioritizeBioParentDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.childCustodyPrioritizeBioParent !== false,
+                checked: settings2.childCustodyPrioritizeBioParent !== false,
                 onChange: (val) => updateSetting("childCustodyPrioritizeBioParent", val)
               }
             )
@@ -31809,17 +33831,17 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Gender Custody Policy",
-            description: "Determines which parent retains child custody upon divorce when biological rules do not decide.",
+            label: t2("settings.children.genderCustodyLabel"),
+            description: t2("settings.children.genderCustodyDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "select",
               {
-                value: settings.childCustodyGenderPolicy ?? 0,
+                value: settings2.childCustodyGenderPolicy ?? 0,
                 onChange: (e) => updateSetting("childCustodyGenderPolicy", parseInt(e.target.value, 10)),
-                className: "bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
+                className: "min-w-[13rem] w-auto bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: "Stay with Mother (Default)" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "Stay with Father" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: t2("settings.children.custodyStayMother") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: t2("settings.children.custodyStayFather") })
                 ]
               }
             )
@@ -31828,18 +33850,18 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Player Custody Override",
-            description: "Overrides gender custody in divorces involving the Player.",
+            label: t2("settings.children.playerCustodyLabel"),
+            description: t2("settings.children.playerCustodyDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "select",
               {
-                value: settings.childCustodyPlayerPolicy ?? 0,
+                value: settings2.childCustodyPlayerPolicy ?? 0,
                 onChange: (e) => updateSetting("childCustodyPlayerPolicy", parseInt(e.target.value, 10)),
-                className: "bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
+                className: "min-w-[13rem] w-auto bg-panel-inset text-foreground-primary text-xs border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus:outline-none focus:border-border-accent",
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: "Use Gender Custody (Default)" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: "Always with Player" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 2, children: "Never with Player" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 0, children: t2("settings.children.custodyUseGender") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 1, children: t2("settings.children.custodyAlwaysPlayer") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 2, children: t2("settings.children.custodyNeverPlayer") })
                 ]
               }
             )
@@ -31849,19 +33871,22 @@ Defaulting to \`null\`.`;
     ] });
   };
   const FertilitySettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
     const cleanNum = (val, fallback) => Number((val ?? fallback).toFixed(2));
+    const unitPercent = t2("settings.fertility.unitPercent");
+    const unitPercentPerDay = t2("settings.fertility.unitPercentPerDay");
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Paternity Daily Evaluation Formulas (Shared)", icon: Eye, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.fertility.formulasTitle"), icon: Eye, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-panel-inset/80 border border-border-subtle rounded-lg space-y-[0.625rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary", children: "Subtle Physical Trait Formula" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-accent-bright bg-accent/10 px-[0.375rem] py-[0.125rem] rounded border border-accent/20", children: "Base + (Days × Daily) ≤ Max" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary", children: t2("settings.fertility.subtleFormulaTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-accent-bright bg-accent/10 px-[0.375rem] py-[0.125rem] rounded border border-accent/20", children: t2("settings.fertility.formulaBadge") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-[0.5rem] text-xs font-mono", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Initial discovery probability on day 0 of birth (0–100%)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus-within:border-border-accent", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: "Base" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("settings.fertility.subtleBaseTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus-within:border-border-accent", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: t2("settings.fertility.formulaBaseLabel") }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "input",
                 {
@@ -31869,19 +33894,22 @@ Defaulting to \`null\`.`;
                   min: 0,
                   max: 100,
                   step: 1,
-                  value: cleanNum(settings.paternityBaseChance, 2),
-                  onChange: (e) => updateSetting("paternityBaseChance", Math.max(0, Math.min(100, Number(e.target.value)))),
+                  value: cleanNum(settings2.paternityBaseChance, 2),
+                  onChange: (e) => updateSetting(
+                    "paternityBaseChance",
+                    Math.max(0, Math.min(100, Number(e.target.value)))
+                  ),
                   className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "%" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: unitPercent })
             ] }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-bold text-sm", children: "+" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] bg-panel-raised/50 border border-border-subtle/60 rounded px-[0.5rem] py-[0.25rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "(" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent text-[0.6875rem] font-sans font-medium", children: "Days" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent text-[0.6875rem] font-sans font-medium", children: t2("settings.fertility.formulaDaysLabel") }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "×" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Daily probability increase added per day since birth (e.g. 2.0% / day)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.125rem] bg-panel-raised border border-border-subtle rounded px-[0.375rem] py-[0.125rem] focus-within:border-border-accent", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("settings.fertility.subtleDailyTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.125rem] bg-panel-raised border border-border-subtle rounded px-[0.375rem] py-[0.125rem] focus-within:border-border-accent", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "input",
                   {
@@ -31889,18 +33917,21 @@ Defaulting to \`null\`.`;
                     min: 0,
                     max: 20,
                     step: 0.5,
-                    value: cleanNum(settings.paternityDailyGrowth, 2),
-                    onChange: (e) => updateSetting("paternityDailyGrowth", Math.max(0, Math.min(20, Number(e.target.value)))),
+                    value: cleanNum(settings2.paternityDailyGrowth, 2),
+                    onChange: (e) => updateSetting(
+                      "paternityDailyGrowth",
+                      Math.max(0, Math.min(20, Number(e.target.value)))
+                    ),
                     className: "w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.6875rem]", children: "%/day" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.6875rem]", children: unitPercentPerDay })
               ] }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: ")" })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-semibold text-xs", children: ", max cap:" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Maximum upper probability cap for subtle discovery (0–100%)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus-within:border-border-accent", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: "Max" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-semibold text-xs", children: t2("settings.fertility.formulaMaxCapPrefix") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("settings.fertility.subtleMaxTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] focus-within:border-border-accent", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: t2("settings.fertility.formulaMaxLabel") }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "input",
                 {
@@ -31908,114 +33939,182 @@ Defaulting to \`null\`.`;
                   min: 0,
                   max: 100,
                   step: 1,
-                  value: cleanNum(settings.paternityMaxChance, 60),
-                  onChange: (e) => updateSetting("paternityMaxChance", Math.max(0, Math.min(100, Number(e.target.value)))),
+                  value: cleanNum(settings2.paternityMaxChance, 60),
+                  onChange: (e) => updateSetting(
+                    "paternityMaxChance",
+                    Math.max(0, Math.min(100, Number(e.target.value)))
+                  ),
                   className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none"
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "%" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: unitPercent })
             ] }) })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: "Standard subtle tick: gradual physical trait resemblance increases each day the child grows." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: t2("settings.fertility.subtleFormulaHelp") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Phenotype Mismatch Birth Evaluation Chance",
-            description: "Probability to immediately trigger a paternity secret evaluation upon birth when child has distinct racial/visual discrepancies with presumed father.",
+            label: t2("settings.fertility.phenotypeBirthLabel"),
+            description: t2("settings.fertility.phenotypeBirthDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SliderInput,
               {
-                value: settings.paternityPhenotypeBirthChance ?? 100,
+                value: settings2.paternityPhenotypeBirthChance ?? 100,
                 min: 0,
                 max: 100,
                 step: 1,
-                unit: "%",
+                unit: unitPercent,
                 onChange: (val) => updateSetting("paternityPhenotypeBirthChance", val)
               }
             )
           }
         ),
         (() => {
-          const isBirth100 = (settings.paternityPhenotypeBirthChance ?? 100) >= 100;
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `p-[0.75rem] bg-panel-inset/80 border border-border-subtle rounded-lg space-y-[0.625rem] transition-opacity ${isBirth100 ? "opacity-60" : ""}`, children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary", children: "Phenotype Mismatch Daily Formula" }),
-              isBirth100 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-amber-400 bg-amber-500/10 px-[0.375rem] py-[0.125rem] rounded border border-amber-500/20", title: "Because birth evaluation chance is 100%, phenotype secrets are evaluated immediately upon birth and will not trigger daily growth.", children: "Inactive (Birth Chance is 100%)" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-purple-400 bg-purple-500/10 px-[0.375rem] py-[0.125rem] rounded border border-purple-500/20", children: "Base + (Days × Daily) ≤ Max" })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-[0.5rem] text-xs font-mono", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: isBirth100 ? "Disabled: secret evaluates immediately at birth (100%)" : "Base starting probability when distinct visual/racial discrepancy exists (0–100%)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] ${isBirth100 ? "cursor-not-allowed opacity-50" : "focus-within:border-border-accent"}`, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: "Base" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "input",
-                  {
-                    type: "number",
-                    disabled: isBirth100,
-                    min: 0,
-                    max: 100,
-                    step: 1,
-                    value: cleanNum(settings.paternityPhenotypeBaseChance, 15),
-                    onChange: (e) => updateSetting("paternityPhenotypeBaseChance", Math.max(0, Math.min(100, Number(e.target.value)))),
-                    className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "%" })
-              ] }) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-bold text-sm", children: "+" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.375rem] bg-panel-raised/50 border border-border-subtle/60 rounded px-[0.5rem] py-[0.25rem] ${isBirth100 ? "opacity-50" : ""}`, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "(" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent text-[0.6875rem] font-sans font-medium", children: "Days" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "×" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: isBirth100 ? "Disabled: secret evaluates immediately at birth (100%)" : "Daily probability increase when visual differences become more glaring each day (e.g. 4.0% / day)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.125rem] bg-panel-raised border border-border-subtle rounded px-[0.375rem] py-[0.125rem] ${isBirth100 ? "cursor-not-allowed" : "focus-within:border-border-accent"}`, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "input",
+          const isBirth100 = (settings2.paternityPhenotypeBirthChance ?? 100) >= 100;
+          const disabledTooltip = t2("settings.fertility.phenotypeDisabledTooltip");
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: `p-[0.75rem] bg-panel-inset/80 border border-border-subtle rounded-lg space-y-[0.625rem] transition-opacity ${isBirth100 ? "opacity-60" : ""}`,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary", children: t2("settings.fertility.phenotypeFormulaTitle") }),
+                  isBirth100 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
                     {
-                      type: "number",
-                      disabled: isBirth100,
-                      min: 0,
-                      max: 20,
-                      step: 0.5,
-                      value: cleanNum(settings.paternityPhenotypeDailyGrowth, 4),
-                      onChange: (e) => updateSetting("paternityPhenotypeDailyGrowth", Math.max(0, Math.min(20, Number(e.target.value)))),
-                      className: "w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
+                      className: "text-[0.6875rem] font-mono text-amber-400 bg-amber-500/10 px-[0.375rem] py-[0.125rem] rounded border border-amber-500/20",
+                      title: t2("settings.fertility.phenotypeInactiveBadgeTooltip"),
+                      children: t2("settings.fertility.phenotypeInactiveBadge")
+                    }
+                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-mono text-purple-400 bg-purple-500/10 px-[0.375rem] py-[0.125rem] rounded border border-purple-500/20", children: t2("settings.fertility.formulaBadge") })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-[0.5rem] text-xs font-mono", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    AppTooltip,
+                    {
+                      content: isBirth100 ? disabledTooltip : t2("settings.fertility.phenotypeBaseTooltip"),
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          className: `flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] ${isBirth100 ? "cursor-not-allowed opacity-50" : "focus-within:border-border-accent"}`,
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: t2("settings.fertility.formulaBaseLabel") }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "input",
+                              {
+                                type: "number",
+                                disabled: isBirth100,
+                                min: 0,
+                                max: 100,
+                                step: 1,
+                                value: cleanNum(settings2.paternityPhenotypeBaseChance, 15),
+                                onChange: (e) => updateSetting(
+                                  "paternityPhenotypeBaseChance",
+                                  Math.max(0, Math.min(100, Number(e.target.value)))
+                                ),
+                                className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: unitPercent })
+                          ]
+                        }
+                      )
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.6875rem]", children: "%/day" })
-                ] }) }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: ")" })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-semibold text-xs", children: ", max cap:" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: isBirth100 ? "Disabled: secret evaluates immediately at birth (100%)" : "Maximum upper probability cap for phenotype mismatch (0–100%)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] ${isBirth100 ? "cursor-not-allowed opacity-50" : "focus-within:border-border-accent"}`, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: "Max" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "input",
-                  {
-                    type: "number",
-                    disabled: isBirth100,
-                    min: 0,
-                    max: 100,
-                    step: 1,
-                    value: cleanNum(settings.paternityPhenotypeMaxChance, 80),
-                    onChange: (e) => updateSetting("paternityPhenotypeMaxChance", Math.max(0, Math.min(100, Number(e.target.value)))),
-                    className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "%" })
-              ] }) })
-            ] }),
-            isBirth100 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-400/80", children: "Daily formula is inactive because Birth Evaluation Chance is set to 100% (paternity secrets are evaluated immediately at birth). Lower the birth evaluation chance above to allow daily growth." }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: "Accelerated daily tick: glaring visual differences between biological and presumed father become noticeable much faster." })
-          ] });
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-bold text-sm", children: "+" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      className: `flex items-center gap-[0.375rem] bg-panel-raised/50 border border-border-subtle/60 rounded px-[0.5rem] py-[0.25rem] ${isBirth100 ? "opacity-50" : ""}`,
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "(" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-accent text-[0.6875rem] font-sans font-medium", children: t2("settings.fertility.formulaDaysLabel") }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "×" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          AppTooltip,
+                          {
+                            content: isBirth100 ? disabledTooltip : t2("settings.fertility.phenotypeDailyTooltip"),
+                            children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                className: `flex items-center gap-[0.125rem] bg-panel-raised border border-border-subtle rounded px-[0.375rem] py-[0.125rem] ${isBirth100 ? "cursor-not-allowed" : "focus-within:border-border-accent"}`,
+                                children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "input",
+                                    {
+                                      type: "number",
+                                      disabled: isBirth100,
+                                      min: 0,
+                                      max: 20,
+                                      step: 0.5,
+                                      value: cleanNum(settings2.paternityPhenotypeDailyGrowth, 4),
+                                      onChange: (e) => updateSetting(
+                                        "paternityPhenotypeDailyGrowth",
+                                        Math.max(0, Math.min(20, Number(e.target.value)))
+                                      ),
+                                      className: "w-12 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
+                                    }
+                                  ),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted text-[0.6875rem]", children: unitPercentPerDay })
+                                ]
+                              }
+                            )
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: ")" })
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-semibold text-xs", children: t2("settings.fertility.formulaMaxCapPrefix") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    AppTooltip,
+                    {
+                      content: isBirth100 ? disabledTooltip : t2("settings.fertility.phenotypeMaxTooltip"),
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          className: `flex items-center gap-[0.25rem] bg-panel-raised border border-border-subtle rounded px-[0.5rem] py-[0.25rem] ${isBirth100 ? "cursor-not-allowed opacity-50" : "focus-within:border-border-accent"}`,
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted uppercase tracking-wider font-sans", children: t2("settings.fertility.formulaMaxLabel") }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "input",
+                              {
+                                type: "number",
+                                disabled: isBirth100,
+                                min: 0,
+                                max: 100,
+                                step: 1,
+                                value: cleanNum(settings2.paternityPhenotypeMaxChance, 80),
+                                onChange: (e) => updateSetting(
+                                  "paternityPhenotypeMaxChance",
+                                  Math.max(0, Math.min(100, Number(e.target.value)))
+                                ),
+                                className: "w-11 bg-transparent text-right font-semibold text-foreground-primary focus:outline-none disabled:cursor-not-allowed"
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: unitPercent })
+                          ]
+                        }
+                      )
+                    }
+                  )
+                ] }),
+                isBirth100 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-400/80", children: t2("settings.fertility.phenotypeInactiveHelp") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: t2("settings.fertility.phenotypeActiveHelp") })
+              ]
+            }
+          );
         })()
       ] }),
-      settings.hasSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "SkyrimNet AI Evaluation Method", icon: Bot, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      settings2.hasSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("settings.fertility.aiMethodTitle"), icon: Bot, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         SettingRow,
         {
-          label: "Opt Out of LLM (Use Dice Rolls)",
-          description: "When enabled, bypasses SkyrimNet LLM evaluation for paternity secrets and uses the deterministic dice-roll method below.",
+          label: t2("settings.fertility.optOutLlmLabel"),
+          description: t2("settings.fertility.optOutLlmDesc"),
           children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             ToggleSwitch,
             {
-              checked: !!settings.paternityForceDiceRolls,
+              checked: !!settings2.paternityForceDiceRolls,
               onChange: (val) => updateSetting("paternityForceDiceRolls", val)
             }
           )
@@ -32024,22 +34123,22 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         SectionCard,
         {
-          title: settings.hasSkyrimNet ? settings.paternityForceDiceRolls ? "Active Dice-Roll Evaluation Rules" : "Fallback Dice-Roll Evaluation Rules" : "Paternity Dice-Roll Evaluation Rules",
+          title: settings2.hasSkyrimNet ? settings2.paternityForceDiceRolls ? t2("settings.fertility.activeDiceTitle") : t2("settings.fertility.fallbackDiceTitle") : t2("settings.fertility.paternityDiceTitle"),
           icon: Dices,
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Paternity Reveal Chance",
-                description: settings.hasSkyrimNet && !settings.paternityForceDiceRolls ? "Probability that paternity secret is revealed when fallback triggers (e.g. if SkyrimNet evaluation fails). Phenotype mismatches always reveal immediately (100%)." : "Probability that paternity secret is revealed when evaluation triggers without LLM. Phenotype mismatches always reveal immediately (100%).",
+                label: t2("settings.fertility.revealChanceLabel"),
+                description: settings2.hasSkyrimNet && !settings2.paternityForceDiceRolls ? t2("settings.fertility.revealChanceFallbackDesc") : t2("settings.fertility.revealChanceDirectDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
-                    value: settings.paternityNonSkyrimNetRevealChance ?? 50,
+                    value: settings2.paternityNonSkyrimNetRevealChance ?? 50,
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => updateSetting("paternityNonSkyrimNetRevealChance", val)
                   }
                 )
@@ -32048,16 +34147,16 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Presumed Father Breakup / Divorce Chance",
-                description: "When paternity secret is revealed, probability that the presumed father breaks up or divorces the mother upon discovering he is not the biological father.",
+                label: t2("settings.fertility.breakupChanceLabel"),
+                description: t2("settings.fertility.breakupChanceDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
-                    value: settings.paternityBreakupChance ?? 50,
+                    value: settings2.paternityBreakupChance ?? 50,
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => updateSetting("paternityBreakupChance", val)
                   }
                 )
@@ -32066,16 +34165,16 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SettingRow,
               {
-                label: "Biological Father Step-In Chance",
-                description: "If breakup/divorce occurs and the biological father is available to marry, probability that he steps in, marries the mother, and becomes the child's recognized parent.",
+                label: t2("settings.fertility.bioStepInChanceLabel"),
+                description: t2("settings.fertility.bioStepInChanceDesc"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   SliderInput,
                   {
-                    value: settings.paternityBioStepUpChance ?? 30,
+                    value: settings2.paternityBioStepUpChance ?? 30,
                     min: 0,
                     max: 100,
                     step: 1,
-                    unit: "%",
+                    unit: unitPercent,
                     onChange: (val) => updateSetting("paternityBioStepUpChance", val)
                   }
                 )
@@ -32087,25 +34186,27 @@ Defaulting to \`null\`.`;
     ] });
   };
   const AIDialogueSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
     const genderOptions = [
-      { value: 0, label: "Opposite Gender Only" },
-      { value: 1, label: "Same Gender Only" },
-      { value: 2, label: "All Genders" }
+      { value: 0, label: t2("settings.aiDialogue.genderOpposite") },
+      { value: 1, label: t2("settings.aiDialogue.genderSame") },
+      { value: 2, label: t2("settings.aiDialogue.genderAll") }
     ];
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[1rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "AI Dialogue & Interactions", icon: Bot, children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[1rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.aiDialogue.title"), icon: Bot, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         SettingRow,
         {
-          label: "Allowed Dialogue Target Gender",
-          description: "Filter which NPCs can initiate dynamic romance dialogues.",
+          label: t2("settings.aiDialogue.targetGenderLabel"),
+          description: t2("settings.aiDialogue.targetGenderDesc"),
           children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             SelectInput,
             {
-              value: settings.startDialGender,
+              value: settings2.startDialGender,
               options: genderOptions,
-              onChange: (val) => updateSetting("startDialGender", parseInt(val))
+              onChange: (val) => updateSetting("startDialGender", parseInt(val)),
+              className: "min-w-[12rem] w-auto"
             }
           )
         }
@@ -32113,12 +34214,14 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         SettingRow,
         {
-          label: "Minimum Relationship Rank for Dialogue",
-          description: `Required RelationshipRank integer (-4 to 4) for dialogue initiation (${settings.minRelRankForDial}).`,
+          label: t2("settings.aiDialogue.minRelRankLabel"),
+          description: t2("settings.aiDialogue.minRelRankDesc", {
+            rank: settings2.minRelRankForDial
+          }),
           children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             SliderInput,
             {
-              value: settings.minRelRankForDial,
+              value: settings2.minRelRankForDial,
               min: -4,
               max: 4,
               step: 1,
@@ -32130,15 +34233,16 @@ Defaulting to \`null\`.`;
     ] }) });
   };
   const SkyrimNetSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
-    const isGatedDisabled = !settings.hasSkyrimNet;
+    const isGatedDisabled = !settings2.hasSkyrimNet;
     const toggleSimSlot = /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-[0.375rem] text-xs text-foreground-secondary cursor-pointer", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Simulate Non-SkyrimNet:" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.skyrimNet.simulateToggleLabel") }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         ToggleSwitch,
         {
-          checked: Boolean(settings.simulateNoSkyrimNet),
+          checked: Boolean(settings2.simulateNoSkyrimNet),
           onChange: (val) => updateSetting("simulateNoSkyrimNet", val)
         }
       )
@@ -32147,59 +34251,67 @@ Defaulting to \`null\`.`;
       isGatedDisabled ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-status-warning-soft border border-status-warning rounded-md p-[0.875rem] text-xs text-foreground-primary flex items-start gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[1.25em] h-[1.25em] text-status-warning flex-shrink-0 mt-[0.125rem]" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-status-warning mb-[0.125rem]", children: settings.simulateNoSkyrimNet ? "SkyrimNet Disabled (Simulation Mode)" : "SkyrimNet.dll Not Detected" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: settings.simulateNoSkyrimNet ? "Non-SkyrimNet simulation is currently active. M.A.R.A.S features operate under standard non-AI rules (Dice Roll matchmaking, vanilla proposal dialog, 2-button modals). You can disable simulation in Cheats & Debug Settings." : "SkyrimNet is required for AI-generated dialogue, prompt actions, and response confirmation modals. Features in this section are automatically disabled per mod safety gating rules." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-status-warning mb-[0.125rem]", children: settings2.simulateNoSkyrimNet ? t2("settings.skyrimNet.disabledSimTitle") : t2("settings.skyrimNet.notDetectedTitle") }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: settings2.simulateNoSkyrimNet ? t2("settings.skyrimNet.disabledSimDesc") : t2("settings.skyrimNet.notDetectedDesc") })
         ] }),
-        settings.simulateNoSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        settings2.simulateNoSkyrimNet && /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
             type: "button",
             onClick: () => updateSetting("simulateNoSkyrimNet", false),
             className: "px-2 py-1 text-xs font-medium rounded border border-status-warning/40 text-status-warning hover:bg-status-warning/20 transition-all cursor-pointer whitespace-nowrap",
-            children: "Disable Simulation"
+            children: t2("settings.skyrimNet.disableSimBtn")
           }
         )
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-status-success-soft border border-status-success rounded-md p-[0.625rem] text-xs text-foreground-primary flex items-center gap-[0.375rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { className: "w-[1.125em] h-[1.125em] text-status-success" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "SkyrimNet DLL Active — Prompt extensions & event listeners registered." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.skyrimNet.activeBanner") })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "AI Relationship Action Detection", icon: Target, actionSlot: toggleSimSlot, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        SettingRow,
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SectionCard,
         {
-          label: "Action Distance Radius (units)",
-          description: "Maximum distance in game units (~70 units ≈ 1 meter) to scan for valid partner targets. If no eligible target actor is within this radius, proposal and consideration actions remain unavailable.",
-          disabled: isGatedDisabled,
+          title: t2("settings.skyrimNet.actionDetectionTitle"),
+          icon: Target,
+          actionSlot: toggleSimSlot,
           children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
+            SettingRow,
             {
-              type: "number",
-              min: 100,
-              max: 2e4,
-              step: 100,
-              value: settings.skyrimnetActionRadius ?? 3e3,
-              onChange: (e) => {
-                const val = parseFloat(e.target.value);
-                if (!isNaN(val) && val > 0) {
-                  updateSetting("skyrimnetActionRadius", val);
-                }
-              },
+              label: t2("settings.skyrimNet.actionRadiusLabel"),
+              description: t2("settings.skyrimNet.actionRadiusDesc"),
               disabled: isGatedDisabled,
-              className: "w-28 px-2 py-1 bg-surface-secondary border border-border-light rounded text-sm text-foreground-primary focus:outline-none focus:border-primary disabled:opacity-50 text-right"
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  type: "number",
+                  min: 100,
+                  max: 2e4,
+                  step: 100,
+                  value: settings2.skyrimnetActionRadius ?? 3e3,
+                  onChange: (e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val > 0) {
+                      updateSetting("skyrimnetActionRadius", val);
+                    }
+                  },
+                  disabled: isGatedDisabled,
+                  className: "w-28 px-2 py-1 bg-surface-secondary border border-border-light rounded text-sm text-foreground-primary focus:outline-none focus:border-primary disabled:opacity-50 text-right"
+                }
+              )
             }
           )
         }
-      ) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "AI Evaluation & Memory Engine", icon: Brain, children: [
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.skyrimNet.evalMemoryTitle"), icon: Brain, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Use SkyrimNet Decisions (Jev)",
-            description: "When enabled, matchmaking verification, player-partner agency, paternity secret reveals, and bio-father step-in evaluations use SkyrimNet's typed Jev Decisions API (single-pass probability scoring with no broken JSON errors). Automatically falls back to the legacy Chat LLM prompt if no Decisions route is configured in SkyrimNet.",
+            label: t2("settings.skyrimNet.useDecisionsLabel"),
+            description: t2("settings.skyrimNet.useDecisionsDesc"),
             disabled: isGatedDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.skyrimnetUseDecisions ?? true,
+                checked: settings2.skyrimnetUseDecisions ?? true,
                 onChange: (val) => updateSetting("skyrimnetUseDecisions", val),
                 disabled: isGatedDisabled
               }
@@ -32209,13 +34321,13 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "LLM-Generated Memories",
-            description: "When enabled, relationship, infidelity, pregnancy, paternity, birth, and custody events are sent to SkyrimNet's memory LLM to generate narrative first-person memories. When disabled, memories are built programmatically without sending an LLM request.",
+            label: t2("settings.skyrimNet.llmMemoriesLabel"),
+            description: t2("settings.skyrimNet.llmMemoriesDesc"),
             disabled: isGatedDisabled,
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.skyrimnetUseLLMMemories ?? true,
+                checked: settings2.skyrimnetUseLLMMemories ?? true,
                 onChange: (val) => updateSetting("skyrimnetUseLLMMemories", val),
                 disabled: isGatedDisabled
               }
@@ -32226,7 +34338,8 @@ Defaulting to \`null\`.`;
     ] });
   };
   const CheatsSettings = () => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
     const dumpData = useMarasStore((s) => s.dumpData);
     const isDumpingData = useMarasStore((s) => s.isDumpingData);
@@ -32235,29 +34348,29 @@ Defaulting to \`null\`.`;
     const isDumpingNPCIndex = useMarasStore((s) => s.isDumpingNPCIndex);
     const lastNPCIndexDumpResult = useMarasStore((s) => s.lastNPCIndexDumpResult);
     const logLevelOptions = [
-      { value: 0, label: "Trace" },
-      { value: 1, label: "Debug" },
-      { value: 2, label: "Info" },
-      { value: 3, label: "Warning" },
-      { value: 4, label: "Error" },
-      { value: 5, label: "None" }
+      { value: 0, label: t2("settings.cheats.logLevelTrace") },
+      { value: 1, label: t2("settings.cheats.logLevelDebug") },
+      { value: 2, label: t2("settings.cheats.logLevelInfo") },
+      { value: 3, label: t2("settings.cheats.logLevelWarning") },
+      { value: 4, label: t2("settings.cheats.logLevelError") },
+      { value: 5, label: t2("settings.cheats.logLevelNone") }
     ];
     const logDestOptions = [
-      { value: 0, label: "Log File" },
-      { value: 1, label: "Console" },
-      { value: 2, label: "Floating Screen" }
+      { value: 0, label: t2("settings.cheats.logDestFile") },
+      { value: 1, label: t2("settings.cheats.logDestConsole") },
+      { value: 2, label: t2("settings.cheats.logDestScreen") }
     ];
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Cheats, Debug & Logging", icon: Wrench, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.cheats.debugTitle"), icon: Wrench, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Cheat: Always Success Marriage",
-            description: "Bypass marriage difficulty calculations and guarantee 100% proposal acceptance.",
+            label: t2("settings.cheats.alwaysSuccessLabel"),
+            description: t2("settings.cheats.alwaysSuccessDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.alwaysSuccess,
+                checked: settings2.alwaysSuccess,
                 onChange: (val) => updateSetting("alwaysSuccess", val)
               }
             )
@@ -32266,12 +34379,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Cheat: Add Debug Inspection Spell",
-            description: "Grant player the M.A.R.A.S Debug Spell to inspect NPC stats in-game.",
+            label: t2("settings.cheats.debugSpellLabel"),
+            description: t2("settings.cheats.debugSpellDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: settings.debugSpell,
+                checked: settings2.debugSpell,
                 onChange: (val) => updateSetting("debugSpell", val)
               }
             )
@@ -32280,12 +34393,12 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Debug: Simulate Non-SkyrimNet Environment",
-            description: "Force M.A.R.A.S to simulate SkyrimNet being absent. Disables AI dialogue events, prompts, and LLM matchmaking, enabling traditional non-AI fallbacks without disabling SkyrimNet.esp/dll.",
+            label: t2("settings.cheats.simulateNoSkyrimNetLabel"),
+            description: t2("settings.cheats.simulateNoSkyrimNetDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
-                checked: Boolean(settings.simulateNoSkyrimNet),
+                checked: Boolean(settings2.simulateNoSkyrimNet),
                 onChange: (val) => updateSetting("simulateNoSkyrimNet", val)
               }
             )
@@ -32294,14 +34407,15 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "SKSE Logging Verbosity Level",
-            description: "Configure spdlog output threshold for C++ plugin logs.",
+            label: t2("settings.cheats.logLevelLabel"),
+            description: t2("settings.cheats.logLevelDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SelectInput,
               {
-                value: settings.logLevel,
+                value: settings2.logLevel,
                 options: logLevelOptions,
-                onChange: (val) => updateSetting("logLevel", parseInt(val))
+                onChange: (val) => updateSetting("logLevel", parseInt(val)),
+                className: "min-w-[10rem] w-auto"
               }
             )
           }
@@ -32309,25 +34423,26 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Log Output Destination",
-            description: "Select where plugin log messages are written.",
+            label: t2("settings.cheats.logDestLabel"),
+            description: t2("settings.cheats.logDestDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               SelectInput,
               {
-                value: settings.logDestination,
+                value: settings2.logDestination,
                 options: logDestOptions,
-                onChange: (val) => updateSetting("logDestination", parseInt(val))
+                onChange: (val) => updateSetting("logDestination", parseInt(val)),
+                className: "min-w-[11rem] w-auto"
               }
             )
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: "Data Export & Diagnostics", icon: Database, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(SectionCard, { title: t2("settings.cheats.exportTitle"), icon: Database, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Dump All Stored Data to JSON",
-            description: "Export all MARAS relationship pairs, NPC profiles, affection values, child registry, household tenancy, spouse hierarchy, and settings into a timestamped JSON file (Data/SKSE/Plugins/MARAS/dumps/).",
+            label: t2("settings.cheats.dumpDataLabel"),
+            description: t2("settings.cheats.dumpDataDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -32337,10 +34452,10 @@ Defaulting to \`null\`.`;
                 className: "flex items-center gap-2 px-3 py-1.5 rounded-md bg-accent-gold/15 hover:bg-accent-gold/25 text-accent-gold font-medium text-xs border border-accent-gold/40 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95",
                 children: isDumpingData ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderCircle, { className: "w-3.5 h-3.5 animate-spin" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dumping Data..." })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.cheats.dumpingDataBtn") })
                 ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Download, { className: "w-3.5 h-3.5" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dump Data to JSON" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.cheats.dumpDataBtn") })
                 ] })
               }
             )
@@ -32354,23 +34469,29 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 font-semibold", children: [
                 lastDumpResult.success ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-4 h-4 text-status-married flex-shrink-0" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-status-married", children: "Data Dump Successful" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-status-married", children: t2("settings.cheats.dumpDataSuccess") })
                 ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-4 h-4 text-red-400 flex-shrink-0" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-400", children: "Data Dump Failed" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-400", children: t2("settings.cheats.dumpDataFailed") })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted ml-auto font-normal", children: lastDumpResult.timestamp })
               ] }),
               lastDumpResult.success ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 space-y-1 text-[0.6875rem] text-foreground-secondary", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Saved File: " }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted", children: [
+                    t2("settings.cheats.savedFilePrefix"),
+                    " "
+                  ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-accent-gold select-all font-medium", children: lastDumpResult.fileName || lastDumpResult.filePath })
                 ] }),
                 lastDumpResult.absolutePath && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "truncate", title: lastDumpResult.absolutePath, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Full Path: " }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted", children: [
+                    t2("settings.cheats.fullPathPrefix"),
+                    " "
+                  ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-foreground-muted select-all", children: lastDumpResult.absolutePath })
                 ] })
-              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-1 text-[0.6875rem] text-red-300", children: lastDumpResult.error || "An unknown error occurred while saving dump file." })
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-1 text-[0.6875rem] text-red-300", children: lastDumpResult.error || t2("settings.cheats.dumpDataUnknownError") })
             ]
           }
         ),
@@ -32378,8 +34499,8 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SettingRow,
           {
-            label: "Dump NPC Index Results",
-            description: "Export all indexed NPCs (Base & Ref FormIDs, Names, EditorIDs, Races, Sex, Child status, loaded state, and INI rules) currently cached in the M.A.R.A.S NPC Index to a timestamped file (Data/SKSE/Plugins/MARAS/dumps/).",
+            label: t2("settings.cheats.dumpNpcIndexLabel"),
+            description: t2("settings.cheats.dumpNpcIndexDesc"),
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -32389,10 +34510,10 @@ Defaulting to \`null\`.`;
                 className: "flex items-center gap-2 px-3 py-1.5 rounded-md bg-accent-gold/15 hover:bg-accent-gold/25 text-accent-gold font-medium text-xs border border-accent-gold/40 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95",
                 children: isDumpingNPCIndex ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderCircle, { className: "w-3.5 h-3.5 animate-spin" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dumping Index..." })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.cheats.dumpingNpcIndexBtn") })
                 ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { className: "w-3.5 h-3.5" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dump NPC Index" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("settings.cheats.dumpNpcIndexBtn") })
                 ] })
               }
             )
@@ -32406,27 +34527,36 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 font-semibold", children: [
                 lastNPCIndexDumpResult.success ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-4 h-4 text-status-married flex-shrink-0" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-status-married", children: "NPC Index Dump Successful" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-status-married", children: t2("settings.cheats.dumpNpcIndexSuccess") })
                 ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-4 h-4 text-red-400 flex-shrink-0" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-400", children: "NPC Index Dump Failed" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-400", children: t2("settings.cheats.dumpNpcIndexFailed") })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted ml-auto font-normal", children: lastNPCIndexDumpResult.timestamp })
               ] }),
               lastNPCIndexDumpResult.success ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 space-y-1 text-[0.6875rem] text-foreground-secondary", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Saved File: " }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted", children: [
+                    t2("settings.cheats.savedFilePrefix"),
+                    " "
+                  ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-accent-gold select-all font-medium", children: lastNPCIndexDumpResult.fileName || lastNPCIndexDumpResult.filePath })
                 ] }),
                 lastNPCIndexDumpResult.totalNPCs !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Total Indexed NPCs: " }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted", children: [
+                    t2("settings.cheats.totalIndexedNpcsPrefix"),
+                    " "
+                  ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-foreground-primary font-medium", children: lastNPCIndexDumpResult.totalNPCs.toLocaleString() })
                 ] }),
                 lastNPCIndexDumpResult.absolutePath && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "truncate", title: lastNPCIndexDumpResult.absolutePath, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Full Path: " }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted", children: [
+                    t2("settings.cheats.fullPathPrefix"),
+                    " "
+                  ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-foreground-muted select-all", children: lastNPCIndexDumpResult.absolutePath })
                 ] })
-              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-1 text-[0.6875rem] text-red-300", children: lastNPCIndexDumpResult.error || "An unknown error occurred while saving NPC index dump." })
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-1 text-[0.6875rem] text-red-300", children: lastNPCIndexDumpResult.error || t2("settings.cheats.dumpNpcIndexUnknownError") })
             ]
           }
         )
@@ -32540,8 +34670,8 @@ Defaulting to \`null\`.`;
     if (existing) return existing;
     return {
       formId: PLAYER_FORM_ID,
-      name: "Prisoner (Player)",
-      race: "Nord",
+      name: t("utils.player.defaultName"),
+      race: t("utils.player.defaultRace"),
       gender: "female",
       pluginName: "Skyrim.esm",
       socialClass: SocialClass.Rulers,
@@ -32553,6 +34683,7 @@ Defaulting to \`null\`.`;
   }
   const NpcDetailPartnerPanel = () => {
     var _a2;
+    const { t: t2, tp: tp2 } = useTranslation();
     const currentNpcId = useMarasStore((s) => s.npcDetailId);
     const partnerId = useMarasStore((s) => s.npcDetailPartnerId);
     const setPartnerId = useMarasStore((s) => s.setNpcDetailPartnerId);
@@ -32560,22 +34691,18 @@ Defaulting to \`null\`.`;
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const affectionData = useMarasStore((s) => s.affectionData);
-    const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks);
-    const playerHomes = useMarasStore((s) => s.playerHomes);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const children = useMarasStore((s) => s.children);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const updateAffection = useMarasStore((s) => s.updateAffection);
-    useMarasStore((s) => s.updateNPCProfile);
-    useMarasStore((s) => s.setHierarchyRank);
     const assignRelationshipStatus = useMarasStore((s) => s.assignRelationshipStatus);
     const removeRelationship = useMarasStore((s) => s.removeRelationship);
     const removeChild = useMarasStore((s) => s.removeChild);
     const isOpen = Boolean(partnerId);
     const isPlayerPartner = partnerId === PLAYER_FORM_ID;
     const availableStatusOptions = useAvailableStatuses(currentNpcId, partnerId);
-    const currentNpcName = currentNpcId ? currentNpcId === PLAYER_FORM_ID ? getPlayerProfileFallback(npcProfiles).name : ((_a2 = npcProfiles.get(currentNpcId)) == null ? void 0 : _a2.name) || `NPC ${currentNpcId}` : "NPC";
+    const currentNpcName = currentNpcId ? currentNpcId === PLAYER_FORM_ID ? getPlayerProfileFallback(npcProfiles).name : ((_a2 = npcProfiles.get(currentNpcId)) == null ? void 0 : _a2.name) || t2("store.fallbackNpcName", { formId: currentNpcId }) : t2("npcDetail.partnerPanel.fallbackNpc");
     const partnerProfile = partnerId ? isPlayerPartner ? getPlayerProfileFallback(npcProfiles) : npcProfiles.get(partnerId) : null;
     const foundRel = partnerId && currentNpcId ? relationships.find(
       (r2) => areSameFormId(r2.actorA, currentNpcId) && areSameFormId(r2.actorB, partnerId) || areSameFormId(r2.actorA, partnerId) && areSameFormId(r2.actorB, currentNpcId)
@@ -32598,24 +34725,15 @@ Defaulting to \`null\`.`;
       });
     }, [children, currentNpcId, partnerId]);
     const targetNpcId = isPlayerPartner ? currentNpcId !== PLAYER_FORM_ID ? currentNpcId : null : partnerId;
-    targetNpcId ? npcProfiles.get(targetNpcId) : null;
     const isTargetPlayer = !targetNpcId || targetNpcId === PLAYER_FORM_ID;
     const affectionObj = targetNpcId ? affectionData.get(targetNpcId) : void 0;
     const currentAffection = (affectionObj == null ? void 0 : affectionObj.permanent) ?? 0;
-    targetNpcId ? hierarchyRanks.indexOf(targetNpcId) : -1;
     const isMarriedToPlayer = !isTargetPlayer && (currentRel == null ? void 0 : currentRel.status) === RelationshipStatus.Married;
     const isEngagedToPlayer = !isTargetPlayer && (currentRel == null ? void 0 : currentRel.status) === RelationshipStatus.Engaged;
     const isLoverToPlayer = !isTargetPlayer && (currentRel == null ? void 0 : currentRel.status) === RelationshipStatus.Lover;
     const isDatingToPlayer = !isTargetPlayer && (currentRel == null ? void 0 : currentRel.status) === RelationshipStatus.Dating;
     const hasAffectionWithPlayer = !isTargetPlayer && (currentNpcId === PLAYER_FORM_ID || partnerId === PLAYER_FORM_ID) && (isMarriedToPlayer || isEngagedToPlayer || isLoverToPlayer || isDatingToPlayer);
-    [
-      { value: "Unset", label: "Unset (No assigned house)" },
-      ...playerHomes.map((h) => ({
-        value: h.name,
-        label: h.locationName ? `${h.name} (${h.locationName})` : h.name
-      }))
-    ];
-    const partnerCategorized = partnerId && partnerProfile ? categorizePartners(partnerId, relationships, cheatingRecords, settings.enablePolygamy) : null;
+    const partnerCategorized = partnerId && partnerProfile ? categorizePartners(partnerId, relationships, cheatingRecords, settings2.enablePolygamy) : null;
     const relevantCheatingRecords = reactExports.useMemo(() => {
       if (!currentNpcId || !partnerId) return [];
       const seen = /* @__PURE__ */ new Set();
@@ -32658,12 +34776,12 @@ Defaulting to \`null\`.`;
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Affair Partner" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.partnerPanel.affairPartner") })
                   ] })
                 ] })
               ] })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Close Partner Panel", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.partnerPanel.closeTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
                 onClick: () => setPartnerId(null),
@@ -32681,13 +34799,13 @@ Defaulting to \`null\`.`;
               },
               className: "text-xs text-accent-bright hover:text-accent flex items-center gap-[0.25rem] font-medium cursor-pointer transition-colors",
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Open Full NPC Page" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.partnerPanel.openFullPage") }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.875em] h-[0.875em]" })
               ]
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "flex-1 p-[0.875rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[1rem] pr-[0.375rem]", children: [
-            currentRel && currentNpcId && partnerId && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Relationship Status", icon: Heart, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.5rem]", children: [
+            currentRel && currentNpcId && partnerId && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.partnerPanel.relationshipStatusTitle"), icon: Heart, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.5rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SelectInput,
                 {
@@ -32699,7 +34817,7 @@ Defaulting to \`null\`.`;
               ),
               (Boolean(
                 foundRel && foundRel.status !== RelationshipStatus.Candidate && foundRel.status !== RelationshipStatus.Unknown
-              ) || isUnofficialAffair) && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              ) || isUnofficialAffair) && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.partnerPanel.removeRelationshipTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
                   onClick: () => confirmRemoveRelationship(
@@ -32710,45 +34828,52 @@ Defaulting to \`null\`.`;
                   className: "w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer",
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Relationship Record" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.partnerPanel.removeRelationshipBtn") })
                   ]
                 }
               ) })
             ] }) }),
-            hasAffectionWithPlayer && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Affection Rating", icon: Heart, subtitle: `${currentAffection}%`, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem] pt-[0.25rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                SliderInput,
-                {
-                  value: currentAffection,
-                  min: 0,
-                  max: 100,
-                  unit: "%",
-                  onChange: (val) => targetNpcId && updateAffection(targetNpcId, val),
-                  className: "w-full"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.6875rem] text-foreground-muted", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                  "Decay Mult: ",
-                  (affectionObj == null ? void 0 : affectionObj.decayMultiplier) ?? 1,
-                  "x"
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                  "Last Seen:",
-                  " ",
-                  (affectionObj == null ? void 0 : affectionObj.daysSinceLastInteraction) != null ? Math.round(affectionObj.daysSinceLastInteraction) === 0 ? "Today" : `${Math.round(affectionObj.daysSinceLastInteraction)} days ago` : "Unknown"
+            hasAffectionWithPlayer && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SectionCard,
+              {
+                title: t2("npcDetail.affection.title"),
+                icon: Heart,
+                subtitle: `${currentAffection}%`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem] pt-[0.25rem]", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    SliderInput,
+                    {
+                      value: currentAffection,
+                      min: 0,
+                      max: 100,
+                      unit: "%",
+                      onChange: (val) => targetNpcId && updateAffection(targetNpcId, val),
+                      className: "w-full"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.6875rem] text-foreground-muted", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.affection.decayMult", {
+                      mult: (affectionObj == null ? void 0 : affectionObj.decayMultiplier) ?? 1
+                    }) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.partnerPanel.lastSeen", {
+                      time: (affectionObj == null ? void 0 : affectionObj.daysSinceLastInteraction) != null ? Math.round(affectionObj.daysSinceLastInteraction) === 0 ? t2("utils.date.today") : tp2(
+                        "utils.date.daysAgo",
+                        Math.round(affectionObj.daysSinceLastInteraction)
+                      ) : t2("utils.date.unknown")
+                    }) })
+                  ] })
                 ] })
-              ] })
-            ] }) }),
-            currentRel && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Relationship Policy", icon: Shield, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs pt-[0.25rem] space-y-[0.5rem]", children: [
+              }
+            ),
+            currentRel && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.partnerPanel.relationshipPolicyTitle"), icon: Shield, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs pt-[0.25rem] space-y-[0.5rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-medium", children: "Pair Open Status:" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted font-medium", children: t2("npcDetail.partnerPanel.pairOpenStatus") }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
                     onClick: () => useMarasStore.getState().setPairIsOpen(currentRel.actorA, currentRel.actorB, !currentRel.isOpen),
                     className: `px-[0.5rem] py-[0.25rem] rounded text-[0.6875rem] font-semibold border transition-all ${currentRel.isOpen ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30" : "bg-panel-raised text-foreground-muted border-border-divider hover:bg-interactive-hover"}`,
-                    children: currentRel.isOpen ? "Open Relationship" : "Closed (Monogamous)"
+                    children: currentRel.isOpen ? t2("npcDetail.partnerPanel.openRelationship") : t2("npcDetail.partnerPanel.closedMonogamous")
                   }
                 )
               ] }),
@@ -32756,42 +34881,38 @@ Defaulting to \`null\`.`;
                 const records = relevantCheatingRecords;
                 if (records.length === 0) return null;
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.375rem] border-t border-border-divider space-y-[0.25rem]", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-destructive font-semibold block text-[0.6875rem]", children: "Cheating / Affair Records:" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-destructive font-semibold block text-[0.6875rem]", children: t2("npcDetail.partnerPanel.cheatingRecordsHeader") }),
                   records.map((cr, idx) => {
                     var _a3, _b, _c, _d;
-                    const cheaterName = cr.cheaterId === PLAYER_FORM_ID ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(cr.cheaterId)) == null ? void 0 : _b.name) || `NPC ${cr.cheaterId}`;
+                    const cheaterName = cr.cheaterId === PLAYER_FORM_ID ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || t2("utils.player.defaultName") : ((_b = npcProfiles.get(cr.cheaterId)) == null ? void 0 : _b.name) || t2("store.fallbackNpcName", { formId: cr.cheaterId });
                     const affairPartner = npcProfiles.get(cr.affairPartnerId);
-                    const affairPartnerName = cr.affairPartnerId === PLAYER_FORM_ID ? ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.name) || "Prisoner (Player)" : (affairPartner == null ? void 0 : affairPartner.name) || `NPC ${cr.affairPartnerId}`;
+                    const affairPartnerName = cr.affairPartnerId === PLAYER_FORM_ID ? ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.name) || t2("utils.player.defaultName") : (affairPartner == null ? void 0 : affairPartner.name) || t2("store.fallbackNpcName", { formId: cr.affairPartnerId });
                     const victimProfile = npcProfiles.get(cr.victimId);
-                    const victimName = cr.victimId === PLAYER_FORM_ID ? ((_d = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _d.name) || "Prisoner (Player)" : (victimProfile == null ? void 0 : victimProfile.name) || `NPC ${cr.victimId}`;
-                    const typeLabel = cr.affairType === AffairType.Lover ? "Lover" : cr.affairType === AffairType.Dating ? "Dating" : "Casual";
-                    const statusLabel = cr.affairStatus === AffairStatus.Ongoing ? "Ongoing" : cr.affairStatus === AffairStatus.EndedBreakup ? "Ended (Breakup)" : cr.affairStatus === AffairStatus.EndedVictimSplit ? "Ended (Divorce/Split)" : cr.affairStatus === AffairStatus.Allowed ? "Allowed (Open)" : cr.affairStatus === AffairStatus.EndedConfronted ? "Ended (Confronted)" : "Ongoing";
+                    const victimName = cr.victimId === PLAYER_FORM_ID ? ((_d = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _d.name) || t2("utils.player.defaultName") : (victimProfile == null ? void 0 : victimProfile.name) || t2("store.fallbackNpcName", { formId: cr.victimId });
+                    const typeLabel = cr.affairType === AffairType.Lover ? t2("npcDetail.partnerPanel.affairTypeLover") : cr.affairType === AffairType.Dating ? t2("npcDetail.partnerPanel.affairTypeDating") : t2("npcDetail.partnerPanel.affairTypeCasual");
+                    const statusLabel = cr.affairStatus === AffairStatus.Ongoing ? t2("npcDetail.partnerPanel.affairStatusOngoing") : cr.affairStatus === AffairStatus.EndedBreakup ? t2("npcDetail.partnerPanel.affairStatusEndedBreakup") : cr.affairStatus === AffairStatus.EndedVictimSplit ? t2("npcDetail.partnerPanel.affairStatusEndedVictimSplit") : cr.affairStatus === AffairStatus.Allowed ? t2("npcDetail.partnerPanel.affairStatusAllowed") : cr.affairStatus === AffairStatus.EndedConfronted ? t2("npcDetail.partnerPanel.affairStatusEndedConfronted") : t2("npcDetail.partnerPanel.affairStatusOngoing");
                     const isOngoing = cr.affairStatus === void 0 || cr.affairStatus === AffairStatus.Ongoing;
                     const isTalkingStage = cr.victimId === PLAYER_FORM_ID && cr.affairStage === AffairStage.Talking;
-                    const stageLabel = isTalkingStage ? "Talking Stage" : "Physical Affair";
+                    const stageLabel = isTalkingStage ? t2("npcDetail.partnerPanel.stageTalking") : t2("npcDetail.partnerPanel.stagePhysical");
                     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-destructive/10 text-destructive text-[0.6875rem] p-[0.375rem] rounded border border-destructive/20 flex justify-between items-center gap-[0.5rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.125rem]", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                          cheaterName,
-                          "'s affair with ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary", children: affairPartnerName }),
-                          ": ",
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tp2(
+                          "npcDetail.partnerPanel.affairIncidentSummary",
                           cr.count,
-                          " incident(s) (Day ",
-                          cr.lastTimestamp,
-                          ")"
-                        ] }) }),
-                        cr.victimId && cr.victimId !== currentNpcId && cr.victimId !== partnerId && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.625rem] text-foreground-muted", children: [
-                          "Cheating on: ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-secondary font-medium", children: victimName })
-                        ] }),
+                          {
+                            cheater: cheaterName,
+                            partner: affairPartnerName,
+                            day: cr.lastTimestamp
+                          }
+                        ) }) }),
+                        cr.victimId && cr.victimId !== currentNpcId && cr.victimId !== partnerId && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.625rem] text-foreground-muted", children: t2("npcDetail.partnerPanel.cheatingOn", { victim: victimName }) }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[0.5625rem] font-medium", children: typeLabel }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-medium border ${isTalkingStage ? "bg-sky-500/20 text-sky-300 border-sky-500/30" : "bg-pink-500/20 text-pink-300 border-pink-500/30"}`, children: stageLabel }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-medium border ${isOngoing ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-zinc-500/20 text-zinc-300 border-zinc-500/30"}`, children: statusLabel })
                         ] })
                       ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold flex-shrink-0 ${cr.isSecret ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"}`, children: cr.isSecret ? "Secret" : "Public" })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-bold flex-shrink-0 ${cr.isSecret ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"}`, children: cr.isSecret ? t2("npcDetail.partnerPanel.visibilitySecret") : t2("npcDetail.partnerPanel.visibilityPublic") })
                     ] }, idx);
                   })
                 ] });
@@ -32800,12 +34921,14 @@ Defaulting to \`null\`.`;
             currentRel && /* @__PURE__ */ jsxRuntimeExports.jsx(
               SectionCard,
               {
-                title: `Children & Offspring (${sharedChildren.length})`,
+                title: t2("npcDetail.partnerPanel.childrenSectionTitle", {
+                  count: sharedChildren.length
+                }),
                 icon: Baby,
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs pt-[0.25rem] space-y-[0.5rem]", children: sharedChildren.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.375rem]", children: sharedChildren.map((child, idx) => {
                   const childProfile = npcProfiles.get(child.childId);
                   const isPlaceholderName = !(childProfile == null ? void 0 : childProfile.name) || childProfile.name.startsWith("NPC_");
-                  const childName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (childProfile == null ? void 0 : childProfile.name) || child.name || `Child ${child.childId}`;
+                  const childName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (childProfile == null ? void 0 : childProfile.name) || child.name || t2("store.fallbackChildName", { childId: child.childId });
                   const { statusLabel, badgeLabel, badgeStyle } = getChildRelationshipStatus(
                     child,
                     currentNpcId,
@@ -32838,7 +34961,7 @@ Defaulting to \`null\`.`;
                               children: badgeLabel
                             }
                           ),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Child Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.removeChild"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "button",
                             {
                               onClick: (e) => {
@@ -32858,17 +34981,17 @@ Defaulting to \`null\`.`;
                     },
                     idx
                   );
-                }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted italic", children: "No children recorded for this relationship pair." }) })
+                }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted italic", children: t2("npcDetail.partnerPanel.noChildrenRecorded") }) })
               }
             ),
-            partnerCategorized && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Other Relationships", icon: Users, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.375rem] text-xs pt-[0.25rem]", children: [
+            partnerCategorized && /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.partnerPanel.otherRelationshipsTitle"), icon: Users, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.375rem] text-xs pt-[0.25rem]", children: [
               ...partnerCategorized.primary,
               ...partnerCategorized.openRelationship,
               ...partnerCategorized.cheating
             ].filter((r2) => r2.actorA !== currentNpcId && r2.actorB !== currentNpcId).map((r2, i) => {
               var _a3, _b;
               const otherId = r2.actorA === partnerId ? r2.actorB : r2.actorA;
-              const otherName = otherId === PLAYER_FORM_ID ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(otherId)) == null ? void 0 : _b.name) || `NPC ${otherId}`;
+              const otherName = otherId === PLAYER_FORM_ID ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || t2("utils.player.defaultName") : ((_b = npcProfiles.get(otherId)) == null ? void 0 : _b.name) || t2("store.fallbackNpcName", { formId: otherId });
               return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
@@ -32888,6 +35011,7 @@ Defaulting to \`null\`.`;
   };
   const MatchmakingModal = () => {
     var _a2, _b;
+    const { t: t2 } = useTranslation();
     const isOpen = useMarasStore((s) => s.matchmakingModalOpen);
     const setOpen = useMarasStore((s) => s.setMatchmakingModalOpen);
     const targetNpcId = useMarasStore((s) => s.matchmakingTargetNpcId);
@@ -32895,7 +35019,7 @@ Defaulting to \`null\`.`;
     const allSkyrimNpcs = useMarasStore((s) => s.allSkyrimNpcs);
     const isLoadingAllNpcs = useMarasStore((s) => s.isLoadingAllNpcs);
     const fetchAllSkyrimNpcs = useMarasStore((s) => s.fetchAllSkyrimNpcs);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const assignRelationshipStatus = useMarasStore((s) => s.assignRelationshipStatus);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const aiSuggestions = useMarasStore((s) => s.aiSuggestions);
@@ -32938,12 +35062,29 @@ Defaulting to \`null\`.`;
       }
     }, [isOpen, selectedPartnerId, manualStatusOptions, selectedStatus]);
     if (!isOpen || !targetNpcId) return null;
-    const isSkyrimNetEnabled = Boolean(settings.hasSkyrimNet);
+    const isSkyrimNetEnabled = Boolean(settings2.hasSkyrimNet);
     const playerProfile = npcProfiles.get(PLAYER_FORM_ID);
-    const playerName = (playerProfile == null ? void 0 : playerProfile.name) || "Prisoner (Player)";
-    const playerRace = (playerProfile == null ? void 0 : playerProfile.race) || "Nord";
+    const playerName = (playerProfile == null ? void 0 : playerProfile.name) || t2("utils.player.defaultName");
+    const playerRace = (playerProfile == null ? void 0 : playerProfile.race) || t2("store.fallbackRace");
     const playerGender = (playerProfile == null ? void 0 : playerProfile.gender) || "female";
     const targetName = targetNpcId === PLAYER_FORM_ID ? playerName : ((_a2 = npcProfiles.get(targetNpcId)) == null ? void 0 : _a2.name) || targetNpcId;
+    const formatActionBadge = (action) => {
+      if (!action) return "";
+      switch (action) {
+        case "new":
+          return t2("npcDetail.matchmakingModal.actionNew");
+        case "advance":
+          return t2("npcDetail.matchmakingModal.actionAdvance");
+        case "breakup":
+          return t2("npcDetail.matchmakingModal.actionBreakup");
+        case "open":
+          return t2("npcDetail.matchmakingModal.actionOpen");
+        case "close":
+          return t2("npcDetail.matchmakingModal.actionClose");
+        default:
+          return action;
+      }
+    };
     const candidateNpcs = [
       ...targetNpcId !== PLAYER_FORM_ID ? [{ formId: PLAYER_FORM_ID, name: playerName, race: playerRace, gender: playerGender, pluginName: "Skyrim.esm" }] : [],
       ...allSkyrimNpcs.filter((n2) => n2.formId !== targetNpcId && !n2.isChild)
@@ -32975,10 +35116,7 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(HeartHandshake, { className: "w-[1.25em] h-[1.25em] text-accent" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-base font-bold text-accent-bright", children: [
-              "Matchmaking for ",
-              targetName
-            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-bold text-accent-bright", children: t2("npcDetail.matchmakingModal.title", { name: targetName }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted font-mono", children: targetNpcId })
           ] })
         ] }),
@@ -32999,7 +35137,7 @@ Defaulting to \`null\`.`;
             className: `px-[1rem] py-[0.5rem] text-xs font-semibold border-b-2 flex items-center gap-[0.375rem] transition-colors cursor-pointer ${activeTab === "manual" ? "border-accent text-accent-bright bg-accent-soft/50" : "border-transparent text-foreground-muted hover:text-foreground-primary"}`,
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "w-[1em] h-[1em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Manual Search" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.tabManual") })
             ]
           }
         ),
@@ -33010,7 +35148,7 @@ Defaulting to \`null\`.`;
             className: `px-[1rem] py-[0.5rem] text-xs font-semibold border-b-2 flex items-center gap-[0.375rem] transition-colors cursor-pointer ${activeTab === "ai" ? "border-accent text-accent-bright bg-accent-soft/50" : "border-transparent text-foreground-muted hover:text-foreground-primary"}`,
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[1em] h-[1em] text-accent" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "AI Suggest (SkyrimNet)" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.tabAi") })
             ]
           }
         )
@@ -33018,21 +35156,19 @@ Defaulting to \`null\`.`;
       activeTab === "manual" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col min-h-0 p-[1rem] gap-[0.75rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.25rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-xs text-foreground-secondary", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-              "Find Partner (",
-              displayNpcs.length,
-              " available):"
-            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.findPartnerCount", {
+              count: displayNpcs.length
+            }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "button",
               {
                 onClick: () => fetchAllSkyrimNpcs(),
                 disabled: isLoadingAllNpcs,
-                title: "Refresh Skyrim NPCs",
+                title: t2("npcDetail.matchmakingModal.refreshTooltip"),
                 className: "flex items-center gap-[0.25rem] text-[0.6875rem] text-foreground-muted hover:text-accent p-[0.125rem] rounded transition-colors cursor-pointer",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: `w-[1em] h-[1em] ${isLoadingAllNpcs ? "animate-spin text-accent" : ""}` }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Refresh" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.refresh") })
                 ]
               }
             )
@@ -33041,7 +35177,7 @@ Defaulting to \`null\`.`;
             SearchInput,
             {
               value: search,
-              placeholder: "Search candidate partner...",
+              placeholder: t2("npcDetail.matchmakingModal.searchPlaceholder"),
               onChange: setSearch
             }
           )
@@ -33053,7 +35189,7 @@ Defaulting to \`null\`.`;
             estimateSize: 44,
             overscan: 6,
             className: "flex-1 min-h-0 border border-border-subtle rounded-md p-[0.375rem] bg-panel-inset overflow-y-auto",
-            emptyMessage: "No matching characters found.",
+            emptyMessage: t2("npcDetail.matchmakingModal.emptyMessage"),
             renderItem: (npc) => {
               const isSelected = selectedPartnerId === npc.formId;
               return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -33070,7 +35206,14 @@ Defaulting to \`null\`.`;
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono", children: npc.formId }),
                           npc.pluginName && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "span",
+                              {
+                                className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle",
+                                title: t2("npcDetail.shell.pluginTitle", { plugin: npc.pluginName }),
+                                children: npc.pluginName
+                              }
+                            )
                           ] })
                         ] })
                       ] })
@@ -33084,7 +35227,7 @@ Defaulting to \`null\`.`;
         ),
         selectedPartnerId && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-panel-raised rounded-md border border-border-accent space-y-[0.5rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary", children: "Assign Relationship Status:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary", children: t2("npcDetail.matchmakingModal.assignStatusLabel") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-accent font-mono", children: ((_b = candidateNpcs.find((n2) => n2.formId === selectedPartnerId)) == null ? void 0 : _b.name) || selectedPartnerId })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
@@ -33106,7 +35249,7 @@ Defaulting to \`null\`.`;
                 className: `px-[1rem] py-[0.375rem] font-semibold text-xs rounded transition-colors flex items-center gap-[0.25rem] ${canConfirmManual ? "bg-accent text-panel hover:bg-accent-bright cursor-pointer" : "bg-panel-inset text-foreground-disabled border border-border-subtle cursor-not-allowed opacity-50"}`,
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { className: "w-[1em] h-[1em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Confirm Match" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.confirmMatch") })
                 ]
               }
             )
@@ -33116,19 +35259,19 @@ Defaulting to \`null\`.`;
       activeTab === "ai" && isSkyrimNetEnabled && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col min-h-0 p-[1rem] gap-[0.75rem]", children: [
         isGeneratingAi ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center justify-center p-[2rem] text-center text-foreground-muted gap-[0.5rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[2em] h-[2em] text-accent animate-pulse" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs", children: "Querying SkyrimNet AI for partner recommendations..." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs", children: t2("npcDetail.matchmakingModal.queryingAi") }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               type: "button",
               onClick: () => useMarasStore.setState({ isGeneratingAiSuggestions: false }),
               className: "mt-[0.5rem] px-[0.625rem] py-[0.25rem] rounded text-xs text-foreground-muted hover:text-foreground-primary bg-panel-inset hover:bg-interactive-hover border border-border-subtle cursor-pointer transition-colors",
-              children: "Cancel"
+              children: t2("npcDetail.matchmakingModal.cancel")
             }
           )
         ] }) : aiSuggestions.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center justify-center p-[2rem] text-center text-foreground-muted gap-[0.75rem] bg-panel-inset border border-border-subtle rounded-md", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[2em] h-[2em] text-accent/50" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs", children: "No suggestions generated yet. Click below to query SkyrimNet AI." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs", children: t2("npcDetail.matchmakingModal.noSuggestionsYet") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
@@ -33137,13 +35280,13 @@ Defaulting to \`null\`.`;
               className: "px-[0.875rem] py-[0.375rem] bg-accent hover:bg-accent-bright text-panel font-semibold text-xs rounded transition-colors cursor-pointer flex items-center gap-[0.375rem]",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em]" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Generate AI Suggestions" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.generateAiSuggestions") })
               ]
             }
           )
         ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-xs text-foreground-secondary bg-panel-inset p-[0.5rem] rounded border border-border-subtle", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "SkyrimNet AI context recommendations:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.aiRecommendationsHeader") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "button",
               {
@@ -33152,7 +35295,7 @@ Defaulting to \`null\`.`;
                 className: "px-[0.5rem] py-[0.25rem] bg-accent-soft text-accent-bright hover:bg-accent/20 rounded border border-border-accent flex items-center gap-[0.25rem] transition-colors cursor-pointer text-xs",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGeneratingAi ? "Generating..." : "Regenerate" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isGeneratingAi ? t2("npcDetail.matchmakingModal.generating") : t2("npcDetail.matchmakingModal.regenerate") })
                 ]
               }
             )
@@ -33179,7 +35322,7 @@ Defaulting to \`null\`.`;
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs font-semibold text-foreground-primary flex items-center gap-[0.375rem]", children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: name }),
-                          s.action && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-accent-soft text-accent-bright border border-border-accent", children: s.action })
+                          s.action && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-accent-soft text-accent-bright border border-border-accent", children: formatActionBadge(s.action) })
                         ] }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted font-mono", children: s.formId })
                       ] })
@@ -33190,8 +35333,22 @@ Defaulting to \`null\`.`;
                       const loverOpt = suggestionOptions.find((o) => o.status === RelationshipStatus.Lover);
                       const isCheating = (loverOpt == null ? void 0 : loverOpt.loverType) === "cheating";
                       return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem]", children: [
-                        (((_a3 = s.targetStatus) == null ? void 0 : _a3.toLowerCase()) === "lover" || s.suggestedStatus === RelationshipStatus.Lover) && (isCheating ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80", title: "Considered cheating: at least one partner is in a closed main relationship", children: "Cheating" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80", title: "Allowed secondary relationship: both parties are single or in open relationships", children: "Allowed" })),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[8.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        (((_a3 = s.targetStatus) == null ? void 0 : _a3.toLowerCase()) === "lover" || s.suggestedStatus === RelationshipStatus.Lover) && (isCheating ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            className: "px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80",
+                            title: t2("statusAvailability.loverCheatingTooltip"),
+                            children: t2("npcDetail.matchmakingModal.badgeCheating")
+                          }
+                        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            className: "px-[0.375rem] py-[0.0625rem] rounded text-[0.625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80",
+                            title: t2("statusAvailability.loverAllowedTooltip"),
+                            children: t2("npcDetail.matchmakingModal.badgeAllowed")
+                          }
+                        )),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-w-[9rem] w-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                           SelectInput,
                           {
                             value: s.suggestedStatus,
@@ -33205,12 +35362,12 @@ Defaulting to \`null\`.`;
                   ] }),
                   s.isGeneratingMemory ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem] text-[0.6875rem] text-accent-bright bg-accent-soft p-[0.5rem] rounded border border-border-accent animate-pulse", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Bot, { className: "w-[1.125em] h-[1.125em] animate-spin" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Generating dual-POV recollections via SkyrimNet AI..." })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.generatingMemories") })
                   ] }) : s.dualMemories && s.dualMemories.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.375rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.625rem] font-semibold text-accent-bright", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-[0.25rem]", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(BookOpen, { className: "w-[0.875em] h-[0.875em]" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dual-POV Recollections:" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.dualPovHeader") })
                       ] }),
                       /* @__PURE__ */ jsxRuntimeExports.jsxs(
                         "button",
@@ -33220,49 +35377,49 @@ Defaulting to \`null\`.`;
                           className: "text-foreground-secondary hover:text-accent-bright flex items-center gap-[0.25rem] cursor-pointer transition-colors",
                           children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.75em] h-[0.75em]" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Regenerate" })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.regenerate") })
                           ]
                         }
                       )
                     ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-[0.375rem]", children: s.dualMemories.map((mem, memIdx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "div",
-                      {
-                        className: "bg-panel-inset p-[0.5rem] rounded border border-border-subtle flex flex-col justify-between gap-[0.25rem] text-[0.6875rem]",
-                        children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-[0.125rem]", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-bold text-accent-bright flex items-center gap-[0.25rem]", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(User, { className: "w-[0.75em] h-[0.75em]" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                                  mem.actor || (memIdx === 0 ? "Target" : name),
-                                  "'s POV"
-                                ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-[0.375rem]", children: s.dualMemories.map((mem, memIdx) => {
+                      const povActor = mem.actor || (memIdx === 0 ? t2("npcDetail.matchmakingModal.defaultTargetActor") : name);
+                      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          className: "bg-panel-inset p-[0.5rem] rounded border border-border-subtle flex flex-col justify-between gap-[0.25rem] text-[0.6875rem]",
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-[0.125rem]", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-bold text-accent-bright flex items-center gap-[0.25rem]", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(User, { className: "w-[0.75em] h-[0.75em]" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.actorPov", {
+                                    actor: povActor
+                                  }) })
+                                ] }),
+                                mem.emotion && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.03125rem] rounded bg-accent-soft text-accent-bright font-mono uppercase text-[0.5625rem] border border-border-accent/40", children: mem.emotion })
                               ] }),
-                              mem.emotion && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.25rem] py-[0.03125rem] rounded bg-accent-soft text-accent-bright font-mono uppercase text-[0.5625rem] border border-border-accent/40", children: mem.emotion })
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "italic text-foreground-primary leading-relaxed", children: [
+                                '"',
+                                mem.content,
+                                '"'
+                              ] })
                             ] }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "italic text-foreground-primary leading-relaxed", children: [
-                              '"',
-                              mem.content,
-                              '"'
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.125rem] border-t border-border-divider/50 flex items-center justify-between text-[0.5625rem] text-foreground-muted", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate max-w-[8rem]", children: mem.location || t2("npcDetail.matchmakingModal.defaultLocation") }),
+                              mem.importance_score !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-accent", children: t2("npcDetail.matchmakingModal.memoryScore", {
+                                percent: (mem.importance_score * 100).toFixed(0)
+                              }) })
                             ] })
-                          ] }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.125rem] border-t border-border-divider/50 flex items-center justify-between text-[0.5625rem] text-foreground-muted", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate max-w-[8rem]", children: mem.location || "Skyrim" }),
-                            mem.importance_score !== void 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-accent", children: [
-                              "Score: ",
-                              (mem.importance_score * 100).toFixed(0),
-                              "%"
-                            ] })
-                          ] })
-                        ]
-                      },
-                      memIdx
-                    )) })
+                          ]
+                        },
+                        memIdx
+                      );
+                    }) })
                   ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.6875rem] bg-panel-inset p-[0.375rem] rounded border border-border-subtle", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-foreground-muted flex items-center gap-[0.25rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(BookOpen, { className: "w-[0.875em] h-[0.875em] text-foreground-secondary" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "No memories generated yet." })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.noMemoriesYet") })
                     ] }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs(
                       "button",
@@ -33272,7 +35429,7 @@ Defaulting to \`null\`.`;
                         className: "px-[0.5rem] py-[0.1875rem] bg-accent-soft hover:bg-accent/20 text-accent-bright border border-border-accent font-semibold rounded transition-colors cursor-pointer flex items-center gap-[0.25rem] text-[0.6875rem]",
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[0.75em] h-[0.75em]" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Generate Memories" })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.generateMemories") })
                         ]
                       }
                     )
@@ -33290,7 +35447,7 @@ Defaulting to \`null\`.`;
             className: "px-[1rem] py-[0.375rem] bg-accent text-panel font-semibold text-xs rounded hover:bg-accent-bright transition-colors cursor-pointer flex items-center gap-[0.25rem]",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { className: "w-[1em] h-[1em]" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Apply Selected Suggestions" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.matchmakingModal.applySelected") })
             ]
           }
         ) })
@@ -33301,24 +35458,25 @@ Defaulting to \`null\`.`;
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const npc = npcProfiles.get(npcId);
     if (!npc) return null;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Profile Characteristics", icon: Shield, className, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.25rem] space-y-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-[0.5rem] text-xs", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.characteristics.title"), icon: Shield, className, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.25rem] space-y-[0.5rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-[0.5rem] text-xs", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: "Social Class" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.characteristics.socialClass") }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SelectInput,
           {
-            value: npc.socialClass,
-            options: Object.keys(SocialClass).filter((k2) => isNaN(Number(k2))).map((key, idx) => ({
-              value: idx,
-              label: key,
+            value: String(npc.socialClass),
+            options: Object.values(SocialClass).filter((v2) => typeof v2 === "number").map((val) => ({
+              value: String(val),
+              label: getSocialClassLabel(val),
               icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SocialClassIcon,
                 {
-                  value: idx,
+                  value: val,
                   size: "md",
                   showTooltip: false
                 }
@@ -33330,18 +35488,18 @@ Defaulting to \`null\`.`;
         )
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: "Skill Type" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.characteristics.skillType") }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SelectInput,
           {
-            value: npc.skillType,
-            options: Object.keys(SkillType).filter((k2) => isNaN(Number(k2))).map((key, idx) => ({
-              value: idx,
-              label: key,
+            value: String(npc.skillType),
+            options: Object.values(SkillType).filter((v2) => typeof v2 === "number").map((val) => ({
+              value: String(val),
+              label: getSkillTypeLabel(val),
               icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 SkillTypeIcon,
                 {
-                  value: idx,
+                  value: val,
                   size: "md",
                   showTooltip: false
                 }
@@ -33353,18 +35511,18 @@ Defaulting to \`null\`.`;
         )
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: "Temperament" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.characteristics.temperament") }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           SelectInput,
           {
-            value: npc.temperament,
-            options: Object.keys(Temperament).filter((k2) => isNaN(Number(k2))).map((key, idx) => ({
-              value: idx,
-              label: key,
+            value: String(npc.temperament),
+            options: Object.values(Temperament).filter((v2) => typeof v2 === "number").map((val) => ({
+              value: String(val),
+              label: getTemperamentLabel(val),
               icon: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 TemperamentIcon,
                 {
-                  value: idx,
+                  value: val,
                   size: "md",
                   showTooltip: false
                 }
@@ -33381,11 +35539,12 @@ Defaulting to \`null\`.`;
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const npc = npcProfiles.get(npcId);
     const currentPackage = (npc == null ? void 0 : npc.currentPackage) || "MARAS_HomeSandboxPackage";
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "AI Process Package", icon: Cpu, className, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.25rem] space-y-[0.375rem] text-xs flex flex-col justify-between h-full", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: "Current Active AI Package" }),
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.aiPackage.title"), icon: Cpu, className, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.25rem] space-y-[0.375rem] text-xs flex flex-col justify-between h-full", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.aiPackage.currentActiveLabel") }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.5rem] bg-panel-inset border border-border-subtle rounded text-accent-bright font-mono text-[0.6875rem] flex items-center gap-[0.375rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Cpu, { className: "w-[1em] h-[1em] text-accent flex-shrink-0" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", title: currentPackage, children: currentPackage })
@@ -33396,14 +35555,16 @@ Defaulting to \`null\`.`;
     npcId,
     className = ""
   }) => {
+    const { t: t2, tp: tp2 } = useTranslation();
     const affectionData = useMarasStore((s) => s.affectionData);
     const updateAffection = useMarasStore((s) => s.updateAffection);
     const affectionObj = affectionData.get(npcId);
     const currentAffection = (affectionObj == null ? void 0 : affectionObj.permanent) ?? 0;
+    const lastInteractionText = (affectionObj == null ? void 0 : affectionObj.daysSinceLastInteraction) != null ? Math.round(affectionObj.daysSinceLastInteraction) === 0 ? t2("utils.date.today") : tp2("utils.date.daysAgo", Math.round(affectionObj.daysSinceLastInteraction)) : t2("utils.date.unknown");
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       SectionCard,
       {
-        title: "Affection Rating",
+        title: t2("npcDetail.affection.title"),
         icon: Heart,
         subtitle: `${Math.round(currentAffection)}%`,
         className,
@@ -33420,40 +35581,36 @@ Defaulting to \`null\`.`;
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-[0.6875rem] text-foreground-muted pt-[0.25rem]", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-              "Decay Mult: ",
-              Number(((affectionObj == null ? void 0 : affectionObj.decayMultiplier) ?? 1).toFixed(2)),
-              "x"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-              "Last Interaction:",
-              " ",
-              (affectionObj == null ? void 0 : affectionObj.daysSinceLastInteraction) != null ? Math.round(affectionObj.daysSinceLastInteraction) === 0 ? "Today" : `${Math.round(affectionObj.daysSinceLastInteraction)} days ago` : "Unknown"
-            ] })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.affection.decayMult", {
+              mult: Number(((affectionObj == null ? void 0 : affectionObj.decayMultiplier) ?? 1).toFixed(2))
+            }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.affection.lastInteraction", { time: lastInteractionText }) })
           ] })
         ] })
       }
     );
   };
-  const rankOptions = [
-    { value: "none", label: "Unranked (4th+)" },
-    { value: "0", label: "1st Rank Spouse" },
-    { value: "1", label: "2nd Rank Spouse" },
-    { value: "2", label: "3rd Rank Spouse" }
-  ];
   const SpouseHierarchySection = ({
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks);
     const setHierarchyRank = useMarasStore((s) => s.setHierarchyRank);
     const currentRank = hierarchyRanks.indexOf(npcId);
+    const rankOptions = [
+      { value: "none", label: t2("npcDetail.hierarchy.optionUnranked") },
+      { value: "0", label: t2("npcDetail.hierarchy.optionRank1") },
+      { value: "1", label: t2("npcDetail.hierarchy.optionRank2") },
+      { value: "2", label: t2("npcDetail.hierarchy.optionRank3") }
+    ];
+    const rankSubtitle = currentRank === 0 ? t2("npcDetail.hierarchy.rank1") : currentRank === 1 ? t2("npcDetail.hierarchy.rank2") : currentRank === 2 ? t2("npcDetail.hierarchy.rank3") : currentRank > 2 ? t2("npcDetail.hierarchy.rankN", { rank: currentRank + 1 }) : t2("npcDetail.hierarchy.unranked");
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       SectionCard,
       {
-        title: "Spouse Hierarchy Rank",
+        title: t2("npcDetail.hierarchy.title"),
         icon: Award,
-        subtitle: currentRank >= 0 ? `${currentRank + 1}st Rank` : "Unranked",
+        subtitle: rankSubtitle,
         className,
         children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem] pt-[0.25rem] flex flex-col justify-between h-full", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -33465,7 +35622,7 @@ Defaulting to \`null\`.`;
               className: "w-full"
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted pt-[0.25rem]", children: "Determines household priority & living arrangement order." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted pt-[0.25rem]", children: t2("npcDetail.hierarchy.description") })
         ] })
       }
     );
@@ -33474,6 +35631,7 @@ Defaulting to \`null\`.`;
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const playerHomes = useMarasStore((s) => s.playerHomes);
     const children = useMarasStore((s) => s.children);
@@ -33486,7 +35644,7 @@ Defaulting to \`null\`.`;
       return areSameFormId(c.guardianAId, PLAYER_FORM_ID) && areSameFormId(c.guardianBId, npcId) || areSameFormId(c.guardianBId, PLAYER_FORM_ID) && areSameFormId(c.guardianAId, npcId);
     });
     const availableHomes = [
-      ...hasChildrenWithPlayer ? [] : [{ value: "Unset", label: "Unset (No assigned house)" }],
+      ...hasChildrenWithPlayer ? [] : [{ value: "Unset", label: t2("npcDetail.spouseHousing.unsetNoHouse") }],
       ...playerHomes.map((h) => ({
         value: h.name,
         label: h.locationName ? `${h.name} (${h.locationName})` : h.name
@@ -33494,10 +35652,10 @@ Defaulting to \`null\`.`;
     ];
     const hasAssignedHome = Boolean((npc == null ? void 0 : npc.currentHome) && npc.currentHome !== "Unset");
     const hasOriginalHome = Boolean(npc == null ? void 0 : npc.originalHome);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Assigned Residence & Housing", icon: House, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.5rem] text-xs", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.spouseHousing.title"), icon: House, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.5rem] text-xs", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row items-stretch gap-[0.75rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0 space-y-[0.25rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block text-xs font-medium", children: "Assigned Player Home" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block text-xs font-medium", children: t2("npcDetail.spouseHousing.assignedPlayerHome") }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SelectInput,
             {
@@ -33517,13 +35675,13 @@ Defaulting to \`null\`.`;
               {
                 htmlFor: "stay-at-home-toggle",
                 className: "text-foreground-muted block text-xs font-medium cursor-pointer",
-                children: "Stay at Assigned Home"
+                children: t2("npcDetail.spouseHousing.stayAtAssignedHome")
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted hidden lg:inline truncate", children: (npc == null ? void 0 : npc.stayAtHome) !== false ? "Sandboxes at home" : "Original routine" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted hidden lg:inline truncate", children: (npc == null ? void 0 : npc.stayAtHome) !== false ? t2("npcDetail.spouseHousing.sandboxesAtHome") : t2("npcDetail.spouseHousing.originalRoutine") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-8 w-full items-center justify-between rounded-md border border-border-subtle bg-panel-inset px-3 py-1 text-xs", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-secondary truncate mr-2", children: (npc == null ? void 0 : npc.stayAtHome) !== false ? "Stay at home" : "Normal routine" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-secondary truncate mr-2", children: (npc == null ? void 0 : npc.stayAtHome) !== false ? t2("npcDetail.spouseHousing.stayAtHome") : t2("npcDetail.spouseHousing.normalRoutine") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               ToggleSwitch,
               {
@@ -33534,7 +35692,7 @@ Defaulting to \`null\`.`;
           ] })
         ] }),
         hasOriginalHome && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0 space-y-[0.25rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block text-xs font-medium", children: "Original Home" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-foreground-muted block text-xs font-medium", children: t2("npcDetail.spouseHousing.originalHome") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex h-8 w-full items-center justify-between rounded-md border border-border-subtle bg-panel-inset px-3 py-1 text-xs", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "span",
@@ -33550,20 +35708,21 @@ Defaulting to \`null\`.`;
                 disabled: hasChildrenWithPlayer,
                 onClick: () => !hasChildrenWithPlayer && updateNPCProfile(npcId, { currentHome: void 0 }),
                 className: `text-[0.625rem] font-semibold px-[0.375rem] py-[0.125rem] rounded border transition-colors flex-shrink-0 ml-2 ${hasChildrenWithPlayer ? "bg-muted/10 text-foreground-muted border-border-divider cursor-not-allowed opacity-60" : "bg-destructive/10 hover:bg-destructive/20 text-destructive border-destructive/20 cursor-pointer"}`,
-                title: hasChildrenWithPlayer ? "Cannot send spouse away while you have children together" : "Free from player's house (Return to original home)",
-                children: hasChildrenWithPlayer ? "Locked" : "Return"
+                title: hasChildrenWithPlayer ? t2("npcDetail.spouseHousing.cannotReturnWithChildrenTooltip") : t2("npcDetail.spouseHousing.returnToOriginalTooltip"),
+                children: hasChildrenWithPlayer ? t2("npcDetail.spouseHousing.locked") : t2("npcDetail.spouseHousing.returnBtn")
               }
             )
           ] })
         ] })
       ] }),
-      hasChildrenWithPlayer && (hasAssignedHome ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]", children: "* Cannot return spouse to original home while you have children together. Move them to a different player home instead." }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]", children: "* When child will grow and be spawned in game world you will have to select house for them, and their mother, your spouse, will move there." }))
+      hasChildrenWithPlayer && (hasAssignedHome ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]", children: t2("npcDetail.spouseHousing.cannotReturnWarning") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-500/90 italic pt-[0.125rem]", children: t2("npcDetail.spouseHousing.unassignedChildrenWarning") }))
     ] }) });
   };
   const HouseholdChildrenSection = ({
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const children = useMarasStore((s) => s.children);
@@ -33574,13 +35733,13 @@ Defaulting to \`null\`.`;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       SectionCard,
       {
-        title: `Household Children & Offspring (${allChildren.length})`,
+        title: t2("npcDetail.householdChildren.title", { count: allChildren.length }),
         icon: Baby,
         className,
         children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.25rem] space-y-[0.5rem] text-xs", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-[0.375rem] max-h-[22rem] overflow-y-auto pr-[0.25rem]", children: allChildren.map((child, idx) => {
           const childProfile = npcProfiles.get(child.childId);
           const isPlaceholderName = !(childProfile == null ? void 0 : childProfile.name) || childProfile.name.startsWith("NPC_");
-          const childName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (childProfile == null ? void 0 : childProfile.name) || child.name || `Child ${child.childId}`;
+          const childName = isPlaceholderName && child.name && !child.name.startsWith("NPC_") ? child.name : (childProfile == null ? void 0 : childProfile.name) || child.name || t2("store.fallbackChildName", { childId: child.childId });
           const { statusLabel, badgeLabel, badgeStyle } = getChildRelationshipStatus(
             child,
             npcId
@@ -33612,7 +35771,7 @@ Defaulting to \`null\`.`;
                       children: badgeLabel
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Child Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.removeChild"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
                       onClick: (e) => {
@@ -33645,11 +35804,12 @@ Defaulting to \`null\`.`;
     onSelectPartner
   }) => {
     var _a2, _b;
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const affectionData = useMarasStore((s) => s.affectionData);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const removeRelationship = useMarasStore((s) => s.removeRelationship);
-    const currentNpcName = currentNpcId === PLAYER_FORM_ID ? ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)" : ((_b = npcProfiles.get(currentNpcId)) == null ? void 0 : _b.name) || `NPC ${currentNpcId}`;
+    const currentNpcName = currentNpcId === PLAYER_FORM_ID ? ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("utils.player.defaultName") : ((_b = npcProfiles.get(currentNpcId)) == null ? void 0 : _b.name) || t2("store.fallbackNpcName", { formId: currentNpcId });
     const validRelationships = relationships.filter((r2) => {
       const partnerId = r2.actorA === currentNpcId ? r2.actorB : r2.actorA;
       return Boolean(partnerId && partnerId !== "" && partnerId !== "00000000" && partnerId !== currentNpcId);
@@ -33670,8 +35830,8 @@ Defaulting to \`null\`.`;
         const partnerId = r2.actorA === currentNpcId ? r2.actorB : r2.actorA;
         const isPlayer = partnerId === PLAYER_FORM_ID;
         const partnerProfile = isPlayer ? npcProfiles.get(PLAYER_FORM_ID) : npcProfiles.get(partnerId);
-        const partnerName = isPlayer ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || "Prisoner (Player)" : (partnerProfile == null ? void 0 : partnerProfile.name) || `NPC ${partnerId}`;
-        const partnerRace = isPlayer ? ((_b2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b2.race) || "Nord" : (partnerProfile == null ? void 0 : partnerProfile.race) || "Nord";
+        const partnerName = isPlayer ? ((_a3 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a3.name) || t2("utils.player.defaultName") : (partnerProfile == null ? void 0 : partnerProfile.name) || t2("store.fallbackNpcName", { formId: partnerId });
+        const partnerRace = isPlayer ? ((_b2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _b2.race) || t2("store.fallbackRace") : (partnerProfile == null ? void 0 : partnerProfile.race) || t2("store.fallbackRace");
         const partnerPlugin = isPlayer ? ((_c = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _c.pluginName) || "Skyrim.esm" : partnerProfile == null ? void 0 : partnerProfile.pluginName;
         const isPlayerInvolved = currentNpcId === PLAYER_FORM_ID || partnerId === PLAYER_FORM_ID;
         const targetNpcId = currentNpcId === PLAYER_FORM_ID ? partnerId : currentNpcId;
@@ -33700,7 +35860,14 @@ Defaulting to \`null\`.`;
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: partnerRace }),
                     partnerPlugin && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]", title: `Plugin: ${partnerPlugin}`, children: partnerPlugin })
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          className: "font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[6.5rem]",
+                          title: t2("npcDetail.shell.pluginTitle", { plugin: partnerPlugin }),
+                          children: partnerPlugin
+                        }
+                      )
                     ] })
                   ] })
                 ] })
@@ -33709,26 +35876,21 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-shrink-0 flex items-center gap-[0.375rem]", children: [
                 partnerCheatedOnMeRecords.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "Cheated (",
-                    partnerCheatedOnMeRecords.length,
-                    ")"
-                  ] })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.partnerGroup.cheatedCount", {
+                    count: partnerCheatedOnMeRecords.length
+                  }) })
                 ] }),
                 affairRecords.length > 0 && !isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isTalkingAffair ? "Affair (Talking)" : `Affair (${affairIncidents})` })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isTalkingAffair ? t2("npcDetail.partnerGroup.affairTalking") : t2("npcDetail.partnerGroup.affairCount", { count: affairIncidents }) })
                 ] }),
                 isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "Affair Partner",
-                    affairIncidents > 1 ? ` (${affairIncidents})` : ""
-                  ] })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: affairIncidents > 1 ? t2("npcDetail.partnerGroup.affairPartnerCount", { count: affairIncidents }) : t2("npcDetail.partnerGroup.affairPartner") })
                 ] }),
-                r2.isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold", children: "Open" }),
+                r2.isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold", children: t2("npcDetail.partnerGroup.openBadge") }),
                 !isUnofficialAffair && /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { status: r2.status }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Remove Relationship Record", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.partnerGroup.removeRelationshipTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
                     onClick: (e) => {
@@ -33755,20 +35917,21 @@ Defaulting to \`null\`.`;
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const setPartnerId = useMarasStore((s) => s.setNpcDetailPartnerId);
-    const categorized = categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy);
+    const categorized = categorizePartners(npcId, relationships, cheatingRecords, settings2.enablePolygamy);
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
     );
     if (!hasRelationships || !categorized) return null;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Tracked Relationships & Partners", icon: Users, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.75rem] pt-[0.25rem] max-h-[22rem] overflow-y-auto pr-[0.25rem]", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.trackedRelationships.title"), icon: Users, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.75rem] pt-[0.25rem] max-h-[22rem] overflow-y-auto pr-[0.25rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         NpcPartnerGroup,
         {
-          title: "Primary Partners (Spouse / Engaged / Dating)",
+          title: t2("npcDetail.trackedRelationships.groupPrimary"),
           icon: Heart,
           badgeColor: "text-accent",
           relationships: categorized.primary,
@@ -33779,7 +35942,7 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         NpcPartnerGroup,
         {
-          title: "Open Relationship Partners",
+          title: t2("npcDetail.trackedRelationships.groupOpen"),
           icon: Shield,
           badgeColor: "text-status-success",
           relationships: categorized.openRelationship,
@@ -33790,7 +35953,7 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         NpcPartnerGroup,
         {
-          title: "Lovers",
+          title: t2("npcDetail.trackedRelationships.groupLovers"),
           icon: Flame,
           badgeColor: "text-pink-400",
           relationships: categorized.lovers,
@@ -33801,7 +35964,7 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         NpcPartnerGroup,
         {
-          title: "Cheating / Affairs",
+          title: t2("npcDetail.trackedRelationships.groupCheating"),
           icon: TriangleAlert,
           badgeColor: "text-status-danger",
           relationships: categorized.cheating,
@@ -33812,7 +35975,7 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         NpcPartnerGroup,
         {
-          title: "Prospective Candidates",
+          title: t2("npcDetail.trackedRelationships.groupCandidates"),
           icon: Flame,
           badgeColor: "text-foreground-muted",
           relationships: categorized.candidate,
@@ -33823,7 +35986,7 @@ Defaulting to \`null\`.`;
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         NpcPartnerGroup,
         {
-          title: "Former Relationships (Exes)",
+          title: t2("npcDetail.trackedRelationships.groupFormer"),
           icon: Clock,
           badgeColor: "text-foreground-muted",
           relationships: categorized.former,
@@ -33836,30 +35999,31 @@ Defaulting to \`null\`.`;
   const PlayerPolicySection = ({
     className = ""
   }) => {
-    const settings = useMarasStore((s) => s.settings);
+    const { t: t2 } = useTranslation();
+    const settings2 = useMarasStore((s) => s.settings);
     const updateSetting = useMarasStore((s) => s.updateSetting);
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       SectionCard,
       {
-        title: "Player Relationship Policy & Polygamy",
+        title: t2("npcDetail.playerPolicy.title"),
         icon: Crown,
         className,
         children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-panel-raised p-[0.625rem] rounded border border-border-subtle", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: "Polygamy Mode" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: "Allows player to have multiple concurrent spouses and main-tier partners." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: t2("npcDetail.playerPolicy.polygamyMode") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: t2("npcDetail.playerPolicy.polygamyDesc") })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
-                onClick: () => updateSetting("enablePolygamy", !settings.enablePolygamy),
-                className: `px-[0.625rem] py-[0.25rem] rounded text-xs font-semibold border cursor-pointer transition-all ${settings.enablePolygamy ? "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30" : "bg-panel-inset text-foreground-muted border-border-divider hover:bg-interactive-hover"}`,
-                children: settings.enablePolygamy ? "Enabled" : "Disabled"
+                onClick: () => updateSetting("enablePolygamy", !settings2.enablePolygamy),
+                className: `px-[0.625rem] py-[0.25rem] rounded text-xs font-semibold border cursor-pointer transition-all ${settings2.enablePolygamy ? "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30" : "bg-panel-inset text-foreground-muted border-border-divider hover:bg-interactive-hover"}`,
+                children: settings2.enablePolygamy ? t2("npcDetail.playerPolicy.enabled") : t2("npcDetail.playerPolicy.disabled")
               }
             )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted italic", children: "When Polygamy is enabled, forming new Main-tier relationships will not auto-break existing casual Lover connections for the Player." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted italic", children: t2("npcDetail.playerPolicy.polygamyNote") })
         ] })
       }
     );
@@ -33873,8 +36037,9 @@ Defaulting to \`null\`.`;
     spouseName,
     otherChildrenNames
   }) => {
+    const { t: t2, tp: tp2 } = useTranslation();
     if (!isOpen) return null;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-[1rem] animate-in fade-in duration-200", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-[1rem] animate-in fade-in duration-200", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
         className: "bg-panel border border-border-accent/40 rounded-xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden text-foreground-primary font-ui",
@@ -33884,11 +36049,8 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.5rem] rounded-full bg-accent-soft text-accent border border-border-accent", children: /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[1.25rem] h-[1.25rem]" }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: "Confirm Household Relocation" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.6875rem] text-foreground-muted", children: [
-                  "Moving family unit to ",
-                  targetHomeName
-                ] })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: t2("npcDetail.relocationModal.title") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: t2("npcDetail.relocationModal.subtitle", { home: targetHomeName }) })
               ] })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -33896,7 +36058,7 @@ Defaulting to \`null\`.`;
               {
                 onClick: onClose,
                 className: "p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer",
-                title: "Cancel",
+                title: t2("npcDetail.relocationModal.cancel"),
                 children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[1.25rem] h-[1.25rem]" })
               }
             )
@@ -33905,31 +36067,27 @@ Defaulting to \`null\`.`;
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 flex items-start gap-[0.625rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "w-[1.25rem] h-[1.25rem] text-amber-400 flex-shrink-0 mt-[0.125rem]" }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.25rem]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block text-xs", children: "Family Unit Relocation" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.6875rem] text-amber-200/90 leading-relaxed", children: [
-                  "Relocating ",
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-bold text-white", children: childName }),
-                  " will also move their co-parent and siblings to maintain household cohesion."
-                ] })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block text-xs", children: t2("npcDetail.relocationModal.warningTitle") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-amber-200/90 leading-relaxed", children: t2("npcDetail.relocationModal.warningBody", { childName }) })
               ] })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-[0.5rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-semibold text-foreground-muted uppercase tracking-wider block", children: "Affected Household Members" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-semibold text-foreground-muted uppercase tracking-wider block", children: t2("npcDetail.relocationModal.affectedMembersHeader") }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel-inset border border-border-subtle rounded-lg p-[0.75rem] space-y-[0.5rem]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-xs", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Selected Child:" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: t2("npcDetail.relocationModal.selectedChild") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-accent-bright", children: childName })
                 ] }),
                 spouseName && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-xs pt-[0.375rem] border-t border-border-divider/50", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Co-Parent Spouse:" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: t2("npcDetail.relocationModal.coParentSpouse") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-accent-bright", children: spouseName })
                 ] }),
                 otherChildrenNames.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between text-xs pt-[0.375rem] border-t border-border-divider/50", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: "Sibling(s):" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted", children: tp2("npcDetail.relocationModal.siblingsLabel", otherChildrenNames.length) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right", children: otherChildrenNames.map((name, i) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-accent-bright", children: name }, i)) })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between text-xs pt-[0.375rem] border-t border-border-divider/50", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted flex items-center gap-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "New Residence:" }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted flex items-center gap-[0.25rem]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.relocationModal.newResidence") }) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-bold text-status-success flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRight, { className: "w-[0.875em] h-[0.875em]" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: targetHomeName })
@@ -33944,7 +36102,7 @@ Defaulting to \`null\`.`;
               {
                 onClick: onClose,
                 className: "px-[0.875rem] py-[0.375rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-foreground-secondary text-xs font-semibold transition-colors cursor-pointer",
-                children: "Cancel"
+                children: t2("npcDetail.relocationModal.cancel")
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -33954,7 +36112,7 @@ Defaulting to \`null\`.`;
                 className: "px-[1rem] py-[0.375rem] bg-accent hover:bg-accent-bright text-accent-contrast rounded text-xs font-bold shadow-lg shadow-accent/20 flex items-center gap-[0.375rem] transition-colors cursor-pointer",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { className: "w-[1em] h-[1em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Confirm Relocation" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.relocationModal.confirmBtn") })
                 ]
               }
             )
@@ -33979,6 +36137,7 @@ Defaulting to \`null\`.`;
     trainingCatalog,
     isEntryUnlocked
   }) => {
+    const { t: t2, tp: tp2 } = useTranslation();
     const [searchQuery, setSearchQuery] = reactExports.useState("");
     const [failedImages, setFailedImages] = reactExports.useState({});
     const filteredCatalog = reactExports.useMemo(() => {
@@ -34047,32 +36206,21 @@ Defaulting to \`null\`.`;
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[0.5rem] rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/35", children: /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1.375rem] h-[1.375rem]" }) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-sm font-bold text-accent-bright", children: [
-                      "Send ",
-                      childName,
-                      " to Adolescent Training"
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.6875rem] text-foreground-muted", children: [
-                      "Choose an organization, academy, or Daedric covenant (",
-                      durationDays,
-                      " day training curriculum)"
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-bold text-accent-bright", children: t2("npcDetail.trainingModal.title", { childName }) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted", children: tp2("npcDetail.trainingModal.subtitle", durationDays) })
                   ] })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
                   isPlayerChild && baseCost > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] px-[0.625rem] py-[0.3125rem] rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Coins, { className: "w-[1em] h-[1em] text-amber-400" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "Your Gold: ",
-                      playerGold.toLocaleString()
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.trainingModal.yourGold", { gold: playerGold.toLocaleString() }) })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
                       onClick: onClose,
                       className: "p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer",
-                      title: "Close",
+                      title: t2("npcDetail.trainingModal.close"),
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[1.25rem] h-[1.25rem]" })
                     }
                   )
@@ -34087,22 +36235,14 @@ Defaulting to \`null\`.`;
                       type: "text",
                       value: searchQuery,
                       onChange: (e) => setSearchQuery(e.target.value),
-                      placeholder: "Search training location, class, or patron...",
+                      placeholder: t2("npcDetail.trainingModal.searchPlaceholder"),
                       className: "w-full pl-[2rem] pr-[0.75rem] py-[0.3125rem] bg-panel border border-border-subtle rounded text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
                     }
                   )
                 ] }),
-                hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-muted", children: [
-                  "Despawns young child actor & unlocks adult adventurer after ",
-                  durationDays,
-                  " day(s)"
-                ] })
+                hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: tp2("npcDetail.trainingModal.despawnNotice", durationDays) })
               ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] overflow-y-auto space-y-[0.625rem] flex-1", children: filteredCatalog.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[2rem] text-center text-xs text-foreground-muted", children: [
-                "No training locations match “",
-                searchQuery,
-                "”."
-              ] }) : filteredCatalog.map(
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[1rem] overflow-y-auto space-y-[0.625rem] flex-1", children: filteredCatalog.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-[2rem] text-center text-xs text-foreground-muted", children: t2("npcDetail.trainingModal.noLocationsMatch", { query: searchQuery }) }) : filteredCatalog.map(
                 ({
                   item,
                   baseTuition,
@@ -34161,7 +36301,7 @@ Defaulting to \`null\`.`;
                                   className: `inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold border ${hasBeastblood ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : "bg-rose-500/20 text-rose-300 border-rose-500/40"}`,
                                   children: [
                                     hasBeastblood ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-[0.85em] h-[0.85em]" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Lock, { className: "w-[0.85em] h-[0.85em]" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "🐺 Requires Beastblood" })
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.trainingModal.requiresBeastbloodBadge") })
                                   ]
                                 }
                               ),
@@ -34175,12 +36315,10 @@ Defaulting to \`null\`.`;
                                   ]
                                 }
                               ),
-                              discountPercent > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-500/40", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                                "-",
-                                discountPercent,
-                                "% ",
-                                discountReason || "Parent Affiliation"
-                              ] }) })
+                              discountPercent > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-500/40", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.trainingModal.discountBadge", {
+                                percent: discountPercent,
+                                reason: discountReason || t2("npcDetail.trainingModal.parentAffiliation")
+                              }) }) })
                             ] }),
                             item.description && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-secondary mt-[0.25rem] leading-relaxed", children: item.description })
                           ] }),
@@ -34189,22 +36327,11 @@ Defaulting to \`null\`.`;
                               /* @__PURE__ */ jsxRuntimeExports.jsx(MapPin, { className: "w-[0.875em] h-[0.875em] text-purple-400" }),
                               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.location })
                             ] }),
-                            isBeastbloodBlocked && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-rose-300 font-medium", children: [
-                              "Requires ",
-                              childName,
-                              " to carry Hircine's Beastblood (inherited from a werewolf parent)"
-                            ] }),
-                            !isBeastbloodBlocked && isFactionBlocked && item.factionLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-rose-300 font-medium", children: [
-                              "Requires Player membership/patronage: ",
-                              item.factionLabel
-                            ] }),
-                            !canAfford && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-rose-300 font-medium", children: [
-                              "Insufficient gold (",
-                              playerGold,
-                              " / ",
-                              cost,
-                              "g)"
-                            ] })
+                            isBeastbloodBlocked && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-rose-300 font-medium", children: t2("npcDetail.trainingModal.beastbloodBlockedReason", { childName }) }),
+                            !isBeastbloodBlocked && isFactionBlocked && item.factionLabel && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-rose-300 font-medium", children: t2("npcDetail.trainingModal.factionBlockedReason", {
+                              faction: item.factionLabel
+                            }) }),
+                            !canAfford && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-rose-300 font-medium", children: t2("npcDetail.trainingModal.insufficientGold", { playerGold, cost }) })
                           ] })
                         ] }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-end justify-between flex-shrink-0 pl-[0.5rem] border-l border-border-divider/60 min-w-[9.5rem]", children: [
@@ -34216,21 +36343,19 @@ Defaulting to \`null\`.`;
                                 children: [
                                   /* @__PURE__ */ jsxRuntimeExports.jsx(Coins, { className: "w-[0.95em] h-[0.95em]" }),
                                   discountPercent > 0 && baseTuition !== cost && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "line-through text-foreground-muted font-normal text-[0.6875rem] mr-[0.125rem]", children: baseTuition.toLocaleString() }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                                    cost.toLocaleString(),
-                                    " Gold"
-                                  ] })
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.trainingModal.costGold", {
+                                    cost: cost.toLocaleString()
+                                  }) })
                                 ]
                               }
                             ),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[0.625rem] text-foreground-muted", children: [
-                              "Tuition (",
-                              Number(item.costMultiplier.toFixed(2)),
-                              "x rate",
-                              discountPercent > 0 ? ` · -${discountPercent}%` : "",
-                              ")"
-                            ] })
-                          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-emerald-300 font-semibold", children: "No Tuition Cost" }) }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.625rem] text-foreground-muted", children: discountPercent > 0 ? t2("npcDetail.trainingModal.tuitionRateDiscounted", {
+                              rate: Number(item.costMultiplier.toFixed(2)),
+                              percent: discountPercent
+                            }) : t2("npcDetail.trainingModal.tuitionRate", {
+                              rate: Number(item.costMultiplier.toFixed(2))
+                            }) })
+                          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-emerald-300 font-semibold", children: t2("npcDetail.trainingModal.noTuitionCost") }) }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "button",
                             {
@@ -34243,10 +36368,10 @@ Defaulting to \`null\`.`;
                               className: `w-full justify-center text-xs font-semibold px-[0.75rem] py-[0.4375rem] rounded border transition-colors flex items-center gap-[0.375rem] ${canSend ? "text-purple-100 bg-purple-600/30 hover:bg-purple-600/50 border-purple-400/50 cursor-pointer" : "opacity-50 cursor-not-allowed bg-panel-inset text-foreground-muted border-border-subtle"}`,
                               children: isRequirementBlocked ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                                 /* @__PURE__ */ jsxRuntimeExports.jsx(Lock, { className: "w-[0.95em] h-[0.95em]" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Locked" })
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.trainingModal.lockedBtn") })
                               ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                                 /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.95em] h-[0.95em] text-purple-300" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Send to Training" })
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.trainingModal.sendToTrainingBtn") })
                               ] })
                             }
                           )
@@ -34258,19 +36383,16 @@ Defaulting to \`null\`.`;
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-[1rem] py-[0.75rem] bg-panel-raised border-t border-border-divider flex items-center justify-between text-xs", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] text-foreground-muted", children: [
-                  "Showing ",
-                  filteredCatalog.length,
-                  " of ",
-                  trainingCatalog.length,
-                  " training locations"
-                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted", children: t2("npcDetail.trainingModal.showingCount", {
+                  shown: filteredCatalog.length,
+                  total: trainingCatalog.length
+                }) }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
                     onClick: onClose,
                     className: "px-[0.875rem] py-[0.375rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-foreground-secondary text-xs font-semibold transition-colors cursor-pointer",
-                    children: "Cancel"
+                    children: t2("npcDetail.trainingModal.cancel")
                   }
                 )
               ] })
@@ -34288,12 +36410,13 @@ Defaulting to \`null\`.`;
     className = ""
   }) => {
     var _a2, _b, _c, _d;
+    const { t: t2, tp: tp2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const children = useMarasStore((s) => s.children);
     const currentGameDay = useMarasStore((s) => s.currentGameDay);
     const playerHomes = useMarasStore((s) => s.playerHomes);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
     const relocateFamilyUnit = useMarasStore((s) => s.relocateFamilyUnit);
     const spawnChild = useMarasStore((s) => s.spawnChild);
@@ -34306,7 +36429,6 @@ Defaulting to \`null\`.`;
     const hasRefID = (childRecord == null ? void 0 : childRecord.hasRefID) ?? (npc == null ? void 0 : npc.hasRefID) ?? !npcId.startsWith("FF7");
     const hasBeastblood = Boolean((childRecord == null ? void 0 : childRecord.hasBeastblood) || (npc == null ? void 0 : npc.hasBeastblood));
     const isFemale = resolveIsFemale(childRecord, npc);
-    const { sonOrDaughter } = getChildGenderNouns(isFemale);
     const isPlayerParent = childRecord && (areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) || areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID));
     const isPlayerChildResolved = isPlayerChild !== void 0 ? isPlayerChild : Boolean(isPlayerParent);
     const coParentId = isPlayerParent ? areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) ? childRecord.guardianBId : childRecord.guardianAId : null;
@@ -34314,14 +36436,14 @@ Defaulting to \`null\`.`;
       (r2) => r2.status === RelationshipStatus.Married && (areSameFormId(r2.actorA, PLAYER_FORM_ID) && areSameFormId(r2.actorB, coParentId) || areSameFormId(r2.actorB, PLAYER_FORM_ID) && areSameFormId(r2.actorA, coParentId))
     ) : false;
     const spouseProfile = isSpouse && coParentId ? npcProfiles.get(coParentId) : null;
-    const spouseName = (spouseProfile == null ? void 0 : spouseProfile.name) || (isSpouse ? "Spouse" : null);
+    const spouseName = (spouseProfile == null ? void 0 : spouseProfile.name) || (isSpouse ? t2("npcDetail.childResidence.fallbackSpouse") : null);
     const uniqueOtherChildren = isSpouse && coParentId ? Array.from(children.values()).filter(
       (c) => !areSameFormId(c.childId, npcId) && (areSameFormId(c.guardianAId, PLAYER_FORM_ID) && areSameFormId(c.guardianBId, coParentId) || areSameFormId(c.guardianBId, PLAYER_FORM_ID) && areSameFormId(c.guardianAId, coParentId))
     ) : [];
     const otherChildrenNames = uniqueOtherChildren.map(
       (c) => {
         var _a3;
-        return ((_a3 = npcProfiles.get(c.childId)) == null ? void 0 : _a3.name) || c.name || `Child ${c.childId}`;
+        return ((_a3 = npcProfiles.get(c.childId)) == null ? void 0 : _a3.name) || c.name || t2("store.fallbackChildName", { childId: c.childId });
       }
     );
     const [isModalOpen, setIsModalOpen] = reactExports.useState(false);
@@ -34330,7 +36452,7 @@ Defaulting to \`null\`.`;
     const isCurrentlyUnset = !(npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.currentHome) === "Unset";
     const hasSpouseCoParent = Boolean(isSpouse && coParentId);
     const availableHomes = [
-      ...hasSpouseCoParent && !isCurrentlyUnset ? [] : [{ value: "Unset", label: "Unset (Original Location)" }],
+      ...hasSpouseCoParent && !isCurrentlyUnset ? [] : [{ value: "Unset", label: t2("npcDetail.childResidence.unsetOriginalLocation") }],
       ...playerHomes.map((h) => ({
         value: h.name,
         label: h.locationName ? `${h.name} (${h.locationName})` : h.name
@@ -34362,58 +36484,55 @@ Defaulting to \`null\`.`;
       setIsModalOpen(false);
       setPendingHome(null);
     };
-    const targetHomeLabel = pendingHome === "Unset" ? "Unset (Original Location)" : ((_a2 = playerHomes.find((h) => h.name === pendingHome)) == null ? void 0 : _a2.locationName) ? `${pendingHome} (${(_b = playerHomes.find((h) => h.name === pendingHome)) == null ? void 0 : _b.locationName})` : pendingHome || "";
+    const targetHomeLabel = pendingHome === "Unset" ? t2("npcDetail.childResidence.unsetOriginalLocation") : ((_a2 = playerHomes.find((h) => h.name === pendingHome)) == null ? void 0 : _a2.locationName) ? `${pendingHome} (${(_b = playerHomes.find((h) => h.name === pendingHome)) == null ? void 0 : _b.locationName})` : pendingHome || "";
+    const expectedLabel = isFemale === true ? t2("npcDetail.childResidence.statusExpectedDaughter") : isFemale === false ? t2("npcDetail.childResidence.statusExpectedSon") : t2("npcDetail.childResidence.statusExpectedChild");
+    const infantLabel = isFemale === true ? t2("npcDetail.childResidence.statusInfantDaughter") : isFemale === false ? t2("npcDetail.childResidence.statusInfantSon") : t2("npcDetail.childResidence.statusInfantChild");
+    const inTrainingBaseLabel = isFemale === true ? t2("npcDetail.childResidence.statusInTrainingDaughter") : isFemale === false ? t2("npcDetail.childResidence.statusInTrainingSon") : t2("npcDetail.childResidence.statusInTrainingChild");
+    const adultBaseLabel = hasRefID ? isFemale === true ? t2("npcDetail.childResidence.statusAdultDaughter") : isFemale === false ? t2("npcDetail.childResidence.statusAdultSon") : t2("npcDetail.childResidence.statusAdultChild") : isFemale === true ? t2("npcDetail.childResidence.statusAdultReadyDaughter") : isFemale === false ? t2("npcDetail.childResidence.statusAdultReadySon") : t2("npcDetail.childResidence.statusAdultReadyChild");
+    const unspawnedStatusLabel = isFemale === true ? t2("npcDetail.childResidence.statusUnspawnedDaughter") : isFemale === false ? t2("npcDetail.childResidence.statusUnspawnedSon") : t2("npcDetail.childResidence.statusUnspawnedChild");
+    const adoptedStatusLabel = isFemale === true ? t2("utils.child.adoptedDaughter") : isFemale === false ? t2("utils.child.adoptedSon") : t2("utils.child.adoptedChild");
+    const biologicalStatusLabel = isFemale === true ? t2("utils.child.biologicalDaughter") : isFemale === false ? t2("utils.child.biologicalSon") : t2("utils.child.biologicalChild");
+    const unspawnedYoungTitle = isFemale === true ? t2("npcDetail.childResidence.unspawnedYoungDaughter") : isFemale === false ? t2("npcDetail.childResidence.unspawnedYoungSon") : t2("npcDetail.childResidence.unspawnedYoungChild");
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Child Profile & Residence", icon: Baby, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.childResidence.title"), icon: Baby, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-[0.75rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Full Name" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.childResidence.fullName") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary text-sm", children: displayName })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Race" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.childResidence.race") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-foreground-primary", children: displayRace })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-[0.75rem] pt-[0.5rem] border-t border-border-divider", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Status" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.childResidence.status") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "span",
               {
                 className: `inline-flex items-center gap-[0.25rem] px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-bold ${stage === "unborn" ? "bg-pink-500/20 text-pink-300 border border-pink-500/30" : stage === "infant" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : stage === "training" ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : stage === "adult" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : !hasRefID ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : !childRecord ? "bg-status-success-soft text-status-success border border-status-success" : childRecord.isAdopted !== false ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`,
                 children: [
-                  stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "🤰 Expected ",
-                    sonOrDaughter,
-                    " (In Gestation)"
-                  ] }) }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                  stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: expectedLabel }) }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[0.875em] h-[0.875em]" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "Newborn Infant ",
-                      sonOrDaughter
-                    ] })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: infantLabel })
                   ] }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.875em] h-[0.875em]" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      "In Training (",
-                      sonOrDaughter,
-                      ")",
+                      inTrainingBaseLabel,
                       (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? ` — ${(childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)}` : "",
                       (childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation) ? ` (${(childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation)})` : ""
                     ] })
                   ] }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[0.875em] h-[0.875em]" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                      hasRefID ? `Adult ${sonOrDaughter}` : `Adult ${sonOrDaughter} (Ready to Spawn)`,
+                      adultBaseLabel,
                       (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? ` — ${(childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)}` : ""
                     ] })
-                  ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                    "🧸 ",
-                    sonOrDaughter,
-                    " (Unspawned Record)"
-                  ] }) }) : !childRecord ? "Eligible for Adoption" : childRecord.isAdopted !== false ? `Adopted ${sonOrDaughter}` : `Biological ${sonOrDaughter}`,
-                  stage === "unborn" ? (childRecord == null ? void 0 : childRecord.conceptionTimestamp) != null && childRecord.conceptionTimestamp > 0 ? ` (Conceived ${formatGameDay(childRecord.conceptionTimestamp, currentGameDay)})` : "" : (childRecord == null ? void 0 : childRecord.timestamp) != null && childRecord.timestamp > 0 ? ` (${formatGameDay(childRecord.timestamp, currentGameDay)})` : ""
+                  ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: unspawnedStatusLabel }) }) : !childRecord ? t2("npcDetail.childResidence.eligibleForAdoption") : childRecord.isAdopted !== false ? adoptedStatusLabel : biologicalStatusLabel,
+                  stage === "unborn" ? (childRecord == null ? void 0 : childRecord.conceptionTimestamp) != null && childRecord.conceptionTimestamp > 0 ? ` ${t2("npcDetail.childResidence.conceivedSuffix", {
+                    date: formatGameDay(childRecord.conceptionTimestamp, currentGameDay)
+                  })}` : "" : (childRecord == null ? void 0 : childRecord.timestamp) != null && childRecord.timestamp > 0 ? ` (${formatGameDay(childRecord.timestamp, currentGameDay)})` : ""
                 ]
               }
             ),
@@ -34421,48 +36540,49 @@ Defaulting to \`null\`.`;
               "span",
               {
                 className: "inline-flex items-center gap-[0.25rem] ml-[0.375rem] px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-bold bg-amber-600/20 text-amber-200 border border-amber-500/40",
-                title: "Carries Hircine's Beastblood (inherited from a werewolf biological parent)",
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "🐺 Beastblood" })
+                title: t2("npcDetail.childResidence.beastbloodInheritedTooltip"),
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.badgeBeastblood") })
               }
             )
           ] }),
           hasSpouseCoParent && spouseName && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Household Co-Parent" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.childResidence.householdCoParent") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-accent-bright", children: spouseName })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pt-[0.5rem] border-t border-border-divider space-y-[0.25rem]", children: stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-pink-500/10 border border-pink-500/30 rounded flex items-center gap-[0.625rem] text-pink-300", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-base flex-shrink-0", children: "🤰" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-pink-200", children: "In Gestation (Womb Care)" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-pink-200/80 mt-[0.0625rem]", children: "This child is currently developing in maternal gestation. Household assignment will be configured upon birth." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-pink-200", children: t2("npcDetail.childResidence.inGestationTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-pink-200/80 mt-[0.0625rem]", children: t2("npcDetail.childResidence.inGestationDesc") })
           ] })
         ] }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-cyan-500/10 border border-cyan-500/30 rounded flex items-center gap-[0.625rem] text-cyan-300", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Baby, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-cyan-400" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-cyan-200", children: "Swaddled Newborn Infant" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-cyan-200/80 mt-[0.0625rem]", children: "This infant is currently carried and swaddled in maternal care. A physical household bed and sandbox assignment will become available once the child grows into a small child." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-cyan-200", children: t2("npcDetail.childResidence.swaddledInfantTitle") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-cyan-200/80 mt-[0.0625rem]", children: t2("npcDetail.childResidence.swaddledInfantDesc") })
           ] })
         ] }) : stage === "training" ? (() => {
-          const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14);
+          const durationDays = Math.max(1, settings2.childTrainingDurationDays ?? 14);
           const startDay = (childRecord == null ? void 0 : childRecord.trainingStartGameDay) ?? (npc == null ? void 0 : npc.trainingStartGameDay) ?? currentGameDay;
           const elapsedDays = Math.max(0, currentGameDay - startDay);
           const progressPct = Math.min(100, Math.round(elapsedDays / durationDays * 100));
           const remainingDays = Math.max(0, Math.ceil(durationDays - elapsedDays));
-          const trainClass = (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) || "Warrior";
-          const trainLoc = (childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation) || "Skyrim Academy";
+          const trainClass = (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) || t2("npcDetail.childResidence.defaultTrainingClass");
+          const trainLoc = (childRecord == null ? void 0 : childRecord.trainingLocation) || (npc == null ? void 0 : npc.trainingLocation) || t2("npcDetail.childResidence.defaultTrainingLocation");
           return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-purple-500/10 border border-purple-500/30 rounded space-y-[0.5rem] text-purple-300", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-[0.5rem]", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-purple-400" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-purple-200", children: [
-                    "Training as ",
-                    trainClass,
-                    " at ",
-                    trainLoc
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]", children: remainingDays > 0 ? `${remainingDays} day(s) remaining (${Math.floor(elapsedDays)} / ${durationDays} days)` : `Training duration completed (${durationDays} days)` })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-purple-200", children: t2("npcDetail.childResidence.trainingAsAt", {
+                    className: trainClass,
+                    location: trainLoc
+                  }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-purple-200/80 mt-[0.0625rem]", children: remainingDays > 0 ? tp2("npcDetail.childResidence.trainingDaysRemaining", remainingDays, {
+                    elapsed: Math.floor(elapsedDays),
+                    duration: durationDays
+                  }) : tp2("npcDetail.childResidence.trainingCompletedDuration", durationDays) })
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -34472,7 +36592,7 @@ Defaulting to \`null\`.`;
                   className: "text-xs font-semibold text-purple-100 bg-purple-600/30 hover:bg-purple-600/45 border border-purple-400/50 px-[0.625rem] py-[0.3125rem] rounded transition-colors flex items-center gap-[0.3125rem] cursor-pointer flex-shrink-0",
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheck, { className: "w-[0.95em] h-[0.95em] text-purple-300" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Complete Training Early" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.childResidence.completeTrainingEarly") })
                   ]
                 }
               )
@@ -34489,11 +36609,10 @@ Defaulting to \`null\`.`;
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.625rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-amber-200", children: [
-                "Training Complete — Ready to Spawn Adult ",
-                (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? `(${(childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)})` : ""
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "This offspring has completed their training and reached adulthood. Spawn their adult actor to send them out into Skyrim as an independent traveling adventurer available for hire." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-amber-200", children: (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName) ? t2("npcDetail.childResidence.trainingCompleteReadyWithClass", {
+                className: (childRecord == null ? void 0 : childRecord.trainingClassName) || (npc == null ? void 0 : npc.trainingClassName)
+              }) : t2("npcDetail.childResidence.trainingCompleteReady") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: t2("npcDetail.childResidence.trainingCompleteDesc") })
             ] })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -34503,28 +36622,24 @@ Defaulting to \`null\`.`;
               className: "text-xs font-semibold text-amber-100 bg-amber-600/30 hover:bg-amber-600/45 border border-amber-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1em] h-[1em] text-amber-300" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Adult" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.spawnAdult") })
               ]
             }
           )
         ] }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-[0.625rem] text-amber-300", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-amber-400" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-amber-200", children: [
-              "Independent Traveling Adventurer — ",
-              (npc == null ? void 0 : npc.currentHome) || "Traveling Skyrim"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: "Travels independently between Skyrim's inns, cities, and family homes, and is available to be hired as a follower." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-amber-200", children: t2("npcDetail.childResidence.independentAdventurerTitle", {
+              location: (npc == null ? void 0 : npc.currentHome) || t2("npcDetail.childResidence.travelingSkyrim")
+            }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-amber-200/80 mt-[0.0625rem]", children: t2("npcDetail.childResidence.independentAdventurerDesc") })
           ] })
         ] }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.75rem] bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between gap-[0.75rem] text-emerald-300", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.625rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[1.25em] h-[1.25em] flex-shrink-0 text-emerald-400" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-xs text-emerald-200", children: [
-                "Unspawned Young ",
-                sonOrDaughter
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-emerald-200/80 mt-[0.0625rem]", children: "Spawn this young child into the world to assign a household bed and AI sandbox, or send them directly to adolescent training below." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-xs text-emerald-200", children: unspawnedYoungTitle }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-emerald-200/80 mt-[0.0625rem]", children: t2("npcDetail.childResidence.unspawnedYoungDesc") })
             ] })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -34534,25 +36649,21 @@ Defaulting to \`null\`.`;
               className: "text-xs font-semibold text-emerald-100 bg-emerald-600/30 hover:bg-emerald-600/45 border border-emerald-400/50 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer flex-shrink-0",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(UserPlus, { className: "w-[1em] h-[1em] text-emerald-300" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Child" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.spawnChild") })
               ]
             }
           )
         ] }) : isPlayerChildResolved && hasSpouseCoParent ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Assigned Residence" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.childResidence.assignedResidence") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-medium text-accent-bright flex items-center gap-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (spouseProfile == null ? void 0 : spouseProfile.currentHome) || "Unassigned" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (spouseProfile == null ? void 0 : spouseProfile.currentHome) || t2("npcDetail.childResidence.unassigned") })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.625rem] text-foreground-muted mt-[0.25rem]", children: [
-            "Residence is controlled by co-parent (",
-            spouseName,
-            ")'s assigned home."
-          ] })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.625rem] text-foreground-muted mt-[0.25rem]", children: t2("npcDetail.childResidence.controlledByCoParent", { spouseName }) })
         ] }) : isPlayerChildResolved ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-foreground-muted block mb-[0.125rem] font-medium flex items-center gap-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Assigned Residence" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.childResidence.assignedResidence") })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SelectInput,
@@ -34564,25 +36675,25 @@ Defaulting to \`null\`.`;
             }
           )
         ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: "Assigned Home" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted block mb-[0.125rem]", children: t2("npcDetail.childResidence.assignedHome") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-medium text-accent-bright flex items-center gap-[0.25rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(House, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || ((childRecord == null ? void 0 : childRecord.guardianAId) && childRecord.guardianAId !== "00000000" ? ((_c = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _c.currentHome) || ((_d = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _d.originalHome) : void 0) || "Following Custodial Parent" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (npc == null ? void 0 : npc.currentHome) || (npc == null ? void 0 : npc.originalHome) || ((childRecord == null ? void 0 : childRecord.guardianAId) && childRecord.guardianAId !== "00000000" ? ((_c = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _c.currentHome) || ((_d = npcProfiles.get(childRecord.guardianAId)) == null ? void 0 : _d.originalHome) : void 0) || t2("npcDetail.childResidence.followingCustodialParent") })
           ] })
         ] }) }),
         stage === "child" && childRecord && (() => {
-          const trainingCatalog = settings.trainingCatalog ?? [];
-          const requireFaction = (settings.childTrainingRequireFaction ?? true) && isPlayerChildResolved;
-          const playerFactions = settings.playerTrainingFactions;
-          const baseCost = isPlayerChildResolved ? Math.max(0, settings.childTrainingCost ?? 2e3) : 0;
+          const trainingCatalog = settings2.trainingCatalog ?? [];
+          const requireFaction = (settings2.childTrainingRequireFaction ?? true) && isPlayerChildResolved;
+          const playerFactions = settings2.playerTrainingFactions;
+          const baseCost = isPlayerChildResolved ? Math.max(0, settings2.childTrainingCost ?? 2e3) : 0;
           const playerGold = (playerFactions == null ? void 0 : playerFactions.playerGold) ?? 999999;
-          const durationDays = Math.max(1, settings.childTrainingDurationDays ?? 14);
-          const isEntryUnlocked = (t2) => {
-            if (t2.requirementMet !== void 0) {
-              return Boolean(t2.requirementMet);
+          const durationDays = Math.max(1, settings2.childTrainingDurationDays ?? 14);
+          const isEntryUnlocked = (item) => {
+            if (item.requirementMet !== void 0) {
+              return Boolean(item.requirementMet);
             }
-            if (t2.factionKey && playerFactions) {
-              return Boolean(playerFactions[t2.factionKey]);
+            if (item.factionKey && playerFactions) {
+              return Boolean(playerFactions[item.factionKey]);
             }
             return true;
           };
@@ -34591,17 +36702,12 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold text-foreground-primary flex items-center gap-[0.375rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[1em] h-[1em] text-purple-400" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adolescent Training & Class Path" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.childResidence.trainingSectionTitle") })
                 ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.6875rem] text-foreground-muted mt-[0.125rem]", children: [
-                  "Enroll ",
-                  displayName,
-                  " in one of ",
-                  trainingCatalog.length,
-                  " academies, guilds, or Daedric covenants (",
-                  durationDays,
-                  " day curriculum)."
-                ] })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] text-foreground-muted mt-[0.125rem]", children: tp2("npcDetail.childResidence.trainingEnrollDesc", durationDays, {
+                  name: displayName,
+                  catalogCount: trainingCatalog.length
+                }) })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
@@ -34610,16 +36716,12 @@ Defaulting to \`null\`.`;
                   className: "text-xs font-semibold px-[0.875rem] py-[0.4375rem] rounded border transition-colors flex items-center gap-[0.375rem] flex-shrink-0 text-purple-100 bg-purple-600/25 hover:bg-purple-600/40 border-purple-500/45 cursor-pointer",
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(GraduationCap, { className: "w-[0.95em] h-[0.95em] text-purple-300" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: hasRefID ? "Despawn Child & Send to Training" : "Send to Training" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: hasRefID ? t2("npcDetail.childResidence.despawnAndTrainBtn") : t2("npcDetail.trainingModal.sendToTrainingBtn") })
                   ]
                 }
               )
             ] }),
-            hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[0.625rem] text-foreground-muted", children: [
-              "Sending a spawned child to training will despawn their young child actor, preserve their SkyrimNet childhood biography, and allow you to spawn their adult actor after ",
-              durationDays,
-              " day(s)."
-            ] }),
+            hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.625rem] text-foreground-muted", children: tp2("npcDetail.childResidence.despawnTrainingHelp", durationDays) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               ChildTrainingModal,
               {
@@ -34656,36 +36758,12 @@ Defaulting to \`null\`.`;
       )
     ] });
   };
-  const SLOT_META = {
-    guardianA: {
-      title: "Guardian A",
-      filterLabel: "All Adult NPCs"
-    },
-    guardianB: {
-      title: "Guardian B",
-      filterLabel: "All Adult NPCs"
-    },
-    bioMother: {
-      title: "Biological Mother",
-      filterLabel: "Females Only",
-      genderFilter: "female"
-    },
-    bioFather: {
-      title: "Biological Father",
-      filterLabel: "Males Only",
-      genderFilter: "male"
-    },
-    presumedFather: {
-      title: "Presumed Father",
-      filterLabel: "Males Only",
-      genderFilter: "male"
-    }
-  };
   const ChildGuardiansSection = ({
     npcId,
     className = ""
   }) => {
     var _a2;
+    const { t: t2 } = useTranslation();
     const openNpcDetail = useMarasStore((s) => s.openNpcDetail);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const allSkyrimNpcs = useMarasStore((s) => s.allSkyrimNpcs);
@@ -34698,6 +36776,34 @@ Defaulting to \`null\`.`;
     const revealSecretsInUI = useMarasStore((s) => Boolean(s.settings.revealSecretsInUI));
     const [activeSlot, setActiveSlot] = reactExports.useState(null);
     const [searchQuery, setSearchQuery] = reactExports.useState("");
+    const slotMeta = reactExports.useMemo(
+      () => ({
+        guardianA: {
+          title: t2("npcDetail.guardians.slotGuardianA"),
+          filterLabel: t2("npcDetail.guardians.filterAllAdults")
+        },
+        guardianB: {
+          title: t2("npcDetail.guardians.slotGuardianB"),
+          filterLabel: t2("npcDetail.guardians.filterAllAdults")
+        },
+        bioMother: {
+          title: t2("npcDetail.guardians.slotBioMother"),
+          filterLabel: t2("npcDetail.guardians.filterFemalesOnly"),
+          genderFilter: "female"
+        },
+        bioFather: {
+          title: t2("npcDetail.guardians.slotBioFather"),
+          filterLabel: t2("npcDetail.guardians.filterMalesOnly"),
+          genderFilter: "male"
+        },
+        presumedFather: {
+          title: t2("npcDetail.guardians.slotPresumedFather"),
+          filterLabel: t2("npcDetail.guardians.filterMalesOnly"),
+          genderFilter: "male"
+        }
+      }),
+      [t2]
+    );
     reactExports.useEffect(() => {
       setActiveSlot(null);
       setSearchQuery("");
@@ -34731,7 +36837,7 @@ Defaulting to \`null\`.`;
       const newPreg = type === "pregnancy" ? checked : !newPartner ? false : currentPreg;
       setPaternitySecretEdges(childRecord.childId, newBio, newPartner, newPreg);
     };
-    const playerName = ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || "Prisoner (Player)";
+    const playerName = ((_a2 = npcProfiles.get(PLAYER_FORM_ID)) == null ? void 0 : _a2.name) || t2("utils.player.defaultName");
     const playerProfile = npcProfiles.get(PLAYER_FORM_ID);
     const cleanId = (id2) => id2 && id2 !== "00000000" && id2 !== "00700000" ? id2 : void 0;
     const gAId = cleanId(childRecord == null ? void 0 : childRecord.guardianAId);
@@ -34760,7 +36866,7 @@ Defaulting to \`null\`.`;
         }
         return {
           formId: id2,
-          name: fallbackName || `NPC ${id2}`,
+          name: fallbackName || t2("store.fallbackNpcName", { formId: id2 }),
           gender: void 0
         };
       }
@@ -34817,7 +36923,7 @@ Defaulting to \`null\`.`;
     }, [activeSlot, gAId, gBId, playerHasMarriedSpouse, childRecord == null ? void 0 : childRecord.stage]);
     const filteredCandidates = reactExports.useMemo(() => {
       if (!activeSlot) return [];
-      const meta = SLOT_META[activeSlot];
+      const meta = slotMeta[activeSlot];
       const seen = /* @__PURE__ */ new Set();
       const list = [];
       const pushCandidate = (c, isChildFlag) => {
@@ -34832,7 +36938,7 @@ Defaulting to \`null\`.`;
       pushCandidate({
         formId: PLAYER_FORM_ID,
         name: playerName,
-        race: (playerProfile == null ? void 0 : playerProfile.race) || "Nord",
+        race: (playerProfile == null ? void 0 : playerProfile.race) || t2("store.fallbackRace"),
         gender: (playerProfile == null ? void 0 : playerProfile.gender) || "male",
         pluginName: "Skyrim.esm"
       });
@@ -34865,7 +36971,7 @@ Defaulting to \`null\`.`;
         (n2) => n2.name.toLowerCase().includes(q2) || n2.formId.toLowerCase().includes(q2) || n2.race && n2.race.toLowerCase().includes(q2) || n2.pluginName && n2.pluginName.toLowerCase().includes(q2)
       ) : list;
       return matched.slice(0, 60);
-    }, [activeSlot, npcProfiles, allSkyrimNpcs, children, npcId, playerName, playerProfile, searchQuery]);
+    }, [activeSlot, slotMeta, npcProfiles, allSkyrimNpcs, children, npcId, playerName, playerProfile, searchQuery, t2]);
     const handleSelectCandidate = (slot, candidate) => {
       if (!childRecord) return;
       const nextId = candidate ? candidate.formId : "";
@@ -34907,12 +37013,12 @@ Defaulting to \`null\`.`;
       setActiveSlot(null);
       setSearchQuery("");
     };
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Parents & Guardians", icon: Users, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.guardians.title"), icon: Users, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: "Custodial Guardians (Click to Swap)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: t2("npcDetail.guardians.custodialHeader") }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-[0.75rem]", children: [
-          { slot: "guardianA", profile: parentAProfile, fallbackLabel: "Guardian A" },
-          { slot: "guardianB", profile: parentBProfile, fallbackLabel: "Guardian B" }
+          { slot: "guardianA", profile: parentAProfile, fallbackLabel: t2("npcDetail.guardians.slotGuardianA") },
+          { slot: "guardianB", profile: parentBProfile, fallbackLabel: t2("npcDetail.guardians.slotGuardianB") }
         ].map(({ slot, profile, fallbackLabel }) => {
           const isSelectedSlot = activeSlot === slot;
           const isPlayerParent = Boolean((profile == null ? void 0 : profile.formId) && areSameFormId(profile.formId, PLAYER_FORM_ID));
@@ -34936,17 +37042,17 @@ Defaulting to \`null\`.`;
                       "span",
                       {
                         className: `text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded font-semibold uppercase tracking-wider ${roleInfo.isPregnancySecretForPartner ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"}`,
-                        title: roleInfo.isPregnancySecretForPartner ? "Partner does not even know the mother is pregnant yet" : roleInfo.isSecretForPartner ? "Partner believes the child is theirs" : "Secret from parent",
-                        children: roleInfo.isPregnancySecretForPartner ? "Unaware of Pregnancy" : roleInfo.isSecretForPartner ? "Secret from Partner" : "Secret"
+                        title: roleInfo.isPregnancySecretForPartner ? t2("npcDetail.guardians.secretPregnancyTooltip") : roleInfo.isSecretForPartner ? t2("npcDetail.guardians.secretPartnerTooltip") : t2("npcDetail.guardians.secretGenericTooltip"),
+                        children: roleInfo.isPregnancySecretForPartner ? t2("npcDetail.guardians.badgeUnawarePregnancy") : roleInfo.isSecretForPartner ? t2("npcDetail.guardians.badgeSecretFromPartner") : t2("npcDetail.guardians.badgeSecret")
                       }
                     )
                   ] }),
-                  profile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-bold text-accent-bright text-xs truncate block", children: profile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "italic text-foreground-muted text-xs block", children: "Unassigned — Click to assign" })
+                  profile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-bold text-accent-bright text-xs truncate block", children: profile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "italic text-foreground-muted text-xs block", children: t2("npcDetail.guardians.unassignedClickToAssign") })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] flex-shrink-0 ml-[0.5rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.625rem] text-foreground-muted flex items-center gap-[0.25rem]", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[0.75em] h-[0.75em]" }),
-                    "Swap"
+                    t2("npcDetail.guardians.swap")
                   ] }),
                   (profile == null ? void 0 : profile.formId) && !isPlayerParent && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "button",
@@ -34957,9 +37063,9 @@ Defaulting to \`null\`.`;
                         openNpcDetail(profile.formId);
                       },
                       className: "px-[0.375rem] py-[0.125rem] rounded bg-panel-raised hover:bg-accent/20 text-[0.625rem] text-accent border border-border-subtle flex items-center gap-[0.25rem] transition-colors cursor-pointer",
-                      title: "Open NPC Profile",
+                      title: t2("npcDetail.guardians.openProfileTooltip"),
                       children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Profile" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.guardians.profileBtn") }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
                       ]
                     }
@@ -34972,7 +37078,7 @@ Defaulting to \`null\`.`;
         }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.5rem] border-t border-border-divider", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: showPresumedFatherSlot ? "Biological & Presumed Parents (Click to Swap)" : "Biological Parents (Click to Swap)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] font-medium text-foreground-muted block mb-[0.375rem]", children: showPresumedFatherSlot ? t2("npcDetail.guardians.bioAndPresumedHeader") : t2("npcDetail.guardians.bioHeader") }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `grid grid-cols-1 ${showPresumedFatherSlot ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-[0.5rem]`, children: [
           (() => {
             const isSelectedSlot = activeSlot === "bioMother";
@@ -34984,7 +37090,7 @@ Defaulting to \`null\`.`;
                 className: `p-[0.5rem] bg-panel-raised border rounded flex flex-col justify-between gap-[0.25rem] transition-colors cursor-pointer ${isSelectedSlot ? "border-accent bg-interactive-hover" : "border-border-subtle hover:border-border-accent"}`,
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem]", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: "Biological Mother" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: t2("npcDetail.guardians.slotBioMother") }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[0.75em] h-[0.75em] text-foreground-muted" }),
                       (bioMotherProfile == null ? void 0 : bioMotherProfile.formId) && !isPlayerBioMom && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -34996,13 +37102,13 @@ Defaulting to \`null\`.`;
                             openNpcDetail(bioMotherProfile.formId);
                           },
                           className: "p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer",
-                          title: "Open Biological Mother Profile",
+                          title: t2("npcDetail.guardians.openBioMotherTooltip"),
                           children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
                         }
                       )
                     ] })
                   ] }),
-                  bioMotherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: bioMotherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: "Unassigned (♀)" })
+                  bioMotherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: bioMotherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: t2("npcDetail.guardians.unassignedFemale") })
                 ]
               }
             );
@@ -35018,13 +37124,13 @@ Defaulting to \`null\`.`;
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem] flex-wrap", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: "Biological Father" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-accent font-medium", children: t2("npcDetail.guardians.slotBioFather") }),
                       (childRecord == null ? void 0 : childRecord.isSecretForBioFather) && /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "span",
                         {
                           className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold uppercase tracking-wider",
-                          title: "Biological father is unaware that he fathered this child",
-                          children: "Secret From Him"
+                          title: t2("npcDetail.guardians.secretBioFatherTooltip"),
+                          children: t2("npcDetail.guardians.badgeSecretFromHim")
                         }
                       )
                     ] }),
@@ -35039,13 +37145,13 @@ Defaulting to \`null\`.`;
                             openNpcDetail(bioFatherProfile.formId);
                           },
                           className: "p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer",
-                          title: "Open Biological Father Profile",
+                          title: t2("npcDetail.guardians.openBioFatherTooltip"),
                           children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
                         }
                       )
                     ] })
                   ] }),
-                  bioFatherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: bioFatherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: "Unassigned (♂)" })
+                  bioFatherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: bioFatherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: t2("npcDetail.guardians.unassignedMale") })
                 ]
               }
             );
@@ -35061,27 +37167,27 @@ Defaulting to \`null\`.`;
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-[0.25rem] flex-wrap", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.25rem]", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-purple-300 font-medium", children: "Presumed Father" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-purple-300 font-medium", children: t2("npcDetail.guardians.slotPresumedFather") }),
                       presumedFatherProfile && (isPregnancySecretForPartner ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "span",
                         {
                           className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase tracking-wider",
-                          title: "Partner does not even know the mother is pregnant yet",
-                          children: "Unaware of Pregnancy"
+                          title: t2("npcDetail.guardians.secretPregnancyTooltip"),
+                          children: t2("npcDetail.guardians.badgeUnawarePregnancy")
                         }
                       ) : isSecretForPartner ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "span",
                         {
                           className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
-                          title: "Partner believes the child is his biological child",
-                          children: "Secret From Partner"
+                          title: t2("npcDetail.guardians.secretPresumedBioTooltip"),
+                          children: t2("npcDetail.guardians.badgeSecretFromPartner")
                         }
                       ) : (childRecord == null ? void 0 : childRecord.discoveredByPartner) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "span",
                         {
                           className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold uppercase tracking-wider",
-                          title: "Partner has discovered the true paternity",
-                          children: "Truth Known"
+                          title: t2("npcDetail.guardians.truthKnownTooltip"),
+                          children: t2("npcDetail.guardians.badgeTruthKnown")
                         }
                       ) : null)
                     ] }),
@@ -35096,13 +37202,13 @@ Defaulting to \`null\`.`;
                             openNpcDetail(presumedFatherProfile.formId);
                           },
                           className: "p-[0.125rem] rounded hover:bg-accent/20 text-accent transition-colors cursor-pointer",
-                          title: "Open Presumed Father Profile",
+                          title: t2("npcDetail.guardians.openPresumedFatherTooltip"),
                           children: /* @__PURE__ */ jsxRuntimeExports.jsx(ExternalLink, { className: "w-[0.75em] h-[0.75em]" })
                         }
                       )
                     ] })
                   ] }),
-                  presumedFatherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: presumedFatherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: "None / Unassigned (♂)" })
+                  presumedFatherProfile ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-primary font-medium truncate", children: presumedFatherProfile.name }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-foreground-muted italic text-[0.6875rem]", children: t2("npcDetail.guardians.noneUnassignedMale") })
                 ]
               }
             );
@@ -35112,11 +37218,8 @@ Defaulting to \`null\`.`;
       activeSlot && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-panel-inset border border-accent/40 rounded space-y-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem]", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-bold text-accent-bright", children: [
-              "Swap ",
-              SLOT_META[activeSlot].title
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-accent/15 text-accent border border-accent/30 font-medium", children: SLOT_META[activeSlot].filterLabel })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-bold text-accent-bright", children: t2("npcDetail.guardians.swapSlotTitle", { slot: slotMeta[activeSlot].title }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] px-[0.375rem] py-[0.0625rem] rounded bg-accent/15 text-accent border border-accent/30 font-medium", children: slotMeta[activeSlot].filterLabel })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
@@ -35127,7 +37230,7 @@ Defaulting to \`null\`.`;
                 setSearchQuery("");
               },
               className: "p-[0.25rem] rounded text-foreground-muted hover:text-foreground-primary hover:bg-panel-raised transition-colors cursor-pointer",
-              title: "Close picker",
+              title: t2("npcDetail.guardians.closePickerTooltip"),
               children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { className: "w-[0.875em] h-[0.875em]" })
             }
           )
@@ -35140,7 +37243,9 @@ Defaulting to \`null\`.`;
               type: "text",
               value: searchQuery,
               onChange: (e) => setSearchQuery(e.target.value),
-              placeholder: `Search ${SLOT_META[activeSlot].filterLabel.toLowerCase()} by name, race, plugin, or FormID...`,
+              placeholder: t2("npcDetail.guardians.searchPlaceholder", {
+                filter: slotMeta[activeSlot].filterLabel.toLowerCase()
+              }),
               autoFocus: true,
               className: "w-full pl-[1.75rem] pr-[0.5rem] py-[0.375rem] bg-panel-raised border border-border-subtle rounded text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
             }
@@ -35154,15 +37259,12 @@ Defaulting to \`null\`.`;
               onClick: () => handleSelectCandidate(activeSlot, null),
               className: "w-full px-[0.5rem] py-[0.375rem] rounded bg-rose-950/30 hover:bg-rose-950/50 border border-rose-500/30 text-rose-300 text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer",
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                  "Clear / Unassign ",
-                  SLOT_META[activeSlot].title
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] uppercase", children: "None" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.guardians.clearUnassignSlot", { slot: slotMeta[activeSlot].title }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] uppercase", children: t2("npcDetail.guardians.none") })
               ]
             }
           ),
-          isLoadingAllNpcs && filteredCandidates.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem] text-center", children: "Loading NPCs..." }) : filteredCandidates.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem] text-center", children: "No matching NPCs found." }) : filteredCandidates.map((cand) => {
+          isLoadingAllNpcs && filteredCandidates.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem] text-center", children: t2("npcDetail.guardians.loadingNpcs") }) : filteredCandidates.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-foreground-muted italic py-[0.5rem] text-center", children: t2("npcDetail.guardians.noMatchingNpcs") }) : filteredCandidates.map((cand) => {
             const currentId = getCurrentSlotFormId(activeSlot);
             const isCurrent = Boolean(currentId && areSameFormId(currentId, cand.formId));
             const isPlayer = areSameFormId(cand.formId, PLAYER_FORM_ID);
@@ -35177,8 +37279,8 @@ Defaulting to \`null\`.`;
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] min-w-0", children: [
                     genderSym && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted flex-shrink-0", children: genderSym }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium truncate", children: cand.name }),
-                    isPlayer && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase flex-shrink-0", children: "Player" }),
-                    isCurrent && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-accent/30 text-accent-bright font-semibold uppercase flex-shrink-0", children: "Current" })
+                    isPlayer && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase flex-shrink-0", children: t2("npcDetail.guardians.badgePlayer") }),
+                    isCurrent && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-accent/30 text-accent-bright font-semibold uppercase flex-shrink-0", children: t2("npcDetail.guardians.badgeCurrent") })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.375rem] text-[0.625rem] text-foreground-muted flex-shrink-0 ml-[0.5rem]", children: [
                     cand.race && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: cand.race }),
@@ -35195,9 +37297,9 @@ Defaulting to \`null\`.`;
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] font-semibold text-foreground-muted uppercase tracking-wider flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Lock, { className: "w-[0.875em] h-[0.875em] text-purple-400" }),
-            "Paternity Secrecy Controls"
+            t2("npcDetail.guardians.secrecyControlsTitle")
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted", children: "Manual Control" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] text-foreground-muted", children: t2("npcDetail.guardians.manualControl") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: isSecretForPartner && isSecretForBio ? "grid grid-cols-1 sm:grid-cols-2 gap-[0.5rem]" : "grid grid-cols-1 gap-[0.5rem]", children: [
           isSecretForPartner && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-start gap-[0.625rem] p-[0.625rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded cursor-pointer transition-colors select-none group", children: [
@@ -35211,8 +37313,8 @@ Defaulting to \`null\`.`;
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left space-y-[0.125rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-purple-300 transition-colors block", children: "Secret from Partner" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: isPregnancySecretForPartner ? "True biological parentage is hidden from partner (who is also unaware of the pregnancy)." : "Partner believes the child is theirs; true biological parentage is hidden from them." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-purple-300 transition-colors block", children: t2("npcDetail.guardians.secretFromPartnerLabel") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: isPregnancySecretForPartner ? t2("npcDetail.guardians.secretFromPartnerPregDesc") : t2("npcDetail.guardians.secretFromPartnerDesc") })
             ] })
           ] }),
           (childRecord == null ? void 0 : childRecord.stage) === "unborn" && (isSecretForPartner || isPregnancySecretForPartner) && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-start gap-[0.625rem] p-[0.625rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded cursor-pointer transition-colors select-none group", children: [
@@ -35226,8 +37328,8 @@ Defaulting to \`null\`.`;
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left space-y-[0.125rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-amber-300 transition-colors block", children: "Pregnancy Unannounced to Partner" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: "Partner does not even know the mother is pregnant yet (revealed when she tells him or when her belly shows)." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-amber-300 transition-colors block", children: t2("npcDetail.guardians.pregnancyUnannouncedLabel") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: t2("npcDetail.guardians.pregnancyUnannouncedDesc") })
             ] })
           ] }),
           isSecretForBio && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-start gap-[0.625rem] p-[0.625rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded cursor-pointer transition-colors select-none group", children: [
@@ -35241,8 +37343,8 @@ Defaulting to \`null\`.`;
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left space-y-[0.125rem]", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-indigo-300 transition-colors block", children: "Secret from Biological Father" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: "Biological father is unaware that he fathered this child." })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-foreground-primary group-hover:text-indigo-300 transition-colors block", children: t2("npcDetail.guardians.secretFromBioFatherLabel") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-foreground-muted block leading-tight", children: t2("npcDetail.guardians.secretFromBioFatherDesc") })
             ] })
           ] })
         ] })
@@ -35253,10 +37355,11 @@ Defaulting to \`null\`.`;
     npcId,
     className = ""
   }) => {
+    const { t: t2 } = useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const children = useMarasStore((s) => s.children);
     const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const dismissChildCritter = useMarasStore((s) => s.dismissChildCritter);
     const dismissChildPet = useMarasStore((s) => s.dismissChildPet);
     const npc = npcProfiles.get(npcId);
@@ -35264,17 +37367,17 @@ Defaulting to \`null\`.`;
     const stage = (childRecord == null ? void 0 : childRecord.stage) || (npc == null ? void 0 : npc.stage) || "child";
     const hasRefID = (childRecord == null ? void 0 : childRecord.hasRefID) ?? (npc == null ? void 0 : npc.hasRefID) ?? !npcId.startsWith("FF7");
     if (!hasRefID || stage !== "child") return null;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: "Critter & Pet Management", icon: Shield, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
-      (settings.globalBanCritter || settings.globalBanPet) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.5rem] bg-amber-500/10 border border-amber-500/30 rounded text-amber-300 flex items-start gap-[0.5rem]", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(SectionCard, { title: t2("npcDetail.critterPet.title"), icon: Shield, className, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-[0.25rem] space-y-[0.75rem] text-xs", children: [
+      (settings2.globalBanCritter || settings2.globalBanPet) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.5rem] bg-amber-500/10 border border-amber-500/30 rounded text-amber-300 flex items-start gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[1.125em] h-[1.125em] flex-shrink-0 mt-[0.125rem]" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block", children: "Global Ban Override Active" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-amber-300/80", children: settings.globalBanCritter && settings.globalBanPet ? "Critters & Pets are globally banned for all children." : settings.globalBanCritter ? "Critters are globally banned for all children." : "Pets are globally banned for all children." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold block", children: t2("npcDetail.critterPet.globalBanTitle") }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.6875rem] text-amber-300/80", children: settings2.globalBanCritter && settings2.globalBanPet ? t2("npcDetail.critterPet.globalBanBoth") : settings2.globalBanCritter ? t2("npcDetail.critterPet.globalBanCritters") : t2("npcDetail.critterPet.globalBanPets") })
         ] })
       ] }),
       (npc == null ? void 0 : npc.currentCritter) ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-panel-inset border border-border-subtle rounded flex items-center justify-between gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted font-medium", children: "Adopted Critter" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted font-medium", children: t2("npcDetail.critterPet.adoptedCritter") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-bold text-accent-bright text-sm mt-[0.125rem] flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.currentCritter.name }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-raised px-[0.25rem] py-[0.125rem] rounded border border-border-subtle", children: npc.currentCritter.formId })
@@ -35285,14 +37388,14 @@ Defaulting to \`null\`.`;
           {
             onClick: () => dismissChildCritter(npcId),
             className: "text-xs font-semibold text-red-300 bg-red-500/20 hover:bg-red-500/30 px-[0.625rem] py-[0.375rem] rounded border border-red-500/40 transition-colors flex items-center gap-[0.25rem] cursor-pointer",
-            title: "Disables and removes critter actor from the game",
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dismiss & Remove Critter" })
+            title: t2("npcDetail.critterPet.dismissCritterTooltip"),
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.critterPet.dismissCritterBtn") })
           }
         )
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-panel-inset p-[0.625rem] rounded border border-border-subtle", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: "Ban Critter Adoption" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: "No active critter. Prevent wild critter adoption dialogue events (foxes, hares, mudcrabs) for this child." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: t2("npcDetail.critterPet.banCritterTitle") }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: t2("npcDetail.critterPet.banCritterDesc") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           ToggleSwitch,
@@ -35304,7 +37407,7 @@ Defaulting to \`null\`.`;
       ] }),
       (npc == null ? void 0 : npc.currentPet) ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-[0.625rem] bg-panel-inset border border-border-subtle rounded flex items-center justify-between gap-[0.5rem]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted font-medium", children: "Adopted Household Pet" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted font-medium", children: t2("npcDetail.critterPet.adoptedPet") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-bold text-accent-bright text-sm mt-[0.125rem] flex items-center gap-[0.375rem]", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: npc.currentPet.name }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[0.625rem] font-mono text-foreground-muted bg-panel-raised px-[0.25rem] py-[0.125rem] rounded border border-border-subtle", children: npc.currentPet.formId })
@@ -35315,14 +37418,14 @@ Defaulting to \`null\`.`;
           {
             onClick: () => dismissChildPet(npcId),
             className: "text-xs font-semibold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-[0.625rem] py-[0.375rem] rounded border border-amber-500/40 transition-colors flex items-center gap-[0.25rem] cursor-pointer",
-            title: "Unbinds pet from child while keeping pet alive in world",
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Dismiss Pet" })
+            title: t2("npcDetail.critterPet.dismissPetTooltip"),
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.critterPet.dismissPetBtn") })
           }
         )
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-panel-inset p-[0.625rem] rounded border border-border-subtle", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: "Ban Pet Adoption" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: "No active pet. Prevent household pet adoption dialogue events (dogs) for this child." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-semibold text-foreground-primary", children: t2("npcDetail.critterPet.banPetTitle") }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[0.6875rem] text-foreground-muted", children: t2("npcDetail.critterPet.banPetDesc") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           ToggleSwitch,
@@ -35335,11 +37438,12 @@ Defaulting to \`null\`.`;
     ] }) });
   };
   const PlayerDetailBody = () => {
+    useTranslation();
     const relationships = useMarasStore((s) => s.relationships);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const children = useMarasStore((s) => s.children);
-    const settings = useMarasStore((s) => s.settings);
-    const categorized = categorizePartners(PLAYER_FORM_ID, relationships, cheatingRecords, settings.enablePolygamy);
+    const settings2 = useMarasStore((s) => s.settings);
+    const categorized = categorizePartners(PLAYER_FORM_ID, relationships, cheatingRecords, settings2.enablePolygamy);
     const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, PLAYER_FORM_ID));
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
@@ -35356,13 +37460,14 @@ Defaulting to \`null\`.`;
     ] });
   };
   const NpcDetailBody = ({ npcId }) => {
+    useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const children = useMarasStore((s) => s.children);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const npc = npcProfiles.get(npcId);
-    const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy) : null;
+    const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings2.enablePolygamy) : null;
     const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, npcId));
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
@@ -35382,17 +37487,18 @@ Defaulting to \`null\`.`;
     ] });
   };
   const SpouseDetailBody = ({ npcId }) => {
+    useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const children = useMarasStore((s) => s.children);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const relWithPlayer = relationships.find(
       (r2) => areSameFormId(r2.actorA, PLAYER_FORM_ID) && areSameFormId(r2.actorB, npcId) || areSameFormId(r2.actorB, PLAYER_FORM_ID) && areSameFormId(r2.actorA, npcId)
     );
     const isMarried = (relWithPlayer == null ? void 0 : relWithPlayer.status) === RelationshipStatus.Married;
     const npc = npcProfiles.get(npcId);
-    const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings.enablePolygamy) : null;
+    const categorized = npc ? categorizePartners(npcId, relationships, cheatingRecords, settings2.enablePolygamy) : null;
     const hasChildren = Array.from(children.values()).some((c) => isActorChild(c, npcId));
     const hasRelationships = Boolean(
       categorized && (categorized.primary.length > 0 || categorized.openRelationship.length > 0 || categorized.lovers.length > 0 || categorized.cheating.length > 0 || categorized.candidate.length > 0 || categorized.former.length > 0)
@@ -35426,6 +37532,7 @@ Defaulting to \`null\`.`;
     displayRace,
     isPlayerChild
   }) => {
+    useTranslation();
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const children = useMarasStore((s) => s.children);
     const npc = npcProfiles.get(npcId);
@@ -35450,6 +37557,7 @@ Defaulting to \`null\`.`;
     displayName,
     displayRace
   }) => {
+    useTranslation();
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-w-2xl mx-auto space-y-[1.25rem]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         ChildDetailBody,
@@ -35464,13 +37572,14 @@ Defaulting to \`null\`.`;
     ] });
   };
   const NpcDetailShell = () => {
+    const { t: t2 } = useTranslation();
     const npcId = useMarasStore((s) => s.npcDetailId);
     const closeNpcDetail = useMarasStore((s) => s.closeNpcDetail);
     const npcProfiles = useMarasStore((s) => s.npcProfiles);
     const relationships = useMarasStore((s) => s.relationships);
     const cheatingRecords = useMarasStore((s) => s.cheatingRecords);
     const children = useMarasStore((s) => s.children);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const teleportPlayerToNpc = useMarasStore((s) => s.teleportPlayerToNpc);
     const teleportNpcToPlayer = useMarasStore((s) => s.teleportNpcToPlayer);
     const spawnChild = useMarasStore((s) => s.spawnChild);
@@ -35505,8 +37614,8 @@ Defaulting to \`null\`.`;
     );
     const isPlaceholderName = !(npc == null ? void 0 : npc.name) || npc.name.startsWith("NPC_");
     const resolvedChildName = (childRecord == null ? void 0 : childRecord.name) && !childRecord.name.startsWith("NPC_") ? childRecord.name : void 0;
-    const displayName = isPlaceholderName && resolvedChildName ? resolvedChildName : (npc == null ? void 0 : npc.name) || (childRecord == null ? void 0 : childRecord.name) || `NPC ${npcId}`;
-    const displayRace = (npc == null ? void 0 : npc.race) || "Nord";
+    const displayName = isPlaceholderName && resolvedChildName ? resolvedChildName : (npc == null ? void 0 : npc.name) || (childRecord == null ? void 0 : childRecord.name) || t2("store.fallbackNpcName", { formId: npcId });
+    const displayRace = (npc == null ? void 0 : npc.race) || t2("store.fallbackRace");
     const renderBody = () => {
       if (isPlayer) {
         return /* @__PURE__ */ jsxRuntimeExports.jsx(PlayerDetailBody, {});
@@ -35540,7 +37649,7 @@ Defaulting to \`null\`.`;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 bg-panel border border-border-subtle rounded-lg flex flex-col h-full overflow-hidden relative", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "p-[1rem] bg-panel-raised border-b border-border-divider flex items-center justify-between", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.75rem]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Back to Previous Page", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.backTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               onClick: closeNpcDetail,
@@ -35558,18 +37667,22 @@ Defaulting to \`null\`.`;
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: displayRace }),
               (npc == null ? void 0 : npc.pluginName) && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[0.6875rem] text-foreground-muted bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-subtle", title: `Plugin: ${npc.pluginName}`, children: npc.pluginName })
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "font-mono text-[0.6875rem] text-foreground-muted bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-subtle",
+                    title: t2("npcDetail.shell.pluginTitle", { plugin: npc.pluginName }),
+                    children: npc.pluginName
+                  }
+                )
               ] }),
               isPlayer && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "span",
                   {
-                    className: `px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-semibold border ${settings.enablePolygamy ? "bg-purple-500/20 text-purple-300 border-purple-500/40" : "bg-panel-inset text-foreground-muted border-border-subtle"}`,
-                    children: [
-                      "Polygamy: ",
-                      settings.enablePolygamy ? "Enabled" : "Disabled"
-                    ]
+                    className: `px-[0.375rem] py-[0.125rem] rounded text-[0.6875rem] font-semibold border ${settings2.enablePolygamy ? "bg-purple-500/20 text-purple-300 border-purple-500/40" : "bg-panel-inset text-foreground-muted border-border-subtle"}`,
+                    children: settings2.enablePolygamy ? t2("npcDetail.shell.polygamyEnabled") : t2("npcDetail.shell.polygamyDisabled")
                   }
                 )
               ] }),
@@ -35577,14 +37690,14 @@ Defaulting to \`null\`.`;
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Cheated" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.badgeCheated") })
                 ] })
               ] }),
               isAffairPartnerWithPlayer && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[0.6875rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { className: "w-[0.875em] h-[0.875em]" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Affair Partner" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.badgeAffairPartner") })
                 ] })
               ] }),
               relWithPlayer && relWithPlayer.status !== RelationshipStatus.Unknown && relWithPlayer.status !== RelationshipStatus.Candidate && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
@@ -35593,8 +37706,8 @@ Defaulting to \`null\`.`;
               ] }),
               isChild && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
-                stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded text-[0.6875rem] font-bold", children: "🤰 Expecting / Unborn" }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded text-[0.6875rem] font-bold", children: "🍼 Newborn Infant" }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[0.6875rem] font-bold", children: "🎓 In Training" }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: "⚔️ Adult Offspring" }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[0.6875rem] font-bold", children: "🧸 Child (Unspawned)" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: "Child" }),
-                hasBeastblood && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Carries Hircine's Beastblood (Lycanthropy)", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-600/20 text-amber-200 border border-amber-500/40 rounded text-[0.6875rem] font-bold", children: "🐺 Beastblood" }) })
+                stage === "unborn" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.stageExpecting") }) : stage === "infant" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.stageInfant") }) : stage === "training" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.stageInTraining") }) : stage === "adult" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.stageAdultOffspring") }) : !hasRefID ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.stageChildUnspawned") }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.stageChild") }),
+                hasBeastblood && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.beastbloodTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "px-[0.375rem] py-[0.125rem] bg-amber-600/20 text-amber-200 border border-amber-500/40 rounded text-[0.6875rem] font-bold", children: t2("npcDetail.shell.badgeBeastblood") }) })
               ] }),
               npc && !isPlayer && !isChild && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "•" }),
@@ -35605,55 +37718,55 @@ Defaulting to \`null\`.`;
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-[0.5rem]", children: [
           !isPlayer && hasRefID && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Teleport Player to NPC location", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.teleportPlayerToTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "button",
               {
                 onClick: () => teleportPlayerToNpc(npcId),
                 className: "text-xs text-foreground-primary bg-panel-inset hover:bg-interactive-hover px-[0.625rem] py-[0.375rem] rounded border border-border-subtle transition-colors flex items-center gap-[0.25rem] cursor-pointer",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Navigation, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Teleport Player To" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.teleportPlayerTo") })
                 ]
               }
             ) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Teleport NPC to Player location", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.teleportNpcToPlayerTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "button",
               {
                 onClick: () => teleportNpcToPlayer(npcId),
                 className: "text-xs text-foreground-primary bg-panel-inset hover:bg-interactive-hover px-[0.625rem] py-[0.375rem] rounded border border-border-subtle transition-colors flex items-center gap-[0.25rem] cursor-pointer",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(UserCheck, { className: "w-[0.875em] h-[0.875em] text-accent" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Teleport NPC To Player" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.teleportNpcToPlayer") })
                 ]
               }
             ) })
           ] }),
-          isChild && !hasRefID && stage === "child" && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Spawn physical child actor into the world (PlaceAtMe persistent)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          isChild && !hasRefID && stage === "child" && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.spawnChildTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
               onClick: () => spawnChild(npcId),
               className: "text-xs font-semibold text-emerald-200 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(UserPlus, { className: "w-[1em] h-[1em] text-emerald-400" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Child" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.spawnChild") })
               ]
             }
           ) }),
-          isChild && !hasRefID && stage === "adult" && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Spawn physical adult child actor into the world (PlaceAtMe persistent) and carry over childhood SkyrimNet bio", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          isChild && !hasRefID && stage === "adult" && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.spawnAdultTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
               onClick: () => spawnChild(npcId),
               className: "text-xs font-semibold text-amber-200 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Swords, { className: "w-[1em] h-[1em] text-amber-400" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Spawn Adult" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.spawnAdult") })
               ]
             }
           ) }),
-          settings.hasSkyrimNet && isChild && hasSecret && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          settings2.hasSkyrimNet && isChild && hasSecret && /* @__PURE__ */ jsxRuntimeExports.jsx(
             AppTooltip,
             {
-              content: isEvaluatingSecret ? "Evaluating paternity secret via SkyrimNet LLM..." : "Evaluate secret via SkyrimNet AI",
+              content: isEvaluatingSecret ? t2("npcDetail.shell.evaluatingSecretTooltip") : t2("npcDetail.shell.evaluateSecretTooltip"),
               children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
@@ -35662,13 +37775,13 @@ Defaulting to \`null\`.`;
                   className: `text-xs font-semibold px-[0.75rem] py-[0.375rem] rounded border transition-colors flex items-center gap-[0.375rem] ${isEvaluatingSecret ? "opacity-50 cursor-not-allowed bg-purple-950/20 text-purple-400/60 border-purple-900/30" : "text-purple-200 bg-purple-500/20 hover:bg-purple-500/30 border-purple-500/40 cursor-pointer shadow-sm shadow-purple-950/40"}`,
                   children: [
                     isEvaluatingSecret ? /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[1em] h-[1em] text-purple-300 animate-spin" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-[1em] h-[1em] text-purple-300" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isEvaluatingSecret ? "Evaluating..." : "Evaluate Secret" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isEvaluatingSecret ? t2("npcDetail.shell.evaluatingSecret") : t2("npcDetail.shell.evaluateSecret") })
                   ]
                 }
               )
             }
           ),
-          childRecord && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Permanently remove this child record from M.A.R.A.S household and family tracking", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          childRecord && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.removeChildTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
               onClick: () => confirmRemoveChild(npcId, displayName, () => {
@@ -35678,18 +37791,18 @@ Defaulting to \`null\`.`;
               className: "text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 px-[0.625rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { className: "w-[0.95em] h-[0.95em]" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remove Child Record" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.removeChild") })
               ]
             }
           ) }),
-          !isChild && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: "Open Matchmaking Modal", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          !isChild && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.matchmakingTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {
               onClick: () => setMatchmakingModalOpen(true, npcId),
               className: "text-xs font-semibold text-accent-bright bg-accent-soft hover:bg-accent/20 px-[0.75rem] py-[0.375rem] rounded border border-border-accent transition-colors flex items-center gap-[0.375rem] cursor-pointer",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(HeartHandshake, { className: "w-[1em] h-[1em] text-accent" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Matchmaking" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.matchmaking") })
               ]
             }
           ) })
@@ -35705,11 +37818,11 @@ Defaulting to \`null\`.`;
   const App = () => {
     const isOpen = useMarasStore((s) => s.isOpen);
     const closeUi = useMarasStore((s) => s.closeUi);
-    const settings = useMarasStore((s) => s.settings);
+    const settings2 = useMarasStore((s) => s.settings);
     const activeTab = useMarasStore((s) => s.activeTab);
     const npcDetailId = useMarasStore((s) => s.npcDetailId);
     const setStatusMsg = useMarasStore((s) => s.setStatusMsg);
-    const uiScale = settings.uiScale ?? 1;
+    const uiScale = settings2.uiScale ?? 1;
     const hasActiveModal = useModalStore((s) => s.activeModal !== null);
     reactExports.useEffect(() => {
       if (!isOpen || hasActiveModal) return;
@@ -35723,13 +37836,13 @@ Defaulting to \`null\`.`;
           closeUi();
           return;
         }
-        if (!settings.toggleUIKey || settings.toggleUIKey === 0) return;
+        if (!settings2.toggleUIKey || settings2.toggleUIKey === 0) return;
         if (isEditableTarget(e.target)) return;
         const scanCode = convertKeyboardEventToScanCode(e);
-        if (scanCode !== settings.toggleUIKey) return;
-        if (settings.toggleUIModCtrl && !e.ctrlKey) return;
-        if (settings.toggleUIModShift && !e.shiftKey) return;
-        if (settings.toggleUIModAlt && !e.altKey) return;
+        if (scanCode !== settings2.toggleUIKey) return;
+        if (settings2.toggleUIModCtrl && !e.ctrlKey) return;
+        if (settings2.toggleUIModShift && !e.shiftKey) return;
+        if (settings2.toggleUIModAlt && !e.altKey) return;
         e.preventDefault();
         closeUi();
       };
@@ -35739,10 +37852,10 @@ Defaulting to \`null\`.`;
       isOpen,
       hasActiveModal,
       closeUi,
-      settings.toggleUIKey,
-      settings.toggleUIModCtrl,
-      settings.toggleUIModShift,
-      settings.toggleUIModAlt
+      settings2.toggleUIKey,
+      settings2.toggleUIModCtrl,
+      settings2.toggleUIModShift,
+      settings2.toggleUIModAlt
     ]);
     reactExports.useEffect(() => {
       const clampedScale = Math.min(1.5, Math.max(0.75, Number.isFinite(uiScale) ? uiScale : 1));
@@ -35797,6 +37910,7 @@ Defaulting to \`null\`.`;
   class ErrorBoundary extends reactExports.Component {
     constructor() {
       super(...arguments);
+      __publicField(this, "unsubscribeLocale");
       __publicField(this, "state", {
         hasError: false,
         error: null
@@ -35809,6 +37923,13 @@ Defaulting to \`null\`.`;
     static getDerivedStateFromError(error) {
       return { hasError: true, error };
     }
+    componentDidMount() {
+      this.unsubscribeLocale = useLocaleStore.subscribe(() => this.forceUpdate());
+    }
+    componentWillUnmount() {
+      var _a2;
+      (_a2 = this.unsubscribeLocale) == null ? void 0 : _a2.call(this);
+    }
     componentDidCatch(error, errorInfo) {
       var _a2;
       console.error("Uncaught error in MARAS React tree:", error, errorInfo);
@@ -35820,8 +37941,8 @@ Defaulting to \`null\`.`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 bg-background flex items-center justify-center p-[2rem] select-none font-ui text-foreground-primary", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-panel border border-border-danger/60 rounded-xl shadow-window p-[2rem] max-w-[32rem] flex flex-col items-center text-center gap-[1rem]", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-[3rem] h-[3rem] rounded-full bg-rose-950/60 border border-rose-800/80 flex items-center justify-center text-rose-400", children: /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { className: "w-[1.75rem] h-[1.75rem]" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-bold text-foreground-primary", children: "An error occurred in M.A.R.A.S UI" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted mt-[0.25rem] leading-relaxed", children: "The UI encountered an unexpected error. You can reload the view to recover state." })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-base font-bold text-foreground-primary", children: t("shared.errorBoundary.title") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-foreground-muted mt-[0.25rem] leading-relaxed", children: t("shared.errorBoundary.description") })
           ] }),
           ((_a2 = this.state.error) == null ? void 0 : _a2.message) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full bg-panel-inset border border-border-subtle rounded-md p-[0.75rem] text-left", children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[0.6875rem] font-mono text-rose-400 break-words", children: this.state.error.message }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -35831,7 +37952,7 @@ Defaulting to \`null\`.`;
               className: "px-[1.25rem] py-[0.5rem] bg-accent hover:bg-accent-bright text-panel font-semibold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-[0.5rem]",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshCw, { className: "w-[1rem] h-[1rem]" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Reload UI" })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t("shared.errorBoundary.reloadButton") })
               ]
             }
           )

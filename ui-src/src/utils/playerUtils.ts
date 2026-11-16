@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { PLAYER_FORM_ID } from '../data/mockData'
 import { NPCProfile, SocialClass, SkillType, Temperament } from '../types'
 
@@ -11,9 +12,13 @@ export function formatActorName(
   fallback?: string,
 ): string {
   if (formId === PLAYER_FORM_ID) {
-    return npcProfiles?.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
+    return npcProfiles?.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
   }
-  return npcProfiles?.get(formId)?.name || fallback || `NPC (${formId.slice(-6)})`
+  return (
+    npcProfiles?.get(formId)?.name ||
+    fallback ||
+    t('utils.player.fallbackNpcShort', { shortId: formId.slice(-6) })
+  )
 }
 
 /**
@@ -26,8 +31,8 @@ export function getPlayerProfileFallback(npcProfiles?: Map<string, NPCProfile> |
 
   return {
     formId: PLAYER_FORM_ID,
-    name: 'Prisoner (Player)',
-    race: 'Nord',
+    name: t('utils.player.defaultName'),
+    race: t('utils.player.defaultRace'),
     gender: 'female',
     pluginName: 'Skyrim.esm',
     socialClass: SocialClass.Rulers,

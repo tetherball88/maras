@@ -1057,6 +1057,12 @@ Function LogNPCDetails(Actor npc) global native
 ;/ Dump full MARAS stored domain state to Data/SKSE/Plugins/MARAS/dumps/ (returns absolute file path, or "" on failure) /;
 string Function DumpStoredData(string tag = "") global native
 
+;/ Queue a localized HUD notification resolved from Data/SKSE/Plugins/MARAS/localization/ /;
+Function NotifyLocalized(string key, string arg1 = "", string arg2 = "") global native
+
+;/ Resolve and format a localized string from Data/SKSE/Plugins/MARAS/localization/ /;
+string Function TranslateKey(string key, string arg1 = "", string arg2 = "") global native
+
 
 ; ── UI Modals & Action Cooldowns ──────────────────────────────────────
 ;/ Show the UI dashboard /;

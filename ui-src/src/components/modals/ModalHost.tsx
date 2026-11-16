@@ -25,6 +25,7 @@ import { SearchInput } from '@/components/shared/SearchInput'
 import { AppTooltip } from '@/components/shared/AppTooltip'
 import { isEnterKey, isEscapeKey } from '@/utils/keys'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/i18n'
 
 const modalContainerVariants = cva(
   'w-full max-h-[86vh] rounded-lg border border-border-strong bg-window shadow-window flex flex-col overflow-hidden relative text-foreground-primary font-ui focus:outline-none',
@@ -224,6 +225,7 @@ interface ChecklistControlSectionProps {
 }
 
 const ChecklistControlSection: React.FC<ChecklistControlSectionProps> = ({ control }) => {
+  const { t } = useTranslation()
   const checklistValue = useModalStore(
     (s) => s.controlValues[control.id] as ModalChecklistValue | undefined,
   )
@@ -275,7 +277,7 @@ const ChecklistControlSection: React.FC<ChecklistControlSectionProps> = ({ contr
             </span>
           )}
           <span className="px-[0.5rem] py-[0.125rem] rounded-full bg-panel-inset border border-border-subtle text-xs text-accent-bright font-semibold">
-            {checkedCount} / {totalCount} Selected
+            {t('modals.selectedCount', { checked: checkedCount, total: totalCount })}
           </span>
         </div>
 
@@ -287,7 +289,7 @@ const ChecklistControlSection: React.FC<ChecklistControlSectionProps> = ({ contr
             onClick={() => setAllChecklistItems(control.id, !allChecked)}
             className="text-xs h-[1.75rem] px-[0.625rem]"
           >
-            {allChecked ? 'Deselect All' : 'Select All'}
+            {allChecked ? t('modals.deselectAll') : t('modals.selectAll')}
           </Button>
         )}
       </div>
@@ -300,14 +302,14 @@ const ChecklistControlSection: React.FC<ChecklistControlSectionProps> = ({ contr
         <SearchInput
           value={filterQuery}
           onChange={setFilterQuery}
-          placeholder="Filter items..."
+          placeholder={t('modals.filterItems')}
         />
       )}
 
       <div className="max-h-[20rem] overflow-y-auto pr-[0.25rem] flex flex-col gap-[0.5rem]">
         {filteredItems.length === 0 ? (
           <div className="p-[1rem] rounded-md bg-panel-inset border border-border-divider text-center text-xs text-foreground-muted">
-            {control.emptyMessage || 'No matching items found.'}
+            {control.emptyMessage || t('modals.emptyChecklist')}
           </div>
         ) : (
           filteredItems.map((item) => {
@@ -454,6 +456,7 @@ interface GenericModalContentProps {
 }
 
 const GenericModalContent: React.FC<GenericModalContentProps> = ({ modal }) => {
+  const { t } = useTranslation()
   const controlValues = useModalStore((s) => s.controlValues)
   const isSubmitting = useModalStore((s) => s.isSubmitting)
   const submitModal = useModalStore((s) => s.submitModal)
@@ -462,6 +465,12 @@ const GenericModalContent: React.FC<GenericModalContentProps> = ({ modal }) => {
   const paragraphs = modal.message
     ? modal.message.split('\n').filter((line) => line.trim().length > 0)
     : []
+
+  const keyboardHintSegments = t('modals.keyboardHint', {
+    navKeys: '[WASD / Arrows]',
+    tabKey: '[Tab]',
+    selectKeys: '[Enter / Space / E]',
+  }).split(/(\[[^\]]+\])/g)
 
   return (
     <>
@@ -472,7 +481,7 @@ const GenericModalContent: React.FC<GenericModalContentProps> = ({ modal }) => {
         </div>
         <div className="flex flex-col min-w-0">
           <h2 className="text-lg font-bold text-accent-bright leading-tight truncate">
-            {modal.title || 'M.A.R.A.S Confirmation'}
+            {modal.title || t('modals.defaultTitle')}
           </h2>
           {modal.subtitle && (
             <span className="text-xs text-foreground-muted truncate mt-[0.125rem]">
@@ -512,8 +521,19 @@ const GenericModalContent: React.FC<GenericModalContentProps> = ({ modal }) => {
 
       {/* Modal Footer Control Buttons */}
       <footer className="px-[1.25rem] py-[0.875rem] bg-panel-raised border-t border-border-divider flex items-center justify-between gap-[0.75rem] flex-wrap">
-        <span className="text-xs text-foreground-muted select-none">
-          Navigate: WASD / Arrows / Tab &bull; Select: Enter / Space / E
+        <span className="text-xs text-foreground-muted select-none flex items-center gap-[0.25rem] flex-wrap">
+          {keyboardHintSegments.map((seg, idx) =>
+            seg.startsWith('[') && seg.endsWith(']') ? (
+              <kbd
+                key={idx}
+                className="px-[0.3125rem] py-[0.0625rem] rounded bg-panel-inset border border-border-subtle font-mono text-[0.6875rem] text-foreground-secondary"
+              >
+                {seg}
+              </kbd>
+            ) : (
+              <React.Fragment key={idx}>{seg}</React.Fragment>
+            ),
+          )}
         </span>
         <div className="flex items-center justify-end gap-[0.625rem] flex-wrap ml-auto">
           {modal.buttons.map((btn, idx) => {

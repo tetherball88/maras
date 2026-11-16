@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
-import { RelationshipStatus, PlayerHouse } from '../../types'
+import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { SearchInput } from '../shared/SearchInput'
 import { AppTooltip } from '../shared/AppTooltip'
@@ -9,7 +9,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Baby,
   User,
-  Check,
   Home,
   Users,
   ShieldCheck,
@@ -21,8 +20,10 @@ import {
 
 import { formatGameDay } from '../../utils/dateUtils'
 import { resolveIsFemale, getChildGenderNouns } from '../../utils/childUtils'
+import { useTranslation } from '../../i18n'
 
 export const AdoptionSubPage: React.FC = () => {
+  const { t, revision } = useTranslation()
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const childrenStore = useMarasStore((s) => s.children)
   const relationships = useMarasStore((s) => s.relationships)
@@ -55,7 +56,7 @@ export const AdoptionSubPage: React.FC = () => {
       const profileFromMap = npcProfiles.get(c.childId)
       childMap.set(c.childId, profileFromMap || {
         formId: c.childId,
-        name: c.name || `Child ${c.childId}`,
+        name: c.name || t('household.children.childFallbackName', { id: c.childId }),
         race: 'Nord',
         isChild: true,
       })
@@ -65,7 +66,7 @@ export const AdoptionSubPage: React.FC = () => {
 
   const getActorName = (formId?: string | null): string | null => {
     if (!formId) return null
-    if (formId === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
+    if (formId === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
     return npcProfiles.get(formId)?.name || null
   }
 
@@ -137,6 +138,7 @@ export const AdoptionSubPage: React.FC = () => {
 
   // Find all spouses of the player (RelationshipStatus.Married)
   const playerSpouses = useMemo(() => {
+    void revision
     return relationships
       .filter(
         (r) =>
@@ -155,7 +157,7 @@ export const AdoptionSubPage: React.FC = () => {
           stayAtHome: prof?.stayAtHome,
         }
       })
-  }, [relationships, npcProfiles])
+  }, [relationships, npcProfiles, revision])
 
   // Compute occupant counters for each player house
   const housesWithOccupants: HouseOccupantInfo[] = useMemo(() => {
@@ -197,7 +199,7 @@ export const AdoptionSubPage: React.FC = () => {
     if (!npc.isChild && npc.formId !== PLAYER_FORM_ID) {
       otherAdultMap.set(npc.formId, {
         formId: npc.formId,
-        name: npc.name || `NPC ${npc.formId}`,
+        name: npc.name || t('shared.npcWithId', { id: npc.formId }),
         race: npc.race || 'Nord',
         pluginName: npc.pluginName,
       })
@@ -240,7 +242,7 @@ export const AdoptionSubPage: React.FC = () => {
 
   const allAdultCandidates: AdoptiveCandidateItem[] = []
 
-  const playerDisplayName = npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
+  const playerDisplayName = npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
   const playerRace = npcProfiles.get(PLAYER_FORM_ID)?.race || 'Nord'
 
   // 1. Add Player options
@@ -254,7 +256,7 @@ export const AdoptionSubPage: React.FC = () => {
       partnerId: null,
       partnerName: null,
       isPlayer: true,
-      badgeLabel: 'Single Parent',
+      badgeLabel: t('matchmaking.adoption.singleParentBadge'),
     })
   } else {
     // Player as Single Parent
@@ -268,7 +270,7 @@ export const AdoptionSubPage: React.FC = () => {
         partnerId: null,
         partnerName: null,
         isPlayer: true,
-        badgeLabel: 'Single Parent',
+        badgeLabel: t('matchmaking.adoption.singleParentBadge'),
       })
     }
 
@@ -284,7 +286,6 @@ export const AdoptionSubPage: React.FC = () => {
         partnerName: sp.name,
         spouseHome: sp.currentHome,
         isPlayer: true,
-        // badgeLabel: sp.currentHome ? `Assigned Home: ${sp.currentHome}` : 'No Assigned Home',
       })
     })
   }
@@ -316,7 +317,9 @@ export const AdoptionSubPage: React.FC = () => {
       partnerId,
       partnerName,
       isPlayer: false,
-      badgeLabel: partnerName ? `Spouse: ${partnerName}` : 'Single',
+      badgeLabel: partnerName
+        ? t('matchmaking.adoption.spouseBadge', { name: partnerName })
+        : t('matchmaking.adoption.singleBadge'),
     })
   })
 
@@ -369,7 +372,7 @@ export const AdoptionSubPage: React.FC = () => {
       return {
         isBio: true,
         score: 2,
-        label: 'Biological Parents',
+        label: t('matchmaking.adoption.bioParents'),
       }
     }
 
@@ -378,7 +381,7 @@ export const AdoptionSubPage: React.FC = () => {
       return {
         isBio: true,
         score: 1,
-        label: 'Biological Mother',
+        label: t('matchmaking.adoption.bioMother'),
       }
     }
 
@@ -387,7 +390,7 @@ export const AdoptionSubPage: React.FC = () => {
       return {
         isBio: true,
         score: 1,
-        label: 'Biological Father',
+        label: t('matchmaking.adoption.bioFather'),
       }
     }
 
@@ -396,7 +399,9 @@ export const AdoptionSubPage: React.FC = () => {
       return {
         isBio: true,
         score: 1,
-        label: adult.partnerName ? `Spouse (${adult.partnerName}) is Bio Mother` : 'Spouse is Bio Mother',
+        label: adult.partnerName
+          ? t('matchmaking.adoption.spouseIsBioMotherNamed', { name: adult.partnerName })
+          : t('matchmaking.adoption.spouseIsBioMother'),
       }
     }
 
@@ -405,7 +410,9 @@ export const AdoptionSubPage: React.FC = () => {
       return {
         isBio: true,
         score: 1,
-        label: adult.partnerName ? `Spouse (${adult.partnerName}) is Bio Father` : 'Spouse is Bio Father',
+        label: adult.partnerName
+          ? t('matchmaking.adoption.spouseIsBioFatherNamed', { name: adult.partnerName })
+          : t('matchmaking.adoption.spouseIsBioFather'),
       }
     }
 
@@ -435,6 +442,7 @@ export const AdoptionSubPage: React.FC = () => {
 
   // Filter and sort adult candidates (bringing selected child's bio parents and guardians to the top)
   const filteredAdults = useMemo(() => {
+    void revision
     const list = allAdultCandidates.filter((adult) => {
       if (!searchParentQuery.trim()) return true
       const q = searchParentQuery.toLowerCase()
@@ -454,7 +462,7 @@ export const AdoptionSubPage: React.FC = () => {
       }
       return 0
     })
-  }, [allAdultCandidates, searchParentQuery, selectedChildInfo])
+  }, [allAdultCandidates, searchParentQuery, selectedChildInfo, revision])
 
   const availableUnassignedCount = childrenWithAdoptionInfo.filter((item) => item.isUnassigned && !item.isBlocked).length
   const adoptedChildrenCount = childrenWithAdoptionInfo.filter((item) => item.isAdopted).length
@@ -560,8 +568,8 @@ export const AdoptionSubPage: React.FC = () => {
         <div className="flex items-center gap-[0.5rem] pb-[0.5rem] border-b border-border-divider">
           <Baby className="w-[1.25em] h-[1.25em] text-accent" />
           <div>
-            <h2 className="text-sm font-bold text-accent-bright">Skyrim Children</h2>
-            <p className="text-[0.6875rem] text-foreground-muted">Select child to assign adoption</p>
+            <h2 className="text-sm font-bold text-accent-bright">{t('matchmaking.adoption.childrenHeader')}</h2>
+            <p className="text-[0.6875rem] text-foreground-muted">{t('matchmaking.adoption.childrenSubheader')}</p>
           </div>
         </div>
 
@@ -569,7 +577,7 @@ export const AdoptionSubPage: React.FC = () => {
         <div className="space-y-[0.5rem]">
           <SearchInput
             value={searchChildQuery}
-            placeholder="Search by name, race, or location..."
+            placeholder={t('matchmaking.adoption.searchChildPlaceholder')}
             onChange={setSearchChildQuery}
           />
 
@@ -581,7 +589,7 @@ export const AdoptionSubPage: React.FC = () => {
                 : 'bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle'
                 }`}
             >
-              <span>All</span>
+              <span>{t('matchmaking.adoption.filterAll')}</span>
               <span className="opacity-80">({childrenWithAdoptionInfo.length})</span>
             </button>
             <button
@@ -591,7 +599,7 @@ export const AdoptionSubPage: React.FC = () => {
                 : 'bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle'
                 }`}
             >
-              <span>Available</span>
+              <span>{t('matchmaking.adoption.filterAvailable')}</span>
               <span className="opacity-80">({availableUnassignedCount})</span>
             </button>
             <button
@@ -601,7 +609,7 @@ export const AdoptionSubPage: React.FC = () => {
                 : 'bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle'
                 }`}
             >
-              <span>Adopted</span>
+              <span>{t('matchmaking.adoption.filterAdopted')}</span>
               <span className="opacity-80">({adoptedChildrenCount})</span>
             </button>
             <button
@@ -611,7 +619,7 @@ export const AdoptionSubPage: React.FC = () => {
                 : 'bg-panel-inset hover:bg-interactive-hover text-foreground-secondary border-border-subtle'
                 }`}
             >
-              <span>Biological</span>
+              <span>{t('matchmaking.adoption.filterBiological')}</span>
               <span className="opacity-80">({biologicalChildrenCount})</span>
             </button>
           </div>
@@ -625,6 +633,7 @@ export const AdoptionSubPage: React.FC = () => {
               const isSelected = selectedChildId === child.formId
               const isFemale = resolveIsFemale(item.childRecord, child)
               const { sonOrDaughter } = getChildGenderNouns(isFemale)
+              const genderSymbol = isFemale ? '♀' : '♂'
 
               return (
                 <div
@@ -641,18 +650,13 @@ export const AdoptionSubPage: React.FC = () => {
                       <div className="text-xs font-bold flex items-center gap-[0.375rem]">
                         <span>{child.name}</span>
                         <span className="text-[0.6875rem] font-mono text-foreground-muted">({child.formId})</span>
-                        {/* {isFemale !== undefined && (
-                          <span className={`text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isFemale ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30'}`} title={isFemale ? 'Daughter' : 'Son'}>
-                            {isFemale ? '♀ Daughter' : '♂ Son'}
-                          </span>
-                        )} */}
                       </div>
                       <div className="text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] flex-wrap">
                         <span>{child.currentHome || child.race}</span>
                         {child.pluginName && (
                           <>
                             <span>•</span>
-                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${child.pluginName}`}>
+                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={t('shared.pluginTooltip', { plugin: child.pluginName })}>
                               {child.pluginName}
                             </span>
                           </>
@@ -664,9 +668,15 @@ export const AdoptionSubPage: React.FC = () => {
                         )}
                         {item.isBiological && (item.parentAName || item.parentBName) && (
                           <span className="ml-[0.25rem] text-emerald-400/90 truncate max-w-[10rem]">
-                            • {item.parentAName && item.parentBName
-                              ? `Parents: ${item.parentAName} and ${item.parentBName}`
-                              : `Parent: ${item.parentAName || item.parentBName}`}
+                            •{' '}
+                            {item.parentAName && item.parentBName
+                              ? t('matchmaking.adoption.parentsPair', {
+                                  parentA: item.parentAName,
+                                  parentB: item.parentBName,
+                                })
+                              : t('matchmaking.adoption.parentSingle', {
+                                  parent: item.parentAName || item.parentBName || '',
+                                })}
                           </span>
                         )}
                         {item.isBlocked && item.blockedReason && (
@@ -681,22 +691,22 @@ export const AdoptionSubPage: React.FC = () => {
                   <div className="flex items-center gap-[0.25rem] shrink-0 whitespace-nowrap">
                     {item.isAdopted ? (
                       <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-accent-soft text-accent-bright border border-border-accent whitespace-nowrap">
-                        Adopted {sonOrDaughter} {isFemale ? '♀' : '♂'}
+                        {t('matchmaking.adoption.adoptedNounBadge', { noun: sonOrDaughter, symbol: genderSymbol })}
                       </span>
                     ) : item.isBiological ? (
                       <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
-                        Biological {sonOrDaughter} {isFemale ? '♀' : '♂'}
+                        {t('matchmaking.adoption.biologicalNounBadge', { noun: sonOrDaughter, symbol: genderSymbol })}
                       </span>
                     ) : item.isBlocked ? (
                       <span
                         className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 whitespace-nowrap"
-                        title={item.blockedReason || 'Blocked from adoption'}
+                        title={item.blockedReason || t('matchmaking.adoption.blockedTitleFallback')}
                       >
-                        Blocked {isFemale ? '♀' : '♂'}
+                        {t('matchmaking.adoption.blockedBadge', { symbol: genderSymbol })}
                       </span>
                     ) : (
                       <span className="px-[0.375rem] py-[0.125rem] rounded text-[0.625rem] font-semibold bg-status-success-soft text-status-success border border-status-success whitespace-nowrap">
-                        Available {isFemale ? '♀' : '♂'}
+                        {t('matchmaking.adoption.availableBadge', { symbol: genderSymbol })}
                       </span>
                     )}
                   </div>
@@ -706,7 +716,7 @@ export const AdoptionSubPage: React.FC = () => {
 
             {filteredChildren.length === 0 && (
               <div className="p-[1rem] text-center text-xs text-foreground-muted">
-                No children match search filter.
+                {t('matchmaking.adoption.emptyChildren')}
               </div>
             )}
           </div>
@@ -729,7 +739,7 @@ export const AdoptionSubPage: React.FC = () => {
                     <button
                       onClick={() => openNpcDetail(selectedChildInfo.profile.formId)}
                       className="text-foreground-muted hover:text-accent p-[0.125rem] rounded cursor-pointer transition-colors"
-                      title="Inspect Child Profile"
+                      title={t('matchmaking.adoption.inspectChildTooltip')}
                     >
                       <ExternalLink className="w-[0.875em] h-[0.875em]" />
                     </button>
@@ -738,31 +748,43 @@ export const AdoptionSubPage: React.FC = () => {
                       const isF = resolveIsFemale(selectedChildInfo.childRecord, selectedChildInfo.profile)
                       if (isF === undefined) return null
                       return (
-                        <span className={`text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isF ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30'}`} title={isF ? 'Daughter' : 'Son'}>
-                          {isF ? '♀ Daughter' : '♂ Son'}
+                        <span
+                          className={`text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isF ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30'}`}
+                          title={isF ? t('household.children.daughterTitle') : t('household.children.sonTitle')}
+                        >
+                          {isF ? t('household.children.daughterBadge') : t('household.children.sonBadge')}
                         </span>
                       )
                     })()}
-
-
                   </div>
                   <div className="flex items-center gap-[0.5rem] flex-wrap">
                     <span className="text-xs text-foreground-muted font-mono">({selectedChildInfo.profile.formId})</span>
                     {selectedChildInfo.profile.pluginName && (
-                      <span className="text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${selectedChildInfo.profile.pluginName}`}>
+                      <span className="text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={t('shared.pluginTooltip', { plugin: selectedChildInfo.profile.pluginName })}>
                         {selectedChildInfo.profile.pluginName}
                       </span>
                     )}
                   </div>
 
                   <div className="text-xs text-foreground-secondary flex items-center gap-[0.625rem] mt-[0.125rem] flex-wrap">
-                    <span>Race: <strong className="text-foreground-primary">{selectedChildInfo.profile.race}</strong></span>
+                    <span>
+                      {t('matchmaking.adoption.raceLabel')}{' '}
+                      <strong className="text-foreground-primary">{selectedChildInfo.profile.race}</strong>
+                    </span>
                     <span>•</span>
-                    <span>Residence: <strong className="text-foreground-primary">{selectedChildInfo.profile.currentHome || 'Skyrim'}</strong></span>
+                    <span>
+                      {t('matchmaking.adoption.residenceLabel')}{' '}
+                      <strong className="text-foreground-primary">
+                        {selectedChildInfo.profile.currentHome || t('matchmaking.adoption.defaultResidence')}
+                      </strong>
+                    </span>
                     {selectedChildInfo.isAdopted && selectedChildInfo.bioParentName && (
                       <>
                         <span>•</span>
-                        <span>Original Bio Parent: <strong className="text-foreground-primary">{selectedChildInfo.bioParentName}</strong></span>
+                        <span>
+                          {t('matchmaking.adoption.originalBioParentLabel')}{' '}
+                          <strong className="text-foreground-primary">{selectedChildInfo.bioParentName}</strong>
+                        </span>
                       </>
                     )}
                   </div>
@@ -774,17 +796,17 @@ export const AdoptionSubPage: React.FC = () => {
                 {selectedChildInfo.isAdopted || selectedChildInfo.isBiological ? (
                   <span className="px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold bg-accent-soft text-accent-bright border border-border-accent flex items-center gap-[0.375rem]">
                     <Heart className="w-[1em] h-[1em] text-accent" />
-                    <span>Has Family</span>
+                    <span>{t('matchmaking.adoption.hasFamilyStatus')}</span>
                   </span>
                 ) : selectedChildInfo.isBlocked ? (
                   <span className="px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-[0.375rem]">
                     <AlertCircle className="w-[1em] h-[1em] text-amber-400" />
-                    <span>Adoption Blocked</span>
+                    <span>{t('matchmaking.adoption.adoptionBlockedStatus')}</span>
                   </span>
                 ) : (
                   <span className="px-[0.75rem] py-[0.375rem] rounded text-xs font-semibold bg-status-success-soft text-status-success border border-status-success flex items-center gap-[0.375rem]">
                     <ShieldCheck className="w-[1em] h-[1em]" />
-                    <span>Eligible for Adoption</span>
+                    <span>{t('matchmaking.adoption.eligibleStatus')}</span>
                   </span>
                 )}
               </div>
@@ -795,14 +817,14 @@ export const AdoptionSubPage: React.FC = () => {
               <div className="flex items-center gap-[0.375rem]">
                 <User className="w-[1.125em] h-[1.125em] text-accent" />
                 <h3 className="text-xs font-bold text-foreground-primary uppercase tracking-wider">
-                  Select Adoptive Parent NPC:
+                  {t('matchmaking.adoption.selectAdoptiveParentHeader')}
                 </h3>
               </div>
 
               <div className="w-[14rem]">
                 <SearchInput
                   value={searchParentQuery}
-                  placeholder="Filter adult NPCs/parents/plugins..."
+                  placeholder={t('matchmaking.adoption.searchParentPlaceholder')}
                   onChange={setSearchParentQuery}
                 />
               </div>
@@ -813,9 +835,11 @@ export const AdoptionSubPage: React.FC = () => {
               <div className="p-[0.75rem] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-[0.625rem] shadow-sm">
                 <AlertCircle className="w-[1.25rem] h-[1.25rem] flex-shrink-0 text-amber-400" />
                 <div>
-                  <span className="font-semibold block">Cannot Adopt {selectedChildInfo.profile.name}</span>
+                  <span className="font-semibold block">
+                    {t('matchmaking.adoption.cannotAdoptTitle', { name: selectedChildInfo.profile.name })}
+                  </span>
                   <span className="text-[0.6875rem] text-foreground-muted">
-                    {selectedChildInfo.blockedReason || 'This child is currently unavailable for adoption.'}
+                    {selectedChildInfo.blockedReason || t('matchmaking.adoption.cannotAdoptFallback')}
                   </span>
                 </div>
               </div>
@@ -826,9 +850,9 @@ export const AdoptionSubPage: React.FC = () => {
               <div className="p-[0.75rem] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-[0.625rem] shadow-sm">
                 <AlertCircle className="w-[1.25rem] h-[1.25rem] flex-shrink-0 text-amber-400" />
                 <div>
-                  <span className="font-semibold block">No Homes Owned</span>
+                  <span className="font-semibold block">{t('matchmaking.adoption.noHomesWarningTitle')}</span>
                   <span className="text-[0.6875rem] text-foreground-muted">
-                    The Dragonborn must purchase or acquire at least one property before adopting children into the household.
+                    {t('matchmaking.adoption.noHomesWarningDesc')}
                   </span>
                 </div>
               </div>
@@ -893,11 +917,14 @@ export const AdoptionSubPage: React.FC = () => {
                           <div className="text-[0.6875rem] text-foreground-muted flex items-center gap-[0.5rem] mt-[0.125rem] flex-wrap">
                             <span className="font-mono">{adult.formId}</span>
                             <span>•</span>
-                            <span>Race: <strong className="text-foreground-secondary">{adult.race}</strong></span>
+                            <span>
+                              {t('matchmaking.adoption.raceLabel')}{' '}
+                              <strong className="text-foreground-secondary">{adult.race}</strong>
+                            </span>
                             {adult.pluginName && (
                               <>
                                 <span>•</span>
-                                <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${adult.pluginName}`}>
+                                <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={t('shared.pluginTooltip', { plugin: adult.pluginName })}>
                                   {adult.pluginName}
                                 </span>
                               </>
@@ -918,30 +945,32 @@ export const AdoptionSubPage: React.FC = () => {
                           >
                             <ShieldCheck className="w-[1em] h-[1em]" />
                             <span className="whitespace-nowrap">
-                              {isBioParent ? 'Biological Parent & Guardian' : 'Current Guardian'}
+                              {isBioParent
+                                ? t('matchmaking.adoption.bioParentAndGuardian')
+                                : t('matchmaking.adoption.currentGuardian')}
                             </span>
                           </span>
                         ) : selectedChildInfo.isBlocked ? (
-                          <AppTooltip content={selectedChildInfo.blockedReason || 'Cannot adopt this child'}>
+                          <AppTooltip content={selectedChildInfo.blockedReason || t('matchmaking.adoption.cannotAdoptTooltipFallback')}>
                             <div>
                               <button
                                 disabled
                                 className="px-[0.875rem] py-[0.375rem] bg-panel-inset text-foreground-muted font-semibold text-xs rounded border border-border-divider flex items-center gap-[0.375rem] cursor-not-allowed opacity-60 whitespace-nowrap"
                               >
                                 <AlertCircle className="w-[1em] h-[1em] text-amber-400" />
-                                <span className="whitespace-nowrap">Adoption Blocked</span>
+                                <span className="whitespace-nowrap">{t('matchmaking.adoption.adoptionBlockedStatus')}</span>
                               </button>
                             </div>
                           </AppTooltip>
                         ) : adult.isPlayer && playerHomes.length === 0 ? (
-                          <AppTooltip content="Requires an owned home to adopt">
+                          <AppTooltip content={t('matchmaking.adoption.requiresOwnedHomeTooltip')}>
                             <div>
                               <button
                                 disabled
                                 className="px-[0.875rem] py-[0.375rem] bg-panel-inset text-foreground-muted font-semibold text-xs rounded border border-border-divider flex items-center gap-[0.375rem] cursor-not-allowed opacity-60 whitespace-nowrap"
                               >
                                 <Home className="w-[1em] h-[1em]" />
-                                <span className="whitespace-nowrap">No Home Owned</span>
+                                <span className="whitespace-nowrap">{t('matchmaking.adoption.noHomeOwnedButton')}</span>
                               </button>
                             </div>
                           </AppTooltip>
@@ -955,7 +984,9 @@ export const AdoptionSubPage: React.FC = () => {
                             }`}
                           >
                             <PlusCircle className="w-[1em] h-[1em] shrink-0" />
-                            <span className="whitespace-nowrap">Adopt {selectedChildInfo.profile.name}</span>
+                            <span className="whitespace-nowrap">
+                              {t('matchmaking.adoption.adoptChildButton', { name: selectedChildInfo.profile.name })}
+                            </span>
                           </button>
                         )}
                       </div>
@@ -966,8 +997,8 @@ export const AdoptionSubPage: React.FC = () => {
                 {filteredAdults.length === 0 && (
                   <div className="p-[2rem] text-center text-xs text-foreground-muted bg-panel-inset border border-border-subtle rounded-lg space-y-[0.25rem]">
                     <Users className="w-[2em] h-[2em] text-accent/50 mx-auto" />
-                    <div className="font-semibold text-foreground-primary">No Adult NPCs Found</div>
-                    <div>Try adjusting your search query.</div>
+                    <div className="font-semibold text-foreground-primary">{t('matchmaking.adoption.noAdultsTitle')}</div>
+                    <div>{t('matchmaking.adoption.noAdultsSubtitle')}</div>
                   </div>
                 )}
               </div>
@@ -976,8 +1007,8 @@ export const AdoptionSubPage: React.FC = () => {
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-[2rem] text-foreground-muted gap-[0.5rem]">
             <Baby className="w-[2.5em] h-[2.5em] text-accent/50" />
-            <div className="text-sm font-semibold text-foreground-primary">No Child Selected</div>
-            <div className="text-xs">Select a child from the left column to assign adoption.</div>
+            <div className="text-sm font-semibold text-foreground-primary">{t('matchmaking.adoption.noChildSelectedTitle')}</div>
+            <div className="text-xs">{t('matchmaking.adoption.noChildSelectedSubtitle')}</div>
           </div>
         )}
       </div>

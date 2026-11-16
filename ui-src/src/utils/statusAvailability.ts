@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
+import { t } from '../i18n'
 import { RelationshipStatus, RelationshipPair, NPCProfile } from '../types'
 import { PLAYER_FORM_ID } from '../data/mockData'
 import { useMarasStore } from '../store/useMarasStore'
+import { useLocaleStore } from '../store/useLocaleStore'
 import { getStatusLabel } from '../components/shared/StatusBadge'
 
 export interface StatusOptionInfo {
@@ -37,7 +39,7 @@ export function getActorDisplayName(
   id: string,
   npcProfiles: Map<string, NPCProfile>
 ): string {
-  if (isPlayerFormId(id)) return 'Player'
+  if (isPlayerFormId(id)) return t('statusAvailability.player')
   const profile =
     npcProfiles.get(id) ||
     Array.from(npcProfiles.values()).find((p) => areSameFormId(p.formId, id))
@@ -77,7 +79,7 @@ export function checkRelationshipStatusAvailability(
   context: StatusAvailabilityContext
 ): { available: boolean; reason?: string; loverType?: 'allowed' | 'cheating' } {
   if (areSameFormId(actorA, actorB)) {
-    return { available: false, reason: 'An actor cannot form a relationship with themselves.' }
+    return { available: false, reason: t('statusAvailability.selfRelationship') }
   }
 
   const profileA =
@@ -88,7 +90,7 @@ export function checkRelationshipStatusAvailability(
     Array.from(context.npcProfiles.values()).find((p) => areSameFormId(p.formId, actorB))
 
   if (profileA?.isChild || profileB?.isChild) {
-    return { available: false, reason: 'Children cannot enter adult relationships.' }
+    return { available: false, reason: t('statusAvailability.childrenBlocked') }
   }
 
   const nameA = getActorDisplayName(actorA, context.npcProfiles)
@@ -103,7 +105,10 @@ export function checkRelationshipStatusAvailability(
   const directStatus = directPair ? directPair.status : RelationshipStatus.Candidate
 
   if (targetStatus === directStatus) {
-    return { available: false, reason: `Already ${getStatusLabel(directStatus)}.` }
+    return {
+      available: false,
+      reason: t('statusAvailability.alreadyStatus', { status: getStatusLabel(directStatus) }),
+    }
   }
 
   // Determine Lover allowed vs cheating classification
@@ -135,12 +140,19 @@ export function checkRelationshipStatusAvailability(
   // 1. Lover rules
   if (targetStatus === RelationshipStatus.Lover) {
     if (directStatus === RelationshipStatus.Lover) {
-      return { available: false, reason: `${nameA} and ${nameB} are already lovers.` }
+      return {
+        available: false,
+        reason: t('statusAvailability.alreadyLovers', { nameA, nameB }),
+      }
     }
     if (isMainTierStatus(directStatus)) {
       return {
         available: false,
-        reason: `${nameA} and ${nameB} already have an active relationship (${getStatusLabel(directStatus)}).`,
+        reason: t('statusAvailability.alreadyActiveRelationship', {
+          nameA,
+          nameB,
+          status: getStatusLabel(directStatus),
+        }),
       }
     }
     const loverType = evaluateLoverType()
@@ -150,25 +162,25 @@ export function checkRelationshipStatusAvailability(
   // 2. Breakup status rules
   if (targetStatus === RelationshipStatus.Divorced) {
     if (directStatus !== RelationshipStatus.Married) {
-      return { available: false, reason: 'Can only divorce if currently Married.' }
+      return { available: false, reason: t('statusAvailability.divorceRequiresMarried') }
     }
     return { available: true }
   }
   if (targetStatus === RelationshipStatus.Jilted) {
     if (directStatus !== RelationshipStatus.Engaged) {
-      return { available: false, reason: 'Can only be jilted if currently Engaged.' }
+      return { available: false, reason: t('statusAvailability.jiltRequiresEngaged') }
     }
     return { available: true }
   }
   if (targetStatus === RelationshipStatus.ExDating) {
     if (directStatus !== RelationshipStatus.Dating) {
-      return { available: false, reason: 'Can only transition to Ex-Dating if currently Dating.' }
+      return { available: false, reason: t('statusAvailability.exDatingRequiresDating') }
     }
     return { available: true }
   }
   if (targetStatus === RelationshipStatus.ExLover) {
     if (directStatus !== RelationshipStatus.Lover) {
-      return { available: false, reason: 'Can only transition to Ex-Lover if currently Lovers.' }
+      return { available: false, reason: t('statusAvailability.exLoverRequiresLover') }
     }
     return { available: true }
   }
@@ -177,7 +189,11 @@ export function checkRelationshipStatusAvailability(
   if (targetStatus === RelationshipStatus.Dating && isMainTierStatus(directStatus)) {
     return {
       available: false,
-      reason: `${nameA} and ${nameB} already have an active relationship (${getStatusLabel(directStatus)}).`,
+      reason: t('statusAvailability.alreadyActiveRelationship', {
+        nameA,
+        nameB,
+        status: getStatusLabel(directStatus),
+      }),
     }
   }
   if (
@@ -186,13 +202,13 @@ export function checkRelationshipStatusAvailability(
   ) {
     return {
       available: false,
-      reason: `${nameA} and ${nameB} are already engaged or married.`,
+      reason: t('statusAvailability.alreadyEngagedOrMarried', { nameA, nameB }),
     }
   }
   if (targetStatus === RelationshipStatus.Married && directStatus === RelationshipStatus.Married) {
     return {
       available: false,
-      reason: `${nameA} and ${nameB} are already married.`,
+      reason: t('statusAvailability.alreadyMarried', { nameA, nameB }),
     }
   }
 
@@ -219,8 +235,8 @@ export function checkRelationshipStatusAvailability(
             return {
               available: false,
               reason: isPlayer
-                ? 'Cannot enter another main relationship: Polygamy is disabled in settings.'
-                : `${name} already has a committed main partner (${partnerName}).`,
+                ? t('statusAvailability.playerPolygamyDisabledMain')
+                : t('statusAvailability.npcHasCommittedPartner', { name, partnerName }),
             }
           }
         } else if (targetStatus === RelationshipStatus.Engaged) {
@@ -228,16 +244,16 @@ export function checkRelationshipStatusAvailability(
             return {
               available: false,
               reason: isPlayer
-                ? 'Cannot enter another engagement/marriage: Polygamy is disabled in settings.'
-                : `${name} is already engaged or married to ${partnerName}.`,
+                ? t('statusAvailability.playerPolygamyDisabledMarriage')
+                : t('statusAvailability.npcAlreadyEngagedOrMarriedTo', { name, partnerName }),
             }
           }
           if (r.status === RelationshipStatus.Dating) {
             return {
               available: false,
               reason: isPlayer
-                ? 'Cannot propose engagement to this actor while dating someone else.'
-                : `${name} is dating ${partnerName} and can only get engaged to their dating partner.`,
+                ? t('statusAvailability.playerDatingSomeoneElse')
+                : t('statusAvailability.npcDatingSomeoneElse', { name, partnerName }),
             }
           }
         }
@@ -277,7 +293,7 @@ export function getAvailableStatuses(
       label: getStatusLabel(st),
       enabled: false,
       disabled: true,
-      tooltip: 'Select both actors first.',
+      tooltip: t('statusAvailability.selectBothActors'),
     }))
   }
 
@@ -294,7 +310,10 @@ export function getAvailableStatuses(
 
     let label = getStatusLabel(st)
     if (st === RelationshipStatus.Lover && res.available) {
-      label = res.loverType === 'cheating' ? 'Lover (Cheating)' : 'Lover (Allowed)'
+      label =
+        res.loverType === 'cheating'
+          ? t('statusAvailability.loverCheatingLabel')
+          : t('statusAvailability.loverAllowedLabel')
     }
 
     let tooltip = res.reason
@@ -302,8 +321,8 @@ export function getAvailableStatuses(
       if (st === RelationshipStatus.Lover) {
         tooltip =
           res.loverType === 'cheating'
-            ? 'Considered cheating: at least one party has a closed main relationship.'
-            : 'Allowed secondary relationship: both parties are single or in open relationships.'
+            ? t('statusAvailability.loverCheatingTooltip')
+            : t('statusAvailability.loverAllowedTooltip')
       }
     }
 
@@ -326,10 +345,10 @@ export function getAvailableStatuses(
     options.unshift({
       status: RelationshipStatus.Candidate,
       value: RelationshipStatus.Candidate,
-      label: 'Candidate',
+      label: getStatusLabel(RelationshipStatus.Candidate),
       enabled: false,
       disabled: true,
-      tooltip: 'Current status (Candidate cannot be manually assigned).',
+      tooltip: t('statusAvailability.candidateNotAssignable'),
       isCurrent: true,
     })
   }
@@ -347,12 +366,14 @@ export function useAvailableStatuses(
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const enablePolygamy = useMarasStore((s) => s.settings.enablePolygamy)
+  const localeRevision = useLocaleStore((s) => s.revision)
 
   return useMemo(() => {
+    void localeRevision
     return getAvailableStatuses(actorA, actorB, {
       relationships,
       npcProfiles,
       enablePolygamy,
     })
-  }, [actorA, actorB, relationships, npcProfiles, enablePolygamy])
+  }, [actorA, actorB, relationships, npcProfiles, enablePolygamy, localeRevision])
 }

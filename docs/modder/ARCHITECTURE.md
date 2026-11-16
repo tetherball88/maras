@@ -16,9 +16,9 @@ flowchart TD
     end
 
     subgraph SKSE["Layer 1: SKSE C++ Plugin (MARAS.dll & maras_tests.exe — SKSE_Source/)"]
-        CoreDomain["Layers 0-2: Pure C++23 Static Libraries (pch_core.h)\nmaras_foundation (StrongIds, DomainEnums, IRng)\nmaras_state (WorldStore, 10 CowTables, SpatialActorSnapshot,\nEngineSyncPlan, SessionEpoch, 'MARS' v1-v7 CoSaveCodec)\nmaras_projection (PerspectiveView & EventDispatchPlan Lens)\nmaras_domain_* (relationships, lineage, household, agency)"]
-        EngineApp["Layers 3-4: Engine & App OBJECT Modules (pch_engine.h)\nmaras_engine (FormCache, SpatialWorldIndex, BuffReconciler,\nFactionReconciler, PackageReconciler, PollingService, PlayerMiscStatsTracker,\nGiftMenuEventSink, SleepEventSink, PromptStringsLoader, HouseholdEngineOps,\nBedOwnershipReconciler, RelationshipEngineReconciler, QuestEventHandler,\nChildrenFleeService, IntimateThreadService)\nmaras_app (AppLifecycleCoordinator, RelationshipUseCases, RelationshipInteractionCoordinator,\nDialogueOutcomeCoordinator, SkyrimNetActionCoordinator, AffectionEventCoordinator,\nHouseholdUseCases, ChildInteractionCoordinator, LineageUseCases,\nFertilityLifecycleCoordinator, PaternityWorkflowCoordinator, AgencyWorkflowCoordinator,\nBanterSceneCoordinator, SettingsCoordinator)"]
-        Bridges["Layer 5: External Bridge OBJECT Modules & Composition Root\nmaras_bridge_papyrus (7 Papyrus TUs) | maras_bridge_ui (Magelight UI)\nmaras_bridge_skyrimnet (EventService/Payloads, 23 Decorators, Decisions, Profiles, Memories)\nmaras_bridge_c_api (MARAS_PublicAPI.h)\nplugin/plugin.cpp -> MARAS.dll | tests/ -> maras_tests.exe"]
+        CoreDomain["Layers 0-2: Pure C++23 Static Libraries (pch_core.h)\nmaras_foundation (StrongIds, DomainEnums, IRng, LocalizationCatalog)\nmaras_state (WorldStore, 10 CowTables, SpatialActorSnapshot,\nEngineSyncPlan, SessionEpoch, 'MARS' v1-v7 CoSaveCodec)\nmaras_projection (PerspectiveView & EventDispatchPlan Lens)\nmaras_domain_* (relationships, lineage, household, agency)"]
+        EngineApp["Layers 3-4: Engine & App OBJECT Modules (pch_engine.h)\nmaras_engine (FormCache, SpatialWorldIndex, BuffReconciler,\nFactionReconciler, PackageReconciler, PollingService, PlayerMiscStatsTracker,\nGiftMenuEventSink, SleepEventSink, LocalizationService, PromptStringsLoader, HouseholdEngineOps,\nBedOwnershipReconciler, RelationshipEngineReconciler, QuestEventHandler,\nChildrenFleeService, IntimateThreadService)\nmaras_app (AppLifecycleCoordinator, RelationshipUseCases, RelationshipInteractionCoordinator,\nDialogueOutcomeCoordinator, SkyrimNetActionCoordinator, AffectionEventCoordinator,\nHouseholdUseCases, ChildInteractionCoordinator, LineageUseCases,\nFertilityLifecycleCoordinator, PaternityWorkflowCoordinator, AgencyWorkflowCoordinator,\nBanterSceneCoordinator, SettingsCoordinator)"]
+        Bridges["Layer 5: External Bridge OBJECT Modules & Composition Root\nmaras_bridge_papyrus (7 Papyrus TUs) | maras_bridge_ui (Magelight UI & LocaleJsonBuilder)\nmaras_bridge_skyrimnet (EventService/Payloads, 23 Decorators, Decisions, Profiles, Memories)\nmaras_bridge_c_api (MARAS_PublicAPI.h)\nplugin/plugin.cpp -> MARAS.dll | tests/ -> maras_tests.exe"]
     end
 
     subgraph Papyrus["Layer 2: Papyrus Scripts (Scripts/Source/)"]
@@ -29,7 +29,7 @@ flowchart TD
     end
 
     subgraph UI["Layer 3: UI Dashboard & Modals (ui-src/ -> Magelight/MARAS/views/MARAS/)"]
-        Zustand["Zustand State Stores\n(useMarasStore.ts, useModalStore.ts & uiBridge.ts)"]
+        Zustand["Zustand State Stores\n(useMarasStore.ts, useModalStore.ts, useLocaleStore.ts & uiBridge.ts)"]
         Pages["React Dashboard & Modal Host\nOverview | My Household | Matchmaking\nNPC Detail | Settings | ModalHost"]
     end
 
@@ -62,6 +62,7 @@ flowchart TD
 - [API_AND_UI_BRIDGE_REFERENCE.md](API_AND_UI_BRIDGE_REFERENCE.md) — Complete reference for `MARAS_PublicAPI.h`, `MARAS.psc` native functions/events, CQS read-only guarantees, and the Magelight UI JSON bridge.
 - [RELATIONSHIP_DYNAMICS_GUIDE.md](RELATIONSHIP_DYNAMICS_GUIDE.md) — Guide to the unified pair-keyed relationship engine (`RelationshipUseCases`, `RelationshipEdgeTable`), cheating/affair tracking (`AffairLedger`), and paternity secrecy (`PaternityWorkflowCoordinator`).
 - [FERTILITY_MODE_RELOADED_INTEGRATION.md](FERTILITY_MODE_RELOADED_INTEGRATION.md) — Integration architecture for Fertility Mode Reloaded (FMR) and adolescent child training (`ChildGrowthRules`, `ChildVisualReconciler`).
+- [LOCALIZATION_GUIDE.md](LOCALIZATION_GUIDE.md) — Multi-language localization architecture (`LocalizationCatalog`, `LocalizationService`, `LocaleJsonBuilder`, `useLocaleStore`, Dynamic String Distributor `TT_MARAS.esp` templates, and `sync_localization.py`).
 
 ### Dedicated C++ Service & Module Guides (`docs/modder/services/`)
 - **Core State, Projection & Engine Registries**:

@@ -1,7 +1,8 @@
 import React from 'react'
+import { useTranslation } from '../../i18n'
 import { useMarasStore } from '../../store/useMarasStore'
 import { confirmRemoveChild } from '../../store/useModalStore'
-import { RelationshipStatus, SocialClass, SkillType, Temperament, AffairStatus } from '../../types'
+import { RelationshipStatus, AffairStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { StatusBadge } from '../shared/StatusBadge'
 import { NpcTraitBadges } from '../shared/TraitIcons'
@@ -32,6 +33,8 @@ import { areSameFormId } from '../../utils/statusAvailability'
 import { getPlayerProfileFallback } from '../../utils/playerUtils'
 
 export const NpcDetailShell: React.FC = () => {
+  const { t, tp } = useTranslation()
+  void tp
   const npcId = useMarasStore((s) => s.npcDetailId)
   const closeNpcDetail = useMarasStore((s) => s.closeNpcDetail)
 
@@ -115,8 +118,11 @@ export const NpcDetailShell: React.FC = () => {
 
   const isPlaceholderName = !npc?.name || npc.name.startsWith('NPC_')
   const resolvedChildName = childRecord?.name && !childRecord.name.startsWith('NPC_') ? childRecord.name : undefined
-  const displayName = (isPlaceholderName && resolvedChildName) ? resolvedChildName : (npc?.name || childRecord?.name || `NPC ${npcId}`)
-  const displayRace = npc?.race || 'Nord'
+  const displayName =
+    isPlaceholderName && resolvedChildName
+      ? resolvedChildName
+      : npc?.name || childRecord?.name || t('store.fallbackNpcName', { formId: npcId })
+  const displayRace = npc?.race || t('store.fallbackRace')
 
   // Render appropriate body component based on NPC resolution
   const renderBody = () => {
@@ -153,7 +159,7 @@ export const NpcDetailShell: React.FC = () => {
       {/* Page Header */}
       <header className="p-[1rem] bg-panel-raised border-b border-border-divider flex items-center justify-between">
         <div className="flex items-center gap-[0.75rem]">
-          <AppTooltip content="Back to Previous Page">
+          <AppTooltip content={t('npcDetail.shell.backTooltip')}>
             <button
               onClick={closeNpcDetail}
               className="p-[0.375rem] rounded-md text-foreground-muted hover:text-accent-bright hover:bg-accent-soft cursor-pointer transition-colors"
@@ -177,7 +183,10 @@ export const NpcDetailShell: React.FC = () => {
               {npc?.pluginName && (
                 <>
                   <span>•</span>
-                  <span className="font-mono text-[0.6875rem] text-foreground-muted bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${npc.pluginName}`}>
+                  <span
+                    className="font-mono text-[0.6875rem] text-foreground-muted bg-panel-inset px-[0.375rem] py-[0.0625rem] rounded border border-border-subtle"
+                    title={t('npcDetail.shell.pluginTitle', { plugin: npc.pluginName })}
+                  >
                     {npc.pluginName}
                   </span>
                 </>
@@ -191,7 +200,9 @@ export const NpcDetailShell: React.FC = () => {
                         : 'bg-panel-inset text-foreground-muted border-border-subtle'
                       }`}
                   >
-                    Polygamy: {settings.enablePolygamy ? 'Enabled' : 'Disabled'}
+                    {settings.enablePolygamy
+                      ? t('npcDetail.shell.polygamyEnabled')
+                      : t('npcDetail.shell.polygamyDisabled')}
                   </span>
                 </>
               )}
@@ -200,7 +211,7 @@ export const NpcDetailShell: React.FC = () => {
                   <span>•</span>
                   <span className="text-[0.6875rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]">
                     <AlertTriangle className="w-[0.875em] h-[0.875em]" />
-                    <span>Cheated</span>
+                    <span>{t('npcDetail.shell.badgeCheated')}</span>
                   </span>
                 </>
               )}
@@ -209,7 +220,7 @@ export const NpcDetailShell: React.FC = () => {
                   <span>•</span>
                   <span className="text-[0.6875rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]">
                     <Flame className="w-[0.875em] h-[0.875em]" />
-                    <span>Affair Partner</span>
+                    <span>{t('npcDetail.shell.badgeAffairPartner')}</span>
                   </span>
                 </>
               )}
@@ -226,33 +237,33 @@ export const NpcDetailShell: React.FC = () => {
                   <span>•</span>
                   {stage === 'unborn' ? (
                     <span className="px-[0.375rem] py-[0.125rem] bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded text-[0.6875rem] font-bold">
-                      🤰 Expecting / Unborn
+                      {t('npcDetail.shell.stageExpecting')}
                     </span>
                   ) : stage === 'infant' ? (
                     <span className="px-[0.375rem] py-[0.125rem] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded text-[0.6875rem] font-bold">
-                      🍼 Newborn Infant
+                      {t('npcDetail.shell.stageInfant')}
                     </span>
                   ) : stage === 'training' ? (
                     <span className="px-[0.375rem] py-[0.125rem] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[0.6875rem] font-bold">
-                      🎓 In Training
+                      {t('npcDetail.shell.stageInTraining')}
                     </span>
                   ) : stage === 'adult' ? (
                     <span className="px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold">
-                      ⚔️ Adult Offspring
+                      {t('npcDetail.shell.stageAdultOffspring')}
                     </span>
                   ) : !hasRefID ? (
                     <span className="px-[0.375rem] py-[0.125rem] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[0.6875rem] font-bold">
-                      🧸 Child (Unspawned)
+                      {t('npcDetail.shell.stageChildUnspawned')}
                     </span>
                   ) : (
                     <span className="px-[0.375rem] py-[0.125rem] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[0.6875rem] font-bold">
-                      Child
+                      {t('npcDetail.shell.stageChild')}
                     </span>
                   )}
                   {hasBeastblood && (
-                    <AppTooltip content="Carries Hircine's Beastblood (Lycanthropy)">
+                    <AppTooltip content={t('npcDetail.shell.beastbloodTooltip')}>
                       <span className="px-[0.375rem] py-[0.125rem] bg-amber-600/20 text-amber-200 border border-amber-500/40 rounded text-[0.6875rem] font-bold">
-                        🐺 Beastblood
+                        {t('npcDetail.shell.badgeBeastblood')}
                       </span>
                     </AppTooltip>
                   )}
@@ -272,48 +283,48 @@ export const NpcDetailShell: React.FC = () => {
         <div className="flex items-center gap-[0.5rem]">
           {!isPlayer && hasRefID && (
             <>
-              <AppTooltip content="Teleport Player to NPC location">
+              <AppTooltip content={t('npcDetail.shell.teleportPlayerToTooltip')}>
                 <button
                   onClick={() => teleportPlayerToNpc(npcId)}
                   className="text-xs text-foreground-primary bg-panel-inset hover:bg-interactive-hover px-[0.625rem] py-[0.375rem] rounded border border-border-subtle transition-colors flex items-center gap-[0.25rem] cursor-pointer"
                 >
                   <Navigation className="w-[0.875em] h-[0.875em] text-accent" />
-                  <span>Teleport Player To</span>
+                  <span>{t('npcDetail.shell.teleportPlayerTo')}</span>
                 </button>
               </AppTooltip>
 
-              <AppTooltip content="Teleport NPC to Player location">
+              <AppTooltip content={t('npcDetail.shell.teleportNpcToPlayerTooltip')}>
                 <button
                   onClick={() => teleportNpcToPlayer(npcId)}
                   className="text-xs text-foreground-primary bg-panel-inset hover:bg-interactive-hover px-[0.625rem] py-[0.375rem] rounded border border-border-subtle transition-colors flex items-center gap-[0.25rem] cursor-pointer"
                 >
                   <UserCheck className="w-[0.875em] h-[0.875em] text-accent" />
-                  <span>Teleport NPC To Player</span>
+                  <span>{t('npcDetail.shell.teleportNpcToPlayer')}</span>
                 </button>
               </AppTooltip>
             </>
           )}
 
           {isChild && !hasRefID && stage === 'child' && (
-            <AppTooltip content="Spawn physical child actor into the world (PlaceAtMe persistent)">
+            <AppTooltip content={t('npcDetail.shell.spawnChildTooltip')}>
               <button
                 onClick={() => spawnChild(npcId)}
                 className="text-xs font-semibold text-emerald-200 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm"
               >
                 <UserPlus className="w-[1em] h-[1em] text-emerald-400" />
-                <span>Spawn Child</span>
+                <span>{t('npcDetail.shell.spawnChild')}</span>
               </button>
             </AppTooltip>
           )}
 
           {isChild && !hasRefID && stage === 'adult' && (
-            <AppTooltip content="Spawn physical adult child actor into the world (PlaceAtMe persistent) and carry over childhood SkyrimNet bio">
+            <AppTooltip content={t('npcDetail.shell.spawnAdultTooltip')}>
               <button
                 onClick={() => spawnChild(npcId)}
                 className="text-xs font-semibold text-amber-200 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm"
               >
                 <Swords className="w-[1em] h-[1em] text-amber-400" />
-                <span>Spawn Adult</span>
+                <span>{t('npcDetail.shell.spawnAdult')}</span>
               </button>
             </AppTooltip>
           )}
@@ -322,8 +333,8 @@ export const NpcDetailShell: React.FC = () => {
             <AppTooltip
               content={
                 isEvaluatingSecret
-                  ? 'Evaluating paternity secret via SkyrimNet LLM...'
-                  : 'Evaluate secret via SkyrimNet AI'
+                  ? t('npcDetail.shell.evaluatingSecretTooltip')
+                  : t('npcDetail.shell.evaluateSecretTooltip')
               }
             >
               <button
@@ -339,13 +350,17 @@ export const NpcDetailShell: React.FC = () => {
                 ) : (
                   <Sparkles className="w-[1em] h-[1em] text-purple-300" />
                 )}
-                <span>{isEvaluatingSecret ? 'Evaluating...' : 'Evaluate Secret'}</span>
+                <span>
+                  {isEvaluatingSecret
+                    ? t('npcDetail.shell.evaluatingSecret')
+                    : t('npcDetail.shell.evaluateSecret')}
+                </span>
               </button>
             </AppTooltip>
           )}
 
           {childRecord && (
-            <AppTooltip content="Permanently remove this child record from M.A.R.A.S household and family tracking">
+            <AppTooltip content={t('npcDetail.shell.removeChildTooltip')}>
               <button
                 onClick={() =>
                   confirmRemoveChild(npcId, displayName, () => {
@@ -356,19 +371,19 @@ export const NpcDetailShell: React.FC = () => {
                 className="text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 px-[0.625rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer"
               >
                 <Trash2 className="w-[0.95em] h-[0.95em]" />
-                <span>Remove Child Record</span>
+                <span>{t('npcDetail.shell.removeChild')}</span>
               </button>
             </AppTooltip>
           )}
 
           {!isChild && (
-            <AppTooltip content="Open Matchmaking Modal">
+            <AppTooltip content={t('npcDetail.shell.matchmakingTooltip')}>
               <button
                 onClick={() => setMatchmakingModalOpen(true, npcId)}
                 className="text-xs font-semibold text-accent-bright bg-accent-soft hover:bg-accent/20 px-[0.75rem] py-[0.375rem] rounded border border-border-accent transition-colors flex items-center gap-[0.375rem] cursor-pointer"
               >
                 <HeartHandshake className="w-[1em] h-[1em] text-accent" />
-                <span>Matchmaking</span>
+                <span>{t('npcDetail.shell.matchmaking')}</span>
               </button>
             </AppTooltip>
           )}

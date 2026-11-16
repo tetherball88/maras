@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { SectionCard } from '../../shared/SectionCard'
 import { NpcPartnerGroup } from '../NpcPartnerGroup'
@@ -14,6 +15,8 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
   npcId,
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
+  void tp
   const relationships = useMarasStore((s) => s.relationships)
   const cheatingRecords = useMarasStore((s) => s.cheatingRecords)
   const settings = useMarasStore((s) => s.settings)
@@ -34,11 +37,11 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
   if (!hasRelationships || !categorized) return null
 
   return (
-    <SectionCard title="Tracked Relationships & Partners" icon={Users} className={className}>
+    <SectionCard title={t('npcDetail.trackedRelationships.title')} icon={Users} className={className}>
       <div className="space-y-[0.75rem] pt-[0.25rem] max-h-[22rem] overflow-y-auto pr-[0.25rem]">
         {/* Primary Partners (Married/Engaged/Dating) */}
         <NpcPartnerGroup
-          title="Primary Partners (Spouse / Engaged / Dating)"
+          title={t('npcDetail.trackedRelationships.groupPrimary')}
           icon={Heart}
           badgeColor="text-accent"
           relationships={categorized.primary}
@@ -48,7 +51,7 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
 
         {/* Open Relationship Partners */}
         <NpcPartnerGroup
-          title="Open Relationship Partners"
+          title={t('npcDetail.trackedRelationships.groupOpen')}
           icon={Shield}
           badgeColor="text-status-success"
           relationships={categorized.openRelationship}
@@ -58,7 +61,7 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
 
         {/* Lovers */}
         <NpcPartnerGroup
-          title="Lovers"
+          title={t('npcDetail.trackedRelationships.groupLovers')}
           icon={Flame}
           badgeColor="text-pink-400"
           relationships={categorized.lovers}
@@ -68,7 +71,7 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
 
         {/* Cheating Partners */}
         <NpcPartnerGroup
-          title="Cheating / Affairs"
+          title={t('npcDetail.trackedRelationships.groupCheating')}
           icon={AlertTriangle}
           badgeColor="text-status-danger"
           relationships={categorized.cheating}
@@ -78,7 +81,7 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
 
         {/* Candidate Partners */}
         <NpcPartnerGroup
-          title="Prospective Candidates"
+          title={t('npcDetail.trackedRelationships.groupCandidates')}
           icon={Flame}
           badgeColor="text-foreground-muted"
           relationships={categorized.candidate}
@@ -88,7 +91,7 @@ export const TrackedRelationshipsSection: React.FC<TrackedRelationshipsSectionPr
 
         {/* Former Partners */}
         <NpcPartnerGroup
-          title="Former Relationships (Exes)"
+          title={t('npcDetail.trackedRelationships.groupFormer')}
           icon={Clock}
           badgeColor="text-foreground-muted"
           relationships={categorized.former}

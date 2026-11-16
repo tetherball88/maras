@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../../i18n'
 import { useMarasStore } from '../../../store/useMarasStore'
 import { confirmRemoveChild } from '../../../store/useModalStore'
 import { SectionCard } from '../../shared/SectionCard'
@@ -16,6 +17,8 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
   npcId,
   className = '',
 }) => {
+  const { t, tp } = useTranslation()
+  void tp
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const children = useMarasStore((s) => s.children)
@@ -28,7 +31,7 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
 
   return (
     <SectionCard
-      title={`Household Children & Offspring (${allChildren.length})`}
+      title={t('npcDetail.householdChildren.title', { count: allChildren.length })}
       icon={Baby}
       className={className}
     >
@@ -39,7 +42,9 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
             const isPlaceholderName = !childProfile?.name || childProfile.name.startsWith('NPC_')
             const childName = (isPlaceholderName && child.name && !child.name.startsWith('NPC_'))
               ? child.name
-              : (childProfile?.name || child.name || `Child ${child.childId}`)
+              : (childProfile?.name ||
+                child.name ||
+                t('store.fallbackChildName', { childId: child.childId }))
             const { statusLabel, badgeLabel, badgeStyle } = getChildRelationshipStatus(
               child,
               npcId,
@@ -74,7 +79,7 @@ export const HouseholdChildrenSection: React.FC<HouseholdChildrenSectionProps> =
                   >
                     {badgeLabel}
                   </span>
-                  <AppTooltip content="Remove Child Record">
+                  <AppTooltip content={t('npcDetail.shell.removeChild')}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()

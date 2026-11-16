@@ -23,8 +23,9 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
     - **Kept (9):** `ChildrenFleeService.md`, `IntimateThreadService.md`, `MarriageDifficulty.md`, `ModalManager.md`, `PollingService.md`, `SkyrimNetIntegration.md`, `SkyrimNetMemoryService.md`, `SkyrimNetProfileService.md`, `UIDataBridge.md`.
     - **Canonical New / Renamed (19):** `WorldStoreAndCoSave.md`, `PerspectiveView.md`, `RelationshipUseCases.md`, `AffectionRules.md`, `TraitClassifier.md`, `BuffReconciler.md`, `AgencyWorkflowCoordinator.md`, `LineageUseCases.md`, `PaternityWorkflowCoordinator.md`, `ChildGrowthAndVisuals.md`, `NamePoolLoader.md`, `HouseholdUseCases.md`, `TravelRules.md`, `DeceasedQueries.md`, `SpatialWorldIndex.md`, `FactionReconciler.md`, `PackageReconciler.md`, `HomeCellDetector.md`, `QuestEventHandler.md`.
 - **External Modder Config Guides & Data Schemas:**
-  - Guides in `docs/modder/`: [ADVANCED_CONFIGURATION_AND_MODDING.md](../../../docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md), [MARRIAGE_DIFFICULTY_CONFIG.md](../../../docs/modder/MARRIAGE_DIFFICULTY_CONFIG.md), [PACKAGE_OVERRIDE.md](../../../docs/modder/PACKAGE_OVERRIDE.md), [QUEST_TRACKER.md](../../../docs/modder/QUEST_TRACKER.md), [LOCATION_IMAGES_PROMPTS.md](../../../docs/modder/LOCATION_IMAGES_PROMPTS.md).
+  - Guides in `docs/modder/`: [ADVANCED_CONFIGURATION_AND_MODDING.md](../../../docs/modder/ADVANCED_CONFIGURATION_AND_MODDING.md), [LOCALIZATION_GUIDE.md](../../../docs/modder/LOCALIZATION_GUIDE.md), [MARRIAGE_DIFFICULTY_CONFIG.md](../../../docs/modder/MARRIAGE_DIFFICULTY_CONFIG.md), [PACKAGE_OVERRIDE.md](../../../docs/modder/PACKAGE_OVERRIDE.md), [QUEST_TRACKER.md](../../../docs/modder/QUEST_TRACKER.md), [LOCATION_IMAGES_PROMPTS.md](../../../docs/modder/LOCATION_IMAGES_PROMPTS.md).
   - External config paths loaded under `(Data/)SKSE/Plugins/`:
+    - `MARAS/localization/<lang>/*.json` — Multi-language HUD, modal, catalog, Dashboard UI, & optional name overlays (`LocalizationService`, `LocaleJsonBuilder`, `NamePoolLoader`).
     - `MARAS/encounters/*.json` (+ optional `MARAS/encounters/overrides/*.json`) — Encounter templates (`EncounterConfigLoader`).
     - `MARAS/spousesTypes/*.json` — NPC trait overrides (`JsonOverrideLoader`).
     - `MARAS/questEvents/*.json` — Quest trigger event configs (`QuestEventConfigLoader` via `plugin.cpp`).
@@ -33,8 +34,8 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
     - `MARAS/marriageDifficultyConfig.json` (fallback `MARAS/marriage_difficulty.json`) — Marriage difficulty params (`MarriageDifficultyLoader`).
     - `MARAS/bonuses.json` — Spouse archetype bonuses (`BonusesConfigLoader`).
     - `MARAS/npc_index_overrides.ini` — NPC spatial index include/exclude overrides (`SpatialWorldIndex`).
-    - `MARAS/promptStrings.json` — Localized Papyrus/dialogue/modal strings (`PromptStringsLoader`).
-    - `PackageOverrides.ini` & `MARAS.ini` — AI package whitelist (`PackageReconciler`) and hotkey/log-level baseline (`SettingsCoordinator`).
+    - `MARAS/promptStrings.json` — Canonical English dialogue/LLM prompt strings (`PromptStringsLoader`).
+    - `PackageOverrides.ini` & `MARAS.ini` — AI package whitelist (`PackageReconciler`) and hotkey/log-level/language baseline (`SettingsCoordinator`).
 
 ## 2. Player-Facing Guides (`docs/player/`)
 

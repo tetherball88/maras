@@ -1,12 +1,10 @@
 import React, { useMemo } from 'react'
+import { useTranslation } from '../../i18n'
 import { useMarasStore } from '../../store/useMarasStore'
 import { confirmRemoveRelationship, confirmRemoveChild } from '../../store/useModalStore'
 import {
   RelationshipPair,
   RelationshipStatus,
-  SocialClass,
-  SkillType,
-  Temperament,
   AffairType,
   AffairStatus,
   AffairStage,
@@ -16,10 +14,9 @@ import { StatusBadge, getStatusLabel } from '../shared/StatusBadge'
 import { SliderInput } from '../shared/SliderInput'
 import { SelectInput } from '../shared/SelectInput'
 import { SectionCard } from '../shared/SectionCard'
-import { NpcTraitBadges } from '../shared/TraitIcons'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { categorizePartners } from '../../utils/partnerCategories'
-import { X, Heart, Home, Shield, Award, Users, ExternalLink, Crown, Baby, Trash2, Flame } from 'lucide-react'
+import { X, Heart, Shield, Users, ExternalLink, Crown, Baby, Trash2, Flame } from 'lucide-react'
 import { AppTooltip } from '../shared/AppTooltip'
 import { formatGameDay } from '../../utils/dateUtils'
 import { getChildRelationshipStatus } from '../../utils/childUtils'
@@ -27,6 +24,7 @@ import { useAvailableStatuses, areSameFormId } from '../../utils/statusAvailabil
 import { getPlayerProfileFallback } from '../../utils/playerUtils'
 
 export const NpcDetailPartnerPanel: React.FC = () => {
+  const { t, tp } = useTranslation()
   const currentNpcId = useMarasStore((s) => s.npcDetailId)
   const partnerId = useMarasStore((s) => s.npcDetailPartnerId)
   const setPartnerId = useMarasStore((s) => s.setNpcDetailPartnerId)
@@ -35,16 +33,12 @@ export const NpcDetailPartnerPanel: React.FC = () => {
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const relationships = useMarasStore((s) => s.relationships)
   const affectionData = useMarasStore((s) => s.affectionData)
-  const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks)
-  const playerHomes = useMarasStore((s) => s.playerHomes)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
   const cheatingRecords = useMarasStore((s) => s.cheatingRecords)
   const children = useMarasStore((s) => s.children)
   const settings = useMarasStore((s) => s.settings)
 
   const updateAffection = useMarasStore((s) => s.updateAffection)
-  const updateNPCProfile = useMarasStore((s) => s.updateNPCProfile)
-  const setHierarchyRank = useMarasStore((s) => s.setHierarchyRank)
   const assignRelationshipStatus = useMarasStore((s) => s.assignRelationshipStatus)
   const removeRelationship = useMarasStore((s) => s.removeRelationship)
   const removeChild = useMarasStore((s) => s.removeChild)
@@ -56,8 +50,8 @@ export const NpcDetailPartnerPanel: React.FC = () => {
   const currentNpcName = currentNpcId
     ? currentNpcId === PLAYER_FORM_ID
       ? getPlayerProfileFallback(npcProfiles).name
-      : npcProfiles.get(currentNpcId)?.name || `NPC ${currentNpcId}`
-    : 'NPC'
+      : npcProfiles.get(currentNpcId)?.name || t('store.fallbackNpcName', { formId: currentNpcId })
+    : t('npcDetail.partnerPanel.fallbackNpc')
 
   const partnerProfile = partnerId
     ? isPlayerPartner
@@ -104,12 +98,10 @@ export const NpcDetailPartnerPanel: React.FC = () => {
   }, [children, currentNpcId, partnerId])
 
   const targetNpcId = isPlayerPartner ? (currentNpcId !== PLAYER_FORM_ID ? currentNpcId : null) : partnerId
-  const targetNpcProfile = targetNpcId ? npcProfiles.get(targetNpcId) : null
   const isTargetPlayer = !targetNpcId || targetNpcId === PLAYER_FORM_ID
 
   const affectionObj = targetNpcId ? affectionData.get(targetNpcId) : undefined
   const currentAffection = affectionObj?.permanent ?? 0
-  const currentRank = targetNpcId ? hierarchyRanks.indexOf(targetNpcId) : -1
   const isMarriedToPlayer = !isTargetPlayer && currentRel?.status === RelationshipStatus.Married
   const isEngagedToPlayer = !isTargetPlayer && currentRel?.status === RelationshipStatus.Engaged
   const isLoverToPlayer = !isTargetPlayer && currentRel?.status === RelationshipStatus.Lover
@@ -117,21 +109,6 @@ export const NpcDetailPartnerPanel: React.FC = () => {
   const hasAffectionWithPlayer = !isTargetPlayer && (currentNpcId === PLAYER_FORM_ID || partnerId === PLAYER_FORM_ID) && (
     isMarriedToPlayer || isEngagedToPlayer || isLoverToPlayer || isDatingToPlayer
   )
-
-  const availableHomes = [
-    { value: 'Unset', label: 'Unset (No assigned house)' },
-    ...playerHomes.map((h) => ({
-      value: h.name,
-      label: h.locationName ? `${h.name} (${h.locationName})` : h.name,
-    })),
-  ]
-
-  const rankOptions = [
-    { value: 'none', label: 'Unranked (4th+)' },
-    { value: '0', label: '1st Rank Spouse' },
-    { value: '1', label: '2nd Rank Spouse' },
-    { value: '2', label: '3rd Rank Spouse' },
-  ]
 
   // Partner's own categorized partners
   const partnerCategorized = partnerId && partnerProfile
@@ -216,14 +193,14 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                     <span>•</span>
                     <span className="text-[0.625rem] px-[0.375rem] py-[0.125rem] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-[0.25rem]">
                       <Flame className="w-[0.875em] h-[0.875em]" />
-                      <span>Affair Partner</span>
+                      <span>{t('npcDetail.partnerPanel.affairPartner')}</span>
                     </span>
                   </>
                 )}
               </div>
             </div>
 
-            <AppTooltip content="Close Partner Panel">
+            <AppTooltip content={t('npcDetail.partnerPanel.closeTooltip')}>
               <button
                 onClick={() => setPartnerId(null)}
                 className="text-foreground-muted hover:text-accent p-[0.25rem] rounded hover:bg-accent-soft cursor-pointer transition-colors ml-[0.5rem]"
@@ -242,7 +219,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
               }}
               className="text-xs text-accent-bright hover:text-accent flex items-center gap-[0.25rem] font-medium cursor-pointer transition-colors"
             >
-              <span>Open Full NPC Page</span>
+              <span>{t('npcDetail.partnerPanel.openFullPage')}</span>
               <ExternalLink className="w-[0.875em] h-[0.875em]" />
             </button>
           </div>
@@ -252,7 +229,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
             <div className="space-y-[1rem] pr-[0.375rem]">
               {/* Relationship Status Selector */}
               {currentRel && currentNpcId && partnerId && (
-                <SectionCard title="Relationship Status" icon={Heart}>
+                <SectionCard title={t('npcDetail.partnerPanel.relationshipStatusTitle')} icon={Heart}>
                   <div className="pt-[0.25rem] space-y-[0.5rem]">
                     <SelectInput
                       value={currentRel.status}
@@ -268,7 +245,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                         foundRel.status !== RelationshipStatus.Unknown,
                     ) ||
                       isUnofficialAffair) && (
-                      <AppTooltip content="Completely remove this relationship record, history, and affair records while keeping the NPC registered as a Candidate">
+                      <AppTooltip content={t('npcDetail.partnerPanel.removeRelationshipTooltip')}>
                         <button
                           onClick={() =>
                             confirmRemoveRelationship(
@@ -280,7 +257,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                           className="w-full flex items-center justify-center gap-[0.375rem] px-[0.625rem] py-[0.375rem] rounded text-xs font-medium bg-rose-950/40 text-status-danger hover:bg-rose-900/50 border border-rose-800/50 hover:border-rose-700/70 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-[0.95em] h-[0.95em]" />
-                          <span>Remove Relationship Record</span>
+                          <span>{t('npcDetail.partnerPanel.removeRelationshipBtn')}</span>
                         </button>
                       </AppTooltip>
                     )}
@@ -290,7 +267,11 @@ export const NpcDetailPartnerPanel: React.FC = () => {
 
               {/* Affection Rating Block */}
               {hasAffectionWithPlayer && (
-                <SectionCard title="Affection Rating" icon={Heart} subtitle={`${currentAffection}%`}>
+                <SectionCard
+                  title={t('npcDetail.affection.title')}
+                  icon={Heart}
+                  subtitle={`${currentAffection}%`}
+                >
                   <div className="space-y-[0.5rem] pt-[0.25rem]">
                     <SliderInput
                       value={currentAffection}
@@ -301,14 +282,23 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                       className="w-full"
                     />
                     <div className="flex items-center justify-between text-[0.6875rem] text-foreground-muted">
-                      <span>Decay Mult: {affectionObj?.decayMultiplier ?? 1.0}x</span>
                       <span>
-                        Last Seen:{' '}
-                        {affectionObj?.daysSinceLastInteraction != null
-                          ? Math.round(affectionObj.daysSinceLastInteraction) === 0
-                            ? 'Today'
-                            : `${Math.round(affectionObj.daysSinceLastInteraction)} days ago`
-                          : 'Unknown'}
+                        {t('npcDetail.affection.decayMult', {
+                          mult: affectionObj?.decayMultiplier ?? 1.0,
+                        })}
+                      </span>
+                      <span>
+                        {t('npcDetail.partnerPanel.lastSeen', {
+                          time:
+                            affectionObj?.daysSinceLastInteraction != null
+                              ? Math.round(affectionObj.daysSinceLastInteraction) === 0
+                                ? t('utils.date.today')
+                                : tp(
+                                    'utils.date.daysAgo',
+                                    Math.round(affectionObj.daysSinceLastInteraction),
+                                  )
+                              : t('utils.date.unknown'),
+                        })}
                       </span>
                     </div>
                   </div>
@@ -317,10 +307,12 @@ export const NpcDetailPartnerPanel: React.FC = () => {
 
               {/* Pair Open Relationship Toggle & Cheating Records */}
               {currentRel && (
-                <SectionCard title="Relationship Policy" icon={Shield}>
+                <SectionCard title={t('npcDetail.partnerPanel.relationshipPolicyTitle')} icon={Shield}>
                   <div className="text-xs pt-[0.25rem] space-y-[0.5rem]">
                     <div className="flex justify-between items-center">
-                      <span className="text-foreground-muted font-medium">Pair Open Status:</span>
+                      <span className="text-foreground-muted font-medium">
+                        {t('npcDetail.partnerPanel.pairOpenStatus')}
+                      </span>
                       <button
                         onClick={() =>
                           useMarasStore.getState().setPairIsOpen(currentRel.actorA, currentRel.actorB, !currentRel.isOpen)
@@ -330,7 +322,9 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                           : 'bg-panel-raised text-foreground-muted border-border-divider hover:bg-interactive-hover'
                           }`}
                       >
-                        {currentRel.isOpen ? 'Open Relationship' : 'Closed (Monogamous)'}
+                        {currentRel.isOpen
+                          ? t('npcDetail.partnerPanel.openRelationship')
+                          : t('npcDetail.partnerPanel.closedMonogamous')}
                       </button>
                     </div>
                     {(() => {
@@ -338,33 +332,70 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                       if (records.length === 0) return null
                       return (
                         <div className="pt-[0.375rem] border-t border-border-divider space-y-[0.25rem]">
-                          <span className="text-destructive font-semibold block text-[0.6875rem]">Cheating / Affair Records:</span>
+                          <span className="text-destructive font-semibold block text-[0.6875rem]">
+                            {t('npcDetail.partnerPanel.cheatingRecordsHeader')}
+                          </span>
                           {records.map((cr, idx) => {
-                            const cheaterName = cr.cheaterId === PLAYER_FORM_ID ? (npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)') : npcProfiles.get(cr.cheaterId)?.name || `NPC ${cr.cheaterId}`
+                            const cheaterName =
+                              cr.cheaterId === PLAYER_FORM_ID
+                                ? npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
+                                : npcProfiles.get(cr.cheaterId)?.name ||
+                                  t('store.fallbackNpcName', { formId: cr.cheaterId })
                             const affairPartner = npcProfiles.get(cr.affairPartnerId)
-                            const affairPartnerName = cr.affairPartnerId === PLAYER_FORM_ID ? (npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)') : affairPartner?.name || `NPC ${cr.affairPartnerId}`
+                            const affairPartnerName =
+                              cr.affairPartnerId === PLAYER_FORM_ID
+                                ? npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
+                                : affairPartner?.name ||
+                                  t('store.fallbackNpcName', { formId: cr.affairPartnerId })
                             const victimProfile = npcProfiles.get(cr.victimId)
-                            const victimName = cr.victimId === PLAYER_FORM_ID ? (npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)') : victimProfile?.name || `NPC ${cr.victimId}`
-                            const typeLabel = cr.affairType === AffairType.Lover ? 'Lover' : cr.affairType === AffairType.Dating ? 'Dating' : 'Casual'
+                            const victimName =
+                              cr.victimId === PLAYER_FORM_ID
+                                ? npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
+                                : victimProfile?.name ||
+                                  t('store.fallbackNpcName', { formId: cr.victimId })
+                            const typeLabel =
+                              cr.affairType === AffairType.Lover
+                                ? t('npcDetail.partnerPanel.affairTypeLover')
+                                : cr.affairType === AffairType.Dating
+                                  ? t('npcDetail.partnerPanel.affairTypeDating')
+                                  : t('npcDetail.partnerPanel.affairTypeCasual')
                             const statusLabel =
-                              cr.affairStatus === AffairStatus.Ongoing ? 'Ongoing' :
-                                cr.affairStatus === AffairStatus.EndedBreakup ? 'Ended (Breakup)' :
-                                  cr.affairStatus === AffairStatus.EndedVictimSplit ? 'Ended (Divorce/Split)' :
-                                    cr.affairStatus === AffairStatus.Allowed ? 'Allowed (Open)' :
-                                      cr.affairStatus === AffairStatus.EndedConfronted ? 'Ended (Confronted)' : 'Ongoing'
+                              cr.affairStatus === AffairStatus.Ongoing
+                                ? t('npcDetail.partnerPanel.affairStatusOngoing')
+                                : cr.affairStatus === AffairStatus.EndedBreakup
+                                  ? t('npcDetail.partnerPanel.affairStatusEndedBreakup')
+                                  : cr.affairStatus === AffairStatus.EndedVictimSplit
+                                    ? t('npcDetail.partnerPanel.affairStatusEndedVictimSplit')
+                                    : cr.affairStatus === AffairStatus.Allowed
+                                      ? t('npcDetail.partnerPanel.affairStatusAllowed')
+                                      : cr.affairStatus === AffairStatus.EndedConfronted
+                                        ? t('npcDetail.partnerPanel.affairStatusEndedConfronted')
+                                        : t('npcDetail.partnerPanel.affairStatusOngoing')
                             const isOngoing = cr.affairStatus === undefined || cr.affairStatus === AffairStatus.Ongoing
                             const isTalkingStage = cr.victimId === PLAYER_FORM_ID && cr.affairStage === AffairStage.Talking
-                            const stageLabel = isTalkingStage ? 'Talking Stage' : 'Physical Affair'
+                            const stageLabel = isTalkingStage
+                              ? t('npcDetail.partnerPanel.stageTalking')
+                              : t('npcDetail.partnerPanel.stagePhysical')
 
                             return (
                               <div key={idx} className="bg-destructive/10 text-destructive text-[0.6875rem] p-[0.375rem] rounded border border-destructive/20 flex justify-between items-center gap-[0.5rem]">
                                 <div className="space-y-[0.125rem]">
                                   <div>
-                                    <span>{cheaterName}'s affair with <span className="font-semibold text-foreground-primary">{affairPartnerName}</span>: {cr.count} incident(s) (Day {cr.lastTimestamp})</span>
+                                    <span>
+                                      {tp(
+                                        'npcDetail.partnerPanel.affairIncidentSummary',
+                                        cr.count,
+                                        {
+                                          cheater: cheaterName,
+                                          partner: affairPartnerName,
+                                          day: cr.lastTimestamp,
+                                        },
+                                      )}
+                                    </span>
                                   </div>
                                   {cr.victimId && cr.victimId !== currentNpcId && cr.victimId !== partnerId && (
                                     <div className="text-[0.625rem] text-foreground-muted">
-                                      Cheating on: <span className="text-foreground-secondary font-medium">{victimName}</span>
+                                      {t('npcDetail.partnerPanel.cheatingOn', { victim: victimName })}
                                     </div>
                                   )}
                                   <div className="flex items-center gap-[0.25rem]">
@@ -389,7 +420,9 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                   : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                                   }`}>
-                                  {cr.isSecret ? 'Secret' : 'Public'}
+                                  {cr.isSecret
+                                    ? t('npcDetail.partnerPanel.visibilitySecret')
+                                    : t('npcDetail.partnerPanel.visibilityPublic')}
                                 </span>
                               </div>
                             )
@@ -404,7 +437,9 @@ export const NpcDetailPartnerPanel: React.FC = () => {
               {/* Children & Offspring Section */}
               {currentRel && (
                 <SectionCard
-                  title={`Children & Offspring (${sharedChildren.length})`}
+                  title={t('npcDetail.partnerPanel.childrenSectionTitle', {
+                    count: sharedChildren.length,
+                  })}
                   icon={Baby}
                 >
                   <div className="text-xs pt-[0.25rem] space-y-[0.5rem]">
@@ -415,7 +450,9 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                           const isPlaceholderName = !childProfile?.name || childProfile.name.startsWith('NPC_')
                           const childName = (isPlaceholderName && child.name && !child.name.startsWith('NPC_'))
                             ? child.name
-                            : (childProfile?.name || child.name || `Child ${child.childId}`)
+                            : (childProfile?.name ||
+                              child.name ||
+                              t('store.fallbackChildName', { childId: child.childId }))
                           const { statusLabel, badgeLabel, badgeStyle } = getChildRelationshipStatus(
                             child,
                             currentNpcId,
@@ -450,7 +487,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                                 >
                                   {badgeLabel}
                                 </span>
-                                <AppTooltip content="Remove Child Record">
+                                <AppTooltip content={t('npcDetail.shell.removeChild')}>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -470,7 +507,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                       </div>
                     ) : (
                       <p className="text-[0.6875rem] text-foreground-muted italic">
-                        No children recorded for this relationship pair.
+                        {t('npcDetail.partnerPanel.noChildrenRecorded')}
                       </p>
                     )}
                   </div>
@@ -479,7 +516,7 @@ export const NpcDetailPartnerPanel: React.FC = () => {
 
               {/* Partner's Other Relationships Summary */}
               {partnerCategorized && (
-                <SectionCard title="Other Relationships" icon={Users}>
+                <SectionCard title={t('npcDetail.partnerPanel.otherRelationshipsTitle')} icon={Users}>
                   <div className="space-y-[0.375rem] text-xs pt-[0.25rem]">
                     {[
                       ...partnerCategorized.primary,
@@ -489,7 +526,11 @@ export const NpcDetailPartnerPanel: React.FC = () => {
                       .filter((r) => r.actorA !== currentNpcId && r.actorB !== currentNpcId)
                       .map((r, i) => {
                         const otherId = r.actorA === partnerId ? r.actorB : r.actorA
-                        const otherName = otherId === PLAYER_FORM_ID ? (npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)') : npcProfiles.get(otherId)?.name || `NPC ${otherId}`
+                        const otherName =
+                          otherId === PLAYER_FORM_ID
+                            ? npcProfiles.get(PLAYER_FORM_ID)?.name || t('utils.player.defaultName')
+                            : npcProfiles.get(otherId)?.name ||
+                              t('store.fallbackNpcName', { formId: otherId })
                         return (
                           <div
                             key={i}

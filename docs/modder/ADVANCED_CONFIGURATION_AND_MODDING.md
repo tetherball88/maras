@@ -17,6 +17,7 @@ This guide is for mod authors, patch creators, and advanced users who want to cu
 - [Household & Children Architecture](HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md) — Multi-home management, spouse hierarchy, store income, buffs, and dual-layer child system.
 - [Marriage Difficulty Configuration Guide](MARRIAGE_DIFFICULTY_CONFIG.md) — Reference for `marriageDifficultyConfig.json` (`marriage_difficulty.json`).
 - [Quest Event Tracker Documentation](QUEST_TRACKER.md) — Detailed reference for `Data/SKSE/Plugins/MARAS/questEvents/*.json`.
+- [Localization & Translator Guide](LOCALIZATION_GUIDE.md) — Translating M.A.R.A.S HUD, modals, catalogs, Dashboard UI (`SKSE/Plugins/MARAS/localization/<lang>/`), and `TT_MARAS.esp` records (Dynamic String Distributor).
 
 ---
 
@@ -26,16 +27,17 @@ All external configuration files live under `Data/SKSE/Plugins/`:
 
 | Path (relative to `Data/`) | Purpose | Loaded When |
 | :--- | :--- | :--- |
-| `SKSE/Plugins/MARAS.ini` | Default plugin settings and logging level. | Plugin startup (`kDataLoaded`) & Settings save |
+| `SKSE/Plugins/MARAS.ini` | Global hotkey (`[Hotkeys] ToggleUI`), logging level (`[Logging] LogLevel`), and UI/HUD language (`[Localization] Language = auto`). | Plugin startup (`kDataLoaded`) & Settings save |
+| `SKSE/Plugins/MARAS/localization/<lang>/*.json` | Multi-language translation packs (`_meta.json`, `hud_and_modals.json`, `catalogs.json`, `ui_dashboard.json`, `ui_settings.json`, optional `names.json`) with key-by-key fallback to `en/` (`LocalizationService`). | Startup (`kDataLoaded`), language switch, & live `Reload Localization` |
 | `SKSE/Plugins/PackageOverrides.ini` | AI package override rules (`Whitelist`, `AllowedPlugins`, `QuestWhitelist`, `QuestPriority`) for housed tenants (`0x6A`), pets/critters (`0xC0`), non-player children (`0x376`), and traveling adult children (`0xDD3`). | `kDataLoaded` |
 | `SKSE/Plugins/MARAS/spousesTypes/*.json` | Permanent NPC archetype overrides (`social`, `skill`, `temperament`). | `kDataLoaded` (applied when an NPC is first registered) |
 | `SKSE/Plugins/MARAS/questEvents/*.json` | Declarative quest start, stop, and stage-change triggers (`promoteToStatus`, `onDeath`, affection, archetype commands). | `kDataLoaded` |
 | `SKSE/Plugins/MARAS/encounters/*.json` & `encounters/overrides/*.json` | Home-arrival secret letter & open-date encounter modal templates (`EncounterConfigLoader`). | `kDataLoaded` & every save load / new game |
 | `SKSE/Plugins/MARAS/bonuses.json` | Numeric buff magnitudes, effect indices, perk FormKeys (`0x35`–`0x42`), and units for Social Class and Skill Type buffs. | `kDataLoaded` & every save load / new game |
 | `SKSE/Plugins/MARAS/marriageDifficultyConfig.json` *(or `marriage_difficulty.json`)* | Weights, clamps, prestige targets, and guild alignment tables for marriage proposal calculations. | `kDataLoaded` & every save load / new game |
-| `SKSE/Plugins/MARAS/childrenNames.json` | Race-keyed male and female name pools for newborn and NPC-couple children. | `kDataLoaded` & save load |
-| `SKSE/Plugins/MARAS/critterNames.json` | Species-keyed (`fox`, `arctic_fox`, `hare`, `mudcrab`, `skeever`) name pools for adopted child critters. | `kDataLoaded` & save load |
-| `SKSE/Plugins/MARAS/promptStrings.json` | Localized vanilla dialogue prompt templates keyed by topic/prompt ID (`PromptStringsLoader`). | `kDataLoaded` & save load |
+| `SKSE/Plugins/MARAS/childrenNames.json` | Base race-keyed male and female name pools for newborn and NPC-couple children (overlaid by optional `localization/<lang>/names.json`). | `kDataLoaded` & save load |
+| `SKSE/Plugins/MARAS/critterNames.json` | Base species-keyed (`fox`, `arctic_fox`, `hare`, `mudcrab`, `skeever`) name pools for adopted child critters (overlaid by optional `localization/<lang>/names.json`). | `kDataLoaded` & save load |
+| `SKSE/Plugins/MARAS/promptStrings.json` | Canonical English dialogue prompt & SkyrimNet context templates keyed by topic/prompt ID (`PromptStringsLoader`). | `kDataLoaded` & save load |
 | `SKSE/Plugins/MARAS/childTraining.yaml` & `childTraining/*.yaml` | Extensible child training locations (`0..21`), adult class outcomes (weighted `1..5` skills, spells, perks, outfits, items, combat styles, `costMultiplier`, `affiliation:` discounts, `requiresBeastblood`), and Daedric Champion Lineage blessings. | `kDataLoaded` & every save load / new game |
 | `SKSE/Plugins/MARAS/npc_index_overrides.ini` | Manual `SpatialWorldIndex` inclusion/exclusion rules (`[Include]`, `[Exclude]`, `[ExcludeNames]`, `[ExcludeEditorIDs]`, `[ExcludePlugins]`) for custom or modded NPCs. | `kDataLoaded` (`SpatialWorldIndex::BuildIndex`) |
 

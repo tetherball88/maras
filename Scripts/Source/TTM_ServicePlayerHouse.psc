@@ -76,7 +76,7 @@ Function ReleaseSpouseFromPlayerHome(Actor spouse, string reason = "") global
     TTM_Debug.trace("ReleaseSpouseFromPlayerHome:spouse:"+spouse+":reason:"+reason)
     if(!MARAS.RemoveTenantFromPlayerHouse(spouse))
         if(reason == "")
-            Debug.Notification("Cannot send " + TTM_Utils.GetActorName(spouse) + " away while you have children together. Move them to a new home instead.")
+            MARAS.NotifyLocalized("hud.cannot_send_spouse_away_children", TTM_Utils.GetActorName(spouse))
         endif
         return
     endif

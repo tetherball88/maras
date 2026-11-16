@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { AffairStatus, ChildRecord, CheatingRecord, RelationshipPair, RelationshipStatus } from '../types'
 import { areSameFormId } from './statusAvailability'
 import { PLAYER_FORM_ID } from '../data/mockData'
@@ -27,11 +28,37 @@ export function resolveIsFemale(
   return undefined
 }
 
+function selectGenderedText(
+  isFemale: boolean | undefined,
+  femaleText: string,
+  maleText: string,
+  neutralText: string,
+): string {
+  if (isFemale === true) return femaleText
+  if (isFemale === false) return maleText
+  return neutralText
+}
+
 export function getChildGenderNouns(isFemale?: boolean) {
-  const sonOrDaughter = isFemale !== undefined ? (isFemale ? 'Daughter' : 'Son') : 'Child'
-  const childNoun = isFemale !== undefined ? (isFemale ? 'Daughter' : 'Son') : 'Child'
-  const stepNoun = isFemale !== undefined ? (isFemale ? 'Stepdaughter' : 'Stepson') : 'Stepchild'
-  const boyOrGirl = isFemale !== undefined ? (isFemale ? 'Girl' : 'Boy') : 'Child'
+  const sonOrDaughter = selectGenderedText(
+    isFemale,
+    t('utils.child.daughter'),
+    t('utils.child.son'),
+    t('utils.child.child'),
+  )
+  const childNoun = sonOrDaughter
+  const stepNoun = selectGenderedText(
+    isFemale,
+    t('utils.child.stepdaughter'),
+    t('utils.child.stepson'),
+    t('utils.child.stepchild'),
+  )
+  const boyOrGirl = selectGenderedText(
+    isFemale,
+    t('utils.child.girl'),
+    t('utils.child.boy'),
+    t('utils.child.child'),
+  )
   const genderSymbol = isFemale !== undefined ? (isFemale ? '♀' : '♂') : ''
   return { sonOrDaughter, childNoun, stepNoun, boyOrGirl, genderSymbol }
 }
@@ -92,12 +119,25 @@ export function getChildRelationshipStatus(
 ): ChildStatusInfo {
   const isAdopted = child.isAdopted !== false
   const isFemale = resolveIsFemale(child)
-  const { sonOrDaughter, childNoun, stepNoun } = getChildGenderNouns(isFemale)
+  const { sonOrDaughter, stepNoun } = getChildGenderNouns(isFemale)
+
+  const adoptedLabel = selectGenderedText(
+    isFemale,
+    t('utils.child.adoptedDaughter'),
+    t('utils.child.adoptedSon'),
+    t('utils.child.adoptedChild'),
+  )
+  const presumedBadgeLabel = selectGenderedText(
+    isFemale,
+    t('utils.child.presumedDaughter'),
+    t('utils.child.presumedSon'),
+    t('utils.child.presumedChild'),
+  )
 
   if (isAdopted) {
     return {
-      statusLabel: `Adopted ${childNoun}`,
-      badgeLabel: `Adopted ${sonOrDaughter}`,
+      statusLabel: adoptedLabel,
+      badgeLabel: adoptedLabel,
       badgeStyle: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     }
   }
@@ -115,7 +155,12 @@ export function getChildRelationshipStatus(
 
     if (isBioA && isBioB) {
       return {
-        statusLabel: `Shared Biological ${sonOrDaughter}`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t('utils.child.sharedBiologicalDaughter'),
+          t('utils.child.sharedBiologicalSon'),
+          t('utils.child.sharedBiologicalChild'),
+        ),
         badgeLabel: sonOrDaughter,
         badgeStyle: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
       }
@@ -124,13 +169,23 @@ export function getChildRelationshipStatus(
       const isSecretPartner = child.isSecretForPartner ?? child.isSecret
       if (isSecretPartner) {
         return {
-          statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
-          badgeLabel: `Presumed ${sonOrDaughter}`,
+          statusLabel: selectGenderedText(
+            isFemale,
+            t('utils.child.presumedDaughterSecret'),
+            t('utils.child.presumedSonSecret'),
+            t('utils.child.presumedChildSecret'),
+          ),
+          badgeLabel: presumedBadgeLabel,
           badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
         }
       }
       return {
-        statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t('utils.child.stepOrBioDaughter'),
+          t('utils.child.stepOrBioSon'),
+          t('utils.child.stepOrBioChild'),
+        ),
         badgeLabel: stepNoun,
         badgeStyle: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
       }
@@ -139,20 +194,30 @@ export function getChildRelationshipStatus(
       const isSecretPartner = child.isSecretForPartner ?? child.isSecret
       if (isSecretPartner) {
         return {
-          statusLabel: `Presumed ${sonOrDaughter} (Secret)`,
-          badgeLabel: `Presumed ${sonOrDaughter}`,
+          statusLabel: selectGenderedText(
+            isFemale,
+            t('utils.child.presumedDaughterSecret'),
+            t('utils.child.presumedSonSecret'),
+            t('utils.child.presumedChildSecret'),
+          ),
+          badgeLabel: presumedBadgeLabel,
           badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
         }
       }
       return {
-        statusLabel: `${stepNoun} / ${sonOrDaughter}`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t('utils.child.stepOrBioDaughter'),
+          t('utils.child.stepOrBioSon'),
+          t('utils.child.stepOrBioChild'),
+        ),
         badgeLabel: stepNoun,
         badgeStyle: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
       }
     }
     return {
-      statusLabel: `Adopted ${childNoun}`,
-      badgeLabel: `Adopted ${sonOrDaughter}`,
+      statusLabel: adoptedLabel,
+      badgeLabel: adoptedLabel,
       badgeStyle: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     }
   }
@@ -168,13 +233,28 @@ export function getChildRelationshipStatus(
   if (isBioMotherMatch || isBioFatherMatch) {
     if (isBioFatherMatch && child.isSecretForBioFather) {
       return {
-        statusLabel: `Biological ${sonOrDaughter} (Secret from Father)`,
-        badgeLabel: `${sonOrDaughter} (Secret)`,
+        statusLabel: selectGenderedText(
+          isFemale,
+          t('utils.child.biologicalDaughterSecretFather'),
+          t('utils.child.biologicalSonSecretFather'),
+          t('utils.child.biologicalChildSecretFather'),
+        ),
+        badgeLabel: selectGenderedText(
+          isFemale,
+          t('utils.child.daughterSecret'),
+          t('utils.child.sonSecret'),
+          t('utils.child.childSecret'),
+        ),
         badgeStyle: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
       }
     }
     return {
-      statusLabel: `Biological ${sonOrDaughter}`,
+      statusLabel: selectGenderedText(
+        isFemale,
+        t('utils.child.biologicalDaughter'),
+        t('utils.child.biologicalSon'),
+        t('utils.child.biologicalChild'),
+      ),
       badgeLabel: sonOrDaughter,
       badgeStyle: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
     }
@@ -185,17 +265,27 @@ export function getChildRelationshipStatus(
   if (isPresumedFatherMatch) {
     if (isPregSecretPartner) {
       return {
-        statusLabel: `Unaware of Pregnancy (Presumed Father)`,
-        badgeLabel: `Unaware of Pregnancy`,
+        statusLabel: t('utils.child.unawareOfPregnancyPresumedFather'),
+        badgeLabel: t('utils.child.unawareOfPregnancy'),
         badgeStyle: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
       }
     }
     if (isSecretPartner) {
       return {
         statusLabel: isGuardianMatch
-          ? `Presumed ${sonOrDaughter} (Guardian • Secret)`
-          : `Presumed ${sonOrDaughter} (Secret from Partner)`,
-        badgeLabel: `Presumed ${sonOrDaughter}`,
+          ? selectGenderedText(
+              isFemale,
+              t('utils.child.presumedDaughterGuardianSecret'),
+              t('utils.child.presumedSonGuardianSecret'),
+              t('utils.child.presumedChildGuardianSecret'),
+            )
+          : selectGenderedText(
+              isFemale,
+              t('utils.child.presumedDaughterSecretPartner'),
+              t('utils.child.presumedSonSecretPartner'),
+              t('utils.child.presumedChildSecretPartner'),
+            ),
+        badgeLabel: presumedBadgeLabel,
         badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
       }
     }
@@ -207,16 +297,26 @@ export function getChildRelationshipStatus(
       }
     }
     return {
-      statusLabel: `Former Presumed ${sonOrDaughter}`,
-      badgeLabel: `Former Presumed`,
+      statusLabel: selectGenderedText(
+        isFemale,
+        t('utils.child.formerPresumedDaughter'),
+        t('utils.child.formerPresumedSon'),
+        t('utils.child.formerPresumedChild'),
+      ),
+      badgeLabel: t('utils.child.formerPresumed'),
       badgeStyle: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
     }
   }
 
   if (isSecretPartner) {
     return {
-      statusLabel: `Presumed ${sonOrDaughter} (Secret from Partner)`,
-      badgeLabel: `Presumed ${sonOrDaughter}`,
+      statusLabel: selectGenderedText(
+        isFemale,
+        t('utils.child.presumedDaughterSecretPartner'),
+        t('utils.child.presumedSonSecretPartner'),
+        t('utils.child.presumedChildSecretPartner'),
+      ),
+      badgeLabel: presumedBadgeLabel,
       badgeStyle: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     }
   }
@@ -251,7 +351,11 @@ export function getParentRole(
   const isMale = parentGender === 'male'
   if (child.isAdopted !== false) {
     return {
-      roleLabel: isMale ? 'Adoptive Father' : isFemale ? 'Adoptive Mother' : 'Current Guardian',
+      roleLabel: isMale
+        ? t('utils.child.roleAdoptiveFather')
+        : isFemale
+          ? t('utils.child.roleAdoptiveMother')
+          : t('utils.child.roleCurrentGuardian'),
       badgeStyle: 'text-amber-300',
     }
   }
@@ -262,7 +366,7 @@ export function getParentRole(
 
   if (isBioMother) {
     return {
-      roleLabel: 'Biological Mother',
+      roleLabel: t('utils.child.roleBiologicalMother'),
       isSecret: false,
       badgeStyle: 'text-emerald-300',
     }
@@ -271,7 +375,7 @@ export function getParentRole(
   if (isBioFather) {
     const isSecretBio = child.isSecretForBioFather ?? false
     return {
-      roleLabel: 'Biological Father',
+      roleLabel: t('utils.child.roleBiologicalFather'),
       isSecret: isSecretBio,
       isSecretForBioFather: isSecretBio,
       badgeStyle: 'text-emerald-300',
@@ -284,7 +388,7 @@ export function getParentRole(
   if (isPresumedFather) {
     if (isSecretPartner) {
       return {
-        roleLabel: 'Presumed Father (Guardian)',
+        roleLabel: t('utils.child.rolePresumedFatherGuardian'),
         isSecret: true,
         isSecretForPartner: true,
         isPregnancySecretForPartner: isPregSecretPartner,
@@ -292,14 +396,18 @@ export function getParentRole(
       }
     }
     return {
-      roleLabel: 'Step-father',
+      roleLabel: t('utils.child.roleStepFather'),
       badgeStyle: 'text-sky-300',
     }
   }
 
   if (isSecretPartner) {
     return {
-      roleLabel: isMale ? 'Presumed Father (Guardian)' : isFemale ? 'Step-mother (secret)' : 'Step-parent (secret)',
+      roleLabel: isMale
+        ? t('utils.child.rolePresumedFatherGuardian')
+        : isFemale
+          ? t('utils.child.roleStepMotherSecret')
+          : t('utils.child.roleStepParentSecret'),
       isSecret: true,
       isSecretForPartner: true,
       isPregnancySecretForPartner: isPregSecretPartner,
@@ -308,7 +416,11 @@ export function getParentRole(
   }
 
   return {
-    roleLabel: isMale ? 'Step-father' : isFemale ? 'Step-mother' : 'Step-parent',
+    roleLabel: isMale
+      ? t('utils.child.roleStepFather')
+      : isFemale
+        ? t('utils.child.roleStepMother')
+        : t('utils.child.roleStepParent'),
     badgeStyle: 'text-sky-300',
   }
 }

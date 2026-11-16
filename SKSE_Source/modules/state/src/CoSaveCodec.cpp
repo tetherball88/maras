@@ -3209,6 +3209,7 @@ namespace MARAS::State {
                 staged.actionsDeclineCooldown = prev.actionsDeclineCooldown;
                 staged.defaultLogLevel = prev.defaultLogLevel;
                 staged.enablePlayerPolygamy = prev.enablePlayerPolygamy;
+                staged.language = prev.language;
             }
 
             bool isFirstField = true;

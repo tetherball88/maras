@@ -1,24 +1,67 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { reloadLocalization } from '../../store/uiBridge'
+import { useTranslation } from '../../i18n'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SliderInput } from '../shared/SliderInput'
+import { SelectInput } from '../shared/SelectInput'
 import { SectionCard } from '../shared/SectionCard'
+import { Button } from '../ui/button'
 import { Sliders, Monitor } from 'lucide-react'
 
 export const GeneralSettings: React.FC = () => {
+  const { t, tp, selectedLanguage, detectedSkyrimLanguage, availableLanguages } = useTranslation()
+  void tp
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
   const uiScale = settings.uiScale ?? 1.0
   const updateMatchmakingSettings = useMarasStore((s) => s.updateMatchmakingSettings)
   const lonelinessDays = settings.lonelinessThresholdDays ?? 2
 
+  const languageOptions = [
+    {
+      value: 'auto',
+      label: t('settings.general.languageAuto', {
+        lang: (detectedSkyrimLanguage || 'en').toUpperCase(),
+      }),
+    },
+    ...availableLanguages.map((m) => ({
+      value: m.code,
+      label:
+        m.nativeName && m.nativeName !== m.name
+          ? `${m.nativeName} (${m.name})`
+          : (m.nativeName || m.name || m.code),
+    })),
+  ]
+
   return (
     <div className="space-y-[1rem]">
-      <SectionCard title="Interface & Accessibility" icon={Monitor}>
+      <SectionCard title={t('settings.general.interfaceTitle')} icon={Monitor}>
         <SettingRow
-          label="Auto-Pause Game on Dashboard Open"
-          description="Automatically pause Skyrim whenever the M.A.R.A.S dashboard is opened. You can also pause or unpause at any time using the Pause button in the top-right header bar."
+          label={t('settings.general.languageLabel')}
+          description={t('settings.general.languageDesc')}
+        >
+          <SelectInput
+            className="min-w-[13rem] w-auto"
+            value={settings.language || selectedLanguage || 'auto'}
+            options={languageOptions}
+            onChange={(val) => updateSetting('language', val)}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label={t('settings.general.reloadLocalizationLabel')}
+          description={t('settings.general.reloadLocalizationDesc')}
+        >
+          <Button variant="secondary" size="sm" onClick={() => reloadLocalization()}>
+            {t('settings.general.reloadLocalizationBtn')}
+          </Button>
+        </SettingRow>
+
+        <SettingRow
+          label={t('settings.general.autoPauseLabel')}
+          description={t('settings.general.autoPauseDesc')}
         >
           <ToggleSwitch
             checked={Boolean(settings.autoPauseOnOpen)}
@@ -27,8 +70,8 @@ export const GeneralSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Full Screen Mode"
-          description="Open the M.A.R.A.S dashboard in full-screen mode instead of a centered window."
+          label={t('settings.general.fullScreenLabel')}
+          description={t('settings.general.fullScreenDesc')}
         >
           <ToggleSwitch
             checked={Boolean(settings.uiFullScreen)}
@@ -37,24 +80,26 @@ export const GeneralSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="UI & Font Scale (Accessibility)"
-          description={`Scale all fonts, icons, cards, and UI elements proportionally across the dashboard and modals (${Math.round(uiScale * 100)}%).`}
+          label={t('settings.general.uiScaleLabel')}
+          description={t('settings.general.uiScaleDesc', {
+            percent: Math.round(uiScale * 100),
+          })}
         >
           <SliderInput
             value={uiScale}
             min={0.75}
             max={1.5}
             step={0.05}
-            unit="x"
+            unit={t('settings.general.unitMultiplier')}
             onChange={(val) => updateSetting('uiScale', val)}
           />
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="General Mod Settings" icon={Sliders}>
+      <SectionCard title={t('settings.general.modSettingsTitle')} icon={Sliders}>
         <SettingRow
-          label="Skip Wedding Ceremony"
-          description="Immediately complete marriages without scheduling a ceremony at the Temple of Mara."
+          label={t('settings.general.skipWeddingLabel')}
+          description={t('settings.general.skipWeddingDesc')}
         >
           <ToggleSwitch
             checked={settings.skipWedding}
@@ -63,29 +108,35 @@ export const GeneralSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Affection Decay Multiplier"
-          description={`Scale daily affection decay rate when not interacting (${Number(settings.affectionDecayMult.toFixed(2))}x).`}
+          label={t('settings.general.affectionDecayLabel')}
+          description={t('settings.general.affectionDecayDesc', {
+            mult: Number(settings.affectionDecayMult.toFixed(2)),
+          })}
         >
           <SliderInput
             value={settings.affectionDecayMult}
             min={0.0}
             max={2.0}
             step={0.1}
-            unit="x"
+            unit={t('settings.general.unitMultiplier')}
             onChange={(val) => updateSetting('affectionDecayMult', val)}
           />
         </SettingRow>
 
         <SettingRow
-          label="Loneliness Threshold (Days)"
-          description={`Master time unit (L = ${lonelinessDays}d): days without meaningful interaction before daily affection decay begins, and base unit scaling all Player Partner Agency intervals (scan every ${Math.max(1, Math.round(lonelinessDays * 1.5))}d, talking-to-physical affair escalation after ${Math.round(lonelinessDays * 2)}d).`}
+          label={t('settings.general.lonelinessThresholdLabel')}
+          description={t('settings.general.lonelinessThresholdDesc', {
+            days: lonelinessDays,
+            scanDays: Math.max(1, Math.round(lonelinessDays * 1.5)),
+            escalationDays: Math.round(lonelinessDays * 2),
+          })}
         >
           <SliderInput
             value={lonelinessDays}
             min={1}
             max={14}
             step={1}
-            unit="d"
+            unit={t('settings.general.unitDaysShort')}
             onChange={(val) => {
               const days = Math.round(val)
               updateSetting('lonelinessThresholdDays', days)
@@ -95,8 +146,8 @@ export const GeneralSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Enable Polygamy"
-          description="Allow marrying multiple spouses and establishing rank hierarchies."
+          label={t('settings.general.enablePolygamyLabel')}
+          description={t('settings.general.enablePolygamyDesc')}
         >
           <ToggleSwitch
             checked={settings.enablePolygamy}
@@ -105,8 +156,8 @@ export const GeneralSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Disable Polygamy Quest"
-          description="Prevent 'The Flame Divides Not' quest from starting. If currently running, stops and resets the quest."
+          label={t('settings.general.disablePolygamyQuestLabel')}
+          description={t('settings.general.disablePolygamyQuestDesc')}
         >
           <ToggleSwitch
             checked={!!settings.disablePolygamyQuest}
@@ -115,8 +166,8 @@ export const GeneralSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Toggle Dashboard Hotkey Modifiers"
-          description="Require Ctrl / Shift / Alt keys in combination with your configured toggle key."
+          label={t('settings.general.hotkeyModifiersLabel')}
+          description={t('settings.general.hotkeyModifiersDesc')}
         >
           <div className="flex items-center gap-[0.75rem] text-xs text-foreground-primary">
             <label className="flex items-center gap-[0.25rem] cursor-pointer">
@@ -126,7 +177,7 @@ export const GeneralSettings: React.FC = () => {
                 onChange={(e) => updateSetting('toggleUIModCtrl', e.target.checked)}
                 className="accent-accent"
               />
-              <span>Ctrl</span>
+              <span>{t('settings.general.modCtrl')}</span>
             </label>
             <label className="flex items-center gap-[0.25rem] cursor-pointer">
               <input
@@ -135,7 +186,7 @@ export const GeneralSettings: React.FC = () => {
                 onChange={(e) => updateSetting('toggleUIModShift', e.target.checked)}
                 className="accent-accent"
               />
-              <span>Shift</span>
+              <span>{t('settings.general.modShift')}</span>
             </label>
             <label className="flex items-center gap-[0.25rem] cursor-pointer">
               <input
@@ -144,7 +195,7 @@ export const GeneralSettings: React.FC = () => {
                 onChange={(e) => updateSetting('toggleUIModAlt', e.target.checked)}
                 className="accent-accent"
               />
-              <span>Alt</span>
+              <span>{t('settings.general.modAlt')}</span>
             </label>
           </div>
         </SettingRow>

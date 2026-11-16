@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../i18n'
 import { useMarasStore } from '../../store/useMarasStore'
 import { PLAYER_FORM_ID } from '../../data/mockData'
 import { categorizePartners } from '../../utils/partnerCategories'
@@ -10,6 +11,9 @@ import {
 } from './sections'
 
 export const PlayerDetailBody: React.FC = () => {
+  const { t, tp } = useTranslation()
+  void t
+  void tp
   const relationships = useMarasStore((s) => s.relationships)
   const cheatingRecords = useMarasStore((s) => s.cheatingRecords)
   const children = useMarasStore((s) => s.children)

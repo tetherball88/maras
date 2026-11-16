@@ -8,8 +8,10 @@ import { AppTooltip } from '../shared/AppTooltip'
 import { formatGameDay } from '../../utils/dateUtils'
 import { getChildRelationshipStatus, resolveIsFemale, getChildGenderNouns, isActorChild } from '../../utils/childUtils'
 import { ChildStage } from '../../types'
+import { useTranslation } from '../../i18n'
 
 export const ChildrenList: React.FC = () => {
+  const { t } = useTranslation()
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
   const childrenStore = useMarasStore((s) => s.children)
@@ -46,9 +48,9 @@ export const ChildrenList: React.FC = () => {
         <div className="p-[1rem] bg-accent-soft rounded-full mb-[0.75rem] text-accent">
           <Baby className="w-[2rem] h-[2rem]" />
         </div>
-        <h3 className="text-base font-bold text-foreground-primary">No Children in Household</h3>
+        <h3 className="text-base font-bold text-foreground-primary">{t('household.children.emptyTitle')}</h3>
         <p className="text-xs text-foreground-secondary max-w-[22rem] mt-[0.25rem] mb-[1.25rem]">
-          Your household does not have any adopted or natural children registered yet.
+          {t('household.children.emptyDescription')}
         </p>
         <button
           onClick={() => {
@@ -58,7 +60,7 @@ export const ChildrenList: React.FC = () => {
           className="flex items-center gap-[0.5rem] px-[0.875rem] py-[0.5rem] bg-accent text-white hover:bg-accent/90 rounded-md text-xs font-semibold shadow transition-colors cursor-pointer"
         >
           <HeartHandshake className="w-[1.125em] h-[1.125em]" />
-          <span>Open Child Adoption</span>
+          <span>{t('household.children.openAdoption')}</span>
         </button>
       </div>
     )
@@ -70,7 +72,7 @@ export const ChildrenList: React.FC = () => {
         <div className="flex items-center justify-between p-[0.5rem] px-[0.75rem] bg-panel-inset rounded border border-border-divider">
           <div className="flex items-center gap-[0.5rem] text-xs font-bold text-accent-bright">
             <Baby className="w-[1.125em] h-[1.125em] text-accent" />
-            <span>Household Children</span>
+            <span>{t('household.children.headerTitle')}</span>
             <span className="text-foreground-muted font-normal">({children.length})</span>
           </div>
           <button
@@ -81,7 +83,7 @@ export const ChildrenList: React.FC = () => {
             className="text-[0.6875rem] font-semibold text-accent hover:underline flex items-center gap-[0.25rem] cursor-pointer"
           >
             <Sparkles className="w-[0.875em] h-[0.875em]" />
-            <span>Adopt More</span>
+            <span>{t('household.children.adoptMore')}</span>
           </button>
         </div>
 
@@ -92,14 +94,22 @@ export const ChildrenList: React.FC = () => {
             const isPlaceholderName = !npc?.name || npc.name.startsWith('NPC_')
             const displayName = (isPlaceholderName && child.name && !child.name.startsWith('NPC_'))
               ? child.name
-              : (npc?.name || child.name || `Child ${child.childId}`)
+              : (npc?.name || child.name || t('household.children.childFallbackName', { id: child.childId }))
             const race = npc?.race || 'Nord'
             const partnerNpc = child.partnerId ? npcProfiles.get(child.partnerId) : undefined
-            const home = npc?.currentHome || npc?.originalHome || partnerNpc?.currentHome || partnerNpc?.originalHome || (child.isPlayerCustodian ? 'Breezehome' : 'With Custodial Parent')
+            const home =
+              npc?.currentHome ||
+              npc?.originalHome ||
+              partnerNpc?.currentHome ||
+              partnerNpc?.originalHome ||
+              (child.isPlayerCustodian
+                ? t('household.children.defaultHomePlayer')
+                : t('household.children.withCustodialParent'))
 
             const stage: ChildStage = child.stage || npc?.stage || 'child'
             const hasRefID = child.hasRefID ?? npc?.hasRefID ?? !child.childId.startsWith('FF7')
             const isEphemeral = child.isEphemeral ?? npc?.isEphemeral ?? (!hasRefID || stage === 'unborn' || stage === 'infant' || stage === 'training')
+            void isEphemeral
             const isFemale = resolveIsFemale(child, npc)
             const { sonOrDaughter } = getChildGenderNouns(isFemale)
 
@@ -122,12 +132,15 @@ export const ChildrenList: React.FC = () => {
                     </span>
                     <span className="text-xs text-foreground-muted">({race})</span>
                     {isFemale !== undefined && (
-                      <span className={`text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isFemale ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30'}`} title={isFemale ? 'Daughter' : 'Son'}>
-                        {isFemale ? '♀ Daughter' : '♂ Son'}
+                      <span
+                        className={`text-[0.625rem] font-bold px-[0.25rem] py-[0.0625rem] rounded border ${isFemale ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30'}`}
+                        title={isFemale ? t('household.children.daughterTitle') : t('household.children.sonTitle')}
+                      >
+                        {isFemale ? t('household.children.daughterBadge') : t('household.children.sonBadge')}
                       </span>
                     )}
                     {npc?.pluginName && (
-                      <span className="text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[8rem]" title={`Plugin: ${npc.pluginName}`}>
+                      <span className="text-[0.625rem] font-mono text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[8rem]" title={t('shared.pluginTooltip', { plugin: npc.pluginName })}>
                         {npc.pluginName}
                       </span>
                     )}
@@ -135,26 +148,30 @@ export const ChildrenList: React.FC = () => {
                     {/* Stage & Lifecycle Badges */}
                     {stage === 'unborn' ? (
                       <span className="text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-pink-500/20 text-pink-300 border-pink-500/30 flex items-center gap-[0.25rem]">
-                        <span>🤰 Expecting / Unborn {sonOrDaughter}</span>
+                        <span>{t('household.children.stageUnbornBadge', { noun: sonOrDaughter })}</span>
                       </span>
                     ) : stage === 'infant' ? (
                       <span className="text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/30 flex items-center gap-[0.25rem]">
                         <Baby className="w-[0.875em] h-[0.875em]" />
-                        <span>Newborn Infant {sonOrDaughter}</span>
+                        <span>{t('household.children.stageInfantBadge', { noun: sonOrDaughter })}</span>
                       </span>
                     ) : stage === 'training' ? (
                       <span className="text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-purple-500/20 text-purple-300 border-purple-500/30 flex items-center gap-[0.25rem]">
                         <GraduationCap className="w-[0.875em] h-[0.875em]" />
-                        <span>In Training ({sonOrDaughter})</span>
+                        <span>{t('household.children.stageTrainingBadge', { noun: sonOrDaughter })}</span>
                       </span>
                     ) : stage === 'adult' ? (
                       <span className="text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-amber-500/20 text-amber-300 border-amber-500/30 flex items-center gap-[0.25rem]">
                         <Swords className="w-[0.875em] h-[0.875em]" />
-                        <span>{hasRefID ? `Adult Follower (${sonOrDaughter})` : `Adult ${sonOrDaughter} (Unsummoned)`}</span>
+                        <span>
+                          {hasRefID
+                            ? t('household.children.stageAdultFollowerBadge', { noun: sonOrDaughter })
+                            : t('household.children.stageAdultUnsummonedBadge', { noun: sonOrDaughter })}
+                        </span>
                       </span>
                     ) : !hasRefID ? (
                       <span className="text-[0.625rem] font-bold px-[0.375rem] py-[0.0625rem] rounded border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                        🧸 {sonOrDaughter} (Unspawned)
+                        {t('household.children.stageUnspawnedBadge', { noun: sonOrDaughter })}
                       </span>
                     ) : (
                       (() => {
@@ -173,22 +190,26 @@ export const ChildrenList: React.FC = () => {
                   <div className="text-xs text-foreground-secondary truncate mt-[0.25rem] flex items-center gap-[0.5rem] flex-wrap">
                     {stage === 'unborn' ? (
                       <span className="flex items-center gap-[0.25rem] text-pink-200">
-                        <span>🤰 In Gestation (Maternal Care)</span>
+                        <span>{t('household.children.detailGestation')}</span>
                       </span>
                     ) : stage === 'infant' ? (
                       <span className="flex items-center gap-[0.25rem] text-cyan-200">
                         <Baby className="w-[0.875em] h-[0.875em] text-cyan-400" />
-                        <span>In Arms / Swaddled (Mother's Care)</span>
+                        <span>{t('household.children.detailInfant')}</span>
                       </span>
                     ) : stage === 'training' ? (
                       <span className="flex items-center gap-[0.25rem] text-purple-200">
                         <GraduationCap className="w-[0.875em] h-[0.875em] text-purple-400" />
-                        <span>Training at {child.trainingLocation || 'Skyrim Academy'}</span>
+                        <span>
+                          {t('household.children.detailTraining', {
+                            location: child.trainingLocation || t('household.children.defaultAcademy'),
+                          })}
+                        </span>
                       </span>
                     ) : stage === 'adult' && !hasRefID ? (
                       <span className="flex items-center gap-[0.25rem] text-amber-200">
                         <Swords className="w-[0.875em] h-[0.875em] text-amber-400" />
-                        <span>Ready to Summon via Follower Dialogue / MCM</span>
+                        <span>{t('household.children.detailAdultUnsummoned')}</span>
                       </span>
                     ) : (
                       <span className="flex items-center gap-[0.25rem]">
@@ -198,12 +219,24 @@ export const ChildrenList: React.FC = () => {
                     )}
 
                     <span>•</span>
-                    <span>{child.isPlayerCustodian ? (child.parentPartnerName ? `Parents: Player & ${child.parentPartnerName}` : 'Guardian: Player (Sole Guardian)') : `Custody: ${child.parentPartnerName || 'Other Parent'}`}</span>
+                    <span>
+                      {child.isPlayerCustodian
+                        ? child.parentPartnerName
+                          ? t('household.children.parentsPlayerAndPartner', { partner: child.parentPartnerName })
+                          : t('household.children.guardianSolePlayer')
+                        : t('household.children.custodyOther', {
+                            parent: child.parentPartnerName || t('household.children.otherParentFallback'),
+                          })}
+                    </span>
                     {stage === 'unborn' ? (
                       child.conceptionTimestamp != null && child.conceptionTimestamp > 0 && (
                         <>
                           <span>•</span>
-                          <span>Conceived {formatGameDay(child.conceptionTimestamp, currentGameDay)}</span>
+                          <span>
+                            {t('household.children.conceivedDate', {
+                              date: formatGameDay(child.conceptionTimestamp, currentGameDay),
+                            })}
+                          </span>
                         </>
                       )
                     ) : (
@@ -218,7 +251,7 @@ export const ChildrenList: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-[0.375rem] flex-shrink-0">
-                  <AppTooltip content="Remove Child Record">
+                  <AppTooltip content={t('household.children.removeTooltip')}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -231,7 +264,7 @@ export const ChildrenList: React.FC = () => {
                       <Trash2 className="w-[0.95em] h-[0.95em]" />
                     </button>
                   </AppTooltip>
-                  <AppTooltip content="View Child Details">
+                  <AppTooltip content={t('household.children.viewDetailsTooltip')}>
                     <button className="p-[0.25rem] text-foreground-muted hover:text-accent cursor-pointer">
                       <ChevronRight className="w-[1.25em] h-[1.25em]" />
                     </button>

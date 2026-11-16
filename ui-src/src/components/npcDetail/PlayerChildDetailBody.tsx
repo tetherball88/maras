@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from '../../i18n'
 import { ChildDetailBody } from './ChildDetailBody'
 import { ChildCritterPetSection } from './sections/ChildCritterPetSection'
 
@@ -13,6 +14,9 @@ export const PlayerChildDetailBody: React.FC<PlayerChildDetailBodyProps> = ({
   displayName,
   displayRace,
 }) => {
+  const { t, tp } = useTranslation()
+  void t
+  void tp
   return (
     <div className="max-w-2xl mx-auto space-y-[1.25rem]">
       {/* Base Child Details */}

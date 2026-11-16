@@ -3,6 +3,8 @@ import { RelationshipStatus } from '../../types'
 import { Badge } from '../ui/badge'
 import { AppTooltip } from './AppTooltip'
 import { cn } from '@/lib/utils'
+import { t } from '../../i18n'
+import { useLocaleStore } from '../../store/useLocaleStore'
 
 interface StatusBadgeProps {
   status: RelationshipStatus
@@ -12,25 +14,25 @@ interface StatusBadgeProps {
 export const getStatusLabel = (status: RelationshipStatus): string => {
   switch (status) {
     case RelationshipStatus.Candidate:
-      return 'Candidate'
+      return t('enums.relationshipStatus.candidate')
     case RelationshipStatus.Dating:
-      return 'Dating'
+      return t('enums.relationshipStatus.dating')
     case RelationshipStatus.Lover:
-      return 'Lover'
+      return t('enums.relationshipStatus.lover')
     case RelationshipStatus.Engaged:
-      return 'Engaged'
+      return t('enums.relationshipStatus.engaged')
     case RelationshipStatus.Married:
-      return 'Married'
+      return t('enums.relationshipStatus.married')
     case RelationshipStatus.Divorced:
-      return 'Divorced'
+      return t('enums.relationshipStatus.divorced')
     case RelationshipStatus.Jilted:
-      return 'Jilted'
+      return t('enums.relationshipStatus.jilted')
     case RelationshipStatus.ExDating:
-      return 'Ex-Dating'
+      return t('enums.relationshipStatus.exDating')
     case RelationshipStatus.ExLover:
-      return 'Ex-Lover'
+      return t('enums.relationshipStatus.exLover')
     default:
-      return 'Unknown'
+      return t('enums.relationshipStatus.unknown')
   }
 }
 
@@ -109,6 +111,8 @@ export interface StatusIconProps extends React.ImgHTMLAttributes<HTMLImageElemen
 
 export const StatusIcon = React.forwardRef<HTMLImageElement, StatusIconProps>(
   ({ status, size = '2em', showTooltip = true, className, style, alt, ...props }, ref) => {
+    const revision = useLocaleStore((s) => s.revision)
+    void revision
     const label = getStatusLabel(status)
     const iconUrl = getStatusIconUrl(status)
     const borderColorClass = getStatusBorderColorClass(status)
@@ -129,7 +133,7 @@ export const StatusIcon = React.forwardRef<HTMLImageElement, StatusIconProps>(
     )
 
     if (showTooltip) {
-      return <AppTooltip content={`Status: ${label}`}>{imgNode}</AppTooltip>
+      return <AppTooltip content={t('shared.statusTooltip', { label })}>{imgNode}</AppTooltip>
     }
 
     return imgNode
@@ -138,7 +142,12 @@ export const StatusIcon = React.forwardRef<HTMLImageElement, StatusIconProps>(
 StatusIcon.displayName = 'StatusIcon'
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
+  const revision = useLocaleStore((s) => s.revision)
+  void revision
   const label = getStatusLabel(status)
+  void label
+  void Badge
+  void className
 
   let badgeVariant: 'default' | 'secondary' | 'outline' | 'success' | 'danger' | 'warning' = 'secondary'
 
@@ -153,6 +162,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
   } else {
     badgeVariant = 'outline'
   }
+  void badgeVariant
 
   return (
     <StatusIcon status={status} size="2em" showTooltip />

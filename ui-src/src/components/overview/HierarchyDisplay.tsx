@@ -5,17 +5,19 @@ import { StatusBadge } from '../shared/StatusBadge'
 import { NpcTraitBadges } from '../shared/TraitIcons'
 import { RelationshipStatus } from '../../types'
 import { Crown, Medal, Award } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const HierarchyDisplay: React.FC = () => {
+  const { t } = useTranslation()
   const hierarchyRanks = useMarasStore((s) => s.hierarchyRanks)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const affectionData = useMarasStore((s) => s.affectionData)
   const openNpcDetail = useMarasStore((s) => s.openNpcDetail)
 
   const rankBadges = [
-    { rank: '1st Spouse', icon: Crown, color: 'text-amber-400 border-amber-500/30' },
-    { rank: '2nd Spouse', icon: Medal, color: 'text-slate-300 border-slate-400/30' },
-    { rank: '3rd Spouse', icon: Award, color: 'text-amber-600 border-amber-700/30' },
+    { rank: t('overview.hierarchy.rank1'), icon: Crown, color: 'text-amber-400 border-amber-500/30' },
+    { rank: t('overview.hierarchy.rank2'), icon: Medal, color: 'text-slate-300 border-slate-400/30' },
+    { rank: t('overview.hierarchy.rank3'), icon: Award, color: 'text-amber-600 border-amber-700/30' },
   ]
 
   const handleCardClick = (formId: string) => {
@@ -28,9 +30,9 @@ export const HierarchyDisplay: React.FC = () => {
     <div className="flex flex-col gap-[0.75rem]">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-semibold text-accent-bright flex items-center gap-[0.375rem]">
-          <Crown className="w-[1.125em] h-[1.125em] text-accent" /> Spouse Hierarchy (Top 3 Ranks)
+          <Crown className="w-[1.125em] h-[1.125em] text-accent" /> {t('overview.hierarchy.title')}
         </h3>
-        <span className="text-xs text-foreground-muted">Managed via Marriage & Spouse Assets</span>
+        <span className="text-xs text-foreground-muted">{t('overview.hierarchy.subtitle')}</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-[0.75rem]">
@@ -65,13 +67,13 @@ export const HierarchyDisplay: React.FC = () => {
                       {npc.pluginName && (
                         <>
                           <span>•</span>
-                          <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={`Plugin: ${npc.pluginName}`}>
+                          <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle" title={t('shared.pluginTooltip', { plugin: npc.pluginName })}>
                             {npc.pluginName}
                           </span>
                         </>
                       )}
                       <span>•</span>
-                      <span>{npc.currentHome || 'No Home Set'}</span>
+                      <span>{npc.currentHome || t('shared.noHomeSet')}</span>
                     </div>
                     <NpcTraitBadges npc={npc} size="md" />
                   </div>
@@ -79,7 +81,7 @@ export const HierarchyDisplay: React.FC = () => {
                 </div>
               ) : (
                 <div className="py-[1rem] text-center text-xs text-foreground-muted italic">
-                  Unassigned Rank Slot
+                  {t('overview.hierarchy.unassignedSlot')}
                 </div>
               )}
             </div>

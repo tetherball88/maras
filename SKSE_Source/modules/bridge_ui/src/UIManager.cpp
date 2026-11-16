@@ -584,6 +584,7 @@ namespace MARAS::Bridge::Ui {
                 self->isDomReady_.store(true, std::memory_order_release);
                 MARAS_LOG_INFO("[UIManager] DOM ready on Magelight view {}; listeners registered", ev->view);
 
+                UIDataBridge::GetSingleton().SendLocaleDataOnMainThreadSafe();
                 self->FlushPendingAfterDomReady();
 
                 if (self->pendingShowAfterCreate_.exchange(false, std::memory_order_acq_rel)) {
@@ -600,6 +601,7 @@ namespace MARAS::Bridge::Ui {
                 if (ev->view == self->view_) {
                     self->isDomReady_.store(true, std::memory_order_release);
                     MARAS_LOG_INFO("[UIManager] Magelight view {} reloaded (DOM ready)", ev->view);
+                    UIDataBridge::GetSingleton().SendLocaleDataOnMainThreadSafe();
                 }
                 break;
 

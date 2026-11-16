@@ -1,5 +1,6 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { useTranslation } from '../../i18n'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SliderInput } from '../shared/SliderInput'
@@ -7,6 +8,8 @@ import { SectionCard } from '../shared/SectionCard'
 import { Clapperboard, HeartHandshake, Flame, Info, Building, Home, MapPin } from 'lucide-react'
 
 export const ScenesSettings: React.FC = () => {
+  const { t, tp } = useTranslation()
+  void tp
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
 
@@ -20,20 +23,17 @@ export const ScenesSettings: React.FC = () => {
         <Info className="w-[1.25em] h-[1.25em] text-accent flex-shrink-0 mt-[0.125rem]" />
         <div className="flex-1 space-y-[0.25rem]">
           <div className="font-semibold text-foreground-primary">
-            NPC Banter & Romance Scenes
+            {t('settings.scenes.bannerTitle')}
           </div>
-          <div>
-            When entering locations, M.A.R.A.S dynamically selects eligible NPC couples
-            to play immersive voiced(if you are using SkyrimNet) interaction scenes that reflect their current relationship status or illicit affairs.
-          </div>
+          <div>{t('settings.scenes.bannerDesc')}</div>
         </div>
       </div>
 
       {/* Master Toggle & General Rules */}
-      <SectionCard title="General Scene Rules" icon={Clapperboard}>
+      <SectionCard title={t('settings.scenes.generalTitle')} icon={Clapperboard}>
         <SettingRow
-          label="Enable NPC Scenes"
-          description="Master toggle for all relationship and encounter scenes. If disabled, no couples will be coordinated or prompted into scenes."
+          label={t('settings.scenes.enableMasterLabel')}
+          description={t('settings.scenes.enableMasterDesc')}
         >
           <ToggleSwitch
             checked={masterEnabled}
@@ -42,8 +42,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Scene Cooldown"
-          description="Minimum game hours that must pass before another NPC scene can trigger (default 24 hours = at most one scene per day)."
+          label={t('settings.scenes.cooldownLabel')}
+          description={t('settings.scenes.cooldownDesc')}
           disabled={isMasterDisabled}
         >
           <SliderInput
@@ -51,7 +51,7 @@ export const ScenesSettings: React.FC = () => {
             min={0}
             max={168}
             step={1}
-            unit=" hrs"
+            unit={t('settings.scenes.unitHours')}
             disabled={isMasterDisabled}
             onChange={(val) => updateSetting('scenesCooldownHours', val)}
           />
@@ -59,10 +59,10 @@ export const ScenesSettings: React.FC = () => {
       </SectionCard>
 
       {/* Standard Relationship Scenes */}
-      <SectionCard title="Relationship Scenes" icon={HeartHandshake}>
+      <SectionCard title={t('settings.scenes.relationshipTitle')} icon={HeartHandshake}>
         <SettingRow
-          label="Dating Scenes"
-          description="Enable conversational scenes between NPCs who are actively dating."
+          label={t('settings.scenes.datingLabel')}
+          description={t('settings.scenes.datingDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -73,8 +73,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Lover Scenes"
-          description="Enable intimate and affectionate banter scenes between established lovers."
+          label={t('settings.scenes.loverLabel')}
+          description={t('settings.scenes.loverDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -85,8 +85,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Engagement Scenes"
-          description="Enable scenes between betrothed couples planning their union."
+          label={t('settings.scenes.engagedLabel')}
+          description={t('settings.scenes.engagedDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -97,8 +97,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Married Scenes"
-          description="Enable domestic and affectionate scenes between married spouses."
+          label={t('settings.scenes.marriedLabel')}
+          description={t('settings.scenes.marriedDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -110,10 +110,10 @@ export const ScenesSettings: React.FC = () => {
       </SectionCard>
 
       {/* Complex & Illicit Scenes */}
-      <SectionCard title="Complex & Affair Scenes" icon={Flame}>
+      <SectionCard title={t('settings.scenes.complexTitle')} icon={Flame}>
         <SettingRow
-          label="Open Relationship Scenes"
-          description="Enable scenes between partners in open relationships discussing their dynamic or other partners."
+          label={t('settings.scenes.openRelLabel')}
+          description={t('settings.scenes.openRelDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -124,8 +124,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Cheating: Secret Affair Scenes"
-          description="Enable clandestine dialogue between unfaithful partners meeting in secret."
+          label={t('settings.scenes.cheatingSecretLabel')}
+          description={t('settings.scenes.cheatingSecretDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -136,8 +136,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Cheating: Discovered Scenes"
-          description="Enable dramatic confrontation scenes when an affair is discovered by a primary partner."
+          label={t('settings.scenes.cheatingDiscoveredLabel')}
+          description={t('settings.scenes.cheatingDiscoveredDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -148,8 +148,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Cheating: Caught in the Act Scenes"
-          description="Enable walk-in encounters where cheaters are caught mid-act (requires sex framework and interior bed)."
+          label={t('settings.scenes.cheatingCaughtLabel')}
+          description={t('settings.scenes.cheatingCaughtDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -161,10 +161,10 @@ export const ScenesSettings: React.FC = () => {
       </SectionCard>
 
       {/* Allowed Locations: Interiors */}
-      <SectionCard title="Allowed Locations: Interiors" icon={Building}>
+      <SectionCard title={t('settings.scenes.interiorsTitle')} icon={Building}>
         <SettingRow
-          label="Temples (LocTypeTemple)"
-          description="Allow scenes inside temples and sacred places of worship."
+          label={t('settings.scenes.locTempleLabel')}
+          description={t('settings.scenes.locTempleDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -175,8 +175,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Stores & Shops (LocTypeStore)"
-          description="Allow scenes inside merchant shops, apothecaries, and trade stalls."
+          label={t('settings.scenes.locStoreLabel')}
+          description={t('settings.scenes.locStoreDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -187,8 +187,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Jarl & Steward Dwellings (LocTypeStewardsDwelling)"
-          description="Allow scenes inside jarl keeps, steward chambers, and court palaces."
+          label={t('settings.scenes.locStewardLabel')}
+          description={t('settings.scenes.locStewardDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -199,8 +199,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Taverns & Inns (LocTypeInn)"
-          description="Allow scenes inside taverns, inns, and public drinking houses."
+          label={t('settings.scenes.locInnLabel')}
+          description={t('settings.scenes.locInnDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -211,8 +211,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Private Houses (LocTypeHouse)"
-          description="Allow scenes inside residential homes and civilian quarters."
+          label={t('settings.scenes.locHouseLabel')}
+          description={t('settings.scenes.locHouseDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -223,8 +223,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Barracks (LocTypeBarracks)"
-          description="Allow scenes inside city guard barracks and military quarters."
+          label={t('settings.scenes.locBarracksLabel')}
+          description={t('settings.scenes.locBarracksDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -235,8 +235,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Guild Halls (LocTypeGuild)"
-          description="Allow scenes inside guild halls, sanctuaries, and faction headquarters."
+          label={t('settings.scenes.locGuildLabel')}
+          description={t('settings.scenes.locGuildDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -248,10 +248,10 @@ export const ScenesSettings: React.FC = () => {
       </SectionCard>
 
       {/* Allowed Locations: Player Houses */}
-      <SectionCard title="Allowed Locations: Player Houses" icon={Home}>
+      <SectionCard title={t('settings.scenes.playerHousesTitle')} icon={Home}>
         <SettingRow
-          label="Player Homes (LocTypePlayerHouse)"
-          description="Allow scenes inside purchased player-owned homes (e.g., Breezehome, Proudspire)."
+          label={t('settings.scenes.locPlayerHouseLabel')}
+          description={t('settings.scenes.locPlayerHouseDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -262,8 +262,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Hearthfire Homesteads (BYOH_LocTypeHomestead)"
-          description="Allow scenes inside player-built Hearthfire manors (e.g., Lakeview, Heljarchen, Windstad)."
+          label={t('settings.scenes.locHomesteadLabel')}
+          description={t('settings.scenes.locHomesteadDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -275,10 +275,10 @@ export const ScenesSettings: React.FC = () => {
       </SectionCard>
 
       {/* Allowed Locations: Streets & Outdoors */}
-      <SectionCard title="Allowed Locations: Streets & Outdoors" icon={MapPin}>
+      <SectionCard title={t('settings.scenes.outdoorsTitle')} icon={MapPin}>
         <SettingRow
-          label="Towns (LocTypeTown)"
-          description="Allow outdoor street scenes in towns (e.g., Riverwood, Falkreath, Dawnstar)."
+          label={t('settings.scenes.locTownLabel')}
+          description={t('settings.scenes.locTownDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -289,8 +289,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Settlements & Villages (LocTypeSettlement)"
-          description="Allow outdoor street scenes in small settlements, mining camps, and mills."
+          label={t('settings.scenes.locSettlementLabel')}
+          description={t('settings.scenes.locSettlementDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -301,8 +301,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Orc Strongholds (LocTypeOrcStronghold)"
-          description="Allow outdoor scenes inside Orc strongholds (e.g., Dushnikh Yal, Narzulbur)."
+          label={t('settings.scenes.locStrongholdLabel')}
+          description={t('settings.scenes.locStrongholdDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -313,8 +313,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Major Cities (LocTypeCity)"
-          description="Allow outdoor street scenes in major walled cities (e.g., Whiterun, Solitude, Windhelm)."
+          label={t('settings.scenes.locCityLabel')}
+          description={t('settings.scenes.locCityDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -325,8 +325,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Lumber Mills (LocTypeLumberMill)"
-          description="Allow outdoor scenes around operating lumber mills."
+          label={t('settings.scenes.locLumberMillLabel')}
+          description={t('settings.scenes.locLumberMillDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -337,8 +337,8 @@ export const ScenesSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Farms (LocTypeFarm)"
-          description="Allow outdoor scenes around rural farms and agrarian homesteads."
+          label={t('settings.scenes.locFarmLabel')}
+          description={t('settings.scenes.locFarmDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch

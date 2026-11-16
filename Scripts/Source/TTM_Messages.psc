@@ -1,9 +1,9 @@
 scriptname TTM_Messages
 
 Function PlayerNoHomeMsg() global
-    Debug.Notification("$TTM_MSG_PlayerNoHome")
+    MARAS.NotifyLocalized("hud.player_no_home")
 EndFunction
 
 Function FreeSpouseFromPlayerHomeMsg(string spouseName) global
-    Debug.Notification("$TTM_MSG_FreeSpouseFromHome{" + spouseName + "}")
+    MARAS.NotifyLocalized("hud.free_spouse_from_home", spouseName)
 EndFunction

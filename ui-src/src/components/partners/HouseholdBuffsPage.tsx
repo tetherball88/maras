@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
-import { BuffCard } from './BuffCard'
+import { BuffCard, getBuffCategoryLabel } from './BuffCard'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -13,11 +13,12 @@ import {
   Search,
   RotateCw,
   EyeOff,
-  Users,
   Info,
 } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const HouseholdBuffsPage: React.FC = () => {
+  const { t, revision } = useTranslation()
   const householdBuffs = useMarasStore((s) => s.householdBuffs)
   const isLoadingBuffs = useMarasStore((s) => s.isLoadingBuffs)
   const fetchHouseholdBuffs = useMarasStore((s) => s.fetchHouseholdBuffs)
@@ -36,6 +37,7 @@ export const HouseholdBuffsPage: React.FC = () => {
 
   // Filter and sort buffs: Active buffs first, then alphabetical
   const filterAndSort = (buffs: typeof permanentBuffs) => {
+    void revision
     return buffs
       .filter((b) => {
         if (hideInactive && !b.isActive) return false
@@ -43,7 +45,9 @@ export const HouseholdBuffsPage: React.FC = () => {
 
         const q = searchQuery.toLowerCase().trim()
         const matchesName = b.name.toLowerCase().includes(q)
-        const matchesCategory = b.category.toLowerCase().includes(q)
+        const matchesCategory =
+          b.category.toLowerCase().includes(q) ||
+          getBuffCategoryLabel(b.category).toLowerCase().includes(q)
         const matchesDesc = b.description.toLowerCase().includes(q)
         const matchesContributor = b.contributors.some((c) => c.name.toLowerCase().includes(q))
         const matchesPotential = b.potentialSpouses?.some((p) => p.name.toLowerCase().includes(q))
@@ -60,12 +64,12 @@ export const HouseholdBuffsPage: React.FC = () => {
 
   const filteredPermanent = useMemo(
     () => filterAndSort(permanentBuffs),
-    [permanentBuffs, searchQuery, hideInactive]
+    [permanentBuffs, searchQuery, hideInactive, revision]
   )
 
   const filteredFollower = useMemo(
     () => filterAndSort(followerBuffs),
-    [followerBuffs, searchQuery, hideInactive]
+    [followerBuffs, searchQuery, hideInactive, revision]
   )
 
   const activePermCount = householdBuffs?.activePermanentCount ?? permanentBuffs.filter((b) => b.isActive).length
@@ -79,14 +83,14 @@ export const HouseholdBuffsPage: React.FC = () => {
           <div className="flex items-center gap-[0.5rem]">
             <Sparkles className="w-[1.25em] h-[1.25em] text-accent-bright" />
             <h1 className="text-lg font-bold text-foreground-primary tracking-wide">
-              Household Buffs Summary
+              {t('household.buffs.title')}
             </h1>
             <Badge variant="default" className="text-xs">
-              {activePermCount + activeFollCount} Active
+              {t('household.buffs.activeCountBadge', { count: activePermCount + activeFollCount })}
             </Badge>
           </div>
           <p className="text-xs text-foreground-secondary mt-[0.25rem]">
-            Bonuses granted by your spouses: permanent household perks scaled by hierarchy rank and affection, plus combat bonuses when travelling together.
+            {t('household.buffs.subtitle')}
           </p>
         </div>
 
@@ -94,7 +98,7 @@ export const HouseholdBuffsPage: React.FC = () => {
         <div className="flex items-center gap-[0.75rem] flex-wrap">
           <div className="flex items-center gap-[0.5rem] bg-panel-inset px-[0.625rem] py-[0.375rem] rounded border border-border-subtle">
             <Shield className="w-[0.9em] h-[0.9em] text-accent" />
-            <span className="text-xs text-foreground-muted">Permanent:</span>
+            <span className="text-xs text-foreground-muted">{t('household.buffs.permanentStatLabel')}</span>
             <span className="text-xs font-bold font-mono text-accent-bright">
               {activePermCount} / {permanentBuffs.length}
             </span>
@@ -102,7 +106,7 @@ export const HouseholdBuffsPage: React.FC = () => {
 
           <div className="flex items-center gap-[0.5rem] bg-panel-inset px-[0.625rem] py-[0.375rem] rounded border border-border-subtle">
             <Swords className="w-[0.9em] h-[0.9em] text-accent" />
-            <span className="text-xs text-foreground-muted">Follower:</span>
+            <span className="text-xs text-foreground-muted">{t('household.buffs.followerStatLabel')}</span>
             <span className="text-xs font-bold font-mono text-accent-bright">
               {activeFollCount} / {followerBuffs.length}
             </span>
@@ -116,7 +120,7 @@ export const HouseholdBuffsPage: React.FC = () => {
             className="flex items-center gap-[0.375rem] text-xs h-[2rem]"
           >
             <RotateCw className={`w-[0.9em] h-[0.9em] ${isLoadingBuffs ? 'animate-spin text-accent' : ''}`} />
-            <span>Refresh</span>
+            <span>{t('household.buffs.refreshButton')}</span>
           </Button>
         </div>
       </div>
@@ -128,7 +132,7 @@ export const HouseholdBuffsPage: React.FC = () => {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by buff, class, or spouse..."
+            placeholder={t('household.buffs.searchPlaceholder')}
             className="pl-[2rem] h-[2rem] text-xs bg-panel-inset border-border-subtle"
           />
         </div>
@@ -136,7 +140,7 @@ export const HouseholdBuffsPage: React.FC = () => {
         <div className="flex items-center gap-[0.75rem]">
           <label className="flex items-center gap-[0.5rem] text-xs text-foreground-secondary cursor-pointer select-none">
             <EyeOff className="w-[0.9em] h-[0.9em] text-foreground-muted" />
-            <span>Hide Inactive Buffs</span>
+            <span>{t('household.buffs.hideInactive')}</span>
             <Switch
               checked={hideInactive}
               onCheckedChange={setHideInactive}
@@ -155,7 +159,7 @@ export const HouseholdBuffsPage: React.FC = () => {
               <div className="flex items-center gap-[0.5rem]">
                 <Shield className="w-[1em] h-[1em] text-accent" />
                 <h2 className="text-sm font-bold text-foreground-primary uppercase tracking-wider">
-                  Permanent Household Buffs
+                  {t('household.buffs.permanentSectionTitle')}
                 </h2>
                 <span className="text-xs text-foreground-muted">
                   ({filteredPermanent.length})
@@ -164,7 +168,7 @@ export const HouseholdBuffsPage: React.FC = () => {
 
               <div className="text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem]">
                 <Info className="w-[0.9em] h-[0.9em]" />
-                <span>Active 24/7 from married spouses based on Social Class</span>
+                <span>{t('household.buffs.permanentSectionHint')}</span>
               </div>
             </div>
 
@@ -180,7 +184,7 @@ export const HouseholdBuffsPage: React.FC = () => {
               </div>
             ) : (
               <div className="p-[1.25rem] text-center bg-panel-inset/50 rounded border border-border-divider text-xs text-foreground-muted">
-                No permanent buffs match the current filter.
+                {t('household.buffs.emptyPermanent')}
               </div>
             )}
           </section>
@@ -191,7 +195,7 @@ export const HouseholdBuffsPage: React.FC = () => {
               <div className="flex items-center gap-[0.5rem]">
                 <Swords className="w-[1em] h-[1em] text-accent" />
                 <h2 className="text-sm font-bold text-foreground-primary uppercase tracking-wider">
-                  Follower Combat Buffs
+                  {t('household.buffs.followerSectionTitle')}
                 </h2>
                 <span className="text-xs text-foreground-muted">
                   ({filteredFollower.length})
@@ -200,7 +204,7 @@ export const HouseholdBuffsPage: React.FC = () => {
 
               <div className="text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem]">
                 <Info className="w-[0.9em] h-[0.9em]" />
-                <span>Granted when married spouse travels with you as an active follower</span>
+                <span>{t('household.buffs.followerSectionHint')}</span>
               </div>
             </div>
 
@@ -216,7 +220,7 @@ export const HouseholdBuffsPage: React.FC = () => {
               </div>
             ) : (
               <div className="p-[1.25rem] text-center bg-panel-inset/50 rounded border border-border-divider text-xs text-foreground-muted">
-                No follower buffs match the current filter.
+                {t('household.buffs.emptyFollower')}
               </div>
             )}
           </section>

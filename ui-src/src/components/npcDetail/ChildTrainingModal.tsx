@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { useTranslation } from '../../i18n'
 import {
   GraduationCap,
   X,
@@ -45,6 +46,7 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
   trainingCatalog,
   isEntryUnlocked,
 }) => {
+  const { t, tp } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({})
 
@@ -137,10 +139,10 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-accent-bright">
-                Send {childName} to Adolescent Training
+                {t('npcDetail.trainingModal.title', { childName })}
               </h2>
               <p className="text-[0.6875rem] text-foreground-muted">
-                Choose an organization, academy, or Daedric covenant ({durationDays} day training curriculum)
+                {tp('npcDetail.trainingModal.subtitle', durationDays)}
               </p>
             </div>
           </div>
@@ -149,13 +151,15 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
             {isPlayerChild && baseCost > 0 && (
               <div className="flex items-center gap-[0.375rem] px-[0.625rem] py-[0.3125rem] rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
                 <Coins className="w-[1em] h-[1em] text-amber-400" />
-                <span>Your Gold: {playerGold.toLocaleString()}</span>
+                <span>
+                  {t('npcDetail.trainingModal.yourGold', { gold: playerGold.toLocaleString() })}
+                </span>
               </div>
             )}
             <button
               onClick={onClose}
               className="p-[0.375rem] text-foreground-muted hover:text-foreground-primary hover:bg-panel-inset rounded-lg transition-colors cursor-pointer"
-              title="Close"
+              title={t('npcDetail.trainingModal.close')}
             >
               <X className="w-[1.25rem] h-[1.25rem]" />
             </button>
@@ -170,14 +174,14 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search training location, class, or patron..."
+              placeholder={t('npcDetail.trainingModal.searchPlaceholder')}
               className="w-full pl-[2rem] pr-[0.75rem] py-[0.3125rem] bg-panel border border-border-subtle rounded text-xs text-foreground-primary placeholder:text-foreground-muted focus:outline-none focus:border-accent"
             />
           </div>
 
           {hasRefID && (
             <span className="text-[0.6875rem] text-foreground-muted">
-              Despawns young child actor &amp; unlocks adult adventurer after {durationDays} day(s)
+              {tp('npcDetail.trainingModal.despawnNotice', durationDays)}
             </span>
           )}
         </div>
@@ -186,7 +190,7 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
         <div className="p-[1rem] overflow-y-auto space-y-[0.625rem] flex-1">
           {filteredCatalog.length === 0 ? (
             <div className="p-[2rem] text-center text-xs text-foreground-muted">
-              No training locations match &ldquo;{searchQuery}&rdquo;.
+              {t('npcDetail.trainingModal.noLocationsMatch', { query: searchQuery })}
             </div>
           ) : (
             filteredCatalog.map(
@@ -273,7 +277,7 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
                             ) : (
                               <Lock className="w-[0.85em] h-[0.85em]" />
                             )}
-                            <span>🐺 Requires Beastblood</span>
+                            <span>{t('npcDetail.trainingModal.requiresBeastbloodBadge')}</span>
                           </span>
                         )}
 
@@ -299,7 +303,10 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
                         {discountPercent > 0 && (
                           <span className="inline-flex items-center gap-[0.25rem] px-[0.4375rem] py-[0.0625rem] rounded text-[0.625rem] font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
                             <span>
-                              -{discountPercent}% {discountReason || 'Parent Affiliation'}
+                              {t('npcDetail.trainingModal.discountBadge', {
+                                percent: discountPercent,
+                                reason: discountReason || t('npcDetail.trainingModal.parentAffiliation'),
+                              })}
                             </span>
                           </span>
                         )}
@@ -319,17 +326,19 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
                       </span>
                       {isBeastbloodBlocked && (
                         <span className="text-rose-300 font-medium">
-                          Requires {childName} to carry Hircine&apos;s Beastblood (inherited from a werewolf parent)
+                          {t('npcDetail.trainingModal.beastbloodBlockedReason', { childName })}
                         </span>
                       )}
                       {!isBeastbloodBlocked && isFactionBlocked && item.factionLabel && (
                         <span className="text-rose-300 font-medium">
-                          Requires Player membership/patronage: {item.factionLabel}
+                          {t('npcDetail.trainingModal.factionBlockedReason', {
+                            faction: item.factionLabel,
+                          })}
                         </span>
                       )}
                       {!canAfford && (
                         <span className="text-rose-300 font-medium">
-                          Insufficient gold ({playerGold} / {cost}g)
+                          {t('npcDetail.trainingModal.insufficientGold', { playerGold, cost })}
                         </span>
                       )}
                     </div>
@@ -351,16 +360,26 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
                                 {baseTuition.toLocaleString()}
                               </span>
                             )}
-                            <span>{cost.toLocaleString()} Gold</span>
+                            <span>
+                              {t('npcDetail.trainingModal.costGold', {
+                                cost: cost.toLocaleString(),
+                              })}
+                            </span>
                           </div>
                           <div className="text-[0.625rem] text-foreground-muted">
-                            Tuition ({Number(item.costMultiplier.toFixed(2))}x rate
-                            {discountPercent > 0 ? ` · -${discountPercent}%` : ''})
+                            {discountPercent > 0
+                              ? t('npcDetail.trainingModal.tuitionRateDiscounted', {
+                                  rate: Number(item.costMultiplier.toFixed(2)),
+                                  percent: discountPercent,
+                                })
+                              : t('npcDetail.trainingModal.tuitionRate', {
+                                  rate: Number(item.costMultiplier.toFixed(2)),
+                                })}
                           </div>
                         </>
                       ) : (
                         <div className="text-[0.6875rem] text-emerald-300 font-semibold">
-                          No Tuition Cost
+                          {t('npcDetail.trainingModal.noTuitionCost')}
                         </div>
                       )}
                     </div>
@@ -381,12 +400,12 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
                       {isRequirementBlocked ? (
                         <>
                           <Lock className="w-[0.95em] h-[0.95em]" />
-                          <span>Locked</span>
+                          <span>{t('npcDetail.trainingModal.lockedBtn')}</span>
                         </>
                       ) : (
                         <>
                           <GraduationCap className="w-[0.95em] h-[0.95em] text-purple-300" />
-                          <span>Send to Training</span>
+                          <span>{t('npcDetail.trainingModal.sendToTrainingBtn')}</span>
                         </>
                       )}
                     </button>
@@ -400,13 +419,16 @@ export const ChildTrainingModal: React.FC<ChildTrainingModalProps> = ({
         {/* Footer */}
         <div className="px-[1rem] py-[0.75rem] bg-panel-raised border-t border-border-divider flex items-center justify-between text-xs">
           <span className="text-[0.6875rem] text-foreground-muted">
-            Showing {filteredCatalog.length} of {trainingCatalog.length} training locations
+            {t('npcDetail.trainingModal.showingCount', {
+              shown: filteredCatalog.length,
+              total: trainingCatalog.length,
+            })}
           </span>
           <button
             onClick={onClose}
             className="px-[0.875rem] py-[0.375rem] bg-panel-inset hover:bg-interactive-hover border border-border-subtle rounded text-foreground-secondary text-xs font-semibold transition-colors cursor-pointer"
           >
-            Cancel
+            {t('npcDetail.trainingModal.cancel')}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/PlayerMiscStatsTracker.h"
 #include "maras/engine/RelationshipEngineReconciler.h"
 #include "maras/engine/TaskDispatcher.h"
@@ -248,41 +249,41 @@ namespace MARAS::App {
         const std::string spouseName = (exSpouseFormID != 0) ? ActorSvc::GetName(exSpouseFormID) : "";
 
         ModalRequest req;
-        req.title = "Divorce Settlement Notice";
-        req.subtitle = !spouseName.empty() ? spouseName : "Hold Court";
+        req.title = Tr("modal.divorce_settlement.title");
+        req.subtitle = !spouseName.empty() ? spouseName : Tr("modal.divorce_settlement.subtitle_fallback");
         req.message = !spouseName.empty()
-            ? ("A hold court has issued a divorce settlement ruling following your divorce from " + spouseName + ".")
-            : "A hold court has issued a divorce settlement ruling.";
+            ? TrFmt("modal.divorce_settlement.message_named", { { "spouse", spouseName } })
+            : Tr("modal.divorce_settlement.message_unnamed");
         req.tone = ModalTone::Danger;
         req.size = ModalSize::Md;
         req.defaultCancelButtonIndex = settlement.canPayDirectly ? 1 : 0;
 
-        const std::string breakdownText = std::format(
-            "Court Filing Fee: 100 Gold\n"
-            "Liquid Wealth Share: {} Gold\n"
-            "Property & Renown Assessment: {} Gold\n"
-            "Total Settlement Due: {} Gold",
-            settlement.playerWealthShare, settlement.assetsShare, settlement.totalFee);
+        const std::string wealthStr = std::to_string(settlement.playerWealthShare);
+        const std::string assetsStr = std::to_string(settlement.assetsShare);
+        const std::string totalStr = std::to_string(settlement.totalFee);
+        const std::string breakdownText = TrFmt(
+            "modal.divorce_settlement.breakdown_body",
+            { { "wealthShare", wealthStr }, { "assetsShare", assetsStr }, { "totalFee", totalStr } });
 
         req.controls.push_back(ModalControl::MakeInfoBox(
             "fee_breakdown",
-            "Settlement Breakdown",
+            Tr("modal.divorce_settlement.breakdown_label"),
             breakdownText,
             ModalTone::Warning));
 
         if (settlement.canPayDirectly) {
             req.buttons.push_back(ModalButton::Make(
                 "pay_now",
-                std::format("Pay Settlement Now ({} Gold)", settlement.totalFee),
+                TrFmt("modal.divorce_settlement.btn_pay_now", { { "totalFee", totalStr } }),
                 ModalButtonVariant::Primary));
             req.buttons.push_back(ModalButton::Make(
                 "refuse_bounty",
-                "Refuse / Add to Hold Bounty",
+                Tr("modal.divorce_settlement.btn_refuse_bounty"),
                 ModalButtonVariant::Danger));
         } else {
             req.buttons.push_back(ModalButton::Make(
                 "accept_bounty",
-                std::format("Accept Hold Bounty ({} Gold)", settlement.totalFee),
+                TrFmt("modal.divorce_settlement.btn_accept_bounty", { { "totalFee", totalStr } }),
                 ModalButtonVariant::Danger));
         }
 

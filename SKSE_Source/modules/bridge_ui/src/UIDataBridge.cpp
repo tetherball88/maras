@@ -8,6 +8,7 @@
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/bridge_ui/HouseholdBuffsJsonBuilder.h"
+#include "maras/bridge_ui/LocaleJsonBuilder.h"
 #include "maras/bridge_ui/ModalManager.h"
 #include "maras/bridge_ui/UIManager.h"
 #include "maras/domain/lineage/TrainingCatalog.h"
@@ -19,6 +20,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/FormUtils.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"
@@ -532,6 +534,17 @@ namespace MARAS::Bridge::Ui {
     void UIDataBridge::HandleAction(const std::string& type, const nlohmann::json& payload) {
         if (type == "uiReady") {
             UIManager::GetSingleton().OnUIReady();
+            SendLocaleData();
+        } else if (type == "fetchLocale") {
+            SendLocaleData();
+        } else if (type == "reloadLocalization") {
+            MARAS::App::SettingsCoordinator::GetSingleton().ReloadLocalization();
+            SendOverviewData();
+            SendHouseholdBuffs();
+            const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
+            if (detailNpcId != 0) {
+                SendNPCDetail(detailNpcId);
+            }
         } else if (type == "modalResponse") {
             (void)ModalManager::GetSingleton().HandleModalResponse(payload);
         } else if (type == "fetchOverview") {
@@ -656,6 +669,27 @@ namespace MARAS::Bridge::Ui {
         UIManager::GetSingleton().SendToUI("receiveMARASOverview", DumpJsonSafe(data));
     }
 
+    void UIDataBridge::SendLocaleData() {
+        DispatchBridgeMainThread("UIDataBridge::SendLocaleData", [this]() {
+            SendLocaleDataOnMainThread();
+        });
+    }
+
+    void UIDataBridge::SendLocaleDataOnMainThreadSafe() {
+        if (MARAS::DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            SendLocaleDataOnMainThread();
+        } else {
+            SendLocaleData();
+        }
+    }
+
+    void UIDataBridge::SendLocaleDataOnMainThread() {
+        if (!UIManager::GetSingleton().IsDomReady()) {
+            return;
+        }
+        UIManager::GetSingleton().SendToUI("receiveMARASLocale", DumpJsonSafe(BuildLocalePayloadJson()));
+    }
+
     void UIDataBridge::SendHouseholdBuffs() {
         DispatchBridgeMainThread("UIDataBridge::SendHouseholdBuffs", [this]() {
             SendHouseholdBuffsOnMainThread();
@@ -764,7 +798,9 @@ namespace MARAS::Bridge::Ui {
             item["suggestedStatus"] = static_cast<std::uint8_t>(
                 MARAS::Foundation::StringToRelationshipStatus(r.targetStatus));
             if (maskCheat) {
-                const std::string neutralText = std::format("{} and {} grew closer.", r.actorAName, r.actorBName);
+                const std::string neutralText = MARAS::TrFmt(
+                    "common.matchmaking_masked_closer",
+                    { { "actorA", r.actorAName }, { "actorB", r.actorBName } });
                 item["memory"] = neutralText;
                 item["reasoning"] = neutralText;
                 item["isCheating"] = false;
@@ -1206,6 +1242,9 @@ namespace MARAS::Bridge::Ui {
             j["uiFullScreen"] = settings.uiFullScreen;
             j["uiScale"] = RoundFloat(settings.uiScale);
             j["autoPauseOnOpen"] = settings.autoPauseOnOpen;
+            j["language"] = settings.language;
+            j["resolvedLanguage"] =
+                MARAS::Engine::LocalizationService::GetSingleton().Snapshot()->GetResolvedCode();
             j["enableScenes"] = settings.enableScenes;
             j["scenesCooldownHours"] = RoundFloat(settings.scenesCooldownHours);
             j["enableScenes_Lover"] = settings.enableScenes_Lover;
@@ -1367,6 +1406,9 @@ namespace MARAS::Bridge::Ui {
 
             std::string blockReason;
             if (lineage.IsChildBlockedFromAdoption(npcFormID, &blockReason)) {
+                if (blockReason.starts_with("Performing the Black Sacrament")) {
+                    blockReason = MARAS::Tr("common.adoption_blocked_black_sacrament");
+                }
                 profile["blockedFromAdoptionReason"] = blockReason;
             }
         }
@@ -1392,16 +1434,26 @@ namespace MARAS::Bridge::Ui {
                 cEntry.stage == MARAS::Foundation::ChildStage::Training;
             profile["hasRefID"] = hasRealActor;
             profile["isEphemeral"] = isEphemeral;
-            if (!cEntry.trainingLocation.empty()) {
-                profile["trainingLocation"] = cEntry.trainingLocation;
-            }
+            const auto& locSvc = MARAS::Engine::LocalizationService::GetSingleton();
             std::int32_t resolvedProfileTrainIdx = cEntry.trainingClassIndex;
             if (!catalog.IsValidClassIndex(resolvedProfileTrainIdx) && !cEntry.trainingLocation.empty()) {
                 resolvedProfileTrainIdx = catalog.FindClassByLocation(cEntry.trainingLocation);
             }
             if (catalog.IsValidClassIndex(resolvedProfileTrainIdx)) {
                 profile["trainingClassIndex"] = resolvedProfileTrainIdx;
-                profile["trainingClassName"] = std::string(lineage.GetTrainingClassName(resolvedProfileTrainIdx));
+                if (const auto* spec = catalog.FindClass(resolvedProfileTrainIdx)) {
+                    profile["trainingClassName"] = locSvc.ResolveTrainingClassName(spec->id, spec->className);
+                    profile["trainingLocation"] = locSvc.ResolveTrainingLocation(
+                        spec->id,
+                        !cEntry.trainingLocation.empty() ? cEntry.trainingLocation : spec->locationName);
+                } else {
+                    profile["trainingClassName"] = std::string(lineage.GetTrainingClassName(resolvedProfileTrainIdx));
+                    if (!cEntry.trainingLocation.empty()) {
+                        profile["trainingLocation"] = cEntry.trainingLocation;
+                    }
+                }
+            } else if (!cEntry.trainingLocation.empty()) {
+                profile["trainingLocation"] = cEntry.trainingLocation;
             }
             if (cEntry.trainingStartGameDay >= 0.0f) {
                 profile["trainingStartGameDay"] = RoundFloat(cEntry.trainingStartGameDay);
@@ -1428,6 +1480,17 @@ namespace MARAS::Bridge::Ui {
             perceivedChild->stage == MARAS::Foundation::ChildStage::Adult &&
             !MARAS::Foundation::IsSyntheticChildRawId(npcFormID)) {
             currentHomeName = MARAS::App::HouseholdUseCases::GetSingleton().GetCurrentDestinationName(npcFormID);
+            if (currentHomeName == "Visiting Family Home") {
+                currentHomeName = MARAS::Tr("common.visiting_family_home");
+            } else if (currentHomeName == "Visiting Parents' Home") {
+                currentHomeName = MARAS::Tr("common.visiting_parents_home");
+            } else if (currentHomeName.starts_with("Visiting ") && currentHomeName.size() > 9) {
+                currentHomeName = MARAS::TrFmt(
+                    "common.visiting_place",
+                    { { "place", std::string_view(currentHomeName).substr(9) } });
+            } else if (currentHomeName == "Local Inn") {
+                currentHomeName = MARAS::Tr("common.local_inn_fallback");
+            }
         }
         if (!currentHomeName.empty()) {
             profile["currentHome"] = currentHomeName;
@@ -1530,19 +1593,28 @@ namespace MARAS::Bridge::Ui {
 
         cObj["hasRefID"] = hasRealActor;
         cObj["isEphemeral"] = isEphemeral;
-        if (!child.trainingLocation.empty()) {
-            cObj["trainingLocation"] = child.trainingLocation;
-        }
-
         const auto& catalog = MARAS::Engine::TrainingCatalogLoader::GetSingleton().GetCatalog();
+        const auto& locSvc = MARAS::Engine::LocalizationService::GetSingleton();
         std::int32_t resolvedChildTrainIdx = child.trainingClassIndex;
         if (!catalog.IsValidClassIndex(resolvedChildTrainIdx) && !child.trainingLocation.empty()) {
             resolvedChildTrainIdx = catalog.FindClassByLocation(child.trainingLocation);
         }
         if (catalog.IsValidClassIndex(resolvedChildTrainIdx)) {
             cObj["trainingClassIndex"] = resolvedChildTrainIdx;
-            cObj["trainingClassName"] = std::string(
-                MARAS::App::LineageUseCases::GetSingleton().GetTrainingClassName(resolvedChildTrainIdx));
+            if (const auto* spec = catalog.FindClass(resolvedChildTrainIdx)) {
+                cObj["trainingClassName"] = locSvc.ResolveTrainingClassName(spec->id, spec->className);
+                cObj["trainingLocation"] = locSvc.ResolveTrainingLocation(
+                    spec->id,
+                    !child.trainingLocation.empty() ? child.trainingLocation : spec->locationName);
+            } else {
+                cObj["trainingClassName"] = std::string(
+                    MARAS::App::LineageUseCases::GetSingleton().GetTrainingClassName(resolvedChildTrainIdx));
+                if (!child.trainingLocation.empty()) {
+                    cObj["trainingLocation"] = child.trainingLocation;
+                }
+            }
+        } else if (!child.trainingLocation.empty()) {
+            cObj["trainingLocation"] = child.trainingLocation;
         }
         if (child.trainingStartGameDay >= 0.0f) {
             cObj["trainingStartGameDay"] = RoundFloat(child.trainingStartGameDay);
@@ -1826,14 +1898,15 @@ namespace MARAS::Bridge::Ui {
         const bool playerWerewolf = MARAS::ChildSpawnService::IsActorWerewolf(
             MARAS::Foundation::kPlayerRefRawId);
 
+        const auto& locSvc = MARAS::Engine::LocalizationService::GetSingleton();
         nlohmann::json arr = nlohmann::json::array();
         for (const auto& spec : catalog.AllClasses()) {
             nlohmann::json item;
             item["index"] = spec.index;
             item["id"] = spec.id;
-            item["className"] = spec.className;
-            item["location"] = spec.locationName;
-            item["description"] = spec.description;
+            item["className"] = locSvc.ResolveTrainingClassName(spec.id, spec.className);
+            item["location"] = locSvc.ResolveTrainingLocation(spec.id, spec.locationName);
+            item["description"] = locSvc.ResolveTrainingDescription(spec.id, spec.description);
             item["image"] = ResolveTrainingImageSrc(spec.imagePath);
             item["costMultiplier"] = RoundFloat(spec.costMultiplier);
             item["effectiveCost"] = catalog.GetEffectiveTrainingCost(spec.index, baseCost);
@@ -1843,7 +1916,7 @@ namespace MARAS::Bridge::Ui {
                 item["factionKey"] = spec.requirementKey;
             }
             if (!spec.requirementLabel.empty()) {
-                item["factionLabel"] = spec.requirementLabel;
+                item["factionLabel"] = locSvc.ResolveTrainingRequirementLabel(spec.id, spec.requirementLabel);
             }
             arr.push_back(std::move(item));
         }
@@ -1861,9 +1934,19 @@ namespace MARAS::Bridge::Ui {
         for (const auto& spec : catalog.AllClasses()) {
             const auto info = catalog.EvaluateChildTrainingDiscount(childId, spec.index, view, port);
             if (info.discountPercent > 0) {
+                std::string localizedReason = info.reason;
+                if (localizedReason.ends_with(" (Leader)") && localizedReason.size() > 9) {
+                    localizedReason = MARAS::TrFmt(
+                        "common.training_discount_leader",
+                        { { "parent", std::string_view(localizedReason).substr(0, localizedReason.size() - 9) } });
+                } else if (localizedReason.ends_with(" (Member)") && localizedReason.size() > 9) {
+                    localizedReason = MARAS::TrFmt(
+                        "common.training_discount_member",
+                        { { "parent", std::string_view(localizedReason).substr(0, localizedReason.size() - 9) } });
+                }
                 discounts[std::to_string(spec.index)] = {
                     { "percent", info.discountPercent },
-                    { "reason", info.reason }
+                    { "reason", std::move(localizedReason) }
                 };
             }
         }
@@ -2025,7 +2108,7 @@ namespace MARAS::Bridge::Ui {
             std::string reason;
             (void)relUses.CanFormRelationship(actorA, actorB, status, &reason);
             if (reason.empty()) {
-                reason = "Relationship assignment failed.";
+                reason = MARAS::Tr("common.action_rejected_default");
             }
             nlohmann::json rej;
             rej["action"] = "assignRelationship";
@@ -2088,6 +2171,18 @@ namespace MARAS::Bridge::Ui {
 
     void UIDataBridge::ProcessUpdateSetting(const nlohmann::json& payload) {
         const std::string key = GetJsonString(payload, "key");
+        if (key == "language" || key == "uiLanguage" || key == "locale") {
+            const std::string langCode = GetJsonString(payload, "value", "auto");
+            MARAS::App::SettingsCoordinator::GetSingleton().SetLanguage(langCode);
+            SendOverviewData();
+            SendHouseholdBuffs();
+            const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
+            if (detailNpcId != 0) {
+                SendNPCDetail(detailNpcId);
+            }
+            return;
+        }
+
         if (key == "debugSpell") {
             const bool add = GetJsonBool(payload, "value", false);
             if (auto* player = RE::PlayerCharacter::GetSingleton()) {
@@ -3042,6 +3137,10 @@ namespace MARAS::Bridge::Ui {
 
             void SendSettingsData() override {
                 UIDataBridge::GetSingleton().SendSettingsData();
+            }
+
+            void SendLocaleData() override {
+                UIDataBridge::GetSingleton().SendLocaleData();
             }
 
             void SendNPCList() override {

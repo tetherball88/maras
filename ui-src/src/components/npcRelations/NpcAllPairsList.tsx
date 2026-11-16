@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
-import { StatusBadge } from '../shared/StatusBadge'
+import { StatusBadge, getStatusLabel } from '../shared/StatusBadge'
 import { NpcTraitBadges } from '../shared/TraitIcons'
 import { SearchInput } from '../shared/SearchInput'
 import { SelectInput } from '../shared/SelectInput'
@@ -10,8 +10,10 @@ import { formatGameDay } from '../../utils/dateUtils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { AppTooltip } from '../shared/AppTooltip'
 import { Sparkles, Users, Crown, User, Clock, Heart, Trash2 } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 export const NpcAllPairsList: React.FC = () => {
+  const { t } = useTranslation()
   const relationships = useMarasStore((s) => s.relationships)
   const npcProfiles = useMarasStore((s) => s.npcProfiles)
   const currentGameDay = useMarasStore((s) => s.currentGameDay)
@@ -22,8 +24,8 @@ export const NpcAllPairsList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const getActorName = (id: string) => {
-    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
-    return npcProfiles.get(id)?.name || `NPC (${id.slice(-6)})`
+    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
+    return npcProfiles.get(id)?.name || t('npcRelations.allPairs.npcShortFallback', { id: id.slice(-6) })
   }
 
   // Filter pairs by search query and status filter
@@ -48,13 +50,16 @@ export const NpcAllPairsList: React.FC = () => {
   })
 
   const statusOptions = [
-    { value: 'all', label: 'All Statuses' },
-    ...Object.keys(RelationshipStatus)
-      .filter((k) => isNaN(Number(k)))
-      .map((key, idx) => ({
-        value: idx.toString(),
-        label: key,
-      })),
+    { value: 'all', label: t('npcRelations.allPairs.allStatuses') },
+    ...(Object.keys(RelationshipStatus).filter((k) => isNaN(Number(k))) as Array<keyof typeof RelationshipStatus>).map(
+      (key) => {
+        const statusVal = RelationshipStatus[key]
+        return {
+          value: statusVal.toString(),
+          label: getStatusLabel(statusVal),
+        }
+      },
+    ),
   ]
 
   return (
@@ -63,16 +68,16 @@ export const NpcAllPairsList: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[0.75rem] border-b border-border-divider pb-[0.75rem]">
         <div className="flex items-center gap-[0.5rem]">
           <Sparkles className="w-[1.25em] h-[1.25em] text-accent" />
-          <h2 className="text-base font-bold text-accent-bright">All NPC Relationship Pairs</h2>
+          <h2 className="text-base font-bold text-accent-bright">{t('npcRelations.allPairs.title')}</h2>
           <span className="text-xs px-[0.5rem] py-[0.125rem] rounded bg-panel-inset text-foreground-muted border border-border-subtle font-mono">
-            {filteredPairs.length} / {relationships.length} Pairs
+            {t('npcRelations.allPairs.pairsCount', { filtered: filteredPairs.length, total: relationships.length })}
           </span>
         </div>
 
         <div className="flex items-center gap-[0.75rem] w-full sm:w-auto">
           <SearchInput
             value={search}
-            placeholder="Search by NPC name..."
+            placeholder={t('npcRelations.allPairs.searchPlaceholder')}
             onChange={setSearch}
             className="w-full sm:w-[13rem]"
           />
@@ -80,7 +85,7 @@ export const NpcAllPairsList: React.FC = () => {
             value={statusFilter}
             options={statusOptions}
             onChange={setStatusFilter}
-            className="w-full sm:w-[10rem]"
+            className="w-full sm:min-w-[11rem] sm:w-auto"
           />
         </div>
       </div>
@@ -90,8 +95,8 @@ export const NpcAllPairsList: React.FC = () => {
         {filteredPairs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-[4rem] text-center gap-[0.5rem]">
             <Users className="w-[2em] h-[2em] text-foreground-muted" />
-            <div className="text-sm font-semibold text-foreground-secondary">No relationship pairs found</div>
-            <div className="text-xs text-foreground-muted">Try adjusting your search query or status filter.</div>
+            <div className="text-sm font-semibold text-foreground-secondary">{t('npcRelations.allPairs.emptyTitle')}</div>
+            <div className="text-xs text-foreground-muted">{t('npcRelations.allPairs.emptySubtitle')}</div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[0.75rem]">
@@ -123,7 +128,7 @@ export const NpcAllPairsList: React.FC = () => {
                           <span>{formatGameDay(dateVal, currentGameDay)}</span>
                         </div>
                       )}
-                      <AppTooltip content="Remove Relationship Record">
+                      <AppTooltip content={t('npcRelations.allPairs.removeTooltip')}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -157,7 +162,7 @@ export const NpcAllPairsList: React.FC = () => {
                       {profileA ? (
                         <div className="text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] flex-wrap">
                           {profileA.pluginName && (
-                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]" title={`Plugin: ${profileA.pluginName}`}>
+                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]" title={t('shared.pluginTooltip', { plugin: profileA.pluginName })}>
                               {profileA.pluginName}
                             </span>
                           )}
@@ -165,7 +170,7 @@ export const NpcAllPairsList: React.FC = () => {
                         </div>
                       ) : (
                         <div className="text-[0.6875rem] text-foreground-muted">
-                          {pair.actorA === PLAYER_FORM_ID ? 'Protagonist' : 'NPC Profile'}
+                          {pair.actorA === PLAYER_FORM_ID ? t('npcRelations.allPairs.protagonist') : t('npcRelations.allPairs.npcProfile')}
                         </div>
                       )}
                     </div>
@@ -191,7 +196,7 @@ export const NpcAllPairsList: React.FC = () => {
                       {profileB ? (
                         <div className="text-[0.6875rem] text-foreground-muted flex items-center gap-[0.25rem] flex-wrap">
                           {profileB.pluginName && (
-                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]" title={`Plugin: ${profileB.pluginName}`}>
+                            <span className="font-mono text-[0.625rem] text-foreground-muted bg-panel-inset px-[0.25rem] py-[0.0625rem] rounded border border-border-subtle truncate max-w-[5.5rem]" title={t('shared.pluginTooltip', { plugin: profileB.pluginName })}>
                               {profileB.pluginName}
                             </span>
                           )}
@@ -199,7 +204,7 @@ export const NpcAllPairsList: React.FC = () => {
                         </div>
                       ) : (
                         <div className="text-[0.6875rem] text-foreground-muted">
-                          {pair.actorB === PLAYER_FORM_ID ? 'Protagonist' : 'NPC Profile'}
+                          {pair.actorB === PLAYER_FORM_ID ? t('npcRelations.allPairs.protagonist') : t('npcRelations.allPairs.npcProfile')}
                         </div>
                       )}
                     </div>

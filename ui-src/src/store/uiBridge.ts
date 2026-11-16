@@ -1,5 +1,7 @@
 import { useMarasStore, flushAllPendingDebouncedActions } from './useMarasStore'
 import { useModalStore } from './useModalStore'
+import { useLocaleStore } from './useLocaleStore'
+import { t } from '../i18n'
 import {
   NPCProfile,
   RelationshipPair,
@@ -10,11 +12,13 @@ import {
   Temperament,
   AffairStatus,
   ModalPayload,
+  LocalePayload,
 } from '../types'
 
 declare global {
   interface Window {
     marasAction?: (jsonStr: string) => void
+    receiveMARASLocale?: (data: LocalePayload | string) => void
     receiveMARASOverview?: (data: any) => void
     receiveMARASBuffs?: (data: any) => void
     receiveNPCList?: (list: any[] | string) => void
@@ -67,12 +71,45 @@ function parsePayload<T = any>(raw: T | string): T {
   return raw as T
 }
 
+async function fetchDevLocale(langCode: string): Promise<LocalePayload | null> {
+  if (typeof window === 'undefined' || window.marasAction) return null
+  try {
+    const res = await fetch(`/__dev/locale/${encodeURIComponent(langCode || 'auto')}`)
+    if (!res.ok) return null
+    const data = (await res.json()) as LocalePayload
+    if (data && typeof data === 'object') {
+      useLocaleStore.getState().applyLocalePayload(data)
+      return data
+    }
+  } catch {
+    // Ignore when static preview without Vite dev middleware
+  }
+  return null
+}
+
 export function sendMarasAction(action: string, payload: Record<string, any> = {}) {
   const jsonStr = JSON.stringify({ action, payload })
   if (typeof window !== 'undefined' && window.marasAction) {
     window.marasAction(jsonStr)
   } else {
     console.log(`[Standalone Mock Action] ${action}:`, payload)
+    if (action === 'updateSetting' && payload?.key === 'language' && typeof payload.value === 'string') {
+      void fetchDevLocale(payload.value)
+    }
+  }
+}
+
+export function reloadLocalization() {
+  if (typeof window !== 'undefined' && window.marasAction) {
+    sendMarasAction('reloadLocalization')
+    const resolved = useLocaleStore.getState().resolvedLanguage || 'en'
+    useMarasStore.getState().setStatusMsg(t('bridge.localizationReloaded', { lang: resolved }))
+  } else {
+    const selected = useLocaleStore.getState().selectedLanguage || 'auto'
+    void fetchDevLocale(selected).then((loaded) => {
+      const resolved = loaded?.resolvedLanguage || useLocaleStore.getState().resolvedLanguage || 'en'
+      useMarasStore.getState().setStatusMsg(t('bridge.localizationReloaded', { lang: resolved }))
+    })
   }
 }
 
@@ -90,6 +127,22 @@ export function completeChildTraining(childId: string) {
 
 export function initializeUIBridge() {
   if (typeof window === 'undefined') return
+
+  // 0. Receive Localization Dictionary & Language Metadata from C++
+  window.receiveMARASLocale = (raw: LocalePayload | string) => {
+    const data = parsePayload<LocalePayload>(raw)
+    if (!data || typeof data !== 'object') return
+    console.log('[UIBridge] receiveMARASLocale:', {
+      selected: data.selectedLanguage,
+      resolved: data.resolvedLanguage,
+      available: data.availableLanguages?.length ?? 0,
+    })
+    useLocaleStore.getState().applyLocalePayload(data)
+  }
+
+  if (!window.marasAction) {
+    void fetchDevLocale('auto')
+  }
 
   // 1. Receive Overview Snapshot from C++
   window.receiveMARASOverview = (raw: any) => {
@@ -414,8 +467,8 @@ export function initializeUIBridge() {
     if (!data) return
     console.warn('[UIBridge] onActionRejected:', data)
     const store = useMarasStore.getState()
-    const reason = data.reason || 'Operation could not proceed due to relationship rules.'
-    store.setStatusMsg(`Action Blocked: ${reason}`)
+    const reason = data.reason || t('bridge.actionBlockedDefault')
+    store.setStatusMsg(t('bridge.actionBlockedStatus', { reason }))
   }
 
   // 12. Receive Matchmaking Results from SkyrimNet LLM

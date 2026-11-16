@@ -31,6 +31,9 @@ namespace MARAS::Engine {
         bool LoadChildNamesFromFile(const std::filesystem::path& customPath = {});
         bool LoadCritterNamesFromFile(const std::filesystem::path& customPath = {});
 
+        /// Applies optional per-language `localization/<langCode>/names.json` overrides on top of base pools.
+        bool ApplyLocalizationOverlay(std::string_view langCode);
+
         void Clear() noexcept;
 
         [[nodiscard]] bool IsLoaded() const noexcept;

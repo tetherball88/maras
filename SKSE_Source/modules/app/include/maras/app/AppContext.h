@@ -32,6 +32,7 @@ namespace MARAS::App {
 
         virtual void SendOverviewData() = 0;
         virtual void SendSettingsData() = 0;
+        virtual void SendLocaleData() = 0;
         virtual void SendNPCList() = 0;
         virtual void SendNPCDetail(std::uint32_t npcFormID) = 0;
         virtual void SendHouseholdBuffs() = 0;

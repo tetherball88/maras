@@ -1,11 +1,14 @@
 import React from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
+import { useTranslation } from '../../i18n'
 import { SettingRow } from './SettingRow'
 import { ToggleSwitch } from '../shared/ToggleSwitch'
 import { SectionCard } from '../shared/SectionCard'
 import { Users, HeartHandshake, UserMinus, Lock, Info } from 'lucide-react'
 
 export const ConfirmationSettings: React.FC = () => {
+  const { t, tp } = useTranslation()
+  void tp
   const settings = useMarasStore((s) => s.settings)
   const updateSetting = useMarasStore((s) => s.updateSetting)
 
@@ -19,17 +22,17 @@ export const ConfirmationSettings: React.FC = () => {
         <Info className="w-[1.25em] h-[1.25em] text-accent flex-shrink-0 mt-[0.125rem]" />
         <div className="flex-1 space-y-[0.25rem]">
           <div className="font-semibold text-foreground-primary">
-            In-Game Confirmation Modals
+            {t('settings.confirmations.bannerTitle')}
           </div>
           <div>
-            Confirmation dialogs require confirmation before major relationship changes take effect.
+            {t('settings.confirmations.bannerDesc')}
             {settings.hasSkyrimNet ? (
               <span className="text-accent-bright block mt-[0.125rem]">
-                SkyrimNet is detected: Modals will include a third &quot;Decline (Explain)&quot; button allowing freeform dialogue responses.
+                {t('settings.confirmations.bannerSkyrimNet')}
               </span>
             ) : (
               <span className="text-foreground-muted block mt-[0.125rem]">
-                Modals display standard &quot;Accept&quot; and &quot;Cancel&quot; options.
+                {t('settings.confirmations.bannerStandard')}
               </span>
             )}
           </div>
@@ -37,10 +40,10 @@ export const ConfirmationSettings: React.FC = () => {
       </div>
 
       {/* Master Toggle & Participant Rules */}
-      <SectionCard title="General Confirmation Rules" icon={Users}>
+      <SectionCard title={t('settings.confirmations.generalTitle')} icon={Users}>
         <SettingRow
-          label="Enable Confirmation Modals"
-          description="Master toggle for all in-game confirmation popups. If disabled, all relationship transitions are auto-accepted without prompts."
+          label={t('settings.confirmations.enableMasterLabel')}
+          description={t('settings.confirmations.enableMasterDesc')}
         >
           <ToggleSwitch
             checked={masterEnabled}
@@ -49,8 +52,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Player-NPC Confirmations"
-          description="Show confirmation modals when the player character is directly involved."
+          label={t('settings.confirmations.playerNpcLabel')}
+          description={t('settings.confirmations.playerNpcDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -61,8 +64,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="NPC-NPC Confirmations"
-          description="Show confirmation modals when interactions occur between two NPCs without player involvement."
+          label={t('settings.confirmations.npcNpcLabel')}
+          description={t('settings.confirmations.npcNpcDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -74,10 +77,10 @@ export const ConfirmationSettings: React.FC = () => {
       </SectionCard>
 
       {/* Status Change Confirmations */}
-      <SectionCard title="Status Change Confirmations" icon={HeartHandshake}>
+      <SectionCard title={t('settings.confirmations.statusChangeTitle')} icon={HeartHandshake}>
         <SettingRow
-          label="Confirm: Dating Proposals"
-          description="Require confirmation modal when proposing or entering a dating relationship."
+          label={t('settings.confirmations.confirmDatingLabel')}
+          description={t('settings.confirmations.confirmDatingDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -88,8 +91,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Engagement Proposals"
-          description="Require confirmation modal when proposing or accepting an engagement."
+          label={t('settings.confirmations.confirmEngagementLabel')}
+          description={t('settings.confirmations.confirmEngagementDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -100,8 +103,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Lover Proposals"
-          description="Require confirmation modal when proposing or becoming lovers."
+          label={t('settings.confirmations.confirmLoverLabel')}
+          description={t('settings.confirmations.confirmLoverDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -112,8 +115,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Marriage Proposals"
-          description="Require confirmation modal when proposing or accepting a marriage proposal."
+          label={t('settings.confirmations.confirmMarryLabel')}
+          description={t('settings.confirmations.confirmMarryDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -125,10 +128,10 @@ export const ConfirmationSettings: React.FC = () => {
       </SectionCard>
 
       {/* Breakup & Divorce Confirmations */}
-      <SectionCard title="Breakup & Divorce Confirmations" icon={UserMinus}>
+      <SectionCard title={t('settings.confirmations.breakupTitle')} icon={UserMinus}>
         <SettingRow
-          label="Confirm: Breakup Dating"
-          description="Require confirmation modal when breaking up a dating relationship."
+          label={t('settings.confirmations.breakupDatingLabel')}
+          description={t('settings.confirmations.breakupDatingDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -139,8 +142,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Breakup Engagement"
-          description="Require confirmation modal when breaking off an engagement."
+          label={t('settings.confirmations.breakupEngagementLabel')}
+          description={t('settings.confirmations.breakupEngagementDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -151,8 +154,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Breakup Lover"
-          description="Require confirmation modal when ending a lover relationship."
+          label={t('settings.confirmations.breakupLoverLabel')}
+          description={t('settings.confirmations.breakupLoverDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -163,8 +166,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Divorce Action"
-          description="Require confirmation modal when an NPC or partner requests divorce."
+          label={t('settings.confirmations.divorceLabel')}
+          description={t('settings.confirmations.divorceDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -175,8 +178,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Low Affection Divorce"
-          description="Require confirmation modal during low affection divorce questline."
+          label={t('settings.confirmations.lowAffectionDivorceLabel')}
+          description={t('settings.confirmations.lowAffectionDivorceDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -188,10 +191,10 @@ export const ConfirmationSettings: React.FC = () => {
       </SectionCard>
 
       {/* Open Relationship Confirmations */}
-      <SectionCard title="Open Relationship Confirmations" icon={Lock}>
+      <SectionCard title={t('settings.confirmations.openRelTitle')} icon={Lock}>
         <SettingRow
-          label="Confirm: Open Relationship"
-          description="Require confirmation modal when opening an existing relationship."
+          label={t('settings.confirmations.openRelLabel')}
+          description={t('settings.confirmations.openRelDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch
@@ -202,8 +205,8 @@ export const ConfirmationSettings: React.FC = () => {
         </SettingRow>
 
         <SettingRow
-          label="Confirm: Close Relationship"
-          description="Require confirmation modal when closing an open relationship."
+          label={t('settings.confirmations.closeRelLabel')}
+          description={t('settings.confirmations.closeRelDesc')}
           disabled={isMasterDisabled}
         >
           <ToggleSwitch

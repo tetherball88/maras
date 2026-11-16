@@ -4,6 +4,8 @@
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/app/SkyrimNetGateway.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
+#include "maras/engine/TaskDispatcher.h"
 #include "maras/state/SessionEpoch.h"
 
 namespace MARAS::PapyrusInterface {
@@ -106,6 +108,42 @@ namespace MARAS::PapyrusInterface {
     std::string DumpStoredData(RE::StaticFunctionTag*, std::string tag) {
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         return App::GetUiBridgeGateway().DumpStoredData(tag);
+    }
+
+    namespace {
+        [[nodiscard]] std::string FormatPapyrusTranslation(
+            std::string_view key,
+            std::string_view arg1,
+            std::string_view arg2) {
+            if (arg1.empty() && arg2.empty()) {
+                return MARAS::Tr(key);
+            }
+            return MARAS::TrFmt(
+                key,
+                { { "arg1", arg1 },
+                  { "arg2", arg2 },
+                  { "actor", arg1 },
+                  { "spouse", arg1 },
+                  { "child", arg1 },
+                  { "mods", arg1 },
+                  { "total", arg1 },
+                  { "home", arg2 },
+                  { "migrated", arg2 } });
+        }
+    }  // namespace
+
+    void NotifyLocalized(RE::StaticFunctionTag*, std::string key, std::string arg1, std::string arg2) {
+        if (key.empty() || State::IsLegacyMigrationActive()) {
+            return;
+        }
+        QueueHUDMessage(FormatPapyrusTranslation(key, arg1, arg2));
+    }
+
+    std::string TranslateKey(RE::StaticFunctionTag*, std::string key, std::string arg1, std::string arg2) {
+        if (key.empty()) {
+            return {};
+        }
+        return FormatPapyrusTranslation(key, arg1, arg2);
     }
 
 }  // namespace MARAS::PapyrusInterface

@@ -1,0 +1,341 @@
+{
+  "bonuses": {
+    "craftsman": {
+      "0": {
+        "name": "Tailored Defense",
+        "description": "Your spouse's mastery in the craft ensures your equipment fits true and holds strong, reducing damage taken by"
+      }
+    },
+    "mage": {
+      "0": {
+        "name": "Arcane Union",
+        "description": "Fighting beside a practiced spellcaster renews your focus, allowing magicka to regenerate faster by"
+      }
+    },
+    "middle": {
+      "0": {
+        "name": "Steady Kinship",
+        "description": "Your stable domestic life encourages learning, increasing skill experience gained by"
+      }
+    },
+    "nobles": {
+      "0": {
+        "name": "Aristocratic Favor",
+        "description": "Your noble ties ease every transaction, reducing store prices by"
+      }
+    },
+    "orator": {
+      "0": {
+        "name": "Echoed Voice",
+        "description": "Marching with a gifted speaker empowers your voice, reducing shout cooldown time by"
+      }
+    },
+    "outcast": {
+      "0": {
+        "name": "Kiss of the Knife",
+        "description": "A life on the fringe teaches you to strike unseen, increasing sneak attack damage by"
+      }
+    },
+    "poverty": {
+      "0": {
+        "name": "Enduring Hearts",
+        "description": "Enduring hardship together fosters resilience, allowing stamina to regenerate faster by"
+      }
+    },
+    "ranger": {
+      "0": {
+        "name": "Wildsight Bond",
+        "description": "With a seasoned ranger by your side, your instincts sharpen and your aim steadies, increasing ranged damage by"
+      }
+    },
+    "religious": {
+      "0": {
+        "name": "Blessing of Union",
+        "description": "Living under divine guidance shields you from harm, increasing your magic resistance by"
+      }
+    },
+    "rogue": {
+      "0": {
+        "name": "Shared Shadows",
+        "description": "Your partner's silent footsteps teach you subtlety, increasing your sneak effectiveness by"
+      }
+    },
+    "rulers": {
+      "0": {
+        "name": "Speech of Sovereigns",
+        "description": "Standing beside a figure of authority emboldens your speech, increasing your Speech skill by"
+      }
+    },
+    "warrior": {
+      "0": {
+        "name": "Bond of Steel",
+        "description": "With your spouse at your side in battle, your melee attack damage is increased by"
+      }
+    },
+    "wealthy": {
+      "0": {
+        "name": "Merchant's Dowry",
+        "description": "Sharing wealth brings prosperity, increasing your sell prices by"
+      }
+    },
+    "working": {
+      "0": {
+        "name": "Labor's Legacy",
+        "description": "Hard-working roots carry their weight, increasing your carry capacity by"
+      }
+    }
+  },
+  "training": {
+    "mage": {
+      "name": "Arcane Evoker",
+      "location": "College of Winterhold",
+      "description": "Apprenticed beneath the windswept spires of the College of Winterhold, initiates spend their days immersed in the ancient tomes of the Arcanaeum and rigorous elemental trials in the Hall of the Elements. Under the tutelage of senior wizards, they master tri-elemental Destruction—hurling Fireballs, Ice Storms, and Chain Lightning—while weaving Ironflesh armor, Steadfast Wards, and protective elemental cloaks to survive the deadliest arcane duels."
+    },
+    "warrior": {
+      "name": "Shield-Brother Vanguard",
+      "location": "Jorrvaskr",
+      "description": "Raised in the proud martial tradition of Ysgramor's Companions, young aspirants train in the courtyard behind Jorrvaskr and feast beneath its overturned longship roof in Whiterun. Tempered by daily sparring with the Circle, shield-wall drills, and hours at Eorlund Gray-Mane's forge, graduates return home clad in heavy Wolf armor, bearing a balanced Skyforge Steel blade, an iron-rimmed shield, and an unshakeable code of frontline honor."
+    },
+    "thief": {
+      "name": "Shadowfoot Infiltrator",
+      "location": "The Cistern",
+      "description": "Inducted into the subterranean vaults of the Ratway Cistern beneath Riften, recruits learn the unwritten rules of shadows, coin, and leverage from the Thieves Guild's veteran larcenists. Trained to move unseen across rooftops, pick masterwork tumblers, lift purses without a whisper, and loose ambush volleys from the dark, they graduate in supple Guild leather armor armed with a silent dagger and hunting bow.",
+      "factionLabel": "Thieves Guild"
+    },
+    "assassin": {
+      "name": "Dark Brotherhood Silencer",
+      "location": "The Sanctuary",
+      "description": "Steeped in the dread Five Tenets of Sithis and the Night Mother within a hidden Dark Brotherhood Sanctuary, initiates undergo merciless conditioning in the art of the unseen kill. They learn to brew virulent alchemical toxins, cloak their footsteps in Muffle and Invisibility magic, and strike from the shadows with lethal precision, emerging in blood-black Shrouded armor as cold, unflinching executioners.",
+      "factionLabel": "Dark Brotherhood"
+    },
+    "bard": {
+      "name": "Spellsword Skald",
+      "location": "The Bards College",
+      "description": "Educated in the candlelit halls of Solitude's Bards College, young skalds study ancient Nordic verse, courtly rhetoric, and the subtle art of swaying both jarls and battlefields. Combining silver-tongued Speechcraft with dueling steel, they weave Illusion enchantments—inspiring allies with Rally and Courage or sowing chaos with Fury and Pacify—while sustaining companions with Restoration healing and Oakflesh wards."
+    },
+    "stormcloak": {
+      "name": "Stormcloak Shock-Trooper",
+      "location": "Palace of the Kings",
+      "description": "Hardened on the frozen flagstones of Windhelm's Palace of the Kings, recruits endure brutal Eastmarch conditioning alongside Ulfric Stormcloak's veteran Huscarls. Emphasizing raw Nordic ferocity and mobility over heavy plate, they master the crushing momentum of two-handed battleaxes, bone-jarring shield bashes, and winter survival, returning home in Stormcloak furs ready to cleave through any frontline."
+    },
+    "legionnaire": {
+      "name": "Imperial Praetorian",
+      "location": "Castle Dour",
+      "description": "Drilled beneath the banners of the Red Diamond inside Solitude's Castle Dour, cadets are forged in the time-tested martial doctrine of the Imperial Legion. Through relentless formation marches, discipline under fire, and tactical versatility, they learn to soften enemy ranks with disciplined Imperial bow volleys before locking heavy shields and advancing with gladius-style Imperial steel."
+    },
+    "dragon_slayer": {
+      "name": "Akaviri Dragonguard",
+      "location": "Sky Haven Temple",
+      "description": "Trained high above the Karth River within the ancient halls of Sky Haven Temple, initiates study the lost dragon-hunting treatises carved by the Akaviri Dragonguard and preserved by the Blades. Outfitted in ceremonial Akaviri heavy plate with a razor-sharp Blades katana and shield, they master parrying monstrous strikes and channeling Close Wounds Restoration magic to endure the fury of dragons.",
+      "factionLabel": "The Blades"
+    },
+    "dawnguard": {
+      "name": "Dawnguard Inquisitor",
+      "location": "Fort Dawnguard",
+      "description": "Sequestered within the fortified stone walls of Fort Dawnguard in Dayspring Canyon, recruits are drilled by veteran vampire hunters to stalk the creatures of the night. They master the mechanical punch of the Dawnguard crossbow, close-quarters war axe combat, and sacred solar Restoration—searing the undead with Sun Fire, Vampire's Bane, and the blazing mantle of Stendarr's Aura.",
+      "factionLabel": "The Dawnguard"
+    },
+    "necromancer": {
+      "name": "Whispers Necromancer",
+      "location": "College of Whispers",
+      "description": "Sent south to the politically sanctioned halls of Cyrodiil's College of Whispers, acolytes delve into the forbidden intersections of Conjuration, soul-binding, and necromantic servitude. Unburdened by common taboos, they learn to trap souls, command risen Revenants and Dread Zombies with a necromantic staff, and freeze the living in their tracks with biting Ice Storms and Frost Cloaks."
+    },
+    "vigilant": {
+      "name": "Paladin of Stendarr",
+      "location": "Stendarr's Beacon",
+      "description": "Sworn to the unyielding tenets of the God of Mercy and Righteous Rule at Stendarr's Beacon in the mountains of the Pale, novitiates are tempered into zealous witchhunters. Clad in heavy gauntlets and consecrated robes, they wade into battle with a steel mace in one hand and a Steadfast Ward in the other, fortifying their flesh with Alteration magic while banishing Daedra, witches, and the undead."
+    },
+    "healer": {
+      "name": "Cleric of Kynareth",
+      "location": "Temple of Kynareth",
+      "description": "Apprenticed beneath the boughs of the sacred Gildergreen in Whiterun's Temple of Kynareth, acolytes dedicate themselves to the preservation of life, herbalism, and restorative grace. Shunning bloodshed for sanctuary, they master Grand Healing, Greater Wards, Ironflesh protection, and holy Circles of Protection, wielding a Staff of Grand Healing and rallying cries to keep their companions standing through the direst peril."
+    },
+    "conjurer": {
+      "name": "Telvanni Spellwright",
+      "location": "House Telvanni",
+      "description": "Trained in the mushroom-tower citadels of Great House Telvanni in Morrowind, apprentices are steeped in ruthlessly pragmatic Dunmeri wizardry where arcane mastery is the only law. They learn to tear open the barriers of Oblivion—binding Flame, Frost, and Storm Atronachs to their will—while manifesting mystic Bound Bows and Swords and hurling crackling bolts of Shock magic."
+    },
+    "illusionist": {
+      "name": "Julianos Mindweaver",
+      "location": "School of Julianos",
+      "description": "Tutored in logic, perception, and cognitive arcana by the monastic scholars of the School of Julianos in Cyrodiil, initiates learn that the deadliest battlefield is the mortal mind. Equipped with Master Robes of Illusion, a Staff of Frenzy, and an Elven dagger, they bend enemies to madness, terror, or docile calm with Rout, Frenzy, and Pacify before vanishing into total Invisibility."
+    },
+    "battlemage": {
+      "name": "Synod Warmage",
+      "location": "The Synod Conclave",
+      "description": "Commissioned into the Imperial Synod Conclave in the heart of Cyrodiil, cadets undergo the rigorous martial-arcane synthesis once favored by the old Imperial Battlemages. Encased in heavy warmage plate and Ironflesh wards, they charge into the fray with an enchanted Elven Sword of Scorching in one hand and devastating barrages of Fireball, Chain Lightning, and elemental cloaks in the other."
+    },
+    "ranger": {
+      "name": "Guild Wardenscout",
+      "location": "Fighters Guild",
+      "description": "Seasoned on long-range frontier contracts and wilderness expeditions with the Fighters Guild, wardenscouts are trained to survive, track, and outmaneuver any quarry in Tamriel. Outfitted in gilded Elven light armor with a masterwork Elven bow and matching blade, they combine long-distance marksmanship, woodland stealth, field alchemy, and self-healing to control skirmishes from afar."
+    },
+    "dawnbringer": {
+      "name": "Meridian Dawnbringer",
+      "location": "Shrine of Meridia",
+      "description": "Consecrated atop Mount Kilkreath beneath the blinding radiance of the Lady of Infinite Energies, initiates are forged into living vessels of Meridia's wrath against all things undead and profane. Resplendent in Elven Gilded armor with an Elven Shield and a blazing solar-enchanted blade, they purge necromancers and vampires alike with Sun Fire, Vampire's Bane, Fireballs, and sacred Circles of Protection.",
+      "factionLabel": "Champion of Meridia"
+    },
+    "shadowblade": {
+      "name": "Boethian Shadowblade",
+      "location": "Sacellum of Boethiah",
+      "description": "Tempered in blood and treachery high in the mountains of Eastmarch at the Sacellum of Boethiah, only those who prove their ruthless will to survive emerge from the Prince of Plots' arena. Clad in midnight-black Ebony plate and Ebonyflesh wards, they stalk their prey under Muffle and Invisibility, sowing Frenzy among rivals before striking with an Ebony Bow and a life-draining Ebony Sword of the Vampire.",
+      "factionLabel": "Champion of Boethiah"
+    },
+    "nightingale": {
+      "name": "Nightingale Sentinel",
+      "location": "Nightingale Hall",
+      "description": "Sworn to the Evergloam within the hidden rock-cut sanctum of Nightingale Hall, initiates walk the twilight path as guardians of Nocturnal's Triad. Mantle-bound in full midnight Nightingale armor and armed with the life-siphoning Nightingale Blade and storm-charged Nightingale Bow, they glide through darkness as unseen sentinels who command Invisibility, Muffle, and masterwork Illusion.",
+      "factionLabel": "Nightingale (Nocturnal)"
+    },
+    "dread_scion": {
+      "name": "Coldharbour Dreadknight",
+      "location": "Shrine of Molag Bal",
+      "description": "Anointed in dark subjugation before the rusted altar of the Lord of Domination, initiates endure the harrowing rites of Coldharbour to break the weak and command the dead. Clad in crimson-and-black vampire plate, they crush both body and spirit with a soul-siphoning Ebony Mace of Leeching, enslaving fallen foes as Dread Zombies while unleashing freezing Ice Storms and terrifying Rout magic.",
+      "factionLabel": "Champion of Molag Bal"
+    },
+    "pack_hunter": {
+      "name": "Primal Pack Hunter",
+      "location": "Frostmoon Crag",
+      "description": "Reserved exclusively for werewolf-blooded youth who inherited Hircine's gift, Majni's reclusive pack beneath the frozen peaks of Solstheim teaches young lycanthropes to master the beast within in harmony with the wild. Clad in rugged hunter furs and armed with a carved Nordic bow and war axe, they stalk prey across the wilds alongside spectral wolf familiars and bolster allies with pack howls.",
+      "factionLabel": "Beastblood or Champion of Hircine"
+    },
+    "pack_berserker": {
+      "name": "Primal Pack Berserker",
+      "location": "The Underforge",
+      "description": "Closed to mortals and open only to offspring born with the Beastblood, the secret stone sanctum beneath the Skyforge is where the Companions' Inner Circle trains young werewolves to harness the unbridled fury of the Wolf Spirit. Clad in Skyforge Wolf Armor and wielding a razor-edged Skyforge Steel Battleaxe, they charge fearlessly into the fray with terrifying howls, spectral packmates, and the untamed power of the Beast Form.",
+      "factionLabel": "The Circle (Underforge) or Beastblood"
+    }
+  },
+  "blessing": {
+    "meridia": {
+      "name": "Meridia (Dawn's Radiance)"
+    },
+    "azura": {
+      "name": "Azura (Twilight Foresight)"
+    },
+    "boethiah": {
+      "name": "Boethiah (Cloak of Shadows)"
+    },
+    "nocturnal": {
+      "name": "Nocturnal (Shadowscale Luck)"
+    },
+    "molag_bal": {
+      "name": "Molag Bal (Vampiric Dominance)"
+    },
+    "mehrunes_dagon": {
+      "name": "Mehrunes Dagon (Razor's Wrath)"
+    },
+    "sanguine": {
+      "name": "Sanguine (Reveler's Summons)"
+    },
+    "hermaeus_mora": {
+      "name": "Hermaeus Mora (Apocrypha's Insight)"
+    },
+    "hircine": {
+      "name": "Hircine (Hunter's Blood)"
+    },
+    "malacath": {
+      "name": "Malacath (Blood-Kin Might)"
+    },
+    "mephala": {
+      "name": "Mephala (Whispering Web)"
+    },
+    "peryite": {
+      "name": "Peryite (Spellbreaker's Ward)"
+    }
+  },
+  "encounters": {
+    "cheating_physical_letter": {
+      "modalTitle": "Charred Letter Found in the Embers",
+      "modalSubtitle": "Addressed to {partner} (Sender Signature Destroyed)",
+      "envelopeMessage": "You notice a piece of parchment left behind as you arrive home.",
+      "infoBoxTitle": "Parchment Contents",
+      "buttonLabel": "Put Note Away",
+      "defaults": {
+        "premise": "\"I still feel your touch on my skin, and I've arranged a private place where we won't be interrupted.\"",
+        "clue": "\"Slip out toward {location} as soon as the house is quiet.\"",
+        "signOff": "(The bottom half of the letter has been charred black in the fire, destroying the writer's name.)"
+      },
+      "variants": {
+        "Romantic": {
+          "salutation": "\"My forbidden love {partner}, last night in my arms was still not enough...\""
+        },
+        "Humble": {
+          "salutation": "\"Dearest {partner}, please don't let guilt keep you from our bed tonight...\""
+        },
+        "Independent": {
+          "salutation": "\"{partner}, come to me again tonight—our secret stays between the two of us...\""
+        },
+        "Proud": {
+          "salutation": "\"My magnificent {partner}, no one else could ever match the passion we shared...\""
+        },
+        "Jealous": {
+          "salutation": "\"{partner}, forget your absent partner and come back to my bed tonight...\""
+        }
+      }
+    },
+    "cheating_talking_letter": {
+      "modalTitle": "Half-Burnt Note Near the Hearth",
+      "modalSubtitle": "Addressed to {partner} (Sender Signature Burned Away)",
+      "envelopeMessage": "You notice a piece of parchment left behind as you arrive home.",
+      "infoBoxTitle": "Parchment Contents",
+      "buttonLabel": "Put Note Away",
+      "defaults": {
+        "premise": "\"Every stolen conversation we've shared lately has only left me wishing we didn't have to hide in the shadows.\"",
+        "clue": "\"Meet me near {location} when you can slip away cleanly.\"",
+        "signOff": "(The bottom corner of the parchment and the sender's signature have been hastily burned away in the hearth embers.)"
+      },
+      "variants": {
+        "Romantic": {
+          "salutation": "\"Dearest {partner}, I cannot stop thinking about our last quiet talk...\""
+        },
+        "Humble": {
+          "salutation": "\"Dear {partner}, I know how hesitant you have been, and I promise no one will learn of our meetings...\""
+        },
+        "Independent": {
+          "salutation": "\"{partner}, slip away from the house whenever you have a spare hour...\""
+        },
+        "Proud": {
+          "salutation": "\"To the incomparable {partner}—someone of your grace deserves far more devotion than an empty hearth...\""
+        },
+        "Jealous": {
+          "salutation": "\"{partner}, why wait at home alone while your partner wanders Skyrim? Let us talk again tonight...\""
+        }
+      }
+    },
+    "open_date_away": {
+      "modalTitle": "Note from {partner}",
+      "modalSubtitle": "Open Relationship — Evening Out",
+      "envelopeMessage": "You notice a piece of parchment left behind as you arrive home.",
+      "infoBoxTitle": "Parchment Contents",
+      "buttonLabel": "Put Note Away",
+      "defaults": {
+        "clue": "We'll be spending time around {location}. Feel free to join us if your travels bring you nearby, or I'll see you at home later tonight.",
+        "signOff": "— Yours, {partner}"
+      },
+      "variants": {
+        "Romantic": {
+          "salutation": "My dearest {player},",
+          "premise": "I was hoping to catch you before I stepped out, but my heart called me away for the evening to share a warm drink and conversation with {lover}."
+        },
+        "Humble": {
+          "salutation": "Dear {player},",
+          "premise": "I wanted to make sure you knew where I went so you wouldn't worry when you came home—{lover} invited me out for a quiet evening together."
+        },
+        "Independent": {
+          "salutation": "{player},",
+          "premise": "Since you were out on the road, I decided to spend the evening with {lover}."
+        },
+        "Proud": {
+          "salutation": "To {player},",
+          "premise": "I have stepped out to enjoy a well-deserved evening in the company of {lover}."
+        },
+        "Jealous": {
+          "salutation": "My love {player},",
+          "premise": "You have been away for so long that I finally accepted {lover}'s invitation to spend the evening together."
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useMarasStore } from '../../store/useMarasStore'
 import { RelationshipStatus } from '../../types'
 import { PLAYER_FORM_ID } from '../../data/mockData'
-import { StatusBadge, getStatusLabel, StatusIcon } from '../shared/StatusBadge'
+import { StatusBadge, StatusIcon } from '../shared/StatusBadge'
 import { Button } from '../ui/button'
 import {
   Tooltip,
@@ -13,8 +13,10 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { HeartHandshake, ArrowRightLeft, AlertCircle, Check, Trash2 } from 'lucide-react'
 import { useAvailableStatuses, areSameFormId } from '../../utils/statusAvailability'
+import { useTranslation } from '../../i18n'
 
 export const StatusAssignment: React.FC = () => {
+  const { t } = useTranslation()
   const npcA = useMarasStore((s) => s.matchmakingNpcA)
   const npcB = useMarasStore((s) => s.matchmakingNpcB)
   const relationships = useMarasStore((s) => s.relationships)
@@ -28,12 +30,25 @@ export const StatusAssignment: React.FC = () => {
   const statusOptions = useAvailableStatuses(npcA, npcB)
 
   if (!npcA || !npcB) {
+    const promptSegments = t('matchmaking.statusAssignment.selectPrompt', {
+      npcA: '[[NPCA]]',
+      npcB: '[[NPCB]]',
+    }).split(/(\[\[NPCA\]\]|\[\[NPCB\]\])/g)
+
     return (
       <div className="w-[18rem] flex-shrink-0 bg-panel border border-border-subtle rounded-lg flex items-center justify-center p-[1.5rem] text-center text-foreground-muted">
         <div className="flex flex-col items-center gap-[0.75rem]">
           <HeartHandshake className="w-[2em] h-[2em] text-accent" />
           <span className="text-xs">
-            Select <strong>NPC A</strong> on the left and <strong>NPC B</strong> on the right to configure their relationship status.
+            {promptSegments.map((seg, idx) =>
+              seg === '[[NPCA]]' ? (
+                <strong key={idx}>{t('matchmaking.statusAssignment.npcALabel')}</strong>
+              ) : seg === '[[NPCB]]' ? (
+                <strong key={idx}>{t('matchmaking.statusAssignment.npcBLabel')}</strong>
+              ) : (
+                <React.Fragment key={idx}>{seg}</React.Fragment>
+              ),
+            )}
           </span>
         </div>
       </div>
@@ -50,8 +65,8 @@ export const StatusAssignment: React.FC = () => {
   const currentStatus = existingRel ? existingRel.status : RelationshipStatus.Candidate
 
   const getName = (id: string) => {
-    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || 'Prisoner (Player)'
-    return npcProfiles.get(id)?.name || 'Unknown NPC'
+    if (id === PLAYER_FORM_ID) return npcProfiles.get(PLAYER_FORM_ID)?.name || t('shared.playerFallback')
+    return npcProfiles.get(id)?.name || t('shared.unknownNpc')
   }
 
   const selectedOption = statusOptions.find((o) => o.status === selectedTargetStatus)
@@ -81,11 +96,11 @@ export const StatusAssignment: React.FC = () => {
             <span>{getName(npcB)}</span>
           </div>
           <div className="text-[0.6875rem] text-foreground-muted flex items-center justify-center gap-[0.375rem]">
-            <span>Current:</span>
+            <span>{t('matchmaking.statusAssignment.currentLabel')}</span>
             <StatusBadge status={currentStatus} />
             {existingRel?.isOpen && (
               <span className="text-[0.5625rem] bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 px-[0.25rem] py-[0.0625rem] rounded font-semibold">
-                Open
+                {t('matchmaking.statusAssignment.openBadge')}
               </span>
             )}
           </div>
@@ -95,7 +110,7 @@ export const StatusAssignment: React.FC = () => {
         <ScrollArea className="flex-1 min-h-0 pr-[0.25rem]">
           <div className="space-y-[0.375rem]">
             <div className="text-xs font-semibold uppercase tracking-wider text-foreground-muted mb-[0.25rem]">
-              Select New Status
+              {t('matchmaking.statusAssignment.selectNewStatus')}
             </div>
 
             {statusOptions.map((opt) => {
@@ -118,12 +133,12 @@ export const StatusAssignment: React.FC = () => {
                     <span className="truncate">{opt.label}</span>
                     {opt.loverType === 'allowed' && (
                       <span className="px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-bold uppercase tracking-wider bg-emerald-950/60 text-emerald-400 border border-emerald-800/80">
-                        Allowed
+                        {t('matchmaking.statusAssignment.allowedBadge')}
                       </span>
                     )}
                     {opt.loverType === 'cheating' && (
                       <span className="px-[0.25rem] py-[0.0625rem] rounded text-[0.5625rem] font-bold uppercase tracking-wider bg-rose-950/60 text-rose-400 border border-rose-800/80">
-                        Cheating
+                        {t('matchmaking.statusAssignment.cheatingBadge')}
                       </span>
                     )}
                   </span>
@@ -164,10 +179,10 @@ export const StatusAssignment: React.FC = () => {
             {successFeedback ? (
               <>
                 <Check className="w-[1em] h-[1em] text-status-success" />
-                <span>Status Assigned!</span>
+                <span>{t('matchmaking.statusAssignment.statusAssigned')}</span>
               </>
             ) : (
-              <span>Apply Status Change</span>
+              <span>{t('matchmaking.statusAssignment.applyStatusChange')}</span>
             )}
           </Button>
 
@@ -179,7 +194,7 @@ export const StatusAssignment: React.FC = () => {
               className="w-full flex items-center justify-center gap-[0.375rem] text-xs"
             >
               <Trash2 className="w-[0.95em] h-[0.95em]" />
-              <span>Remove Relationship Record</span>
+              <span>{t('matchmaking.statusAssignment.removeRecord')}</span>
             </Button>
           )}
         </div>

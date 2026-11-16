@@ -77,6 +77,13 @@ namespace MARAS::App {
         }
         void SetGlobalPetBanned(bool banned);
 
+        // Global localization setting (persisted in MARAS.ini [Localization] Language = auto)
+        [[nodiscard]] std::string GetLanguage() const {
+            return Snapshot()->language;
+        }
+        void SetLanguage(std::string_view code);
+        void ReloadLocalization();
+
         // Post-load engine sync and runtime revert helpers
         void ApplyPostLoadEngineSideEffects();
         void RevertGameSettings();
