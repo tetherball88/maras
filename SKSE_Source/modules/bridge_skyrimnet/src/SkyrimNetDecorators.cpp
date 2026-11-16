@@ -479,7 +479,9 @@ namespace MARAS::Bridge::SkyrimNet {
                 const RE::FormID childID = child.childId.raw();
 
                 nlohmann::json childObj;
-                childObj["uuid"] = GetActorUUID(childID);
+                childObj["uuid"] = (IsSkyrimNetAvailable() && child.skyrimNetUuid != 0)
+                    ? child.skyrimNetUuid
+                    : GetActorUUID(childID);
                 const std::string childName =
                     (child.name.empty() || MARAS::Foundation::StringUtils::CaseInsensitiveEquals(child.name, "Newborn"))
                         ? "child"
@@ -666,7 +668,9 @@ namespace MARAS::Bridge::SkyrimNet {
             for (const auto& child : selfView.GetNonCustodialChildrenOf(selfActorId)) {
                 const RE::FormID childID = child.childId.raw();
                 nlohmann::json ncObj;
-                ncObj["uuid"] = GetActorUUID(childID);
+                ncObj["uuid"] = (IsSkyrimNetAvailable() && child.skyrimNetUuid != 0)
+                    ? child.skyrimNetUuid
+                    : GetActorUUID(childID);
                 const std::string childName =
                     (child.name.empty() || MARAS::Foundation::StringUtils::CaseInsensitiveEquals(child.name, "Newborn"))
                         ? "child"

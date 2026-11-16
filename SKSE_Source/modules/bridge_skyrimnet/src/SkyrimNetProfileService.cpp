@@ -584,7 +584,7 @@ namespace MARAS::Bridge::SkyrimNet {
             ChildProfileContextData data;
             data.childID = childID;
             data.stage = stage;
-            data.actorUUID = ResolvePlacedActorUUID(childID);
+            data.actorUUID = GetActorUUID(childID);
             data.bioTemplateName = ResolvePlacedActorBioTemplateName(childID);
             data.saveId = GetSaveUniqueIDExport();
 
@@ -677,14 +677,14 @@ namespace MARAS::Bridge::SkyrimNet {
                 }
 
                 if (data.bioMotherID != 0) {
-                    data.bioMotherUUID = ResolvePlacedActorUUID(data.bioMotherID);
+                    data.bioMotherUUID = GetActorUUID(data.bioMotherID);
                     data.motherName = MARAS::ResolveActorNameSafe(data.bioMotherID, *worldSnap, *spatialSnap);
                     data.motherRace = MARAS::ResolveActorRaceSafe(data.bioMotherID, *worldSnap, *spatialSnap);
                     data.motherIsGuardian = entry.guardians.HasGuardian(MARAS::State::ActorId{ data.bioMotherID });
                 }
 
                 if (data.bioFatherID != 0 && data.bioFatherID != MARAS::kUnknownFatherFormID) {
-                    data.bioFatherUUID = ResolvePlacedActorUUID(data.bioFatherID);
+                    data.bioFatherUUID = GetActorUUID(data.bioFatherID);
                     data.bioFatherName = MARAS::ResolveActorNameSafe(data.bioFatherID, *worldSnap, *spatialSnap);
                     data.bioFatherRace = MARAS::ResolveActorRaceSafe(data.bioFatherID, *worldSnap, *spatialSnap);
                     data.bioFatherIsGuardian = entry.guardians.HasGuardian(MARAS::State::ActorId{ data.bioFatherID });
@@ -693,7 +693,7 @@ namespace MARAS::Bridge::SkyrimNet {
                 }
 
                 if (data.hasPresumedFather && data.presumedFatherID != 0) {
-                    data.presumedFatherUUID = ResolvePlacedActorUUID(data.presumedFatherID);
+                    data.presumedFatherUUID = GetActorUUID(data.presumedFatherID);
                     data.presumedFatherName = MARAS::ResolveActorNameSafe(data.presumedFatherID, *worldSnap, *spatialSnap);
                     data.presumedFatherRace = MARAS::ResolveActorRaceSafe(data.presumedFatherID, *worldSnap, *spatialSnap);
                     data.presumedFatherIsGuardian = entry.guardians.HasGuardian(MARAS::State::ActorId{ data.presumedFatherID });
@@ -725,7 +725,7 @@ namespace MARAS::Bridge::SkyrimNet {
                     seenAdults.push_back(adultID);
                     InvolvedAdultProfileRef ref;
                     ref.formID = adultID;
-                    ref.uuid = ResolvePlacedActorUUID(adultID);
+                    ref.uuid = GetActorUUID(adultID);
                     ref.bioTemplateName = ResolvePlacedActorBioTemplateName(adultID);
                     ref.name = MARAS::ResolveActorNameSafe(adultID, *worldSnap, *spatialSnap);
                     ref.raceName = MARAS::ResolveActorRaceSafe(adultID, *worldSnap, *spatialSnap);

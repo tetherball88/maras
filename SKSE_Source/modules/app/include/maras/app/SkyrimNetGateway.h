@@ -163,7 +163,6 @@ namespace MARAS::App {
         virtual std::string GetActorBioTemplateName(std::uint32_t actorFormID) const = 0;
         virtual std::uint64_t GetActorUUID(std::uint32_t actorFormID) const = 0;
         virtual bool IsActorSuccessionAvailable() const = 0;
-        virtual std::uint64_t ResolvePlacedActorUUID(std::uint32_t actorFormID) const = 0;
         virtual bool RecordActorSuccession(std::uint32_t fromFormID, std::uint32_t toFormID) = 0;
         virtual bool RecordActorSuccessionByUUID(std::uint64_t fromUuid, std::uint64_t toUuid) = 0;
         virtual bool RequestActorProfileUpdate(std::uint32_t actorFormID,
