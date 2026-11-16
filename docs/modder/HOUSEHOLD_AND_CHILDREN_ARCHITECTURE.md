@@ -130,6 +130,7 @@ To allow Creation Kit AI packages on the quest aliases to switch behaviors insta
   - `5` = Ask to keep a stray/follower pet (`pet_topic`).
   - `6` = Ask the player to play a game (`game_ask`).
   - `10` = Pet bailout / scared of aggressive pet (`pet_bailout`).
+  - `MARAS.ResetChildForceGreeting` (`PlayerChildrenEngineOps::ResetForceGreetingOnActor`) zeros `Variable07` immediately while deferring `EvaluatePackage()` via `DialogueEventSink` until `Dialogue Menu` closes when invoked mid-dialogue, preventing `Goodbye` ForceGreet topics (`chest`, `gift_receive_*`, `pet_topic_scared`) from aborting the active `ForceGreet` package before Skyrim restores player movement/camera controls.
 - **Faction Snapshot & Clean Removal (`'CFSN'`)**:
   - Before `PlayerChildrenEngineOps::SnapshotChildFactions` adds a child to `PlayerChildFaction` (`0xC23`), it snapshots the child's original factions and ranks into chunk `'CFSN'`. If a child is ever removed/unadopted via the UI Dashboard or script, `RestoreChildFactions` restores their original factions cleanly.
 - **Adolescent Training & Adult Offspring Lifecycle (Stages 2–4)**:

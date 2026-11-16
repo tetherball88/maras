@@ -3,6 +3,8 @@
 #include "maras/engine/EngineLogging.h"
 
 #include <atomic>
+#include <mutex>
+#include <vector>
 
 namespace MARAS {
 
@@ -22,6 +24,9 @@ namespace MARAS {
         // Attempts to resolve a deferred dialogue speaker if waitingForSpeaker_ is active.
         bool TryResolveDeferredSpeaker();
 
+        // Queues an actor to run EvaluatePackage() on the next main-thread frame after Dialogue Menu closes.
+        void DeferPackageEvalUntilDialogueClosed(RE::FormID actorId);
+
         [[nodiscard]] bool IsWaitingForSpeaker() const noexcept {
             return waitingForSpeaker_.load(std::memory_order_acquire);
         }
@@ -37,10 +42,13 @@ namespace MARAS {
         DialogueEventSink& operator=(DialogueEventSink&&) = delete;
 
         void SendDialogueEvent(RE::Actor* npc);
+        void FlushDeferredPackageEvals();
 
         // Set when Dialogue Menu opens but speaker is not yet populated.
         // Cleared when speaker resolves or the menu closes.
         std::atomic<bool> waitingForSpeaker_{ false };
+        std::mutex deferredEvalMutex_;
+        std::vector<RE::FormID> deferredPackageEvalActors_;
     };
 
 }  // namespace MARAS

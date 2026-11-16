@@ -263,9 +263,9 @@ EndFunction
 Function ResetForceGreeting(Actor child)
     TTM_Debug.debug("ResetForceGreeting() child(" + child + ")")
     ForcegreetEventReady = false
-    MARAS.ResetChildForceGreeting(child)
-    child.SetActorValue("Variable07", 0)
-    child.EvaluatePackage()
+    if (child)
+        MARAS.ResetChildForceGreeting(child)
+    endif
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------

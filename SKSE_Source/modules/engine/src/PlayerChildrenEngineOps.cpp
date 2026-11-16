@@ -2,6 +2,7 @@
 
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/DeferredActorResolver.h"
+#include "maras/engine/DialogueEventSink.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/HouseholdEngineOps.h"
@@ -300,16 +301,37 @@ namespace MARAS {
         if (!HasPhysicalActor(childId)) {
             return;
         }
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddCurrentEpochTask("PlayerChildrenEngineOps::ResetForceGreetingOnActor", [childId]() {
+                std::lock_guard lock(GetPapyrusMutex());
+                PlayerChildrenEngineOps::GetSingleton().ResetForceGreetingOnActor(childId);
+            });
+            return;
+        }
+
         auto* actor = RE::TESForm::LookupByID<RE::Actor>(childId);
-        if (!actor) {
+        if (!actor || actor->IsDeleted()) {
             return;
         }
         if (auto* avOwner = actor->AsActorValueOwner()) {
             avOwner->SetActorValue(RE::ActorValue::kVariable07, 0.0f);
         }
-        actor->EvaluatePackage();
-        MARAS_LOG_INFO("PlayerChildrenEngineOps::ResetForceGreetingOnActor: reset Variable07 for child {:08X}",
-                       childId);
+
+        auto* ui = RE::UI::GetSingleton();
+        const bool dialogueOpen = ui && ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME);
+        if (dialogueOpen) {
+            DialogueEventSink::GetSingleton()->DeferPackageEvalUntilDialogueClosed(childId);
+            MARAS_LOG_INFO(
+                "PlayerChildrenEngineOps::ResetForceGreetingOnActor: reset Variable07 for child {:08X} ({}); deferring EvaluatePackage until Dialogue Menu closes",
+                childId,
+                actor->GetName());
+        } else {
+            actor->EvaluatePackage();
+            MARAS_LOG_INFO(
+                "PlayerChildrenEngineOps::ResetForceGreetingOnActor: reset Variable07 and evaluated package for child {:08X} ({})",
+                childId,
+                actor->GetName());
+        }
     }
 
     void PlayerChildrenEngineOps::ReassertChildPackagesOnLoad() {
