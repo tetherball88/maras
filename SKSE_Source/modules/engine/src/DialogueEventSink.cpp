@@ -6,6 +6,9 @@
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/TaskDispatcher.h"
 
+#include <algorithm>
+#include <utility>
+
 namespace MARAS {
 
     DialogueEventSink* DialogueEventSink::GetSingleton() {
@@ -15,6 +18,51 @@ namespace MARAS {
 
     void DialogueEventSink::Revert() {
         waitingForSpeaker_.store(false, std::memory_order_release);
+        std::lock_guard lock(deferredEvalMutex_);
+        deferredPackageEvalActors_.clear();
+    }
+
+    void DialogueEventSink::DeferPackageEvalUntilDialogueClosed(RE::FormID actorId) {
+        if (!HasPhysicalActor(actorId)) {
+            return;
+        }
+        {
+            std::lock_guard lock(deferredEvalMutex_);
+            if (std::find(deferredPackageEvalActors_.begin(), deferredPackageEvalActors_.end(), actorId) ==
+                deferredPackageEvalActors_.end()) {
+                deferredPackageEvalActors_.push_back(actorId);
+            }
+        }
+        if (auto* ui = RE::UI::GetSingleton(); !ui || !ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
+            FlushDeferredPackageEvals();
+        }
+    }
+
+    void DialogueEventSink::FlushDeferredPackageEvals() {
+        std::vector<RE::FormID> pending;
+        {
+            std::lock_guard lock(deferredEvalMutex_);
+            if (deferredPackageEvalActors_.empty()) {
+                return;
+            }
+            pending.swap(deferredPackageEvalActors_);
+        }
+
+        AddCurrentEpochTask("DialogueEventSink::FlushDeferredPackageEvals",
+                            [actors = std::move(pending)]() {
+                                std::lock_guard lock(GetPapyrusMutex());
+                                for (const RE::FormID actorId : actors) {
+                                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorId);
+                                    if (!actor || actor->IsDeleted() || actor->IsDead() || !actor->Is3DLoaded()) {
+                                        continue;
+                                    }
+                                    actor->EvaluatePackage();
+                                    MARAS_LOG_DEBUG(
+                                        "DialogueEventSink: ran deferred post-dialogue EvaluatePackage for actor {:08X} ({})",
+                                        actorId,
+                                        actor->GetName());
+                                }
+                            });
     }
 
     bool DialogueEventSink::TryResolveDeferredSpeaker() {
@@ -71,11 +119,15 @@ namespace MARAS {
 
         if (a_event->menuName != RE::DialogueMenu::MENU_NAME) {
             TryResolveDeferredSpeaker();
+            if (auto* ui = RE::UI::GetSingleton(); !ui || !ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
+                FlushDeferredPackageEvals();
+            }
             return RE::BSEventNotifyControl::kContinue;
         }
 
         if (!a_event->opening) {
             waitingForSpeaker_.store(false, std::memory_order_release);
+            FlushDeferredPackageEvals();
             MARAS_LOG_DEBUG("DialogueEventSink: Dialogue Menu closed");
             return RE::BSEventNotifyControl::kContinue;
         }
