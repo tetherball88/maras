@@ -67,7 +67,11 @@ namespace MARAS::App {
             if (Foundation::IsSyntheticChildRawId(tenantFormID)) {
                 return true;
             }
-            return snap.lineage && snap.lineage->FindChild(State::ChildId{ tenantFormID }) != nullptr;
+            if (!snap.lineage) {
+                return false;
+            }
+            const auto* rec = snap.lineage->FindChild(State::ChildId{ tenantFormID });
+            return rec != nullptr && rec->stage != Foundation::ChildStage::Adult;
         }
 
         [[nodiscard]] bool HasLivingChildWithPlayer(
@@ -123,30 +127,6 @@ namespace MARAS::App {
             }
 
             return false;
-        }
-
-        [[nodiscard]] bool IsTravelEligibleAdultChild(
-            const State::WorldStateSnapshot& snap,
-            RE::FormID childID) noexcept {
-            if (childID == 0 || Foundation::IsSyntheticChildRawId(childID) || !snap.lineage || !snap.household) {
-                return false;
-            }
-            const auto* rec = snap.lineage->FindChild(State::ChildId{ childID });
-            if (!rec || rec->stage != Foundation::ChildStage::Adult) {
-                return false;
-            }
-            if (Domain::Household::IsDeceased(snap, State::ActorId{ childID })) {
-                return false;
-            }
-            if (!snap.household->GetTenantHouse(childID).IsNull()) {
-                return false;
-            }
-            if (snap.relationships &&
-                snap.relationships->GetStatus(State::ActorId{ childID }, State::ActorId::Player()) ==
-                    Foundation::RelationshipStatus::Married) {
-                return false;
-            }
-            return true;
         }
 
         [[nodiscard]] std::string ResolveActorDisplayName(
@@ -497,6 +477,10 @@ namespace MARAS::App {
         }
 
         ReconcileTenantEngineRemoved(tenantFormID);
+        if (const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+            postSnap && Domain::Household::IsTravelEligibleAdultChild(*postSnap, State::ChildId{ tenantFormID })) {
+            AssignOrUpdateDestination(tenantFormID, false);
+        }
         GlobalVarReconciler::GetSingleton().ReconcileGlobals();
 
         MARAS_LOG_INFO(
@@ -723,7 +707,7 @@ namespace MARAS::App {
         }
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        if (!IsTravelEligibleAdultChild(*snap, childID)) {
+        if (!Domain::Household::IsTravelEligibleAdultChild(*snap, State::ChildId{ childID })) {
             const bool hadTravel =
                 snap->household &&
                 snap->household->FindAdultChildTravel(State::ChildId{ childID }) != nullptr;
@@ -740,7 +724,11 @@ namespace MARAS::App {
         if (!actor) {
             actor = RE::TESForm::LookupByID<RE::Actor>(childID);
         }
-        if (!actor || actor->IsDead() || actor->IsDeleted()) {
+        if (actor) {
+            if (actor->IsDead() || actor->IsDeleted()) {
+                return false;
+            }
+        } else if (!ActorSvc::IsValid(childID)) {
             return false;
         }
 
@@ -777,9 +765,7 @@ namespace MARAS::App {
         bool upserted = false;
         bool alreadyAssigned = false;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            const auto* childRec = ws.lineage->FindChild(State::ChildId{ childID });
-            if (!childRec || childRec->stage != Foundation::ChildStage::Adult ||
-                !ws.household->GetTenantHouse(childID).IsNull()) {
+            if (!Domain::Household::IsTravelEligibleAdultChild(ws, State::ChildId{ childID })) {
                 return;
             }
             const auto* cur = ws.household->FindAdultChildTravel(State::ChildId{ childID });
@@ -800,7 +786,13 @@ namespace MARAS::App {
         }
 
         // Ensure independent Stage 4 travelers clear stale player-household child custody flags/tenancy.
-        LineageUseCases::GetSingleton().OnChildRemovedFromHousehold(childID);
+        if (const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+            postSnap && postSnap->household &&
+            (postSnap->household->FindChildState(State::ChildId{ childID }) != nullptr ||
+             !postSnap->household->GetTenantHouse(childID).IsNull() ||
+             postSnap->household->AllChildFactionSnapshots().contains(State::ChildId{ childID }))) {
+            LineageUseCases::GetSingleton().OnChildRemovedFromHousehold(childID);
+        }
         PackageReconciler::GetSingleton().ReconcileActor(childID);
 
         MARAS_LOG_INFO(
@@ -894,6 +886,9 @@ namespace MARAS::App {
         for (const State::ChildId cid : outcome.childrenNeedingRotation) {
             AssignOrUpdateDestination(cid.raw(), true);
         }
+        for (const State::ChildId cid : outcome.unassignedEligibleAdults) {
+            AssignOrUpdateDestination(cid.raw(), false);
+        }
     }
 
     void HouseholdUseCases::ReassertAllTravelOnLoad() {
@@ -908,7 +903,7 @@ namespace MARAS::App {
             }
             for (const auto& [cid, tr] : snap->household->AllAdultChildTravel()) {
                 (void)tr;
-                if (!IsTravelEligibleAdultChild(*snap, cid.raw())) {
+                if (!Domain::Household::IsTravelEligibleAdultChild(*snap, cid)) {
                     invalidTravelers.push_back(cid.raw());
                 } else {
                     activeTravelers.push_back(cid.raw());
@@ -916,7 +911,7 @@ namespace MARAS::App {
             }
             for (const auto& [cid, childRec] : snap->lineage->AllChildren()) {
                 (void)childRec;
-                if (IsTravelEligibleAdultChild(*snap, cid.raw()) &&
+                if (Domain::Household::IsTravelEligibleAdultChild(*snap, cid) &&
                     !snap->household->FindAdultChildTravel(cid)) {
                     missingTravelers.push_back(cid.raw());
                 }

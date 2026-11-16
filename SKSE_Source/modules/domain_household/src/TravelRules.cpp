@@ -5,6 +5,63 @@
 
 namespace MARAS::Domain::Household {
 
+    namespace {
+
+        [[nodiscard]] bool IsTravelEligibleAdultChildTables(
+            ChildId childId,
+            const State::LineageTable& lineage,
+            const State::HouseholdTable& household,
+            const State::DeceasedTable* deceased,
+            const State::RelationshipEdgeTable* relationships) noexcept {
+            if (childId.IsNull() || childId.IsSynthetic()) {
+                return false;
+            }
+            const auto* rec = lineage.FindChild(childId);
+            if (!rec || rec->stage != Foundation::ChildStage::Adult) {
+                return false;
+            }
+            const ActorId actorId{ childId.raw() };
+            if (deceased && deceased->IsDeceased(actorId)) {
+                return false;
+            }
+            if (!household.GetTenantHouse(childId.raw()).IsNull()) {
+                return false;
+            }
+            if (relationships &&
+                relationships->GetStatus(actorId, ActorId::Player()) ==
+                    Foundation::RelationshipStatus::Married) {
+                return false;
+            }
+            return true;
+        }
+
+    }  // namespace
+
+    bool IsTravelEligibleAdultChild(
+        const State::WorldState& ws,
+        ChildId childId) noexcept {
+        return IsTravelEligibleAdultChildTables(
+            childId,
+            ws.lineage.Read(),
+            ws.household.Read(),
+            &ws.deceased.Read(),
+            &ws.relationships.Read());
+    }
+
+    bool IsTravelEligibleAdultChild(
+        const State::WorldStateSnapshot& snap,
+        ChildId childId) noexcept {
+        if (!snap.lineage || !snap.household) {
+            return false;
+        }
+        return IsTravelEligibleAdultChildTables(
+            childId,
+            *snap.lineage,
+            *snap.household,
+            snap.deceased.get(),
+            snap.relationships.get());
+    }
+
     std::vector<TravelDestinationCandidate> BuildFamilyVisitCandidates(
         const Projection::PerspectiveView& view,
         ChildId childId) {
@@ -108,14 +165,7 @@ namespace MARAS::Domain::Household {
         }
 
         for (ChildId cid : travelIds) {
-            const auto* childRec = ws.lineage.Read().FindChild(cid);
-            const bool stillValidAdult =
-                childRec &&
-                childRec->stage == Foundation::ChildStage::Adult &&
-                !cid.IsSynthetic() &&
-                ws.household.Read().GetTenantHouse(cid.raw()).IsNull() &&
-                !ws.IsMarried(ActorId{ cid.raw() }, ActorId::Player());
-            if (!stillValidAdult) {
+            if (!IsTravelEligibleAdultChild(ws, cid)) {
                 if (ws.household.Write().EraseAdultChildTravel(cid)) {
                     out.unregisteredInvalidAdults.push_back(cid);
                 }
@@ -124,6 +174,10 @@ namespace MARAS::Domain::Household {
 
             const auto* recPtr = ws.household.Read().FindAdultChildTravel(cid);
             if (!recPtr) {
+                continue;
+            }
+            if (recPtr->targetMarkerId.IsNull()) {
+                out.unassignedEligibleAdults.push_back(cid);
                 continue;
             }
             State::AdultChildTravelRecord rec = *recPtr;
@@ -164,6 +218,18 @@ namespace MARAS::Domain::Household {
                 }
             }
         }
+
+        for (const auto& [cid, childRec] : ws.lineage.Read().AllChildren()) {
+            (void)childRec;
+            if (IsTravelEligibleAdultChild(ws, cid) &&
+                ws.household.Read().FindAdultChildTravel(cid) == nullptr) {
+                out.unassignedEligibleAdults.push_back(cid);
+            }
+        }
+        std::sort(out.unassignedEligibleAdults.begin(), out.unassignedEligibleAdults.end());
+        out.unassignedEligibleAdults.erase(
+            std::unique(out.unassignedEligibleAdults.begin(), out.unassignedEligibleAdults.end()),
+            out.unassignedEligibleAdults.end());
 
         return out;
     }

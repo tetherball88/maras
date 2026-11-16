@@ -481,6 +481,12 @@ namespace MARAS {
 
         if (registryChanged) {
             InvalidateHookEvalActor(actorId);
+            if (plan.role == State::PackageRole::None || desiredPkgId == 0) {
+                MARAS_LOG_INFO("PackageReconciler: unregistered actor {:08X}", actorId);
+            } else {
+                MARAS_LOG_INFO("PackageReconciler: registered actor {:08X} -> base package {:08X}",
+                               actorId, desiredPkgId);
+            }
         }
 
         if (plan.role == State::PackageRole::None || desiredPkgId == 0) {

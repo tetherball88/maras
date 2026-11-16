@@ -118,6 +118,7 @@ add_library(maras_domain_lineage STATIC
     modules/domain_lineage/src/NamePool.cpp
     modules/domain_lineage/src/PaternityActionRules.cpp
     modules/domain_lineage/src/FertilityLifecycleRules.cpp
+    modules/domain_lineage/src/ChildProfileGuidance.cpp
 )
 target_compile_features(maras_domain_lineage PUBLIC cxx_std_23)
 target_include_directories(maras_domain_lineage

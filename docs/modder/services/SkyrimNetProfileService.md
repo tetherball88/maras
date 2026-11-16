@@ -4,6 +4,8 @@
 **Sources**:
 - [SkyrimNetProfileService.h](../../../SKSE_Source/modules/bridge_skyrimnet/include/maras/bridge_skyrimnet/SkyrimNetProfileService.h)
 - [SkyrimNetProfileService.cpp](../../../SKSE_Source/modules/bridge_skyrimnet/src/SkyrimNetProfileService.cpp)
+- [ChildProfileGuidance.h](../../../SKSE_Source/modules/domain_lineage/include/maras/domain/lineage/ChildProfileGuidance.h)
+- [ChildProfileGuidance.cpp](../../../SKSE_Source/modules/domain_lineage/src/ChildProfileGuidance.cpp)
 - [Architecture Overview](../ARCHITECTURE.md)
 
 ---
@@ -21,11 +23,16 @@
 
 ---
 
-## 3. Context Rendering & Strict HTTP JSON Validation
+## 3. Context Rendering, Guidance Isolation & Strict HTTP JSON Validation
 
-Background workers resolve involved adult family members (bio parents and guardians) safely and build context without leaking unmasked secrets into public bios:
+Background workers resolve involved adult family members (bio parents, presumed fathers when present, and custodial guardians) safely and build context without leaking unmasked secrets or irrelevant relationship drama into child bios:
 
-- **Primary Local Preview Route**: When SkyrimNet's local web server is reachable, the worker issues HTTP `POST /prompts?api=render-template-preview` (5000 ms timeout) embedding `render_character_profile("ttm_gm", adult.uuid)` blocks and recent family events, keeping the prompt decorator `ttm_npc_relationship_profile` strictly perspective-masked. Template curly braces in dynamic names are sanitized (`{`/`}` $\rightarrow$ `(`/`)`) before template rendering.
+- **Pure Guidance Rules (`ChildProfileGuidance` in `maras_domain_lineage`)**:
+  - **Gameplay Time-Compression Framing**: Explicitly instructs the LLM that short Tamrielic calendar intervals between pregnancy, birth, growing from infancy into a young child, or completing adolescent training are gameplay time-scale abstractions rather than literal 1-day or magical rapid aging, and forbids inventing missing infancy memories or supernatural aging anomalies.
+  - **Authoritative Involved-Party Scoping**: Explicitly restricts the child's parental, step-parental, and household relationships to the adults listed under `Involved Parties`, warning the LLM to ignore uninvolved parental ex-spouses/ex-partners (from pre-birth dialogue/events or stale un-regenerated parent prose) and never invent former-stepparent relationships for them.
+- **Dedicated Parent Bio Render Mode (`ttm_child_parent_bio`)**:
+  - **Primary Local Preview Route**: When SkyrimNet's local web server is reachable, the worker issues HTTP `POST /prompts?api=render-template-preview` (5000 ms timeout) embedding `render_character_profile("ttm_child_parent_bio", adult.uuid)` blocks (`9999_ttm_child_parent_bio.prompt`) instead of `ttm_gm`. `ttm_child_parent_bio` renders heritage blocks (`Summary`, `Background`, `Personality`, `Appearance`, `Occupation`, `Skills & Abilities`, and `Memories`) plus a live `Current Family & Household Status` override (active non-secret-affair partnerships, married player co-spouses, and custodial children) while omitting `bio_relationships`, `0040_ex_partners.prompt`, `0050_infidelity.prompt`, and secret parent affairs. The disk-fallback reader (`ReadAdultBioFromDiskFallback`) likewise omits the narrative `relationships` block.
+  - **Post-Birth Event Filtering (`recent_events_max_age_seconds` & `child_bio_mode`)**: `ComputeChildRecentEventsMaxAgeSeconds` derives a post-birth (or post-adoption) lookback window in seconds (`(currentGameDays - birthTimestampDays) * 86400 + 120` buffer, or `registeredTimestampDays` for adopted children). `maras_actor_bio_recent_events.prompt` skips events older than that cutoff, suppresses `direct_narration` stage directions, strips literal time-gap banners and clock prefixes in `child_bio_mode`, and emits the `Family & Household Recent Events (Chronological)` heading only when at least one post-birth event remains. Template curly braces in dynamic names are sanitized (`{`/`}` $\rightarrow$ `(`/`)`) before template rendering, and `ttm_npc_relationship_profile` stays strictly perspective-masked.
 - **Strict Response Type Checks**: Parses responses non-throwing (`nlohmann::json::parse(..., false)`) and validates `parsed.is_object()`, `parsed["success"].is_boolean() == true`, and `parsed["renderedContent"].is_string()` before accepting rendered output.
 
 ---
