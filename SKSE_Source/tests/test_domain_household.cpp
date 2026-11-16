@@ -11,6 +11,7 @@
 #include "maras/state/SpatialActorSnapshot.h"
 #include "maras/state/WorldState.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -756,6 +757,154 @@ namespace MARAS::Tests {
             MARAS_CHECK_EQ(plan.eventChild, tenantChild);
             MARAS_CHECK(plan.markChestIntroduced);
             MARAS_CHECK(plan.clearNewlyAdoptedForHouse);
+        }
+    }
+
+    MARAS_TEST(DomainHousehold, ChildAnchoredRelocationAndMarriageSpouseStayAtHome) {
+        const HouseId breezehome{ 0x00020098u };
+        const HouseId proudspire{ 0x0003D002u };
+        const RefId markerA{ 0x0003D010u };
+        const RefId markerB{ 0x0003D020u };
+        const ActorId serana{ 0x02002B74u };
+        const ActorId unrelatedNpc{ 0x0003D100u };
+        const ActorId deceasedSpouse{ 0x0003D101u };
+        const ChildId newChild{ 0xFF000DEEu };
+        const ChildId existingSibling{ 0xFF000DE0u };
+
+        // 1. Child-anchored relocation (moveParents = true) houses unhoused co-parent with stayAtHome = false
+        //    and populates changedHouseChildren only for children changing house or lacking homeMarkerId.
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+            MARAS_CHECK(ApplyRegisterHouse(ws, proudspire, markerB, true));
+
+            ws.relationships.Write().GetOrCreateEdge(serana, ActorId::Player()).status =
+                RelationshipStatus::Married;
+
+            ChildRecord newRec{};
+            newRec.childId = newChild;
+            newRec.stage = ChildStage::Child;
+            newRec.guardians.Assign(ActorId::Player(), serana);
+            ws.lineage.Write().UpsertChild(newRec);
+
+            ChildRecord sibRec{};
+            sibRec.childId = existingSibling;
+            sibRec.stage = ChildStage::Child;
+            sibRec.guardians.Assign(ActorId::Player(), serana);
+            ws.lineage.Write().UpsertChild(sibRec);
+
+            ChildHouseholdRecord sibHh{};
+            sibHh.childId = existingSibling;
+            sibHh.currentHouseId = breezehome;
+            sibHh.homeMarkerId = RefId{ 0xFF000DF0u };
+            ws.household.Write().UpsertChildState(sibHh);
+            MARAS_CHECK(ApplyRegisterTenant(ws, existingSibling.raw(), breezehome, true, true));
+
+            const auto reloc = ApplyRelocateFamilyUnit(ws, newChild.raw(), breezehome, true);
+            MARAS_CHECK(reloc.targetHouseExists);
+            MARAS_CHECK(!reloc.ineligibleAdultAnchor);
+            MARAS_CHECK_EQ(reloc.movedAdults.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(reloc.movedAdults[0], serana);
+            MARAS_CHECK_EQ(reloc.movedChildren.size(), std::size_t{ 2 });
+            MARAS_CHECK_EQ(reloc.changedHouseChildren.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(reloc.changedHouseChildren[0], newChild);
+
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(serana.raw()), breezehome);
+            MARAS_CHECK(!ws.household.Read().GetTenantStayAtHome(serana.raw()));
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(newChild.raw()), breezehome);
+            MARAS_CHECK(ws.household.Read().GetTenantStayAtHome(newChild.raw()));
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(existingSibling.raw()), breezehome);
+
+            // 2. Child-anchored relocation to another house preserves already-housed spouse stayAtHome = true
+            MARAS_CHECK(ApplySetTenantStayAtHome(ws, serana.raw(), true));
+            const auto reloc2 = ApplyRelocateFamilyUnit(ws, newChild.raw(), proudspire, true);
+            MARAS_CHECK(reloc2.targetHouseExists);
+            MARAS_CHECK_EQ(reloc2.movedAdults.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(serana.raw()), proudspire);
+            MARAS_CHECK(ws.household.Read().GetTenantStayAtHome(serana.raw()));
+            MARAS_CHECK_EQ(reloc2.changedHouseChildren.size(), std::size_t{ 2 });
+        }
+
+        // 3. Child-anchored relocation with moveParents = false leaves unhoused co-parent unhoused
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+            ws.relationships.Write().GetOrCreateEdge(serana, ActorId::Player()).status =
+                RelationshipStatus::Married;
+
+            ChildRecord newRec{};
+            newRec.childId = newChild;
+            newRec.stage = ChildStage::Child;
+            newRec.guardians.Assign(ActorId::Player(), serana);
+            ws.lineage.Write().UpsertChild(newRec);
+
+            const auto reloc = ApplyRelocateFamilyUnit(ws, newChild.raw(), breezehome, false);
+            MARAS_CHECK(reloc.targetHouseExists);
+            MARAS_CHECK(reloc.movedAdults.empty());
+            MARAS_CHECK_EQ(reloc.movedChildren.size(), std::size_t{ 1 });
+            MARAS_CHECK(ws.household.Read().GetTenantHouse(serana.raw()).IsNull());
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(newChild.raw()), breezehome);
+        }
+
+        // 4. Adult-anchored relocation eligibility & unhoused stayAtHome = true default
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+            ws.relationships.Write().GetOrCreateEdge(serana, ActorId::Player()).status =
+                RelationshipStatus::Married;
+
+            DeceasedActorRecord deadRec{};
+            deadRec.refId = deceasedSpouse.AsRefId();
+            deadRec.baseId = BaseId{ 0x0003D901u };
+            deadRec.deathTimestamp = 5.0f;
+            ws.deceased.Write().UpsertRecord(std::move(deadRec));
+            ws.relationships.Write().GetOrCreateEdge(deceasedSpouse, ActorId::Player()).status =
+                RelationshipStatus::Married;
+
+            const auto unrelatedReloc = ApplyRelocateFamilyUnit(ws, unrelatedNpc.raw(), breezehome, true);
+            MARAS_CHECK(unrelatedReloc.targetHouseExists);
+            MARAS_CHECK(unrelatedReloc.ineligibleAdultAnchor);
+            MARAS_CHECK(unrelatedReloc.movedAdults.empty());
+            MARAS_CHECK(ws.household.Read().GetTenantHouse(unrelatedNpc.raw()).IsNull());
+
+            const auto deadReloc = ApplyRelocateFamilyUnit(ws, deceasedSpouse.raw(), breezehome, true);
+            MARAS_CHECK(deadReloc.targetHouseExists);
+            MARAS_CHECK(deadReloc.ineligibleAdultAnchor);
+            MARAS_CHECK(deadReloc.movedAdults.empty());
+            MARAS_CHECK(ws.household.Read().GetTenantHouse(deceasedSpouse.raw()).IsNull());
+
+            const auto adultReloc = ApplyRelocateFamilyUnit(ws, serana.raw(), breezehome, true);
+            MARAS_CHECK(adultReloc.targetHouseExists);
+            MARAS_CHECK(!adultReloc.ineligibleAdultAnchor);
+            MARAS_CHECK_EQ(adultReloc.movedAdults.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(serana.raw()), breezehome);
+            MARAS_CHECK(ws.household.Read().GetTenantStayAtHome(serana.raw()));
+        }
+
+        // 5. EvaluateCustodyOnMarriage auto-houses unhoused new spouse into child's home with stayAtHome = false
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+
+            ChildRecord soleChild{};
+            soleChild.childId = newChild;
+            soleChild.stage = ChildStage::Child;
+            soleChild.guardians.Assign(ActorId::Player(), ActorId{});
+            ws.lineage.Write().UpsertChild(soleChild);
+
+            ChildHouseholdRecord chState{};
+            chState.childId = newChild;
+            chState.currentHouseId = breezehome;
+            ws.household.Write().UpsertChildState(chState);
+            MARAS_CHECK(ApplyRegisterTenant(ws, newChild.raw(), breezehome, true, true));
+
+            ws.relationships.Write().GetOrCreateEdge(serana, ActorId::Player()).status =
+                RelationshipStatus::Married;
+            DefaultActorMetadataProvider meta{};
+            (void)ws.EvaluateCustodyOnMarriage(ActorId::Player(), serana, meta);
+
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(serana.raw()), breezehome);
+            MARAS_CHECK(!ws.household.Read().GetTenantStayAtHome(serana.raw()));
         }
     }
 

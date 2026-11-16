@@ -409,10 +409,20 @@ namespace MARAS::PapyrusInterface {
 
                 if (chosenLoc && !isChild && targetFormID != 0) {
                     const bool stayAtHome = (resp.GetString("schedule_mode", "stay") != "original");
-                    std::lock_guard lock(GetPapyrusMutex());
-                    auto& svc = App::HouseholdUseCases::GetSingleton();
-                    (void)svc.RelocateFamilyUnit(targetFormID, selectedHouseID, true);
-                    svc.SetTenantStayAtHome(targetFormID, stayAtHome);
+                    std::vector<RE::FormID> relocated;
+                    {
+                        std::lock_guard lock(GetPapyrusMutex());
+                        auto& svc = App::HouseholdUseCases::GetSingleton();
+                        relocated = svc.RelocateFamilyUnit(targetFormID, selectedHouseID, true);
+                        svc.SetTenantStayAtHome(targetFormID, stayAtHome);
+                    }
+                    auto& ui = App::GetUiBridgeGateway();
+                    ui.SendNPCDetail(targetFormID);
+                    for (const RE::FormID fid : relocated) {
+                        if (fid != targetFormID) {
+                            ui.SendNPCDetail(fid);
+                        }
+                    }
                 }
 
                 DispatchLatentFormResult<RE::BGSLocation>(expectedEpoch, vm, stackID, resolvedHouseID, "ShowChooseHomeModal");

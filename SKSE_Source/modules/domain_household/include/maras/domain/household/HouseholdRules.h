@@ -15,9 +15,11 @@ namespace MARAS::Domain::Household {
 
     struct RelocateFamilyOutcome {
         bool targetHouseExists{ false };
+        bool ineligibleAdultAnchor{ false };
         HouseId targetHouseId{};
         std::vector<ActorId> movedAdults{};
         std::vector<ChildId> movedChildren{};
+        std::vector<ChildId> changedHouseChildren{};
         std::vector<std::uint32_t> skippedChildCustody{};
         std::vector<ActorId> dirtyActors{};
     };
@@ -60,6 +62,6 @@ namespace MARAS::Domain::Household {
         State::WorldState& ws,
         std::uint32_t anchorRawId,
         HouseId targetHouseId,
-        bool stayAtHome = true);
+        bool moveParents = true);
 
 }  // namespace MARAS::Domain::Household
