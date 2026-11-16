@@ -5,7 +5,7 @@ import { PLAYER_FORM_ID } from '../../../data/mockData'
 import { Users, Lock, Search, X, RefreshCw, ExternalLink } from 'lucide-react'
 import { areSameFormId } from '../../../utils/statusAvailability'
 import { getParentRole } from '../../../utils/childUtils'
-import { ChildRecord } from '../../../types'
+import { ChildRecord, RelationshipStatus } from '../../../types'
 
 interface ChildGuardiansSectionProps {
   npcId: string
@@ -65,6 +65,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
   const isLoadingAllNpcs = useMarasStore((s) => s.isLoadingAllNpcs)
   const fetchAllSkyrimNpcs = useMarasStore((s) => s.fetchAllSkyrimNpcs)
   const children = useMarasStore((s) => s.children)
+  const relationships = useMarasStore((s) => s.relationships)
   const updateChild = useMarasStore((s) => s.updateChild)
   const setPaternitySecretEdges = useMarasStore((s) => s.setPaternitySecretEdges)
   const revealSecretsInUI = useMarasStore((s) => Boolean(s.settings.revealSecretsInUI))
@@ -184,6 +185,32 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
         return presumedFatherId
     }
   }
+
+  const playerHasMarriedSpouse = useMemo(
+    () =>
+      relationships.some(
+        (r) =>
+          r.status === RelationshipStatus.Married &&
+          (areSameFormId(r.actorA, PLAYER_FORM_ID) || areSameFormId(r.actorB, PLAYER_FORM_ID)),
+      ),
+    [relationships],
+  )
+
+  const canClearActiveSlot = useMemo(() => {
+    if (!activeSlot || !getCurrentSlotFormId(activeSlot)) return false
+    if (
+      (activeSlot === 'guardianA' || activeSlot === 'guardianB') &&
+      playerHasMarriedSpouse &&
+      childRecord?.stage !== 'unborn' &&
+      childRecord?.stage !== 'adult'
+    ) {
+      const otherGuardianId = activeSlot === 'guardianA' ? gBId : gAId
+      if (otherGuardianId && areSameFormId(otherGuardianId, PLAYER_FORM_ID)) {
+        return false
+      }
+    }
+    return true
+  }, [activeSlot, gAId, gBId, playerHasMarriedSpouse, childRecord?.stage])
 
   const filteredCandidates = useMemo(() => {
     if (!activeSlot) return []
@@ -596,7 +623,7 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
             </div>
 
             <div className="max-h-[12rem] overflow-y-auto space-y-[0.25rem] pr-[0.25rem]">
-              {getCurrentSlotFormId(activeSlot) && (
+              {canClearActiveSlot && (
                 <button
                   type="button"
                   onClick={() => handleSelectCandidate(activeSlot, null)}

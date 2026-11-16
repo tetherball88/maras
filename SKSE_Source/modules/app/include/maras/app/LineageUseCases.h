@@ -69,6 +69,7 @@ namespace MARAS::App {
 
         bool RemoveChild(RE::FormID childID);
         bool SetChildGuardian(RE::FormID childID, RE::FormID guardianID, bool isAdd);
+        bool SetChildGuardians(RE::FormID childID, RE::FormID guardianAID, RE::FormID guardianBID);
         bool AddChildGuardian(RE::FormID childID, RE::FormID guardianID);
         bool RemoveChildGuardian(RE::FormID childID, RE::FormID guardianID);
         bool SetBioMother(RE::FormID childID, RE::FormID motherID);
@@ -77,19 +78,27 @@ namespace MARAS::App {
 
         void AddPendingChild(RE::FormID childBaseID, RE::FormID parentABaseID, RE::FormID parentBBaseID, bool isAdopted);
         void TryResolvePendingChildren(RE::FormID baseID, RE::FormID refID);
-        void ClearPendingMarriageAdoptions();
-        void DispatchPlayerSpouseMarriageAdoptions(
-            RE::FormID spouseID,
-            std::unordered_set<RE::FormID>& skippedChildIds);
 
         void SyncChildHouseholdState(
             RE::FormID childID,
             RE::FormID guardianAID,
             RE::FormID guardianBID,
             RE::FormID explicitHouseID = 0);
-        void EvaluateChildCustodyOnMarriage(RE::FormID actorA, RE::FormID actorB);
+        void HandleMarriageCustodySideEffects(
+            const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
+            const State::WorldStateSnapshot& postSnap,
+            RE::FormID actorA,
+            RE::FormID actorB);
+        void HandleDivorceCustodySideEffects(
+            const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
+            const State::WorldStateSnapshot& postSnap,
+            RE::FormID actorA,
+            RE::FormID actorB);
+        void HandleDeathCustodySideEffects(
+            const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
+            const State::WorldStateSnapshot& postSnap,
+            RE::FormID deceasedID);
         void EvaluateChildCustodyOnDivorce(RE::FormID actorA, RE::FormID actorB);
-        void SyncAllMarriedCouplesChildCustody();
         void EvaluateChildCustodyOnDeath(RE::FormID deceasedID);
 
         [[nodiscard]] RE::FormID ResolveNonPlayerChildTarget(const State::ChildRecord& child) const;
@@ -239,20 +248,6 @@ namespace MARAS::App {
     private:
         LineageUseCases() = default;
         ~LineageUseCases() = default;
-
-        void HandleDivorceCustodySideEffects(
-            const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
-            const State::WorldStateSnapshot& postSnap,
-            RE::FormID actorA,
-            RE::FormID actorB);
-        void HandleDeathCustodySideEffects(
-            const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
-            const State::WorldStateSnapshot& postSnap,
-            RE::FormID deceasedID);
-        void RefreshCustodyChildrenAfterTransition(
-            const std::unordered_map<RE::FormID, State::ChildRecord>& preChildren,
-            const State::WorldStateSnapshot& postSnap,
-            const std::unordered_set<RE::FormID>& skippedChildIds);
     };
 
 }  // namespace MARAS::App

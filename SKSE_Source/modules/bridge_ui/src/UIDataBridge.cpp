@@ -2478,17 +2478,8 @@ namespace MARAS::Bridge::Ui {
                 targetB = {};
             }
 
-            if (!oldGuardians.slotA.IsNull() && oldGuardians.slotA != targetA && oldGuardians.slotA != targetB) {
-                changed |= lineage.RemoveChildGuardian(childID, oldGuardians.slotA.raw());
-            }
-            if (!oldGuardians.slotB.IsNull() && oldGuardians.slotB != targetA && oldGuardians.slotB != targetB) {
-                changed |= lineage.RemoveChildGuardian(childID, oldGuardians.slotB.raw());
-            }
-            if (!targetA.IsNull() && targetA != oldGuardians.slotA && targetA != oldGuardians.slotB) {
-                changed |= lineage.AddChildGuardian(childID, targetA.raw());
-            }
-            if (!targetB.IsNull() && targetB != oldGuardians.slotA && targetB != oldGuardians.slotB) {
-                changed |= lineage.AddChildGuardian(childID, targetB.raw());
+            if (targetA != oldGuardians.slotA || targetB != oldGuardians.slotB) {
+                changed |= lineage.SetChildGuardians(childID, targetA.raw(), targetB.raw());
             }
         }
 

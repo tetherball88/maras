@@ -925,4 +925,48 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainLineage, GuardiansPairAndMarriedPlayerSingleParentGuard) {
+        const ActorId spouseA{ 0x00029001u };
+        const ActorId spouseB{ 0x00029002u };
+        const HouseId breezehome{ 0x00029101u };
+        const ChildId cid{ 0x00029201u };
+
+        WorldState ws{};
+        DefaultActorMetadataProvider meta{};
+        ws.settings.Write().enablePlayerPolygamy = true;
+        ws.household.Write().RegisterHouse(breezehome, RefId{ 0x00029111u }, true);
+        (void)ws.PromoteToMarried(ActorId::Player(), spouseA, 5.0f, ActorId::Player(), meta);
+        (void)ws.PromoteToMarried(ActorId::Player(), spouseB, 8.0f, ActorId::Player(), meta);
+        ws.household.Write().AssignTenant(spouseB.raw(), breezehome, true, false);
+
+        ChildRecord rec{};
+        rec.childId = cid;
+        rec.stage = ChildStage::Child;
+        rec.guardians.Assign(ActorId::Player(), spouseA);
+        ws.lineage.Write().UpsertChild(rec);
+
+        // Removing spouseA when spouseB is also married reassigns co-guardian to spouseB & inherits house
+        const auto remA = ApplySetChildGuardian(ws, cid, spouseA, false, meta);
+        MARAS_CHECK(remA.changed);
+        MARAS_CHECK(ws.lineage.Read().FindChild(cid)->guardians.HasSameSet(ActorId::Player(), spouseB));
+        MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(cid.raw()), breezehome);
+
+        // Divorcing spouseA leaves spouseB as sole remaining living spouse -> cannot clear spouseB into sole Player
+        (void)ws.PromoteToDivorced(ActorId::Player(), spouseA, 12.0f, ActorId::Player(), meta);
+        const auto blockedClear = ApplySetChildGuardian(ws, cid, spouseB, false, meta);
+        MARAS_CHECK(!blockedClear.changed);
+        MARAS_CHECK(ws.lineage.Read().FindChild(cid)->guardians.HasSameSet(ActorId::Player(), spouseB));
+
+        // Atomic pair setter passing (Player, 0) while married auto-fills surviving Lead Spouse (spouseB)
+        const auto pairSet = ApplySetChildGuardiansPair(ws, cid, ActorId::Player(), ActorId{}, meta);
+        MARAS_CHECK(!pairSet.changed);
+        MARAS_CHECK(ws.lineage.Read().FindChild(cid)->guardians.HasSameSet(ActorId::Player(), spouseB));
+
+        // Removing Player themselves still transitions cleanly to sole NPC guardian (spouseB)
+        const auto remPlayer = ApplySetChildGuardian(ws, cid, ActorId::Player(), false, meta);
+        MARAS_CHECK(remPlayer.changed);
+        MARAS_CHECK(ws.lineage.Read().FindChild(cid)->guardians.IsSoleGuardian(spouseB));
+        MARAS_CHECK(ws.household.Read().GetTenantHouse(cid.raw()).IsNull());
+    }
+
 }  // namespace MARAS::Tests

@@ -8,6 +8,7 @@
 #include "maras/domain/household/TravelRules.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BedOwnershipReconciler.h"
+#include "maras/engine/ChildSpawnService.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/GlobalVarReconciler.h"
@@ -78,6 +79,7 @@ namespace MARAS::App {
             for (const auto& [cid, rec] : snap.lineage->AllChildren()) {
                 (void)cid;
                 if (rec.stage == Foundation::ChildStage::Adult ||
+                    rec.stage == Foundation::ChildStage::Training ||
                     rec.stage == Foundation::ChildStage::Unborn) {
                     continue;
                 }
@@ -412,11 +414,25 @@ namespace MARAS::App {
                 return false;
             }
             isChild = IsChildTenantEntry(*snap, tenantFormID);
-            if (!isChild && !ActorSvc::IsValid(tenantFormID)) {
-                MARAS_LOG_WARN(
-                    "HouseholdUseCases::RegisterTenantInPlayerHouse: invalid adult tenant {:08X}",
-                    tenantFormID);
-                return false;
+            if (!isChild) {
+                if (!ActorSvc::IsValid(tenantFormID)) {
+                    MARAS_LOG_WARN(
+                        "HouseholdUseCases::RegisterTenantInPlayerHouse: invalid adult tenant {:08X}",
+                        tenantFormID);
+                    return false;
+                }
+                const bool isMarriedToPlayer =
+                    snap->relationships &&
+                    snap->relationships->GetStatus(
+                        State::ActorId{ tenantFormID }, State::ActorId::Player()) ==
+                        Foundation::RelationshipStatus::Married;
+                if (!isMarriedToPlayer &&
+                    !HasLivingChildWithPlayer(*snap, State::ActorId{ tenantFormID })) {
+                    MARAS_LOG_WARN(
+                        "HouseholdUseCases::RegisterTenantInPlayerHouse: adult {:08X} is not married to Player and cannot be housed",
+                        tenantFormID);
+                    return false;
+                }
             }
             previousHouseID = snap->household->GetTenantHouse(tenantFormID).raw();
         }
@@ -450,6 +466,12 @@ namespace MARAS::App {
 
     bool HouseholdUseCases::RemoveTenantFromPlayerHouse(RE::FormID tenantFormID) {
         if (tenantFormID == 0) {
+            return false;
+        }
+        if (!CanRemoveTenant(tenantFormID)) {
+            MARAS_LOG_WARN(
+                "HouseholdUseCases::RemoveTenantFromPlayerHouse: tenant {:08X} cannot be removed while sharing active household children",
+                tenantFormID);
             return false;
         }
 
@@ -602,17 +624,32 @@ namespace MARAS::App {
             changedChildSet.insert(cid.raw());
         }
 
+        std::unordered_set<std::uint32_t> newlyHousedSet;
+        newlyHousedSet.reserve(outcome.newlyHousedChildren.size());
+        for (const State::ChildId cid : outcome.newlyHousedChildren) {
+            newlyHousedSet.insert(cid.raw());
+        }
+
         for (const State::ActorId adultId : outcome.movedAdults) {
             ReconcileTenantEngineAdded(adultId.raw(), playerHouseFormID, false);
             relocatedMembers.push_back(adultId.raw());
         }
 
+        auto& childOps = PlayerChildrenEngineOps::GetSingleton();
         for (const State::ChildId cid : outcome.movedChildren) {
             if (!cid.IsSynthetic()) {
+                const bool isNewlyHoused = newlyHousedSet.contains(cid.raw());
+                if (isNewlyHoused) {
+                    childOps.SnapshotChildFactions(cid.raw());
+                    childOps.ClearChildExternalFactions(cid.raw());
+                    ChildSpawnService::GetSingleton().RemoveChildSandboxAroundParentLinkedRef(cid.raw());
+                }
                 const bool shouldMove = changedChildSet.contains(cid.raw());
-                PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(
-                    cid.raw(), playerHouseFormID, shouldMove);
+                childOps.MoveChildAndMarkerToHouse(cid.raw(), playerHouseFormID, shouldMove);
                 ReconcileTenantEngineAdded(cid.raw(), playerHouseFormID, true);
+                if (isNewlyHoused) {
+                    childOps.ApplyOrderOnActorFromWorld(cid.raw());
+                }
             }
             relocatedMembers.push_back(cid.raw());
         }

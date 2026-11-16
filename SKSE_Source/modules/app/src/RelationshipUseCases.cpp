@@ -3,6 +3,7 @@
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/BanterSceneCoordinator.h"
+#include "maras/app/LineageUseCases.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/domain/relationships/AffectionRules.h"
@@ -1096,6 +1097,13 @@ namespace MARAS::App {
             snap->relationships->GetStatus(State::ActorId{ npcFormID }, State::ActorId::Player()) ==
             Foundation::RelationshipStatus::Married;
 
+        std::unordered_map<RE::FormID, State::ChildRecord> preChildren;
+        if (snap->lineage) {
+            for (const auto& [cid, rec] : snap->lineage->AllChildren()) {
+                preChildren.emplace(cid.raw(), rec);
+            }
+        }
+
         State::WorldMutationResult mut;
         Domain::Relationships::CleanupAffairsOutcome cleanup;
         const float currentDay = GetCurrentGameDays();
@@ -1110,6 +1118,10 @@ namespace MARAS::App {
         BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(mut.retiredSceneMarkers);
 
         ReconcileDirtyActorsAndChildren(mut, /*reconcilePackages=*/true);
+        if (mut.changed && !preChildren.empty()) {
+            const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+            LineageUseCases::GetSingleton().HandleDeathCustodySideEffects(preChildren, *postSnap, npcFormID);
+        }
         for (const auto affId : cleanup.affectedActors) {
             if (!affId.IsNull() && !affId.IsPlayer()) {
                 FactionReconciler::GetSingleton().ReconcileActor(affId.raw());
@@ -2028,6 +2040,15 @@ namespace MARAS::App {
         const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
         auto checkData = CaptureRelationshipCheckData(preSnap, *this, npcFormID, targetFormID);
         checkData.ctx.partnerCheatedOnPlayer = partnerCheatedOnPlayer;
+        std::unordered_map<RE::FormID, State::ChildRecord> preChildren;
+        if (preSnap->lineage &&
+            (status == Foundation::RelationshipStatus::Married ||
+             IsBreakupStatus(status) ||
+             status == Foundation::RelationshipStatus::Candidate)) {
+            for (const auto& [cid, rec] : preSnap->lineage->AllChildren()) {
+                preChildren.emplace(cid.raw(), rec);
+            }
+        }
         const float currentGameDay = GetCurrentGameDays();
         const RE::FormID initiator = (explicitInitiatorID != 0)
                                          ? explicitInitiatorID
@@ -2098,6 +2119,20 @@ namespace MARAS::App {
             FactionReconciler::GetSingleton().ReconcileActor(targetFormID);
         }
         ReconcileDirtyActorsAndChildren(outcome.mutations, /*reconcilePackages=*/true);
+
+        if (!preChildren.empty()) {
+            if (status == Foundation::RelationshipStatus::Married &&
+                outcome.oldStatus != Foundation::RelationshipStatus::Married) {
+                const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+                LineageUseCases::GetSingleton().HandleMarriageCustodySideEffects(
+                    preChildren, *postSnap, npcFormID, targetFormID);
+            } else if (outcome.oldStatus == Foundation::RelationshipStatus::Married &&
+                       (IsBreakupStatus(status) || status == Foundation::RelationshipStatus::Candidate)) {
+                const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+                LineageUseCases::GetSingleton().HandleDivorceCustodySideEffects(
+                    preChildren, *postSnap, npcFormID, targetFormID);
+            }
+        }
 
         if (isPlayerPair) {
             FactionReconciler::GetSingleton().ReconcilePlayer();
@@ -2303,6 +2338,14 @@ namespace MARAS::App {
             }
         }
 
+        std::unordered_map<RE::FormID, State::ChildRecord> preChildren;
+        if (preSnap->lineage &&
+            existingEdge && Foundation::IsMainTierStatus(existingEdge->status)) {
+            for (const auto& [cId, childRec] : preSnap->lineage->AllChildren()) {
+                preChildren.emplace(cId.raw(), childRec);
+            }
+        }
+
         std::unordered_set<RE::FormID> affectedActors{ actorA, actorB };
         State::WorldMutationResult custodyMut;
 
@@ -2438,6 +2481,11 @@ namespace MARAS::App {
         BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(custodyMut.retiredSceneMarkers);
 
         ReconcileDirtyActorsAndChildren(custodyMut, /*reconcilePackages=*/true);
+        if (custodyMut.changed && !preChildren.empty()) {
+            const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+            LineageUseCases::GetSingleton().HandleDivorceCustodySideEffects(
+                preChildren, *postSnap, actorA, actorB);
+        }
         for (const RE::FormID id : affectedActors) {
             if (id != 0) {
                 if (id == kPlayerFormID) {

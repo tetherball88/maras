@@ -25,6 +25,7 @@ namespace MARAS::Domain::Household {
             for (const auto& [cid, rec] : snap.lineage->AllChildren()) {
                 (void)cid;
                 if (rec.stage == Foundation::ChildStage::Adult ||
+                    rec.stage == Foundation::ChildStage::Training ||
                     rec.stage == Foundation::ChildStage::Unborn) {
                     continue;
                 }
@@ -49,8 +50,8 @@ namespace MARAS::Domain::Household {
                 return false;
             }
             if (snap.relationships &&
-                Foundation::IsActivePartnerStatus(
-                    snap.relationships->GetStatus(adultId, ActorId::Player()))) {
+                snap.relationships->GetStatus(adultId, ActorId::Player()) ==
+                    Foundation::RelationshipStatus::Married) {
                 return true;
             }
             return HasLivingChildWithPlayer(snap, adultId);
@@ -246,9 +247,18 @@ namespace MARAS::Domain::Household {
             const auto* prevChildState = ws.household.Read().FindChildState(cid);
             const bool hadMarker =
                 (prevChildState != nullptr && !prevChildState->homeMarkerId.IsNull());
+            const bool wasUnhoused =
+                prevHouse.IsNull() &&
+                (prevChildState == nullptr || prevChildState->currentHouseId.IsNull());
 
             if (ws.household.Write().AssignTenant(cid.raw(), targetHouseId, /*stayAtHome=*/true, /*isChildTenant=*/true)) {
                 out.movedChildren.push_back(cid);
+                if (wasUnhoused) {
+                    if (auto* st = ws.household.Write().FindChildStateMutable(cid)) {
+                        st->isNewlyAdopted = true;
+                    }
+                    out.newlyHousedChildren.push_back(cid);
+                }
                 if (prevHouse != targetHouseId || !hadMarker) {
                     out.changedHouseChildren.push_back(cid);
                 }

@@ -926,7 +926,12 @@ namespace MARAS::State {
         }
         if (const auto marriedSpouses = relationships->GetPartnersWithStatus(motherId, RelationshipStatus::Married);
             !marriedSpouses.empty()) {
-            const ActorId spouse = marriedSpouses.front();
+            ActorId spouse = marriedSpouses.front();
+            if (motherId.IsPlayer()) {
+                if (const ActorId leadSpouse = GetHighestRankingSurvivingPlayerSpouse(); !leadSpouse.IsNull()) {
+                    spouse = leadSpouse;
+                }
+            }
             const auto diff = child->guardians.Assign(motherId, spouse);
             if (diff.changed) {
                 result.changed = true;
@@ -958,9 +963,12 @@ namespace MARAS::State {
 
         const ActorId custodian = ResolveSingleCustodian(childId, *child, motherId, otherParent, meta, rng);
         ActorId coGuardian{};
-        if (custodian != motherId && !custodian.IsPlayer()) {
-            const auto custodianSpouses = relationships->GetPartnersWithStatus(custodian, RelationshipStatus::Married);
+        if (custodian.IsPlayer()) {
+            coGuardian = GetHighestRankingSurvivingPlayerSpouse();
+        } else if (custodian != motherId) {
+            auto custodianSpouses = relationships->GetPartnersWithStatus(custodian, RelationshipStatus::Married);
             if (!custodianSpouses.empty()) {
+                std::sort(custodianSpouses.begin(), custodianSpouses.end());
                 coGuardian = custodianSpouses.front();
             }
         }
@@ -1154,6 +1162,45 @@ namespace MARAS::State {
         }
         std::sort(childIds.begin(), childIds.end());
 
+        auto assignPlayerDivorceCustody = [&](ChildId targetChildId, ChildRecord* mutChild, ActorId exSpouse) {
+            const ActorId remainingSpouse = GetHighestRankingSurvivingPlayerSpouse(exSpouse);
+            if (!remainingSpouse.IsNull()) {
+                const GuardianSetDiff diff = mutChild->guardians.Assign(ActorId::Player(), remainingSpouse);
+                if (diff.changed) {
+                    result.changed = true;
+                }
+                result.MarkActorDirty(ActorId::Player());
+                result.MarkActorDirty(remainingSpouse);
+                result.MarkChildDirty(targetChildId);
+
+                HouseId remSpouseHouse = household->GetTenantHouse(remainingSpouse.raw());
+                HouseId childHouse{};
+                if (const auto* cs = household->FindChildState(targetChildId)) {
+                    childHouse = cs->currentHouseId;
+                }
+                if (childHouse.IsNull()) {
+                    childHouse = household->GetTenantHouse(targetChildId.raw());
+                }
+                if (!remSpouseHouse.IsNull()) {
+                    result.Merge(SyncChildHouseholdState(targetChildId, remSpouseHouse));
+                } else {
+                    if (!childHouse.IsNull() && household->FindHouse(childHouse) != nullptr) {
+                        household.Write().AssignTenant(
+                            remainingSpouse.raw(), childHouse, /*stayAtHome=*/false, /*isChildTenant=*/false);
+                    }
+                    result.Merge(SyncChildHouseholdState(targetChildId, childHouse));
+                }
+            } else {
+                const GuardianSetDiff diff = mutChild->guardians.Assign(ActorId::Player(), ActorId{});
+                if (diff.changed) {
+                    result.changed = true;
+                }
+                result.MarkActorDirty(ActorId::Player());
+                result.MarkChildDirty(targetChildId);
+                result.Merge(SyncChildHouseholdState(targetChildId));
+            }
+        };
+
         // 1. Unborn pregnancies & active paternity secrets involving the splitting couple
         for (const ChildId cId : childIds) {
             const auto* childView = lineage->FindChild(cId);
@@ -1199,11 +1246,19 @@ namespace MARAS::State {
                 if (mutableChild->guardians.IsSoleGuardian(formerSpouse)) {
                     const ActorId custodian =
                         ResolveSingleCustodian(cId, *mutableChild, mutableChild->bioMother, formerSpouse, meta, rng);
-                    const GuardianSetDiff diff = mutableChild->guardians.Assign(custodian, ActorId{});
-                    if (diff.changed) {
+                    if (custodian.IsPlayer()) {
+                        const ActorId exSpouse =
+                            actorA.IsPlayer() ? actorB : (actorB.IsPlayer() ? actorA : ActorId{});
+                        assignPlayerDivorceCustody(cId, mutableChild, exSpouse);
                         result.MarkActorDirty(mutableChild->bioMother);
                         result.MarkActorDirty(formerSpouse);
-                        result.Merge(SyncChildHouseholdState(cId));
+                    } else {
+                        const GuardianSetDiff diff = mutableChild->guardians.Assign(custodian, ActorId{});
+                        if (diff.changed) {
+                            result.MarkActorDirty(mutableChild->bioMother);
+                            result.MarkActorDirty(formerSpouse);
+                            result.Merge(SyncChildHouseholdState(cId));
+                        }
                     }
                 }
             }
@@ -1227,14 +1282,21 @@ namespace MARAS::State {
             }
 
             const ActorId custodian = ResolveSingleCustodian(cId, *mutableChild, actorA, actorB, meta, rng);
-            const GuardianSetDiff diff = mutableChild->guardians.Assign(custodian, ActorId{});
-            if (diff.changed) {
-                result.changed = true;
+            if (custodian.IsPlayer()) {
+                const ActorId exSpouse = actorA.IsPlayer() ? actorB : actorA;
+                assignPlayerDivorceCustody(cId, mutableChild, exSpouse);
+                result.MarkActorDirty(actorA);
+                result.MarkActorDirty(actorB);
+            } else {
+                const GuardianSetDiff diff = mutableChild->guardians.Assign(custodian, ActorId{});
+                if (diff.changed) {
+                    result.changed = true;
+                }
+                result.MarkActorDirty(actorA);
+                result.MarkActorDirty(actorB);
+                result.MarkChildDirty(cId);
+                result.Merge(SyncChildHouseholdState(cId));
             }
-            result.MarkActorDirty(actorA);
-            result.MarkActorDirty(actorB);
-            result.MarkChildDirty(cId);
-            result.Merge(SyncChildHouseholdState(cId));
         }
 
         return result;
@@ -1329,7 +1391,23 @@ namespace MARAS::State {
                     (void)mutableChild->guardians.Assign(ActorId::Player(), highestSurvivingSpouse);
                     result.MarkActorDirty(ActorId::Player());
                     result.MarkActorDirty(highestSurvivingSpouse);
-                    result.Merge(SyncChildHouseholdState(cId, nextSpouseHouse));
+
+                    HouseId targetHouse = nextSpouseHouse;
+                    if (targetHouse.IsNull()) {
+                        if (const auto* cs = household->FindChildState(cId)) {
+                            targetHouse = cs->currentHouseId;
+                        }
+                        if (targetHouse.IsNull()) {
+                            targetHouse = household->GetTenantHouse(cId.raw());
+                        }
+                        if (!targetHouse.IsNull() &&
+                            household->FindHouse(targetHouse) != nullptr &&
+                            household->GetTenantHouse(highestSurvivingSpouse.raw()).IsNull()) {
+                            household.Write().AssignTenant(
+                                highestSurvivingSpouse.raw(), targetHouse, /*stayAtHome=*/false, /*isChildTenant=*/false);
+                        }
+                    }
+                    result.Merge(SyncChildHouseholdState(cId, targetHouse));
                 } else {
                     (void)mutableChild->guardians.Remove(deceasedActor);
                     if (mutableChild->paternitySecret.HasActiveSecret()) {
@@ -1455,7 +1533,24 @@ namespace MARAS::State {
                 marriedPairs.push_back(pair);
             }
         }
-        std::sort(marriedPairs.begin(), marriedPairs.end());
+        const ActorId leadPlayerSpouse = GetHighestRankingSurvivingPlayerSpouse();
+        std::sort(
+            marriedPairs.begin(),
+            marriedPairs.end(),
+            [&leadPlayerSpouse](const CanonicalPairKey& lhs, const CanonicalPairKey& rhs) {
+                const bool lhsIsLead =
+                    !leadPlayerSpouse.IsNull() &&
+                    ((lhs.first.IsPlayer() && lhs.second == leadPlayerSpouse) ||
+                     (lhs.second.IsPlayer() && lhs.first == leadPlayerSpouse));
+                const bool rhsIsLead =
+                    !leadPlayerSpouse.IsNull() &&
+                    ((rhs.first.IsPlayer() && rhs.second == leadPlayerSpouse) ||
+                     (rhs.second.IsPlayer() && rhs.first == leadPlayerSpouse));
+                if (lhsIsLead != rhsIsLead) {
+                    return lhsIsLead;
+                }
+                return lhs < rhs;
+            });
 
         for (const CanonicalPairKey& pair : marriedPairs) {
             result.Merge(EvaluateCustodyOnMarriage(pair.first, pair.second, meta));

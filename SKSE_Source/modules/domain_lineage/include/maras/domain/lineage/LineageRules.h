@@ -96,6 +96,13 @@ namespace MARAS::Domain::Lineage {
         bool isAdd,
         const State::IActorMetadataProvider& meta = State::DefaultActorMetadataProvider{});
 
+    ChildGuardianMutationOutcome ApplySetChildGuardiansPair(
+        State::WorldState& ws,
+        ChildId childId,
+        ActorId guardianA,
+        ActorId guardianB,
+        const State::IActorMetadataProvider& meta = State::DefaultActorMetadataProvider{});
+
     ChildOrderOutcome ApplyOrderIssue(
         State::WorldState& ws,
         ChildId childId,

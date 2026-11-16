@@ -67,17 +67,22 @@ Location Function ChooseHomeForSpouseMsg(Actor spouse, int page = 0, bool isChil
 EndFunction
 
 Function ReleaseSpouseFromPlayerHome(Actor spouse, string reason = "") global
-    if(MARAS.GetChildren(TTM_Data.GetPlayer(), spouse).Length > 0)
-        Debug.Notification("Cannot send " + TTM_Utils.GetActorName(spouse) + " away while you have children together. Move them to a new home instead.")
+    if(!spouse)
         return
     endif
-    if(MARAS.GetTenantHouse(spouse) != none)
-        if(reason == "affection")
-            TTM_Messages.FreeSpouseFromPlayerHomeMsg(TTM_Utils.GetActorName(spouse))
-        endif
+    if(MARAS.GetTenantHouse(spouse) == none)
+        return
     endif
     TTM_Debug.trace("ReleaseSpouseFromPlayerHome:spouse:"+spouse+":reason:"+reason)
-    MARAS.RemoveTenantFromPlayerHouse(spouse)
+    if(!MARAS.RemoveTenantFromPlayerHouse(spouse))
+        if(reason == "")
+            Debug.Notification("Cannot send " + TTM_Utils.GetActorName(spouse) + " away while you have children together. Move them to a new home instead.")
+        endif
+        return
+    endif
+    if(reason == "affection")
+        TTM_Messages.FreeSpouseFromPlayerHomeMsg(TTM_Utils.GetActorName(spouse))
+    endif
 EndFunction
 
 Function ReleaseChildFromPlayerHome(Actor child) global

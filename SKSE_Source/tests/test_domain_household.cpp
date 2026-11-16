@@ -908,4 +908,84 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainHousehold, NonSpouseRejectionNewlyHousedStepChildAndTrainingNonBlocking) {
+        const HouseId breezehome{ 0x00020098u };
+        const HouseId proudspire{ 0x0003E002u };
+        const RefId markerA{ 0x0003E010u };
+        const RefId markerB{ 0x0003E020u };
+        const ActorId spouse{ 0x0003E101u };
+        const ActorId datingPartner{ 0x0003E102u };
+        const ActorId engagedPartner{ 0x0003E103u };
+        const ActorId loverPartner{ 0x0003E104u };
+        const ChildId stepChild{ 0xFF000EF1u };
+        const ChildId trainingChild{ 0xFF700EF2u };
+
+        // 1. Dating / Engaged / Lover partners without shared living Stage 1-2 children are ineligible for relocation
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+            ws.relationships.Write().GetOrCreateEdge(datingPartner, ActorId::Player()).status =
+                RelationshipStatus::Dating;
+            ws.relationships.Write().GetOrCreateEdge(engagedPartner, ActorId::Player()).status =
+                RelationshipStatus::Engaged;
+            ws.relationships.Write().GetOrCreateEdge(loverPartner, ActorId::Player()).status =
+                RelationshipStatus::Lover;
+
+            for (const ActorId p : { datingPartner, engagedPartner, loverPartner }) {
+                const auto res = ApplyRelocateFamilyUnit(ws, p.raw(), breezehome, true);
+                MARAS_CHECK(res.targetHouseExists);
+                MARAS_CHECK(res.ineligibleAdultAnchor);
+                MARAS_CHECK(res.movedAdults.empty());
+                MARAS_CHECK(ws.household.Read().GetTenantHouse(p.raw()).IsNull());
+            }
+        }
+
+        // 2. Step-child entering from unhoused spouse is marked newlyHousedChildren once, then not on move
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+            MARAS_CHECK(ApplyRegisterHouse(ws, proudspire, markerB, true));
+            ws.relationships.Write().GetOrCreateEdge(spouse, ActorId::Player()).status =
+                RelationshipStatus::Married;
+
+            ChildRecord stepRec{};
+            stepRec.childId = stepChild;
+            stepRec.stage = ChildStage::Child;
+            stepRec.guardians.Assign(ActorId::Player(), spouse);
+            ws.lineage.Write().UpsertChild(stepRec);
+
+            const auto firstHouse = ApplyRelocateFamilyUnit(ws, spouse.raw(), breezehome, true);
+            MARAS_CHECK(firstHouse.targetHouseExists);
+            MARAS_REQUIRE_EQ(firstHouse.newlyHousedChildren.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(firstHouse.newlyHousedChildren[0], stepChild);
+            MARAS_REQUIRE(ws.household.Read().FindChildState(stepChild) != nullptr);
+            MARAS_CHECK(ws.household.Read().FindChildState(stepChild)->isNewlyAdopted);
+            MARAS_CHECK(ws.household.Read().GetTenantStayAtHome(spouse.raw()));
+
+            // Moving spouse + child to Proudspire later does NOT mark child newlyHousedChildren again
+            const auto secondHouse = ApplyRelocateFamilyUnit(ws, spouse.raw(), proudspire, true);
+            MARAS_CHECK(secondHouse.newlyHousedChildren.empty());
+            MARAS_CHECK_EQ(secondHouse.changedHouseChildren.size(), std::size_t{ 1 });
+            MARAS_CHECK_EQ(ws.household.Read().GetTenantHouse(stepChild.raw()), proudspire);
+        }
+
+        // 3. Training / Unborn / Adult stages do NOT grant non-married child-tie relocation eligibility
+        {
+            WorldState ws{};
+            MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+            ws.relationships.Write().GetOrCreateEdge(datingPartner, ActorId::Player()).status =
+                RelationshipStatus::Divorced;
+
+            ChildRecord trRec{};
+            trRec.childId = trainingChild;
+            trRec.stage = ChildStage::Training;
+            trRec.guardians.Assign(ActorId::Player(), datingPartner);
+            ws.lineage.Write().UpsertChild(trRec);
+
+            const auto res = ApplyRelocateFamilyUnit(ws, datingPartner.raw(), breezehome, true);
+            MARAS_CHECK(res.ineligibleAdultAnchor);
+            MARAS_CHECK(res.movedAdults.empty());
+        }
+    }
+
 }  // namespace MARAS::Tests
