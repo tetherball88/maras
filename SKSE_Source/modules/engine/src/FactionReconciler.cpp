@@ -23,16 +23,27 @@ namespace MARAS {
     }
 
     void FactionReconciler::RegisterFactionAddedListener(FactionAddedCallback callback) {
+        if (!callback) {
+            return;
+        }
         std::unique_lock lock(mutex_);
         addedListeners_.push_back(std::move(callback));
+        hasListeners_.store(true, std::memory_order_release);
     }
 
     void FactionReconciler::RegisterFactionRemovedListener(FactionRemovedCallback callback) {
+        if (!callback) {
+            return;
+        }
         std::unique_lock lock(mutex_);
         removedListeners_.push_back(std::move(callback));
+        hasListeners_.store(true, std::memory_order_release);
     }
 
     void FactionReconciler::NotifyFactionAdded(RE::Actor* a_actor, RE::TESFaction* a_faction, std::int8_t a_rank) {
+        if (!HasListeners()) {
+            return;
+        }
         std::vector<FactionAddedCallback> listeners;
         {
             std::shared_lock lock(mutex_);
@@ -46,6 +57,9 @@ namespace MARAS {
     }
 
     void FactionReconciler::NotifyFactionRemoved(RE::Actor* a_actor, RE::TESFaction* a_faction) {
+        if (!HasListeners()) {
+            return;
+        }
         std::vector<FactionRemovedCallback> listeners;
         {
             std::shared_lock lock(mutex_);
@@ -184,16 +198,25 @@ namespace MARAS {
                 if (_originalAddToFaction) {
                     _originalAddToFaction(a_actor, a_faction, a_rank);
                 }
-                if (a_rank < 0) {
-                    FactionReconciler::GetSingleton().NotifyFactionRemoved(a_actor, a_faction);
-                } else {
-                    FactionReconciler::GetSingleton().NotifyFactionAdded(a_actor, a_faction, a_rank);
+                if (FactionReconciler::GetSingleton().HasListeners()) {
+                    if (a_rank < 0) {
+                        FactionReconciler::GetSingleton().NotifyFactionRemoved(a_actor, a_faction);
+                    } else {
+                        FactionReconciler::GetSingleton().NotifyFactionAdded(a_actor, a_faction, a_rank);
+                    }
+                }
+                return;
+            }
+
+            const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
+            if (!isMarriedFaction && !FactionReconciler::GetSingleton().HasListeners()) {
+                if (_originalAddToFaction) {
+                    _originalAddToFaction(a_actor, a_faction, a_rank);
                 }
                 return;
             }
 
             const bool isPlayer = a_actor->IsPlayerRef();
-            const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
             const bool polygamyEnabled =
                 State::WorldStore::GetSingleton().Snapshot()->settings->enablePlayerPolygamy;
 
@@ -341,12 +364,21 @@ namespace MARAS {
                 if (_originalRemoveFromFaction) {
                     _originalRemoveFromFaction(a_actor, a_faction);
                 }
-                FactionReconciler::GetSingleton().NotifyFactionRemoved(a_actor, a_faction);
+                if (FactionReconciler::GetSingleton().HasListeners()) {
+                    FactionReconciler::GetSingleton().NotifyFactionRemoved(a_actor, a_faction);
+                }
+                return;
+            }
+
+            const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
+            if (!isMarriedFaction && !FactionReconciler::GetSingleton().HasListeners()) {
+                if (_originalRemoveFromFaction) {
+                    _originalRemoveFromFaction(a_actor, a_faction);
+                }
                 return;
             }
 
             const bool isPlayer = a_actor->IsPlayerRef();
-            const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
             const RE::FormID actorId = a_actor->GetFormID();
             const RE::FormID factionId = a_faction->GetFormID();
 
@@ -777,8 +809,34 @@ namespace MARAS {
         (void)SyncActorFaction(actor, fc.GetPlayerFaction(), plan.playerFactionRank, true);
     }
 
+    namespace {
+        [[nodiscard]] bool HasCandidateMarasFactionsOnUnknownActor(const RE::Actor* actor) noexcept {
+            if (!actor) {
+                return false;
+            }
+            if (actor->extraList.HasType<RE::ExtraFactionChanges>()) {
+                return true;
+            }
+            const auto* base = actor->GetActorBase();
+            if (!base || base->factions.empty()) {
+                return false;
+            }
+            const auto* trackedFac = FormCache::GetSingleton().GetTrackedFaction();
+            const auto* marasFile = trackedFac ? trackedFac->GetFile(0) : nullptr;
+            if (!marasFile) {
+                return true;
+            }
+            for (const auto& entry : base->factions) {
+                if (entry.faction && entry.rank >= 0 && entry.faction->GetFile(0) == marasFile) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }  // namespace
+
     void FactionReconciler::ClearUnknownActorMarasFactions(RE::Actor* actor) {
-        if (!actor) {
+        if (!HasCandidateMarasFactionsOnUnknownActor(actor)) {
             return;
         }
 
@@ -906,6 +964,9 @@ namespace MARAS {
         }
 
         // 4. Unregistered / removed actor: strip any lingering MARAS factions safely
+        if (!HasCandidateMarasFactionsOnUnknownActor(actor)) {
+            return;
+        }
         if (auto* petFac = FormCache::GetSingleton().GetPlayerChildPetFaction();
             petFac && actor->IsInFaction(petFac)) {
             ReconcileCompanionFactions(actor, State::CompanionFactionPlan{});

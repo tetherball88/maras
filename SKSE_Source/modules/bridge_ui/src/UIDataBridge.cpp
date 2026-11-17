@@ -10,6 +10,7 @@
 #include "maras/bridge_ui/HouseholdBuffsJsonBuilder.h"
 #include "maras/bridge_ui/LocaleJsonBuilder.h"
 #include "maras/bridge_ui/ModalManager.h"
+#include "maras/bridge_ui/SanityEngineProbe.h"
 #include "maras/bridge_ui/UIManager.h"
 #include "maras/domain/lineage/TrainingCatalog.h"
 #include "maras/engine/ActorService.h"
@@ -437,6 +438,11 @@ namespace MARAS::Bridge::Ui {
             fn();
         }
 
+        [[nodiscard]] bool IsDashboardReadyAndOpen() noexcept {
+            const auto& ui = UIManager::GetSingleton();
+            return ui.IsDashboardOpen() && ui.IsDomReady();
+        }
+
     }  // namespace
 
     UIDataBridge& UIDataBridge::GetSingleton() {
@@ -505,6 +511,8 @@ namespace MARAS::Bridge::Ui {
                 try {
                     std::lock_guard papyrusLock(MARAS::GetPapyrusMutex());
                     UIManager::GetSingleton().OnUIReady();
+                    SendLocaleDataOnMainThread();
+                    SendSettingsDataOnMainThread();
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("[UIDataBridge] Exception for action 'uiReady': {}", e.what());
                 } catch (...) {
@@ -640,14 +648,39 @@ namespace MARAS::Bridge::Ui {
     // Outbound UI Pushes
     // =========================================================================
 
+    void UIDataBridge::RefreshDashboardOnOpen() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
+        DispatchBridgeMainThread("UIDataBridge::RefreshDashboardOnOpen", [this]() {
+            RefreshDashboardOnOpenOnMainThread();
+        });
+    }
+
+    void UIDataBridge::RefreshDashboardOnOpenOnMainThread() {
+        if (!IsDashboardReadyAndOpen()) {
+            return;
+        }
+        SendOverviewDataOnMainThread();
+        SendHouseholdBuffsOnMainThread();
+        SendMatchmakingSettingsOnMainThread();
+        const RE::FormID detailNpcId = lastRequestedDetailNpcID_.load(std::memory_order_relaxed);
+        if (detailNpcId != 0) {
+            SendNPCDetailOnMainThread(detailNpcId);
+        }
+    }
+
     void UIDataBridge::SendOverviewData() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendOverviewData", [this]() {
             SendOverviewDataOnMainThread();
         });
     }
 
     void UIDataBridge::SendOverviewDataOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         UIManager::GetSingleton().SendToUI("receiveMARASOverview", DumpJsonSafe(BuildOverviewJson()));
@@ -691,26 +724,32 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::SendHouseholdBuffs() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendHouseholdBuffs", [this]() {
             SendHouseholdBuffsOnMainThread();
         });
     }
 
     void UIDataBridge::SendHouseholdBuffsOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         UIManager::GetSingleton().SendToUI("receiveMARASBuffs", DumpJsonSafe(BuildHouseholdBuffsJson()));
     }
 
     void UIDataBridge::SendNPCList() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendNPCList", [this]() {
             SendNPCListOnMainThread();
         });
     }
 
     void UIDataBridge::SendNPCListOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         const auto view = MakeDashboardView();
@@ -724,13 +763,16 @@ namespace MARAS::Bridge::Ui {
             return;
         }
         lastRequestedDetailNpcID_.store(npcFormID, std::memory_order_relaxed);
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendNPCDetail", [this, npcFormID]() {
             SendNPCDetailOnMainThread(npcFormID);
         });
     }
 
     void UIDataBridge::SendNPCDetailOnMainThread(RE::FormID npcFormID) {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         const auto view = MakeDashboardView();
@@ -740,13 +782,16 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::SendMatchmakingData() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendMatchmakingData", [this]() {
             SendMatchmakingDataOnMainThread();
         });
     }
 
     void UIDataBridge::SendMatchmakingDataOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         SendNPCListOnMainThread();
@@ -754,13 +799,16 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::SendAllSkyrimNPCs() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendAllSkyrimNPCs", [this]() {
             SendAllSkyrimNPCsOnMainThread();
         });
     }
 
     void UIDataBridge::SendAllSkyrimNPCsOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         UIManager::GetSingleton().SendToUI(
@@ -841,13 +889,16 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::SendMatchmakingSettings() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::SendMatchmakingSettings", [this]() {
             SendMatchmakingSettingsOnMainThread();
         });
     }
 
     void UIDataBridge::SendMatchmakingSettingsOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         UIManager::GetSingleton().SendToUI(
@@ -860,13 +911,16 @@ namespace MARAS::Bridge::Ui {
     // =========================================================================
 
     void UIDataBridge::OnAffectionChanged(RE::FormID npcFormID, int newValue) {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::OnAffectionChanged", [this, npcFormID, newValue]() {
             OnAffectionChangedOnMainThread(npcFormID, newValue);
         });
     }
 
     void UIDataBridge::OnAffectionChangedOnMainThread(RE::FormID npcFormID, int newValue) {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         nlohmann::json data;
@@ -879,6 +933,9 @@ namespace MARAS::Bridge::Ui {
         RE::FormID actorA,
         RE::FormID actorB,
         MARAS::Foundation::RelationshipStatus newStatus) {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::OnStatusChanged", [this, actorA, actorB, newStatus]() {
             OnStatusChangedOnMainThread(actorA, actorB, newStatus);
         });
@@ -888,7 +945,7 @@ namespace MARAS::Bridge::Ui {
         RE::FormID actorA,
         RE::FormID actorB,
         MARAS::Foundation::RelationshipStatus newStatus) {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
@@ -926,13 +983,16 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::OnHierarchyChanged() {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::OnHierarchyChanged", [this]() {
             OnHierarchyChangedOnMainThread();
         });
     }
 
     void UIDataBridge::OnHierarchyChangedOnMainThread() {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         const auto worldSnap = MARAS::State::WorldStore::GetSingleton().Snapshot();
@@ -946,13 +1006,16 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::OnChildUpdated(const MARAS::State::ChildRecord& entry) {
+        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+            return;
+        }
         DispatchBridgeMainThread("UIDataBridge::OnChildUpdated", [this, entry]() {
             OnChildUpdatedOnMainThread(entry);
         });
     }
 
     void UIDataBridge::OnChildUpdatedOnMainThread(const MARAS::State::ChildRecord& entry) {
-        if (!UIManager::GetSingleton().IsDomReady()) {
+        if (!IsDashboardReadyAndOpen()) {
             return;
         }
         const auto view = MakeDashboardView();
@@ -2964,6 +3027,7 @@ namespace MARAS::Bridge::Ui {
             root["deceasedRegistry"] = lineage.DumpDeceasedJson(view);
             root["banterCoordinator"] = BuildBanterDumpJson(view);
             root["adultChildTravel"] = household.DumpTravelJson(view);
+            root["engineProbe"] = BuildSanityEngineProbeJson(view);
 
             const std::filesystem::path dumpsDir = "Data/SKSE/Plugins/MARAS/dumps";
             std::error_code ec;

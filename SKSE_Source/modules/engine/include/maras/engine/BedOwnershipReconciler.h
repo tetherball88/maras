@@ -45,6 +45,9 @@ namespace MARAS {
         // Re-applies all shared cells' public flags and bed ownership after loading a save game.
         void ReapplyAllSharedCellsOnLoad();
 
+        // Lazily indexes streamed beds and reconciles shared/unshared bed ownership when an interior cell loads.
+        void OnCellFullyLoaded(RE::FormID cellFormId);
+
     private:
         BedOwnershipReconciler() = default;
         ~BedOwnershipReconciler() = default;

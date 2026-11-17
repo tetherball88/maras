@@ -5,6 +5,7 @@
 #include "maras/domain/household/SpouseBuffRules.h"
 #include "maras/domain/relationships/GiftAndIntimacyRules.h"
 #include "maras/foundation/StrongIds.h"
+#include "maras/state/CoSaveCodec.h"
 
 #include <cstdint>
 #include <span>
@@ -26,9 +27,9 @@ namespace MARAS::Engine {
         virtual void BeginCoSaveLoad() {}
         virtual void FinalizeCoSaveLoad(
             bool loadedAny,
-            std::span<const Foundation::RefId> retiredSceneMarkers = {}) {
+            const State::CoSaveLoadReport& report) {
             (void)loadedAny;
-            (void)retiredSceneMarkers;
+            (void)report;
         }
         virtual void OnCoSaveRevert() {}
 

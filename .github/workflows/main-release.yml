@@ -24,6 +24,7 @@ jobs:
           mkdir -p out
           # use the tag from a push context
           TAG="${{ github.ref_name }}"
+          printf '%s\n' "${TAG}" > SKSE/Plugins/MARAS/version.txt
           # quote paths in case
           zip -r "out/MARAS_${TAG}.zip" \
             interface/ \

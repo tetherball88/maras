@@ -67,4 +67,42 @@ namespace MARAS::Domain::Household {
         return snap.household->IsCellSharedWithPlayer(cellId);
     }
 
+    LoadedCellBedReconcilePlan PlanLoadedCellBedReconciliation(
+        const State::WorldStateSnapshot& snap,
+        CellId cellId,
+        std::span<const RefId> loadedCellBedRefs) {
+        LoadedCellBedReconcilePlan plan{};
+        if (!snap.household || cellId.IsNull()) {
+            return plan;
+        }
+
+        const auto& hh = *snap.household;
+        if (const auto cellIt = hh.AllSharedCells().find(cellId);
+            cellIt != hh.AllSharedCells().end() &&
+            cellIt->second.sharedWithPlayer &&
+            !cellIt->second.sharingSpouses.empty()) {
+            plan.shouldEnsureCellPublic = true;
+            plan.shouldRecordOriginalPublic = !cellIt->second.originalPublicRecorded;
+            plan.sharingSpouses.assign(
+                cellIt->second.sharingSpouses.begin(),
+                cellIt->second.sharingSpouses.end());
+            return plan;
+        }
+
+        if (loadedCellBedRefs.empty() || hh.AllOriginalBedOwners().empty()) {
+            return plan;
+        }
+
+        const auto& savedOwners = hh.AllOriginalBedOwners();
+        for (const RefId bedRef : loadedCellBedRefs) {
+            if (bedRef.IsNull()) {
+                continue;
+            }
+            if (const auto ownerIt = savedOwners.find(bedRef); ownerIt != savedOwners.end()) {
+                plan.staleTrackedBedsToRestore.emplace_back(bedRef, ownerIt->second);
+            }
+        }
+        return plan;
+    }
+
 }  // namespace MARAS::Domain::Household

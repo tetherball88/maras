@@ -60,4 +60,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-
 # Verify real in-game S1-S4 dumps + MARAS.log and emit Markdown digest
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" -Scenario all -DumpsDir "<Path\To\Data\SKSE\Plugins\MARAS\dumps>" -LogPath "<Path\To\MARAS.log>" -ReportPath "sanity_digest.md"
 ```
-See [INGAME_SANITY_TEST_SUITE.md](../../../docs/modder/INGAME_SANITY_TEST_SUITE.md) for the console `bat` workflow (`TTM_SanitySuite.psc`).
+See [INGAME_SANITY_TEST_SUITE.md](../../../docs/modder/INGAME_SANITY_TEST_SUITE.md) for the direct `maras_sanity` (`msanity`) console workflow (`TTM_SanitySuite.psc`).

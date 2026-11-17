@@ -641,6 +641,14 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     std::vector<RE::Actor*> GetNPCsByStatus(RE::StaticFunctionTag*, std::string statusType) {
+        const bool anyStatus =
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "any") ||
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "all");
+        if (anyStatus) {
+            std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+            return ResolveActorsById(App::RelationshipUseCases::GetSingleton().GetAllRegisteredNPCs());
+        }
+
         const auto parsed = Foundation::StringToRelationshipStatus(statusType);
         if (parsed == Foundation::RelationshipStatus::Unknown) {
             MARAS_LOG_WARN("GetNPCsByStatus: unknown statusType '{}'", statusType);
@@ -662,6 +670,15 @@ namespace MARAS::PapyrusInterface {
     }
 
     std::vector<RE::Actor*> GetNPCsByStatusWith(RE::StaticFunctionTag*, RE::Actor* target, std::string statusType) {
+        const bool anyStatus =
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "any") ||
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "all");
+        if (anyStatus) {
+            std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+            const RE::FormID targetID = target ? target->GetFormID() : kPlayerFormID;
+            return ResolveActorsById(App::RelationshipUseCases::GetSingleton().GetAllPartners(targetID));
+        }
+
         const auto parsed = Foundation::StringToRelationshipStatus(statusType);
         if (parsed == Foundation::RelationshipStatus::Unknown) {
             MARAS_LOG_WARN("GetNPCsByStatusWith: unknown statusType '{}'", statusType);
@@ -676,6 +693,14 @@ namespace MARAS::PapyrusInterface {
     std::vector<RE::Actor*> GetRelationshipPartners(RE::StaticFunctionTag*, RE::Actor* npc, std::string statusType) {
         if (!npc) {
             return {};
+        }
+
+        const bool anyStatus =
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "any") ||
+            Foundation::StringUtils::CaseInsensitiveEquals(statusType, "all");
+        if (anyStatus) {
+            std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
+            return ResolveActorsById(App::RelationshipUseCases::GetSingleton().GetAllPartners(npc->GetFormID()));
         }
 
         const auto parsed = Foundation::StringToRelationshipStatus(statusType);

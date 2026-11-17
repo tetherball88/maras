@@ -148,7 +148,9 @@ namespace MARAS::App {
         // =========================================================================
 
         bool OnChildAddedToHousehold(RE::FormID childID, RE::FormID houseID = 0);
-        bool OnChildRemovedFromHousehold(RE::FormID childID);
+        bool OnChildRemovedFromHousehold(
+            RE::FormID childID,
+            const State::ChildFactionSnapshotRecord* fallbackSnapshot = nullptr);
         bool MoveChildToHouse(RE::FormID childID, RE::FormID houseID, bool moveActor = true);
         void ReconcileChildHouseholdOnLoad();
 

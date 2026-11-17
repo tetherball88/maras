@@ -20,7 +20,7 @@ In M.A.R.A.S, `TT_MARAS.esp`, vanilla, and Hearthfire factions are strictly **no
 | **Young Children (`Stage 0–3`)** | `ComputeChildFactionPlan` | Converges `PlayerChildFaction`, `BYOHRelationshipAdoptionChildOwnedFaction`, `BYOHRelationshipAdoptable` (rank `25` in household, rank `0` at Honorhall orphanage marker), `PlayerFaction`, and dual-parent marriage indicator rank (`2` if other spouse is male, `1` otherwise), plus saved crime faction restoration (`ClearChildHouseholdFactions` strips these when leaving custody). |
 | **Child Pets & Critters** | `ComputeCompanionFactionPlan` | Synchronizes `PlayerChildPetFaction` and `PlayerFaction` when assigned to a tracked living child. |
 
-Unregistered/removed actors reaching step 4 of `ReconcileLoadedActor` strip lingering companion and MARAS factions safely via `ClearUnknownActorMarasFactions`.
+Unregistered/removed actors reaching step 4 of `ReconcileLoadedActor` first check whether `ExtraFactionChanges` or any static `TT_MARAS.esp` base faction is present (`HasCandidateMarasFactionsOnUnknownActor`), skipping the 25-faction scrub completely on untouched creatures/NPCs while still stripping lingering companion and MARAS factions safely via `ClearUnknownActorMarasFactions` when present.
 
 ---
 
@@ -29,6 +29,7 @@ Unregistered/removed actors reaching step 4 of `ReconcileLoadedActor` strip ling
 `FactionReconciler::InstallHooks()` detours Skyrim's native `AddToFaction` (`RELOCATION_ID(36678, 37686)`) and `RemoveFromFaction` (`RELOCATION_ID(36680, 37688)`) functions at plugin startup:
 
 - **Instruction-Safe x64 Detour**: `InstallDetourHook` handles already-hooked targets (`E9` chaining) or decodes x64 prologue instruction boundaries (`DecodePrologueSize`) so instructions (including RIP-relative instructions) are never sliced; if unrecognized, it aborts hooking cleanly and logs an `ERROR`. Allocates a 14-byte absolute jump (`WriteAbsoluteJump`) bridge on SKSE's trampoline.
+- **Zero-Allocation Fast-Exit for Non-Marriage Factions**: When `a_faction->GetFormID() != PlayerMarriedFaction` (`0x000C6472`) and no external faction listeners are registered (`!HasListeners()`), both hooks jump straight to `_originalAddToFaction` / `_originalRemoveFromFaction` without copying `WorldStore::Snapshot()` or scheduling main-thread SKSE tasks on off-thread Papyrus/AI calls.
 - **Re-Entrancy Suppression (`InternalFactionScope`)**: Sets `thread_local int s_internalFactionDepth` while MARAS performs its own `AddToFaction`/`RemoveFromFaction` writes so external auto-promotion/demotion hooks are skipped while still dispatching `NotifyFactionAdded` / `NotifyFactionRemoved` callbacks to registered listeners (such as adoption tracking).
 - **Polygamy & Vanilla Marriage Intercept**: When an external mod or vanilla quest adds `PlayerMarriedFaction` (`0x000C6472`) to the Player while `enablePlayerPolygamy` is enabled, the hook blocks the addition so vanilla marriage quest conditions remain compatible with multiple spouses. External additions/removals on NPCs marshal via `AddCurrentEpochTask` under `GetPapyrusMutex()` into `OnExternalMarriageFactionAdded` (if `CanAcceptExternalMarriage` permits, otherwise reverted) or `OnExternalMarriageFactionRemoved`.
 

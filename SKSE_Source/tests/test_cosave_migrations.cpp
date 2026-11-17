@@ -3,6 +3,7 @@
 #include "maras/foundation/IRng.h"
 #include "maras/state/CoSaveCodec.h"
 #include "maras/state/CoSaveStream.h"
+#include "maras/state/MigrationReportFormatter.h"
 #include "maras/state/PerTableSnapshot.h"
 #include "maras/state/WorldState.h"
 
@@ -1908,6 +1909,310 @@ namespace MARAS::Tests {
         // 2. Round-trip both WITHOUT 'FRT1' and WITH 'FRT1'
         runRoundTrip(false);
         runRoundTrip(true);
+    }
+
+    MARAS_TEST(CoSaveMigrations, DeceasedPresumedFatherPreservedAfterSilentPartnerSecretClear) {
+        const ActorId camilla{ 0x00013488u };
+        const ActorId sven{ 0x00013491u };
+        const ActorId faendal{ 0x0001348Cu };
+        const ChildId infantId{ 0xFF700001u };
+
+        MockFormIdResolver resolver{};
+        resolver.names[camilla] = "Camilla Valerius";
+        resolver.names[sven] = "Sven";
+        resolver.names[faendal] = "Faendal";
+        resolver.baseIds[camilla] = BaseId{ 0x0001347Bu };
+        resolver.baseIds[sven] = BaseId{ 0x0001347Fu };
+        resolver.baseIds[faendal] = BaseId{ 0x00013480u };
+        resolver.races[faendal] = FormRawId{ 0x00013749u };
+
+        WorldState preSave{};
+        preSave.actors.Write().SetRegisteredAdult(camilla.AsRefId(), true);
+        preSave.actors.Write().SetRegisteredAdult(sven.AsRefId(), true);
+        preSave.actors.Write().SetRegisteredAdult(faendal.AsRefId(), true);
+        (void)preSave.TransitionRelationship(camilla, sven, RelationshipStatus::Married, 1.0f, camilla);
+        (void)preSave.RecordCheatingIncident(
+            camilla, sven, faendal, true, AffairType::Casual, AffairStatus::Ongoing, AffairStage::Physical, 5.0f);
+
+        ChildRecord infant{};
+        infant.childId = infantId;
+        infant.name = "SanityInfant";
+        infant.stage = ChildStage::Infant;
+        infant.isBiologicalChild = true;
+        infant.isAdopted = false;
+        infant.bioMother = camilla;
+        infant.bioFather = faendal;
+        infant.presumedFather = sven;
+        (void)infant.guardians.Assign(camilla, sven);
+        infant.conceptionTimestamp = 10.0f;
+        infant.birthTimestamp = 15.0f;
+        infant.paternitySecret.isSecret = true;
+        infant.paternitySecret.isSecretForPartner = true;
+        infant.paternitySecret.isSecretForBioFather = false;
+        infant.paternitySecret.discovered = false;
+        infant.paternitySecret.discoveredByBioFather = true;
+        infant.paternitySecret.discoveredByPartner = false;
+        infant.paternitySecret.hasPhenotypeMismatch = true;
+        infant.paternitySecret.bioFatherName = "Faendal";
+        infant.paternitySecret.bioFatherRaceId = FormRawId{ 0x00013749u };
+        preSave.lineage.Write().UpsertChild(infant);
+
+        // Sven (deceived guardian & presumed father) dies: partner secret clears silently,
+        // leaving isSecret == false && discovered == false while presumedFather stays Sven.
+        (void)preSave.RecordActorDeath(sven, 16.0f, false, ActorId{}, resolver);
+        resolver.deadOrInvalidActors.insert(sven);
+
+        const auto* preInfant = preSave.lineage->FindChild(infantId);
+        MARAS_REQUIRE(preInfant != nullptr);
+        MARAS_CHECK(!preInfant->paternitySecret.isSecret);
+        MARAS_CHECK(!preInfant->paternitySecret.discovered);
+        MARAS_CHECK(preInfant->paternitySecret.discoveredByBioFather);
+        MARAS_CHECK_EQ(preInfant->presumedFather, sven);
+        MARAS_CHECK_EQ(preInfant->guardians.SingleGuardian(), camilla);
+
+        InMemoryCoSaveWriter writer{};
+        MARAS_REQUIRE(SaveWorldState(preSave, writer));
+
+        WorldState postLoad{};
+        InMemoryCoSaveReader reader(writer.Records());
+        const CoSaveLoadReport report = LoadWorldState(postLoad, reader, resolver);
+        MARAS_REQUIRE(report.allChunksSucceeded);
+
+        const auto* postInfant = postLoad.lineage->FindChild(infantId);
+        MARAS_REQUIRE(postInfant != nullptr);
+        MARAS_CHECK_EQ(postInfant->presumedFather, sven);
+        MARAS_CHECK_EQ(postInfant->bioMother, camilla);
+        MARAS_CHECK_EQ(postInfant->bioFather, faendal);
+        MARAS_CHECK_EQ(postInfant->guardians.SingleGuardian(), camilla);
+        MARAS_CHECK_EQ(postInfant->paternitySecret.isSecret, preInfant->paternitySecret.isSecret);
+        MARAS_CHECK_EQ(postInfant->paternitySecret.discovered, preInfant->paternitySecret.discovered);
+        MARAS_CHECK_EQ(postInfant->paternitySecret.discoveredByBioFather, preInfant->paternitySecret.discoveredByBioFather);
+        MARAS_CHECK_EQ(postInfant->paternitySecret.isSecretForPartner, preInfant->paternitySecret.isSecretForPartner);
+        MARAS_CHECK(postLoad.deceased->IsDeceased(sven));
+
+        // Also verify an adopted biological orphan (isBiologicalChild == true && isAdopted == true)
+        // retains its birth-era presumedFather across SaveWorldState -> LoadWorldState.
+        const ActorId adoptGuardian{ 0x0001A69Au };
+        const ChildId adoptedBioOrphanId{ 0xFF700002u };
+        resolver.names[adoptGuardian] = "Ysolda";
+        resolver.baseIds[adoptGuardian] = BaseId{ 0x00013BA9u };
+
+        postLoad.actors.Write().SetRegisteredAdult(adoptGuardian.AsRefId(), true);
+        (void)postLoad.TransitionRelationship(ActorId::Player(), adoptGuardian, RelationshipStatus::Married, 20.0f, ActorId::Player());
+        (void)postLoad.RecordActorDeath(camilla, 21.0f, false, ActorId{}, resolver);
+        resolver.deadOrInvalidActors.insert(camilla);
+
+        ChildRecord adoptedBio{};
+        adoptedBio.childId = adoptedBioOrphanId;
+        adoptedBio.name = "AdoptedBioOrphan";
+        adoptedBio.stage = ChildStage::Child;
+        adoptedBio.isBiologicalChild = true;
+        adoptedBio.isAdopted = true;
+        adoptedBio.bioMother = camilla;
+        adoptedBio.bioFather = faendal;
+        adoptedBio.presumedFather = sven;
+        (void)adoptedBio.guardians.Assign(ActorId::Player(), adoptGuardian);
+        adoptedBio.paternitySecret.isSecret = true;
+        adoptedBio.paternitySecret.isSecretForBioFather = true;
+        postLoad.lineage.Write().UpsertChild(adoptedBio);
+
+        InMemoryCoSaveWriter writer2{};
+        MARAS_REQUIRE(SaveWorldState(postLoad, writer2));
+
+        WorldState postLoad2{};
+        InMemoryCoSaveReader reader2(writer2.Records());
+        const CoSaveLoadReport report2 = LoadWorldState(postLoad2, reader2, resolver);
+        MARAS_REQUIRE(report2.allChunksSucceeded);
+
+        const auto* reloadedAdoptedBio = postLoad2.lineage->FindChild(adoptedBioOrphanId);
+        MARAS_REQUIRE(reloadedAdoptedBio != nullptr);
+        MARAS_CHECK(reloadedAdoptedBio->isBiologicalChild);
+        MARAS_CHECK(reloadedAdoptedBio->isAdopted);
+        MARAS_CHECK_EQ(reloadedAdoptedBio->presumedFather, sven);
+    }
+
+    MARAS_TEST(CoSaveMigrations, SaveVersionMetadataVER1AndMigrationFailureReportDiagnostics) {
+        MockFormIdResolver resolver{};
+        WorldState src = BuildRichV7WorldState(resolver);
+
+        // 1. Default SaveWorldState omits 'VER1'; stamped SaveWorldState round-trips 'VER1' cleanly
+        {
+            InMemoryCoSaveWriter plainWriter{};
+            MARAS_REQUIRE(SaveWorldState(src, plainWriter));
+            WorldState plainLoaded{};
+            InMemoryCoSaveReader plainReader(plainWriter.Records());
+            const CoSaveLoadReport plainRep = LoadWorldState(plainLoaded, plainReader, resolver);
+            MARAS_REQUIRE(plainRep.allChunksSucceeded);
+            MARAS_CHECK(plainRep.savedModVersion.empty());
+            MARAS_CHECK(plainRep.cnfgPresent);
+            MARAS_CHECK(plainRep.cnfgHasVersionHeader);
+            MARAS_CHECK_EQ(plainRep.cnfgSubVersion, CoSaveConstants::kSettingsSubVersion);
+            MARAS_CHECK(DescribeSaveOriginVersion(plainRep).find("pre-version-stamp") != std::string::npos);
+
+            InMemoryCoSaveWriter stampedWriter{};
+            MARAS_REQUIRE(SaveWorldState(src, stampedWriter, "v2.6.0-beta"));
+            WorldState stampedLoaded{};
+            InMemoryCoSaveReader stampedReader(stampedWriter.Records());
+            const CoSaveLoadReport stampedRep = LoadWorldState(stampedLoaded, stampedReader, resolver);
+            MARAS_REQUIRE(stampedRep.allChunksSucceeded);
+            MARAS_CHECK_EQ(stampedRep.savedModVersion, "v2.6.0-beta");
+            MARAS_CHECK(DescribeSaveOriginVersion(stampedRep).find("v2.6.0-beta") != std::string::npos);
+
+            // Corrupting or truncating 'VER1' rolls back 'CNFG' atomically without touching prior settings
+            std::vector<CoSaveRecordChunk> truncatedChunks = stampedWriter.Records();
+            for (auto& c : truncatedChunks) {
+                if (c.type == CoSaveConstants::kChunkCNFG) {
+                    MARAS_REQUIRE(c.payload.size() > 3u);
+                    c.payload.resize(c.payload.size() - 2u);
+                }
+            }
+            WorldState rollbackTarget{};
+            rollbackTarget.settings.Write().affectionDecayMultiplier = 4.5f;
+            InMemoryCoSaveReader truncReader(truncatedChunks);
+            const CoSaveLoadReport truncRep = LoadWorldState(rollbackTarget, truncReader, resolver);
+            MARAS_CHECK(!truncRep.allChunksSucceeded);
+            MARAS_CHECK_EQ(truncRep.failedChunkCount, 1u);
+            MARAS_CHECK_EQ(rollbackTarget.settings->affectionDecayMultiplier, 4.5f);
+        }
+
+        // 2. Legacy <= v2.5.1.alpha detection + FormID remap/unresolved tracking + failure report formatting
+        {
+            InMemoryCoSaveWriter legacyWriter{};
+            // Legacy v5 'AFCT' with one remapped NPC and one uninstalled-mod unresolved NPC
+            MARAS_REQUIRE(legacyWriter.OpenRecord(CoSaveConstants::kChunkAFCT, 5u));
+            MARAS_REQUIRE(legacyWriter.WritePod(static_cast<std::uint32_t>(2u)));
+            MARAS_REQUIRE(legacyWriter.WritePod(static_cast<std::uint32_t>(0x02001000u)));
+            MARAS_REQUIRE(legacyWriter.WritePod(static_cast<std::int32_t>(77)));
+            MARAS_REQUIRE(legacyWriter.WritePod(static_cast<std::uint32_t>(0x0900DEADu)));
+            MARAS_REQUIRE(legacyWriter.WritePod(static_cast<std::int32_t>(55)));
+
+            // Truncated v5 'PLCH' chunk failing mid-stream
+            MARAS_REQUIRE(legacyWriter.OpenRecord(CoSaveConstants::kChunkPLCH, 5u));
+            MARAS_REQUIRE(legacyWriter.WritePod(CoSaveConstants::kMagicNumber));
+            MARAS_REQUIRE(legacyWriter.WritePod(static_cast<std::uint32_t>(3u)));
+
+            class PartialResolver final : public IFormIdResolver {
+            public:
+                bool ResolveFormId(std::uint32_t oldRawId, std::uint32_t& outNewRawId) const noexcept override {
+                    if (oldRawId == 0x02001000u) {
+                        outNewRawId = 0x05001000u;
+                        return true;
+                    }
+                    outNewRawId = 0;
+                    return false;
+                }
+            };
+
+            PartialResolver partialResolver{};
+            WorldState partialLoaded{};
+            InMemoryCoSaveReader legacyReader(legacyWriter.Records());
+            const CoSaveLoadReport legacyRep = LoadWorldState(partialLoaded, legacyReader, partialResolver);
+
+            MARAS_CHECK(!legacyRep.allChunksSucceeded);
+            MARAS_CHECK_EQ(legacyRep.loadedChunkCount, 1u);
+            MARAS_CHECK_EQ(legacyRep.failedChunkCount, 1u);
+            MARAS_CHECK_EQ(legacyRep.upgradedChunkCount, 2u);
+            MARAS_CHECK_EQ(legacyRep.remappedFormIdCount, 1u);
+            MARAS_CHECK_EQ(legacyRep.unresolvedFormIdCount, 1u);
+            MARAS_CHECK(DescribeSaveOriginVersion(legacyRep).find("<= v2.5.1.alpha") != std::string::npos);
+
+            const std::vector<ExternalMigrationIssue> extIssues{
+                ExternalMigrationIssue{
+                    .source = "FMR Child Migration",
+                    .detail = "Failed to register legacy child 'Lucia' (returned ID 0)",
+                },
+            };
+            const std::string modalSummary = BuildFailureModalIssuesSummary(legacyRep, extIssues);
+            MARAS_CHECK(modalSummary.find("'PLCH'") != std::string::npos);
+            MARAS_CHECK(modalSummary.find("FMR Child Migration") != std::string::npos);
+
+            const std::string fullReport = BuildMigrationFailureReportText(
+                partialLoaded,
+                legacyRep,
+                "v2.5.2-dev",
+                extIssues,
+                "2026-11-17 19:45:00",
+                false);
+            MARAS_CHECK(fullReport.find("M.A.R.A.S — SAVE DATA MIGRATION FAILURE REPORT") != std::string::npos);
+            MARAS_CHECK(fullReport.find("<= v2.5.1.alpha") != std::string::npos);
+            MARAS_CHECK(fullReport.find("[FAIL] 'PLCH'") != std::string::npos);
+            MARAS_CHECK(fullReport.find("Load-Order Remapped FormIDs      : 1") != std::string::npos);
+            MARAS_CHECK(fullReport.find("Unresolved / Missing Mod FormIDs : 1") != std::string::npos);
+            MARAS_CHECK(fullReport.find("FMR Child Migration") != std::string::npos);
+        }
+
+        // 3. Brand-new save report origin classification
+        {
+            const CoSaveLoadReport freshRep{};
+            MARAS_CHECK_EQ(DescribeSaveOriginVersion(freshRep), "New Game / No Prior MARAS Co-Save");
+        }
+    }
+
+    MARAS_TEST(CoSaveMigrations, PreV2_V3_LoggingServiceCNFGAndAffectionDecayMigration) {
+        const ActorId ysolda{ 0x0001A69Au };
+        MockFormIdResolver resolver{};
+        resolver.baseIds[ysolda] = BaseId{ 0x00013BA9u };
+
+        InMemoryCoSaveWriter v3Writer{};
+        // v3 'AFCT': permanentAffection (1) + lastAffectionDay (1) + trailing float decayMultiplier_ = 1.5f
+        MARAS_REQUIRE(v3Writer.OpenRecord(CoSaveConstants::kChunkAFCT, 3u));
+        MARAS_REQUIRE(v3Writer.WritePod(static_cast<std::uint32_t>(1u)));
+        MARAS_REQUIRE(v3Writer.WritePod(ysolda.raw()));
+        MARAS_REQUIRE(v3Writer.WritePod(static_cast<std::int32_t>(88)));
+        MARAS_REQUIRE(v3Writer.WritePod(static_cast<std::uint32_t>(1u)));
+        MARAS_REQUIRE(v3Writer.WritePod(ysolda.raw()));
+        MARAS_REQUIRE(v3Writer.WritePod(12.25f));
+        MARAS_REQUIRE(v3Writer.WritePod(1.5f)); // legacy v1-v3 AffectionService::decayMultiplier_
+
+        // v3 'CNFG': single 4-byte int32 m_logLevel = 2 written by LoggingService::Save
+        MARAS_REQUIRE(v3Writer.OpenRecord(CoSaveConstants::kChunkCNFG, 3u));
+        MARAS_REQUIRE(v3Writer.WritePod(static_cast<std::int32_t>(2)));
+
+        // 1. Canonical order (AFCT -> CNFG): consumes 100% of bytes on both chunks and preserves decayMultiplier_ = 1.5f
+        {
+            WorldState state{};
+            state.actors.Write().SetRegisteredAdult(ysolda.AsRefId(), true);
+            InMemoryCoSaveReader reader(v3Writer.Records());
+            const CoSaveLoadReport rep = LoadWorldState(state, reader, resolver);
+            MARAS_REQUIRE(rep.allChunksSucceeded);
+            MARAS_CHECK_EQ(rep.loadedChunkCount, 2u);
+            MARAS_CHECK_EQ(rep.failedChunkCount, 0u);
+            MARAS_CHECK(rep.cnfgPresent);
+            MARAS_CHECK(!rep.cnfgHasVersionHeader);
+            MARAS_CHECK_EQ(state.settings->logLevel, 2);
+            MARAS_CHECK_EQ(state.settings->affectionDecayMultiplier, 1.5f);
+            MARAS_CHECK_EQ(state.affection->GetPermanent(ysolda), 88);
+            for (const auto& ch : rep.chunks) {
+                MARAS_CHECK_EQ(ch.bytesRead, ch.byteLength);
+            }
+        }
+
+        // 2. Reversed order (CNFG -> AFCT): produces identical settings
+        {
+            auto reversed = v3Writer.Records();
+            std::reverse(reversed.begin(), reversed.end());
+            WorldState state{};
+            state.actors.Write().SetRegisteredAdult(ysolda.AsRefId(), true);
+            InMemoryCoSaveReader reader(reversed);
+            const CoSaveLoadReport rep = LoadWorldState(state, reader, resolver);
+            MARAS_REQUIRE(rep.allChunksSucceeded);
+            MARAS_CHECK_EQ(state.settings->logLevel, 2);
+            MARAS_CHECK_EQ(state.settings->affectionDecayMultiplier, 1.5f);
+        }
+
+        // 3. Out-of-range or truncated v3 'CNFG' rolls back cleanly
+        {
+            InMemoryCoSaveWriter badWriter{};
+            MARAS_REQUIRE(badWriter.OpenRecord(CoSaveConstants::kChunkCNFG, 3u));
+            MARAS_REQUIRE(badWriter.WritePod(static_cast<std::int32_t>(99))); // invalid logLevel > 5
+            WorldState state{};
+            state.settings.Write().logLevel = 1;
+            InMemoryCoSaveReader badReader(badWriter.Records());
+            const CoSaveLoadReport badRep = LoadWorldState(state, badReader, resolver);
+            MARAS_CHECK(!badRep.allChunksSucceeded);
+            MARAS_CHECK_EQ(badRep.failedChunkCount, 1u);
+            MARAS_CHECK_EQ(state.settings->logLevel, 1);
+        }
     }
 
 }  // namespace MARAS::Tests

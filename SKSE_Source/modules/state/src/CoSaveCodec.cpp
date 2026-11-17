@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -24,9 +25,50 @@ namespace MARAS::State {
         constexpr std::uint32_t kMaxSharedCells = 10000u;
         constexpr std::uint32_t kMaxChildStringLen = 512u;
         constexpr std::uint32_t kMaxDeceasedStringLen = 4096u;
+        constexpr std::uint32_t kMaxVersionStringLen = 64u;
         constexpr std::uint32_t kMaxTypesPerActor = 256u;
         constexpr float kMinAdultChildStayDays = 2.0f;
         constexpr float kMaxAdultChildStayDays = 4.0f;
+
+        class TrackingFormIdResolver final : public IFormIdResolver {
+        public:
+            explicit TrackingFormIdResolver(const IFormIdResolver& inner) noexcept
+                : inner_(inner) {}
+
+            [[nodiscard]] bool ResolveFormId(std::uint32_t oldRawId, std::uint32_t& outNewRawId) const noexcept override {
+                if (oldRawId == 0) {
+                    outNewRawId = 0;
+                    return false;
+                }
+                const bool ok = inner_.ResolveFormId(oldRawId, outNewRawId);
+                if (ok && outNewRawId != 0) {
+                    ++resolvedCount_;
+                    if (outNewRawId != oldRawId) {
+                        ++remappedCount_;
+                    }
+                } else {
+                    ++unresolvedCount_;
+                }
+                return ok;
+            }
+
+            [[nodiscard]] ActorSex GetSex(ActorId actor) const noexcept override { return inner_.GetSex(actor); }
+            [[nodiscard]] bool IsAliveAndValid(ActorId actor) const noexcept override { return inner_.IsAliveAndValid(actor); }
+            [[nodiscard]] bool IsDynamicActorPresent(RefId refId) const noexcept override { return inner_.IsDynamicActorPresent(refId); }
+            [[nodiscard]] std::string GetActorName(ActorId actor) const override { return inner_.GetActorName(actor); }
+            [[nodiscard]] FormRawId GetActorRaceId(ActorId actor) const noexcept override { return inner_.GetActorRaceId(actor); }
+            [[nodiscard]] BaseId GetActorBaseId(ActorId actor) const noexcept override { return inner_.GetActorBaseId(actor); }
+
+            [[nodiscard]] std::uint32_t ResolvedCount() const noexcept { return resolvedCount_; }
+            [[nodiscard]] std::uint32_t RemappedCount() const noexcept { return remappedCount_; }
+            [[nodiscard]] std::uint32_t UnresolvedCount() const noexcept { return unresolvedCount_; }
+
+        private:
+            const IFormIdResolver& inner_;
+            mutable std::uint32_t resolvedCount_{ 0 };
+            mutable std::uint32_t remappedCount_{ 0 };
+            mutable std::uint32_t unresolvedCount_{ 0 };
+        };
 
         class BoundedChunkReader {
         public:
@@ -1187,7 +1229,10 @@ namespace MARAS::State {
             return true;
         }
 
-        bool SaveChunkCNFG(const WorldState& state, ICoSaveWriter& writer) {
+        bool SaveChunkCNFG(
+            const WorldState& state,
+            ICoSaveWriter& writer,
+            std::string_view savedModVersion) {
             if (!writer.OpenRecord(CoSaveConstants::kChunkCNFG, CoSaveConstants::kDataVersion)) {
                 return false;
             }
@@ -1215,7 +1260,18 @@ namespace MARAS::State {
                     ok = writer.WritePod(field);
                 }
             });
-            return ok;
+            if (!ok) {
+                return false;
+            }
+            if (!savedModVersion.empty()) {
+                const std::string_view bounded =
+                    savedModVersion.substr(0, std::min<std::size_t>(savedModVersion.size(), kMaxVersionStringLen));
+                if (!writer.WritePod(CoSaveConstants::kExtSaveMetadataVER1) ||
+                    !WriteLengthPrefixedString(writer, bounded)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         // =====================================================================
@@ -1226,7 +1282,9 @@ namespace MARAS::State {
             WorldState& state,
             BoundedChunkReader& chunk,
             std::uint32_t version,
-            const IFormIdResolver& resolver) {
+            const IFormIdResolver& resolver,
+            std::uint32_t& outInferredPresumedFathers) {
+            outInferredPresumedFathers = 0;
             std::uint32_t magic = 0;
             if (!chunk.ReadValue(magic) || magic != CoSaveConstants::kMagicNumber) {
                 Foundation::LogError("[CoSaveCodec] NPCR: Invalid magic header 0x{:08X}", magic);
@@ -1237,6 +1295,7 @@ namespace MARAS::State {
             RelationshipEdgeTable stagedEdges{};
             AffairLedger stagedAffairs{};
             LineageTable stagedLineage{};
+            std::uint32_t stagedInferredPresumed = 0;
 
             if (version < 4) {
                 // Legacy v1–v3 format migration
@@ -1785,12 +1844,12 @@ namespace MARAS::State {
                         (void)ResolveActorOrSpecialRaw(resolver, oldPresumedFather, newPresumed, true, false, false, true);
 
                         if (newPresumed != 0 &&
-                            ((!isSec && !disc) || newPresumed == newBioM ||
+                            ((!isBioChild && newBioM == 0) || newPresumed == newBioM ||
                              (newBioF != 0 && newPresumed == newBioF))) {
                             newPresumed = 0;
                         }
 
-                        if (!hasPaternityBioFatherMeta && (isSec || disc) &&
+                        if (!hasPaternityBioFatherMeta && (isSec || disc || byPartner || byBio) &&
                             newBioF != 0 && newBioF != Foundation::kUnknownFatherRawId) {
                             if (bioFatherName.empty()) {
                                 bioFatherName = resolver.GetActorName(ActorId{ newBioF });
@@ -1851,7 +1910,10 @@ namespace MARAS::State {
                     for (auto& [cId, entry] : stagedLineage.MutableChildren()) {
                         (void)cId;
                         if (entry.presumedFather.IsNull() &&
-                            (entry.paternitySecret.isSecret || entry.paternitySecret.discovered) &&
+                            (entry.paternitySecret.isSecret ||
+                             entry.paternitySecret.discovered ||
+                             entry.paternitySecret.discoveredByPartner ||
+                             entry.paternitySecret.discoveredByBioFather) &&
                             !entry.bioMother.IsNull()) {
                             ActorId candidate{};
                             if (entry.guardians.slotA == entry.bioMother && !entry.guardians.slotB.IsNull()) {
@@ -1863,6 +1925,7 @@ namespace MARAS::State {
                             }
                             if (!candidate.IsNull() && candidate != entry.bioFather && candidate != entry.bioMother) {
                                 entry.presumedFather = candidate;
+                                ++stagedInferredPresumed;
                             }
                         }
                     }
@@ -2185,6 +2248,7 @@ namespace MARAS::State {
                 return false;
             }
 
+            outInferredPresumedFathers = stagedInferredPresumed;
             state.actors.Reset(std::move(stagedActors));
             state.relationships.Reset(std::move(stagedEdges));
             state.affairs.Reset(std::move(stagedAffairs));
@@ -2267,6 +2331,18 @@ namespace MARAS::State {
                 }
             }
 
+            // v1–v3 legacy AffectionService::Save appended float decayMultiplier_ at the end of 'AFCT'
+            float migratedV3DecayMultiplier = -1.0f;
+            if (version < 4u && chunk.HasRemaining(sizeof(float))) {
+                float rawDecay = 1.0f;
+                if (!chunk.ReadValue(rawDecay)) {
+                    return false;
+                }
+                if (!std::isnan(rawDecay) && rawDecay >= 0.0f) {
+                    migratedV3DecayMultiplier = rawDecay;
+                }
+            }
+
             // v7+ daily accumulation block
             if (version >= 7 && chunk.HasRemaining(sizeof(std::uint32_t))) {
                 std::uint32_t dailyActorCount = 0;
@@ -2296,6 +2372,9 @@ namespace MARAS::State {
                 }
             }
 
+            if (migratedV3DecayMultiplier >= 0.0f) {
+                state.settings.Write().affectionDecayMultiplier = migratedV3DecayMultiplier;
+            }
             state.affection.Reset(std::move(staged));
             return true;
         }
@@ -3182,7 +3261,29 @@ namespace MARAS::State {
             return true;
         }
 
-        bool LoadChunkCNFG(WorldState& state, BoundedChunkReader& chunk) {
+        bool LoadChunkCNFG(
+            WorldState& state,
+            BoundedChunkReader& chunk,
+            std::uint32_t version,
+            CoSaveLoadReport& report) {
+            // Pre-v2 (v1–v3, <= v0.11.1): 'CNFG' was written by LoggingService::Save as a single 4-byte int32 logLevel.
+            if (version < 4u) {
+                std::int32_t storedLogLevel = 2;
+                if (!chunk.ReadValue(storedLogLevel) ||
+                    storedLogLevel < 0 || storedLogLevel > 5 ||
+                    chunk.HasRemaining(1u)) {
+                    return false;
+                }
+                SettingsData staged = state.settings.Read();
+                staged.logLevel = storedLogLevel;
+                report.cnfgPresent = true;
+                report.cnfgHasVersionHeader = false;
+                report.cnfgSubVersion = 0;
+                report.savedModVersion.clear();
+                state.settings.Reset(std::move(staged));
+                return true;
+            }
+
             std::uint8_t firstByte = 0;
             if (!chunk.ReadValue(firstByte)) {
                 return false;
@@ -3310,6 +3411,20 @@ namespace MARAS::State {
             if (requiredReadFailed) {
                 return false;
             }
+
+            std::string stagedModVersion{};
+            if (!streamEnded && chunk.HasRemaining(1u)) {
+                std::uint32_t extTag = 0;
+                if (!chunk.ReadValue(extTag) ||
+                    extTag != CoSaveConstants::kExtSaveMetadataVER1 ||
+                    !chunk.ReadLengthPrefixedString(stagedModVersion, kMaxVersionStringLen)) {
+                    return false;
+                }
+            }
+            if (chunk.HasRemaining(1u)) {
+                return false;
+            }
+
             if (subVersion < 3u) {
                 staged.childTrainingRequireFaction = true;
             }
@@ -3317,6 +3432,10 @@ namespace MARAS::State {
                 staged.logLevel = staged.defaultLogLevel;
             }
 
+            report.cnfgPresent = true;
+            report.cnfgHasVersionHeader = hasVersionHeader;
+            report.cnfgSubVersion = subVersion;
+            report.savedModVersion = std::move(stagedModVersion);
             state.settings.Reset(std::move(staged));
             return true;
         }
@@ -3327,7 +3446,10 @@ namespace MARAS::State {
     // Public Codec Entry Points
     // =========================================================================
 
-    bool SaveWorldState(const WorldState& state, ICoSaveWriter& writer) {
+    bool SaveWorldState(
+        const WorldState& state,
+        ICoSaveWriter& writer,
+        std::string_view savedModVersion) {
         return SaveChunkNPCR(state, writer) &&
                SaveChunkSPHR(state, writer) &&
                SaveChunkAFCT(state, writer) &&
@@ -3339,13 +3461,14 @@ namespace MARAS::State {
                SaveChunkDCSD(state, writer) &&
                SaveChunkBNTR(state, writer) &&
                SaveChunkACTR(state, writer) &&
-               SaveChunkCNFG(state, writer);
+               SaveChunkCNFG(state, writer, savedModVersion);
     }
 
     WorldMutationResult FinalizeWorldStateAfterLoad(
         WorldState& state,
         const IFormIdResolver& resolver,
-        Foundation::IRng* optionalRng) {
+        Foundation::IRng* optionalRng,
+        CoSaveNormalizationStats* outStats) {
         Foundation::DeterministicRng fallbackRng{};
         Foundation::IRng& rng = optionalRng ? *optionalRng : fallbackRng;
 
@@ -3395,6 +3518,10 @@ namespace MARAS::State {
             }
             for (const ActorId dynAdult : orphanedAdults) {
                 result.Merge(state.UnregisterActor(dynAdult));
+            }
+            if (outStats) {
+                outStats->prunedOrphanedDynamicChildren += static_cast<std::uint32_t>(orphanedChildren.size());
+                outStats->prunedOrphanedDynamicAdults += static_cast<std::uint32_t>(orphanedAdults.size());
             }
         }
 
@@ -3451,6 +3578,10 @@ namespace MARAS::State {
             }
             for (const ActorId deadG : deadGuardians) {
                 result.Merge(state.EvaluateCustodyOnDeath(deadG, resolver));
+            }
+            if (outStats) {
+                outStats->reconciledDeadAdults += static_cast<std::uint32_t>(deadAdults.size());
+                outStats->reconciledDeadChildren += static_cast<std::uint32_t>(deadChildren.size());
             }
         }
 
@@ -3525,6 +3656,9 @@ namespace MARAS::State {
             for (const std::uint32_t tid : tenantsToEvict) {
                 state.household.Write().EvictTenant(tid);
                 result.changed = true;
+            }
+            if (outStats) {
+                outStats->evictedStaleTenants += static_cast<std::uint32_t>(tenantsToEvict.size());
             }
             for (const std::uint32_t tid : youngChildTenantsToPinHome) {
                 state.household.Write().SetTenantStayAtHome(tid, true);
@@ -3801,6 +3935,7 @@ namespace MARAS::State {
         const IFormIdResolver& resolver,
         Foundation::IRng* optionalRng) {
         CoSaveLoadReport report{};
+        TrackingFormIdResolver trackedResolver(resolver);
 
         std::uint32_t type = 0;
         std::uint32_t version = 0;
@@ -3809,55 +3944,68 @@ namespace MARAS::State {
         // Phase 1: Atomic per-chunk deserialization (order-independent)
         while (reader.NextRecordInfo(type, version, length)) {
             if (version < 1u || version > CoSaveConstants::kDataVersion) {
+                const std::string detail = std::format(
+                    "Unsupported chunk version {} (expected 1..{})",
+                    version,
+                    CoSaveConstants::kDataVersion);
                 Foundation::LogError(
-                    "[CoSaveCodec] Unsupported record version {} for chunk 0x{:08X} (expected 1-{})",
-                    version, type, CoSaveConstants::kDataVersion);
+                    "[CoSaveCodec] Unsupported record version {} for chunk '{}' (0x{:08X}, expected 1-{})",
+                    version, FourCCToString(type), type, CoSaveConstants::kDataVersion);
                 report.allChunksSucceeded = false;
                 ++report.failedChunkCount;
                 report.failedChunkTypes.push_back(type);
+                report.chunks.push_back(CoSaveChunkDiagnostic{
+                    .type = type,
+                    .version = version,
+                    .byteLength = length,
+                    .bytesRead = 0,
+                    .succeeded = false,
+                    .detail = detail,
+                });
                 continue;
             }
 
             BoundedChunkReader chunk(reader, length);
             bool ok = false;
             bool recognized = true;
+            std::uint32_t inferredPresumed = 0;
 
             switch (type) {
                 case CoSaveConstants::kChunkNPCR:
-                    ok = LoadChunkNPCR(state, chunk, version, resolver);
+                    ok = LoadChunkNPCR(state, chunk, version, trackedResolver, inferredPresumed);
                     break;
                 case CoSaveConstants::kChunkSPHR:
-                    ok = LoadChunkSPHR(state, chunk, resolver);
+                    ok = LoadChunkSPHR(state, chunk, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkAFCT:
-                    ok = LoadChunkAFCT(state, chunk, version, resolver);
+                    ok = LoadChunkAFCT(state, chunk, version, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkPHOU:
-                    ok = LoadChunkPHOU(state, chunk, version, resolver);
+                    ok = LoadChunkPHOU(state, chunk, version, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkSPAS:
-                    ok = LoadChunkSPAS(state, chunk, version, resolver);
+                    ok = LoadChunkSPAS(state, chunk, version, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkPLCH:
-                    ok = LoadChunkPLCH(state, chunk, resolver);
+                    ok = LoadChunkPLCH(state, chunk, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkCFSN:
-                    ok = LoadChunkCFSN(state, chunk, resolver);
+                    ok = LoadChunkCFSN(state, chunk, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkMKMK:
-                    ok = LoadChunkMKMK(state, chunk, resolver);
+                    ok = LoadChunkMKMK(state, chunk, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkDCSD:
-                    ok = LoadChunkDCSD(state, chunk, version, resolver);
+                    ok = LoadChunkDCSD(state, chunk, version, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkBNTR:
-                    ok = LoadChunkBNTR(state, chunk, version, resolver);
+                    ok = LoadChunkBNTR(state, chunk, version, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkACTR:
-                    ok = LoadChunkACTR(state, chunk, resolver);
+                    ok = LoadChunkACTR(state, chunk, trackedResolver);
                     break;
                 case CoSaveConstants::kChunkCNFG:
-                    ok = LoadChunkCNFG(state, chunk);
+                    ok = LoadChunkCNFG(state, chunk, version, report);
                     break;
                 default:
                     recognized = false;
@@ -3869,23 +4017,76 @@ namespace MARAS::State {
                 continue;
             }
 
+            if (report.minChunkVersion == 0 || version < report.minChunkVersion) {
+                report.minChunkVersion = version;
+            }
+            if (version > report.maxChunkVersion) {
+                report.maxChunkVersion = version;
+            }
+            if (version < CoSaveConstants::kDataVersion) {
+                ++report.upgradedChunkCount;
+            }
+
             if (ok) {
                 ++report.loadedChunkCount;
+                report.normalization.inferredLegacyPresumedFathers += inferredPresumed;
+                std::string detail = (version < CoSaveConstants::kDataVersion)
+                                         ? std::format("Migrated v{} -> v{}", version, CoSaveConstants::kDataVersion)
+                                         : std::string("OK");
+                if (type == CoSaveConstants::kChunkCNFG) {
+                    if (version < 4u) {
+                        detail = std::format("Migrated pre-v2 LoggingService CNFG (v{}) -> sub-v{}",
+                                             version,
+                                             CoSaveConstants::kSettingsSubVersion);
+                    } else if (!report.cnfgHasVersionHeader) {
+                        detail = std::format("Migrated headerless legacy CNFG -> sub-v{}", CoSaveConstants::kSettingsSubVersion);
+                    } else if (report.cnfgSubVersion < CoSaveConstants::kSettingsSubVersion) {
+                        detail = std::format("Migrated CNFG sub-v{} -> sub-v{}",
+                                             report.cnfgSubVersion,
+                                             CoSaveConstants::kSettingsSubVersion);
+                    }
+                }
+                report.chunks.push_back(CoSaveChunkDiagnostic{
+                    .type = type,
+                    .version = version,
+                    .byteLength = length,
+                    .bytesRead = chunk.BytesRead(),
+                    .succeeded = true,
+                    .detail = std::move(detail),
+                });
             } else {
                 report.allChunksSucceeded = false;
                 ++report.failedChunkCount;
                 report.failedChunkTypes.push_back(type);
+                const std::string detail = std::format(
+                    "Decode failed at byte {} of {} (chunk v{}) — rolled back cleanly",
+                    chunk.BytesRead(),
+                    length,
+                    version);
+                report.chunks.push_back(CoSaveChunkDiagnostic{
+                    .type = type,
+                    .version = version,
+                    .byteLength = length,
+                    .bytesRead = chunk.BytesRead(),
+                    .succeeded = false,
+                    .detail = detail,
+                });
                 Foundation::LogError(
-                    "[CoSaveCodec] Failed to decode chunk 0x{:08X} (version {}, length {}) — rolled back chunk cleanly",
-                    type, version, length);
+                    "[CoSaveCodec] Failed to decode chunk '{}' (0x{:08X}, version {}, byte {}/{}) — rolled back chunk cleanly",
+                    FourCCToString(type), type, version, chunk.BytesRead(), length);
             }
         }
 
         // Phase 2: Post-chunk cross-table normalization
         if (report.loadedChunkCount > 0) {
-            const WorldMutationResult normResult = FinalizeWorldStateAfterLoad(state, resolver, optionalRng);
+            const WorldMutationResult normResult =
+                FinalizeWorldStateAfterLoad(state, trackedResolver, optionalRng, &report.normalization);
             report.retiredSceneMarkers = normResult.retiredSceneMarkers;
         }
+
+        report.resolvedFormIdCount = trackedResolver.ResolvedCount();
+        report.remappedFormIdCount = trackedResolver.RemappedCount();
+        report.unresolvedFormIdCount = trackedResolver.UnresolvedCount();
 
         return report;
     }

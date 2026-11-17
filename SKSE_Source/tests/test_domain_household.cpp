@@ -1104,4 +1104,90 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainHousehold, ExpireChildOrdersSkipsCowCloneWhenUnexpiredAndClearsExpired) {
+        WorldState ws{};
+        const ChildId childA{ 0x0003E101u };
+        const ChildId childB{ 0x0003E102u };
+
+        ChildHouseholdRecord stA{};
+        stA.childId = childA;
+        stA.currentOrder = 2.0f;
+        stA.orderExpiryGameDay = 15.0f;
+        ws.household.Write().UpsertChildState(stA);
+
+        ChildHouseholdRecord stB{};
+        stB.childId = childB;
+        stB.currentOrder = 1.0f;
+        stB.orderExpiryGameDay = -1.0f;
+        ws.household.Write().UpsertChildState(stB);
+
+        // Freeze HouseholdTable via Snapshot() so any accidental .Write() would detach to a new pointer.
+        const auto snapBefore = ws.Snapshot();
+        const auto* ptrBefore = snapBefore.household.get();
+        MARAS_CHECK(!HasExpiredChildOrders(*snapBefore.household, 14.99f));
+
+        const auto noneExpired = ApplyExpireChildOrders(ws, 14.99f);
+        MARAS_CHECK(noneExpired.empty());
+        const auto snapMid = ws.Snapshot();
+        MARAS_CHECK_EQ(snapMid.household.get(), ptrBefore);
+
+        // Once game day reaches 15.0, childA expires while childB remains untouched.
+        MARAS_CHECK(HasExpiredChildOrders(*snapMid.household, 15.0f));
+        const auto expired = ApplyExpireChildOrders(ws, 15.0f);
+        MARAS_REQUIRE_EQ(expired.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(expired[0], childA);
+
+        const auto snapAfter = ws.Snapshot();
+        MARAS_CHECK(snapAfter.household.get() != ptrBefore);
+        MARAS_REQUIRE(snapAfter.household->FindChildState(childA) != nullptr);
+        MARAS_CHECK_EQ(snapAfter.household->FindChildState(childA)->currentOrder, 0.0f);
+        MARAS_CHECK_EQ(snapAfter.household->FindChildState(childA)->orderExpiryGameDay, -1.0f);
+        MARAS_REQUIRE(snapAfter.household->FindChildState(childB) != nullptr);
+        MARAS_CHECK_EQ(snapAfter.household->FindChildState(childB)->currentOrder, 1.0f);
+    }
+
+    MARAS_TEST(DomainHousehold, PlanLoadedCellBedReconciliationHandlesSharedAndUnsharedDivorceCleanup) {
+        WorldState ws{};
+        const CellId ysoldaHouse{ 0x000165ACu };
+        const CellId carlottaHouse{ 0x000165B1u };
+        const ActorId ysolda{ 0x0001A69Au };
+        const RefId ysoldaBed{ 0x00093B50u };
+        const RefId carlottaBed{ 0x00093B60u };
+        const RefId untrackedBed{ 0x00093B70u };
+        const FormRawId ysoldaHouseFaction{ 0x00093B24u };
+
+        // 1. Active shared cell -> requests public-state check + sharingSpouses furniture sync
+        (void)ApplyShareCellsWithPlayer(ws, ysolda, { ysoldaHouse });
+        ws.household.Write().SetOriginalBedOwner(ysoldaBed, ysoldaHouseFaction);
+        ws.household.Write().SetOriginalBedOwner(carlottaBed, FormRawId{ 0u });
+
+        const std::vector<RefId> ysoldaCellBeds{ ysoldaBed, untrackedBed };
+        const auto activePlan = PlanLoadedCellBedReconciliation(ws.Snapshot(), ysoldaHouse, ysoldaCellBeds);
+        MARAS_CHECK(activePlan.shouldEnsureCellPublic);
+        MARAS_CHECK(activePlan.shouldRecordOriginalPublic);
+        MARAS_REQUIRE_EQ(activePlan.sharingSpouses.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(activePlan.sharingSpouses[0], ysolda);
+        MARAS_CHECK(activePlan.staleTrackedBedsToRestore.empty());
+
+        // 2. Unloaded divorce stops cell sharing while originalBedOwners retains ysoldaBed;
+        //    next time ysoldaHouse loads, PlanLoadedCellBedReconciliation flags ysoldaBed for restore
+        //    without touching carlottaBed (different cell) or untrackedBed.
+        const auto stopOut = ApplyStopSharingForSpouse(ws, ysolda);
+        MARAS_CHECK(stopOut.stopped);
+
+        const auto cleanupPlan = PlanLoadedCellBedReconciliation(ws.Snapshot(), ysoldaHouse, ysoldaCellBeds);
+        MARAS_CHECK(!cleanupPlan.shouldEnsureCellPublic);
+        MARAS_CHECK(cleanupPlan.sharingSpouses.empty());
+        MARAS_REQUIRE_EQ(cleanupPlan.staleTrackedBedsToRestore.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(cleanupPlan.staleTrackedBedsToRestore[0].first, ysoldaBed);
+        MARAS_CHECK_EQ(cleanupPlan.staleTrackedBedsToRestore[0].second, ysoldaHouseFaction);
+
+        // 3. Unrelated non-shared cell with no tracked beds produces an empty no-op plan.
+        const std::vector<RefId> otherBeds{ untrackedBed };
+        const auto noopPlan = PlanLoadedCellBedReconciliation(ws.Snapshot(), CellId{ 0x00099999u }, otherBeds);
+        MARAS_CHECK(!noopPlan.shouldEnsureCellPublic);
+        MARAS_CHECK(noopPlan.sharingSpouses.empty());
+        MARAS_CHECK(noopPlan.staleTrackedBedsToRestore.empty());
+    }
+
 }  // namespace MARAS::Tests

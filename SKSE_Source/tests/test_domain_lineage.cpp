@@ -1304,4 +1304,40 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainLineage, ApplyRemoveChildReturnsErasedFactionSnapshotForEngineRestore) {
+        WorldState ws{};
+        const ChildId braithId{ 0x0001A66Bu };
+        const ActorId ysoldaId{ 0x0001A69Au };
+
+        ChildRegistrationInput reg{};
+        reg.childId = braithId;
+        reg.guardianA = ActorId::Player();
+        reg.guardianB = ysoldaId;
+        reg.name = "Braith";
+        reg.isAdopted = true;
+        const auto regOut = ApplyRegisterChild(ws, reg);
+        MARAS_REQUIRE(regOut.changed);
+
+        ChildFactionSnapshotRecord snap{};
+        snap.crimeFactionId = FormRawId{ 0x000267EAu };
+        snap.factions = {
+            FactionRankSnapshotEntry{ FormRawId{ 0x00028172u }, 0 },
+            FactionRankSnapshotEntry{ FormRawId{ 0x00051596u }, 0 },
+            FactionRankSnapshotEntry{ FormRawId{ 0x0002C6C8u }, 1 },
+        };
+        ws.household.Write().UpsertChildFactionSnapshot(braithId, snap);
+        MARAS_REQUIRE(ws.household.Read().AllChildFactionSnapshots().contains(braithId));
+
+        const auto remOut = ApplyRemoveChild(ws, braithId);
+        MARAS_REQUIRE(remOut.changed);
+        MARAS_CHECK(!ws.lineage.Read().FindChild(braithId));
+        MARAS_CHECK(!ws.household.Read().AllChildFactionSnapshots().contains(braithId));
+
+        MARAS_REQUIRE(remOut.removedFactionSnapshot.has_value());
+        MARAS_CHECK_EQ(remOut.removedFactionSnapshot->crimeFactionId.raw(), 0x000267EAu);
+        MARAS_REQUIRE_EQ(remOut.removedFactionSnapshot->factions.size(), std::size_t{ 3 });
+        MARAS_CHECK_EQ(remOut.removedFactionSnapshot->factions[0].factionId.raw(), 0x00028172u);
+        MARAS_CHECK_EQ(remOut.removedFactionSnapshot->factions[2].rank, std::int8_t{ 1 });
+    }
+
 }  // namespace MARAS::Tests

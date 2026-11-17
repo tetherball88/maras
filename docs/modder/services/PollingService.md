@@ -40,10 +40,10 @@ When `500 ms` has elapsed since the previous tick:
      - Invokes [`BuffReconciler::ReconcilePlayerBuffs()`](BuffReconciler.md) so follower Skill Type spouse perks update immediately.
      - Reconciles factions ([`FactionReconciler`](FactionReconciler.md)) and packages ([`PackageReconciler`](PackageReconciler.md)) for added/removed actors.
 4. **In-Game Calendar & Player Progression Checks**:
-   - `CheckDayChanged()`: When `floor(currentDay)` advances, calls `EngineEventHooks::OnPollingDayChanged(currentDay)` (firing daily affection decay, lineage/paternity/travel daily ticks, matchmaking, partner agency, and banter evaluation) and emits `maras_day_changed`.
+   - `CheckDayChanged()`: When `floor(currentDay)` advances, calls `EngineEventHooks::OnPollingDayChanged(currentDay)` (running daily affection decay and lineage/paternity/travel daily ticks immediately, then staggering autonomous matchmaking, player-partner infidelity, and banter scans across the next three `500 ms` `OnPollingFastTick` slices guarded by `SessionEpoch` so midnight rollover never spikes a single frame) and emits `maras_day_changed`.
    - `CheckPlayerLevelChanged()`: When the Player levels up, invokes `OnPollingRefreshChildVisuals()` so graduated adult children scale cleanly to the new player level (see [`ChildGrowthAndVisuals`](ChildGrowthAndVisuals.md)).
 5. **Continuous Coordinator & Marriage Ticks**:
-   - Invokes `OnPollingUpdate(currentDay)` (SkyrimNet memory episode flush, fertility polling, expiring child orders, child training completion, adult child travel progress) and `OnPollingAutoMarriageTick(currentDay)` (automatic NPC-to-NPC marriage ceremonies after courtship).
+   - Invokes `OnPollingUpdate(currentDay)` (SkyrimNet memory episode flush, fertility polling, read-gated child order expiry via `HouseholdRules::HasExpiredChildOrders` / `ApplyExpireChildOrders` so `HouseholdTable` never CoW-clones when no orders expired, child training completion, and adult child travel progress) and `OnPollingAutoMarriageTick(currentDay)` (automatic NPC-to-NPC marriage ceremonies after courtship).
 
 ---
 

@@ -165,21 +165,27 @@ Function Maintenance()
 EndFunction
 
 Function MigrateLegacyRuntimeStorage(TTM_ServiceChildrenLogic childrenLogicQst)
+    int migratedFlags = 0
     if(StorageUtil.GetIntValue(none, "PlayerKiller", 0) == 1)
         MARAS.SetPlayerKiller(true)
         StorageUtil.UnsetIntValue(none, "PlayerKiller")
+        migratedFlags += 1
     endif
     if(StorageUtil.GetIntValue(none, "PlayerHadWedding", 0) == 1)
         MARAS.SetPlayerHadWedding(true)
         StorageUtil.UnsetIntValue(none, "PlayerHadWedding")
+        migratedFlags += 1
     endif
     if(StorageUtil.GetIntValue(none, "TTM_DontShowSkipWeddingMessage", 0) == 1)
         MARAS.SetDontShowSkipWeddingMessage(true)
         StorageUtil.UnsetIntValue(none, "TTM_DontShowSkipWeddingMessage")
+        migratedFlags += 1
     endif
 
+    int migratedMuted = 0
     Form[] mutedForms = StorageUtil.FormListToArray(none, "SkyrimNet_Blacklisted_Actors")
     if(mutedForms.Length > 0)
+        migratedMuted = mutedForms.Length
         if(Game.GetModByName("SkyrimNet.esp") != 255)
             Faction filterFac = Game.GetFormFromFile(0x12DB, "SkyrimNet.esp") as Faction
             if(filterFac)
@@ -196,8 +202,10 @@ Function MigrateLegacyRuntimeStorage(TTM_ServiceChildrenLogic childrenLogicQst)
         StorageUtil.FormListClear(none, "SkyrimNet_Blacklisted_Actors")
     endif
 
+    int migratedMoved = 0
     Form[] movedForms = StorageUtil.FormListToArray(none, "TTM_MovedNpcs")
     if(movedForms.Length > 0)
+        migratedMoved = movedForms.Length
         int i = 0
         while(i < movedForms.Length)
             Actor movedNpc = movedForms[i] as Actor
@@ -215,6 +223,7 @@ Function MigrateLegacyRuntimeStorage(TTM_ServiceChildrenLogic childrenLogicQst)
         StorageUtil.FormListClear(none, "TTM_MovedNpcs")
     endif
 
+    int migratedCritters = 0
     Actor[] pChildren = MARAS.GetAllPlayerChildren()
     int cIdx = 0
     while(cIdx < pChildren.Length)
@@ -222,6 +231,7 @@ Function MigrateLegacyRuntimeStorage(TTM_ServiceChildrenLogic childrenLogicQst)
         if(child)
             Actor legacyCritter = StorageUtil.GetFormValue(child, "TransientCritter") as Actor
             if(legacyCritter)
+                migratedCritters += 1
                 legacyCritter.Disable()
                 legacyCritter.Delete()
                 StorageUtil.UnsetFormValue(child, "TransientCritter")
@@ -279,6 +289,10 @@ Function MigrateLegacyRuntimeStorage(TTM_ServiceChildrenLogic childrenLogicQst)
         if(childrenLogicQst)
             childrenLogicQst.PoorCounter = MARAS.GetChildPoorCounter()
         endif
+    endif
+
+    if(migratedFlags > 0 || migratedMuted > 0 || migratedMoved > 0 || migratedCritters > 0 || legacyDivorceFeeDay >= 0.0 || legacyPoor > 0 || matchedCount > 0)
+        TTM_Debug.info("TTM_MainController: Migrated legacy StorageUtil runtime state (flags=" + migratedFlags + ", mutedActors=" + migratedMuted + ", movedNpcs=" + migratedMoved + ", transientCritters=" + migratedCritters + ", npcTimestamps=" + matchedCount + ", poorCounter=" + legacyPoor + ")")
     endif
 EndFunction
 
@@ -593,6 +607,7 @@ Function MigrateOldNpcHomeMarkers()
             endif
             i += 1
         endwhile
+        TTM_Debug.info("TTM_MainController: Migrated " + count + " legacy NPC HomeMarker(s) across " + npcs.Length + " tracked NPC(s)")
         MARAS.NotifyLocalized("hud.legacy_migrated_home_markers", npcs.Length as string, count as string)
     endif
 
@@ -628,6 +643,7 @@ Function MigrateSettingsToCpp()
     endif
 
     MARAS.MarkSettingsMigrated()
+    TTM_Debug.info("TTM_MainController: Migrated legacy StorageUtil MCM settings into C++ SettingsCoordinator")
     MARAS.NotifyLocalized("hud.legacy_migrated_settings")
 EndFunction
 

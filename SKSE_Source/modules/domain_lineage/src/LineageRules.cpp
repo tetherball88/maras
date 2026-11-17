@@ -225,6 +225,10 @@ namespace MARAS::Domain::Lineage {
 
         out.changed = ws.lineage.Write().EraseChild(childId);
         if (out.changed) {
+            const auto& snaps = ws.household.Read().AllChildFactionSnapshots();
+            if (const auto it = snaps.find(childId); it != snaps.end()) {
+                out.removedFactionSnapshot = it->second;
+            }
             ws.household.Write().EvictTenant(childId.raw());
             ws.household.Write().EraseChildState(childId);
             ws.household.Write().EraseChildFactionSnapshot(childId);

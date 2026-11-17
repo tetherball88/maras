@@ -2,6 +2,7 @@
 
 #include "maras/domain/household/TravelRules.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/foundation/StrongIds.h"
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -10,6 +11,7 @@
 #include <map>
 #include <optional>
 #include <shared_mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -101,9 +103,10 @@ namespace MARAS {
         void RefreshIndex();
 
         /**
-         * Register or update an actor when loaded dynamically in game.
+         * Register or update one or more actors when loaded dynamically in game.
          */
         void RegisterLoadedActor(RE::Actor* actor);
+        void RegisterLoadedActors(std::span<RE::Actor* const> actors);
 
         /**
          * Clear only transient live actor pointers on pre-load (kPreLoadGame).
@@ -182,6 +185,10 @@ namespace MARAS {
 
         // ── Home Cell Queries (formerly HomeCellService) ──
 
+        [[nodiscard]] bool IsHomeCell(RE::FormID cellFormID) const;
+        [[nodiscard]] std::vector<Foundation::RefId> RefreshHomeCellBeds(
+            RE::TESObjectCELL* cell,
+            const std::unordered_map<Foundation::RefId, Foundation::FormRawId>& savedOriginalBedOwners);
         [[nodiscard]] RE::FormID GetNpcHome(RE::Actor* npc) const;
         [[nodiscard]] RE::FormID GetNpcHome(RE::FormID actorFormID) const;
         [[nodiscard]] std::vector<RE::FormID> GetNpcBeds(RE::Actor* npc) const;
@@ -235,7 +242,7 @@ namespace MARAS {
         void IndexLoadedActorLocked(RE::Actor* actor);
 
         bool ScanHomeCellLocked(RE::TESObjectCELL* cell, HomeCellData& outData);
-        void ProcessBedOwnershipLocked(RE::TESObjectREFR& bedRef);
+        void AddUniqueBedOwnerLocked(RE::FormID ownerBaseFormId, RE::FormID bedFormId);
         void ProcessActorHomeLocked(RE::FormID actorFormId, RE::FormID cellId);
 
         [[nodiscard]] std::string GetLocationInfo(const RE::TESObjectCELL* cell) const;

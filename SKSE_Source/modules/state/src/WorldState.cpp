@@ -1374,8 +1374,16 @@ namespace MARAS::State {
             }
 
             if (!isDeceasedGuardian) {
-                if (isPresumedFather) {
-                    mutableChild->presumedFather = ActorId{};
+                if (isPresumedFather && mutableChild->paternitySecret.HasActiveSecret()) {
+                    ClearPartnerPaternitySecretSilently(*mutableChild);
+                    result.changed = true;
+                    result.MarkChildDirty(cId);
+                } else if (mutableChild->bioFather == deceasedActor &&
+                           mutableChild->paternitySecret.isSecretForBioFather) {
+                    mutableChild->paternitySecret.isSecretForBioFather = false;
+                    if (!mutableChild->paternitySecret.isSecretForPartner) {
+                        mutableChild->paternitySecret.isSecret = false;
+                    }
                     result.changed = true;
                     result.MarkChildDirty(cId);
                 }
@@ -1468,7 +1476,7 @@ namespace MARAS::State {
             }
 
             if (!childView->presumedFather.IsNull() &&
-                ((!childView->paternitySecret.isSecret && !childView->paternitySecret.discovered) ||
+                ((!childView->isBiologicalChild && childView->bioMother.IsNull()) ||
                  childView->presumedFather == childView->bioMother ||
                  (!childView->bioFather.IsNull() && childView->presumedFather == childView->bioFather))) {
                 lineage.Write().FindChildMutable(cId)->presumedFather = ActorId{};

@@ -66,6 +66,7 @@ add_library(maras_state STATIC
     modules/state/src/WorldState.cpp
     modules/state/src/WorldStore.cpp
     modules/state/src/CoSaveCodec.cpp
+    modules/state/src/MigrationReportFormatter.cpp
     modules/state/src/SpatialActorSnapshot.cpp
     modules/state/src/EngineSyncPlan.cpp
     modules/state/src/SessionEpoch.cpp
@@ -256,6 +257,7 @@ add_library(maras_app OBJECT
     modules/app/src/FertilityLifecycleCoordinator.cpp
     modules/app/src/HouseholdUseCases.cpp
     modules/app/src/LineageUseCases.cpp
+    modules/app/src/MigrationDiagnosticsCoordinator.cpp
     modules/app/src/ModalTypes.cpp
     modules/app/src/PaternityWorkflowCoordinator.cpp
     modules/app/src/RelationshipInteractionCoordinator.cpp
@@ -279,6 +281,7 @@ add_library(maras_bridge_papyrus OBJECT
     modules/bridge_papyrus/src/PapyrusRelationship.cpp
     modules/bridge_papyrus/src/PapyrusSettings.cpp
     modules/bridge_papyrus/src/PapyrusSkyrimNet.cpp
+    modules/bridge_papyrus/src/SanityConsoleCommand.cpp
 )
 target_compile_features(maras_bridge_papyrus PUBLIC cxx_std_23)
 target_include_directories(maras_bridge_papyrus
@@ -293,6 +296,7 @@ add_library(maras_bridge_ui OBJECT
     modules/bridge_ui/src/HouseholdBuffsJsonBuilder.cpp
     modules/bridge_ui/src/LocaleJsonBuilder.cpp
     modules/bridge_ui/src/ModalManager.cpp
+    modules/bridge_ui/src/SanityEngineProbe.cpp
     modules/bridge_ui/src/UIDataBridge.cpp
     modules/bridge_ui/src/UIManager.cpp
 )

@@ -17,7 +17,7 @@ Whenever an implementation alters behavior, formulas, APIs, bridge payloads, Sky
   - `docs/modder/API_AND_UI_BRIDGE_REFERENCE.md` — `MARAS.psc` natives, `MARAS_PublicAPI.h` C exports, UI JS $\leftrightarrow$ C++ actions/events.
   - `docs/modder/RELATIONSHIP_DYNAMICS_GUIDE.md` — Pair statuses, hierarchy, affection math, loneliness, infidelity, open relationships, matchmaking & partner agency.
   - `docs/modder/FERTILITY_MODE_RELOADED_INTEGRATION.md` — FMR & Beeing Female NG hooks, conception, birth batching.
-  - [INGAME_SANITY_TEST_SUITE.md](../../../docs/modder/INGAME_SANITY_TEST_SUITE.md) — `TTM_SanitySuite.psc`, console `.txt` batch scripts, `MARAS.DumpStoredData(tag)`, and `verify-maras-sanity.ps1`.
+  - [INGAME_SANITY_TEST_SUITE.md](../../../docs/modder/INGAME_SANITY_TEST_SUITE.md) — `maras_sanity` (`msanity`) console command, `TTM_SanitySuite.psc`, `MARAS.DumpStoredData(tag)`, and `verify-maras-sanity.ps1`.
 - **C++ Service Guides (Canonical 28-File `docs/modder/services/` Roster):**
   - Update or add `<ServiceName>.md` whenever a service's mechanics, formulas, edge cases, or workflows change. Use **only** the canonical 28-file roster below (retiring pre-modular service filenames):
     - **Kept (9):** `ChildrenFleeService.md`, `IntimateThreadService.md`, `MarriageDifficulty.md`, `ModalManager.md`, `PollingService.md`, `SkyrimNetIntegration.md`, `SkyrimNetMemoryService.md`, `SkyrimNetProfileService.md`, `UIDataBridge.md`.

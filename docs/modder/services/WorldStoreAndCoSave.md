@@ -4,7 +4,8 @@
 **Sources**:
 - [StrongIds.h](../../../SKSE_Source/modules/foundation/include/maras/foundation/StrongIds.h) & [DomainEnums.h](../../../SKSE_Source/modules/foundation/include/maras/foundation/DomainEnums.h)
 - [WorldTables.h](../../../SKSE_Source/modules/state/include/maras/state/WorldTables.h), [WorldState.h](../../../SKSE_Source/modules/state/include/maras/state/WorldState.h), [WorldStore.h](../../../SKSE_Source/modules/state/include/maras/state/WorldStore.h), [PerTableSnapshot.h](../../../SKSE_Source/modules/state/include/maras/state/PerTableSnapshot.h)
-- [CoSaveCodec.h](../../../SKSE_Source/modules/state/include/maras/state/CoSaveCodec.h) & [CoSaveCodec.cpp](../../../SKSE_Source/modules/state/src/CoSaveCodec.cpp)
+- [CoSaveCodec.h](../../../SKSE_Source/modules/state/include/maras/state/CoSaveCodec.h), [CoSaveCodec.cpp](../../../SKSE_Source/modules/state/src/CoSaveCodec.cpp), & [MigrationReportFormatter.cpp](../../../SKSE_Source/modules/state/src/MigrationReportFormatter.cpp)
+- [MigrationDiagnosticsCoordinator.cpp](../../../SKSE_Source/modules/app/src/MigrationDiagnosticsCoordinator.cpp)
 - [SkseSerializationCallbacks.h](../../../SKSE_Source/modules/engine/include/maras/engine/SkseSerializationCallbacks.h) & [SkseSerializationCallbacks.cpp](../../../SKSE_Source/modules/engine/src/SkseSerializationCallbacks.cpp)
 - [SessionEpoch.h](../../../SKSE_Source/modules/state/include/maras/state/SessionEpoch.h)
 - [Architecture Overview](../ARCHITECTURE.md)
@@ -72,7 +73,7 @@ flowchart LR
 | :--- | :--- |
 | `'NPCR'` | Registered adults, relationship edges, status history, and `AffairLedger` + inline extensions `'AGN1'`, `'PRG1'`, `'CHD1'`, `'LYC1'`, `'CHD2'`, `'FRT1'`, and `'SNU1'` for partner intents, secret pregnancy flags, child genetics, beastblood, lineage/blessing data, active multi-fetus fertility delivery batches, and persistent child SkyrimNet `EntityUUID` (`skyrimNetUuid`) continuity across despawned training and adult promotion (omitted when all zero). |
 | `'SPHR'` | 4-slot ranked `SpouseHierarchyTable`. |
-| `'AFCT'` | Permanent affection scores, timestamps, daily per-type maps, and type min/max bounds (`AffectionTable`). |
+| `'AFCT'` | Permanent affection scores, timestamps, daily per-type maps, and type min/max bounds (`AffectionTable`); in pre-v2 (`v1`–`v3`) co-saves, also carries a trailing `float decayMultiplier_` migrated into `SettingsData::affectionDecayMultiplier`. |
 | `'PHOU'` | Registered player houses, home markers, tenant assignments, and `stayAtHome` flags. |
 | `'SPAS'` | Shared spouse interior cells (`SharedCellRecord` public area restoration tracking). |
 | `'PLCH'` | Legacy/household child state (`petId`, `critterId`, bans, training location/progress, active orders), plus optional trailing `'PLC1'` extension (`ChildChestIntroduced`, `PoorCounter`, `NameCallingUsedLast`, `transientCritterId`; omitted when default/empty). |
@@ -81,6 +82,10 @@ flowchart LR
 | `'DCSD'` | `DeceasedTable` entries (`DeceasedRecord`), plus optional trailing `'DCS1'` extension written whenever any record carries `partnersAtDeath[i].isSecretAffair` or `childInfo->hasUndiscoveredPaternitySecret` (preserving public fallback status/bio-father for Intrigue Mode across save loads). |
 | `'BNTR'` | Ambient couple banter cooldowns and daily banter counters, plus optional trailing `'BNT1'` extension (`movedSceneActors` return XMarkers and `skyrimNetMutedActors` filter-faction mute recovery; omitted when empty). |
 | `'ACTR'` | Active adult-child travel records and schedules. |
-| `'CNFG'` | Persistent settings using marker `0xFF` and sub-version `4`. INI-only user preferences (`toggleUIKey*`, `enableConfirmationModal`, `actionsCooldown`, `actionsDeclineCooldown`, `defaultLogLevel`, `enablePlayerPolygamy`) are **preserved** from `iniBaselineSettings_` across save loads rather than overwritten by co-save data. |
+| `'CNFG'` | Persistent settings using marker `0xFF` and sub-version `4` (plus pre-v2 `v1`–`v3` `LoggingService` 4-byte `int32 logLevel` compatibility), plus optional trailing `'VER1'` metadata recording the M.A.R.A.S. release version (`Data/SKSE/Plugins/MARAS/version.txt` / compile-time fallback) that wrote the co-save. INI-only user preferences (`toggleUIKey*`, `enableConfirmationModal`, `actionsCooldown`, `actionsDeclineCooldown`, `defaultLogLevel`, `enablePlayerPolygamy`) are **preserved** from `iniBaselineSettings_` across save loads rather than overwritten by co-save data. |
 
 - **Post-Decode Normalization (`FinalizeWorldStateAfterLoad`)**: Upgrades historical v1–v6 records cleanly into v7 tables, resolves dynamic `0xFF` deceased-child keying collisions against template `TESNPC` bases, normalizes `GuardianSlots`, repairs broken pair symmetry, and preserves INI baselines before publishing the initial snapshot via `WorldStore::ReplaceState`.
+- **Save Migration Audit & Persistent Failure Protection (`MigrationReportFormatter` & `MigrationDiagnosticsCoordinator`)**:
+  - Every load records per-chunk decode diagnostics (FourCC, schema version, byte length vs. bytes read, upgraded `< v7` chunk count, `'CNFG'` sub-version, and `'VER1'` origin build), FormID remap/unresolved counts, post-load normalization repair counters, and loaded domain table counts, emitting a concise two-line `[MigrationAudit]` summary to `MARAS.log` at `INFO` level.
+  - Saves created on `<= v2.5.1.alpha` (prior to `'VER1'`) are automatically identified from chunk versions `< 7` or legacy `'CNFG'` headers; normal unresolved FormIDs from uninstalled third-party NPC/house mods log quietly without alarming the player.
+  - Only when an actual migration error occurs—a co-save chunk fails/rolls back or a one-time Papyrus upgrade script reports an unrecoverable failure via `MARAS.ReportMigrationIssue`—does `MigrationDiagnosticsCoordinator` write a persistent `MARAS_MigrationReport.log` alongside `MARAS.log` (surviving subsequent game restarts) and open a game-pausing `save_migration_failed` modal (`ModalManager`) instructing the player not to overwrite their save, providing a one-click **Quit to Desktop** action, and displaying the exact report path.

@@ -51,7 +51,7 @@ Applies to **Permanent Social Class Buffs**:
 ## 4. Idempotent Engine Reconciliation (`BuffReconciler`)
 
 - **Main-Thread Marshalling**: `ReconcilePlayerBuffs()` checks `DeferredActorResolver::CanSyncEngineInline()`. Off-thread callers coalesce via `pendingReconcile_` atomic exchange into a single `SessionEpoch`-guarded SKSE main-thread task acquiring `GetPapyrusMutex()`.
-- **Grouped Perk Updates**: `RebuildCacheIfNeeded()` groups multiple bonus entries referencing the same `RE::BGSPerk*`. When no entry in a perk group is active, `BuffReconciler` removes the perk; when magnitudes drift beyond `kMagnitudeEpsilon = 1e-5` (or `forceRefreshOnLoad_` is set post-load), it patches spell/entry-point magnitudes and cycles `RemovePerk` $\rightarrow$ `AddPerk` cleanly so Skyrim recalculates active magic effects immediately.
+- **Grouped Perk Updates**: `RebuildCacheIfNeeded()` groups multiple bonus entries referencing the same `RE::BGSPerk*`. When no entry in a perk group is active, `BuffReconciler` removes the perk; when magnitudes drift beyond `kMagnitudeEpsilon = 1e-5` (or `forceRefreshOnLoad_` is set post-load) on an already-active perk, it patches spell/entry-point magnitudes and refreshes each `BGSPerkEntry` in-place via `RemovePerkEntry` $\rightarrow$ `ApplyPerkEntry` (avoiding `PlayerCharacter::RemovePerk` + `AddPerk` back-to-back, since `RemovePerk` queues a deferred end-of-frame task that would strip the perk after synchronous `AddPerk` no-ops).
 - **Dashboard Reporting (`EvaluateHouseholdBuffs`)**: [`HouseholdBuffsJsonBuilder`](UIDataBridge.md) evaluates the identical `SpouseBuffRules` snapshot purely read-only to display live bonuses, active contributors, and at-home potential follower contributors.
 
 ---

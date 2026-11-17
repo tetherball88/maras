@@ -12325,13 +12325,27 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       console.log("[UIBridge] receiveMARASBuffs payload:", data);
       useMarasStore.getState().setHouseholdBuffs(data);
     };
+    const refreshActiveDetailViewsOnOpen = () => {
+      const store2 = useMarasStore.getState();
+      if (store2.npcDetailId) {
+        sendMarasAction("fetchNPCDetail", { formId: store2.npcDetailId });
+      }
+      if (store2.npcDetailPartnerId) {
+        sendMarasAction("fetchNPCDetail", { formId: store2.npcDetailPartnerId });
+      }
+      if (store2.selectedNpcId && store2.selectedNpcId !== store2.npcDetailId) {
+        sendMarasAction("fetchNPCDetail", { formId: store2.selectedNpcId });
+      }
+    };
     window.openMARAS = () => {
       console.log("[UIBridge] openMARAS called");
       useMarasStore.getState().setIsOpen(true);
+      refreshActiveDetailViewsOnOpen();
     };
     window.showMARAS = () => {
       console.log("[UIBridge] showMARAS called");
       useMarasStore.getState().setIsOpen(true);
+      refreshActiveDetailViewsOnOpen();
     };
     window.closeMARASView = () => {
       console.log("[UIBridge] closeMARASView called");
@@ -12482,7 +12496,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       const ranks = Array.isArray(data) ? data : data == null ? void 0 : data.ranks;
       if (ranks) {
         useMarasStore.setState({ hierarchyRanks: ranks });
-      } else {
+      } else if (useMarasStore.getState().isOpen) {
         sendMarasAction("fetchOverview");
       }
     };
@@ -17733,8 +17747,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           statusMsg: isSyntheticTarget ? t("store.status.childSentToTraining") : t("store.status.childSpawned")
         };
       });
-      sendMarasAction("fetchNPCDetail", { formId: newId });
-      sendMarasAction("fetchOverview");
+      if (get().isOpen) {
+        sendMarasAction("fetchNPCDetail", { formId: newId });
+        sendMarasAction("fetchOverview");
+      }
     },
     sendChildToTraining: (childId, trainingClassIndex) => {
       sendMarasAction("sendChildToTraining", { childId, trainingClassIndex });

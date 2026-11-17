@@ -962,6 +962,9 @@ Function SetIsMigrating(bool migrating) global native
 ;/ Query whether legacy save migration guard flag is active /;
 bool Function IsMigrating() global native
 
+;/ Record an unrecoverable legacy save migration error (writes MARAS_MigrationReport.log and opens warning modal) /;
+Function ReportMigrationIssue(string source, string detail) global native
+
 
 ; ── Relationship Rules & Dialogue Filters ─────────────────────────────
 ;/ Get gender filter for starting relationship dialogues /;
@@ -1039,7 +1042,7 @@ bool Function RemoveNpcKeyword(Actor npc, Keyword kw) global native
 
 
 ; ── Diagnostics & Logging ─────────────────────────────────────────────
-;/ Log a message to the SKSE log file with specified log level: 0=trace, 1=debug, 2=warn, 3=error, 4=none /;
+;/ Log a message to the SKSE log file with specified log level: 0=trace, 1=debug, 2=info, 3=warn, 4=error /;
 Function Log(string msg, int logLevel) global native
 
 ;/ Set the logging level for the SKSE plugin: 0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=off /;

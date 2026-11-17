@@ -13,7 +13,7 @@
 
 ## 1. Purpose & Responsibility
 
-`ModalManager` provides M.A.R.A.S.'s standalone, game-pausing interactive dialog system (`<ModalHost />` backed by `useModalStore`), replacing native `RE::MessageBoxMenu` prompts across LLM failure retries, encounter letters, paternity/adoption prompts, and action confirmations. All C++-assembled modal titles, subtitles, messages, control labels, badges, and button captions resolve through `LocalizationService` (`localization/<lang>/hud_and_modals.json` and `catalogs.json`) at request creation time, while generic `<ModalHost />` chrome (checklist counters, Select All toggles, and keyboard navigation hints) resolves through `useLocaleStore`. `ConfirmationModal` exposes Papyrus-facing non-blocking latent confirmation prompts and pair cooldown tracking on top of `ModalManager`.
+`ModalManager` provides M.A.R.A.S.'s standalone, game-pausing interactive dialog system (`<ModalHost />` backed by `useModalStore`), replacing native `RE::MessageBoxMenu` prompts across LLM failure retries, save-migration failure protection (`MigrationDiagnosticsCoordinator`), encounter letters, paternity/adoption prompts, and action confirmations. All C++-assembled modal titles, subtitles, messages, control labels, badges, and button captions resolve through `LocalizationService` (`localization/<lang>/hud_and_modals.json` and `catalogs.json`) at request creation time, while generic `<ModalHost />` chrome (checklist counters, Select All toggles, and keyboard navigation hints) resolves through `useLocaleStore`. `ConfirmationModal` exposes Papyrus-facing non-blocking latent confirmation prompts and pair cooldown tracking on top of `ModalManager`.
 
 ---
 

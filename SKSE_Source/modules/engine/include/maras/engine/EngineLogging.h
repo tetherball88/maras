@@ -7,10 +7,7 @@
 #include <spdlog/spdlog.h>
 
 #include <cstdint>
-#include <memory>
-#include <random>
-
-#include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <random>
 #include <string_view>
@@ -55,6 +52,8 @@ namespace MARAS {
         void InitializeFileLogger() noexcept;
         void InitializeFoundationLogSink() noexcept;
         void ApplyLogLevel(std::int32_t level) noexcept;
+        [[nodiscard]] std::string_view GetInstalledModVersion() noexcept;
+        [[nodiscard]] std::filesystem::path WriteMigrationReportFile(std::string_view reportText) noexcept;
     }  // namespace Engine
 
 }  // namespace MARAS

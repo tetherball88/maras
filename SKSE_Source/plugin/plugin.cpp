@@ -11,9 +11,11 @@
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/bridge_papyrus/PapyrusInterface.h"
+#include "maras/bridge_papyrus/SanityConsoleCommand.h"
 #include "maras/bridge_skyrimnet/SkyrimNetApiLoader.h"
 #include "maras/bridge_ui/ModalManager.h"
 #include "maras/bridge_ui/UIDataBridge.h"
+#include "maras/engine/BedOwnershipReconciler.h"
 #include "maras/engine/BonusesConfigLoader.h"
 #include "maras/engine/BuffReconciler.h"
 #include "maras/engine/ChildVisualReconciler.h"
@@ -46,6 +48,7 @@
 #include "maras/state/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -152,7 +155,7 @@ namespace {
             if (a_event && a_event->objectInitialized &&
                 a_event->objectInitialized->GetFormType() == RE::FormType::ActorCharacter) {
                 const RE::FormID actorFormID = a_event->objectInitialized->GetFormID();
-                if (actorFormID != 0) {
+                if (MARAS::HasPhysicalActor(actorFormID)) {
                     bool shouldSchedule = false;
                     MARAS::SessionEpoch scheduleEpoch = 0;
                     {
@@ -164,7 +167,10 @@ namespace {
                             drainQueued_ = false;
                             queuedEpoch_ = curEpoch;
                         }
-                        pendingInitActors_.push_back(actorFormID);
+                        if (std::find(pendingInitActors_.begin(), pendingInitActors_.end(), actorFormID) ==
+                            pendingInitActors_.end()) {
+                            pendingInitActors_.push_back(actorFormID);
+                        }
                         if (!drainQueued_) {
                             drainQueued_ = true;
                             shouldSchedule = true;
@@ -181,7 +187,11 @@ namespace {
 
         RE::BSEventNotifyControl ProcessEvent(const RE::TESObjectLoadedEvent* a_event,
                                               RE::BSTEventSource<RE::TESObjectLoadedEvent>*) override {
-            if (a_event && a_event->loaded && a_event->formID != 0) {
+            if (a_event && a_event->loaded && MARAS::HasPhysicalActor(a_event->formID)) {
+                auto* form = RE::TESForm::LookupByID(a_event->formID);
+                if (!form || form->GetFormType() != RE::FormType::ActorCharacter) {
+                    return RE::BSEventNotifyControl::kContinue;
+                }
                 bool shouldSchedule = false;
                 MARAS::SessionEpoch scheduleEpoch = 0;
                 {
@@ -193,7 +203,10 @@ namespace {
                         drainQueued_ = false;
                         queuedEpoch_ = curEpoch;
                     }
-                    pendingLoadedForms_.push_back(a_event->formID);
+                    if (std::find(pendingLoadedForms_.begin(), pendingLoadedForms_.end(), a_event->formID) ==
+                        pendingLoadedForms_.end()) {
+                        pendingLoadedForms_.push_back(a_event->formID);
+                    }
                     if (!drainQueued_) {
                         drainQueued_ = true;
                         shouldSchedule = true;
@@ -258,9 +271,109 @@ namespace {
         MARAS::SessionEpoch queuedEpoch_{ 0 };
     };
 
+    class CellFullyLoadedEventSink final : public RE::BSTEventSink<RE::TESCellFullyLoadedEvent> {
+    public:
+        static CellFullyLoadedEventSink* GetSingleton() {
+            static CellFullyLoadedEventSink singleton;
+            return &singleton;
+        }
+
+        void Reset() noexcept {
+            std::lock_guard<std::mutex> lock(mutex_);
+            pendingCells_.clear();
+            drainQueued_ = false;
+            queuedEpoch_ = MARAS::GetSessionEpoch();
+        }
+
+        RE::BSEventNotifyControl ProcessEvent(
+            const RE::TESCellFullyLoadedEvent* a_event,
+            RE::BSTEventSource<RE::TESCellFullyLoadedEvent>*) override {
+            if (!a_event || !a_event->cell || !a_event->cell->IsInteriorCell()) {
+                return RE::BSEventNotifyControl::kContinue;
+            }
+            const RE::FormID cellFormID = a_event->cell->GetFormID();
+            if (cellFormID == 0) {
+                return RE::BSEventNotifyControl::kContinue;
+            }
+
+            bool shouldSchedule = false;
+            MARAS::SessionEpoch scheduleEpoch = 0;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                const MARAS::SessionEpoch curEpoch = MARAS::GetSessionEpoch();
+                if (queuedEpoch_ != curEpoch) {
+                    pendingCells_.clear();
+                    drainQueued_ = false;
+                    queuedEpoch_ = curEpoch;
+                }
+                if (std::find(pendingCells_.begin(), pendingCells_.end(), cellFormID) == pendingCells_.end()) {
+                    pendingCells_.push_back(cellFormID);
+                }
+                if (!drainQueued_) {
+                    drainQueued_ = true;
+                    shouldSchedule = true;
+                    scheduleEpoch = curEpoch;
+                }
+            }
+            if (shouldSchedule) {
+                ScheduleDrainOnMainThread(scheduleEpoch);
+            }
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+    private:
+        CellFullyLoadedEventSink() = default;
+
+        void ScheduleDrainOnMainThread(MARAS::SessionEpoch expectedEpoch) {
+            if (!MARAS::IsSessionEpochCurrent(expectedEpoch)) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (queuedEpoch_ == expectedEpoch) {
+                    drainQueued_ = false;
+                }
+                return;
+            }
+            const auto* taskIF = SKSE::GetTaskInterface();
+            if (!taskIF) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (queuedEpoch_ == expectedEpoch) {
+                    drainQueued_ = false;
+                }
+                return;
+            }
+            taskIF->AddTask([this, expectedEpoch]() {
+                MARAS::ScopedMainThreadTask mainScope;
+                std::vector<RE::FormID> cellIDs;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    if (queuedEpoch_ != expectedEpoch || !MARAS::IsSessionEpochCurrent(expectedEpoch)) {
+                        return;
+                    }
+                    cellIDs.swap(pendingCells_);
+                    drainQueued_ = false;
+                }
+                try {
+                    std::lock_guard papyrusLock(MARAS::GetPapyrusMutex());
+                    for (const RE::FormID cellID : cellIDs) {
+                        MARAS::BedOwnershipReconciler::GetSingleton().OnCellFullyLoaded(cellID);
+                    }
+                } catch (const std::exception& e) {
+                    MARAS_LOG_ERROR("CellFullyLoadedEventSink: exception draining queued cells: {}", e.what());
+                } catch (...) {
+                    MARAS_LOG_ERROR("CellFullyLoadedEventSink: unknown exception draining queued cells");
+                }
+            });
+        }
+
+        std::mutex mutex_;
+        std::vector<RE::FormID> pendingCells_;
+        bool drainQueued_{ false };
+        MARAS::SessionEpoch queuedEpoch_{ 0 };
+    };
+
     void ResetAllPluginEventSinks() noexcept {
         UpdateEventSink::GetSingleton()->Reset();
         ActorInitLoadedEventSink::GetSingleton()->Reset();
+        CellFullyLoadedEventSink::GetSingleton()->Reset();
     }
 
     void SetupLoggingAndSettings() {
@@ -422,6 +535,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         if (auto* holder = RE::ScriptEventSourceHolder::GetSingleton()) {
                             holder->AddEventSink<RE::TESInitScriptEvent>(ActorInitLoadedEventSink::GetSingleton());
                             holder->AddEventSink<RE::TESObjectLoadedEvent>(ActorInitLoadedEventSink::GetSingleton());
+                            holder->AddEventSink<RE::TESCellFullyLoadedEvent>(CellFullyLoadedEventSink::GetSingleton());
                         }
 
                         auto& relUseCases = MARAS::App::RelationshipUseCases::GetSingleton();
@@ -496,6 +610,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::Engine::TrainingCatalogLoader::GetSingleton().Initialize();
                         MARAS::Engine::EncounterConfigLoader::GetSingleton().Initialize();
                         MARAS::Engine::PromptStringsLoader::GetSingleton().Initialize();
+
+                        (void)MARAS::PapyrusInterface::RegisterSanityConsoleCommand();
 
                         if (auto* console = RE::ConsoleLog::GetSingleton()) {
                             console->Print("MARAS: Ready");

@@ -193,7 +193,7 @@ Function Migrate() global
     if (IsMigrated())
         return
     endif
-    TTM_Debug.debug("TTM_ServiceFertilityFMR: Starting one-time migration from FMR storage")
+    TTM_Debug.info("TTM_ServiceFertilityFMR: Starting one-time migration from FMR storage")
     if (Game.GetModByName("Fertility Mode.esm") == 255)
         TTM_Debug.debug("TTM_ServiceFertilityFMR: Fertility Mode.esm not found")
         return
@@ -202,6 +202,7 @@ Function Migrate() global
     _JSW_BB_Storage fmrStorage = storageQuest as _JSW_BB_Storage
     if (!fmrStorage)
         TTM_Debug.warn("TTM_ServiceFertilityFMR: FMR storage quest not found")
+        MARAS.ReportMigrationIssue("Fertility Mode Reloaded Migration", "Fertility Mode.esm is active, but _JSW_BB_Storage (0x000D62) could not be resolved.")
         return
     endif
 
@@ -229,20 +230,28 @@ Function Migrate() global
                 ; Active pregnancy in FMR (NPC-NPC or NPC-Player)
                 Actor father = fmrStorage.CurrentFatherRef[tIdx] as Actor
                 int unbornID = MARAS.RegisterUnbornChild(mother, father, conceptionTime)
-                if (fmrStorage.ImmersiveEffectsFaction)
-                    int fmrRank = mother.GetFactionRank(fmrStorage.ImmersiveEffectsFaction)
-                    if (((fmrRank >= 34 && fmrRank <= 100) || fmrRank == 120) && MARAS.IsPregnancySecretForPartner(unbornID))
-                        MARAS.RevealPregnancyToPartner(unbornID, true)
+                if (unbornID == 0 && !mother.IsDead())
+                    MARAS.ReportMigrationIssue("Fertility Mode Reloaded Migration", "Failed to register active FMR pregnancy for mother '" + TTM_Utils.GetActorName(mother) + "'.")
+                else
+                    if (fmrStorage.ImmersiveEffectsFaction)
+                        int fmrRank = mother.GetFactionRank(fmrStorage.ImmersiveEffectsFaction)
+                        if (((fmrRank >= 34 && fmrRank <= 100) || fmrRank == 120) && MARAS.IsPregnancySecretForPartner(unbornID))
+                            MARAS.RevealPregnancyToPartner(unbornID, true)
+                        endif
                     endif
+                    TTM_Debug.info("TTM_ServiceFertilityFMR: Migrated active FMR pregnancy: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Unborn ID=" + unbornID + ")")
                 endif
-                TTM_Debug.info("TTM_ServiceFertilityFMR: Migrated active FMR pregnancy: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Unborn ID=" + unbornID + ")")
             endif
 
             if (babyAddedTime > 0.0)
                 ; Carried newborn baby item in FMR (NPC-NPC or NPC-Player)
                 Actor father = fmrStorage.LastFatherRef[tIdx] as Actor
                 int infantID = MARAS.RegisterFertilityChild(0, mother, none, father, 0.0, birthTime, "Newborn")
-                TTM_Debug.info("TTM_ServiceFertilityFMR: Migrated carried baby item: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Infant ID=" + infantID + ")")
+                if (infantID == 0 && !mother.IsDead())
+                    MARAS.ReportMigrationIssue("Fertility Mode Reloaded Migration", "Failed to register carried FMR newborn item for mother '" + TTM_Utils.GetActorName(mother) + "'.")
+                else
+                    TTM_Debug.info("TTM_ServiceFertilityFMR: Migrated carried baby item: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(father) + " (Infant ID=" + infantID + ")")
+                endif
             endif
 
             if (birthTime > 0.0 && mother != player)
@@ -323,7 +332,9 @@ Function RegisterPlayerChild(int nIdx, float birthTime, int childIdx, Actor bioF
         endif
         TTM_Debug.debug("TTM_ServiceFertilityFMR: Resolving child record " + childIdx + ": " + childName + ": mother: " + TTM_Utils.GetActorName(mother) + ": father: " + TTM_Utils.GetActorName(player) + ": gender: " + childGender)
         int childID = MARAS.RegisterFertilityChild(0, mother, none, bioFather, 0.0, birthTime, childName)
-        if (childID != 0)
+        if (childID == 0 && mother != none && !mother.IsDead())
+            MARAS.ReportMigrationIssue("Fertility Mode Reloaded Migration", "Failed to register FMR player child '" + childName + "' (mother='" + TTM_Utils.GetActorName(mother) + "').")
+        elseif (childID != 0)
             MARAS.SetChildGender(childID, childGender)
             MARAS.UpdateChildName(childID, childName)
             ; FMR status codes:

@@ -257,6 +257,16 @@
       "body_invalid_json": "Your AI model replied, but its response was formatted incorrectly (broken JSON) and could not be read.\n\n• Why this happens: M.A.R.A.S requires the AI to reply in a strict structured data format. Even good models occasionally make a formatting mistake, and clicking Retry usually fixes it.\n• Seeing this error too often? If this happens frequently, the AI model assigned to your '{slot}' slot in SkyrimNet is incapable of returning valid JSON reliably most of the time. Consider switching that slot in SkyrimNet to a more capable model.",
       "body_request_failed": "SkyrimNet could not get a response from your AI provider for the '{slot}' model slot (HTTP / network error or empty reply).\n\n• Cloud AI (OpenRouter, OpenAI, etc.): The service may have timed out, hit a rate limit, run out of API credits, or your API key / model name in SkyrimNet may be invalid.\n• Local AI (Ollama, KoboldCPP, LM Studio): Your local AI server may be offline, still loading a model, or overloaded.\n• What to do: Click Retry to send the request again. If it keeps failing, check your internet connection or SkyrimNet provider settings.",
       "body_mixed_batch": "Some AI requests failed to connect, while others returned unreadable data:\n\n• HTTP / Connection Failed: SkyrimNet could not reach your AI provider or received an empty reply (timeout, rate limit, out of API credits, invalid API key, or local AI server offline).\n• Broken JSON Response: The AI model in your SkyrimNet '{slot}' slot replied with broken formatting. If you see broken JSON errors too often, your '{slot}' model is incapable of returning valid JSON reliably and should be changed to a stronger model."
+    },
+    "save_migration_failed": {
+      "title": "M.A.R.A.S — Save Data Migration Failed",
+      "subtitle": "Saved: {origin}  ->  Current: {current}",
+      "message": "M.A.R.A.S could not cleanly migrate all data from this save. Playing further and saving over your game may permanently erase unmigrated relationships, children, or household records.",
+      "issues_label": "Detected Migration Issues",
+      "instructions_label": "How to Protect Your Save & Get Help",
+      "instructions_body": "Diagnostic report saved to:\n{path}\n\n• Step 1: DO NOT save your game. Click 'Quit to Desktop' below.\n• Step 2: Reinstall the previous version of M.A.R.A.S you used on this save.\n• Step 3: Send MARAS_MigrationReport.log (and MARAS.log) to the mod author and wait for help.",
+      "btn_quit": "Quit to Desktop (Recommended)",
+      "btn_close": "Close Warning (Do Not Save)"
     }
   }
 }
