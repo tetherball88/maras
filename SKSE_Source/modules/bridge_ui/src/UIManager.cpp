@@ -153,9 +153,6 @@ namespace MARAS::Bridge::Ui {
         if (CapabilitySupported(magelight_, 2800, "escapecapture") && magelight_->SetEscapeCapture) {
             magelight_->SetEscapeCapture(view_, true);
         }
-        if (CapabilitySupported(magelight_, 3111, "prepaint") && magelight_->SetViewPrepaint) {
-            magelight_->SetViewPrepaint(view_, true);
-        }
         if (CapabilitySupported(magelight_, 10600, "gamepad") && magelight_->SetViewGamepad) {
             MAGELIGHT_API::GamepadConfig gp{};
             gp.size = sizeof(MAGELIGHT_API::GamepadConfig);
@@ -272,7 +269,7 @@ namespace MARAS::Bridge::Ui {
         if (isDomReady_.load(std::memory_order_acquire)) {
             SendToUI("openMARAS", "");
             SendToUI("onGamePausedChanged", BuildPauseChangedJson(defaultPause));
-            UIDataBridge::GetSingleton().SendOverviewData();
+            UIDataBridge::GetSingleton().RefreshDashboardOnOpen();
         } else {
             pendingShowAfterCreate_.store(true, std::memory_order_release);
         }
@@ -375,7 +372,7 @@ namespace MARAS::Bridge::Ui {
         if (isVisible_.load(std::memory_order_acquire)) {
             SendToUI("openMARAS", "");
             SendToUI("onGamePausedChanged", BuildPauseChangedJson(IsDashboardPaused()));
-            UIDataBridge::GetSingleton().SendOverviewData();
+            UIDataBridge::GetSingleton().RefreshDashboardOnOpen();
         } else {
             SendToUI("closeMARASView", "");
         }

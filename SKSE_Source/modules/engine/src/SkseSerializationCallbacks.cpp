@@ -170,10 +170,11 @@ namespace MARAS::Serialization {
         const State::WorldState stateCopy = State::WorldStore::GetSingleton().ReadLive(
             [](const State::WorldState& ws) { return ws; });
         SkseCoSaveWriter writer(serialization);
-        if (!State::SaveWorldState(stateCopy, writer)) {
+        const std::string_view modVersion = Engine::GetInstalledModVersion();
+        if (!State::SaveWorldState(stateCopy, writer, modVersion)) {
             MARAS_LOG_ERROR("SaveCallback: Failed to save MARAS WorldState co-save chunks");
         } else {
-            MARAS_LOG_INFO("SaveCallback: Successfully saved MARAS WorldState");
+            MARAS_LOG_INFO("SaveCallback: Successfully saved MARAS WorldState (version: {})", modVersion);
         }
     }
 
@@ -212,7 +213,7 @@ namespace MARAS::Serialization {
         }
 
         if (hooks) {
-            hooks->FinalizeCoSaveLoad(loadedAny, report.retiredSceneMarkers);
+            hooks->FinalizeCoSaveLoad(loadedAny, report);
         }
 
         if (loadedAny) {

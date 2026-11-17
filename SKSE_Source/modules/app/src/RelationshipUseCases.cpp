@@ -975,7 +975,11 @@ namespace MARAS::App {
 
         const auto socialClass = DetermineSocialClass(npcFormID);
         const auto skillType = DetermineSkillType(npcFormID);
-        const auto temperament = DetermineTemperament(npcFormID);
+        const auto temperament = NPCTypeDeterminer::DetermineTemperament(
+            npcFormID,
+            [this](RE::FormID id) { return GetTemperamentOverride(id); },
+            [socialClass](RE::FormID) { return socialClass; },
+            [skillType](RE::FormID) { return skillType; });
         const RE::FormID baseIdRaw = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
         const RE::FormID origHome = SpatialWorldIndex::GetSingleton().GetNpcHome(npcFormID);
         const int initialCandidateAffection = (npcFormID != kPlayerFormID)
@@ -2907,8 +2911,20 @@ namespace MARAS::App {
         return NPCTypeDeterminer::DetermineTemperament(
             npcFormID,
             [this](RE::FormID id) { return GetTemperamentOverride(id); },
-            [this](RE::FormID id) { return DetermineSocialClass(id); },
-            [this](RE::FormID id) { return DetermineSkillType(id); });
+            [this](RE::FormID id) {
+                const auto snap = State::WorldStore::GetSingleton().Snapshot();
+                if (const auto* prof = snap->actors->Find(State::RefId{ id }); prof && prof->isRegisteredAdult) {
+                    return prof->socialClass;
+                }
+                return DetermineSocialClass(id);
+            },
+            [this](RE::FormID id) {
+                const auto snap = State::WorldStore::GetSingleton().Snapshot();
+                if (const auto* prof = snap->actors->Find(State::RefId{ id }); prof && prof->isRegisteredAdult) {
+                    return prof->skillType;
+                }
+                return DetermineSkillType(id);
+            });
     }
 
     bool RelationshipUseCases::SetSocialClass(RE::FormID npcFormID, std::int8_t socialClass) {

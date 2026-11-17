@@ -2,9 +2,11 @@
 
 #include "maras/state/WorldState.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -15,6 +17,21 @@ namespace MARAS::State {
                (static_cast<std::uint32_t>(static_cast<unsigned char>(b)) << 16) |
                (static_cast<std::uint32_t>(static_cast<unsigned char>(c)) << 8) |
                static_cast<std::uint32_t>(static_cast<unsigned char>(d));
+    }
+
+    [[nodiscard]] inline std::string FourCCToString(std::uint32_t fourCC) {
+        const std::array<unsigned char, 4> bytes{
+            static_cast<unsigned char>((fourCC >> 24) & 0xFFu),
+            static_cast<unsigned char>((fourCC >> 16) & 0xFFu),
+            static_cast<unsigned char>((fourCC >> 8) & 0xFFu),
+            static_cast<unsigned char>(fourCC & 0xFFu),
+        };
+        std::string out;
+        out.reserve(4);
+        for (const unsigned char ch : bytes) {
+            out.push_back((ch >= 0x20u && ch <= 0x7Eu) ? static_cast<char>(ch) : '?');
+        }
+        return out;
     }
 
     namespace CoSaveConstants {
@@ -56,6 +73,9 @@ namespace MARAS::State {
 
         // Optional inline extension magic inside 'BNTR' (omitted when no moved actors or muted SkyrimNet participants exist)
         inline constexpr std::uint32_t kExtBanterSceneStateBNT1 = MakeFourCC('B', 'N', 'T', '1');
+
+        // Optional inline extension magic inside 'CNFG' storing the MARAS mod version string that wrote the co-save
+        inline constexpr std::uint32_t kExtSaveMetadataVER1 = MakeFourCC('V', 'E', 'R', '1');
 
         // 'CNFG' sub-version header
         inline constexpr std::uint8_t kSettingsVersionMarker = 0xFFu;

@@ -689,12 +689,17 @@ namespace MARAS::App {
             rec.skyrimNetUuid = GetSkyrimNetGateway().GetActorUUID(synthFormID);
         }
 
+        std::optional<State::ChildFactionSnapshotRecord> synthRemovedSnap;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& lineageW = ws.lineage.Write();
             if (hasSynthErase) {
                 const State::ChildId synthKey{ synthFormID };
                 lineageW.EraseChild(synthKey);
                 if (synthFormID != childID) {
+                    const auto& snaps = ws.household.Read().AllChildFactionSnapshots();
+                    if (const auto it = snaps.find(synthKey); it != snaps.end()) {
+                        synthRemovedSnap = it->second;
+                    }
                     ws.household.Write().EvictTenant(synthFormID);
                     ws.household.Write().EraseChildState(synthKey);
                     ws.household.Write().EraseChildFactionSnapshot(synthKey);
@@ -709,7 +714,9 @@ namespace MARAS::App {
                 if (!IsSyntheticId(synthFormID)) {
                     ChildVisualReconciler::GetSingleton().ReleaseRuntimeBaseForActor(synthFormID);
                 }
-                OnChildRemovedFromHousehold(synthFormID);
+                OnChildRemovedFromHousehold(
+                    synthFormID,
+                    synthRemovedSnap ? &(*synthRemovedSnap) : nullptr);
                 PackageReconciler::GetSingleton().ReconcileActor(synthFormID);
             }
             GetUiBridgeGateway().OnChildRemoved(synthFormID);
@@ -817,7 +824,9 @@ namespace MARAS::App {
 
         const bool inPlayerHousehold = preRec->guardians.HasGuardian(State::ActorId::Player());
         if (inPlayerHousehold) {
-            OnChildRemovedFromHousehold(childID);
+            OnChildRemovedFromHousehold(
+                childID,
+                outcome.removedFactionSnapshot ? &(*outcome.removedFactionSnapshot) : nullptr);
             ClearAdoptableFactionDirect(childID);
         } else {
             RemoveChildSandboxAroundParentLinkedRef(childID);
@@ -1093,6 +1102,9 @@ namespace MARAS::App {
         {
             snap = State::WorldStore::GetSingleton().Snapshot();
             const auto& allPending = snap->lineage->AllPendingChildren();
+            if (allPending.empty()) {
+                return;
+            }
             if (const auto it = allPending.find(State::BaseId{ baseID }); it != allPending.end()) {
                 matchingSelfPending = it->second;
             }
@@ -1102,6 +1114,10 @@ namespace MARAS::App {
                     parentPendingSnapshot.push_back(entry);
                 }
             }
+        }
+
+        if (!matchingSelfPending.has_value() && parentPendingSnapshot.empty()) {
+            return;
         }
 
         auto& idx = SpatialWorldIndex::GetSingleton();
@@ -2058,7 +2074,9 @@ namespace MARAS::App {
         return true;
     }
 
-    bool LineageUseCases::OnChildRemovedFromHousehold(RE::FormID childID) {
+    bool LineageUseCases::OnChildRemovedFromHousehold(
+        RE::FormID childID,
+        const State::ChildFactionSnapshotRecord* fallbackSnapshot) {
         if (childID == 0) {
             return false;
         }
@@ -2079,8 +2097,14 @@ namespace MARAS::App {
             (void)ChildSpawnService::GetSingleton().DisableAndDeleteActor(transientCritterId.raw());
         }
 
+        if (!IsSyntheticId(childID)) {
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(childID); actor && !actor->IsDeleted()) {
+                FactionReconciler::GetSingleton().ClearChildHouseholdFactions(actor);
+            }
+        }
+
         auto& ops = PlayerChildrenEngineOps::GetSingleton();
-        ops.RestoreChildFactions(childID);
+        ops.RestoreChildFactions(childID, fallbackSnapshot);
         if (!IsSyntheticId(childID)) {
             PackageReconciler::GetSingleton().UnregisterActor(childID);
             FactionReconciler::GetSingleton().ReconcileActor(childID);
@@ -3224,7 +3248,14 @@ namespace MARAS::App {
 
         // 3. Engine, SkyrimNet & UI cleanup outside lock
         if (wasYoungChild) {
-            OnChildRemovedFromHousehold(victimId);
+            const State::ChildFactionSnapshotRecord* preDeathSnapPtr = nullptr;
+            if (preSnap && preSnap->household) {
+                const auto& snaps = preSnap->household->AllChildFactionSnapshots();
+                if (const auto it = snaps.find(State::ChildId{ victimId }); it != snaps.end()) {
+                    preDeathSnapPtr = &it->second;
+                }
+            }
+            OnChildRemovedFromHousehold(victimId, preDeathSnapPtr);
             ClearAdoptableFactionDirect(victimId);
             RemoveChildSandboxAroundParentLinkedRef(victimId);
             if (!IsSyntheticId(victimId)) {

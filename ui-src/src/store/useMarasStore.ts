@@ -874,8 +874,10 @@ export const useMarasStore = create<MarasState>((set, get) => ({
           : t('store.status.childSpawned'),
       }
     })
-    sendMarasAction('fetchNPCDetail', { formId: newId })
-    sendMarasAction('fetchOverview')
+    if (get().isOpen) {
+      sendMarasAction('fetchNPCDetail', { formId: newId })
+      sendMarasAction('fetchOverview')
+    }
   },
 
   sendChildToTraining: (childId: string, trainingClassIndex: number) => {

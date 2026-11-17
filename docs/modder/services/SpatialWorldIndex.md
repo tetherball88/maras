@@ -21,6 +21,8 @@ Spatial awareness in M.A.R.A.S is intentionally split into two complementary str
 | `kDataLoaded` | `BuildIndex()` | Runs `BuildNpcIndex()`, `BuildHomeCellIndexLocked()` (see [HomeCellDetector.md](HomeCellDetector.md)), and `BuildInnDestinationIndexLocked()`. |
 | `kPreLoadGame` | `ClearLoadedActors()` | Drops cached runtime `RE::Actor*` pointers before Skyrim destroys actors during load transitions. |
 | `kPostLoadGame` / `kNewGame` | `RefreshIndex()` | Evicts invalid/dead/deleted loaded actor pointers and re-sweeps loaded actors via `ProcessUtils::ForEachLoadedActor` (or triggers `BuildNpcIndex()` if not yet built). |
+| `TESInitScriptEvent` / `TESObjectLoadedEvent` (Actors) | `RegisterLoadedActors()` | Batch-registers newly loaded `ActorCharacter` forms under a single exclusive `m_mutex` lock (filtering out non-actor 3D objects in `ActorInitLoadedEventSink` before queuing, and avoiding string lowercasing allocations for already-indexed actors). |
+| `TESCellFullyLoadedEvent` (Interior) | `RefreshHomeCellBeds()` | Lazily scans newly streamed non-persistent furniture beds inside known interior home cells on the main thread outside `m_mutex`, resolving direct `TESNPC`, house `TESFaction`, and `cell->GetOwner()` inheritance (excluding `kChildCanUse` beds) into deduplicated `m_bedsWithOwners` entries. |
 | Save Revert | `Revert()` | Clears NPC entries, loaded actor pointers, home cells, bed owners, and inn destinations cleanly. |
 
 ### Base-to-Reference Resolution & INI Overrides

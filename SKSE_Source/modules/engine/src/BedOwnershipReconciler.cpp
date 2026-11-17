@@ -1,5 +1,6 @@
 #include "maras/engine/BedOwnershipReconciler.h"
 
+#include "maras/domain/household/SpouseAssetRules.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/DeferredActorResolver.h"
@@ -158,6 +159,7 @@ namespace MARAS {
         }
 
         auto* actorBase = ActorSvc::GetActorBase(npcFormId);
+        auto* playerFaction = FormCache::GetSingleton().GetPlayerFaction();
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto& savedOwners = snap->household->AllOriginalBedOwners();
         std::vector<State::RefId> bedsToErase;
@@ -175,8 +177,10 @@ namespace MARAS {
                     ref->extraList.SetOwner(restoredOwner);
                     return;
                 }
+                ref->extraList.SetOwner(nullptr);
+                return;
             }
-            if (actorBase) {
+            if (playerFaction && ref->extraList.GetOwner() == playerFaction && actorBase) {
                 ref->extraList.SetOwner(actorBase);
             }
         });
@@ -188,6 +192,22 @@ namespace MARAS {
                     hh.EraseOriginalBedOwner(bedRefId);
                 }
             });
+        }
+
+        // If another spouse still shares this home cell, keep their beds shared with PlayerFaction.
+        const RE::FormID homeCell = GetNpcHomeCell(npcFormId);
+        if (homeCell != 0) {
+            const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+            if (postSnap && postSnap->household) {
+                if (const auto cellIt = postSnap->household->AllSharedCells().find(State::CellId{ homeCell });
+                    cellIt != postSnap->household->AllSharedCells().end() && cellIt->second.sharedWithPlayer) {
+                    for (const State::ActorId remainingSpouse : cellIt->second.sharingSpouses) {
+                        if (remainingSpouse.raw() != npcFormId) {
+                            ApplyShareFurniture(remainingSpouse.raw());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -356,6 +376,105 @@ namespace MARAS {
 
         MARAS_LOG_INFO("BedOwnershipReconciler::ReapplyAllSharedCellsOnLoad: re-applied sharing for {} home cell(s)",
                        reappliedCount);
+    }
+
+    void BedOwnershipReconciler::OnCellFullyLoaded(RE::FormID cellFormId) {
+        if (cellFormId == 0) {
+            return;
+        }
+
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const State::CellId cellId{ cellFormId };
+        const bool isHomeCell = SpatialWorldIndex::GetSingleton().IsHomeCell(cellFormId);
+        const bool isTrackedSharedCell =
+            snap && snap->household && snap->household->AllSharedCells().contains(cellId);
+        const bool hasTrackedBedOverrides =
+            snap && snap->household && !snap->household->AllOriginalBedOwners().empty();
+
+        if (!isHomeCell && !isTrackedSharedCell && !hasTrackedBedOverrides) {
+            return;
+        }
+
+        auto* cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(cellFormId);
+        if (!cell || !cell->IsInteriorCell()) {
+            return;
+        }
+
+        static const std::unordered_map<State::RefId, State::FormRawId> kEmptyOwners{};
+        const auto& savedOwners =
+            (snap && snap->household) ? snap->household->AllOriginalBedOwners() : kEmptyOwners;
+        const auto loadedBedRefs =
+            SpatialWorldIndex::GetSingleton().RefreshHomeCellBeds(cell, savedOwners);
+
+        if (!snap || !snap->household) {
+            return;
+        }
+
+        const auto plan =
+            Domain::Household::PlanLoadedCellBedReconciliation(*snap, cellId, loadedBedRefs);
+        if (plan.shouldEnsureCellPublic) {
+            State::SharedCellRecord cellRecord{};
+            if (const auto it = snap->household->AllSharedCells().find(cellId);
+                it != snap->household->AllSharedCells().end()) {
+                cellRecord = it->second;
+            }
+            ApplyCellSharedPublicState(cellFormId, cellRecord);
+            if (plan.shouldRecordOriginalPublic && cellRecord.originalPublicRecorded) {
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    auto& hh = ws.household.Write();
+                    if (const auto it = hh.AllSharedCells().find(cellId);
+                        it != hh.AllSharedCells().end()) {
+                        State::SharedCellRecord merged = it->second;
+                        if (!merged.originalPublicRecorded) {
+                            merged.originalPublicRecorded = true;
+                            merged.originalPublicState = cellRecord.originalPublicState;
+                            hh.UpsertSharedCell(cellId, std::move(merged));
+                        }
+                    }
+                });
+            }
+            for (const State::ActorId spouseId : plan.sharingSpouses) {
+                ApplyShareFurniture(spouseId.raw());
+            }
+            MARAS_LOG_DEBUG(
+                "BedOwnershipReconciler::OnCellFullyLoaded: reconciled shared cell {:08X} ({} spouse(s), {} bed(s))",
+                cellFormId,
+                plan.sharingSpouses.size(),
+                loadedBedRefs.size());
+            return;
+        }
+
+        if (!plan.staleTrackedBedsToRestore.empty()) {
+            std::vector<State::RefId> restoredBeds;
+            restoredBeds.reserve(plan.staleTrackedBedsToRestore.size());
+            for (const auto& [bedRefId, origOwnerRaw] : plan.staleTrackedBedsToRestore) {
+                auto* bedRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(bedRefId.raw());
+                if (!bedRef || bedRef->IsDeleted()) {
+                    continue;
+                }
+                if (origOwnerRaw.IsNull()) {
+                    bedRef->extraList.SetOwner(nullptr);
+                } else if (auto* restoredOwner = RE::TESForm::LookupByID(origOwnerRaw.raw())) {
+                    bedRef->extraList.SetOwner(restoredOwner);
+                } else {
+                    bedRef->extraList.SetOwner(nullptr);
+                }
+                restoredBeds.push_back(bedRefId);
+            }
+
+            if (!restoredBeds.empty()) {
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    auto& hh = ws.household.Write();
+                    for (const State::RefId bedRefId : restoredBeds) {
+                        hh.EraseOriginalBedOwner(bedRefId);
+                    }
+                });
+                MARAS_LOG_INFO(
+                    "BedOwnershipReconciler::OnCellFullyLoaded: restored {} previously shared bed(s) in unshared cell {:08X}",
+                    restoredBeds.size(),
+                    cellFormId);
+            }
+        }
     }
 
 }  // namespace MARAS

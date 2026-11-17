@@ -5,9 +5,29 @@
 #include "maras/state/WorldState.h"
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace MARAS::State {
+
+    struct CoSaveChunkDiagnostic {
+        std::uint32_t type{ 0 };
+        std::uint32_t version{ 0 };
+        std::uint32_t byteLength{ 0 };
+        std::uint32_t bytesRead{ 0 };
+        bool succeeded{ false };
+        std::string detail{};
+    };
+
+    struct CoSaveNormalizationStats {
+        std::uint32_t prunedOrphanedDynamicChildren{ 0 };
+        std::uint32_t prunedOrphanedDynamicAdults{ 0 };
+        std::uint32_t reconciledDeadAdults{ 0 };
+        std::uint32_t reconciledDeadChildren{ 0 };
+        std::uint32_t evictedStaleTenants{ 0 };
+        std::uint32_t inferredLegacyPresumedFathers{ 0 };
+    };
 
     struct CoSaveLoadReport {
         bool allChunksSucceeded{ true };
@@ -16,13 +36,33 @@ namespace MARAS::State {
         std::uint32_t skippedChunkCount{ 0 };
         std::vector<std::uint32_t> failedChunkTypes{};
         std::vector<RefId> retiredSceneMarkers{};
+
+        // Version & migration audit metadata
+        std::string savedModVersion{};
+        std::uint32_t minChunkVersion{ 0 };
+        std::uint32_t maxChunkVersion{ 0 };
+        std::uint32_t upgradedChunkCount{ 0 };
+        bool cnfgPresent{ false };
+        bool cnfgHasVersionHeader{ false };
+        std::uint32_t cnfgSubVersion{ 0 };
+
+        // FormID resolution & post-load normalization audit counters
+        std::uint32_t resolvedFormIdCount{ 0 };
+        std::uint32_t remappedFormIdCount{ 0 };
+        std::uint32_t unresolvedFormIdCount{ 0 };
+        CoSaveNormalizationStats normalization{};
+        std::vector<CoSaveChunkDiagnostic> chunks{};
     };
 
     /**
      * Serializes the entire normalized `WorldState` into the 12 canonical `'MARS'` v7 co-save chunks
      * (`NPCR`, `SPHR`, `AFCT`, `PHOU`, `SPAS`, `PLCH`, `CFSN`, `MKMK`, `DCSD`, `BNTR`, `ACTR`, `CNFG`).
+     * When `savedModVersion` is non-empty, appends an optional `'VER1'` metadata trailer to `'CNFG'`.
      */
-    bool SaveWorldState(const WorldState& state, ICoSaveWriter& writer);
+    bool SaveWorldState(
+        const WorldState& state,
+        ICoSaveWriter& writer,
+        std::string_view savedModVersion = {});
 
     /**
      * Two-phase `'MARS'` v1–v7 co-save deserializer:
@@ -46,6 +86,7 @@ namespace MARAS::State {
     WorldMutationResult FinalizeWorldStateAfterLoad(
         WorldState& state,
         const IFormIdResolver& resolver = IdentityFormIdResolver{},
-        Foundation::IRng* optionalRng = nullptr);
+        Foundation::IRng* optionalRng = nullptr,
+        CoSaveNormalizationStats* outStats = nullptr);
 
 }  // namespace MARAS::State

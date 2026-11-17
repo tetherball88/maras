@@ -1,6 +1,7 @@
 #pragma once
 
 #include "maras/engine/EngineLogging.h"
+#include "maras/state/WorldTables.h"
 
 namespace MARAS {
 
@@ -20,7 +21,9 @@ namespace MARAS {
         // Custody faction snapshotting & restoration (around non-household external factions).
         void SnapshotChildFactions(RE::FormID childId);
         void ClearChildExternalFactions(RE::FormID childId);
-        void RestoreChildFactions(RE::FormID childId);
+        void RestoreChildFactions(
+            RE::FormID childId,
+            const State::ChildFactionSnapshotRecord* fallbackSnapshot = nullptr);
 
         // Mirrors Variable06 (order) and Variable07 (forcegreetPending) onto the loaded child actor & re-evaluates AI.
         void ApplyOrderAndForcegreetOnActor(RE::FormID childId, float currentOrder, bool forcegreetPending) const;

@@ -265,17 +265,22 @@ namespace MARAS {
                 }
             }
 
-            if (anyFormValueChanged || (forceRefresh && playerHasPerk)) {
-                if (playerHasPerk) {
-                    player->RemovePerk(perk);
-                }
-                player->AddPerk(perk);
-                ++updatedPerkCount;
-                MARAS_LOG_DEBUG("[BuffReconciler] Applied updated perk {:08X}", perk->GetFormID());
-            } else if (!playerHasPerk) {
+            if (!playerHasPerk) {
                 player->AddPerk(perk);
                 ++updatedPerkCount;
                 MARAS_LOG_DEBUG("[BuffReconciler] Added active perk {:08X}", perk->GetFormID());
+            } else if (anyFormValueChanged || forceRefresh) {
+                // Do NOT call player->RemovePerk(perk) + AddPerk(perk) back-to-back:
+                // PlayerCharacter::RemovePerk queues a deferred TaskQueueInterface removal that executes
+                // at end-of-frame after synchronous AddPerk no-ops, wiping out the active perk.
+                for (auto* pe : perk->perkEntries) {
+                    if (pe) {
+                        pe->RemovePerkEntry(player);
+                        pe->ApplyPerkEntry(player);
+                    }
+                }
+                ++updatedPerkCount;
+                MARAS_LOG_DEBUG("[BuffReconciler] Applied updated perk {:08X}", perk->GetFormID());
             }
         }
 

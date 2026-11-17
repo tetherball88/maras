@@ -65,4 +65,12 @@ namespace MARAS::Domain::Household {
         HouseId targetHouseId,
         bool moveParents = true);
 
+    [[nodiscard]] bool HasExpiredChildOrders(
+        const State::HouseholdTable& hh,
+        float currentGameDay) noexcept;
+
+    [[nodiscard]] std::vector<ChildId> ApplyExpireChildOrders(
+        State::WorldState& ws,
+        float currentGameDay);
+
 }  // namespace MARAS::Domain::Household

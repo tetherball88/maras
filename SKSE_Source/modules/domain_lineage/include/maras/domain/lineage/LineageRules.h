@@ -42,6 +42,7 @@ namespace MARAS::Domain::Lineage {
         bool changed{ false };
         State::GuardianSetDiff guardianDiff{};
         std::vector<ActorId> affectedActors{};
+        std::optional<State::ChildFactionSnapshotRecord> removedFactionSnapshot{};
     };
 
     struct ChildOrderOutcome {

@@ -5,6 +5,7 @@
 #include "maras/app/DialogueOutcomeCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
+#include "maras/app/MigrationDiagnosticsCoordinator.h"
 #include "maras/app/ModalTypes.h"
 #include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
@@ -54,14 +55,25 @@ namespace MARAS::PapyrusInterface {
                 MARAS_LOG_DEBUG("Papyrus: {}", msg);
                 break;
             case 2:
-                MARAS_LOG_WARN("Papyrus: {}", msg);
+                MARAS_LOG_INFO("Papyrus: {}", msg);
                 break;
             case 3:
+                MARAS_LOG_WARN("Papyrus: {}", msg);
+                break;
+            case 4:
                 MARAS_LOG_ERROR("Papyrus: {}", msg);
                 break;
             default:
+                if (logLevel > 4) {
+                    break;
+                }
+                MARAS_LOG_INFO("Papyrus: {}", msg);
                 break;
         }
+    }
+
+    void ReportMigrationIssue(RE::StaticFunctionTag*, std::string source, std::string detail) {
+        App::MigrationDiagnosticsCoordinator::GetSingleton().ReportMigrationIssue(source, detail);
     }
 
     void LogNPCStatistics(RE::StaticFunctionTag*) {
@@ -1245,6 +1257,7 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<MarkSettingsMigrated>(vm, "MarkSettingsMigrated");
         RegisterSynced<SetIsMigrating>(vm, "SetIsMigrating");
         RegisterSynced<IsMigrating>(vm, "IsMigrating");
+        RegisterSynced<ReportMigrationIssue>(vm, "ReportMigrationIssue");
 
         RegisterSynced<GetStartDialGender>(vm, "GetStartDialGender");
         RegisterSynced<SetStartDialGender>(vm, "SetStartDialGender");

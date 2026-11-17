@@ -1,86 +1,88 @@
 # M.A.R.A.S — In-Game Sanity & Config Verification Suite
 
-The in-game sanity suite verifies live Skyrim SE engine integration, Papyrus $\leftrightarrow$ C++ bindings, UI Intrigue Mode masking, and `'MARS'` v7 SKSE co-save serialization round-trips end-to-end inside a real game session—complementing the **113** hermetic pure-C++ unit tests (**2451** assertions) in `maras_tests.exe` ([SKSE_Source/tests/AGENTS.md](../../SKSE_Source/tests/AGENTS.md)).
+The in-game sanity suite verifies live Skyrim SE engine integration, machine-code trampoline detours, Papyrus $\leftrightarrow$ C++ bindings, UI Intrigue Mode masking, dynamic `0xFF` runtime actors/markers, unloaded-cell actor preservation, `'CFSN'`/`'SPAS'` engine state restoration, and `'MARS'` v7 SKSE co-save serialization round-trips end-to-end inside a real game session—complementing the headless pure-C++ unit tests in `maras_tests.exe` ([SKSE_Source/tests/AGENTS.md](../../SKSE_Source/tests/AGENTS.md)).
 
 ---
 
-## 1. Suite Components (Zero `.esp` Changes)
+## 1. Suite Components (Zero `.esp` Changes, Zero Extra Files)
 
 | Component | Path | Role |
 | :--- | :--- | :--- |
+| **Native Console Command** | [`SKSE_Source/modules/bridge_papyrus/src/SanityConsoleCommand.cpp`](../../SKSE_Source/modules/bridge_papyrus/src/SanityConsoleCommand.cpp) | Built-in `maras_sanity` (short alias: `msanity`) console command registered directly by `MARAS.dll`; also cleans up previous dynamic `0xFF` test children before `prep`/`all_pre` and marks `SanityOrphanFF` deleted after `s4_pre`/`all_pre` to test reload orphan pruning. |
 | **Papyrus Sanity Runner** | [`Scripts/Source/TTM_SanitySuite.psc`](../../Scripts/Source/TTM_SanitySuite.psc) | Global test scenarios (`PrepEnvironment`, `RunScenario1`–`RunScenario4PostLoad`, `RunAllPreSave`) using deterministic vanilla actors (`Skyrim.esm` / `HearthFires.esm`) with zero `TT_MARAS.esp` quest edits. |
-| **Diagnostic Dump Native** | [`MARAS.DumpStoredData`](../../Scripts/Source/MARAS.psc) | Scriptable Papyrus $\to$ `IUiBridgeGateway` $\to$ [`UIDataBridge`](services/UIDataBridge.md) entrypoint writing tagged snapshots (`maras_dump_<tag>_<YYYY-MM-DD_HH-MM-SS>.json`) under `Data/SKSE/Plugins/MARAS/dumps/`. |
-| **Console Batch Scripts** | [`tools/ingame_sanity/bat/`](../../tools/ingame_sanity/bat/) | Short console `.txt` commands (`maras_prep`, `maras_s1`, `maras_s2`, `maras_s3`, `maras_s4_pre`, `maras_s4_post`, `maras_all_pre`). |
-| **Batch Installer** | [`tools/ingame_sanity/install-bats.ps1`](../../tools/ingame_sanity/install-bats.ps1) | Copies `bat/*.txt` into a target Skyrim root directory (`SkyrimSE.exe` / `SkyrimVR.exe`). |
-| **Offline Deterministic Verifier** | [`tools/ingame_sanity/verify-maras-sanity.ps1`](../../tools/ingame_sanity/verify-maras-sanity.ps1) | Validates shipped configs, checks all S1–S4 dump assertions, compares pre-save vs. post-load co-save parity, scans `MARAS.log` for `[error]`/`[warn]`, and emits a Markdown judge digest. |
+| **Read-Only Engine Probe** | [`SKSE_Source/modules/bridge_ui/src/SanityEngineProbe.cpp`](../../SKSE_Source/modules/bridge_ui/src/SanityEngineProbe.cpp) | Emits `root["engineProbe"]` inside [`UIDataBridge::DumpStoredData`](services/UIDataBridge.md) (`TESGlobal` values, `PlayerCharacter` bonus perks & `PlayerMarriedFaction` state, live `RE::Actor` faction ranks, `Variable06`/`Variable07` orders, `0xFF` home `XMarker` links, runtime-cloned `TESNPC` adult-child bases, `'CFSN'` snapshots, and live cell/bed ownership) with strict CQS and `PerspectiveView` secret masking. |
+| **Offline Deterministic Verifier** | [`tools/ingame_sanity/verify-maras-sanity.ps1`](../../tools/ingame_sanity/verify-maras-sanity.ps1) | Validates shipped configs, checks all S1–S4 domain & `engineProbe` assertions, compares pre-save vs. post-load co-save parity + post-load engine restoration (`s4_post_restore`), enforces `0 [error]` and `0 unexpected [warning]` lines in `MARAS.log`, and emits a Markdown judge digest. |
 
 ---
 
-## 2. In-Game Quickstart (Clean Save Runbook)
+## 2. In-Game Quickstart (Copy-Paste Console Commands)
 
-1. **Ensure Latest Build & Compiled Scripts Are Deployed**:
-   - C++ plugin built (`SKSE/Plugins/MARAS.dll`) via [build-and-test.ps1](../../.agents/skills/maras-build-and-test/scripts/build-and-test.ps1).
-   - Papyrus scripts compiled (`Scripts/MARAS.pex` and `Scripts/TTM_SanitySuite.pex`) via `skyrimse.ppj`.
-2. **Install Console Batch Scripts to Skyrim Root** (same folder as `SkyrimSE.exe`):
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/install-bats.ps1" -SkyrimRoot "<Path\To\Skyrim Special Edition>"
-   ```
-3. **Load a Clean Save in Skyrim SE**:
+> **Tip**: Every `maras_sanity <step>` command also has the short alias **`msanity <step>`** (and typing bare `maras_sanity` in-game prints usage help in the console).
+
+1. **Load a Clean Save in Skyrim SE** (with `MARAS.dll`, `MARAS.pex`, and `TTM_SanitySuite.pex` deployed).
+2. **Run Pre-Save Scenarios (`Prep` + `S1`–`S4`)**:
    - Open the console (`~`) and run:
      ```text
-     bat maras_all_pre
+     coc WhiterunBreezehome
+     maras_sanity all_pre
      ```
-4. **Close the Console for 2+ Seconds**:
-   - Closing the console lets `coc WhiterunBreezehome` settle and allows `Utility.Wait(2.0)` inside `RunScenario4PreSave` to yield unpaused main-thread frames so `DeathEventHandler` processes Sven's `TESDeathEvent` via `AddCurrentEpochTask`.
-   - Wait for the HUD notification: `[MARAS Sanity] S4 pre-save ready - Save & Reload now!`.
-5. **Save & Reload**:
-   - Create a manual save, then immediately load that save (or relaunch Skyrim and load it to test cold `'MARS'` v7 co-save loading).
-6. **Capture the Post-Load Dump**:
-   - Open the console (`~`) and run:
+     *(Note: `coc WhiterunBreezehome` puts you in an interior cell so distant actors like `Niranye` in Windhelm remain 3D-unloaded.)*
+3. **Close the Console (`~`) for 3–5 Seconds**:
+   - Closing the console unpauses the Papyrus VM, finishes the cell transition, lets `Utility.Wait(2.0)` inside `RunScenario4PreSave` process Sven's `TESDeathEvent`, and marks `SanityOrphanFF` deleted for co-save pruning verification.
+   - Wait for the top-left HUD notification:
+     > `[MARAS Sanity] S4 pre-save ready - Save & Reload now!`
+4. **Save & Reload**:
+   - Create a **new manual save**, then immediately load that save *(or relaunch Skyrim and load it to test cold `'MARS'` v7 co-save loading)*.
+5. **Capture the Post-Load & Engine-Restore Dumps**:
+   - Open the console (`~`), run:
      ```text
-     bat maras_s4_post
+     maras_sanity s4_post
      ```
-7. **Run the Deterministic Offline Verifier**:
+   - **Close the console (`~`) for 2 seconds** so the Papyrus VM captures `s4_post_load_*`, runs the post-load convergence/restore steps (`MoveTo` on unloaded `Niranye`, `RemoveChild(Braith)` `'CFSN'` restore, `StopShareHouseWithPlayer(Ysolda)` `'SPAS'` restore), writes `s4_post_restore`, and displays:
+     > `[MARAS Sanity] S4 post-load & restore dumps complete!`
+6. **Run the Deterministic Offline Verifier** (from repo root):
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" `
-     -DumpsDir "<Path\To\Data\SKSE\Plugins\MARAS\dumps>" `
-     -LogPath "<Path\To\Documents\My Games\Skyrim Special Edition\SKSE\MARAS.log>" `
+     -Scenario all `
+     -DumpsDir "<Path\To\SKSE\Plugins\MARAS\dumps>" `
+     -LogPath "$env:USERPROFILE\Documents\My Games\Skyrim Special Edition\SKSE\MARAS.log" `
      -ReportPath "sanity_digest.md"
    ```
-   - Exit code `0` means all checks passed; exit code `1` prints exact failed assertions and log errors.
-   - To request an AI/human review, attach the generated `sanity_digest.md` alongside `MARAS.log` and the `maras_dump_*.json` files.
+   - **MO2 Note**: New runtime dumps are written to `<MO2>\overwrite\SKSE\Plugins\MARAS\dumps` (unless a dedicated output mod is configured); direct `Data/` installs write to `<Skyrim Special Edition>\Data\SKSE\Plugins\MARAS\dumps`.
+   - Exit code `0` means all checks passed; exit code `1` prints exact failed assertions and unexpected log warnings/errors.
 
 ---
 
-## 3. Scenario Coverage Matrix (`S1`–`S4` & `configs`)
+## 3. Direct Console Commands & Covered Engine Integration Edge Cases
 
-You can run the full chain via `bat maras_all_pre` or run scenarios one by one after `bat maras_prep`:
-
-| Batch File | Papyrus Entrypoint | Emitted Dump Tag(s) | Key Invariants Verified by `verify-maras-sanity.ps1` |
-| :--- | :--- | :--- | :--- |
-| `maras_prep.txt` | `TTM_SanitySuite.PrepEnvironment` | `prep_baseline` | Enables debug log (`SetLogLevel(1)`), registers Breezehome (`0001F86F` / marker `0001F88E`), and positions vanilla test actors (`Ysolda` `0001A69A`, `Lydia` `000A2C94`, `Mikael` `0001A671`, `Carlotta` `0001A675`, `Camilla` `00013488`, `Sven` `00013491`, `Faendal` `0001348C`, child `Lucia`/`Braith`). |
-| `maras_s1.txt` | `TTM_SanitySuite.RunScenario1` | `s1_household` | `meta.serializationVersion == 7`; `enablePolygamy == true`; `(Player, Ysolda)` & `(Player, Lydia)` Married; hierarchy `0=Ysolda`, `1=Lydia`; permanent affection `85`/`72` + daily `gift == 5`; Breezehome tenants (`Ysolda` `stayAtHome=true`, `Lydia` `stayAtHome=false`, child `Lucia`/`Braith`). |
-| `maras_s2.txt` | `TTM_SanitySuite.RunScenario2` | `s2_masked`, `s2_omniscient` | `(Camilla, Sven)` w/ secret Physical (`stage=1`) `Faendal` affair + `(Player, Ysolda)` w/ secret Talking (`stage=0`) `Carlotta` affair: verifies `s2_masked` hides **both** affairs (zero `0x14` Player exemption in `PerspectiveView::ForDashboard`), `s2_omniscient` exposes both stages, and opening/closing `(Player, Lydia)` transitions `(Lydia, Mikael)` to `ExLover`. |
-| `maras_s3.txt` | `TTM_SanitySuite.RunScenario3` | `s3_masked`, `s3_omniscient`, `s3_partial_masked`, `s3_partial_omniscient` | `RegisterUnbornChild` $\to$ `PromoteUnbornToInfant("SanityInfant")` + `SetPaternitySecretEdges(infantId, true, true)`: confirms masked view substitutes presumed father `Sven` (`00013491`) and omits secret flags while omniscient view exposes `Faendal` (`0001348C`); `ResolvePaternitySecretForBioFather` clears only the bio-father edge while keeping the partner edge secret. |
-| `maras_s4_pre.txt` + Save/Reload + `maras_s4_post.txt` | `RunScenario4PreSave` / `RunScenario4PostLoad` | `s4_pre_save_masked`, `s4_pre_save_omniscient`, `s4_post_load_masked`, `s4_post_load_omniscient` | `Breakup(Player, Lydia)` $\to$ `Divorced` & Breezehome tenant eviction; `Sven.KillSilent()` $\to$ `deceasedRegistry` w/ Camilla `Married` at death; full `'MARS'` v7 co-save parity across relationships, hierarchy, affection, houses, children, and deceased state before save vs. after reload. |
-| *(offline)* | `-Scenario configs` | *(n/a)* | Validates UTF-8 + syntax/schema keys for all shipped `.json`, `.ini`, and `.yaml` files under `SKSE/Plugins/MARAS/` and `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/`. |
+| Console Command | Short Alias | Dispatched Target | Emitted Dump Tag(s) | Key Invariants Verified |
+| :--- | :--- | :--- | :--- | :--- |
+| `maras_sanity` *(or `maras_sanity help`)* | `msanity` | *(prints usage in console)* | *(none)* | Lists all valid subcommands directly in the Skyrim console. |
+| `maras_sanity dump [tag]` | `msanity dump [tag]` | `UIDataBridge::DumpStoredData` | `<tag>` *(default: `console_manual`)* | Writes an immediate C++ JSON snapshot (including `engineProbe`) and prints the output path. |
+| `maras_sanity migration_test` | `msanity migration_test` | `MigrationDiagnosticsCoordinator::TriggerPreviewFailureForTesting` | *(writes `MARAS_MigrationReport.log`)* | Non-destructively previews the standalone `save_migration_failed` modal and writes a labeled synthetic `MARAS_MigrationReport.log` without altering `WorldStore`. |
+| `maras_sanity prep` | `msanity prep` | `TTM_SanitySuite.PrepEnvironment` | `prep_baseline` | Enables debug log (`SetLogLevel(1)`), cleans prior dynamic `0xFF` test children & shared houses, registers Breezehome (`0001F86F` / marker `0001F88E`), prepares local Whiterun/Riverwood actors, and resets `Niranye` (`0001B11C`) in Windhelm **without** `MoveTo` so her cell stays unloaded. |
+| `maras_sanity s1` | `msanity s1` | `TTM_SanitySuite.RunScenario1` | `s1_household` | `meta.serializationVersion == 7`; polygamy + hierarchy (`0=Ysolda`, `1=Lydia`) + affection (`85`/`72`, daily `gift == 5`) + Breezehome tenants (`Ysolda`, `Lydia`, `Lucia`); **Engine Mirrors**: live `TESGlobal`s (`SpousesCount == 2`, `LoveInterestsCount == 2`, `PlayerHousesCount >= 1`, `EnablePolygamy == 1`), `BuffReconciler` active `BGSPerk`s (`>= 2`) on `PlayerCharacter`, `PlayerMarriedFaction` kept absent on `PlayerCharacter` under polygamy, and live MARAS/vanilla faction ranks on `Ysolda` & `Lydia`. |
+| `maras_sanity s2` | `msanity s2` | `TTM_SanitySuite.RunScenario2` | `s2_masked`, `s2_omniscient` | `(Camilla, Sven)` w/ secret `Faendal` affair + `(Player, Ysolda)` w/ secret `Carlotta` affair: verifies `s2_masked` hides **both** affairs (zero `0x14` Player exemption in `PerspectiveView::ForDashboard`), `s2_omniscient` exposes both, and opening/closing `(Player, Lydia)` transitions `(Lydia, Mikael)` to `ExLover`. |
+| `maras_sanity s3` | `msanity s3` | `TTM_SanitySuite.RunScenario3` | `s3_masked`, `s3_omniscient`, `s3_partial_masked`, `s3_partial_omniscient` | `RegisterUnbornChild` $\to$ `PromoteUnbornToInfant("SanityInfant")` + `SetPaternitySecretEdges(infantId, true, true)`: confirms masked view substitutes presumed father `Sven` (`00013491`) and omits secret flags while omniscient view exposes `Faendal` (`0001348C`); `ResolvePaternitySecretForBioFather` clears only the bio-father edge while keeping the partner edge secret. |
+| `maras_sanity s4_pre` $\to$ Save/Reload $\to$ `maras_sanity s4_post` | `msanity s4_pre` / `msanity s4_post` | `RunScenario4PreSave` / `RunScenario4PostLoad` | `s4_pre_save_masked`, `s4_pre_save_omniscient`, `s4_post_load_masked`, `s4_post_load_omniscient`, `s4_post_restore` | **(1) `Hook_RemoveFromFaction`**: external `lydia.RemoveFromFaction(PlayerMarriedFaction)` auto-demotes `(Player, Lydia)` to `Divorced`, evicts Lydia from Breezehome, strips MARAS/marriage factions, and updates `SpousesCount == 1` + Player bonus perks across reload; **(2) Dynamic `0xFF` Child + Cloned `TESNPC` + Orphan Pruning**: persistent Stage 4 `SanityAdultFF` (`PlaceAtMe`) gets a runtime-cloned `RE::TESNPC` (`actorBase != originalAdultBase`) reasserted post-load, `nextSyntheticChildId` stays in `0xFF700000`–`0xFF7FFFFF`, and deleted `SanityOrphanFF` (`0xFF`) is pruned cleanly on reload; **(3) Unloaded Placed NPC (`0001B11C` Niranye)**: paired as `Dating` while `is3DLoaded == false` & `parentCellAttached == false`, preserved across reload without pruning, then moved to Player in `s4_post_restore` with 3D + MARAS factions converged; **(4) `0xFF` Home `XMarker`s, `Variable06` Orders & `'CFSN'` Restore**: `GetTrackedNpcHomeMarker(ysolda)` & `GetChildHomeMarker(lucia)` resolve & link (`0x6B`) across reload, `IssueChildOrder(lucia, 2.0, 12.0)` persists `Variable06 == 2.0`, and `Braith` (`0001A66B`) captures `'CFSN'` pre-save, clears external factions while housed, and restores original Whiterun factions + crime faction `000267EA` upon `RemoveChild(braith)` post-load; **(5) `'SPAS'` Shared Cell & Bed Ownership**: `ShareHouseWithPlayer(ysolda)` sets `Ysolda's House` (`000165AC`) `public=true` in `'SPAS'` (plus `PlayerFaction` `00000DB1` bed ownership when interior bed refs are loaded) across reload, and `StopShareHouseWithPlayer(ysolda)` clears `'SPAS'` and restores `public=false` (+ original bed owner when loaded); **(6) Death Cascade & Co-Save Parity**: `Sven.KillSilent()` $\to$ `deceasedRegistry` + preserved `presumedFather` on `SanityInfant`, with full `'MARS'` v7 pre-save vs. post-load parity. |
+| `maras_sanity all_pre` | `msanity all_pre` | `TTM_SanitySuite.RunAllPreSave` | All `prep` + `s1`–`s4_pre` tags | Runs `PrepEnvironment` $\to$ `RunScenario1` $\to$ `RunScenario2` $\to$ `RunScenario3` $\to$ `RunScenario4PreSave` in one call. |
 
 ---
 
-## 4. Offline Verifier CLI (`verify-maras-sanity.ps1`)
+## 4. Offline Verifier CLI & Strict Log Audit (`verify-maras-sanity.ps1`)
 
 ```powershell
-# Run verifier self-test (validates positive & tampered S1-S4 fixtures + shipped configs in temp folder)
+# Run verifier self-test (validates positive & tampered S1-S4/engineProbe fixtures + strict log checks in temp folder)
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" -SelfTest
 
-# Validate shipped configs only (offline CI/dev check)
+# Validate shipped configs only (offline CI/dev check, no game needed)
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" -Scenario configs
 
 # Validate full in-game run + MARAS.log and write Markdown judge digest
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-maras-sanity.ps1" `
   -Scenario all `
-  -DumpsDir "<Path\To\Data\SKSE\Plugins\MARAS\dumps>" `
-  -LogPath "<Path\To\SKSE\MARAS.log>" `
+  -DumpsDir "<Path\To\SKSE\Plugins\MARAS\dumps>" `
+  -LogPath "$env:USERPROFILE\Documents\My Games\Skyrim Special Edition\SKSE\MARAS.log" `
   -ReportPath "sanity_digest.md"
 ```
 
@@ -88,7 +90,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "tools/ingame_sanity/verify-
 | :--- | :--- | :--- |
 | `-Scenario` | `all` | Scope to check: `all`, `configs`, `s1`, `s2`, `s3`, or `s4`. |
 | `-DumpsDir` | `<RepoRoot>\SKSE\Plugins\MARAS\dumps` | Directory containing `maras_dump_<tag>_*.json` files. Uses the newest dump matching each tag. |
-| `-LogPath` | *(empty)* | Optional path to `MARAS.log`. Fails on any `[error]` line and surfaces `[warn]` highlights in the digest. |
+| `-LogPath` | *(empty)* | Optional path to `MARAS.log`. **Fails** on any `[error]` line **and** on any unexpected `[warning]` line (whitelisting only benign missing optional override-folder notes for `Data/SKSE/Plugins/MARAS/spousesTypes` and `Data/SKSE/Plugins/MARAS/questEvents`). |
 | `-RepoRoot` | Resolved from `$PSScriptRoot\..\..` | Repository root used when scanning shipped JSON/INI/YAML configs. |
 | `-ReportPath` | *(empty)* | Optional output path to save the Markdown verification digest. |
-| `-SelfTest` | `$false` | Creates temporary valid + tampered S1–S4 fixtures and clean/error logs, verifies pass + fault detection, cleans up temp files, and exits `0`/`1`. |
+| `-SelfTest` | `$false` | Creates temporary valid + tampered S1–S4/`engineProbe` fixtures and clean/error/warning logs, verifies pass + fault detection across 7 self-test cases, cleans up temp files, and exits `0`/`1`. |

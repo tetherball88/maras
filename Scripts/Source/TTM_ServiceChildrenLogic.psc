@@ -852,29 +852,34 @@ Function MigrateAllChildren()
     ;------------------------------------------------------------------------------------------------
     ; PASS 2: Migrate Vanilla & Hearthfire Adopted Children from running adoption quest aliases
     ;------------------------------------------------------------------------------------------------
+    int adoptedMigratedCount = 0
     if (childrenAdoptionQst.IsRunning() || childrenSandboxQst.IsRunning() || childrenNewAdoptionQst.IsRunning())
         Actor spouseToAdoptWith = TTM_Utils.GetActorAlias(childrenAdoptionQst, "Spouse")
         Location houseToMove = TTM_Utils.GetChildMigrationPlayerHouse()
-        TTM_Debug.debug("TTM_ServiceChildrenLogic: MigrateAllChildren: Pass 2 Adoption - spouse: " + spouseToAdoptWith + ", house: " + houseToMove)
+        TTM_Debug.info("TTM_ServiceChildrenLogic: MigrateAllChildren Pass 2 - Adoption quest active (spouse=" + TTM_Utils.GetActorName(spouseToAdoptWith) + ", house=" + houseToMove + ")")
 
         int maxChildren = 2
         if (multipleAdoptionsInstalled)
             maxChildren = 6
         endif
 
-        Location playerHouse = TTM_Utils.GetChildMigrationPlayerHouse()
-
         int i = 1
         while (i <= maxChildren)
             Actor child = TTM_Utils.GetActorAlias(childrenAdoptionQst, "Child" + i)
             if (child != none)
-                TTM_Debug.debug("TTM_ServiceChildrenLogic: MigrateAllChildren: Migrating adopted child " + i + ": " + child)
+                TTM_Debug.info("TTM_ServiceChildrenLogic: MigrateAllChildren: Migrating adopted slot Child" + i + " (" + TTM_Utils.GetActorName(child) + ")")
                 ; multipleAdoptions = true prevents AdoptChild from stopping the adoption quest mid-loop
                 AdoptChild(child, spouseToAdoptWith, houseToMove, multipleAdoptions = true, isMigrating = true)
+                if (!child.IsDead() && MARAS.GetChildStage(child.GetFormID()) == 0)
+                    MARAS.ReportMigrationIssue("Hearthfire Adoption Migration", "Failed to register adopted child '" + TTM_Utils.GetActorName(child) + "' from slot Child" + i + ".")
+                else
+                    adoptedMigratedCount += 1
+                endif
             endif
             i += 1
         endwhile
     endif
+    TTM_Debug.info("TTM_ServiceChildrenLogic: MigrateAllChildren Pass 1-2 finished (fertilityEngine=" + fertilityEngine + ", adoptedSlotsMigrated=" + adoptedMigratedCount + ")")
 
     ;------------------------------------------------------------------------------------------------
     ; PASS 3: Teardown, Cleanup & Re-enable Adoptable Children

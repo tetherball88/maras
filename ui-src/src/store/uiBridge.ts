@@ -191,13 +191,28 @@ export function initializeUIBridge() {
   }
 
   // 1b. Direct View Show/Open/Close callbacks from SKSE / UI Host
+  const refreshActiveDetailViewsOnOpen = () => {
+    const store = useMarasStore.getState()
+    if (store.npcDetailId) {
+      sendMarasAction('fetchNPCDetail', { formId: store.npcDetailId })
+    }
+    if (store.npcDetailPartnerId) {
+      sendMarasAction('fetchNPCDetail', { formId: store.npcDetailPartnerId })
+    }
+    if (store.selectedNpcId && store.selectedNpcId !== store.npcDetailId) {
+      sendMarasAction('fetchNPCDetail', { formId: store.selectedNpcId })
+    }
+  }
+
   window.openMARAS = () => {
     console.log('[UIBridge] openMARAS called')
     useMarasStore.getState().setIsOpen(true)
+    refreshActiveDetailViewsOnOpen()
   }
   window.showMARAS = () => {
     console.log('[UIBridge] showMARAS called')
     useMarasStore.getState().setIsOpen(true)
+    refreshActiveDetailViewsOnOpen()
   }
   window.closeMARASView = () => {
     console.log('[UIBridge] closeMARASView called')
@@ -374,7 +389,7 @@ export function initializeUIBridge() {
     const ranks = Array.isArray(data) ? data : data?.ranks
     if (ranks) {
       useMarasStore.setState({ hierarchyRanks: ranks })
-    } else {
+    } else if (useMarasStore.getState().isOpen) {
       sendMarasAction('fetchOverview')
     }
   }

@@ -4,7 +4,9 @@
 #include "SKSE/SKSE.h"
 #include "maras/app/AppContext.h"
 #include "maras/engine/EngineEventHooks.h"
+#include "maras/state/SessionEpoch.h"
 
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -30,7 +32,7 @@ namespace MARAS::App {
 
         // SKSE Co-Save Lifecycle
         void BeginCoSaveLoad() override;
-        void FinalizeCoSaveLoad(bool loadedAny, std::span<const Foundation::RefId> retiredSceneMarkers = {}) override;
+        void FinalizeCoSaveLoad(bool loadedAny, const State::CoSaveLoadReport& report) override;
         void OnCoSaveRevert() override;
 
         // PollingService Timers (Main Thread)
@@ -88,10 +90,15 @@ namespace MARAS::App {
         ~AppLifecycleCoordinator() override = default;
 
         void ReleaseCoSaveLoadSuppressions() noexcept;
+        void ResetPendingDailyAgency() noexcept;
 
         std::mutex suppressionMutex_{};
         std::optional<ScopedMemorySuppression> loadMemorySuppression_{};
         std::optional<ScopedProfileSuppression> loadProfileSuppression_{};
+
+        std::uint8_t pendingDailyAgencyStep_{ 0 };
+        float pendingDailyAgencyDay_{ -1.0f };
+        State::SessionEpoch pendingDailyAgencyEpoch_{ 0 };
     };
 
 }  // namespace MARAS::App

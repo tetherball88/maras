@@ -5,11 +5,13 @@
 #include "maras/app/BanterSceneCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
+#include "maras/app/MigrationDiagnosticsCoordinator.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
 #include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/app/SkyrimNetActionCoordinator.h"
+#include "maras/domain/household/HouseholdRules.h"
 #include "maras/engine/ChildVisualReconciler.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
@@ -59,11 +61,18 @@ namespace MARAS::App {
         loadMemorySuppression_.reset();
     }
 
+    void AppLifecycleCoordinator::ResetPendingDailyAgency() noexcept {
+        pendingDailyAgencyStep_ = 0;
+        pendingDailyAgencyDay_ = -1.0f;
+        pendingDailyAgencyEpoch_ = 0;
+    }
+
     // =========================================================================
     // SKSE Co-Save Lifecycle
     // =========================================================================
 
     void AppLifecycleCoordinator::BeginCoSaveLoad() {
+        ResetPendingDailyAgency();
         std::lock_guard lock(suppressionMutex_);
         if (!loadMemorySuppression_.has_value()) {
             loadMemorySuppression_.emplace();
@@ -76,21 +85,23 @@ namespace MARAS::App {
 
     void AppLifecycleCoordinator::FinalizeCoSaveLoad(
         bool loadedAny,
-        std::span<const Foundation::RefId> retiredSceneMarkers) {
+        const State::CoSaveLoadReport& report) {
         ScopedSuppressionGuard releaseOnExit(*this, &AppLifecycleCoordinator::ReleaseCoSaveLoadSuppressions);
 
         ChildVisualReconciler::GetSingleton().FlushRetiredForms();
-        BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(retiredSceneMarkers);
+        BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(report.retiredSceneMarkers);
 
         if (!loadedAny) {
             GlobalVarReconciler::GetSingleton().ResetSessionGlobalsToDefaults();
             GlobalVarReconciler::GetSingleton().ReconcileGlobals();
             LineageUseCases::GetSingleton().FinalizeCoSaveLoad(false);
+            MigrationDiagnosticsCoordinator::GetSingleton().OnCoSaveLoaded(report);
             MARAS_LOG_INFO("[AppLifecycleCoordinator] FinalizeCoSaveLoad: no prior co-save chunks loaded");
             return;
         }
 
         SettingsCoordinator::GetSingleton().ApplyPostLoadEngineSideEffects();
+        MigrationDiagnosticsCoordinator::GetSingleton().OnCoSaveLoaded(report);
         RelationshipUseCases::GetSingleton().FinalizeLoad();
         LineageUseCases::GetSingleton().FinalizeCoSaveLoad(true);
         PaternityWorkflowCoordinator::GetSingleton().FinalizeLoad();
@@ -124,7 +135,9 @@ namespace MARAS::App {
     }
 
     void AppLifecycleCoordinator::OnCoSaveRevert() {
+        ResetPendingDailyAgency();
         ReleaseCoSaveLoadSuppressions();
+        MigrationDiagnosticsCoordinator::GetSingleton().OnCoSaveRevert();
 
         auto& visualReconciler = ChildVisualReconciler::GetSingleton();
         visualReconciler.Revert();
@@ -152,6 +165,35 @@ namespace MARAS::App {
 
     void AppLifecycleCoordinator::OnPollingFastTick(float deltaSeconds) {
         SkyrimNetActionCoordinator::GetSingleton().TickPendingNarrations(deltaSeconds);
+
+        if (pendingDailyAgencyStep_ == 0) {
+            return;
+        }
+        std::lock_guard lock(GetPapyrusMutex());
+        if (pendingDailyAgencyStep_ == 0 || !State::IsSessionEpochCurrent(pendingDailyAgencyEpoch_)) {
+            ResetPendingDailyAgency();
+            return;
+        }
+
+        const float scheduledDay = pendingDailyAgencyDay_;
+        auto& agency = AgencyWorkflowCoordinator::GetSingleton();
+        switch (pendingDailyAgencyStep_) {
+            case 1:
+                pendingDailyAgencyStep_ = 2;
+                agency.TryScheduledMatchmaking(scheduledDay);
+                break;
+            case 2:
+                pendingDailyAgencyStep_ = 3;
+                agency.TryScheduledPlayerPartnerInfidelity(scheduledDay);
+                break;
+            case 3:
+                ResetPendingDailyAgency();
+                agency.TryScheduledBanter(scheduledDay);
+                break;
+            default:
+                ResetPendingDailyAgency();
+                break;
+        }
     }
 
     void AppLifecycleCoordinator::OnPollingUpdate(float currentGameDay) {
@@ -164,27 +206,18 @@ namespace MARAS::App {
 
         auto& lineageUseCases = LineageUseCases::GetSingleton();
         if (currentGameDay >= 0.0f) {
-            std::vector<RE::FormID> expiredOrderChildren;
-            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                auto& hh = ws.household.Write();
-                std::vector<State::ChildId> expiredIds;
-                for (const auto& [cid, st] : hh.AllChildStates()) {
-                    if (st.orderExpiryGameDay >= 0.0f && currentGameDay >= st.orderExpiryGameDay) {
-                        expiredIds.push_back(cid);
-                    }
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            if (snap && snap->household &&
+                Domain::Household::HasExpiredChildOrders(*snap->household, currentGameDay)) {
+                const auto expiredOrderChildren = State::WorldStore::GetSingleton().Modify(
+                    [currentGameDay](State::WorldState& ws) {
+                        return Domain::Household::ApplyExpireChildOrders(ws, currentGameDay);
+                    });
+                for (const State::ChildId childId : expiredOrderChildren) {
+                    MARAS_LOG_INFO("[AppLifecycleCoordinator] Child {:08X} order expired at game day {:.3f}",
+                                   childId.raw(), currentGameDay);
+                    lineageUseCases.ApplyPackageForCurrentState(childId.raw());
                 }
-                for (const auto cid : expiredIds) {
-                    if (auto* st = hh.FindChildStateMutable(cid)) {
-                        st->currentOrder = 0.0f;
-                        st->orderExpiryGameDay = -1.0f;
-                        expiredOrderChildren.push_back(cid.raw());
-                    }
-                }
-            });
-            for (const RE::FormID childId : expiredOrderChildren) {
-                MARAS_LOG_INFO("[AppLifecycleCoordinator] Child {:08X} order expired at game day {:.3f}",
-                               childId, currentGameDay);
-                lineageUseCases.ApplyPackageForCurrentState(childId);
             }
             lineageUseCases.CheckChildrenTrainingProgress(currentGameDay);
         }
@@ -204,10 +237,11 @@ namespace MARAS::App {
         PaternityWorkflowCoordinator::GetSingleton().ProcessDailyTick(currentGameDay);
         HouseholdUseCases::GetSingleton().ProcessDailyTick(currentGameDay);
 
-        auto& agency = AgencyWorkflowCoordinator::GetSingleton();
-        agency.TryScheduledMatchmaking(currentGameDay);
-        agency.TryScheduledPlayerPartnerInfidelity(currentGameDay);
-        agency.TryScheduledBanter(currentGameDay);
+        // Stagger autonomous candidate-scanning passes across the next three 500 ms fast ticks
+        // so midnight rollover never concentrates 7 subsystems into a single render frame.
+        pendingDailyAgencyDay_ = currentGameDay;
+        pendingDailyAgencyEpoch_ = State::GetSessionEpoch();
+        pendingDailyAgencyStep_ = 1;
     }
 
     void AppLifecycleCoordinator::OnPollingRefreshChildVisuals() {
@@ -236,7 +270,18 @@ namespace MARAS::App {
         auto& relUseCases = RelationshipUseCases::GetSingleton();
         auto& lineageUseCases = LineageUseCases::GetSingleton();
 
-        auto processActorId = [&](RE::FormID actorId, bool fromInitScript) {
+        struct ResolvedLoadedActor {
+            RE::FormID actorId{ 0 };
+            RE::Actor* actor{ nullptr };
+            bool fromInitScript{ false };
+        };
+
+        std::vector<ResolvedLoadedActor> resolvedBatch;
+        resolvedBatch.reserve(initActors.size() + loadedActors.size());
+        std::vector<RE::Actor*> actorPtrs;
+        actorPtrs.reserve(initActors.size() + loadedActors.size());
+
+        auto collectActor = [&](RE::FormID actorId, bool fromInitScript) {
             if (!HasPhysicalActor(actorId) || !seenIds.insert(actorId).second) {
                 return;
             }
@@ -244,23 +289,33 @@ namespace MARAS::App {
             if (!actor || actor->IsDeleted()) {
                 return;
             }
-
-            spatialIndex.RegisterLoadedActor(actor);
-            if (auto* base = actor->GetActorBase()) {
-                lineageUseCases.TryResolvePendingChildren(base->GetFormID(), actorId);
-            }
-            deferredResolver.OnActorLoaded(actor);
-            relUseCases.OnActorLoaded(actorId, fromInitScript);
-            if (actor->Is3DLoaded()) {
-                lineageUseCases.ApplyChildVisualsOn3DLoad(actor);
-            }
+            resolvedBatch.push_back(ResolvedLoadedActor{ actorId, actor, fromInitScript });
+            actorPtrs.push_back(actor);
         };
 
         for (const RE::FormID id : initActors) {
-            processActorId(id, true);
+            collectActor(id, true);
         }
         for (const RE::FormID id : loadedActors) {
-            processActorId(id, initSet.contains(id));
+            collectActor(id, initSet.contains(id));
+        }
+
+        if (resolvedBatch.empty()) {
+            return;
+        }
+
+        // Batch-index all newly loaded actors under a single exclusive SpatialWorldIndex lock.
+        spatialIndex.RegisterLoadedActors(actorPtrs);
+
+        for (const auto& item : resolvedBatch) {
+            if (auto* base = item.actor->GetActorBase()) {
+                lineageUseCases.TryResolvePendingChildren(base->GetFormID(), item.actorId);
+            }
+            deferredResolver.OnActorLoaded(item.actor);
+            relUseCases.OnActorLoaded(item.actorId, item.fromInitScript);
+            if (item.actor->Is3DLoaded()) {
+                lineageUseCases.ApplyChildVisualsOn3DLoad(item.actor);
+            }
         }
     }
 

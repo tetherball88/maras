@@ -222,7 +222,9 @@ namespace MARAS {
         }
     }
 
-    void PlayerChildrenEngineOps::RestoreChildFactions(RE::FormID childId) {
+    void PlayerChildrenEngineOps::RestoreChildFactions(
+        RE::FormID childId,
+        const State::ChildFactionSnapshotRecord* fallbackSnapshot) {
         if (!HasPhysicalActor(childId)) {
             return;
         }
@@ -232,11 +234,15 @@ namespace MARAS {
         }
 
         std::optional<State::ChildFactionSnapshotRecord> foundSnap;
+        bool wasInStore = false;
         {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
             const auto& snaps = snap->household->AllChildFactionSnapshots();
             if (const auto it = snaps.find(State::ChildId{ childId }); it != snaps.end()) {
                 foundSnap = it->second;
+                wasInStore = true;
+            } else if (fallbackSnapshot != nullptr) {
+                foundSnap = *fallbackSnapshot;
             }
         }
 
@@ -253,9 +259,11 @@ namespace MARAS {
             }
             MARAS_LOG_INFO("PlayerChildrenEngineOps::RestoreChildFactions: restored {} factions and crime {:08X} for child {:08X}",
                            foundSnap->factions.size(), foundSnap->crimeFactionId.raw(), childId);
-            State::WorldStore::GetSingleton().Modify([childId](State::WorldState& ws) {
-                ws.household.Write().EraseChildFactionSnapshot(State::ChildId{ childId });
-            });
+            if (wasInStore) {
+                State::WorldStore::GetSingleton().Modify([childId](State::WorldState& ws) {
+                    ws.household.Write().EraseChildFactionSnapshot(State::ChildId{ childId });
+                });
+            }
         } else {
             MARAS_LOG_DEBUG("PlayerChildrenEngineOps::RestoreChildFactions: no faction snapshot found for child {:08X}",
                             childId);

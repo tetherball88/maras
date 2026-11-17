@@ -70,8 +70,80 @@ namespace MARAS {
 
         bool IsBed(RE::TESFurniture* furniture) {
             if (!furniture) return false;
+            if ((furniture->GetFormFlags() & RE::TESFurniture::RecordFlags::kChildCanUse) != 0) {
+                return false;
+            }
             const auto flags = furniture->furnFlags.underlying();
             return (flags & kFurnitureCanSleepMask) != 0;
+        }
+
+        bool IsChildNpcBase(const RE::TESNPC* base) {
+            if (!base || !base->race) return false;
+            return base->race->data.flags.any(RE::RACE_DATA::Flag::kChild);
+        }
+
+        bool IsNpcBaseInFaction(const RE::TESNPC* base, const RE::TESFaction* faction) {
+            if (!base || !faction) return false;
+            for (const auto& fr : base->factions) {
+                if (fr.faction == faction && fr.rank >= 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void AppendUniqueNpcBase(std::vector<RE::TESNPC*>& list, RE::TESNPC* npcBase) {
+            if (!npcBase || npcBase->IsDeleted() || IsChildNpcBase(npcBase)) {
+                return;
+            }
+            if (std::find(list.begin(), list.end(), npcBase) == list.end()) {
+                list.push_back(npcBase);
+            }
+        }
+
+        RE::TESNPC* ResolveAdultNpcBaseFromForm(RE::FormID formId) {
+            if (formId == 0 || IsSyntheticChildID(formId)) {
+                return nullptr;
+            }
+            auto* form = RE::TESForm::LookupByID(formId);
+            if (!form || form->IsDeleted()) {
+                return nullptr;
+            }
+            RE::TESNPC* base = form->As<RE::TESNPC>();
+            if (!base) {
+                if (auto* actor = form->As<RE::Actor>()) {
+                    base = actor->GetActorBase();
+                } else if (auto* refr = form->As<RE::TESObjectREFR>()) {
+                    if (auto* baseObj = refr->GetBaseObject(); baseObj && !baseObj->IsDeleted()) {
+                        base = baseObj->As<RE::TESNPC>();
+                    }
+                }
+            }
+            return (base && !base->IsDeleted() && !IsChildNpcBase(base)) ? base : nullptr;
+        }
+
+        void CollectBedOwnerBaseIds(
+            RE::FormID bedFormId,
+            RE::TESForm* ownerForm,
+            std::span<RE::TESNPC* const> adultResidents,
+            const RE::TESFaction* playerFaction,
+            std::vector<std::pair<RE::FormID, RE::FormID>>& outOwnerBaseToBed) {
+            if (bedFormId == 0 || !ownerForm || ownerForm->IsDeleted() || ownerForm == playerFaction) {
+                return;
+            }
+            if (auto* npcOwner = ownerForm->As<RE::TESNPC>()) {
+                if (!IsChildNpcBase(npcOwner)) {
+                    outOwnerBaseToBed.emplace_back(npcOwner->GetFormID(), bedFormId);
+                }
+                return;
+            }
+            if (auto* facOwner = ownerForm->As<RE::TESFaction>()) {
+                for (RE::TESNPC* residentBase : adultResidents) {
+                    if (IsNpcBaseInFaction(residentBase, facOwner)) {
+                        outOwnerBaseToBed.emplace_back(residentBase->GetFormID(), bedFormId);
+                    }
+                }
+            }
         }
 
         std::string GetFormDisplayName(const RE::TESForm* form) {
@@ -794,9 +866,12 @@ namespace MARAS {
 
         bool foundCenterMarker = false;
         std::vector<RE::TESObjectREFR*> candidateBeds;
+        std::vector<RE::TESNPC*> adultResidents;
 
         cell->ForEachReference([&](RE::TESObjectREFR* ref) {
-            if (!ref) return RE::BSContainer::ForEachResult::kContinue;
+            if (!ref || ref->IsDeleted() || ref->IsDisabled()) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
             auto* base = ref->GetBaseObject();
             if (!base) return RE::BSContainer::ForEachResult::kContinue;
 
@@ -826,14 +901,30 @@ namespace MARAS {
             if (ref->IsPersistent() && base->formType == RE::FormType::NPC) {
                 hasPersistentActor = true;
                 ProcessActorHomeLocked(ref->GetFormID(), cellId);
+                AppendUniqueNpcBase(adultResidents, base->As<RE::TESNPC>());
             }
 
             return RE::BSContainer::ForEachResult::kContinue;
         });
 
         if (hasPersistentActor) {
+            RE::TESForm* cellOwner = cell->GetOwner();
+            const auto* playerFaction = FormCache::GetSingleton().GetPlayerFaction();
+            std::vector<std::pair<RE::FormID, RE::FormID>> ownerBaseToBed;
             for (auto* bedRef : candidateBeds) {
-                ProcessBedOwnershipLocked(*bedRef);
+                RE::TESForm* ownerForm = bedRef->extraList.GetOwner();
+                if (!ownerForm) {
+                    ownerForm = cellOwner;
+                }
+                CollectBedOwnerBaseIds(
+                    bedRef->GetFormID(),
+                    ownerForm,
+                    adultResidents,
+                    playerFaction,
+                    ownerBaseToBed);
+            }
+            for (const auto& [ownerBaseId, bedFormId] : ownerBaseToBed) {
+                AddUniqueBedOwnerLocked(ownerBaseId, bedFormId);
             }
             if (!outData.centerMarker) {
                 MARAS_LOG_WARN("SpatialWorldIndex: Cell {:08X} '{}' has persistent actors but NO center marker found",
@@ -844,10 +935,12 @@ namespace MARAS {
         return hasPersistentActor;
     }
 
-    void SpatialWorldIndex::ProcessBedOwnershipLocked(RE::TESObjectREFR& bedRef) {
-        RE::TESForm* ownerForm = bedRef.extraList.GetOwner();
-        if (!ownerForm) return;
-        m_bedsWithOwners[ownerForm->GetFormID()].push_back(bedRef.GetFormID());
+    void SpatialWorldIndex::AddUniqueBedOwnerLocked(RE::FormID ownerBaseFormId, RE::FormID bedFormId) {
+        if (ownerBaseFormId == 0 || bedFormId == 0) return;
+        auto& beds = m_bedsWithOwners[ownerBaseFormId];
+        if (std::find(beds.begin(), beds.end(), bedFormId) == beds.end()) {
+            beds.push_back(bedFormId);
+        }
     }
 
     void SpatialWorldIndex::ProcessActorHomeLocked(RE::FormID actorFormId, RE::FormID cellId) {
@@ -950,8 +1043,6 @@ namespace MARAS {
         const char* displayName = actor->GetDisplayFullName();
         if (!displayName || displayName[0] == '\0') return;
 
-        const std::string lowerName = Foundation::StringUtils::ToLowerStd(displayName);
-
         m_loadedActors[refID] = actor;
         m_baseToRefMap[baseID] = refID;
 
@@ -973,6 +1064,7 @@ namespace MARAS {
                 }
             }
         } else {
+            const std::string lowerName = Foundation::StringUtils::ToLowerStd(displayName);
             NPCEntry entry;
             entry.refFormID = refID;
             entry.baseFormID = baseID;
@@ -1025,6 +1117,16 @@ namespace MARAS {
         if (!actor) return;
         std::unique_lock lock(m_mutex);
         IndexLoadedActorLocked(actor);
+    }
+
+    void SpatialWorldIndex::RegisterLoadedActors(std::span<RE::Actor* const> actors) {
+        if (actors.empty()) return;
+        std::unique_lock lock(m_mutex);
+        for (RE::Actor* actor : actors) {
+            if (actor) {
+                IndexLoadedActorLocked(actor);
+            }
+        }
     }
 
     void SpatialWorldIndex::RefreshIndex() {
@@ -1668,6 +1770,110 @@ namespace MARAS {
         root["loadedActors"] = loadedJson;
 
         return root;
+    }
+
+    bool SpatialWorldIndex::IsHomeCell(RE::FormID cellFormID) const {
+        if (cellFormID == 0) return false;
+        std::shared_lock lock(m_mutex);
+        return m_homeCells.contains(cellFormID);
+    }
+
+    std::vector<Foundation::RefId> SpatialWorldIndex::RefreshHomeCellBeds(
+        RE::TESObjectCELL* cell,
+        const std::unordered_map<Foundation::RefId, Foundation::FormRawId>& savedOriginalBedOwners) {
+        std::vector<Foundation::RefId> loadedBedRefs;
+        if (!cell) {
+            return loadedBedRefs;
+        }
+
+        const RE::FormID cellId = cell->GetFormID();
+        if (cellId == 0) {
+            return loadedBedRefs;
+        }
+
+        bool isKnownHomeCell = false;
+        std::vector<RE::FormID> indexedResidentIds;
+        {
+            std::shared_lock lock(m_mutex);
+            isKnownHomeCell = m_homeCells.contains(cellId);
+            if (isKnownHomeCell) {
+                for (const auto& [actorId, homeData] : m_actorsWithHome) {
+                    if (homeData.homeCell == cellId) {
+                        indexedResidentIds.push_back(actorId);
+                    }
+                }
+            }
+        }
+
+        // Gather resident base forms and bed references on the main thread outside m_mutex.
+        std::vector<RE::TESNPC*> adultResidents;
+        adultResidents.reserve(indexedResidentIds.size());
+        for (const RE::FormID residentId : indexedResidentIds) {
+            AppendUniqueNpcBase(adultResidents, ResolveAdultNpcBaseFromForm(residentId));
+        }
+
+        std::vector<RE::TESObjectREFR*> candidateBeds;
+        cell->ForEachReference([&](RE::TESObjectREFR* ref) {
+            if (!ref || ref->IsDeleted() || ref->IsDisabled()) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+            auto* base = ref->GetBaseObject();
+            if (!base) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+            if (ref->IsPersistent() && base->formType == RE::FormType::NPC) {
+                AppendUniqueNpcBase(adultResidents, base->As<RE::TESNPC>());
+            } else if (base->formType == RE::FormType::Furniture) {
+                if (auto* furn = base->As<RE::TESFurniture>(); furn && IsBed(furn)) {
+                    candidateBeds.push_back(ref);
+                    loadedBedRefs.emplace_back(ref->GetFormID());
+                }
+            }
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+
+        if (!isKnownHomeCell || candidateBeds.empty()) {
+            return loadedBedRefs;
+        }
+
+        RE::TESForm* cellOwner = cell->GetOwner();
+        const auto* playerFaction = FormCache::GetSingleton().GetPlayerFaction();
+        std::vector<std::pair<RE::FormID, RE::FormID>> discoveredOwnerBeds;
+        discoveredOwnerBeds.reserve(candidateBeds.size());
+
+        for (RE::TESObjectREFR* bedRef : candidateBeds) {
+            const RE::FormID bedFormId = bedRef->GetFormID();
+            RE::TESForm* ownerForm = nullptr;
+            if (const auto savedIt = savedOriginalBedOwners.find(Foundation::RefId{ bedFormId });
+                savedIt != savedOriginalBedOwners.end()) {
+                if (!savedIt->second.IsNull()) {
+                    ownerForm = RE::TESForm::LookupByID(savedIt->second.raw());
+                } else {
+                    ownerForm = cellOwner;
+                }
+            } else {
+                ownerForm = bedRef->extraList.GetOwner();
+                if (!ownerForm) {
+                    ownerForm = cellOwner;
+                }
+            }
+
+            CollectBedOwnerBaseIds(
+                bedFormId,
+                ownerForm,
+                adultResidents,
+                playerFaction,
+                discoveredOwnerBeds);
+        }
+
+        if (!discoveredOwnerBeds.empty()) {
+            std::unique_lock lock(m_mutex);
+            for (const auto& [ownerBaseId, bedFormId] : discoveredOwnerBeds) {
+                AddUniqueBedOwnerLocked(ownerBaseId, bedFormId);
+            }
+        }
+
+        return loadedBedRefs;
     }
 
     RE::FormID SpatialWorldIndex::GetNpcHome(RE::Actor* npc) const {

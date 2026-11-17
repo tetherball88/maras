@@ -271,4 +271,51 @@ namespace MARAS::Domain::Household {
         return out;
     }
 
+    bool HasExpiredChildOrders(
+        const State::HouseholdTable& hh,
+        float currentGameDay) noexcept {
+        if (currentGameDay < 0.0f) {
+            return false;
+        }
+        for (const auto& [cid, st] : hh.AllChildStates()) {
+            (void)cid;
+            if (st.orderExpiryGameDay >= 0.0f && currentGameDay >= st.orderExpiryGameDay) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::vector<ChildId> ApplyExpireChildOrders(
+        State::WorldState& ws,
+        float currentGameDay) {
+        std::vector<ChildId> expiredIds;
+        if (currentGameDay < 0.0f) {
+            return expiredIds;
+        }
+
+        const auto& hhRead = ws.household.Read();
+        for (const auto& [cid, st] : hhRead.AllChildStates()) {
+            if (st.orderExpiryGameDay >= 0.0f && currentGameDay >= st.orderExpiryGameDay) {
+                expiredIds.push_back(cid);
+            }
+        }
+        if (expiredIds.empty()) {
+            return expiredIds;
+        }
+
+        std::sort(expiredIds.begin(), expiredIds.end(), [](ChildId a, ChildId b) {
+            return a.raw() < b.raw();
+        });
+
+        auto& hhWrite = ws.household.Write();
+        for (const ChildId cid : expiredIds) {
+            if (auto* st = hhWrite.FindChildStateMutable(cid)) {
+                st->currentOrder = 0.0f;
+                st->orderExpiryGameDay = -1.0f;
+            }
+        }
+        return expiredIds;
+    }
+
 }  // namespace MARAS::Domain::Household

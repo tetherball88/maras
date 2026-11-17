@@ -484,6 +484,7 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     void Log(RE::StaticFunctionTag*, std::string msg, int32_t logLevel);
+    void ReportMigrationIssue(RE::StaticFunctionTag*, std::string source, std::string detail);
     void SetLogLevel(RE::StaticFunctionTag*, int32_t logLevel);
     int32_t GetLogLevel(RE::StaticFunctionTag*);
     void LogNPCStatistics(RE::StaticFunctionTag*);

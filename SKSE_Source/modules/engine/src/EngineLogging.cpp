@@ -1,9 +1,14 @@
 #include "maras/engine/EngineLogging.h"
 
+#include "maras/foundation/StringUtils.h"
+#include "maras/foundation/VersionInfo.h"
+
 #include <spdlog/sinks/basic_file_sink.h>
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <string>
 
 namespace MARAS {
 
@@ -80,6 +85,57 @@ namespace MARAS {
             spdlog::set_default_logger(logger);
             MARAS::LoggerSlot() = std::move(logger);
             InitializeFoundationLogSink();
+            MARAS_LOG_INFO("MARAS initialized (version: {})", GetInstalledModVersion());
+        }
+
+        std::string_view GetInstalledModVersion() noexcept {
+            static const std::string s_cachedVersion = []() -> std::string {
+                const std::filesystem::path candidates[] = {
+                    "Data/SKSE/Plugins/MARAS/version.txt",
+                    "SKSE/Plugins/MARAS/version.txt",
+                };
+                for (const auto& candidate : candidates) {
+                    std::error_code ec;
+                    if (!std::filesystem::is_regular_file(candidate, ec) || ec) {
+                        continue;
+                    }
+                    std::ifstream in(candidate);
+                    std::string line;
+                    if (in && std::getline(in, line)) {
+                        const std::string_view trimmed = Foundation::StringUtils::TrimView(line);
+                        if (!trimmed.empty() && trimmed.size() <= 64u) {
+                            return std::string(trimmed);
+                        }
+                    }
+                }
+                return std::string(Foundation::kCompiledModVersion);
+            }();
+            return s_cachedVersion;
+        }
+
+        std::filesystem::path WriteMigrationReportFile(std::string_view reportText) noexcept {
+            try {
+                auto logDir = SKSE::log::log_directory();
+                std::filesystem::path dirPath = logDir ? *logDir : std::filesystem::path("Data/SKSE/Plugins/MARAS");
+                if (logDir && !std::filesystem::is_directory(dirPath)) {
+                    dirPath = dirPath.parent_path();
+                }
+                std::error_code ec;
+                std::filesystem::create_directories(dirPath, ec);
+                std::filesystem::path outPath = dirPath / "MARAS_MigrationReport.log";
+                std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+                if (!out) {
+                    MARAS_LOG_ERROR("WriteMigrationReportFile: failed to open '{}' for writing", outPath.string());
+                    return {};
+                }
+                out.write(reportText.data(), static_cast<std::streamsize>(reportText.size()));
+                out.flush();
+                return std::filesystem::weakly_canonical(outPath, ec).empty() ? outPath
+                                                                               : std::filesystem::weakly_canonical(outPath, ec);
+            } catch (const std::exception& ex) {
+                MARAS_LOG_ERROR("WriteMigrationReportFile: exception writing report: {}", ex.what());
+                return {};
+            }
         }
 
         void ApplyLogLevel(std::int32_t level) noexcept {

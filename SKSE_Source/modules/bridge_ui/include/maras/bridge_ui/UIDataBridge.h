@@ -33,6 +33,7 @@ namespace MARAS::Bridge::Ui {
         void Revert();
 
         // Outbound UI pushes
+        void RefreshDashboardOnOpen();
         void SendOverviewData();
         void SendSettingsData();
         void SendLocaleData();
@@ -72,6 +73,7 @@ namespace MARAS::Bridge::Ui {
         void HandleAction(const std::string& type, const nlohmann::json& payload);
 
         // Game-thread push implementations
+        void RefreshDashboardOnOpenOnMainThread();
         void SendOverviewDataOnMainThread();
         void SendSettingsDataOnMainThread();
         void SendLocaleDataOnMainThread();

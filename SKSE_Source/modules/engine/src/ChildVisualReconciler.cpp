@@ -4,11 +4,13 @@
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/ChildSpawnService.h"
+#include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/FormUtils.h"
 #include "maras/engine/NPCTypeDeterminer.h"
 #include "maras/engine/SpatialWorldIndex.h"
+#include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"
 #include "maras/foundation/EnumUtils.h"
 #include "maras/foundation/StringUtils.h"
@@ -641,6 +643,7 @@ namespace MARAS {
     void ChildVisualReconciler::FlushRetiredForms() {
         for (auto* cloneBase : retiredClonedBases_) {
             if (!cloneBase) continue;
+            cloneBase->factions.clear();
             if (cloneBase->perks) {
                 RE::free(cloneBase->perks);
                 cloneBase->perks = nullptr;
@@ -797,6 +800,26 @@ namespace MARAS {
             }
             std::memcpy(cloneNpc, origNpc, sizeof(RE::TESNPC));
 
+            // Deep-clone and sanitize base factions so cloneNpc never aliases origNpc->factions._data
+            // and never exposes a null TESFaction* entry to Actor::GetFactionReaction on AI job threads.
+            std::memset(&cloneNpc->factions, 0, sizeof(cloneNpc->factions));
+            std::size_t strippedNullFactions = 0;
+            for (const auto& entry : origNpc->factions) {
+                if (entry.faction != nullptr) {
+                    cloneNpc->factions.push_back(entry);
+                } else {
+                    ++strippedNullFactions;
+                }
+            }
+            if (strippedNullFactions > 0) {
+                MARAS_LOG_DEBUG(
+                    "[ChildTraining] Stripped {} null faction entry/entries when cloning adult template {:08X} for child {:08X}",
+                    strippedNullFactions, origNpc->GetFormID(), childId);
+            }
+            if (cloneNpc->crimeFaction && cloneNpc->crimeFaction->IsDeleted()) {
+                cloneNpc->crimeFaction = nullptr;
+            }
+
             if (origNpc->perks && origNpc->perkCount > 0) {
                 auto* newPerks = RE::calloc<RE::PerkRankData>(origNpc->perkCount);
                 if (newPerks) {
@@ -827,13 +850,20 @@ namespace MARAS {
             }
             cloneNpc->headRelatedData = newHrd;
 
-            // Prevent template container weapons (CNTO) and template spells (SPLO) from bleeding onto this actor
+            // Prevent template container weapons (CNTO), spells (SPLO), unique/template flags,
+            // template AI packages, and template BGSRelationship records from bleeding onto this actor
             cloneNpc->containerObjects = nullptr;
             cloneNpc->numContainerObjects = 0;
             cloneNpc->actorEffects = nullptr;
             cloneNpc->sleepOutfit = nullptr;
+            cloneNpc->baseTemplateForm = nullptr;
+            cloneNpc->relationships = nullptr;
+            std::memset(&cloneNpc->aiPackages, 0, sizeof(cloneNpc->aiPackages));
+            cloneNpc->actorData.templateUseFlags = RE::ACTOR_BASE_DATA::TEMPLATE_USE_FLAG::kNone;
             cloneNpc->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kAutoCalcStats);
             cloneNpc->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kPCLevelMult);
+            cloneNpc->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kUnique);
+            cloneNpc->actorData.actorBaseFlags.reset(RE::ACTOR_BASE_DATA::Flag::kUsesTemplate);
 
             const char* origNpcName = origNpc->GetName();
             std::memset(&cloneNpc->fullName, 0, sizeof(RE::BSFixedString));
@@ -994,6 +1024,13 @@ namespace MARAS {
 
     void ChildVisualReconciler::InitializeAndApplyChildVisualsAndRPG(RE::FormID childId) {
         if (!HasPhysicalActor(childId)) {
+            return;
+        }
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddCurrentEpochTask("ChildVisualReconciler::InitializeAndApplyChildVisualsAndRPG", [childId]() {
+                std::lock_guard lock(GetPapyrusMutex());
+                ChildVisualReconciler::GetSingleton().InitializeAndApplyChildVisualsAndRPG(childId);
+            });
             return;
         }
         const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
@@ -1613,10 +1650,22 @@ namespace MARAS {
     }
 
     void ChildVisualReconciler::ApplyChildVisualsOn3DLoad(RE::Actor* actor) {
-        if (!actor) {
+        if (!actor || actor->IsDeleted()) {
             return;
         }
         const RE::FormID formId = actor->GetFormID();
+        if (formId == 0) {
+            return;
+        }
+        if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            AddCurrentEpochTask("ChildVisualReconciler::ApplyChildVisualsOn3DLoad", [formId]() {
+                std::lock_guard lock(GetPapyrusMutex());
+                if (auto* a = RE::TESForm::LookupByID<RE::Actor>(formId); a && !a->IsDeleted()) {
+                    ChildVisualReconciler::GetSingleton().ApplyChildVisualsOn3DLoad(a);
+                }
+            });
+            return;
+        }
         std::optional<State::ChildRecord> recOpt;
         {
             const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();

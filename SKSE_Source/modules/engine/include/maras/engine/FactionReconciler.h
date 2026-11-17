@@ -43,6 +43,9 @@ namespace MARAS {
         // Listener registration for external systems (e.g. child adoption tracking)
         void RegisterFactionAddedListener(FactionAddedCallback callback);
         void RegisterFactionRemovedListener(FactionRemovedCallback callback);
+        [[nodiscard]] bool HasListeners() const noexcept {
+            return hasListeners_.load(std::memory_order_acquire);
+        }
 
         // Internal dispatcher called from the engine hooks
         void NotifyFactionAdded(RE::Actor* a_actor, RE::TESFaction* a_faction, std::int8_t a_rank);
@@ -120,6 +123,7 @@ namespace MARAS {
         std::shared_mutex mutex_{};
         std::vector<FactionAddedCallback> addedListeners_{};
         std::vector<FactionRemovedCallback> removedListeners_{};
+        std::atomic<bool> hasListeners_{ false };
         std::atomic<bool> pendingAllOnLoad_{ false };
     };
 

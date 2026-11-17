@@ -277,7 +277,7 @@ Function Migrate() global
         TTM_Debug.debug("TTM_ServiceFertilityBF: BeeingFemale.esm not found")
         return
     endif
-    TTM_Debug.debug("TTM_ServiceFertilityBF: Starting one-time migration from Beeing Female storage")
+    TTM_Debug.info("TTM_ServiceFertilityBF: Starting one-time migration from Beeing Female storage")
 
     StopDialogueQuests()
 
@@ -333,10 +333,14 @@ Function MigrateMother(Actor mother) global
                 bioFather = StorageUtil.FormListGet(mother, "FW.ChildFather", 0) as Actor
             endif
             int unbornID = MARAS.RegisterUnbornChild(mother, bioFather, conceptionTime, false)
-            if (currentState >= 5 && MARAS.IsPregnancySecretForPartner(unbornID))
-                MARAS.RevealPregnancyToPartner(unbornID, true)
+            if (unbornID == 0 && !mother.IsDead())
+                MARAS.ReportMigrationIssue("Beeing Female Migration", "Failed to register active BF pregnancy for mother '" + TTM_Utils.GetActorName(mother) + "'.")
+            else
+                if (currentState >= 5 && MARAS.IsPregnancySecretForPartner(unbornID))
+                    MARAS.RevealPregnancyToPartner(unbornID, true)
+                endif
+                TTM_Debug.info("TTM_ServiceFertilityBF: Migrated active pregnancy: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(bioFather) + " (Unborn ID=" + unbornID + ")")
             endif
-            TTM_Debug.info("TTM_ServiceFertilityBF: Migrated active pregnancy: mother=" + TTM_Utils.GetActorName(mother) + ", father=" + TTM_Utils.GetActorName(bioFather) + " (Unborn ID=" + unbornID + ")")
             i += 1
         endWhile
     endif
@@ -354,7 +358,9 @@ Function MigrateMother(Actor mother) global
         endif
         if (MARAS.FindSyntheticChild(mother, babyName) == 0)
             int infantID = MARAS.RegisterFertilityChild(0, mother, none, babyFather, babyDOB, babyDOB, babyName)
-            if (infantID != 0)
+            if (infantID == 0 && !mother.IsDead())
+                MARAS.ReportMigrationIssue("Beeing Female Migration", "Failed to register carried BF newborn '" + babyName + "' for mother '" + TTM_Utils.GetActorName(mother) + "'.")
+            elseif (infantID != 0)
                 MARAS.SetChildGender(infantID, babySex)
                 TTM_Debug.info("TTM_ServiceFertilityBF: Migrated carried baby item: mother=" + TTM_Utils.GetActorName(mother) + ", name=" + babyName + " (Infant ID=" + infantID + ")")
             endif
