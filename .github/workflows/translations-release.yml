@@ -1,0 +1,65 @@
+name: Translations Release
+
+on:
+  push:
+    tags:
+      - "translations-*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Translations release version (e.g. v2.6.0.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  make-translations-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version and release tag
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            RAW="${INPUT_VERSION}"
+          else
+            RAW="${REF_NAME}"
+          fi
+          RAW="$(printf '%s' "${RAW}" | tr -d '\r\n' | tr -d ' ')"
+          VERSION="${RAW#translations-}"
+          if [ -z "${VERSION}" ] || ! printf '%s' "${VERSION}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+            echo "Invalid translations version: '${RAW}'" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=translations-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved translations version=${VERSION}, tag=translations-${VERSION}"
+
+      - name: Build Translations FOMOD zip
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          mkdir -p out
+          python3 .agents/skills/maras-translations/scripts/package_translations_fomod.py \
+            --version "${VERSION}" \
+            --output "out/MARAS_Translations_${VERSION}.zip"
+
+      - name: Create or update Translations GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: Translations ${{ steps.meta.outputs.version }}
+          body: "Automated M.A.R.A.S Translations FOMOD release (${{ steps.meta.outputs.version }})"
+          files: |
+            out/MARAS_Translations_${{ steps.meta.outputs.version }}.zip

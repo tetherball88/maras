@@ -163,7 +163,12 @@ You can either manage `<lang>.json` directly through `sync_localization.py` (`"d
 }
 ```
 > [!IMPORTANT]
-> Preserve Creation Kit text-replacement tags such as `<Alias=Spouse>`, `<Alias=Player>`, `<Alias.Pronoun=Spouse>`, `<Alias.PronounObj=Spouse>`, `<mag>`, `<dur>`, and `%.0f` inside DSD `"string"` values (`sync_localization.py` automatically checks these tags for typos or omissions).
+> - Preserve Creation Kit text-replacement tags such as `<Alias=Spouse>`, `<Alias=Player>`, `<Alias.Pronoun=Spouse>`, `<Alias.PronounObj=Spouse>`, `<mag>`, `<dur>`, and `%.0f` inside DSD `"string"` values (keep both `<mag>` tags in `0000D0` `TTM_LoversRadianceEffect`).
+> - **`INFO NAM1` vs. `INFO RNAM` indexing**: Spoken NPC lines (`INFO NAM1`) **must** use 1-based `ResponseNumber` (`"index": 1, 2...`, never `0`), because `index: 0` is reserved for player prompt overrides (`INFO RNAM`) in DSD.
+> - **Magic Effect descriptions**: DSD requires `"type": "MGEF DNAM"` (not `"MGEF DESC"`).
+> - **`$DragonFont` runes (`00004D|TT_MARAS.esp` `BOOK DESC`)**: Uses Skyrim's uppercase-ASCII-only Dragon rune font—keep `00004D` `BOOK DESC` in its original uppercase English ASCII text verbatim so runes render instead of missing-glyph boxes, and translate `00004D` `BOOK FULL` + `00004C` (*Scroll of Alessia's Grace (Translated)*) instead.
+> - **Skyrim Scaleform-safe punctuation (`DSD`, `names.json`, `hud.*`/`pet.*`/`common.*`/`mcm.*`)**: Never leave typographic Unicode punctuation (`—`, `–`, `…`, `«»`, `“”`, `’`, `ʼ`, NBSP, zero-width spaces) in Skyrim-rendered text—it renders as `□` boxes in `.swf` fonts. Use plain ASCII `-`, `...`, `"`, and `'` (or pass `--sanitize-existing` to normalize existing packs).
+> (`sync_localization.py` automatically enforces all of these rules!)
 
 - **For M.A.R.A.S Developers**: Whenever records in `.spriggit/TT_MARAS.esp/` are added or edited, regenerate the DSD template via:
   ```powershell
@@ -182,7 +187,7 @@ Unlike hardcoded C++ or React strings, M.A.R.A.S's gameplay data catalogs—**Sp
 
 | Gameplay Source File(s) | Entry Identifier | Localization Keys in `catalogs.json` (or `zz_<mod>.json`) | Not Localized (Keep in Gameplay File) |
 | :--- | :--- | :--- | :--- |
-| `SKSE/Plugins/MARAS/bonuses.json` | `<category>` (e.g. `warrior`, `nobles`) + array index (`0`) | `bonuses.<category>.<effectIndex>.name`<br>`bonuses.<category>.<effectIndex>.description` | `perk`, `type`, `unit`, `value` |
+| `SKSE/Plugins/MARAS/bonuses.json` | `<category>` (e.g. `warrior`, `nobles`) + array index (`0`) | `bonuses.<category>.<effectIndex>.name`<br>`bonuses.<category>.<effectIndex>.description` *(renders immediately before `15%` inline — do not end with a period)* | `perk`, `type`, `unit`, `value` |
 | `SKSE/Plugins/MARAS/childTraining.yaml` & `childTraining/*.yaml` | `trainingLocations[].id` (e.g. `mage`, `morag_tong`) | `training.<id>.name`<br>`training.<id>.location`<br>`training.<id>.description`<br>`training.<id>.factionLabel` *(optional)* | `costMultiplier`, `skillType`, `skills`, `spells`, `perks`, `items`, `outfit`, `requirements`, `skyrimnetContext` *(stays English for LLM)* |
 | `SKSE/Plugins/MARAS/childTraining.yaml` & `childTraining/*.yaml` | `daedricBlessings[].id` (e.g. `azura`, `nocturnal`) | `blessing.<id>.name` | `quest`, `hmsBonus`, `skills`, `spells`, `perks` |
 | `SKSE/Plugins/MARAS/encounters/*.json` & `encounters/overrides/*.json` | `id` (e.g. `open_date_away`, `cheating_talking_letter`) | `encounters.<id>.modalTitle`, `.modalSubtitle`, `.envelopeMessage`, `.infoBoxTitle`, `.buttonLabel`<br>`encounters.<id>.defaults.{salutation,premise,clue,signOff}`<br>`encounters.<id>.variants.<Temperament>.{salutation,premise,clue,signOff}` | `modalTone`, `modalSize`, `allowLoverNameToken`, `defaultCancelButtonIndex` |

@@ -20,9 +20,10 @@ M.A.R.A.S uses a **100% ESP-override-free two-layer localization architecture** 
   - `SKSE/Plugins/MARAS/promptStrings.json` (`PromptStringsLoader`)
   - `skyrimnetContext` fields inside `SKSE/Plugins/MARAS/childTraining.yaml` and `childTraining/*.yaml`
   - Internal JSON/YAML keys, enum identifiers, FormKeys, `TTM_*` technical EditorIDs, co-save tags, and `MARAS.log` diagnostics.
-- **Placeholder & Tag Integrity**:
+- **Placeholder, Tag & Scaleform Punctuation Integrity**:
   - Never rename `{named}` placeholder tokens in JSON packs (`{{` and `}}` escape literal braces).
   - Never alter Creation Kit / Scaleform tags (`<Alias=...>`, `<Alias.Pronoun=...>`, `<mag>`, `<dur>`, `%.0f`, `<font ...>`, `</font>`) in DSD files, and never put non-ASCII characters inside `$DragonFont` (`00004D|TT_MARAS.esp` `BOOK DESC`).
+  - **Skyrim Scaleform Safe Punctuation (`DSD`, `names.json`, and `hud.*` / `pet.*` / `common.*` / `mcm.*`)**: Never emit LLM typography (`—`, `–`, `…`, `«»`, `“”`, `’`, `ʼ`, `•`, `→`, NBSP, zero-width spaces) in Skyrim-rendered text—it renders as missing-glyph squares (`□`) in `.swf` fonts. Always use plain ASCII `-`, `...`, `"`, and `'` (enforced automatically by `sync_localization.py` and `translation_batches.py`).
 
 ---
 
@@ -104,8 +105,11 @@ Before translating strings into `<lang>`, **read [translation-style-and-gotchas.
    # Verify 100% coverage and 0 placeholder/CK-tag warnings or errors:
    python tools/localization/sync_localization.py --lang <lang> --strict
 
-   # Build standalone zero-ESP archive (SKSE/Plugins/MARAS/localization/<lang>/ + DynamicStringDistributor/...):
+   # Build standalone zero-ESP archive for a single language (SKSE/Plugins/MARAS/localization/<lang>/ + DynamicStringDistributor/...):
    python .agents/skills/maras-translations/scripts/translation_batches.py package --lang <lang> --output "dist/MARAS_Translation_<lang>.zip"
+
+   # Build the multi-language MO2/Vortex FOMOD installer (auto-discovers all complete/valid non-en packs; SelectExactlyOne):
+   python .agents/skills/maras-translations/scripts/package_translations_fomod.py --version <ver> --output "dist/MARAS_Translations_<ver>.zip"
    ```
    *(In-game live preview: open Dashboard $\to$ **Settings $\to$ General $\to$ Language**, select `<lang>`, and click **Reload Localization** without restarting Skyrim.)*
 
