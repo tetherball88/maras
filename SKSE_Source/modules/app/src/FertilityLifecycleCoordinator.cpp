@@ -8,10 +8,13 @@
 #include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/LocalizationService.h"
 #include "maras/engine/NamePoolLoader.h"
 #include "maras/engine/SpatialWorldIndex.h"
+#include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
 #include "maras/foundation/StrongIds.h"
+#include "maras/state/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
 
 #include <algorithm>
@@ -942,6 +945,96 @@ namespace MARAS::App {
             ActorSvc::GetName(motherId), motherId, fatherId, childName, childId);
 
         return static_cast<std::int32_t>(childId);
+    }
+
+    void FertilityLifecycleCoordinator::ShowBlockedFertilityMcmModal(
+        Domain::Lineage::BlockedFertilityMcmClick blockedClick,
+        std::string_view optionStateName) {
+        using Domain::Lineage::BlockedFertilityMcmAction;
+        using Domain::Lineage::FertilityProvider;
+
+        const std::string providerName =
+            (blockedClick.provider == FertilityProvider::Fmr)
+                ? MARAS::TrOr("modal.fertility_mcm_blocked.provider_fmr", "Fertility Mode Reloaded")
+                : MARAS::TrOr("modal.fertility_mcm_blocked.provider_bf", "Beeing Female NG");
+
+        std::string_view msgKey = "modal.fertility_mcm_blocked.msg_spawn_young";
+        std::string_view msgFallback =
+            "Spawning young children into your household is managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your child's lineage, home assignment, and genetics stay intact.";
+
+        switch (blockedClick.action) {
+            case BlockedFertilityMcmAction::SpawnYoungChild:
+                break;
+            case BlockedFertilityMcmAction::SendToTraining:
+                msgKey = "modal.fertility_mcm_blocked.msg_send_training";
+                msgFallback =
+                    "Sending children to adolescent training is managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked (no gold was spent) so your child can use M.A.R.A.S.'s training paths, parent discounts, and RPG progression.";
+                break;
+            case BlockedFertilityMcmAction::SendToOrphanage:
+                msgKey = "modal.fertility_mcm_blocked.msg_send_orphanage";
+                msgFallback =
+                    "Child custody and household management are handled through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your child record is not deleted.";
+                break;
+            case BlockedFertilityMcmAction::SpawnAdultChild:
+                msgKey = "modal.fertility_mcm_blocked.msg_spawn_adult";
+                msgFallback =
+                    "Spawning grown adult children is managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your adult child receives their M.A.R.A.S. visual genetics, class perks, and AI routines.";
+                break;
+            case BlockedFertilityMcmAction::DismissAdultChild:
+                msgKey = "modal.fertility_mcm_blocked.msg_dismiss_adult";
+                msgFallback =
+                    "Grown adult children are managed as independent NPCs and followers by M.A.R.A.S. rather than the {mod} MCM. Your MCM click was blocked so the actor is not disabled.";
+                break;
+            case BlockedFertilityMcmAction::GrowOrHatchChild:
+                msgKey = "modal.fertility_mcm_blocked.msg_grow_or_hatch";
+                msgFallback =
+                    "Growing children and graduating them to adulthood are managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your child's training and lineage progression stay intact.";
+                break;
+        }
+
+        ModalRequest req{};
+        req.modalType = "generic";
+        req.tone = ModalTone::Warning;
+        req.size = ModalSize::Md;
+        req.defaultCancelButtonIndex = 1;
+        req.title = MARAS::TrOr("modal.fertility_mcm_blocked.title", "Managed by M.A.R.A.S.");
+        req.subtitle = MARAS::TrFmtOr(
+            "modal.fertility_mcm_blocked.subtitle",
+            "{mod} — Child Management",
+            { { "mod", providerName } });
+        req.message = MARAS::TrFmtOr(msgKey, msgFallback, { { "mod", providerName } });
+
+        req.controls.push_back(ModalControl::MakeInfoBox(
+            "use_maras_dashboard",
+            MARAS::TrOr("modal.fertility_mcm_blocked.infobox_label", "Use M.A.R.A.S. Dashboard Instead"),
+            MARAS::TrOr(
+                "modal.fertility_mcm_blocked.infobox_body",
+                "Open the M.A.R.A.S. Dashboard -> Children tab to spawn young children into a home, send children to training, or spawn graduated adult children."),
+            ModalTone::Default));
+
+        req.buttons.push_back(ModalButton::Make(
+            "open_dashboard",
+            MARAS::TrOr("modal.fertility_mcm_blocked.btn_open_dashboard", "Open M.A.R.A.S. Dashboard"),
+            ModalButtonVariant::Primary));
+        req.buttons.push_back(ModalButton::Make(
+            "close",
+            MARAS::TrOr("modal.fertility_mcm_blocked.btn_close", "OK"),
+            ModalButtonVariant::Secondary));
+
+        MARAS_LOG_DEBUG(
+            "[Fertility] Enqueued blocked MCM alert modal for {} state '{}'",
+            providerName,
+            optionStateName);
+
+        const State::SessionEpoch expectedEpoch = State::GetSessionEpoch();
+        GetModalGateway().ShowModal(std::move(req), [expectedEpoch](const ModalResponse& resp) {
+            if (resp.aborted || resp.buttonId != "open_dashboard") {
+                return;
+            }
+            MARAS::AddEpochTask(expectedEpoch, "FertilityLifecycleCoordinator::OpenDashboardFromMcmAlert", []() {
+                GetUiBridgeGateway().ShowDashboard();
+            });
+        });
     }
 
 }  // namespace MARAS::App

@@ -43,8 +43,8 @@ Most fertility mods don't spawn a 3D toddler the second a baby is born—they tr
 | 🏃‍♂️ **"Real Kids"** *(Spawned Actors)* | A physical child (or grown-up adult follower!) walking around Skyrim. | Living in your homes, playing tag, doing chores, or fighting beside you as an adult follower! |
 
 > [!TIP]
-> **The One-Click `Spawn Child` Button!**
-> Have a biological child who reached the `🧸 Child (Unspawned)` stage? Open their profile in the **M.A.R.A.S Dashboard (`Alt + B`)** and click **`Spawn Child`** in the top-right corner! M.A.R.A.S will spawn their physical 3D child actor right into the world and link all of their family history automatically. ✨
+> **The One-Click `Spawn Child` Button! (Don't Use FMR / Beeing Female MCM Child Buttons)**
+> Have a biological child who reached the `🧸 Child (Unspawned)` stage? Open their profile in the **M.A.R.A.S Dashboard (`Alt + B`)** and click **`Spawn Child`** (or **`Send to Training`** / **`Spawn Adult`**)! If you accidentally click the old child adoption, training, summon, or grow buttons inside the **Fertility Mode Reloaded** or **Beeing Female NG** MCM menus, M.A.R.A.S will automatically block that click before any gold is spent or actors are broken and pop up a helpful shortcut to open the **M.A.R.A.S Dashboard** instead. ✨
 
 ---
 

@@ -59,6 +59,65 @@ namespace MARAS::Domain::Lineage {
         return BfCycleStateAction::None;
     }
 
+    std::optional<BlockedFertilityMcmClick> ClassifyBlockedFertilityMcmClick(
+        std::string_view configScriptName,
+        std::string_view optionStateName) noexcept {
+        if (configScriptName.empty() || optionStateName.empty()) {
+            return std::nullopt;
+        }
+
+        using Foundation::StringUtils::CaseInsensitiveEquals;
+
+        if (CaseInsensitiveEquals(configScriptName, "_JSW_BB_ConfigQuestScript")) {
+            if (CaseInsensitiveEquals(optionStateName, "EXECUTE_ADOPTION")) {
+                return BlockedFertilityMcmClick{
+                    .provider = FertilityProvider::Fmr,
+                    .action = BlockedFertilityMcmAction::SpawnYoungChild,
+                };
+            }
+            if (CaseInsensitiveEquals(optionStateName, "SEND_FOR_TRAINING")) {
+                return BlockedFertilityMcmClick{
+                    .provider = FertilityProvider::Fmr,
+                    .action = BlockedFertilityMcmAction::SendToTraining,
+                };
+            }
+            if (CaseInsensitiveEquals(optionStateName, "SEND_TO_HONORHALL")) {
+                return BlockedFertilityMcmClick{
+                    .provider = FertilityProvider::Fmr,
+                    .action = BlockedFertilityMcmAction::SendToOrphanage,
+                };
+            }
+            if (CaseInsensitiveEquals(optionStateName, "SUMMON_SELECTED_UNSUMMONED") ||
+                CaseInsensitiveEquals(optionStateName, "SUMMON_ALL_UNSUMMONED")) {
+                return BlockedFertilityMcmClick{
+                    .provider = FertilityProvider::Fmr,
+                    .action = BlockedFertilityMcmAction::SpawnAdultChild,
+                };
+            }
+            if (CaseInsensitiveEquals(optionStateName, "DISMISS_SELECTED_SUMMONED") ||
+                CaseInsensitiveEquals(optionStateName, "DISMISS_ALL_SUMMONED")) {
+                return BlockedFertilityMcmClick{
+                    .provider = FertilityProvider::Fmr,
+                    .action = BlockedFertilityMcmAction::DismissAdultChild,
+                };
+            }
+            return std::nullopt;
+        }
+
+        if (CaseInsensitiveEquals(configScriptName, "FWSystemConfig")) {
+            if (CaseInsensitiveEquals(optionStateName, "TextGrowSelected") ||
+                CaseInsensitiveEquals(optionStateName, "TextGrowUpChildren")) {
+                return BlockedFertilityMcmClick{
+                    .provider = FertilityProvider::BeeingFemale,
+                    .action = BlockedFertilityMcmAction::GrowOrHatchChild,
+                };
+            }
+            return std::nullopt;
+        }
+
+        return std::nullopt;
+    }
+
     ChildId FindSyntheticChildByName(
         const State::LineageTable& lineage,
         ActorId motherId,

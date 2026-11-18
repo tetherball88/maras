@@ -3,6 +3,7 @@
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 #include "maras/domain/household/SpouseBuffRules.h"
+#include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/domain/relationships/GiftAndIntimacyRules.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/state/CoSaveCodec.h"
@@ -129,6 +130,13 @@ namespace MARAS::Engine {
             bool hadSex) {
             (void)recordedPartnerIds;
             (void)hadSex;
+        }
+
+        virtual void OnBlockedFertilityMcmClick(
+            Domain::Lineage::BlockedFertilityMcmClick blockedClick,
+            std::string_view optionStateName) {
+            (void)blockedClick;
+            (void)optionStateName;
         }
     };
 

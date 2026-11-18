@@ -197,6 +197,7 @@ add_library(maras_engine OBJECT
     modules/engine/src/EncounterConfigLoader.cpp
     modules/engine/src/EngineLogging.cpp
     modules/engine/src/FactionReconciler.cpp
+    modules/engine/src/FertilityMcmClickSink.cpp
     modules/engine/src/FormCache.cpp
     modules/engine/src/FormUtils.cpp
     modules/engine/src/GiftMenuEventSink.cpp

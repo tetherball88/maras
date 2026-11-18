@@ -267,6 +267,22 @@
       "instructions_body": "Diagnostic report saved to:\n{path}\n\n• Step 1: DO NOT save your game. Click 'Quit to Desktop' below.\n• Step 2: Reinstall the previous version of M.A.R.A.S you used on this save.\n• Step 3: Send MARAS_MigrationReport.log (and MARAS.log) to the mod author and wait for help.",
       "btn_quit": "Quit to Desktop (Recommended)",
       "btn_close": "Close Warning (Do Not Save)"
+    },
+    "fertility_mcm_blocked": {
+      "title": "Managed by M.A.R.A.S.",
+      "subtitle": "{mod} — Child Management",
+      "provider_fmr": "Fertility Mode Reloaded",
+      "provider_bf": "Beeing Female NG",
+      "msg_spawn_young": "Spawning young children into your household is managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your child's lineage, home assignment, and genetics stay intact.",
+      "msg_send_training": "Sending children to adolescent training is managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked (no gold was spent) so your child can use M.A.R.A.S.'s training paths, parent discounts, and RPG progression.",
+      "msg_send_orphanage": "Child custody and household management are handled through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your child record is not deleted.",
+      "msg_spawn_adult": "Spawning grown adult children is managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your adult child receives their M.A.R.A.S. visual genetics, class perks, and AI routines.",
+      "msg_dismiss_adult": "Grown adult children are managed as independent NPCs and followers by M.A.R.A.S. rather than the {mod} MCM. Your MCM click was blocked so the actor is not disabled.",
+      "msg_grow_or_hatch": "Growing children and graduating them to adulthood are managed through the M.A.R.A.S. Dashboard rather than the {mod} MCM. Your MCM click was blocked so your child's training and lineage progression stay intact.",
+      "infobox_label": "Use M.A.R.A.S. Dashboard Instead",
+      "infobox_body": "Open the M.A.R.A.S. Dashboard -> Children tab to spawn young children into a home, send children to training, or spawn graduated adult children.",
+      "btn_open_dashboard": "Open M.A.R.A.S. Dashboard",
+      "btn_close": "OK"
     }
   }
 }
