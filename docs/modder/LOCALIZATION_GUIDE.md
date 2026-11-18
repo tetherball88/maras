@@ -80,6 +80,7 @@ Dynamic values always use named `{token}` placeholders so translators can reorde
 
 **Safety Guarantees**:
 - Never rename placeholder identifiers inside `{...}` (keep `{actor}`, `{spouse}`, `{child}`, `{count}`, etc. in exact ASCII spelling).
+- Runtime substitutions for `{token}` and `<Alias=...>` are always injected in **dictionary / Nominative form** without grammatical case inflection—in case-inflected languages, place actor tokens in grammatical subject position or precede location/object tokens with an inflected generic classifier noun + quotes or parentheses (e.g., `at the inn "<Alias=TavernLocation>"`).
 - Literal braces can be escaped as `{{` and `}}`.
 - Malformed braces or missing tokens **never crash** C++ or React—unknown tokens render verbatim and log a startup validation warning in `MARAS.log`.
 
