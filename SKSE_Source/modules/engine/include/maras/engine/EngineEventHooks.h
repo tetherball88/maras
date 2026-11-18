@@ -9,7 +9,9 @@
 #include "maras/state/CoSaveCodec.h"
 
 #include <cstdint>
+#include <functional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -137,6 +139,22 @@ namespace MARAS::Engine {
             std::string_view optionStateName) {
             (void)blockedClick;
             (void)optionStateName;
+        }
+
+        struct FertilityChildNamingRequest {
+            RE::FormID motherId{ 0 };
+            bool isFemale{ false };
+            bool cameFromMcmForceGrowth{ false };
+            std::vector<std::string> existingNames{};
+        };
+
+        virtual void OnFertilityChildNamingRequested(
+            FertilityChildNamingRequest request,
+            std::function<void(const std::string&)> onResolved) {
+            (void)request;
+            if (onResolved) {
+                onResolved("Child");
+            }
         }
     };
 

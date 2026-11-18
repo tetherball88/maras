@@ -1414,4 +1414,45 @@ namespace MARAS::Tests {
         MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "").has_value());
     }
 
+    MARAS_TEST(DomainLineage, FertilityChildNamingPromptAndNameResolution) {
+        using Domain::Lineage::ClassifyFertilityChildNamingPrompt;
+        using Domain::Lineage::ResolveSubmittedChildName;
+
+        const auto sonPrompt = ClassifyFertilityChildNamingPrompt("Name your son");
+        MARAS_CHECK(sonPrompt.isChildNamingPrompt);
+        MARAS_CHECK(!sonPrompt.isFemale);
+
+        const auto daughterPrompt = ClassifyFertilityChildNamingPrompt("Name your daughter");
+        MARAS_CHECK(daughterPrompt.isChildNamingPrompt);
+        MARAS_CHECK(daughterPrompt.isFemale);
+
+        const auto unrelatedPrompt = ClassifyFertilityChildNamingPrompt("Enter preset name");
+        MARAS_CHECK(!unrelatedPrompt.isChildNamingPrompt);
+
+        const std::vector<std::string> existing{ "Sven", "Freya", "Ragnar II" };
+
+        // Custom typed name trimmed & preserved (including multi-byte UTF-8 Cyrillic)
+        MARAS_CHECK_EQ(
+            ResolveSubmittedChildName("confirm", "  Оксана \n ", "Freya", existing, "Astrid"),
+            std::string("Оксана"));
+
+        // Duplicate name deduplicated cleanly so FMR PlayerChildName check never loops
+        MARAS_CHECK_EQ(
+            ResolveSubmittedChildName("confirm", "sven", "Hakon", existing, "Torvar"),
+            std::string("sven II"));
+
+        // Empty / 'Cancel' input falls back to suggested or random fallback
+        MARAS_CHECK_EQ(
+            ResolveSubmittedChildName("confirm", "   ", "Hakon", existing, "Torvar"),
+            std::string("Hakon"));
+        MARAS_CHECK_EQ(
+            ResolveSubmittedChildName("confirm", "Cancel", "Torvar", existing, "Bjorn"),
+            std::string("Torvar"));
+
+        // Random button prefers randomFallback
+        MARAS_CHECK_EQ(
+            ResolveSubmittedChildName("random_name", "CustomTyped", "Suggested", existing, "Bjorn"),
+            std::string("Bjorn"));
+    }
+
 }  // namespace MARAS::Tests

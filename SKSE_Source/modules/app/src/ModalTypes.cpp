@@ -228,6 +228,11 @@ namespace MARAS::App {
         if (disabled) j["disabled"] = true;
         if (!defaultValue.is_null()) j["defaultValue"] = defaultValue;
         if (!placeholder.empty()) j["placeholder"] = placeholder;
+        if (!syncTargetControlId.empty()) j["syncTargetControlId"] = syncTargetControlId;
+        if (!disallowedValues.empty()) {
+            j["disallowedValues"] = disallowedValues;
+        }
+        if (!disallowedMessage.empty()) j["disallowedMessage"] = disallowedMessage;
 
         if (type == ModalControlType::Select) {
             nlohmann::json opts = nlohmann::json::array();
@@ -275,6 +280,7 @@ namespace MARAS::App {
             j["requireChecklistId"] = requireChecklistId;
             j["minCheckedCount"] = minCheckedCount;
         }
+        if (bypassValidation) j["bypassValidation"] = true;
         return j;
     }
 

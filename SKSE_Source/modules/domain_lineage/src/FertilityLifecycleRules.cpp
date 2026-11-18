@@ -123,6 +123,127 @@ namespace MARAS::Domain::Lineage {
         return std::nullopt;
     }
 
+    FertilityChildNamingPromptInfo ClassifyFertilityChildNamingPrompt(
+        std::string_view promptText) noexcept {
+        FertilityChildNamingPromptInfo info{};
+        if (promptText.empty()) {
+            return info;
+        }
+        if (!Foundation::StringUtils::Contains(promptText, "Name your")) {
+            return info;
+        }
+        info.isChildNamingPrompt = true;
+        info.isFemale = Foundation::StringUtils::Contains(promptText, "daughter");
+        return info;
+    }
+
+    namespace {
+        [[nodiscard]] std::string SanitizeChildNameInput(std::string_view raw) {
+            constexpr std::size_t kMaxBytes = 48;
+            std::string cleaned;
+            cleaned.reserve(std::min(raw.size(), kMaxBytes));
+            bool prevSpace = true;
+            for (const unsigned char ch : raw) {
+                if (ch < 0x20 || ch == 0x7F) {
+                    if (!prevSpace) {
+                        cleaned.push_back(' ');
+                        prevSpace = true;
+                    }
+                    continue;
+                }
+                if (ch == ' ') {
+                    if (!prevSpace) {
+                        cleaned.push_back(' ');
+                        prevSpace = true;
+                    }
+                    continue;
+                }
+                cleaned.push_back(static_cast<char>(ch));
+                prevSpace = false;
+            }
+            while (!cleaned.empty() && cleaned.back() == ' ') {
+                cleaned.pop_back();
+            }
+            if (cleaned.size() > kMaxBytes) {
+                std::size_t cut = kMaxBytes;
+                while (cut > 0 && (static_cast<unsigned char>(cleaned[cut]) & 0xC0u) == 0x80u) {
+                    --cut;
+                }
+                cleaned.resize(cut);
+                while (!cleaned.empty() && cleaned.back() == ' ') {
+                    cleaned.pop_back();
+                }
+            }
+            if (Foundation::StringUtils::CaseInsensitiveEquals(cleaned, "Cancel")) {
+                cleaned.clear();
+            }
+            return cleaned;
+        }
+
+        [[nodiscard]] bool IsNameTaken(
+            std::string_view candidate,
+            std::span<const std::string> existingNames) noexcept {
+            for (const auto& existing : existingNames) {
+                if (Foundation::StringUtils::CaseInsensitiveEquals(existing, candidate)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }  // namespace
+
+    std::string ResolveSubmittedChildName(
+        std::string_view buttonId,
+        std::string_view typedName,
+        std::string_view suggestedName,
+        std::span<const std::string> existingNames,
+        std::string_view randomFallback) noexcept {
+        const bool useRandom =
+            Foundation::StringUtils::CaseInsensitiveEquals(buttonId, "random_name");
+
+        std::string candidate;
+        if (useRandom) {
+            candidate = SanitizeChildNameInput(randomFallback);
+            if (candidate.empty()) {
+                candidate = SanitizeChildNameInput(suggestedName);
+            }
+            if (candidate.empty()) {
+                candidate = SanitizeChildNameInput(typedName);
+            }
+        } else {
+            candidate = SanitizeChildNameInput(typedName);
+            if (candidate.empty()) {
+                candidate = SanitizeChildNameInput(suggestedName);
+            }
+            if (candidate.empty()) {
+                candidate = SanitizeChildNameInput(randomFallback);
+            }
+        }
+
+        if (candidate.empty()) {
+            candidate = "Child";
+        }
+
+        if (!IsNameTaken(candidate, existingNames)) {
+            return candidate;
+        }
+
+        constexpr std::array<std::string_view, 3> kRomanSuffixes{ " II", " III", " IV" };
+        for (const std::string_view suffix : kRomanSuffixes) {
+            std::string attempt = candidate + std::string(suffix);
+            if (!IsNameTaken(attempt, existingNames)) {
+                return attempt;
+            }
+        }
+        for (int n = 2; n < 200; ++n) {
+            std::string attempt = candidate + " " + std::to_string(n);
+            if (!IsNameTaken(attempt, existingNames)) {
+                return attempt;
+            }
+        }
+        return candidate;
+    }
+
     ChildId FindSyntheticChildByName(
         const State::LineageTable& lineage,
         ActorId motherId,

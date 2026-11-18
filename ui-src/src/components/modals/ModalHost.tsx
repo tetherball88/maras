@@ -419,7 +419,12 @@ const ScalarControlSection: React.FC<ScalarControlSectionProps> = ({ control }) 
           value={strVal}
           options={control.options || []}
           disabled={control.disabled}
-          onChange={(val) => setControlValue(control.id, val)}
+          onChange={(val) => {
+            setControlValue(control.id, val)
+            if (control.syncTargetControlId) {
+              setControlValue(control.syncTargetControlId, val)
+            }
+          }}
           className="w-full"
         />
       </div>
@@ -428,6 +433,14 @@ const ScalarControlSection: React.FC<ScalarControlSectionProps> = ({ control }) 
 
   if (control.type === 'text') {
     const strVal = value !== undefined && value !== null ? String(value) : ''
+    const trimmed = strVal.trim()
+    const isDisallowed =
+      trimmed.length > 0 &&
+      Boolean(
+        control.disallowedValues?.some(
+          (item) => item.trim().toLowerCase() === trimmed.toLowerCase(),
+        ),
+      )
     return (
       <div className="flex flex-col gap-[0.375rem]">
         {control.label && (
@@ -444,6 +457,9 @@ const ScalarControlSection: React.FC<ScalarControlSectionProps> = ({ control }) 
           placeholder={control.placeholder}
           onChange={(e) => setControlValue(control.id, e.target.value)}
         />
+        {isDisallowed && control.disallowedMessage && (
+          <span className="text-xs text-status-danger">{control.disallowedMessage}</span>
+        )}
       </div>
     )
   }
@@ -545,6 +561,28 @@ const GenericModalContent: React.FC<GenericModalContentProps> = ({ modal }) => {
               const checkedCount = checklist?.checkedIds.length ?? 0
               if (checkedCount < (btn.minCheckedCount ?? 0)) {
                 requirementUnmet = true
+              }
+            }
+
+            if (!btn.bypassValidation && modal.controls) {
+              for (const ctrl of modal.controls) {
+                if (ctrl.type !== 'text') continue
+                const rawVal = controlValues[ctrl.id]
+                const trimmedVal =
+                  rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : ''
+                if (ctrl.required && trimmedVal.length === 0) {
+                  requirementUnmet = true
+                  break
+                }
+                if (
+                  trimmedVal.length > 0 &&
+                  ctrl.disallowedValues?.some(
+                    (item) => item.trim().toLowerCase() === trimmedVal.toLowerCase(),
+                  )
+                ) {
+                  requirementUnmet = true
+                  break
+                }
               }
             }
 

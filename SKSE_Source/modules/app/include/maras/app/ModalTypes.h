@@ -86,6 +86,9 @@ namespace MARAS::App {
         bool disabled{ false };
         nlohmann::json defaultValue;
         std::string placeholder;
+        std::string syncTargetControlId;
+        std::vector<std::string> disallowedValues;
+        std::string disallowedMessage;
 
         std::vector<ModalSelectOption> options;
         std::vector<ModalChecklistItem> items;
@@ -136,6 +139,7 @@ namespace MARAS::App {
         std::string tooltip;
         std::string requireChecklistId;
         std::int32_t minCheckedCount{ 1 };
+        bool bypassValidation{ false };
 
         nlohmann::json ToJson() const;
 

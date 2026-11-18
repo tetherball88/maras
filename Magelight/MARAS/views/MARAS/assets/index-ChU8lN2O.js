@@ -24019,6 +24019,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     ] });
   };
   const ScalarControlSection = ({ control }) => {
+    var _a2;
     const value = useModalStore((s) => s.controlValues[control.id]);
     const setControlValue = useModalStore((s) => s.setControlValue);
     if (control.type === "infobox") {
@@ -24074,7 +24075,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             value: strVal,
             options: control.options || [],
             disabled: control.disabled,
-            onChange: (val) => setControlValue(control.id, val),
+            onChange: (val) => {
+              setControlValue(control.id, val);
+              if (control.syncTargetControlId) {
+                setControlValue(control.syncTargetControlId, val);
+              }
+            },
             className: "w-full"
           }
         )
@@ -24082,6 +24088,12 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     }
     if (control.type === "text") {
       const strVal = value !== void 0 && value !== null ? String(value) : "";
+      const trimmed = strVal.trim();
+      const isDisallowed = trimmed.length > 0 && Boolean(
+        (_a2 = control.disallowedValues) == null ? void 0 : _a2.some(
+          (item) => item.trim().toLowerCase() === trimmed.toLowerCase()
+        )
+      );
       return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-[0.375rem]", children: [
         control.label && /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "text-xs font-semibold text-foreground-secondary", children: control.label }),
         control.description && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-foreground-muted", children: control.description }),
@@ -24093,7 +24105,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             placeholder: control.placeholder,
             onChange: (e) => setControlValue(control.id, e.target.value)
           }
-        )
+        ),
+        isDisallowed && control.disallowedMessage && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-status-danger", children: control.disallowedMessage })
       ] });
     }
     return null;
@@ -24143,12 +24156,30 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           ) : /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.Fragment, { children: seg }, idx)
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-end gap-[0.625rem] flex-wrap ml-auto", children: modal.buttons.map((btn, idx) => {
+          var _a2;
           let requirementUnmet = false;
           if (btn.requireChecklistId && (btn.minCheckedCount ?? 0) > 0) {
             const checklist = controlValues[btn.requireChecklistId];
             const checkedCount = (checklist == null ? void 0 : checklist.checkedIds.length) ?? 0;
             if (checkedCount < (btn.minCheckedCount ?? 0)) {
               requirementUnmet = true;
+            }
+          }
+          if (!btn.bypassValidation && modal.controls) {
+            for (const ctrl of modal.controls) {
+              if (ctrl.type !== "text") continue;
+              const rawVal = controlValues[ctrl.id];
+              const trimmedVal = rawVal !== void 0 && rawVal !== null ? String(rawVal).trim() : "";
+              if (ctrl.required && trimmedVal.length === 0) {
+                requirementUnmet = true;
+                break;
+              }
+              if (trimmedVal.length > 0 && ((_a2 = ctrl.disallowedValues) == null ? void 0 : _a2.some(
+                (item) => item.trim().toLowerCase() === trimmedVal.toLowerCase()
+              ))) {
+                requirementUnmet = true;
+                break;
+              }
             }
           }
           const isDisabled = Boolean(btn.disabled || isSubmitting || requirementUnmet);

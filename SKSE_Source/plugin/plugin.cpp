@@ -28,6 +28,7 @@
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FertilityMcmClickSink.h"
+#include "maras/engine/FertilityNamingMenuSink.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/GiftMenuEventSink.h"
 #include "maras/engine/GlobalVarReconciler.h"
@@ -458,6 +459,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::ResetPluginEventSinks();
                         MARAS::DialogueEventSink::GetSingleton()->Revert();
                         MARAS::GiftMenuEventSink::GetSingleton()->Revert();
+                        MARAS::FertilityNamingMenuSink::GetSingleton()->Revert();
                         MARAS::PlayerMiscStatsTracker::GetSingleton()->Revert();
                         MARAS::DeferredActorResolver::GetSingleton().Revert();
                         MARAS::GlobalVarReconciler::GetSingleton().Revert();
@@ -596,8 +598,9 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::DialogueEventSink::GetSingleton());
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::GiftMenuEventSink::GetSingleton());
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::FertilityMcmClickSink::GetSingleton());
+                            ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::FertilityNamingMenuSink::GetSingleton());
                             MARAS_LOG_INFO("Registered polling service update event sink");
-                            MARAS_LOG_INFO("Registered dialogue, gift menu, and fertility MCM click event sinks");
+                            MARAS_LOG_INFO("Registered dialogue, gift menu, and fertility MCM/naming event sinks");
                         } else {
                             MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
                         }
