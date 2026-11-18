@@ -58,15 +58,15 @@ DSD entries in `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` 
 
 | DSD `type` | In-Game Surface | Translation & Formatting Rules |
 | :--- | :--- | :--- |
-| `DIAL FULL` / `INFO RNAM` | Player dialogue menu choice | Keep concise and natural from the Dragonborn's perspective (first-person intent). |
-| `INFO NAM1` | Spoken NPC line (subtitles) | Match relationship stage (stranger, courting, spouse, estranged, child) and Skyrim's localized 2nd-person register. |
+| `DIAL FULL` / `INFO RNAM` | Player dialogue menu choice | Keep concise and natural from the Dragonborn's perspective (first-person intent). `INFO RNAM` always uses `index = 0` internally in DSD. |
+| `INFO NAM1` | Spoken NPC line (subtitles) | Match relationship stage (stranger, courting, spouse, estranged, child) and Skyrim's localized 2nd-person register. Uses 1-based `ResponseNumber` (`index >= 1`, never `0`) so it never collides with `INFO RNAM` (`index = 0`). |
 | `QUST FULL` | Quest journal title | Short title-case / localized quest title (`TTM_EnablePolygamy`, `TTM_CheckSpouseHome`, etc.). |
 | `QUST NNAM` | HUD / Journal objective | Actionable concise objective (`<Alias=...>` preserved). |
 | `QUST CNAM` | Quest journal log entry | Written in the Dragonborn's first-person reflective journal voice (`"Maramal recognized that my soul..."`). |
 | `BOOK FULL` / `BOOK DESC` | Letters, notices & scrolls | Preserve Scaleform HTML tags (`<font size="19">`, `</font>`) and `\n` line breaks verbatim. **Exception (`$DragonFont`)**: see Section 3.1 below! |
 | `MESG DESC` / `MESG ITXT` | Engine message box & buttons | Preserve `%.0f` float tokens; keep `MESG ITXT` button labels short (`Yes`, `No`, `Don't show it again`). |
 | `SPEL FULL` / `MGEF FULL` / `PERK FULL` | Magic / Active Effects titles | Align terminology with `catalogs.json` `bonuses.*.0.name`. |
-| `MGEF DESC` / `PERK DESC` | Active Effects descriptions | Preserve every `<mag>` token (note: `0000D0` `TTM_LoversRadianceEffect` contains **two** `<mag>` tags!). |
+| `MGEF DNAM` / `PERK DESC` | Active Effects descriptions | Preserve every `<mag>` token (note: `0000D0` `TTM_LoversRadianceEffect` contains **two** `<mag>` tags!). |
 
 ### 3.1 Critical `$DragonFont` Rule (`00004D|TT_MARAS.esp` — `TTM_ScrollofAlessiasGrace`)
 - `00004D|TT_MARAS.esp` (`TTM_ScrollofAlessiasGrace` `BOOK DESC`) uses `<font face="$DragonFont" size="19">` to render **untranslated ancient Dragon runes** in-game before the player has the scroll translated into `00004C|TT_MARAS.esp` (`TTM_ScrollofAlessiasGraceTranslated`).
@@ -78,6 +78,17 @@ Never translate or alter ASCII identifiers inside `<...>`:
 - `<Alias=Player>`, `<Alias=Spouse>`, `<Alias=Partner>`, `<Alias=Lover>`, `<Alias=Victim>`, `<Alias=TavernLocation>`
 - `<Alias.Pronoun=Spouse>`, `<Alias.PronounObj=Spouse>`, `<Alias.Pronoun=Partner>`
 - `<mag>`, `<dur>`, `%.0f`
+
+### 3.3 Skyrim Scaleform Font Punctuation (Avoid LLM Typography Traps!)
+Skyrim's native `.swf` Scaleform fonts (dialogues, quests, books, message boxes, and top-left HUD notifications: `DSD`, `names.json`, and `hud.*`/`pet.*`/`common.*`/`mcm.*`) lack most typographic Unicode punctuation emitted by LLMs and render them as missing-glyph boxes (`□`):
+- **Forbidden in Scaleform strings** $\to$ **Use plain ASCII instead**:
+  - Long/en dashes (`—`, `–`, `―`, `−`) $\to$ `-`
+  - Single-character ellipsis (`…`) $\to$ `...`
+  - Guillemets & curly double quotes (`«`, `»`, `“`, `”`, `„`) $\to$ `"`
+  - Curly/modifier apostrophes (`’`, `‘`, `ʼ`) $\to$ `'`
+  - Non-breaking / zero-width spaces (`\u00A0`, `\u202F`, `\u200B`) $\to$ regular space `" "` or omit
+  - Bullets, arrows, math, numero (`•`, `→`, `×`, `≤`, `№`) $\to$ `-`, `->`, `x`, `<=`, `#`
+- Also avoid `…`, NBSP, zero-width chars, and curly apostrophes (`’`, `ʼ`) in Magelight UI JSON (`modal.*`, `ui_*`, `catalogs.json`). Both `sync_localization.py` and `translation_batches.py` enforce these checks as hard errors.
 
 ---
 

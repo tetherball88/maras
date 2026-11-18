@@ -283,6 +283,22 @@
       "infobox_body": "Open the M.A.R.A.S. Dashboard -> Children tab to spawn young children into a home, send children to training, or spawn graduated adult children.",
       "btn_open_dashboard": "Open M.A.R.A.S. Dashboard",
       "btn_close": "OK"
+    },
+    "child_naming": {
+      "title_son": "Name Your Son",
+      "title_daughter": "Name Your Daughter",
+      "sub_parents_two": "Mother: {mother} & Father: {father}",
+      "sub_mother_only": "Mother: {mother}",
+      "message_son": "Your newborn son has grown into a young child. Enter a name below or choose a lore-friendly racial name.",
+      "message_daughter": "Your newborn daughter has grown into a young child. Enter a name below or choose a lore-friendly racial name.",
+      "input_label": "Child's Name",
+      "input_placeholder": "Enter a name...",
+      "input_desc": "Type any custom name, or pick from the suggested lore names below.",
+      "suggested_label": "Suggested Lore Names",
+      "suggested_desc": "Selecting a suggested name fills the text box above.",
+      "err_duplicate": "Another child already has this name. Please choose a unique name.",
+      "btn_confirm": "Confirm Name",
+      "btn_random": "Random Lore Name"
     }
   }
 }

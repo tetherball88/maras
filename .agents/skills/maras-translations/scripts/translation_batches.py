@@ -33,6 +33,19 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REPO_ROOT = SCRIPT_DIR.parents[3]
+sys.path.insert(0, str(DEFAULT_REPO_ROOT / "tools" / "localization"))
+try:
+    from sync_localization import (
+        find_scaleform_unsafe_chars as _sync_find_scaleform_unsafe_chars,
+        find_universal_llm_artifacts as _sync_find_universal_llm_artifacts,
+        is_scaleform_json_key as _sync_is_scaleform_json_key,
+        validate_dsd_schema_fields as _sync_validate_dsd_schema_fields,
+    )
+except Exception:
+    _sync_find_scaleform_unsafe_chars = None
+    _sync_find_universal_llm_artifacts = None
+    _sync_is_scaleform_json_key = None
+    _sync_validate_dsd_schema_fields = None
 
 PLURAL_SUFFIXES = ("_zero", "_one", "_two", "_few", "_many", "_other")
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -686,11 +699,39 @@ def validate_batches_internal(
                                 "but BuffCard appends ' 15%' directly after description"
                             )
 
+                    if _sync_is_scaleform_json_key is not None and _sync_is_scaleform_json_key(fname, key):
+                        unsafe = _sync_find_scaleform_unsafe_chars(tr_val) if _sync_find_scaleform_unsafe_chars else []
+                        if unsafe:
+                            errors.append(
+                                f"{bp.name} -> {fname}:{key}: unrenderable Skyrim Scaleform symbol(s) {', '.join(unsafe)} "
+                                "(replace long dashes with '-', '...' glyph with '...', smart/angle quotes with '\"' / \"'\")"
+                            )
+                    elif _sync_find_universal_llm_artifacts is not None:
+                        artifacts = _sync_find_universal_llm_artifacts(tr_val, ref_en)
+                        if artifacts:
+                            errors.append(
+                                f"{bp.name} -> {fname}:{key}: unexpected LLM typography/whitespace artifact(s) {', '.join(artifacts)}"
+                            )
+
         # Validate DSD entries
         dsd_sec = doc.get("dsd") or {}
         if isinstance(dsd_sec, dict):
             for dkey, item in dsd_sec.items():
                 total_seen += 1
+                parts = str(dkey).split("|")
+                if len(parts) < 3:
+                    errors.append(f"{bp.name} -> DSD '{dkey}': malformed DSD key (expected form_id|plugin|type[|index])")
+                    continue
+                if _sync_validate_dsd_schema_fields is not None:
+                    raw_idx: Any = None
+                    if len(parts) >= 4 and parts[3].strip() != "":
+                        try:
+                            raw_idx = int(parts[3])
+                        except ValueError:
+                            raw_idx = parts[3]
+                    schema_err = _sync_validate_dsd_schema_fields(dkey, parts[2], raw_idx, f"{bp.name} -> DSD")
+                    if schema_err:
+                        errors.append(schema_err)
                 tr_val = (
                     item
                     if isinstance(item, str)
@@ -728,7 +769,7 @@ def validate_batches_internal(
 
                 if en_ck.count("<mag>") != tr_ck.count("<mag>"):
                     warnings.append(
-                        f"{bp.name} -> DSD '{dkey}': '<mag>' count changed ({len(en_ck)} in EN vs {tr_ck.count('<mag>')})"
+                        f"{bp.name} -> DSD '{dkey}': '<mag>' count changed ({en_ck.count('<mag>')} in EN vs {tr_ck.count('<mag>')})"
                     )
 
                 if sorted(en_pf) != sorted(tr_pf):
@@ -748,6 +789,14 @@ def validate_batches_internal(
                         errors.append(
                             f"{bp.name} -> DSD '{dkey}': $DragonFont text contains non-ASCII characters "
                             f"{non_ascii[:8]} which render as missing-glyph boxes in Skyrim"
+                        )
+
+                if _sync_find_scaleform_unsafe_chars is not None:
+                    unsafe = _sync_find_scaleform_unsafe_chars(tr_val)
+                    if unsafe:
+                        errors.append(
+                            f"{bp.name} -> DSD '{dkey}': unrenderable Skyrim Scaleform symbol(s) {', '.join(unsafe)} "
+                            "(replace long dashes with '-', '...' glyph with '...', smart/angle quotes with '\"' / \"'\")"
                         )
 
     return total_seen, total_filled, errors, warnings, merged_files, merged_dsd

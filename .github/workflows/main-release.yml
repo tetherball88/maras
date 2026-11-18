@@ -20,12 +20,12 @@ jobs:
       # build steps here if needed
 
       - name: Create selective zip
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           mkdir -p out
-          # use the tag from a push context
-          TAG="${{ github.ref_name }}"
           printf '%s\n' "${TAG}" > SKSE/Plugins/MARAS/version.txt
-          # quote paths in case
+          # Exclude non-English packs & DSD from the main archive so DSD never leaks into English setups
           zip -r "out/MARAS_${TAG}.zip" \
             interface/ \
             Magelight/ \
@@ -36,7 +36,21 @@ jobs:
             Strings/ \
             TT_MARAS.esp \
             *.ini \
-            -x ".github/*"
+            -x ".github/*" \
+            -x "*.pdb" \
+            -x "SKSE/Plugins/DynamicStringDistributor*" \
+            -x "SKSE/Plugins/MARAS/localization/*"
+          zip -r "out/MARAS_${TAG}.zip" \
+            SKSE/Plugins/MARAS/localization/en/ \
+            -x "*_todo.json" -x "*.todo.json"
+
+      - name: Build Translations FOMOD zip
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 .agents/skills/maras-translations/scripts/package_translations_fomod.py \
+            --version "${TAG}" \
+            --output "out/MARAS_Translations_${TAG}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -46,3 +60,4 @@ jobs:
           body: "Automated release for ${{ github.ref_name }}"
           files: |
             out/MARAS_${{ github.ref_name }}.zip
+            out/MARAS_Translations_${{ github.ref_name }}.zip
