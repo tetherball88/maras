@@ -48,7 +48,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          python3 .agents/skills/maras-translations/scripts/package_translations_fomod.py \
+          python3 localization/scripts/package_translations_fomod.py \
             --version "${TAG}" \
             --output "out/MARAS_Translations_${TAG}.zip"
 
