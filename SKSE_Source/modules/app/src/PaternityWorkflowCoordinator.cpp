@@ -489,7 +489,7 @@ namespace MARAS::App {
             ? preSnap->relationships->GetPrimaryPartner(State::ActorId{ motherID }).raw()
             : 0;
         if (bioFatherID == 0) {
-            bioFatherID = (presumedFatherID != 0) ? presumedFatherID : kUnknownFatherFormID;
+            bioFatherID = kUnknownFatherFormID;
         }
 
         auto& relUseCases = RelationshipUseCases::GetSingleton();
@@ -764,7 +764,7 @@ namespace MARAS::App {
             presumedFatherID = preSnap->relationships->GetPrimaryPartner(State::ActorId{ motherID }).raw();
         }
         if (bioFatherID == 0) {
-            bioFatherID = presumedFatherID;
+            bioFatherID = kUnknownFatherFormID;
         }
 
         std::string childName = name;
@@ -812,7 +812,8 @@ namespace MARAS::App {
                 ? ChildSpawnService::IsActorWerewolf(bioFatherID)
                 : false;
         const bool hasMismatch =
-            (presumedFatherID != 0 && bioFatherID != 0 && !Utils::MatchesActor(bioFatherID, presumedFatherID))
+            (presumedFatherID != 0 && bioFatherID != 0 && bioFatherID != kUnknownFatherFormID &&
+             !Utils::MatchesActor(bioFatherID, presumedFatherID))
                 ? HasPhenotypeMismatch(presumedFatherID, bioFatherID)
                 : false;
 
@@ -847,7 +848,7 @@ namespace MARAS::App {
             rec.isAdopted = false;
             rec.isBiologicalChild = true;
             rec.bioMother = State::ActorId{ motherID };
-            rec.bioFather = State::ActorId{ (bioFatherID != 0) ? bioFatherID : presumedFatherID };
+            rec.bioFather = State::ActorId{ bioFatherID };
             rec.conceptionTimestamp = cTime;
             rec.birthTimestamp = bTime;
             rec.stage = Foundation::ChildStage::Infant;
@@ -863,7 +864,7 @@ namespace MARAS::App {
                 rec.presumedFather = State::ActorId{ presumedFatherID };
                 rec.paternitySecret.isSecret = true;
                 rec.paternitySecret.isSecretForPartner = true;
-                rec.paternitySecret.isSecretForBioFather = true;
+                rec.paternitySecret.isSecretForBioFather = (bioFatherID != kUnknownFatherFormID);
                 rec.paternitySecret.discovered = false;
                 rec.paternitySecret.discoveredByPartner = false;
                 rec.paternitySecret.discoveredByBioFather = false;

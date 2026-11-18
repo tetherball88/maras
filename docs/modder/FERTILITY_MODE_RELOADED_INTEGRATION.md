@@ -218,10 +218,10 @@ M.A.R.A.S. deliberately avoids duplicating FMR's internal mechanics (menstrual c
 
 | FMR ModEvent | Parameters | M.A.R.A.S. Handler Action |
 |---|---|---|
-| `FMR_Conception` | `akMother, akFather, iTrackingIndex` | Registers Unborn child record; sets bio-father & presumed father; initializes paternity secret (`isPregnancySecretForPartner = true`) if sire $\neq$ partner. |
+| `FMR_Conception` | `akMother, akFather, iTrackingIndex` | Registers Unborn child record; sets `bioFather` (`UnknownFather` `0x00700000` if `akFather` is `None`, never substituting the mother's partner) & `presumedFather`; initializes paternity secret (`isPregnancySecretForPartner = true`) if sire $\neq$ partner. |
 | `FMR_ActorStatus` | `akMother, factionRank, fatherName, fatherRaceId` | When pregnancy reaches 2nd/3rd trimester (`factionRank` 34–100) or labor (`120`), automatically reveals unannounced pregnancy to the partner (`RevealPregnancyToPartner(unbornID, true)`). |
 
-| `FMR_BabyBirth` | `akMother, akFather, iTrackingIndex` | Promotes Unborn record to **Stage 1 (`Infant`)** named `"Newborn"`. |
+| `FMR_BabyBirth` | `akMother, akFather, iTrackingIndex` | Promotes Unborn record to **Stage 1 (`Infant`)** named `"Newborn"`, upgrading an `UnknownFather` record if `akFather` is provided at birth and force-reevaluating Beastblood inheritance. |
 | `FMR_Abort` / `FMR_BabyMiscarriage` / `FMR_PregnancyCancelled` | `akMother, ...` | Removes Unborn record; applies pregnancy loss affection and notifies SkyrimNet AI of pregnancy loss. |
 | `FMR_ChildGrewUpNpcNpc` | `akMother, akFather` | Generates lore-friendly racial name; promotes to **Stage 2 (`Child`)** as an **ephemeral child** belonging to NPC couple. |
 | `FMR_ChildGrewUpWithMother` | `childIndex, childName, gender, akMother` | Applies player-chosen name; promotes to **Stage 2 (`Child`)** as an ephemeral child scoped to mother. |
@@ -253,7 +253,7 @@ M.A.R.A.S. integrates [`TTM_ServiceFertilityBF`](../../Scripts/Source/TTM_Servic
 |---|---|---|
 | `BeeingFemaleConception` | `mother, childCount, father0..2` | Registers one **Unborn** record **per fetus**, each with its own bio father read from `FW.ChildFather`. The bio-father step-in is evaluated once, after the last fetus is registered, so every father is a candidate. |
 | `BeeingFemaleLabor` | `mother, childCount, father0..2` | SkyrimNet labor notification; starts a fresh birth batch. |
-| `BeeingFemaleBirth` | `mother, father, baby, name, sex` | Fired once per child that reached the world. Promotes the **one** unborn child fathered by `father` to **Stage 1 (`Infant`)** with the given name and sex (`-1` = unknown). BF delivers fetuses in reverse order, so the match is by father. If Baby NTR replaced a father without any event, the first unborn record is corrected to the real father first. When no unborn record is left the batch is announced as one birth message (including multi-father twins). |
+| `BeeingFemaleBirth` | `mother, father, baby, name, sex` | Fired once per child that reached the world. Promotes the **one** unborn child fathered by `father` to **Stage 1 (`Infant`)** with the given name and sex (`-1` = unknown). BF delivers fetuses in reverse order, so the match is by father. If Baby NTR replaced a father without any event, the first unborn record is corrected to the real father first (initializing partner/bio-father secrecy if different from the mother's partner, clearing `bioLineageEvaluated`, and force-reevaluating Beastblood inheritance). When no unborn record is left the batch is announced as one birth message (including multi-father twins). |
 | `BeeingFemaleChildSpawned` | `mother, father, child, name` | A child is physically in the world (a carried baby that finished growing, or a baby born straight as an actor). The Infant becomes a **Stage 2 (`Child`)** bound to that actor and BF's behavior is taken over (7.4). |
 | `BeeingFemaleAdultChildSpawned` | `mother, father, adult, child, name` | The child record moves to the adult actor at **Stage 4 (`Adult`)** (`child` equals `adult` when it graduated in place). The old household entry is released and the adult never receives child factions or packages. |
 | `BeeingFemaleAbort` | `mother, father, abortusState, reason` | The pregnancy ended in loss (`abortion`, `miscarriage`, `stillbirth` for a missed abortion): all unborn records of the mother are removed. |

@@ -468,7 +468,10 @@ namespace MARAS::App {
                 const auto correctionTarget = Domain::Lineage::ResolveBabyNtrCorrectionTarget(
                     *snap->lineage, State::ActorId{ motherId }, State::ActorId{ initialBioFatherId });
                 if (!correctionTarget.IsNull() && initialBioFatherId != 0) {
-                    lineage.SetBioFather(correctionTarget.raw(), initialBioFatherId);
+                    lineage.SetBioFather(
+                        correctionTarget.raw(),
+                        initialBioFatherId,
+                        /*initializePartnerSecretIfDifferent=*/true);
                 }
                 childId = pw.PromoteUnbornToInfant(motherId, currentGameDay, effectiveName, initialBioFatherId);
                 fromUnborn = (childId != 0);

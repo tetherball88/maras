@@ -55,4 +55,5 @@ All persistent mod state lives under SKSE serialization UID `'MARS'` (implemente
    - Reuses `pch_core.h` from `maras_foundation` and links **only** the 7 pure `STATIC` targets (`maras_foundation`, `maras_state`, `maras_projection`, `maras_domain_*`).
    - Use `MARAS_TEST(Suite, Name)` and `MARAS_CHECK` / `MARAS_REQUIRE` / `MARAS_CHECK_EQ` / `MARAS_REQUIRE_EQ`.
    - Use deterministic `MockFormIdResolver`, `IActorMetadataProvider`, `IWerewolfStateProvider`, and `MARAS::Foundation::IRng` fakes—zero sleeps, zero `std::random_device`, zero `<RE/...>`/`<SKSE/...>`/`pch_engine.h`/`nlohmann`/`yaml-cpp`/`spdlog` includes.
+   - Write compact, data-driven `MARAS_TEST` cases (~20–60 lines via helper lambdas/aggregate init) scoped strictly to the requested change—no multi-hundred-line boilerplate blocks.
    - Run via `.agents/skills/maras-build-and-test/scripts/build-and-test.ps1 -Target tests`.

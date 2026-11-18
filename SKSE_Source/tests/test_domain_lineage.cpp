@@ -1455,4 +1455,86 @@ namespace MARAS::Tests {
             std::string("Bjorn"));
     }
 
+    MARAS_TEST(DomainLineage, UnknownFatherAndBeastbloodReevaluation) {
+        StubLineageMeta meta{};
+        DeterministicRng rng{ 42u };
+        const ActorId mother{ 0x00027001u }, werewolfHusband{ 0x00027002u };
+        const ActorId mortalBioFather{ 0x00027003u }, werewolfBioMother{ 0x00027004u };
+        meta.names = { { mother, "Serana" }, { werewolfHusband, "Farkas" }, { mortalBioFather, "Bjorn" }, { werewolfBioMother, "Aela" } };
+        auto makeMarriedWs = [&]() {
+            WorldState ws{};
+            (void)ws.TransitionRelationship(mother, werewolfHusband, RelationshipStatus::Married, 1.0f, mother, meta);
+            return ws;
+        };
+        auto regUnknown = [&](WorldState& ws) {
+            return ApplyRegisterUnbornChild(ws, { .bioMother = mother, .conceptionTimestamp = 3.0f }, meta);
+        };
+
+        // 1. Null bioFather at conception -> UnknownFather (not husband), no Beastblood, partner secret resolves
+        {
+            auto ws = makeMarriedWs();
+            const auto reg = regUnknown(ws);
+            const auto* rec = ws.lineage.Read().FindChild(reg.childId);
+            MARAS_REQUIRE(rec != nullptr);
+            MARAS_CHECK_EQ(rec->bioFather, ActorId::UnknownFather());
+            MARAS_CHECK_EQ(rec->presumedFather, werewolfHusband);
+            MARAS_CHECK(rec->paternitySecret.isSecret && rec->paternitySecret.isSecretForPartner &&
+                        rec->paternitySecret.isPregnancySecretForPartner && !rec->paternitySecret.isSecretForBioFather && !rec->hasBeastblood);
+            MARAS_CHECK(ApplyResolvePaternitySecretForPartner(ws, reg.childId, "confess").updated);
+            MARAS_CHECK(!rec->paternitySecret.isSecret && rec->paternitySecret.discovered);
+        }
+
+        // 2. Promote UnknownFather at birth: husband -> clears secrecy & inherits Beastblood; mortal sire -> sets isSecretForBioFather
+        for (const bool husbandIsSire : { true, false }) {
+            auto ws = makeMarriedWs();
+            const auto reg = regUnknown(ws);
+            const ActorId birthSire = husbandIsSire ? werewolfHusband : mortalBioFather;
+            const auto promo = ApplyPromoteUnbornToInfant(ws, mother, 12.0f, "Cub", birthSire, husbandIsSire, husbandIsSire, meta, rng);
+            MARAS_REQUIRE(promo.promoted);
+            const auto* rec = ws.lineage.Read().FindChild(reg.childId);
+            MARAS_REQUIRE(rec != nullptr);
+            MARAS_CHECK_EQ(rec->bioFather, birthSire);
+            MARAS_CHECK_EQ(rec->presumedFather, husbandIsSire ? ActorId{} : werewolfHusband);
+            MARAS_CHECK_EQ(rec->paternitySecret.isSecret, !husbandIsSire);
+            MARAS_CHECK_EQ(promo.isSecretForPartner, !husbandIsSire);
+            MARAS_CHECK_EQ(promo.isSecretForBioFather, !husbandIsSire);
+            MARAS_CHECK_EQ(rec->hasBeastblood, husbandIsSire);
+            MARAS_CHECK(rec->beastbloodEvaluated);
+        }
+
+        // 3. ApplySetBioMother / ApplySetBioFather resets bioSkillBonuses, re-evaluates Beastblood, & manages Baby NTR secrecy
+        {
+            auto ws = makeMarriedWs();
+            const ChildId cid{ 0xFF727010u };
+            ChildRecord c{
+                .childId = cid, .name = "Alfhild", .isAdopted = false,
+                .bioMother = mother, .bioFather = werewolfHusband, .isBiologicalChild = true,
+                .stage = ChildStage::Unborn, .hasBeastblood = true, .beastbloodEvaluated = true,
+                .bioLineageEvaluated = true
+            };
+            c.guardians.Assign(mother, werewolfHusband);
+            c.bioSkillBonuses[0] = 5;
+            ws.lineage.Write().UpsertChild(c);
+
+            MARAS_REQUIRE(ApplySetBioFather(ws, { .childId = cid, .fatherId = mortalBioFather, .fatherName = "Bjorn",
+                                                  .presumedFatherRaceEditorId = "NordRace", .bioFatherRaceEditorId = "NordRace",
+                                                  .initializePartnerSecretIfDifferent = true }));
+            const auto* rec = ws.lineage.Read().FindChild(cid);
+            MARAS_REQUIRE(rec != nullptr);
+            MARAS_CHECK_EQ(rec->presumedFather, werewolfHusband);
+            MARAS_CHECK(rec->paternitySecret.isSecret && rec->paternitySecret.isSecretForPartner &&
+                        rec->paternitySecret.isSecretForBioFather && rec->paternitySecret.isPregnancySecretForPartner);
+            MARAS_CHECK(!rec->hasBeastblood && rec->beastbloodEvaluated && !rec->bioLineageEvaluated);
+            MARAS_CHECK_EQ(rec->bioSkillBonuses[0], std::uint8_t{ 0 });
+
+            MARAS_REQUIRE(ApplySetBioMother(ws, cid, werewolfBioMother, true, false));
+            MARAS_REQUIRE(ApplySetBioFather(ws, { .childId = cid, .fatherId = werewolfHusband, .motherIsWerewolf = true, .fatherIsWerewolf = true }));
+            MARAS_CHECK(rec->hasBeastblood && rec->presumedFather.IsNull() && !rec->paternitySecret.isSecret);
+
+            MARAS_REQUIRE(ApplySetBioMother(ws, cid, mother, false, true));
+            MARAS_REQUIRE(ApplySetBioFather(ws, { .childId = cid, .fatherId = mortalBioFather }));
+            MARAS_CHECK(!rec->hasBeastblood && rec->beastbloodEvaluated);
+        }
+    }
+
 }  // namespace MARAS::Tests

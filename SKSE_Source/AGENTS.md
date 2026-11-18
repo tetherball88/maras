@@ -41,6 +41,7 @@ flowchart TD
 
 ### File Granularity & Anti-God-File Rule
 
+- **Strict Minimal Blast Radius**: Implement only what was requested. Before adding any reconciler or UI broadcast call (`FactionReconciler`, `SendOverviewData`, etc.), verify that the reconciler actually reads the mutated state and that the caller does not already broadcast. Report out-of-scope bugs or ideas in chat instead of editing extra files unasked.
 - **Legacy Large Hubs Are Extraction Targets, Never Dumping Grounds**: Do **not** append new subsystems, pure rules, JSON payload builders, or unrelated helpers into multi-thousand-line files (`RelationshipUseCases.cpp`, `LineageUseCases.cpp`, `PaternityWorkflowCoordinator.cpp`, `AgencyWorkflowCoordinator.cpp`, `UIDataBridge.cpp`, `SkyrimNetDecorators.cpp`, `SkyrimNetMemoryService.cpp`).
 - **Required Decomposition for New Features & Refactors**:
   1. **Pure rules, scoring, eligibility, or transitions** $\to$ focused `.h`/`.cpp` in `modules/domain_{relationships,lineage,household,agency}/` + headless unit tests in `tests/test_domain_*.cpp`.
