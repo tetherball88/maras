@@ -32,6 +32,22 @@ namespace MARAS::Domain::Lineage {
                 list.push_back(id);
             }
         }
+
+        void EnsureAdultRegistered(
+            State::WorldState& ws,
+            ActorId id,
+            const State::IActorMetadataProvider& meta) {
+            if (id.IsNull() || id.IsUnknownFather() || id.IsPlayer() || id.IsSyntheticChild()) {
+                return;
+            }
+            if (!ws.actors.Read().Find(id.AsRefId())) {
+                State::ActorProfileRecord prof{};
+                prof.refId = id.AsRefId();
+                prof.baseId = meta.GetActorBaseId(id);
+                prof.isRegisteredAdult = true;
+                ws.actors.Write().Upsert(std::move(prof));
+            }
+        }
     }  // namespace
 
     PhenotypeTier ClassifyPhenotypeTierFromEditorID(std::string_view raceEditorId) noexcept {
@@ -141,7 +157,7 @@ namespace MARAS::Domain::Lineage {
         const ActorId presumedPartner = ws.relationships.Read().GetPrimaryPartner(input.bioMother);
         const ActorId resolvedBioFather = !input.bioFather.IsNull()
                                               ? input.bioFather
-                                              : (!presumedPartner.IsNull() ? presumedPartner : ActorId::UnknownFather());
+                                              : ActorId::UnknownFather();
 
         const auto synId = ws.lineage.Write().AllocateSyntheticChildId();
         const ChildId childId{ synId.raw() };
@@ -152,22 +168,9 @@ namespace MARAS::Domain::Lineage {
         const std::string childName =
             std::format("{}'s Unborn Child #{}", motherName.empty() ? "Mother" : motherName, existingCount + 1);
 
-        const auto ensureRegistered = [&](ActorId id) {
-            if (id.IsNull() || id.IsUnknownFather() || id.IsPlayer() || id.IsSyntheticChild()) {
-                return;
-            }
-            if (!ws.actors.Read().Find(id.AsRefId())) {
-                State::ActorProfileRecord prof{};
-                prof.refId = id.AsRefId();
-                prof.baseId = meta.GetActorBaseId(id);
-                prof.isRegisteredAdult = true;
-                ws.actors.Write().Upsert(std::move(prof));
-            }
-        };
-
-        ensureRegistered(input.bioMother);
-        ensureRegistered(presumedPartner);
-        ensureRegistered(resolvedBioFather);
+        EnsureAdultRegistered(ws, input.bioMother, meta);
+        EnsureAdultRegistered(ws, presumedPartner, meta);
+        EnsureAdultRegistered(ws, resolvedBioFather, meta);
 
         State::ChildRecord rec{};
         rec.childId = childId;
@@ -192,7 +195,7 @@ namespace MARAS::Domain::Lineage {
             rec.presumedFather = presumedPartner;
             rec.paternitySecret.isSecret = true;
             rec.paternitySecret.isSecretForPartner = true;
-            rec.paternitySecret.isSecretForBioFather = true;
+            rec.paternitySecret.isSecretForBioFather = !resolvedBioFather.IsUnknownFather();
             rec.paternitySecret.isPregnancySecretForPartner = true;
             rec.paternitySecret.lastCheckTimestamp = input.conceptionTimestamp;
             if (!resolvedBioFather.IsUnknownFather()) {
@@ -200,10 +203,12 @@ namespace MARAS::Domain::Lineage {
                     input.bioFatherName.empty() ? meta.GetActorName(resolvedBioFather) : input.bioFatherName;
                 rec.paternitySecret.bioFatherRaceId =
                     !input.bioFatherRaceId.IsNull() ? input.bioFatherRaceId : meta.GetActorRaceId(resolvedBioFather);
+                rec.paternitySecret.hasPhenotypeMismatch = HasPhenotypeMismatch(
+                    input.presumedFatherRaceEditorId,
+                    input.bioFatherRaceEditorId);
+            } else {
+                rec.paternitySecret.hasPhenotypeMismatch = false;
             }
-            rec.paternitySecret.hasPhenotypeMismatch = HasPhenotypeMismatch(
-                input.presumedFatherRaceEditorId,
-                input.bioFatherRaceEditorId);
             out.hasSecret = true;
             out.hasPhenotypeMismatch = rec.paternitySecret.hasPhenotypeMismatch;
         }
@@ -255,6 +260,30 @@ namespace MARAS::Domain::Lineage {
             return out;
         }
 
+        bool fatherUpdatedAtBirth = false;
+        if (!bioFatherId.IsNull() && !bioFatherId.IsUnknownFather() &&
+            (rec->bioFather.IsNull() || rec->bioFather.IsUnknownFather())) {
+            EnsureAdultRegistered(ws, bioFatherId, meta);
+            rec->bioFather = bioFatherId;
+            fatherUpdatedAtBirth = true;
+
+            const ActorId partnerId = ws.relationships.Read().GetPrimaryPartner(motherId);
+            if (!partnerId.IsNull() && partnerId == bioFatherId) {
+                rec->presumedFather = ActorId{};
+                rec->paternitySecret = State::PaternitySecretState{};
+            } else if (!partnerId.IsNull() && partnerId != bioFatherId) {
+                rec->presumedFather = partnerId;
+                rec->paternitySecret.isSecret = true;
+                rec->paternitySecret.isSecretForPartner = !rec->paternitySecret.discoveredByPartner;
+                rec->paternitySecret.isSecretForBioFather = true;
+                if (rec->paternitySecret.isSecretForPartner || rec->paternitySecret.isSecretForBioFather) {
+                    rec->paternitySecret.discovered = false;
+                }
+                rec->paternitySecret.bioFatherName = meta.GetActorName(bioFatherId);
+                rec->paternitySecret.bioFatherRaceId = meta.GetActorRaceId(bioFatherId);
+            }
+        }
+
         const ActorId prevCoGuardian = rec->guardians.OtherGuardian(motherId);
         rec->stage = ChildStage::Infant;
         rec->birthTimestamp = birthTime;
@@ -291,7 +320,8 @@ namespace MARAS::Domain::Lineage {
         const bool secretForPartner = rec->paternitySecret.isSecretForPartner;
         const bool secretForBioFather = rec->paternitySecret.isSecretForBioFather;
 
-        EvaluateChildBeastbloodInheritance(*rec, motherIsWerewolf, fatherIsWerewolf);
+        EvaluateChildBeastbloodInheritance(
+            *rec, motherIsWerewolf, fatherIsWerewolf, /*forceReevaluate=*/fatherUpdatedAtBirth);
         const auto birthMut = ws.ApplyBirthCustodyRules(
             chosenId, motherId, resolvedPresumedFather, recBioFather, meta, rng);
 

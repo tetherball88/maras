@@ -73,7 +73,10 @@ namespace MARAS::App {
         bool AddChildGuardian(RE::FormID childID, RE::FormID guardianID);
         bool RemoveChildGuardian(RE::FormID childID, RE::FormID guardianID);
         bool SetBioMother(RE::FormID childID, RE::FormID motherID);
-        bool SetBioFather(RE::FormID childID, RE::FormID fatherID);
+        bool SetBioFather(
+            RE::FormID childID,
+            RE::FormID fatherID,
+            bool initializePartnerSecretIfDifferent = false);
         bool SetPresumedFather(RE::FormID childID, RE::FormID fatherID);
 
         void AddPendingChild(RE::FormID childBaseID, RE::FormID parentABaseID, RE::FormID parentBBaseID, bool isAdopted);

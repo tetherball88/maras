@@ -1,5 +1,6 @@
 #include "maras/domain/lineage/LineageRules.h"
 
+#include "maras/domain/lineage/FertilityRules.h"
 #include "maras/foundation/Logging.h"
 
 #include <algorithm>
@@ -34,7 +35,11 @@ namespace MARAS::Domain::Lineage {
     void EvaluateChildBeastbloodInheritance(
         State::ChildRecord& record,
         bool motherIsWerewolf,
-        bool fatherIsWerewolf) noexcept {
+        bool fatherIsWerewolf,
+        bool forceReevaluate) noexcept {
+        if (forceReevaluate) {
+            record.beastbloodEvaluated = false;
+        }
         if (record.beastbloodEvaluated) {
             return;
         }
@@ -44,8 +49,8 @@ namespace MARAS::Domain::Lineage {
             record.hasBeastblood = true;
             record.beastbloodEvaluated = true;
             Foundation::LogInfo(
-                "[Beastblood] Child {:08X} ('{}') inherited Beastblood (both bio parents are werewolves)",
-                record.childId.raw(), record.name);
+                "[Beastblood] Child {:08X} ('{}') inherited Beastblood (100% — both bio parents {:08X} & {:08X} are werewolves)",
+                record.childId.raw(), record.name, record.bioMother.raw(), record.bioFather.raw());
         } else if (wwParentCount == 1) {
             std::uint64_t seed =
                 (static_cast<std::uint64_t>(record.childId.raw()) * 0x9E3779B97F4A7C15ULL) ^
@@ -59,15 +64,15 @@ namespace MARAS::Domain::Lineage {
             record.hasBeastblood = ((seed & 1ULL) != 0);
             record.beastbloodEvaluated = true;
             Foundation::LogInfo(
-                "[Beastblood] Child {:08X} ('{}') 50% Beastblood inheritance roll -> {}",
-                record.childId.raw(), record.name, record.hasBeastblood ? "INHERITED" : "MORTAL");
+                "[Beastblood] Child {:08X} ('{}') 50% Beastblood inheritance roll (mother={:08X}[{}], father={:08X}[{}]) -> {}",
+                record.childId.raw(), record.name, record.bioMother.raw(), motherIsWerewolf,
+                record.bioFather.raw(), fatherIsWerewolf, record.hasBeastblood ? "INHERITED" : "MORTAL");
         } else {
             record.hasBeastblood = false;
-            if (!record.bioMother.IsNull() ||
-                (!record.bioFather.IsNull() && !record.bioFather.IsUnknownFather()) ||
-                record.isAdopted) {
-                record.beastbloodEvaluated = true;
-            }
+            record.beastbloodEvaluated =
+                (!record.bioMother.IsNull() ||
+                 (!record.bioFather.IsNull() && !record.bioFather.IsUnknownFather()) ||
+                 record.isAdopted);
         }
     }
 
@@ -385,6 +390,96 @@ namespace MARAS::Domain::Lineage {
         if (!out.guardianDiff.addedA.IsNull()) out.affectedActors.push_back(out.guardianDiff.addedA);
         if (!out.guardianDiff.addedB.IsNull()) out.affectedActors.push_back(out.guardianDiff.addedB);
         return out;
+    }
+
+    bool ApplySetBioMother(
+        State::WorldState& ws,
+        ChildId childId,
+        ActorId motherId,
+        bool motherIsWerewolf,
+        bool fatherIsWerewolf) noexcept {
+        auto* rec = ws.lineage.Write().FindChildMutable(childId);
+        if (!rec) {
+            return false;
+        }
+        rec->bioMother = motherId;
+        if (!motherId.IsNull()) {
+            rec->isBiologicalChild = true;
+        }
+        rec->bioLineageEvaluated = false;
+        rec->bioSkillBonuses.fill(0);
+        EvaluateChildBeastbloodInheritance(
+            *rec, motherIsWerewolf, fatherIsWerewolf, /*forceReevaluate=*/true);
+        return true;
+    }
+
+    bool ApplySetBioFather(
+        State::WorldState& ws,
+        const SetBioFatherInput& input) {
+        auto* rec = ws.lineage.Write().FindChildMutable(input.childId);
+        if (!rec) {
+            return false;
+        }
+        rec->bioFather = input.fatherId;
+        if (!input.fatherId.IsNull() && !input.fatherId.IsUnknownFather()) {
+            rec->isBiologicalChild = true;
+        }
+
+        const ActorId motherPartner =
+            !rec->presumedFather.IsNull()
+                ? rec->presumedFather
+                : (!rec->bioMother.IsNull() ? ws.relationships.Read().GetPrimaryPartner(rec->bioMother) : ActorId{});
+
+        const auto updateBioFatherSecretMetadata = [&](bool hasRealFather) {
+            if (hasRealFather) {
+                rec->paternitySecret.bioFatherName = input.fatherName;
+                rec->paternitySecret.bioFatherRaceId = input.fatherRaceId;
+                rec->paternitySecret.hasPhenotypeMismatch = HasPhenotypeMismatch(
+                    input.presumedFatherRaceEditorId,
+                    input.bioFatherRaceEditorId);
+            } else {
+                rec->paternitySecret.bioFatherName.clear();
+                rec->paternitySecret.bioFatherRaceId = {};
+                rec->paternitySecret.hasPhenotypeMismatch = false;
+            }
+        };
+
+        if (!motherPartner.IsNull() && input.fatherId == motherPartner) {
+            rec->presumedFather = ActorId{};
+            rec->paternitySecret = State::PaternitySecretState{};
+        } else if (rec->paternitySecret.HasActiveSecret()) {
+            const bool hasRealFather = !input.fatherId.IsNull() && !input.fatherId.IsUnknownFather();
+            rec->paternitySecret.isSecretForBioFather =
+                hasRealFather && !rec->paternitySecret.discoveredByBioFather;
+            updateBioFatherSecretMetadata(hasRealFather);
+            rec->paternitySecret.isSecret =
+                rec->paternitySecret.isSecretForBioFather ||
+                rec->paternitySecret.isSecretForPartner ||
+                rec->paternitySecret.isPregnancySecretForPartner;
+            if (!rec->paternitySecret.isSecret) {
+                rec->paternitySecret.discovered = true;
+            }
+        } else if (input.initializePartnerSecretIfDifferent &&
+                   !motherPartner.IsNull() &&
+                   !input.fatherId.IsNull() &&
+                   input.fatherId != motherPartner) {
+            const bool hasRealFather = !input.fatherId.IsUnknownFather();
+            rec->presumedFather = motherPartner;
+            rec->paternitySecret.isSecret = true;
+            rec->paternitySecret.isSecretForPartner = true;
+            rec->paternitySecret.isSecretForBioFather = hasRealFather;
+            rec->paternitySecret.isPregnancySecretForPartner = (rec->stage == Foundation::ChildStage::Unborn);
+            rec->paternitySecret.discovered = false;
+            rec->paternitySecret.discoveredByPartner = false;
+            rec->paternitySecret.discoveredByBioFather = false;
+            updateBioFatherSecretMetadata(hasRealFather);
+        }
+
+        rec->bioLineageEvaluated = false;
+        rec->bioSkillBonuses.fill(0);
+        EvaluateChildBeastbloodInheritance(
+            *rec, input.motherIsWerewolf, input.fatherIsWerewolf, /*forceReevaluate=*/true);
+        return true;
     }
 
     ChildOrderOutcome ApplyOrderIssue(

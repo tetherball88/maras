@@ -1,5 +1,6 @@
 #include "maras/engine/ChildSpawnService.h"
 
+#include "maras/domain/lineage/LineageRules.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/FormCache.h"
@@ -323,43 +324,10 @@ namespace MARAS {
         const RE::FormID fatherId = record.bioFather.raw();
         const bool motherHas = (motherId != 0) && IsActorWerewolf(motherId);
         const bool fatherHas = (fatherId != 0 && fatherId != kUnknownFatherFormID) && IsActorWerewolf(fatherId);
-        const int wwParentCount = (motherHas ? 1 : 0) + (fatherHas ? 1 : 0);
-
-        if (wwParentCount >= 2) {
-            record.hasBeastblood = true;
-            record.beastbloodEvaluated = true;
-            MARAS_LOG_INFO(
-                "[Beastblood] Child {:08X} ('{}') inherited Beastblood (100% — both bio parents {:08X} & {:08X} are werewolves)",
-                record.childId.raw(), record.name, motherId, fatherId);
-            return true;
-        }
-
-        if (wwParentCount == 1) {
-            std::uint64_t seed = (static_cast<std::uint64_t>(record.childId.raw()) * 0x9E3779B97F4A7C15ULL) ^
-                                 (static_cast<std::uint64_t>(motherId) * 0xBF58476D1CE4E5B9ULL) ^
-                                 (static_cast<std::uint64_t>(fatherId) * 0x94D049BB133111EBULL);
-            seed ^= (seed >> 30);
-            seed *= 0xBF58476D1CE4E5B9ULL;
-            seed ^= (seed >> 27);
-            seed *= 0x94D049BB133111EBULL;
-            seed ^= (seed >> 31);
-            record.hasBeastblood = ((seed & 1ULL) != 0);
-            record.beastbloodEvaluated = true;
-            MARAS_LOG_INFO(
-                "[Beastblood] Child {:08X} ('{}') 50% Beastblood inheritance roll (mother={:08X}[{}], father={:08X}[{}]) -> {}",
-                record.childId.raw(), record.name, motherId, motherHas, fatherId, fatherHas,
-                record.hasBeastblood ? "INHERITED" : "MORTAL");
-            return true;
-        }
-
-        record.hasBeastblood = false;
-        if (motherId != 0 ||
-            (fatherId != 0 && fatherId != kUnknownFatherFormID) ||
-            record.isAdopted) {
-            record.beastbloodEvaluated = true;
-            return true;
-        }
-        return false;
+        const bool prevBeast = record.hasBeastblood;
+        const bool prevEval = record.beastbloodEvaluated;
+        Domain::Lineage::EvaluateChildBeastbloodInheritance(record, motherHas, fatherHas);
+        return (record.hasBeastblood != prevBeast) || (record.beastbloodEvaluated != prevEval);
     }
 
 }  // namespace MARAS

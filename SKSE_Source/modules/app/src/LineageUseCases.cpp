@@ -889,6 +889,19 @@ namespace MARAS::App {
                 }
             }
         }
+        void FinalizeBioParentMutation(
+            LineageUseCases& self,
+            RE::FormID childID,
+            State::ChildRecord updatedRec) {
+            if (updatedRec.stage != Foundation::ChildStage::Unborn) {
+                self.EvaluateChildBioLineageAtBirth(childID);
+                if (auto refreshed = self.GetChildEntry(childID)) {
+                    updatedRec = *refreshed;
+                }
+            }
+            GetUiBridgeGateway().OnChildUpdated(updatedRec);
+            GetUiBridgeGateway().SendNPCDetail(childID);
+        }
     }  // namespace
 
     bool LineageUseCases::SetChildGuardian(RE::FormID childID, RE::FormID guardianID, bool isAdd) {
@@ -974,56 +987,99 @@ namespace MARAS::App {
         if (childID == 0) {
             return false;
         }
+        const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* existing = (preSnap && preSnap->lineage)
+            ? preSnap->lineage->FindChild(State::ChildId{ childID })
+            : nullptr;
+        if (!existing) {
+            return false;
+        }
         if (motherID != 0) {
             RelationshipUseCases::GetSingleton().EnsureRegistered(motherID);
         }
-        std::optional<State::ChildRecord> updatedRec;
+
         const bool motherWW = (motherID != 0) && ChildSpawnService::IsActorWerewolf(motherID);
+        const RE::FormID fatherID = existing->bioFather.raw();
+        const bool fatherWW = (fatherID != 0 && fatherID != kUnknownFatherFormID) &&
+                              ChildSpawnService::IsActorWerewolf(fatherID);
+
+        std::optional<State::ChildRecord> updatedRec;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            auto* rec = ws.lineage.Write().FindChildMutable(State::ChildId{ childID });
-            if (!rec) {
-                return;
+            if (Domain::Lineage::ApplySetBioMother(
+                    ws,
+                    State::ChildId{ childID },
+                    State::ActorId{ motherID },
+                    motherWW,
+                    fatherWW)) {
+                if (const auto* rec = ws.lineage.Read().FindChild(State::ChildId{ childID })) {
+                    updatedRec = *rec;
+                }
             }
-            rec->bioMother = State::ActorId{ motherID };
-            if (motherWW && !rec->hasBeastblood) {
-                rec->hasBeastblood = true;
-            }
-            updatedRec = *rec;
         });
         if (!updatedRec.has_value()) {
             return false;
         }
-        GetUiBridgeGateway().OnChildUpdated(*updatedRec);
-        GetUiBridgeGateway().SendNPCDetail(childID);
+        FinalizeBioParentMutation(*this, childID, *updatedRec);
         return true;
     }
 
-    bool LineageUseCases::SetBioFather(RE::FormID childID, RE::FormID fatherID) {
+    bool LineageUseCases::SetBioFather(
+        RE::FormID childID,
+        RE::FormID fatherID,
+        bool initializePartnerSecretIfDifferent) {
         if (childID == 0) {
+            return false;
+        }
+        const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* existing = (preSnap && preSnap->lineage)
+            ? preSnap->lineage->FindChild(State::ChildId{ childID })
+            : nullptr;
+        if (!existing) {
             return false;
         }
         if (fatherID != 0 && fatherID != kUnknownFatherFormID) {
             RelationshipUseCases::GetSingleton().EnsureRegistered(fatherID);
         }
-        std::optional<State::ChildRecord> updatedRec;
+
+        const RE::FormID motherID = existing->bioMother.raw();
+        const RE::FormID presumedID = !existing->presumedFather.IsNull()
+            ? existing->presumedFather.raw()
+            : ((preSnap->relationships && motherID != 0)
+                   ? preSnap->relationships->GetPrimaryPartner(existing->bioMother).raw()
+                   : 0);
+        const bool motherWW = (motherID != 0) && ChildSpawnService::IsActorWerewolf(motherID);
         const bool fatherWW = (fatherID != 0 && fatherID != kUnknownFatherFormID) &&
                               ChildSpawnService::IsActorWerewolf(fatherID);
+
+        Domain::Lineage::SetBioFatherInput input{};
+        input.childId = State::ChildId{ childID };
+        input.fatherId = State::ActorId{ fatherID };
+        input.motherIsWerewolf = motherWW;
+        input.fatherIsWerewolf = fatherWW;
+        input.initializePartnerSecretIfDifferent = initializePartnerSecretIfDifferent;
+        if (fatherID != 0 && fatherID != kUnknownFatherFormID) {
+            input.fatherName = ActorSvc::GetName(fatherID);
+            if (auto* race = ActorSvc::GetRace(fatherID)) {
+                input.fatherRaceId = State::FormRawId{ race->GetFormID() };
+            }
+            input.bioFatherRaceEditorId = ActorSvc::GetRaceEditorID(fatherID);
+        }
+        if (presumedID != 0) {
+            input.presumedFatherRaceEditorId = ActorSvc::GetRaceEditorID(presumedID);
+        }
+
+        std::optional<State::ChildRecord> updatedRec;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            auto* rec = ws.lineage.Write().FindChildMutable(State::ChildId{ childID });
-            if (!rec) {
-                return;
+            if (Domain::Lineage::ApplySetBioFather(ws, input)) {
+                if (const auto* rec = ws.lineage.Read().FindChild(State::ChildId{ childID })) {
+                    updatedRec = *rec;
+                }
             }
-            rec->bioFather = State::ActorId{ fatherID };
-            if (fatherWW && !rec->hasBeastblood) {
-                rec->hasBeastblood = true;
-            }
-            updatedRec = *rec;
         });
         if (!updatedRec.has_value()) {
             return false;
         }
-        GetUiBridgeGateway().OnChildUpdated(*updatedRec);
-        GetUiBridgeGateway().SendNPCDetail(childID);
+        FinalizeBioParentMutation(*this, childID, *updatedRec);
         return true;
     }
 

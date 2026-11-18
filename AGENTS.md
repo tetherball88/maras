@@ -10,12 +10,14 @@ Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_I
 
 ---
 
-## 0. Build & Test Policy
+## 0. Scope, Diagnostics & Build Policy
 
+- **Strict Scope Discipline — Never Touch Unrequested Code or Files**: Modify **only** the code and files strictly required to fulfill what the user explicitly asked for. **Never** opportunistically refactor adjacent workflows, invent extra plumbing/helpers, touch unrelated callers/files, or expand task scope without explicit permission. If you discover an adjacent bug, latent edge case, or cleanup opportunity while investigating, **do not edit it**—note it briefly in your reply and ask before touching it.
+- **Read Local Game Logs Directly**: When diagnosing an in-game issue on this machine, inspect `C:\Users\sokol\Documents\My Games\Skyrim Special Edition\SKSE\MARAS.log` and `C:\Users\sokol\Documents\My Games\Skyrim Special Edition\Logs\Script\Papyrus.0.log` directly yourself—never tell the user to check or paste local logs.
 - **Build & Test Directly Without Path-Hunting**: Never search the filesystem for `cmake.exe`, Visual Studio, or `vcpkg`. Use the one-command script in `.agents/skills/maras-build-and-test`:
   `powershell -NoProfile -ExecutionPolicy Bypass -File ".agents/skills/maras-build-and-test/scripts/build-and-test.ps1" -Target all` (or `-Target tests` for ~1s unit-test loop; `Set-Location ui-src; npm run build` for UI).
 - **Locked Target DLL (`SkyrimSE.exe` Open)**: If Skyrim is running, `SKSE/Plugins/MARAS.dll` is locked by Windows, causing CMake's `POST_BUILD` copy (`MSB3073`) to fail *after* `SKSE_Source/build/release/Release/MARAS.dll` compiles and links cleanly. Treat compilation as **succeeded**—never retry in a loop or kill Skyrim; simply note that deploying the new DLL awaits closing the game.
-- **Mandatory Unit Tests**: Changes to pure state tables, `'MARS'` co-save serialization, domain lifecycle rules, or secret masking in `SKSE_Source/modules/` **must** include new/updated tests in `SKSE_Source/tests/` verified green via `maras_tests.exe`.
+- **Mandatory Unit Tests**: Changes to pure state tables, `'MARS'` co-save serialization, domain lifecycle rules, or secret masking in `SKSE_Source/modules/` **must** include new/updated tests in `SKSE_Source/tests/` verified green via `maras_tests.exe`. Keep test cases concise (~20–60 lines with helper lambdas/aggregate init)—never pad `SKSE_Source/tests/` with multi-hundred-line repetitive boilerplate.
 
 ---
 

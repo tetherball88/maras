@@ -53,6 +53,18 @@ namespace MARAS::Domain::Lineage {
         std::vector<ChildId> updatedChildren{};
     };
 
+    struct SetBioFatherInput {
+        ChildId childId{};
+        ActorId fatherId{};
+        bool motherIsWerewolf{ false };
+        bool fatherIsWerewolf{ false };
+        std::string fatherName{};
+        State::FormRawId fatherRaceId{};
+        std::string presumedFatherRaceEditorId{};
+        std::string bioFatherRaceEditorId{};
+        bool initializePartnerSecretIfDifferent{ false };
+    };
+
     [[nodiscard]] bool IsChildBlockedFromAdoption(
         RefId childRefId,
         BaseId childBaseId,
@@ -62,7 +74,8 @@ namespace MARAS::Domain::Lineage {
     void EvaluateChildBeastbloodInheritance(
         State::ChildRecord& record,
         bool motherIsWerewolf,
-        bool fatherIsWerewolf) noexcept;
+        bool fatherIsWerewolf,
+        bool forceReevaluate = false) noexcept;
 
     [[nodiscard]] bool IsCompanionRetryCooldownElapsed(
         float storedTimestamp,
@@ -103,6 +116,17 @@ namespace MARAS::Domain::Lineage {
         ActorId guardianA,
         ActorId guardianB,
         const State::IActorMetadataProvider& meta = State::DefaultActorMetadataProvider{});
+
+    bool ApplySetBioMother(
+        State::WorldState& ws,
+        ChildId childId,
+        ActorId motherId,
+        bool motherIsWerewolf,
+        bool fatherIsWerewolf) noexcept;
+
+    bool ApplySetBioFather(
+        State::WorldState& ws,
+        const SetBioFatherInput& input);
 
     ChildOrderOutcome ApplyOrderIssue(
         State::WorldState& ws,
