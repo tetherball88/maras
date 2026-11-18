@@ -86,6 +86,7 @@ namespace MARAS::State {
 
     struct ChildFactionPlan {
         bool isYoungChild{ false };
+        bool isPhysicalInfant{ false };
         bool inPlayerHousehold{ false };
         bool restoreSavedCrimeFaction{ false };
 

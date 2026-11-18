@@ -1392,6 +1392,7 @@ namespace MARAS::PapyrusInterface {
         RegisterSynced<RegisterNpcFertilityChildSpawn>(vm, "RegisterNpcFertilityChildSpawn");
         RegisterSynced<GetFertilitySpawnCoSpouse>(vm, "GetFertilitySpawnCoSpouse");
         RegisterSynced<MigrateCompletedFmrNpcChild>(vm, "MigrateCompletedFmrNpcChild");
+        RegisterSynced<GetActorRefScale>(vm, "GetActorRefScale");
 
         // Child name generation functions
         RegisterSynced<GenerateRandomChildName>(vm, "GenerateRandomChildName");

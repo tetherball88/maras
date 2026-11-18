@@ -737,8 +737,8 @@ Function PlayerLocationChanged(Location newLoc, Location oldLoc, bool onGameLoad
     endif
     TTM_Debug.debug("TTM_ServiceChildrenLogic:PlayerLocationChanged:newLoc:" + newLoc + ":oldLoc:" + oldLoc + ":currLoc:"+ Game.GetPlayer().GetCurrentLocation())
     ;Determine whether to trigger a Welcome Home event.
-    bool isNewLocPlayerHouse = newLoc.HasKeywordString("LocTypePlayerHouse")
-    bool isOldLocPlayerHouse = oldLoc.HasKeywordString("LocTypePlayerHouse")
+    bool isNewLocPlayerHouse = (newLoc != None) && newLoc.HasKeywordString("LocTypePlayerHouse")
+    bool isOldLocPlayerHouse = (oldLoc != None) && oldLoc.HasKeywordString("LocTypePlayerHouse")
     bool enteredPlayerHouse = (!isOldLocPlayerHouse && isNewLocPlayerHouse)
     bool leftPlayerHouse = (isOldLocPlayerHouse && !isNewLocPlayerHouse)
     bool needQstStart = false
@@ -775,7 +775,17 @@ Function PlayerLocationChanged(Location newLoc, Location oldLoc, bool onGameLoad
 
         TTM_Debug.debug("TTM_ServiceChildrenLogic:PlayerLocationChanged:children.Length:" + children.Length)
 
-        if(children.Length > 0)
+        ; Only Stage 2 Young Children join TTM_ChildrenSandbox (Stage 1 physical Infants stay on base sandbox FE0AF06A without ForceGreet).
+        int eligibleCount = 0
+        int cIdx = 0
+        while (cIdx < children.Length)
+            if (children[cIdx] != None && MARAS.GetChildStage(children[cIdx].GetFormID()) == 2)
+                eligibleCount += 1
+            endif
+            cIdx += 1
+        endwhile
+
+        if(eligibleCount > 0)
             bool started = TTM_ChildreSandboxQst.Start()
             TTM_Debug.debug("TTM_ServiceChildrenLogic:PlayerLocationChanged:started:" + started)
             int tries = 4
@@ -785,16 +795,20 @@ Function PlayerLocationChanged(Location newLoc, Location oldLoc, bool onGameLoad
                 j += 1
             endwhile
             int i = 0
-            while(i < numOfChildrenPerLocation && i < children.Length)
+            int aliasSlot = 0
+            while(aliasSlot < numOfChildrenPerLocation && i < children.Length)
                 Actor child = children[i]
-                int childAliasIndex = i + 1
-                string normalizedIndex = ""
-                if(childAliasIndex < 10)
-                    normalizedIndex = "0" + childAliasIndex
-                else
-                    normalizedIndex = "" + childAliasIndex
+                if (child != None && MARAS.GetChildStage(child.GetFormID()) == 2)
+                    int childAliasIndex = aliasSlot + 1
+                    string normalizedIndex = ""
+                    if(childAliasIndex < 10)
+                        normalizedIndex = "0" + childAliasIndex
+                    else
+                        normalizedIndex = "" + childAliasIndex
+                    endif
+                    TTM_Utils.SetActorAlias(TTM_ChildreSandboxQst, "Child0" + normalizedIndex, child)
+                    aliasSlot += 1
                 endif
-                TTM_Utils.SetActorAlias(TTM_ChildreSandboxQst, "Child0" + normalizedIndex, child)
                 i += 1
             endwhile
             ReadyForcegreetEvent(newLoc)
@@ -1160,7 +1174,9 @@ Function SpawnSyntheticChild(int syntheticID)
     if (usedBFBase)
         TTM_ServiceFertilityBF.TakeOverChild(spawnedChild)
         StorageUtil.SetFloatValue(spawnedChild, "FW.Child.DOB", Utility.GetCurrentGameTime())
-        StorageUtil.SetIntValue(spawnedChild, "FW.AddOn.StartGrowing", 1)
+        StorageUtil.SetIntValue(spawnedChild, "FW.AddOn.StartGrowing", 0)
+        spawnedChild.SetScale(1.0)
+        spawnedChild.AllowPCDialogue(true)
     endif
 
     if (childName != "")

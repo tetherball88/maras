@@ -7311,7 +7311,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     },
     header: {
       brandTitle: "M.A.R.A.S",
-      brandSubtitle: "Marriage & Relationship Alignment System",
+      brandSubtitle: "Marriage, Affairs, Relationships, Ancestry & Society",
       secretsRevealedTooltip: "All Secrets Revealed — Showing all hidden affairs and paternity secrets. Click to hide undiscovered secrets (Intrigue Mode).",
       secretsHiddenTooltip: "Secrets Hidden (Intrigue Mode) — Undiscovered affairs and paternity secrets are masked as if no secrets exist. Click to reveal all secrets.",
       secretsButton: "Secrets",
@@ -7676,6 +7676,8 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       teleportPlayerTo: "Teleport Player To",
       teleportNpcToPlayerTooltip: "Teleport NPC to Player location",
       teleportNpcToPlayer: "Teleport NPC To Player",
+      growInfantTooltip: "Grow infant into a Stage 2 young child immediately (snaps scale to normal or spawns child actor)",
+      growInfant: "Grow to Young Child",
       spawnChildTooltip: "Spawn physical child actor into the world (PlaceAtMe persistent)",
       spawnChild: "Spawn Child",
       spawnAdultTooltip: "Spawn physical adult child actor into the world (PlaceAtMe persistent) and carry over childhood SkyrimNet bio",
@@ -8140,6 +8142,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       fleeingChildren: "Children are running away from this cell...",
       dismissingCritter: "Dismissing critter for child ({formId})...",
       dismissingPet: "Dismissing pet for child ({formId})...",
+      growingInfant: "Growing infant ({childId}) into a young child...",
       spawningChild: "Spawning child actor ({childId})...",
       childSpawnedSuccess: "Child ({childId}) successfully spawned into the world!",
       childSentToTraining: "Child sent to training.",
@@ -12403,6 +12406,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           stage: item.stage ?? (existing == null ? void 0 : existing.stage),
           isEphemeral: item.isEphemeral ?? (existing == null ? void 0 : existing.isEphemeral),
           hasRefID: item.hasRefID ?? (existing == null ? void 0 : existing.hasRefID),
+          canGrowInfant: item.canGrowInfant ?? (existing == null ? void 0 : existing.canGrowInfant),
           trainingLocation: item.trainingLocation ?? (existing == null ? void 0 : existing.trainingLocation),
           trainingClassIndex: item.trainingClassIndex ?? (existing == null ? void 0 : existing.trainingClassIndex),
           trainingClassName: item.trainingClassName ?? (existing == null ? void 0 : existing.trainingClassName),
@@ -12452,6 +12456,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             stage: detail.stage,
             isEphemeral: detail.isEphemeral,
             hasRefID: detail.hasRefID,
+            canGrowInfant: detail.canGrowInfant,
             trainingLocation: detail.trainingLocation,
             trainingClassIndex: detail.trainingClassIndex,
             trainingClassName: detail.trainingClassName,
@@ -17668,6 +17673,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     dismissChildPet: (npcId) => {
       sendMarasAction("dismissChildPet", { formId: npcId });
       set({ statusMsg: t("store.status.dismissingPet", { formId: npcId }) });
+    },
+    growInfant: (childId) => {
+      sendMarasAction("growInfant", { childId });
+      set({ statusMsg: t("store.status.growingInfant", { childId }) });
     },
     spawnChild: (childId) => {
       sendMarasAction("spawnChild", { childId });
@@ -36868,9 +36877,11 @@ Defaulting to \`null\`.`;
       setSearchQuery("");
     };
     const childRecord = children.get(npcId);
-    const isSecretForPartner = Boolean((childRecord == null ? void 0 : childRecord.isSecretForPartner) ?? (childRecord == null ? void 0 : childRecord.isSecret));
+    const isSecretForPartner = Boolean(
+      !(childRecord == null ? void 0 : childRecord.discoveredByPartner) && ((childRecord == null ? void 0 : childRecord.isSecretForPartner) ?? (childRecord == null ? void 0 : childRecord.isSecret))
+    );
     const isPregnancySecretForPartner = Boolean(
-      (childRecord == null ? void 0 : childRecord.stage) === "unborn" && (childRecord == null ? void 0 : childRecord.isPregnancySecretForPartner)
+      !(childRecord == null ? void 0 : childRecord.discoveredByPartner) && (childRecord == null ? void 0 : childRecord.stage) === "unborn" && (childRecord == null ? void 0 : childRecord.isPregnancySecretForPartner)
     );
     const isSecretForBio = Boolean(childRecord == null ? void 0 : childRecord.isSecretForBioFather);
     const hasActiveSecret = isSecretForPartner || isSecretForBio || isPregnancySecretForPartner;
@@ -36931,7 +36942,7 @@ Defaulting to \`null\`.`;
     const bioMotherProfile = resolveDisplayProfile(bioMotherId, childRecord == null ? void 0 : childRecord.bioMotherName);
     const bioFatherProfile = resolveDisplayProfile(bioFatherId, childRecord == null ? void 0 : childRecord.bioFatherName);
     const presumedFatherProfile = resolveDisplayProfile(presumedFatherId, childRecord == null ? void 0 : childRecord.presumedFatherName);
-    const showPresumedFatherSlot = revealSecretsInUI || Boolean(presumedFatherProfile);
+    const showPresumedFatherSlot = revealSecretsInUI && (isSecretForPartner || isPregnancySecretForPartner);
     reactExports.useEffect(() => {
       if (!showPresumedFatherSlot && activeSlot === "presumedFather") {
         setActiveSlot(null);
@@ -37228,13 +37239,6 @@ Defaulting to \`null\`.`;
                           className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold uppercase tracking-wider",
                           title: t2("npcDetail.guardians.secretPresumedBioTooltip"),
                           children: t2("npcDetail.guardians.badgeSecretFromPartner")
-                        }
-                      ) : (childRecord == null ? void 0 : childRecord.discoveredByPartner) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "span",
-                        {
-                          className: "text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold uppercase tracking-wider",
-                          title: t2("npcDetail.guardians.truthKnownTooltip"),
-                          children: t2("npcDetail.guardians.badgeTruthKnown")
                         }
                       ) : null)
                     ] }),
@@ -37630,6 +37634,7 @@ Defaulting to \`null\`.`;
     const teleportPlayerToNpc = useMarasStore((s) => s.teleportPlayerToNpc);
     const teleportNpcToPlayer = useMarasStore((s) => s.teleportNpcToPlayer);
     const spawnChild = useMarasStore((s) => s.spawnChild);
+    const growInfant = useMarasStore((s) => s.growInfant);
     const removeChild = useMarasStore((s) => s.removeChild);
     const setMatchmakingModalOpen = useMarasStore((s) => s.setMatchmakingModalOpen);
     const evaluateChildSecret = useMarasStore((s) => s.evaluateChildSecret);
@@ -37651,6 +37656,7 @@ Defaulting to \`null\`.`;
     const isChild = !!((npc == null ? void 0 : npc.isChild) || childRecord);
     const stage = (childRecord == null ? void 0 : childRecord.stage) || (npc == null ? void 0 : npc.stage) || (isChild ? "child" : void 0);
     const hasRefID = (childRecord == null ? void 0 : childRecord.hasRefID) ?? (npc == null ? void 0 : npc.hasRefID) ?? !npcId.startsWith("FF7");
+    const canGrowInfant = Boolean((childRecord == null ? void 0 : childRecord.canGrowInfant) ?? (npc == null ? void 0 : npc.canGrowInfant));
     const isPlayerChild = isChild && !!(childRecord && (areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) || areSameFormId(childRecord.guardianBId, PLAYER_FORM_ID) || (!childRecord.guardianAId || childRecord.guardianAId === "00000000") && (!childRecord.guardianBId || childRecord.guardianBId === "00000000") && (areSameFormId(childRecord.bioMotherId, PLAYER_FORM_ID) || areSameFormId(childRecord.bioFatherId, PLAYER_FORM_ID))));
     const hasSecret = Boolean(
       childRecord && (childRecord.isSecret || childRecord.isSecretForPartner || childRecord.isSecretForBioFather)
@@ -37788,6 +37794,17 @@ Defaulting to \`null\`.`;
               }
             ) })
           ] }),
+          isChild && stage === "infant" && canGrowInfant && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.growInfantTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              onClick: () => growInfant(npcId),
+              className: "text-xs font-semibold text-cyan-200 bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(UserPlus, { className: "w-[1em] h-[1em] text-cyan-400" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t2("npcDetail.shell.growInfant") })
+              ]
+            }
+          ) }),
           isChild && !hasRefID && stage === "child" && /* @__PURE__ */ jsxRuntimeExports.jsx(AppTooltip, { content: t2("npcDetail.shell.spawnChildTooltip"), children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
             {

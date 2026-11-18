@@ -3,6 +3,7 @@
 #include "RE/B/BGSScene.h"
 #include "RE/B/BGSSceneAction.h"
 #include "RE/B/BGSSceneActionPackage.h"
+#include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/ChildSpawnService.h"
@@ -420,7 +421,8 @@ namespace MARAS {
         const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
         Foundation::RefId resolvedChildFollowTargetId{};
         if (const auto* childRec = worldSnap->lineage->FindChild(State::ChildId{ actorId });
-            childRec && childRec->stage == State::ChildStage::Child) {
+            childRec && (childRec->stage == State::ChildStage::Child ||
+                         childRec->stage == State::ChildStage::Infant)) {
             resolvedChildFollowTargetId = Foundation::RefId{
                 ChildSpawnService::GetSingleton().ResolveNonPlayerChildTarget(*childRec) };
         }
@@ -614,7 +616,8 @@ namespace MARAS {
         for (const RE::FormID actorId : candidateIds) {
             Foundation::RefId resolvedChildFollowTargetId{};
             if (const auto* childRec = worldSnap->lineage->FindChild(State::ChildId{ actorId });
-                childRec && childRec->stage == State::ChildStage::Child) {
+                childRec && (childRec->stage == State::ChildStage::Child ||
+                             childRec->stage == State::ChildStage::Infant)) {
                 resolvedChildFollowTargetId = Foundation::RefId{
                     ChildSpawnService::GetSingleton().ResolveNonPlayerChildTarget(*childRec) };
             }
@@ -983,14 +986,24 @@ namespace MARAS {
             const char* questEdid = (rawQuestEdid && rawQuestEdid[0] != '\0') ? rawQuestEdid : nullptr;
             if (quest && questEdid && !snap->questWhitelistPatterns.empty() &&
                 MatchesPatternList(questEdid, snap->questWhitelistPatterns)) {
-                CheckAndLog(actorID, candidateID, candidateID, PackageDecision::QuestWhitelist, [&]() {
-                    const std::string candidateName = GetPackageDesc(candidate);
-                    MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
-                                    actorID, candidateName, candidateID);
-                    MARAS_LOG_DEBUG("PackageStartHook: allowing '{}' ({:08X}) on actor {:08X} (quest whitelist '{}')",
-                                    candidateName, candidateID, actorID, GetQuestDesc(quest));
-                });
-                return candidate;
+                bool blockedForPhysicalInfant = false;
+                if (const auto worldSnap = State::WorldStore::GetSingleton().Snapshot();
+                    worldSnap && worldSnap->lineage) {
+                    if (const auto* childRec = worldSnap->lineage->FindChild(State::ChildId{ actorID })) {
+                        blockedForPhysicalInfant =
+                            Domain::Lineage::ShouldBlockQuestPackageForPhysicalInfant(childRec->stage, questEdid);
+                    }
+                }
+                if (!blockedForPhysicalInfant) {
+                    CheckAndLog(actorID, candidateID, candidateID, PackageDecision::QuestWhitelist, [&]() {
+                        const std::string candidateName = GetPackageDesc(candidate);
+                        MARAS_LOG_DEBUG("PackageStartHook: evaluating actor {:08X}, candidate='{}' ({:08X})",
+                                        actorID, candidateName, candidateID);
+                        MARAS_LOG_DEBUG("PackageStartHook: allowing '{}' ({:08X}) on actor {:08X} (quest whitelist '{}')",
+                                        candidateName, candidateID, actorID, GetQuestDesc(quest));
+                    });
+                    return candidate;
+                }
             }
 
             if (snap->questPriorityThreshold >= 0 && quest) {

@@ -222,6 +222,7 @@ namespace MARAS::App {
                 }
             }
             lineageUseCases.CheckChildrenTrainingProgress(currentGameDay);
+            FertilityLifecycleCoordinator::GetSingleton().CheckPhysicalInfantsGrowth(currentGameDay);
         }
 
         HouseholdUseCases::GetSingleton().PollTick(currentGameDay);

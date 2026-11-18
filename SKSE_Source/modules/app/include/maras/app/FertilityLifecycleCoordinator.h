@@ -122,6 +122,12 @@ namespace MARAS::App {
             Domain::Lineage::BlockedFertilityMcmClick blockedClick,
             std::string_view optionStateName);
 
+        void CheckPhysicalInfantsGrowth(float currentGameDay);
+
+        bool PromotePhysicalInfantToChild(RE::FormID childId, bool forceSnapScale);
+
+        bool GrowInfantFromDashboard(RE::FormID childId);
+
     private:
         FertilityLifecycleCoordinator() = default;
         ~FertilityLifecycleCoordinator() = default;

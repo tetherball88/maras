@@ -47,6 +47,7 @@ export const NpcDetailShell: React.FC = () => {
   const teleportPlayerToNpc = useMarasStore((s) => s.teleportPlayerToNpc)
   const teleportNpcToPlayer = useMarasStore((s) => s.teleportNpcToPlayer)
   const spawnChild = useMarasStore((s) => s.spawnChild)
+  const growInfant = useMarasStore((s) => s.growInfant)
   const removeChild = useMarasStore((s) => s.removeChild)
   const setMatchmakingModalOpen = useMarasStore((s) => s.setMatchmakingModalOpen)
   const evaluateChildSecret = useMarasStore((s) => s.evaluateChildSecret)
@@ -97,6 +98,7 @@ export const NpcDetailShell: React.FC = () => {
   const isChild = !!(npc?.isChild || childRecord)
   const stage = childRecord?.stage || npc?.stage || (isChild ? 'child' : undefined)
   const hasRefID = childRecord?.hasRefID ?? npc?.hasRefID ?? !npcId.startsWith('FF7')
+  const canGrowInfant = Boolean(childRecord?.canGrowInfant ?? npc?.canGrowInfant)
   const isPlayerChild = isChild && !!(
     childRecord && (
       areSameFormId(childRecord.guardianAId, PLAYER_FORM_ID) ||
@@ -303,6 +305,18 @@ export const NpcDetailShell: React.FC = () => {
                 </button>
               </AppTooltip>
             </>
+          )}
+
+          {isChild && stage === 'infant' && canGrowInfant && (
+            <AppTooltip content={t('npcDetail.shell.growInfantTooltip')}>
+              <button
+                onClick={() => growInfant(npcId)}
+                className="text-xs font-semibold text-cyan-200 bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 px-[0.75rem] py-[0.375rem] rounded transition-colors flex items-center gap-[0.375rem] cursor-pointer shadow-sm"
+              >
+                <UserPlus className="w-[1em] h-[1em] text-cyan-400" />
+                <span>{t('npcDetail.shell.growInfant')}</span>
+              </button>
+            </AppTooltip>
           )}
 
           {isChild && !hasRefID && stage === 'child' && (

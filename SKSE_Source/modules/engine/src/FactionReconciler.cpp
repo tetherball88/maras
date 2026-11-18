@@ -796,6 +796,20 @@ namespace MARAS {
                 }
             }
         }
+
+        // Physical scaled-down BF Infants stay non-conversational (both vanilla/MARAS dialogue and SkyrimNet)
+        // until promoted to Stage 2 Young Child at normal scale.
+        if (plan.isPhysicalInfant) {
+            actor->AllowPCDialogue(false);
+            if (auto* filterFac = fc.GetSkyrimNetFilterFaction()) {
+                (void)SyncActorFaction(actor, filterFac, std::int8_t{ 0 }, false);
+            }
+        } else if (plan.isYoungChild) {
+            actor->AllowPCDialogue(true);
+            if (auto* filterFac = fc.GetSkyrimNetFilterFaction()) {
+                (void)SyncActorFaction(actor, filterFac, std::nullopt, false);
+            }
+        }
     }
 
     void FactionReconciler::ReconcileCompanionFactions(
@@ -929,7 +943,8 @@ namespace MARAS {
                 const State::ActorSex otherParentSex = LookupActorSex(otherParent);
 
                 Foundation::RefId resolvedFollowTargetId{};
-                if (childRec->stage == State::ChildStage::Child) {
+                if (childRec->stage == State::ChildStage::Child ||
+                    childRec->stage == State::ChildStage::Infant) {
                     resolvedFollowTargetId = Foundation::RefId{
                         ChildSpawnService::GetSingleton().ResolveNonPlayerChildTarget(*childRec) };
                 }

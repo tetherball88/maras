@@ -299,6 +299,7 @@ namespace MARAS::PapyrusInterface {
                                         RE::Actor* father,
                                         float conceptionTime,
                                         float birthTime);
+    float GetActorRefScale(RE::StaticFunctionTag*, RE::Actor* actor);
 
     // ========================================
     // Random Name Generation (Child & Critter)

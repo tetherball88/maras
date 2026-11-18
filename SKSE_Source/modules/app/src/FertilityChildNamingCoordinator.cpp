@@ -2,6 +2,7 @@
 
 #include "maras/app/AppContext.h"
 #include "maras/app/FertilityLifecycleCoordinator.h"
+#include "maras/app/LineageUseCases.h"
 #include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
@@ -103,18 +104,19 @@ namespace MARAS::App {
 
         if (worldSnap && spatialSnap) {
             const auto view = Projection::PerspectiveView::ForDashboard(worldSnap, spatialSnap);
-            if (motherId != 0 && worldSnap->lineage) {
-                const auto infantCid = Domain::Lineage::FindSyntheticChildByName(
+            State::ChildId targetCid{ request.childId };
+            if (targetCid.IsNull() && motherId != 0 && worldSnap->lineage) {
+                targetCid = Domain::Lineage::FindSyntheticChildByName(
                     *worldSnap->lineage,
                     State::ActorId{ motherId },
                     "Newborn",
                     Foundation::ChildStage::Infant);
-                if (!infantCid.IsNull()) {
-                    if (const auto perceived = view.GetPerceivedChild(infantCid)) {
-                        if (!perceived->perceivedBioFather.IsNull() &&
-                            !perceived->perceivedBioFather.IsUnknownFather()) {
-                            perceivedFatherId = perceived->perceivedBioFather.raw();
-                        }
+            }
+            if (!targetCid.IsNull()) {
+                if (const auto perceived = view.GetPerceivedChild(targetCid)) {
+                    if (!perceived->perceivedBioFather.IsNull() &&
+                        !perceived->perceivedBioFather.IsUnknownFather()) {
+                        perceivedFatherId = perceived->perceivedBioFather.raw();
                     }
                 }
             }
@@ -259,6 +261,102 @@ namespace MARAS::App {
                             }
                         });
                 }
+            });
+    }
+
+    void FertilityChildNamingCoordinator::PromptBeeingFemaleChildNaming(
+        RE::FormID childId,
+        RE::FormID motherId,
+        bool isFemale,
+        std::string initialName,
+        std::function<void(const std::string&)> onNamed) {
+        if (childId == 0) {
+            if (onNamed) {
+                onNamed(initialName);
+            }
+            return;
+        }
+
+        Engine::IEngineEventHooks::FertilityChildNamingRequest req{};
+        req.childId = childId;
+        req.motherId = motherId;
+        req.isFemale = isFemale;
+        req.cameFromMcmForceGrowth = false;
+
+        if (const auto snap = State::WorldStore::GetSingleton().Snapshot(); snap && snap->lineage) {
+            req.existingNames = Domain::Lineage::CollectExistingChildNamesForNaming(
+                *snap->lineage, State::ChildId{ childId });
+        }
+
+        const State::SessionEpoch expectedEpoch = State::GetSessionEpoch();
+        ShowChildNamingModal(
+            std::move(req),
+            [expectedEpoch,
+             childId,
+             motherId,
+             initialName = std::move(initialName),
+             onNamed = std::move(onNamed)](const std::string& finalName) mutable {
+                if (!State::IsSessionEpochCurrent(expectedEpoch)) {
+                    return;
+                }
+
+                (void)AddEpochTask(
+                    expectedEpoch,
+                    "FertilityChildNamingCoordinator::ApplyBeeingFemaleChildName",
+                    [childId,
+                     motherId,
+                     initialName = std::move(initialName),
+                     finalName,
+                     onNamed = std::move(onNamed)]() mutable {
+                        std::lock_guard lock(GetPapyrusMutex());
+
+                        RE::FormID resolvedId = childId;
+                        if (const auto snap = State::WorldStore::GetSingleton().Snapshot(); snap && snap->lineage) {
+                            resolvedId = Domain::Lineage::ResolveNamingTargetChildId(
+                                             *snap->lineage,
+                                             State::ChildId{ childId },
+                                             State::ActorId{ motherId },
+                                             initialName)
+                                             .raw();
+                        }
+
+                        auto& lineage = LineageUseCases::GetSingleton();
+                        (void)lineage.UpdateChildName(resolvedId, finalName);
+
+                        RE::Actor* childActor = HasPhysicalActor(resolvedId)
+                                                    ? RE::TESForm::LookupByID<RE::Actor>(resolvedId)
+                                                    : nullptr;
+                        if (childActor && !childActor->IsDeleted()) {
+                            childActor->SetDisplayName(finalName.c_str(), true);
+                        }
+
+                        RE::Actor* motherActor =
+                            motherId != 0 ? RE::TESForm::LookupByID<RE::Actor>(motherId) : nullptr;
+                        if (auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton()) {
+                            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCb;
+                            RE::BSFixedString oldNameArg(initialName.c_str());
+                            RE::BSFixedString newNameArg(finalName.c_str());
+                            auto args = RE::MakeFunctionArguments(
+                                std::move(childActor),
+                                std::move(motherActor),
+                                std::move(oldNameArg),
+                                std::move(newNameArg));
+                            vm->DispatchStaticCall("TTM_ServiceFertilityBF", "ApplyChildName", args, nullCb);
+                        }
+
+                        MARAS_LOG_INFO(
+                            "[Fertility][BF] Renamed newborn {:08X} '{}' -> '{}' via M.A.R.A.S. naming modal",
+                            resolvedId,
+                            initialName,
+                            finalName);
+
+                        GetUiBridgeGateway().SendOverviewData();
+                        GetUiBridgeGateway().SendNPCDetail(resolvedId);
+
+                        if (onNamed) {
+                            onNamed(finalName);
+                        }
+                    });
             });
     }
 

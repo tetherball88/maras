@@ -128,6 +128,7 @@ interface MarasState {
   dismissChildCritter: (npcId: string) => void
   dismissChildPet: (npcId: string) => void
   spawnChild: (childId: string) => void
+  growInfant: (childId: string) => void
   sendChildToTraining: (childId: string, trainingClassIndex: number) => void
   completeChildTraining: (childId: string) => void
   handleChildPromoted: (oldId: string, newId: string) => void
@@ -788,6 +789,11 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   dismissChildPet: (npcId: string) => {
     sendMarasAction('dismissChildPet', { formId: npcId })
     set({ statusMsg: t('store.status.dismissingPet', { formId: npcId }) })
+  },
+
+  growInfant: (childId: string) => {
+    sendMarasAction('growInfant', { childId })
+    set({ statusMsg: t('store.status.growingInfant', { childId }) })
   },
 
   spawnChild: (childId: string) => {

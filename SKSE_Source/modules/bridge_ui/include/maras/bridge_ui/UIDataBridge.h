@@ -146,6 +146,7 @@ namespace MARAS::Bridge::Ui {
         void ProcessRemoveChild(const nlohmann::json& payload);
         void ProcessUpdateChild(const nlohmann::json& payload);
         void ProcessSpawnChild(const nlohmann::json& payload);
+        void ProcessGrowInfant(const nlohmann::json& payload);
         void ProcessSendChildToTraining(const nlohmann::json& payload);
         void ProcessCompleteChildTraining(const nlohmann::json& payload);
         void ProcessRelocateFamilyUnit(const nlohmann::json& payload);

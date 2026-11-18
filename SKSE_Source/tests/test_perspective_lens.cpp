@@ -1834,3 +1834,70 @@ MARAS_TEST(PerspectiveLens, EventDispatchPlanPostAuditEdgeCases) {
         MARAS_CHECK_EQ(divorcedSkipped.postSuppressNarrationSeconds, 0.0f);
     }
 }
+
+MARAS_TEST(PerspectiveLens, StepChildWithoutSecretHasNoPresumedFatherWhileExposedSecretKeepsSkyrimNetHistory) {
+    const ActorId mother{ 0x0001A697u };
+    const ActorId bioFather{ 0x0001A693u };
+    const ActorId stepFather = ActorId::Player();
+    const ChildId openStepChildId{ 0xFF800901u };
+    const ChildId exposedSecretChildId{ 0xFF800902u };
+
+    WorldState ws{};
+    (void)ws.PromoteToMarried(mother, stepFather, 1.0f);
+
+    ChildRecord openStep{};
+    openStep.childId = openStepChildId;
+    openStep.name = "OpenStepChild";
+    openStep.stage = ChildStage::Child;
+    openStep.isAdopted = false;
+    openStep.isBiologicalChild = true;
+    openStep.guardians.Assign(mother, stepFather);
+    openStep.bioMother = mother;
+    openStep.bioFather = bioFather;
+    ws.lineage.Write().UpsertChild(openStep);
+
+    ChildRecord exposed{};
+    exposed.childId = exposedSecretChildId;
+    exposed.name = "ExposedSecretChild";
+    exposed.stage = ChildStage::Child;
+    exposed.isAdopted = false;
+    exposed.isBiologicalChild = true;
+    exposed.guardians.Assign(mother, stepFather);
+    exposed.bioMother = mother;
+    exposed.bioFather = bioFather;
+    exposed.presumedFather = stepFather;
+    exposed.paternitySecret.discovered = true;
+    exposed.paternitySecret.discoveredByPartner = true;
+    exposed.paternitySecret.discoveredByBioFather = true;
+    ws.lineage.Write().UpsertChild(exposed);
+
+    const auto worldSnap = std::make_shared<MARAS::State::WorldStateSnapshot>(ws.Snapshot());
+    const auto spatialSnap = std::make_shared<SpatialActorSnapshot>();
+
+    const auto vMother = PerspectiveView::ForActor(worldSnap, spatialSnap, mother);
+    const auto vStepFather = PerspectiveView::ForActor(worldSnap, spatialSnap, stepFather);
+    const auto vTarget = PerspectiveView::ForDialogueTarget(worldSnap, spatialSnap);
+    const auto vUiHidden = PerspectiveView::ForDashboard(worldSnap, spatialSnap, false);
+    const auto vUiReveal = PerspectiveView::ForDashboard(worldSnap, spatialSnap, true);
+
+    for (const PerspectiveView* view : { &vMother, &vStepFather, &vTarget, &vUiHidden, &vUiReveal }) {
+        const auto c = view->GetPerceivedChild(openStepChildId);
+        MARAS_REQUIRE(c.has_value());
+        MARAS_CHECK(c->presumedFather.IsNull());
+        MARAS_CHECK(!c->paternitySecret.has_value());
+        MARAS_CHECK_EQ(c->perceivedBioFather, bioFather);
+        MARAS_CHECK(c->IsActorPerceivedBioParent(bioFather));
+        MARAS_CHECK(c->IsActorPerceivedStepParent(stepFather));
+    }
+
+    for (const PerspectiveView* view : { &vMother, &vStepFather, &vUiReveal }) {
+        const auto c = view->GetPerceivedChild(exposedSecretChildId);
+        MARAS_REQUIRE(c.has_value());
+        MARAS_CHECK_EQ(c->presumedFather, stepFather);
+        MARAS_REQUIRE(c->paternitySecret.has_value());
+        MARAS_CHECK(!c->paternitySecret->isSecret);
+        MARAS_CHECK(c->paternitySecret->discovered);
+        MARAS_CHECK(c->paternitySecret->discoveredByPartner);
+        MARAS_CHECK(c->IsActorPerceivedStepParent(stepFather));
+    }
+}

@@ -1,7 +1,7 @@
 # 💍🐉 M.A.R.A.S Player Guide — The Ultimate "How-To" & Feature Handbook
 *How to woo, wed, raise a dynasty, and (maybe) survive twelve spouses without soft-locking your heart or your wallet.*
 
-Welcome to **M.A.R.A.S** (*Marriage, Affection, Romance & Adoption in Skyrim*)! Think of this guide as your **master handbook and shortcut cheat sheet**: what features the mod adds, how you're supposed to use them in actual gameplay, and which dialogue lines or Dashboard buttons do the magic. ✨
+Welcome to **M.A.R.A.S** (*Marriage, Affairs, Relationships, Ancestry & Society*)! Think of this guide as your **master handbook and shortcut cheat sheet**: what features the mod adds, how you're supposed to use them in actual gameplay, and which dialogue lines or Dashboard buttons do the magic. ✨
 
 ---
 

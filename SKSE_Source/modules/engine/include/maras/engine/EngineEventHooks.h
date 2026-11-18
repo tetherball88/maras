@@ -142,6 +142,7 @@ namespace MARAS::Engine {
         }
 
         struct FertilityChildNamingRequest {
+            RE::FormID childId{ 0 };
             RE::FormID motherId{ 0 };
             bool isFemale{ false };
             bool cameFromMcmForceGrowth{ false };

@@ -3,6 +3,7 @@
 #include "maras/foundation/StringUtils.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace MARAS::Domain::Lineage {
 
@@ -191,6 +192,160 @@ namespace MARAS::Domain::Lineage {
             return false;
         }
     }  // namespace
+
+    bool IsPhysicalInfantScaledDown(
+        float actorRefScale,
+        bool isStillGrowingFlag) noexcept {
+        if (isStillGrowingFlag) {
+            return true;
+        }
+        return std::isfinite(actorRefScale) && actorRefScale > 0.0f &&
+               actorRefScale < kPhysicalInfantFullScaleThreshold;
+    }
+
+    bool ShouldPromotePhysicalInfantToChild(float actorRefScale) noexcept {
+        return std::isfinite(actorRefScale) && actorRefScale >= kPhysicalInfantFullScaleThreshold;
+    }
+
+    bool ShouldBlockQuestPackageForPhysicalInfant(
+        ChildStage stage,
+        std::string_view questEditorId) noexcept {
+        constexpr std::string_view kSandboxPrefix = "TTM_ChildrenSandbox";
+        if (stage != ChildStage::Infant || questEditorId.size() < kSandboxPrefix.size()) {
+            return false;
+        }
+        return Foundation::StringUtils::CaseInsensitiveEquals(
+            questEditorId.substr(0, kSandboxPrefix.size()), kSandboxPrefix);
+    }
+
+    bool ShouldPromptBeeingFemaleChildNaming(
+        const State::WorldStateSnapshot& snap,
+        ActorId motherId,
+        ActorId bioFatherId,
+        ActorId presumedFatherId,
+        bool isSecretForBioFather) noexcept {
+        if (motherId.IsPlayer() || presumedFatherId.IsPlayer()) {
+            return true;
+        }
+        if (bioFatherId.IsPlayer() && !isSecretForBioFather) {
+            return true;
+        }
+        if (!motherId.IsNull() && IsMarriedToPlayer(snap, motherId)) {
+            return true;
+        }
+        return false;
+    }
+
+    bool ShouldPromptBeeingFemaleChildNamingForRecord(
+        const State::WorldStateSnapshot& snap,
+        ChildId childId,
+        ActorId motherHint,
+        ActorId bioFatherHint) noexcept {
+        const State::ChildRecord* rec =
+            (snap.lineage && !childId.IsNull()) ? snap.lineage->FindChild(childId) : nullptr;
+        const ActorId motherId =
+            (rec && !rec->bioMother.IsNull()) ? rec->bioMother : motherHint;
+        const ActorId bioFatherId =
+            (rec && !rec->bioFather.IsNull()) ? rec->bioFather : bioFatherHint;
+        const ActorId presumedFatherId = rec ? rec->presumedFather : ActorId{};
+        const bool secretForBioFather =
+            rec != nullptr && rec->paternitySecret.isSecretForBioFather && !rec->paternitySecret.discovered;
+        return ShouldPromptBeeingFemaleChildNaming(
+            snap, motherId, bioFatherId, presumedFatherId, secretForBioFather);
+    }
+
+    std::vector<std::string> CollectExistingChildNamesForNaming(
+        const State::LineageTable& lineage,
+        ChildId excludeChildId) {
+        std::vector<std::string> names;
+        for (const auto& [cid, rec] : lineage.AllChildren()) {
+            if (cid == excludeChildId || rec.name.empty()) {
+                continue;
+            }
+            if (Foundation::StringUtils::CaseInsensitiveEquals(rec.name, "Newborn")) {
+                continue;
+            }
+            if (!IsNameTaken(rec.name, names)) {
+                names.push_back(rec.name);
+            }
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
+    ChildId ResolveNamingTargetChildId(
+        const State::LineageTable& lineage,
+        ChildId initialChildId,
+        ActorId motherId,
+        std::string_view initialName) {
+        if (initialChildId.IsNull() || lineage.FindChild(initialChildId) != nullptr) {
+            return initialChildId;
+        }
+        if (motherId.IsNull()) {
+            return initialChildId;
+        }
+
+        std::vector<ChildId> matches;
+        for (const auto& [cid, rec] : lineage.AllChildren()) {
+            if (!cid.IsSynthetic() &&
+                rec.stage == ChildStage::Infant &&
+                RecordMatchesMother(rec, motherId) &&
+                Foundation::StringUtils::CaseInsensitiveEquals(rec.name, initialName)) {
+                matches.push_back(cid);
+            }
+        }
+        if (matches.empty()) {
+            return initialChildId;
+        }
+        std::sort(matches.begin(), matches.end());
+        return matches.front();
+    }
+
+    std::vector<ChildId> CollectPhysicalInfantIds(const State::LineageTable& lineage) {
+        std::vector<ChildId> out;
+        for (const auto& [cid, rec] : lineage.AllChildren()) {
+            if (!cid.IsSynthetic() && rec.stage == ChildStage::Infant) {
+                out.push_back(cid);
+            }
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    DashboardInfantGrowthPlan PlanDashboardInfantGrowth(
+        const State::LineageTable& lineage,
+        ChildId childId,
+        bool hasBeeingFemale) noexcept {
+        DashboardInfantGrowthPlan plan{};
+        if (childId.IsNull()) {
+            return plan;
+        }
+        const auto* rec = lineage.FindChild(childId);
+        if (!rec || rec->stage != ChildStage::Infant) {
+            return plan;
+        }
+
+        const bool isPhysical = !childId.IsSynthetic();
+        if (!CanGrowInfantFromDashboard(rec->stage, isPhysical, hasBeeingFemale)) {
+            return plan;
+        }
+
+        plan.bioMother = rec->bioMother;
+        plan.bioFather = rec->bioFather;
+        plan.existingGender = rec->gender;
+
+        if (isPhysical) {
+            plan.mode = DashboardInfantGrowthMode::PromotePhysicalInPlace;
+            return plan;
+        }
+
+        plan.mode = DashboardInfantGrowthMode::PromoteSyntheticAndSpawn;
+        plan.needsGenderRoll = (rec->gender != 0 && rec->gender != 1);
+        plan.needsNameFallback =
+            rec->name.empty() || Foundation::StringUtils::CaseInsensitiveEquals(rec->name, "Newborn");
+        plan.removeCarriedBfBabyItem = hasBeeingFemale && !rec->bioMother.IsNull();
+        return plan;
+    }
 
     std::string ResolveSubmittedChildName(
         std::string_view buttonId,

@@ -2,6 +2,7 @@
 
 #include "maras/app/AgencyWorkflowCoordinator.h"
 #include "maras/app/AppContext.h"
+#include "maras/app/FertilityLifecycleCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
@@ -12,6 +13,7 @@
 #include "maras/bridge_ui/ModalManager.h"
 #include "maras/bridge_ui/SanityEngineProbe.h"
 #include "maras/bridge_ui/UIManager.h"
+#include "maras/domain/lineage/FertilityLifecycleRules.h"
 #include "maras/domain/lineage/TrainingCatalog.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BedOwnershipReconciler.h"
@@ -613,6 +615,8 @@ namespace MARAS::Bridge::Ui {
             ProcessUpdateChild(payload);
         } else if (type == "spawnChild") {
             ProcessSpawnChild(payload);
+        } else if (type == "growInfant") {
+            ProcessGrowInfant(payload);
         } else if (type == "sendChildToTraining") {
             ProcessSendChildToTraining(payload);
         } else if (type == "completeChildTraining") {
@@ -1497,6 +1501,10 @@ namespace MARAS::Bridge::Ui {
                 cEntry.stage == MARAS::Foundation::ChildStage::Training;
             profile["hasRefID"] = hasRealActor;
             profile["isEphemeral"] = isEphemeral;
+            profile["canGrowInfant"] = MARAS::Domain::Lineage::CanGrowInfantFromDashboard(
+                cEntry.stage,
+                hasRealActor,
+                MARAS::FormCache::GetSingleton().GetBeeingFemaleMcmQuest() != nullptr);
             const auto& locSvc = MARAS::Engine::LocalizationService::GetSingleton();
             std::int32_t resolvedProfileTrainIdx = cEntry.trainingClassIndex;
             if (!catalog.IsValidClassIndex(resolvedProfileTrainIdx) && !cEntry.trainingLocation.empty()) {
@@ -1614,7 +1622,15 @@ namespace MARAS::Bridge::Ui {
             (!child.perceivedBioFather.IsNull() && !child.perceivedBioFather.IsUnknownFather())
                 ? child.perceivedBioFather.raw()
                 : 0;
-        const RE::FormID visiblePresumedFatherID = child.presumedFather.raw();
+        const bool hasVisibleSecretMeta = child.paternitySecret.has_value();
+        const bool isActivePartnerPresumption = hasVisibleSecretMeta &&
+            !child.paternitySecret->discovered &&
+            !child.paternitySecret->discoveredByPartner &&
+            (child.paternitySecret->isSecretForPartner ||
+             (child.stage == MARAS::Foundation::ChildStage::Unborn &&
+              child.paternitySecret->isPregnancySecretForPartner));
+        const RE::FormID visiblePresumedFatherID =
+            isActivePartnerPresumption ? child.presumedFather.raw() : 0;
 
         nlohmann::json cObj;
         cObj["childId"] = FormIDToString(childID);
@@ -1656,6 +1672,10 @@ namespace MARAS::Bridge::Ui {
 
         cObj["hasRefID"] = hasRealActor;
         cObj["isEphemeral"] = isEphemeral;
+        cObj["canGrowInfant"] = MARAS::Domain::Lineage::CanGrowInfantFromDashboard(
+            child.stage,
+            hasRealActor,
+            MARAS::FormCache::GetSingleton().GetBeeingFemaleMcmQuest() != nullptr);
         const auto& catalog = MARAS::Engine::TrainingCatalogLoader::GetSingleton().GetCatalog();
         const auto& locSvc = MARAS::Engine::LocalizationService::GetSingleton();
         std::int32_t resolvedChildTrainIdx = child.trainingClassIndex;
@@ -1686,7 +1706,6 @@ namespace MARAS::Bridge::Ui {
         cObj["hasBeastblood"] = child.hasBeastblood;
         cObj["trainingDiscounts"] = BuildChildTrainingDiscountsJson(child.childId, view);
 
-        const bool hasVisibleSecretMeta = child.paternitySecret.has_value();
         const bool isActiveSecret = hasVisibleSecretMeta &&
             !child.paternitySecret->discovered &&
             (child.paternitySecret->isSecretForBioFather ||
@@ -2733,6 +2752,28 @@ namespace MARAS::Bridge::Ui {
                         RE::FormID{ 0 });
                 });
         }
+    }
+
+    void UIDataBridge::ProcessGrowInfant(const nlohmann::json& payload) {
+        RE::FormID childID = StringToFormID(GetJsonString(payload, "childId"));
+        if (childID == 0) {
+            childID = StringToFormID(GetJsonString(payload, "formId"));
+        }
+        if (childID == 0) {
+            return;
+        }
+        MARAS_LOG_INFO("[UIDataBridge] Growing infant {:08X} to young child; closing dashboard and waiting for focus release",
+                       childID);
+        const auto expectedEpoch = MARAS::State::GetSessionEpoch();
+        CloseDashboardAndRunWhenFocusReleased([expectedEpoch, childID]() {
+            MARAS::AddEpochTask(
+                expectedEpoch,
+                "UIDataBridge::GrowInfantFromDashboard",
+                [childID]() {
+                    std::lock_guard lock(MARAS::GetPapyrusMutex());
+                    (void)MARAS::App::FertilityLifecycleCoordinator::GetSingleton().GrowInfantFromDashboard(childID);
+                });
+        });
     }
 
     void UIDataBridge::ProcessSendChildToTraining(const nlohmann::json& payload) {
