@@ -3,6 +3,7 @@
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AgencyWorkflowCoordinator.h"
 #include "maras/app/BanterSceneCoordinator.h"
+#include "maras/app/FertilityChildNamingCoordinator.h"
 #include "maras/app/FertilityLifecycleCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
@@ -510,6 +511,15 @@ namespace MARAS::App {
         FertilityLifecycleCoordinator::GetSingleton().ShowBlockedFertilityMcmModal(
             blockedClick,
             optionStateName);
+    }
+
+    void AppLifecycleCoordinator::OnFertilityChildNamingRequested(
+        FertilityChildNamingRequest request,
+        std::function<void(const std::string&)> onResolved) {
+        std::lock_guard lock(GetPapyrusMutex());
+        FertilityChildNamingCoordinator::GetSingleton().ShowChildNamingModal(
+            std::move(request),
+            std::move(onResolved));
     }
 
 }  // namespace MARAS::App

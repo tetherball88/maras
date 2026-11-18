@@ -13,6 +13,8 @@ A complete M.A.R.A.S translation mod (shipped as a standalone FOMOD/MO2/Vortex a
 | **1. MARAS Localization Pack** | `SKSE/Plugins/MARAS/localization/<lang>/*.json` | HUD notifications, Papyrus messages, standalone confirmation/choice modals, spouse buff names/descriptions, adolescent training paths, Daedric blessings, encounter letters, optional newborn/critter names, and the entire Magelight UI Dashboard & Settings. | Built natively into `MARAS.dll` |
 | **2. Dynamic String Distributor (DSD)** | `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` | `TT_MARAS.esp` player/NPC dialogue topics & responses (`DIAL` / `INFO`), quests (`QUST`), courier letters & scrolls (`BOOK`), spells (`SPEL`), magic effects (`MGEF`), perks (`PERK`), and engine messages (`MESG`). | [Dynamic String Distributor (DSD)](https://www.nexusmods.com/skyrimspecialedition/mods/107676) |
 
+**Official Release Packaging (English Main Archive vs. Translations FOMOD)**: Because Dynamic String Distributor unconditionally loads every `.json` file inside `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/`, official GitHub Actions releases keep `MARAS_<version>.zip` English-only (`localization/en/` only, excluding DSD and non-English packs) and distribute all non-English packs in a separate `SelectExactlyOne` FOMOD archive (`MARAS_Translations_<version>.zip`) so DSD translations never leak into English setups or overwrite one another.
+
 > [!NOTE]
 > **Why SkyrimNet AI Prompts Are Not Translated**: Files under `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/` and `SKSE/Plugins/MARAS/promptStrings.json` remain in canonical English intentionally. Large Language Models reason accurately over English context blocks while generating spoken NPC dialogue in whatever output language you configure inside SkyrimNet.
 
@@ -142,6 +144,10 @@ Both helper scripts in [`tools/localization/`](../../tools/localization/) use **
    Open the M.A.R.A.S Dashboard (`Alt+B`), select **Deutsch (German)** in **Settings $\rightarrow$ General**, and click **Reload Localization** to preview JSON edits without restarting Skyrim. Run a strict final check:
    ```powershell
    python tools/localization/sync_localization.py --lang de --strict
+   ```
+   To preview or bundle all completed non-English packs into the official `SelectExactlyOne` FOMOD archive (`MARAS_Translations_<version>.zip`)—mirroring what `.github/workflows/main-release.yml` and `translations-release.yml` produce—run:
+   ```powershell
+   python .agents/skills/maras-translations/scripts/package_translations_fomod.py --version v2.6.0 --output dist/MARAS_Translations_v2.6.0.zip
    ```
 
 ---

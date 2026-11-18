@@ -9,6 +9,8 @@ skyrimse.ppj
 tools
 
 build/
+out/
+dist/
 SKSE_Source/build/
 SKSE_Source/extern/
 cmake-build*/

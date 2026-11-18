@@ -89,6 +89,10 @@ namespace MARAS::App {
             Domain::Lineage::BlockedFertilityMcmClick blockedClick,
             std::string_view optionStateName) override;
 
+        void OnFertilityChildNamingRequested(
+            FertilityChildNamingRequest request,
+            std::function<void(const std::string&)> onResolved) override;
+
     private:
         AppLifecycleCoordinator() = default;
         ~AppLifecycleCoordinator() override = default;

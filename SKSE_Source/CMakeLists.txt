@@ -198,6 +198,7 @@ add_library(maras_engine OBJECT
     modules/engine/src/EngineLogging.cpp
     modules/engine/src/FactionReconciler.cpp
     modules/engine/src/FertilityMcmClickSink.cpp
+    modules/engine/src/FertilityNamingMenuSink.cpp
     modules/engine/src/FormCache.cpp
     modules/engine/src/FormUtils.cpp
     modules/engine/src/GiftMenuEventSink.cpp
@@ -255,6 +256,7 @@ add_library(maras_app OBJECT
     modules/app/src/ChildInteractionCoordinator.cpp
     modules/app/src/ChildSkyrimNetSuccession.cpp
     modules/app/src/DialogueOutcomeCoordinator.cpp
+    modules/app/src/FertilityChildNamingCoordinator.cpp
     modules/app/src/FertilityLifecycleCoordinator.cpp
     modules/app/src/HouseholdUseCases.cpp
     modules/app/src/LineageUseCases.cpp

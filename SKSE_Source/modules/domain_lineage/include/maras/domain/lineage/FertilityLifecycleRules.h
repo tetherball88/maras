@@ -7,6 +7,8 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -42,6 +44,13 @@ namespace MARAS::Domain::Lineage {
         BlockedFertilityMcmAction action{ BlockedFertilityMcmAction::SpawnYoungChild };
 
         bool operator==(const BlockedFertilityMcmClick&) const = default;
+    };
+
+    struct FertilityChildNamingPromptInfo {
+        bool isChildNamingPrompt{ false };
+        bool isFemale{ false };
+
+        bool operator==(const FertilityChildNamingPromptInfo&) const = default;
     };
 
     struct FertilityAffectionTarget {
@@ -101,6 +110,16 @@ namespace MARAS::Domain::Lineage {
     [[nodiscard]] std::optional<BlockedFertilityMcmClick> ClassifyBlockedFertilityMcmClick(
         std::string_view configScriptName,
         std::string_view optionStateName) noexcept;
+
+    [[nodiscard]] FertilityChildNamingPromptInfo ClassifyFertilityChildNamingPrompt(
+        std::string_view promptText) noexcept;
+
+    [[nodiscard]] std::string ResolveSubmittedChildName(
+        std::string_view buttonId,
+        std::string_view typedName,
+        std::string_view suggestedName,
+        std::span<const std::string> existingNames,
+        std::string_view randomFallback) noexcept;
 
     [[nodiscard]] ChildId FindSyntheticChildByName(
         const State::LineageTable& lineage,

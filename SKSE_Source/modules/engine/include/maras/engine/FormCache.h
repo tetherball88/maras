@@ -155,7 +155,9 @@ namespace MARAS {
         RE::TESQuest* GetChildLogicQuest();
         [[nodiscard]] RE::TESQuest* GetSkyUiConfigManagerQuest();
         [[nodiscard]] RE::TESQuest* GetFmrMcmQuest();
+        [[nodiscard]] RE::TESQuest* GetFmrHandlerQuest();
         [[nodiscard]] RE::TESQuest* GetBeeingFemaleMcmQuest();
+        [[nodiscard]] RE::TESQuest* GetUiExtListMenuQuest();
         RE::SpellItem* GetLoversRadianceAbility();
         RE::TESQuest* GetPlayerSleepQuest();
         RE::SpellItem* GetRestedSpell();
@@ -344,7 +346,9 @@ namespace MARAS {
         RE::TESQuest* childLogicQuest_{ nullptr };
         RE::TESQuest* skyUiConfigManagerQuest_{ nullptr };
         RE::TESQuest* fmrMcmQuest_{ nullptr };
+        RE::TESQuest* fmrHandlerQuest_{ nullptr };
         RE::TESQuest* beeingFemaleMcmQuest_{ nullptr };
+        RE::TESQuest* uiExtListMenuQuest_{ nullptr };
         bool optionalMcmQuestsProbed_{ false };
         RE::SpellItem* loversRadianceAbility_{ nullptr };
         RE::TESQuest* playerSleepQuest_{ nullptr };

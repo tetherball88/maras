@@ -10,6 +10,7 @@ namespace MARAS {
         constexpr std::string_view SKYRIMNET_ESP = "SkyrimNet.esp";
         constexpr std::string_view SKYUI_SE_ESP = "SkyUI_SE.esp";
         constexpr std::string_view SKYUI_ESP = "SkyUI.esp";
+        constexpr std::string_view UIEXTENSIONS_ESP = "UIExtensions.esp";
         constexpr std::string_view FERTILITY_MODE_ESM = "Fertility Mode.esm";
         constexpr std::string_view BEEING_FEMALE_ESM = "BeeingFemale.esm";
         constexpr std::string_view HEARTHFIRES_ESM = "HearthFires.esm";
@@ -240,10 +241,16 @@ namespace MARAS {
                 if (dataHandler->LookupModByName(FERTILITY_MODE_ESM) != nullptr) {
                     fmrMcmQuest_ = Utils::LookupForm<RE::TESQuest>(
                         0x0115C8, FERTILITY_MODE_ESM, "_JSW_BB_ConfigQuest");
+                    fmrHandlerQuest_ = Utils::LookupForm<RE::TESQuest>(
+                        0x000D62, FERTILITY_MODE_ESM, "_JSW_BB_HandlerQuest");
                 }
                 if (dataHandler->LookupModByName(BEEING_FEMALE_ESM) != nullptr) {
                     beeingFemaleMcmQuest_ = Utils::LookupForm<RE::TESQuest>(
                         0x001828, BEEING_FEMALE_ESM, "FWSystemConfig");
+                }
+                if (dataHandler->LookupModByName(UIEXTENSIONS_ESP) != nullptr) {
+                    uiExtListMenuQuest_ = Utils::LookupForm<RE::TESQuest>(
+                        0x000E05, UIEXTENSIONS_ESP, "UIListMenu");
                 }
             }
         }
@@ -613,8 +620,16 @@ namespace MARAS {
         return fmrMcmQuest_;
     }
 
+    RE::TESQuest* FormCache::GetFmrHandlerQuest() {
+        return fmrHandlerQuest_;
+    }
+
     RE::TESQuest* FormCache::GetBeeingFemaleMcmQuest() {
         return beeingFemaleMcmQuest_;
+    }
+
+    RE::TESQuest* FormCache::GetUiExtListMenuQuest() {
+        return uiExtListMenuQuest_;
     }
 
     RE::SpellItem* FormCache::GetLoversRadianceAbility() {

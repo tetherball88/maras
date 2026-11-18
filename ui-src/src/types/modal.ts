@@ -38,6 +38,9 @@ export interface ModalControl {
   disabled?: boolean
   defaultValue?: boolean | string | number | null
   placeholder?: string
+  syncTargetControlId?: string
+  disallowedValues?: string[]
+  disallowedMessage?: string
   options?: ModalSelectOption[]
   items?: ModalChecklistItem[]
   showSelectAllToggle?: boolean
@@ -53,6 +56,7 @@ export interface ModalButton {
   tooltip?: string
   requireChecklistId?: string
   minCheckedCount?: number
+  bypassValidation?: boolean
 }
 
 export interface ModalPayload {

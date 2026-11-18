@@ -6,6 +6,7 @@
 #include "maras/engine/ChildrenFleeService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/DialogueEventSink.h"
+#include "maras/engine/FertilityNamingMenuSink.h"
 #include "maras/engine/GiftMenuEventSink.h"
 #include "maras/engine/PlayerMiscStatsTracker.h"
 #include "maras/engine/EngineEventHooks.h"
@@ -242,6 +243,9 @@ namespace MARAS::Serialization {
         }
         if (auto* giftSink = GiftMenuEventSink::GetSingleton()) {
             giftSink->Revert();
+        }
+        if (auto* namingSink = FertilityNamingMenuSink::GetSingleton()) {
+            namingSink->Revert();
         }
         if (auto* statsTracker = PlayerMiscStatsTracker::GetSingleton()) {
             statsTracker->Revert();
