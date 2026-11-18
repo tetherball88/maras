@@ -75,18 +75,23 @@ Before translating strings into `<lang>`, **read [translation-style-and-gotchas.
 
 ### Step-by-Step Batch Pipeline
 
-1. **Initialize `_meta.json` & Split Pending Entries into Batches**:
+1. **Initialize `_meta.json` & Split Pending (or Full-Pack Review) Entries into Batches**:
    ```powershell
    # Creates localization/<lang>/_meta.json (if missing), runs sync_localization.py,
    # scaffolds language-specific CLDR plural siblings (_few/_many for Slavic, _other-only for CJK),
-   # auto-protects $DragonFont runes, and writes ~100-entry batch_*.json files + manifest.json:
+   # auto-protects $DragonFont runes, orders DSD records chronologically via .spriggit/TT_MARAS.esp
+   # (Quest/Branch LinkTo chains & Scene variants + speaker hints), and writes ~100-entry batch_*.json files:
    python .agents/skills/maras-translations/scripts/translation_batches.py split --lang <lang> --out-dir "<scratch_dir>/i18n_<lang>" --init-meta
-   ```
-   *(Optional flags: `--batch-size 80`, `--prev-en <old_en_dir>` to flag changed English JSON strings across versions, `--no-dsd`, or `--dsd-only`.)*
 
-2. **Translate `batch_*.json` Files (Sequential or Parallel Subagents)**:
-   - Fill `"translation"` for each item in `<scratch_dir>/i18n_<lang>/batch_*.json`.
-   - Follow inline `"placeholders"`, `"plural_rule"`, `"required_tags"`, and `"note"` hints attached to batch items.
+   # Full-pack LQA / editorial review mode (pre-fills all entries with existing <lang> strings even at 100% coverage):
+   python .agents/skills/maras-translations/scripts/translation_batches.py split --lang <lang> --all --out-dir "<scratch_dir>/i18n_<lang>"
+   ```
+   *(Optional flags: `--batch-size 80`, `--prev-en <old_en_dir>` to flag changed English JSON strings across versions, `--no-dsd`, `--dsd-only`, or `--all` for full LQA passes.)*
+
+2. **Translate or Review `batch_*.json` Files (Sequential or Parallel Subagents)**:
+   - Fill or refine `"translation"` for each item in `<scratch_dir>/i18n_<lang>/batch_*.json`.
+   - Follow inline `"placeholders"`, `"plural_rule"`, `"required_tags"`, `"context"` (quest, branch, `prompt_en`, `speaker_hints`, scene `variant`/`phase`), and `"note"` hints attached to batch items.
+   - Maintain multi-turn conversation flow, consistent T-V pronoun register per speaker/relationship role, Nominative placeholder case-framing, and natural idiomatic phrasing (avoiding word-for-word calques and stiff gender-dodge passives).
    - When fanning out across parallel subagents or `run_workflow`, assign **disjoint `batch_*.json` files** to each worker so zero file write collisions occur, and instruct each worker to read [translation-style-and-gotchas.md](./references/translation-style-and-gotchas.md) first.
    - Omit `names.json` for Latin-script languages unless requested; for Cyrillic/CJK/Korean packs (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`), optionally localize `SKSE/Plugins/MARAS/localization/<lang>/names.json` using root keys `"childrenNames"` and `"critterNames"`.
 

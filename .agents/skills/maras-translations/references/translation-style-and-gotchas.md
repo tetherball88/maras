@@ -35,6 +35,19 @@ Do **not** treat these four keys in `hud_and_modals.json` as CLDR `{count}` plur
 - `modal.child_migration.sub_guardians_two` (`{guardianA}` & `{guardianB}` — two adoptive guardians)
 - `modal.child_migration.sub_parents_two` (`{mother}` & `{father}`)
 
+### 1.4 Nominative `{placeholder}` & `<Alias=...>` Case-Framing (Inflected Languages)
+C++ `TrFmt`, Papyrus `FormatPapyrusTranslation`, React `t()`, and Creation Kit `<Alias=...>` tags always inject proper names, homes, archetypes, and locations (`{actor}`, `{spouse}`, `{partner}`, `{lover}`, `{cheater}`, `{child}`, `{home}`, `{location}`, `{className}`, `<Alias=Spouse>`, `<Alias=Victim>`, `<Alias=TavernLocation>`) in **dictionary / Nominative form** without grammatical case inflection.
+
+In case-inflected languages (Slavic, Germanic, Turkic, etc.), placing a raw non-Nominative preposition or transitive verb directly before a token causes broken concord (e.g. an uninflected Nominative house/tavern name after a locative or accusative preposition). Use one of two safe strategies:
+1. Place dynamic actor tokens in **grammatical subject (Nominative) position** whenever natural.
+2. Precede location, house, archetype, or oblique object tokens with an **inflected generic classifier noun + quotes, parentheses, or colon**, so the classifier carries the grammatical case while the token stays Nominative in apposition (using plain ASCII quotes `"` in Skyrim-rendered Scaleform text):
+   - *"at the inn `"<Alias=TavernLocation>"`"*, *"to the home `"{home}"`"*, *"`({className}, {location})`"*
+
+### 1.5 Unisex vs. Sex-Conditioned Dialogue Lines (Gendered Languages)
+In languages with grammatical gender on 1st-person past verbs, participles, or predicate adjectives (Slavic, Romance, Semitic, etc.):
+- **Inspect `"context.speaker_hints"`** emitted by `translation_batches.py split` (`ActorSex=Male|Female`, `PlayerSex=Male|Female`, `Voice=MaleChild|FemaleChild`, `NPC=...`). When speaker sex is fixed by Creation Kit conditions, use natural gendered forms freely.
+- **Unisex lines** (player dialogue options `DIAL FULL` / `INFO RNAM` or unconditioned NPC lines) must read naturally for any speaker gender—prefer active present/future verbs, infinitives, modal/impersonal idioms, or inclusive plural phrasing (*"We with `{actor}`..."* where idiomatic). **Never** dodge gender endings by turning lines into stiff bureaucratic/legal passives (*"vows were betrayed through my fault"*, *"excessive closeness arose"*) or literal `"X and I"` English calques.
+
 ---
 
 ## 2. CLDR Plural Rules by Language Family
@@ -90,17 +103,29 @@ Skyrim's native `.swf` Scaleform fonts (dialogues, quests, books, message boxes,
   - Bullets, arrows, math, numero (`•`, `→`, `×`, `≤`, `№`) $\to$ `-`, `->`, `x`, `<=`, `#`
 - Also avoid `…`, NBSP, zero-width chars, and curly apostrophes (`’`, `ʼ`) in Magelight UI JSON (`modal.*`, `ui_*`, `catalogs.json`). Both `sync_localization.py` and `translation_batches.py` enforce these checks as hard errors.
 
+### 3.4 Narrative POV, Epistolary Conventions, Multi-Turn Continuity & Lexical Gotchas
+- **Quest Journal POV (`QUST CNAM`)**: English `00005C` (stage `0`) and `00011A` (stage `10`) use 2nd-person `"you"`, whereas sibling stages in those same quests use 1st-person `"I"`. Keep all `QUST CNAM` stages in a single consistent journal POV matching localized *Skyrim SE* quest-log conventions (typically 1st-person Dragonborn voice).
+- **Cross-File Quest & Buff Title Sync**: `ui_settings.json` (`settings.general.disablePolygamyQuestDesc`) quotes quest `00005C` (*"The Flame Divides Not"*), and `catalogs.json` (`bonuses.<cat>.0.name`) mirrors DSD `SPEL` / `MGEF` / `PERK FULL`. Keep these titles verbatim-identical across UI JSON and DSD.
+- **Epistolary & Mourning Letters (`BOOK DESC` `0000E1`–`0000E3`, `000162`)**:
+  - Adapt `"To <Alias=Player>,"` into an idiomatic letter salutation compatible with a Nominative `<Alias=Player>` (avoid literal directional prepositions that break case agreement).
+  - Distinguish singular addressee pronouns (to the player) from plural couple pronouns (*"your union"* / *"between you"*).
+  - In mourning notices (`0000E1`–`0000E3`), `<Alias=Victim>` is already deceased—use past tense rather than present tense for actions referencing the departed partner.
+- **Multi-Turn Dialogue & Scene Continuity (`DIAL` / `INFO`)**: Translate and review DSD lines in the chronological topic (`LinkTo`) and scene (`variant` -> `phase`) order produced by `translation_batches.py split`, preserving banter callbacks across turns and consistent 2nd-person T–V register per relationship role (formal/respectful for priests and scholars such as Maramal, Senna, and Urag; intimate/informal for spouses, lovers, and children; plural 2nd-person when a child walks in on multiple siblings talking together in `000569` / `00056A`).
+- **Lore Lexical Disambiguation (`0000CD`)**: `"mead"` in `0000CD` refers to fermented Nordic alcoholic mead (*Met / hydromel / aguamiel*), not raw bee honey.
+
 ---
 
-## 4. Elder Scrolls Lore, Register & UI Length Guidelines
+## 4. Literary Adaptation, Elder Scrolls Lore & Register Guidelines
 
-1. **Official *Skyrim Special Edition* Proper Nouns**:
-   - Always use the official localized *Skyrim SE* names for Divines (*Mara, Dibella, Kynareth, Stendarr, Julianos, Akatosh*), Daedric Princes (*Azura, Boethiah, Meridia, Molag Bal, Nocturnal, Hircine, Hermaeus Mora, Mehrunes Dagon, Sanguine, Malacath, Mephala, Peryite*), cities/holds (*Whiterun, Solitude, Windhelm, Riften, Markarth,Solstheim, Ragnvald*), and factions/locations (*Jorrvaskr, Companions, The Circle, Underforge, Skyforge, College of Winterhold, Arcanaeum, Thieves Guild, Ratway Cistern, Dark Brotherhood, Bards College, Palace of the Kings, Castle Dour, Sky Haven Temple, The Blades, Fort Dawnguard, College of Whispers, Stendarr's Beacon, Temple of Kynareth, House Telvanni, School of Julianos, Synod, Fighters Guild, Morag Tong, Nightingale Hall, Evergloam, Coldharbour, Frostmoon Crag*).
-2. **Two Distinct Registers**:
-   - **Dashboard & Settings UI (`ui_dashboard.json`, `ui_settings.json`, system/LLM modals)**: Crisp, scannable RPG interface style. Establish consistent terms across all files for M.A.R.A.S core concepts: *Affection*, *Hierarchy* (*Primary / Lead, Secondary, Tertiary, Subordinate*), *Temperament* (*Romantic, Humble, Independent, Proud, Jealous*), *Social Class*, *Open Relationship*, *Intrigue Mode*, *Matchmaking*, *Partner Agency*, *Adolescent Training*.
-   - **In-World Dialogue, Letters & Lore (`DSD`, `hud.*`, `catalogs.json` `training.*` & `encounters.*`)**: Authentic Tamrielic in-world tone. Respect formal vs. intimate 2nd-person pronouns (`Sie`/`Ihr` vs. `du` in German depending on Skyrim SE convention, `Вы` vs. `ты` in Russian, `vous` vs. `tu` in French, polite vs. intimate speech in Japanese/Korean) based on whether the speaker is a court clerk/priestess, a courting acquaintance, a devoted spouse, or the player's child.
-3. **UI Badge & Tab Compactness**:
+1. **Literary Adaptation (No Literal Calques or Robotic Phrasing)**:
+   - Eliminate word-for-word English calques, unnatural syntax mirroring, and stiff, robotic, or bureaucratic phrasing. Rewrite lines to sound natural, emotionally resonant, and idiomatic in the target language while preserving exact gameplay meaning, speaker tone, and placeholders/tags.
+2. **Official *Skyrim Special Edition* Proper Nouns**:
+   - Always use the official localized *Skyrim SE* names for Divines (*Mara, Dibella, Kynareth, Stendarr, Julianos, Akatosh*), Daedric Princes (*Azura, Boethiah, Meridia, Molag Bal, Nocturnal, Hircine, Hermaeus Mora, Mehrunes Dagon, Sanguine, Malacath, Mephala, Peryite*), cities/holds (*Whiterun, Solitude, Windhelm, Riften, Markarth, Solstheim, Ragnvald*), and factions/locations (*Jorrvaskr, Companions, The Circle, Underforge, Skyforge, College of Winterhold, Arcanaeum, Thieves Guild, Ratway Cistern, Dark Brotherhood, Bards College, Palace of the Kings, Castle Dour, Sky Haven Temple, The Blades, Fort Dawnguard, College of Whispers, Stendarr's Beacon, Temple of Kynareth, House Telvanni, School of Julianos, Synod, Fighters Guild, Morag Tong, Nightingale Hall, Evergloam, Coldharbour, Frostmoon Crag*).
+3. **Two Distinct Registers & Gaming Terminology Boundary**:
+   - **Dashboard, Settings UI & Technical Modals (`ui_dashboard.json`, `ui_settings.json`, system/debug `modal.*`)**: Crisp, scannable RPG interface style. Established RPG/gaming terms (such as *buff, quest, cooldown, spawn/despawn, log, dump*) are acceptable where standard in the target language's gaming community. Establish consistent terms across all files for M.A.R.A.S core concepts: *Affection*, *Hierarchy* (*Primary / Lead, Secondary, Tertiary, Subordinate*), *Temperament* (*Romantic, Humble, Independent, Proud, Jealous*), *Social Class*, *Open Relationship*, *Intrigue Mode*, *Matchmaking*, *Partner Agency*, *Adolescent Training*.
+   - **In-World Dialogue, Letters, Notifications & Lore (`DSD`, `hud.*`, `pet.*`, `catalogs.json` `training.*`, `blessing.*` & `encounters.*`)**: Strictly diegetic Tamrielic high-fantasy tone—never leak modern UI/tech jargon (such as *spawn* or *buff*) into subtitles, quest logs, letters, or world notifications. Respect formal vs. intimate 2nd-person register (`Sie`/`Ihr` vs. `du`, `vous` vs. `tu`, `Вы` vs. `ты`, polite vs. intimate speech levels) based on whether the speaker is a priest/scholar/clerk, a courting acquaintance, a devoted spouse, or the player's child.
+4. **UI Badge & Tab Compactness**:
    - Magelight UI scales proportionally via `rem`. Keep top navigation tabs, status pills (`enums.relationshipStatus.*`, `badge_*`), table column headers, and slider unit suffixes (`unitDaysShort`, `unitHours`, `unitPercent`, `unitMultiplier`) compact so cards and badges do not clip or wrap awkwardly.
-4. **Optional `names.json` Policy**:
+5. **Optional `names.json` Policy**:
    - Omit `SKSE/Plugins/MARAS/localization/<lang>/names.json` for Latin-alphabet languages unless explicitly requested, preserving lore-friendly Tamrielic names (*Thorvik, Yrsil, Aubrin*).
    - Include `names.json` (root keys `"childrenNames"` mapping race $\to$ `{"male": [...], "female": [...]}` and `"critterNames"` mapping species $\to$ `[...]`) for non-Latin scripts (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`) so newborn/critter names match vanilla NPC script rendering.

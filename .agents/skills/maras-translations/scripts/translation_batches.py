@@ -33,7 +33,10 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REPO_ROOT = SCRIPT_DIR.parents[3]
+sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(DEFAULT_REPO_ROOT / "tools" / "localization"))
+from dsd_spriggit_context import enrich_and_group_dsd_units
+
 try:
     from sync_localization import (
         find_scaleform_unsafe_chars as _sync_find_scaleform_unsafe_chars,
@@ -213,23 +216,40 @@ def plural_hint_for_lang(lang_code: str, suffix: str) -> str:
 
 
 def json_context_note(fname: str, key: str) -> Optional[str]:
-    if fname == "catalogs.json" and key.startswith("bonuses.") and key.endswith(".description"):
+    if fname == "catalogs.json" and key.startswith("bonuses."):
+        if key.endswith(".name"):
+            return (
+                "Keep identical to the matching TT_MARAS.esp DSD MGEF FULL / PERK FULL buff title "
+                "so Dashboard Household Buffs matches Skyrim's Active Effects menu."
+            )
+        if key.endswith(".description"):
+            return (
+                "BuffCard UI renders '{description} <strong>15%</strong>' inline. "
+                "Phrase so the trailing value follows naturally and DO NOT end with a period."
+            )
+    if fname == "ui_settings.json" and key == "settings.general.disablePolygamyQuestDesc":
         return (
-            "BuffCard UI renders '{description} <strong>15%</strong>' inline. "
-            "Phrase so the trailing value follows naturally and DO NOT end with a period."
+            "References quest 00005C|TT_MARAS.esp QUST FULL ('The Flame Divides Not'). "
+            "Keep the localized quest title identical to DSD 00005C|TT_MARAS.esp|QUST FULL."
         )
-    if fname == "hud_and_modals.json" and key.startswith("modal.confirm.label_"):
-        leaf = key.rsplit(".", 1)[-1]
-        if leaf in CONFIRM_ENTER_LABELS:
+    if fname == "hud_and_modals.json":
+        if key in ("modal.confirm.msg_enter", "modal.confirm.msg_breakup"):
             return (
-                "Substituted as {action} into 'modal.confirm.msg_enter'. "
-                "Keep grammatical case/framing compatible with msg_enter."
+                "Substitutes modal.confirm.label_* into {action}; {actorA}/{actorB} are Nominative. "
+                "Frame {action} (e.g. quotes/colon) or align case across its 4 label_* keys."
             )
-        if leaf in CONFIRM_BREAKUP_LABELS:
-            return (
-                "Substituted as {action} into 'modal.confirm.msg_breakup'. "
-                "Keep grammatical case/framing compatible with msg_breakup."
-            )
+        if key.startswith("modal.confirm.label_"):
+            leaf = key.rsplit(".", 1)[-1]
+            if leaf in CONFIRM_ENTER_LABELS:
+                return (
+                    "Substituted as {action} into 'modal.confirm.msg_enter'. "
+                    "Keep grammatical case/framing compatible with msg_enter."
+                )
+            if leaf in CONFIRM_BREAKUP_LABELS:
+                return (
+                    "Substituted as {action} into 'modal.confirm.msg_breakup'. "
+                    "Keep grammatical case/framing compatible with msg_breakup."
+                )
     return None
 
 
@@ -345,6 +365,155 @@ def load_existing_batch_translations(out_dir: Path) -> Tuple[Dict[str, Dict[str,
     return saved_files, saved_dsd
 
 
+def _normalize_dsd_form_id(raw_form_id: str) -> str:
+    parts = raw_form_id.strip().split("|", 1)
+    if len(parts) != 2:
+        return raw_form_id.strip().lower()
+    hex_part = parts[0].strip()
+    if hex_part.lower().startswith("0x"):
+        hex_part = hex_part[2:]
+    try:
+        norm_hex = f"{int(hex_part, 16):06X}"
+    except ValueError:
+        norm_hex = hex_part.upper()
+    return f"{norm_hex}|{parts[1].strip().lower()}"
+
+
+def _dsd_keys_from_entry(item: Dict[str, Any]) -> Tuple[str, str]:
+    raw_fid = str(item.get("form_id", "")).strip()
+    norm_fid = _normalize_dsd_form_id(raw_fid)
+    dtype = str(item.get("type", "")).strip().upper()
+    if item.get("index") is not None:
+        idx = int(item["index"])
+        return f"{raw_fid}|{dtype}|{idx}", f"{norm_fid}|{dtype}|{idx}"
+    return f"{raw_fid}|{dtype}", f"{norm_fid}|{dtype}"
+
+
+def _load_dsd_en_lookup(dsd_template: Path) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+    if not dsd_template.is_file():
+        return [], {}
+    raw = json.loads(dsd_template.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        return [], {}
+    tmpl_list: List[Dict[str, Any]] = [item for item in raw if isinstance(item, dict)]
+    en_by_key: Dict[str, str] = {}
+    for item in tmpl_list:
+        disp_key, norm_key = _dsd_keys_from_entry(item)
+        en_val = str(item.get("original", item.get("string", "")))
+        en_by_key[norm_key.lower()] = en_val
+        en_by_key[disp_key.lower()] = en_val
+    return tmpl_list, en_by_key
+
+
+def _chunk_atomic_units(
+    units: List[List[Tuple[str, Dict[str, Any]]]],
+    batch_size: int,
+) -> List[List[Tuple[str, Dict[str, Any]]]]:
+    chunks: List[List[Tuple[str, Dict[str, Any]]]] = []
+    cur_chunk: List[Tuple[str, Dict[str, Any]]] = []
+    for unit in units:
+        if cur_chunk and len(cur_chunk) + len(unit) > batch_size:
+            chunks.append(cur_chunk)
+            cur_chunk = []
+        cur_chunk.extend(unit)
+    if cur_chunk:
+        chunks.append(cur_chunk)
+    return chunks
+
+
+def _build_full_review_todo(
+    lang: str,
+    en_dir: Path,
+    lang_dir: Path,
+    dsd_tmpl_list: List[Dict[str, Any]],
+    dsd_file: Path,
+    include_json: bool,
+    include_dsd: bool,
+) -> Dict[str, Any]:
+    files_todo: Dict[str, Dict[str, Any]] = {}
+    if include_json and en_dir.is_dir():
+        req_plurals = required_plural_suffixes_for_lang(lang)
+        for p in sorted(en_dir.glob("*.json")):
+            if p.name in ("_meta.json", "names.json") or p.name.startswith("_"):
+                continue
+            en_flat = flatten_json(json.loads(p.read_text(encoding="utf-8")))
+            tgt_path = lang_dir / p.name
+            tgt_flat = flatten_json(json.loads(tgt_path.read_text(encoding="utf-8"))) if tgt_path.is_file() else {}
+            true_stems = find_true_cldr_plural_stems(en_flat)
+
+            file_entries: Dict[str, Dict[str, Any]] = {}
+            handled_stems: Set[str] = set()
+            for key, en_val in en_flat.items():
+                sp = split_plural_stem(key)
+                if sp is not None and sp[0] in true_stems:
+                    stem = sp[0]
+                    if stem in handled_stems:
+                        continue
+                    handled_stems.add(stem)
+                    ref_other = en_flat.get(f"{stem}_other", en_val)
+                    ref_one = en_flat.get(f"{stem}_one", ref_other)
+                    for suf in req_plurals:
+                        sib_key = f"{stem}{suf}"
+                        en_src = ref_one if suf == "_one" else ref_other
+                        tr_val = tgt_flat.get(sib_key, "")
+                        status = (
+                            "review"
+                            if tr_val.strip()
+                            else ("missing_plural_form" if sib_key not in en_flat else "missing")
+                        )
+                        file_entries[sib_key] = {"status": status, "en": en_src, "translation": tr_val}
+                    continue
+
+                tr_val = tgt_flat.get(key, "")
+                status = "review" if tr_val.strip() else "missing"
+                file_entries[key] = {"status": status, "en": en_val, "translation": tr_val}
+
+            if file_entries:
+                files_todo[p.name] = file_entries
+
+    dsd_todo: Dict[str, Any] = {}
+    if include_dsd and dsd_tmpl_list:
+        tgt_by_nk: Dict[str, Dict[str, Any]] = {}
+        if dsd_file.is_file():
+            raw_tgt = json.loads(dsd_file.read_text(encoding="utf-8"))
+            if isinstance(raw_tgt, list):
+                for item in raw_tgt:
+                    if isinstance(item, dict) and "form_id" in item and "type" in item:
+                        _, nk = _dsd_keys_from_entry(item)
+                        tgt_by_nk[nk.lower()] = item
+
+        for tmpl_entry in dsd_tmpl_list:
+            disp_key, norm_key = _dsd_keys_from_entry(tmpl_entry)
+            en_text = str(tmpl_entry.get("original", tmpl_entry.get("string", "")))
+            editor_id = str(tmpl_entry.get("editor_id", ""))
+            tgt_entry = tgt_by_nk.get(norm_key.lower(), {})
+            tr_text = str(tgt_entry.get("string", ""))
+            tgt_orig = tgt_entry.get("original")
+
+            if not tr_text.strip():
+                status = "missing"
+            elif isinstance(tgt_orig, str) and tgt_orig != en_text:
+                status = "source_changed"
+            else:
+                status = "review"
+
+            entry_obj: Dict[str, Any] = {"status": status}
+            if editor_id:
+                entry_obj["editor_id"] = editor_id
+            if status == "source_changed":
+                entry_obj["previous_en"] = tgt_orig
+            entry_obj["en"] = en_text
+            if tr_text.strip():
+                entry_obj["translation"] = tr_text
+            elif DRAGON_FONT_RE.search(en_text):
+                entry_obj["translation"] = en_text
+            else:
+                entry_obj["translation"] = ""
+            dsd_todo[disp_key] = entry_obj
+
+    return {"language": lang, "files": files_todo, "dsd": dsd_todo}
+
+
 def cmd_split(args: argparse.Namespace) -> int:
     repo_root, loc_dir, dsd_template, dsd_file = resolve_paths(args)
     lang = canonical_lang_code(args.lang)
@@ -355,6 +524,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     if args.init_meta:
         ensure_meta_file(repo_root=repo_root, loc_dir=loc_dir, lang=lang)
 
+    review_all = bool(getattr(args, "all", False))
     sync_args = [
         "--lang",
         lang,
@@ -371,6 +541,8 @@ def cmd_split(args: argparse.Namespace) -> int:
         sync_args.append("--no-dsd")
     if args.dsd_only:
         sync_args.append("--dsd-only")
+    if review_all:
+        sync_args.append("--check")
 
     res = run_sync_script(repo_root, sync_args)
     if res.stdout:
@@ -378,14 +550,29 @@ def cmd_split(args: argparse.Namespace) -> int:
     if res.stderr:
         print(res.stderr.rstrip(), file=sys.stderr)
 
-    todo_path = loc_dir / lang / "_todo.json"
-    if not todo_path.is_file():
-        if res.returncode != 0:
-            return res.returncode
-        print(f"[OK] Zero pending translations for '{lang}' — nothing to split.")
-        return 0
+    en_dir = loc_dir / "en"
+    lang_dir = loc_dir / lang
+    dsd_tmpl_list, dsd_en_by_key = _load_dsd_en_lookup(dsd_template)
 
-    todo_doc = json.loads(todo_path.read_text(encoding="utf-8"))
+    if review_all:
+        todo_doc = _build_full_review_todo(
+            lang=lang,
+            en_dir=en_dir,
+            lang_dir=lang_dir,
+            dsd_tmpl_list=dsd_tmpl_list,
+            dsd_file=dsd_file,
+            include_json=not args.dsd_only,
+            include_dsd=not args.no_dsd,
+        )
+    else:
+        todo_path = loc_dir / lang / "_todo.json"
+        if not todo_path.is_file():
+            if res.returncode != 0:
+                return res.returncode
+            print(f"[OK] Zero pending translations for '{lang}' — nothing to split.")
+            return 0
+        todo_doc = json.loads(todo_path.read_text(encoding="utf-8"))
+
     out_dir = Path(args.out_dir).resolve()
     saved_files_tr, saved_dsd_tr = load_existing_batch_translations(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -396,8 +583,6 @@ def cmd_split(args: argparse.Namespace) -> int:
 
     batch_size = max(10, int(args.batch_size))
     req_plurals = required_plural_suffixes_for_lang(lang)
-    en_dir = loc_dir / "en"
-    lang_dir = loc_dir / lang
 
     manifest_batches: List[Dict[str, Any]] = []
     batch_counter = 0
@@ -473,17 +658,7 @@ def cmd_split(args: argparse.Namespace) -> int:
                 entry_obj["note"] = note
             units.append([(key, entry_obj)])
 
-        # Slice units into batches of ~batch_size keys
-        chunks: List[List[Tuple[str, Dict[str, Any]]]] = []
-        cur_chunk: List[Tuple[str, Dict[str, Any]]] = []
-        for unit in units:
-            if cur_chunk and len(cur_chunk) + len(unit) > batch_size:
-                chunks.append(cur_chunk)
-                cur_chunk = []
-            cur_chunk.extend(unit)
-        if cur_chunk:
-            chunks.append(cur_chunk)
-
+        chunks = _chunk_atomic_units(units, batch_size)
         stem_slug = Path(fname).stem
         for part_idx, chunk in enumerate(chunks, start=1):
             batch_counter += 1
@@ -492,8 +667,10 @@ def cmd_split(args: argparse.Namespace) -> int:
             bpath = out_dir / bname
             bdoc = {
                 "_instructions": (
-                    f"Translate 'en' into '{lang}' by filling 'translation' for every entry. "
-                    "Preserve {placeholders} verbatim (never rename tokens inside braces)."
+                    f"{'Review and refine' if review_all else 'Translate'} 'en' into '{lang}' "
+                    "by filling/updating 'translation' for every entry. "
+                    "Preserve {placeholders} verbatim (never rename tokens inside braces). "
+                    "Adapt naturally and idiomatically (avoid word-for-word English calques and stiff, robotic phrasing)."
                 ),
                 "language": lang,
                 "layer": "json",
@@ -512,7 +689,7 @@ def cmd_split(args: argparse.Namespace) -> int:
                 }
             )
 
-    # 2. Build DSD batches (TT_MARAS.esp)
+    # 2. Build DSD batches (TT_MARAS.esp) ordered by Spriggit quest/branch/scene conversation flow
     dsd_todo: Dict[str, Any] = todo_doc.get("dsd") or {}
     if isinstance(dsd_todo, dict) and dsd_todo:
         dsd_items: List[Tuple[str, Dict[str, Any]]] = []
@@ -543,16 +720,23 @@ def cmd_split(args: argparse.Namespace) -> int:
 
             dsd_items.append((dkey, entry_obj))
 
-        total_dsd_chunks = (len(dsd_items) + batch_size - 1) // batch_size
-        for part_idx in range(total_dsd_chunks):
-            chunk = dsd_items[part_idx * batch_size : (part_idx + 1) * batch_size]
+        dsd_units = enrich_and_group_dsd_units(repo_root, dsd_items, dsd_en_by_key)
+        grouped_total = sum(len(u) for u in dsd_units)
+        if grouped_total != len(dsd_items):
+            raise RuntimeError(
+                f"DSD grouping item count mismatch: grouped={grouped_total}, expected={len(dsd_items)}"
+            )
+
+        dsd_chunks = _chunk_atomic_units(dsd_units, batch_size)
+        for part_idx, chunk in enumerate(dsd_chunks, start=1):
             batch_counter += 1
-            bname = f"batch_{batch_counter:02d}_dsd_p{part_idx + 1:02d}.json"
+            bname = f"batch_{batch_counter:02d}_dsd_p{part_idx:02d}.json"
             bpath = out_dir / bname
             bdoc = {
                 "_instructions": (
-                    f"Translate TT_MARAS.esp DSD records from 'en' into '{lang}' by filling 'translation'. "
-                    "Preserve Creation Kit <Alias=...>, <mag>, <dur>, %.0f, and <font> tags verbatim."
+                    f"{'Review and refine' if review_all else 'Translate'} TT_MARAS.esp DSD records from 'en' into '{lang}' "
+                    "by filling/updating 'translation'. Preserve Creation Kit <Alias=...>, <mag>, <dur>, %.0f, and <font> tags verbatim. "
+                    "Adapt naturally and idiomatically (avoid word-for-word English calques and stiff, robotic phrasing)."
                 ),
                 "language": lang,
                 "layer": "dsd",
@@ -573,6 +757,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     total_entries = sum(b["entries"] for b in manifest_batches)
     manifest = {
         "language": lang,
+        "mode": "review_all" if review_all else "pending_todo",
         "batch_size": batch_size,
         "required_plural_suffixes": list(req_plurals),
         "total_batches": len(manifest_batches),
@@ -584,7 +769,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
     print(
         f"[SPLIT] Wrote {len(manifest_batches)} batch file(s) ({total_entries} total entries, "
-        f"plural forms={list(req_plurals)}) to {out_dir}"
+        f"plural forms={list(req_plurals)}, mode={'review_all' if review_all else 'pending_todo'}) to {out_dir}"
     )
     return 0
 
@@ -1022,6 +1207,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_split.add_argument("--prev-en", default=None, help="Previous release en/ folder to detect changed JSON strings.")
     p_split.add_argument("--no-dsd", action="store_true", help="Skip TT_MARAS.esp DSD entries.")
     p_split.add_argument("--dsd-only", action="store_true", help="Split TT_MARAS.esp DSD entries only.")
+    p_split.add_argument(
+        "--all",
+        action="store_true",
+        help="Split ALL JSON and/or DSD entries (pre-filled with current <lang> translations) for LQA/editorial review, even when 0 strings are pending.",
+    )
     p_split.set_defaults(func=cmd_split)
 
     p_val = sub.add_parser("validate", parents=[common], help="Validate translated batch_*.json files.")
