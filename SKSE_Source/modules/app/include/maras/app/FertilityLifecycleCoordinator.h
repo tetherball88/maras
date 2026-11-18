@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RE/Skyrim.h"
+#include "maras/domain/lineage/FertilityLifecycleRules.h"
 
 #include <cstdint>
 #include <string>
@@ -116,6 +117,10 @@ namespace MARAS::App {
             RE::Actor* father,
             float conceptionTime,
             float birthTime);
+
+        void ShowBlockedFertilityMcmModal(
+            Domain::Lineage::BlockedFertilityMcmClick blockedClick,
+            std::string_view optionStateName);
 
     private:
         FertilityLifecycleCoordinator() = default;

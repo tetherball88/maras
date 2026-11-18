@@ -27,6 +27,7 @@
 #include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FactionReconciler.h"
+#include "maras/engine/FertilityMcmClickSink.h"
 #include "maras/engine/FormCache.h"
 #include "maras/engine/GiftMenuEventSink.h"
 #include "maras/engine/GlobalVarReconciler.h"
@@ -427,6 +428,10 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
         return false;
     }
 
+    if (const auto* scaleform = SKSE::GetScaleformInterface()) {
+        scaleform->Register(&MARAS::FertilityMcmClickSink::RegisterScaleformCallback, "MARAS");
+    }
+
     if (const auto* messaging = SKSE::GetMessagingInterface()) {
         if (!messaging->RegisterListener([](SKSE::MessagingInterface::Message* message) {
                 switch (message->type) {
@@ -585,13 +590,14 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                             MARAS_LOG_ERROR("Failed to get ScriptEventSourceHolder for event sink registration");
                         }
 
-                        // Register UI polling, dialogue menu & gift menu sinks
+                        // Register UI polling, dialogue menu, gift menu & fertility MCM click sinks
                         if (auto* ui = RE::UI::GetSingleton()) {
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(UpdateEventSink::GetSingleton());
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::DialogueEventSink::GetSingleton());
                             ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::GiftMenuEventSink::GetSingleton());
+                            ui->AddEventSink<RE::MenuOpenCloseEvent>(MARAS::FertilityMcmClickSink::GetSingleton());
                             MARAS_LOG_INFO("Registered polling service update event sink");
-                            MARAS_LOG_INFO("Registered dialogue and gift menu event sinks");
+                            MARAS_LOG_INFO("Registered dialogue, gift menu, and fertility MCM click event sinks");
                         } else {
                             MARAS_LOG_ERROR("Failed to get UI singleton for event sink registration");
                         }

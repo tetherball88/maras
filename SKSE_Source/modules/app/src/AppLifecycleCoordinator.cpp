@@ -3,6 +3,7 @@
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AgencyWorkflowCoordinator.h"
 #include "maras/app/BanterSceneCoordinator.h"
+#include "maras/app/FertilityLifecycleCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/MigrationDiagnosticsCoordinator.h"
@@ -500,6 +501,15 @@ namespace MARAS::App {
         }
         MARAS_LOG_DEBUG("[AppLifecycleCoordinator] Intimate thread ended (partners={}, hadSex={}, baseAffection={})",
                         outcome.eligiblePartners.size(), hadSex, outcome.baseAffection);
+    }
+
+    void AppLifecycleCoordinator::OnBlockedFertilityMcmClick(
+        Domain::Lineage::BlockedFertilityMcmClick blockedClick,
+        std::string_view optionStateName) {
+        std::lock_guard lock(GetPapyrusMutex());
+        FertilityLifecycleCoordinator::GetSingleton().ShowBlockedFertilityMcmModal(
+            blockedClick,
+            optionStateName);
     }
 
 }  // namespace MARAS::App

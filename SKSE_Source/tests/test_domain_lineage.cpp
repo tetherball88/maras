@@ -1340,4 +1340,68 @@ namespace MARAS::Tests {
         MARAS_CHECK_EQ(remOut.removedFactionSnapshot->factions[2].rank, std::int8_t{ 1 });
     }
 
+    MARAS_TEST(DomainLineage, ClassifyBlockedFertilityMcmClickCoversFmrAndBfActionsOnly) {
+        using Domain::Lineage::BlockedFertilityMcmAction;
+        using Domain::Lineage::ClassifyBlockedFertilityMcmClick;
+        using Domain::Lineage::FertilityProvider;
+
+        // 1. Fertility Mode Reloaded (_JSW_BB_ConfigQuestScript) child spawn/train/orphanage/summon actions
+        {
+            const auto adopt = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "EXECUTE_ADOPTION");
+            MARAS_REQUIRE(adopt.has_value());
+            MARAS_CHECK_EQ(adopt->provider, FertilityProvider::Fmr);
+            MARAS_CHECK_EQ(adopt->action, BlockedFertilityMcmAction::SpawnYoungChild);
+
+            const auto train = ClassifyBlockedFertilityMcmClick("_jsw_bb_configquestscript", "send_for_training");
+            MARAS_REQUIRE(train.has_value());
+            MARAS_CHECK_EQ(train->provider, FertilityProvider::Fmr);
+            MARAS_CHECK_EQ(train->action, BlockedFertilityMcmAction::SendToTraining);
+
+            const auto honorhall = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "SEND_TO_HONORHALL");
+            MARAS_REQUIRE(honorhall.has_value());
+            MARAS_CHECK_EQ(honorhall->action, BlockedFertilityMcmAction::SendToOrphanage);
+
+            const auto summonOne = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "SUMMON_SELECTED_UNSUMMONED");
+            const auto summonAll = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "SUMMON_ALL_UNSUMMONED");
+            MARAS_REQUIRE(summonOne.has_value());
+            MARAS_REQUIRE(summonAll.has_value());
+            MARAS_CHECK_EQ(summonOne->action, BlockedFertilityMcmAction::SpawnAdultChild);
+            MARAS_CHECK_EQ(summonAll->action, BlockedFertilityMcmAction::SpawnAdultChild);
+
+            const auto dismissOne = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "DISMISS_SELECTED_SUMMONED");
+            const auto dismissAll = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "DISMISS_ALL_SUMMONED");
+            MARAS_REQUIRE(dismissOne.has_value());
+            MARAS_REQUIRE(dismissAll.has_value());
+            MARAS_CHECK_EQ(dismissOne->action, BlockedFertilityMcmAction::DismissAdultChild);
+            MARAS_CHECK_EQ(dismissAll->action, BlockedFertilityMcmAction::DismissAdultChild);
+
+            // Non-blocked FMR settings, dropdowns, and pregnancy controls pass through untouched
+            MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "ENABLED_TOGGLE").has_value());
+            MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "SELECT_SMALL_CHILD").has_value());
+            MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "SELECT_TRAINING_LOCATION").has_value());
+            MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "PLAYER_GROWTH").has_value());
+        }
+
+        // 2. Beeing Female NG (FWSystemConfig) manual grow/hatch actions
+        {
+            const auto growSel = ClassifyBlockedFertilityMcmClick("FWSystemConfig", "TextGrowSelected");
+            const auto growAll = ClassifyBlockedFertilityMcmClick("fwsystemconfig", "textgrowupchildren");
+            MARAS_REQUIRE(growSel.has_value());
+            MARAS_REQUIRE(growAll.has_value());
+            MARAS_CHECK_EQ(growSel->provider, FertilityProvider::BeeingFemale);
+            MARAS_CHECK_EQ(growSel->action, BlockedFertilityMcmAction::GrowOrHatchChild);
+            MARAS_CHECK_EQ(growAll->provider, FertilityProvider::BeeingFemale);
+            MARAS_CHECK_EQ(growAll->action, BlockedFertilityMcmAction::GrowOrHatchChild);
+
+            MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("FWSystemConfig", "ToggleBabyMayCry").has_value());
+            MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("FWSystemConfig", "RemoveDeceasedChildren").has_value());
+        }
+
+        // 3. Unrelated MCM scripts and empty inputs never match
+        MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("SKI_ConfigBase", "EXECUTE_ADOPTION").has_value());
+        MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("TTM_MCM", "SEND_FOR_TRAINING").has_value());
+        MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("", "EXECUTE_ADOPTION").has_value());
+        MARAS_CHECK(!ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "").has_value());
+    }
+
 }  // namespace MARAS::Tests

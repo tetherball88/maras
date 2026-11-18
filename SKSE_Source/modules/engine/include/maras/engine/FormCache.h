@@ -153,6 +153,9 @@ namespace MARAS {
 
         // Quests & sleep/rested spells (TT_MARAS.esp, Skyrim.esm, HearthFires.esm)
         RE::TESQuest* GetChildLogicQuest();
+        [[nodiscard]] RE::TESQuest* GetSkyUiConfigManagerQuest();
+        [[nodiscard]] RE::TESQuest* GetFmrMcmQuest();
+        [[nodiscard]] RE::TESQuest* GetBeeingFemaleMcmQuest();
         RE::SpellItem* GetLoversRadianceAbility();
         RE::TESQuest* GetPlayerSleepQuest();
         RE::SpellItem* GetRestedSpell();
@@ -339,6 +342,10 @@ namespace MARAS {
 
         // Quests & sleep/rested spells (cached)
         RE::TESQuest* childLogicQuest_{ nullptr };
+        RE::TESQuest* skyUiConfigManagerQuest_{ nullptr };
+        RE::TESQuest* fmrMcmQuest_{ nullptr };
+        RE::TESQuest* beeingFemaleMcmQuest_{ nullptr };
+        bool optionalMcmQuestsProbed_{ false };
         RE::SpellItem* loversRadianceAbility_{ nullptr };
         RE::TESQuest* playerSleepQuest_{ nullptr };
         RE::SpellItem* restedSpell_{ nullptr };

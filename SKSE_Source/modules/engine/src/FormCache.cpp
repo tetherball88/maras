@@ -8,6 +8,10 @@ namespace MARAS {
     namespace {
         constexpr std::string_view PLUGIN_NAME = "TT_MARAS.esp";
         constexpr std::string_view SKYRIMNET_ESP = "SkyrimNet.esp";
+        constexpr std::string_view SKYUI_SE_ESP = "SkyUI_SE.esp";
+        constexpr std::string_view SKYUI_ESP = "SkyUI.esp";
+        constexpr std::string_view FERTILITY_MODE_ESM = "Fertility Mode.esm";
+        constexpr std::string_view BEEING_FEMALE_ESM = "BeeingFemale.esm";
         constexpr std::string_view HEARTHFIRES_ESM = "HearthFires.esm";
         constexpr std::string_view DAWNGUARD_ESM = "Dawnguard.esm";
         constexpr std::string_view DRAGONBORN_ESM = "Dragonborn.esm";
@@ -222,6 +226,27 @@ namespace MARAS {
         (void)GetChildrenNonPlayerFollowParentPackage();
         (void)GetChildrenFleeIntimateScenePackage();
         (void)GetAdultChildTravelSandboxPackage();
+
+        if (!optionalMcmQuestsProbed_) {
+            optionalMcmQuestsProbed_ = true;
+            if (auto* dataHandler = RE::TESDataHandler::GetSingleton()) {
+                if (dataHandler->LookupModByName(SKYUI_SE_ESP) != nullptr) {
+                    skyUiConfigManagerQuest_ = Utils::LookupForm<RE::TESQuest>(
+                        0x000802, SKYUI_SE_ESP, "SKI_ConfigManagerInstance");
+                } else if (dataHandler->LookupModByName(SKYUI_ESP) != nullptr) {
+                    skyUiConfigManagerQuest_ = Utils::LookupForm<RE::TESQuest>(
+                        0x000802, SKYUI_ESP, "SKI_ConfigManagerInstance");
+                }
+                if (dataHandler->LookupModByName(FERTILITY_MODE_ESM) != nullptr) {
+                    fmrMcmQuest_ = Utils::LookupForm<RE::TESQuest>(
+                        0x0115C8, FERTILITY_MODE_ESM, "_JSW_BB_ConfigQuest");
+                }
+                if (dataHandler->LookupModByName(BEEING_FEMALE_ESM) != nullptr) {
+                    beeingFemaleMcmQuest_ = Utils::LookupForm<RE::TESQuest>(
+                        0x001828, BEEING_FEMALE_ESM, "FWSystemConfig");
+                }
+            }
+        }
     }
 
     // TT_MARAS.esp Faction getters
@@ -578,6 +603,18 @@ namespace MARAS {
 
     RE::TESQuest* FormCache::GetChildLogicQuest() {
         return LazyLoadForm(childLogicQuest_, 0xC25, "TTM_ServiceChildrenLogic quest");
+    }
+
+    RE::TESQuest* FormCache::GetSkyUiConfigManagerQuest() {
+        return skyUiConfigManagerQuest_;
+    }
+
+    RE::TESQuest* FormCache::GetFmrMcmQuest() {
+        return fmrMcmQuest_;
+    }
+
+    RE::TESQuest* FormCache::GetBeeingFemaleMcmQuest() {
+        return beeingFemaleMcmQuest_;
     }
 
     RE::SpellItem* FormCache::GetLoversRadianceAbility() {

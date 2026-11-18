@@ -28,6 +28,22 @@ namespace MARAS::Domain::Lineage {
         RecoveryDelivery = 2
     };
 
+    enum class BlockedFertilityMcmAction : std::uint8_t {
+        SpawnYoungChild = 0,
+        SendToTraining = 1,
+        SendToOrphanage = 2,
+        SpawnAdultChild = 3,
+        DismissAdultChild = 4,
+        GrowOrHatchChild = 5
+    };
+
+    struct BlockedFertilityMcmClick {
+        FertilityProvider provider{ FertilityProvider::Unknown };
+        BlockedFertilityMcmAction action{ BlockedFertilityMcmAction::SpawnYoungChild };
+
+        bool operator==(const BlockedFertilityMcmClick&) const = default;
+    };
+
     struct FertilityAffectionTarget {
         ActorId targetActor{};
         bool isPlayerPregnant{ false };
@@ -81,6 +97,10 @@ namespace MARAS::Domain::Lineage {
     }
 
     [[nodiscard]] BfCycleStateAction ClassifyBfCycleState(std::int32_t currentState) noexcept;
+
+    [[nodiscard]] std::optional<BlockedFertilityMcmClick> ClassifyBlockedFertilityMcmClick(
+        std::string_view configScriptName,
+        std::string_view optionStateName) noexcept;
 
     [[nodiscard]] ChildId FindSyntheticChildByName(
         const State::LineageTable& lineage,

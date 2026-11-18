@@ -85,6 +85,10 @@ namespace MARAS::App {
             std::span<const RE::FormID> recordedPartnerIds,
             bool hadSex) override;
 
+        void OnBlockedFertilityMcmClick(
+            Domain::Lineage::BlockedFertilityMcmClick blockedClick,
+            std::string_view optionStateName) override;
+
     private:
         AppLifecycleCoordinator() = default;
         ~AppLifecycleCoordinator() override = default;
