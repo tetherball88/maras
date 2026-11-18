@@ -20,9 +20,17 @@ namespace MARAS {
     namespace {
 
         constexpr const char* kOrigSendModEventMember = "__marasOrigSendModEvent";
+        constexpr const char* kWrappedMarkerMember = "__marasMcmWrapped";
         constexpr std::string_view kOptionSelectedEvent = "SKICP_optionSelected";
         constexpr std::string_view kFmrMcmScriptName = "_JSW_BB_ConfigQuestScript";
         constexpr std::string_view kBfMcmScriptName = "FWSystemConfig";
+
+        // Known variable indices inside compiled SkyUI_SE.bsa PEX files (used as VM fallback):
+        //   SKI_ConfigManager: var[8] = _activeConfig : SKI_ConfigBase
+        //   SKI_ConfigBase:    var[1] = _stateOptionMap : String[], var[12] = _currentPage : String
+        constexpr std::int32_t kSkiConfigMgrActiveConfigIdx = 8;
+        constexpr std::int32_t kSkiConfigBaseStateMapIdx = 1;
+        constexpr std::int32_t kSkiConfigBaseCurrentPageIdx = 12;
 
         [[nodiscard]] RE::BSTSmartPointer<RE::BSScript::Object> FindQuestScriptObject(
             RE::TESQuest* quest,
@@ -31,27 +39,111 @@ namespace MARAS {
                 return nullptr;
             }
             auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            auto* policy = vm ? vm->GetObjectHandlePolicy() : nullptr;
-            if (!vm || !policy) {
+            auto* ivm = static_cast<RE::BSScript::IVirtualMachine*>(vm);
+            auto* policy = ivm ? ivm->GetObjectHandlePolicy() : nullptr;
+            if (!vm || !ivm || !policy) {
                 return nullptr;
             }
             const RE::VMHandle handle = policy->GetHandleForObject(RE::TESQuest::FORMTYPE, quest);
             if (handle == 0 || handle == policy->EmptyHandle()) {
                 return nullptr;
             }
+
             RE::BSTSmartPointer<RE::BSScript::Object> obj;
-            if (!vm->FindBoundObject(handle, scriptClassName, obj) || !obj || !obj->IsValid()) {
-                return nullptr;
+            if (ivm->FindBoundObject(handle, scriptClassName, obj) && obj && obj->GetTypeInfo() != nullptr) {
+                return obj;
             }
-            return obj;
+
+            // Fallback: scan attachedScripts table case-insensitively in case FindBoundObject missed
+            RE::BSSpinLockGuard lk{ vm->attachedScriptsLock };
+            const auto it = vm->attachedScripts.find(handle);
+            if (it != vm->attachedScripts.end()) {
+                for (const auto& attached : it->second) {
+                    auto candidate = attached.get();
+                    const auto* ti = candidate ? candidate->GetTypeInfo() : nullptr;
+                    const char* candidateName = ti ? ti->GetName() : nullptr;
+                    if (candidateName &&
+                        Foundation::StringUtils::CaseInsensitiveEquals(candidateName, scriptClassName)) {
+                        return RE::BSTSmartPointer<RE::BSScript::Object>{ candidate };
+                    }
+                }
+            }
+            return nullptr;
         }
 
-        [[nodiscard]] bool HasNonEmptyCurrentPage(const RE::BSScript::Object* configObj) {
-            if (!configObj) {
+        [[nodiscard]] bool ReadScriptVariable(
+            const RE::BSTSmartPointer<RE::BSScript::Object>& obj,
+            const char* declaringClassHint,
+            std::string_view varName,
+            std::int32_t hintClassVarIdx,
+            RE::BSScript::Variable& outVar) {
+            outVar.SetNone();
+            if (!obj || !obj->GetTypeInfo()) {
                 return false;
             }
-            const auto* pageVar = configObj->GetVariable(RE::BSFixedString("_currentPage"));
-            return pageVar && pageVar->IsString() && !pageVar->GetString().empty();
+
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            auto* ivm = static_cast<RE::BSScript::IVirtualMachine*>(vm);
+
+            // 1. Case-insensitive walk across ObjectTypeInfo hierarchy (avoids BSFixedString pointer-equality pitfall)
+            constexpr auto kInvalid = static_cast<std::uint32_t>(-1);
+            std::uint32_t localIdx = kInvalid;
+            std::uint32_t parentOffset = 0;
+            for (const auto* cls = obj->GetTypeInfo(); cls; cls = cls->GetParent()) {
+                if (localIdx == kInvalid) {
+                    const auto* vars = cls->GetVariableIter();
+                    if (vars && cls->IsLinkedValid()) {
+                        const std::uint32_t count = cls->GetNumVariables();
+                        for (std::uint32_t i = 0; i < count; ++i) {
+                            const char* rawName = vars[i].name.c_str();
+                            if (rawName && Foundation::StringUtils::CaseInsensitiveEquals(rawName, varName)) {
+                                localIdx = i;
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    parentOffset += cls->GetNumVariables();
+                }
+            }
+
+            if (localIdx != kInvalid) {
+                const std::uint32_t flatIdx = parentOffset + localIdx;
+                if (ivm && ivm->GetVariableValue(obj, flatIdx, outVar) &&
+                    outVar.GetType().GetRawType() != RE::BSScript::TypeInfo::RawType::kNone) {
+                    return true;
+                }
+                if (obj->IsConstructed()) {
+                    outVar = obj->variables[flatIdx];
+                    if (outVar.GetType().GetRawType() != RE::BSScript::TypeInfo::RawType::kNone) {
+                        return true;
+                    }
+                }
+            }
+
+            // 2. Native VM vtable fallback by (VMHandle, declaringClassName, classRelativeVarIndex)
+            if (ivm && declaringClassHint && *declaringClassHint && hintClassVarIdx >= 0) {
+                const RE::VMHandle handle = obj->GetHandle();
+                if (handle != 0 &&
+                    ivm->GetVariableValue(handle, RE::BSFixedString(declaringClassHint), hintClassVarIdx, outVar)) {
+                    return true;
+                }
+            }
+
+            return localIdx != kInvalid;
+        }
+
+        [[nodiscard]] bool HasNonEmptyCurrentPage(const RE::BSTSmartPointer<RE::BSScript::Object>& configObj) {
+            RE::BSScript::Variable pageVar;
+            if (!ReadScriptVariable(
+                    configObj,
+                    "SKI_ConfigBase",
+                    "_currentPage",
+                    kSkiConfigBaseCurrentPageIdx,
+                    pageVar)) {
+                return false;
+            }
+            return pageVar.IsString() && !pageVar.GetString().empty();
         }
 
         [[nodiscard]] RE::BSTSmartPointer<RE::BSScript::Object> ResolveActiveMcmConfigObject() {
@@ -59,9 +151,15 @@ namespace MARAS {
 
             // 1. Authoritative SkyUI SKI_ConfigManager._activeConfig
             if (auto mgrObj = FindQuestScriptObject(cache.GetSkyUiConfigManagerQuest(), "SKI_ConfigManager")) {
-                const auto* activeVar = mgrObj->GetVariable(RE::BSFixedString("_activeConfig"));
-                if (activeVar && activeVar->IsObject() && !activeVar->IsNoneObject()) {
-                    if (auto activeObj = activeVar->GetObject(); activeObj && activeObj->IsValid()) {
+                RE::BSScript::Variable activeVar;
+                if (ReadScriptVariable(
+                        mgrObj,
+                        "SKI_ConfigManager",
+                        "_activeConfig",
+                        kSkiConfigMgrActiveConfigIdx,
+                        activeVar) &&
+                    activeVar.IsObject() && !activeVar.IsNoneObject()) {
+                    if (auto activeObj = activeVar.GetObject(); activeObj && activeObj->GetTypeInfo() != nullptr) {
                         return activeObj;
                     }
                 }
@@ -69,12 +167,12 @@ namespace MARAS {
 
             // 2. Fallback: inspect cached FMR / Beeing Female MCM quests directly for an open _currentPage
             if (auto fmrObj = FindQuestScriptObject(cache.GetFmrMcmQuest(), "_JSW_BB_ConfigQuestScript")) {
-                if (HasNonEmptyCurrentPage(fmrObj.get())) {
+                if (HasNonEmptyCurrentPage(fmrObj)) {
                     return fmrObj;
                 }
             }
             if (auto bfObj = FindQuestScriptObject(cache.GetBeeingFemaleMcmQuest(), "FWSystemConfig")) {
-                if (HasNonEmptyCurrentPage(bfObj.get())) {
+                if (HasNonEmptyCurrentPage(bfObj)) {
                     return bfObj;
                 }
             }
@@ -95,8 +193,7 @@ namespace MARAS {
         class SendModEventInterceptor final : public RE::GFxFunctionHandler {
         public:
             void Call(Params& a_params) override {
-                if (!a_params.movie || a_params.argCount < 3 || !a_params.args ||
-                    !a_params.args[0].IsString() || !a_params.args[2].IsNumber()) {
+                if (!a_params.movie || a_params.argCount < 1 || !a_params.args || !a_params.args[0].IsString()) {
                     ForwardOriginalSendModEvent(a_params);
                     return;
                 }
@@ -107,8 +204,19 @@ namespace MARAS {
                     return;
                 }
 
+                if (a_params.argCount < 3 || !a_params.args[2].IsNumber()) {
+                    MARAS_LOG_DEBUG(
+                        "[FertilityMcmClickSink] SKICP_optionSelected had unexpected args (argCount={})",
+                        a_params.argCount);
+                    ForwardOriginalSendModEvent(a_params);
+                    return;
+                }
+
                 const std::int32_t optionIndex = static_cast<std::int32_t>(a_params.args[2].GetNumber());
                 if (optionIndex < 0 || optionIndex >= 128) {
+                    MARAS_LOG_DEBUG(
+                        "[FertilityMcmClickSink] SKICP_optionSelected optionIndex={} out of [0..127]",
+                        optionIndex);
                     ForwardOriginalSendModEvent(a_params);
                     return;
                 }
@@ -121,29 +229,50 @@ namespace MARAS {
 
                 if (!Foundation::StringUtils::CaseInsensitiveEquals(scriptName, kFmrMcmScriptName) &&
                     !Foundation::StringUtils::CaseInsensitiveEquals(scriptName, kBfMcmScriptName)) {
+                    MARAS_LOG_DEBUG(
+                        "[FertilityMcmClickSink] SKICP_optionSelected optionIndex={} activeConfig='{}' (not FMR/BF)",
+                        optionIndex,
+                        scriptName);
                     ForwardOriginalSendModEvent(a_params);
                     return;
                 }
 
-                const auto* mapVar = activeConfig->GetVariable(RE::BSFixedString("_stateOptionMap"));
-                if (!mapVar || !mapVar->IsArray() || mapVar->IsNoneArray()) {
+                RE::BSScript::Variable mapVar;
+                if (!ReadScriptVariable(
+                        activeConfig,
+                        "SKI_ConfigBase",
+                        "_stateOptionMap",
+                        kSkiConfigBaseStateMapIdx,
+                        mapVar) ||
+                    !mapVar.IsArray() || mapVar.IsNoneArray()) {
+                    MARAS_LOG_WARN(
+                        "[FertilityMcmClickSink] Failed to read _stateOptionMap on '{}' for optionIndex={}",
+                        scriptName,
+                        optionIndex);
                     ForwardOriginalSendModEvent(a_params);
                     return;
                 }
 
-                const auto stateMap = mapVar->GetArray();
+                const auto stateMap = mapVar.GetArray();
                 if (!stateMap || static_cast<std::uint32_t>(optionIndex) >= stateMap->size()) {
+                    MARAS_LOG_WARN(
+                        "[FertilityMcmClickSink] _stateOptionMap size={} out of bounds for optionIndex={} on '{}'",
+                        stateMap ? stateMap->size() : 0u,
+                        optionIndex,
+                        scriptName);
                     ForwardOriginalSendModEvent(a_params);
                     return;
                 }
 
                 const auto& stateElem = (*stateMap)[static_cast<std::uint32_t>(optionIndex)];
-                if (!stateElem.IsString()) {
-                    ForwardOriginalSendModEvent(a_params);
-                    return;
-                }
+                const std::string_view optionState =
+                    stateElem.IsString() ? stateElem.GetString() : std::string_view{};
+                MARAS_LOG_DEBUG(
+                    "[FertilityMcmClickSink] SKICP_optionSelected script='{}' optionIndex={} state='{}'",
+                    scriptName,
+                    optionIndex,
+                    optionState);
 
-                const std::string_view optionState = stateElem.GetString();
                 const auto blocked = Domain::Lineage::ClassifyBlockedFertilityMcmClick(scriptName, optionState);
                 if (!blocked.has_value()) {
                     ForwardOriginalSendModEvent(a_params);
@@ -203,7 +332,8 @@ namespace MARAS {
         }
         const auto* def = a_view->GetMovieDef();
         const char* fileUrl = def ? def->GetFileURL() : nullptr;
-        if (fileUrl && Foundation::StringUtils::Contains(fileUrl, "quest_journal")) {
+        if (fileUrl && (Foundation::StringUtils::Contains(fileUrl, "quest_journal") ||
+                        Foundation::StringUtils::Contains(fileUrl, "configpanel"))) {
             InstallOnJournalMovie(a_view);
         }
         return true;
@@ -219,22 +349,26 @@ namespace MARAS {
             return;
         }
 
-        if (skseObj.HasMember(kOrigSendModEventMember)) {
+        RE::GFxValue currentFn;
+        if (!skseObj.GetMember("SendModEvent", &currentFn) || currentFn.IsUndefined() || currentFn.IsNull()) {
             return;
         }
 
-        RE::GFxValue origFn;
-        if (!skseObj.GetMember("SendModEvent", &origFn) || origFn.IsUndefined() || origFn.IsNull()) {
+        // Check marker on the active SendModEvent function itself so we re-wrap if SKSE overwrote it on child SWF load
+        if (currentFn.IsObject() && currentFn.HasMember(kWrappedMarkerMember)) {
             return;
         }
 
-        if (!skseObj.SetMember(kOrigSendModEventMember, origFn)) {
+        if (!skseObj.SetMember(kOrigSendModEventMember, currentFn)) {
             return;
         }
 
         auto interceptor = RE::make_gptr<SendModEventInterceptor>();
         RE::GFxValue wrappedFn;
         movie->CreateFunction(&wrappedFn, interceptor.get());
+        if (wrappedFn.IsObject()) {
+            wrappedFn.SetMember(kWrappedMarkerMember, true);
+        }
         if (skseObj.SetMember("SendModEvent", wrappedFn)) {
             MARAS_LOG_DEBUG("[FertilityMcmClickSink] Installed MCM click interceptor on Journal Menu movie");
         }

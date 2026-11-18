@@ -69,7 +69,11 @@ namespace MARAS::Domain::Lineage {
         using Foundation::StringUtils::CaseInsensitiveEquals;
 
         if (CaseInsensitiveEquals(configScriptName, "_JSW_BB_ConfigQuestScript")) {
-            if (CaseInsensitiveEquals(optionStateName, "EXECUTE_ADOPTION")) {
+            if (CaseInsensitiveEquals(optionStateName, "EXECUTE_ADOPTION") ||
+                CaseInsensitiveEquals(optionStateName, "SPAWN_CHILD_PLAYER_MALE") ||
+                CaseInsensitiveEquals(optionStateName, "SPAWN_CHILD_PLAYER_FEMALE") ||
+                CaseInsensitiveEquals(optionStateName, "SPAWN_CHILD_PLAYER_ALL") ||
+                CaseInsensitiveEquals(optionStateName, "ADOPT_CHILD_PLAYER")) {
                 return BlockedFertilityMcmClick{
                     .provider = FertilityProvider::Fmr,
                     .action = BlockedFertilityMcmAction::SpawnYoungChild,
@@ -81,7 +85,8 @@ namespace MARAS::Domain::Lineage {
                     .action = BlockedFertilityMcmAction::SendToTraining,
                 };
             }
-            if (CaseInsensitiveEquals(optionStateName, "SEND_TO_HONORHALL")) {
+            if (CaseInsensitiveEquals(optionStateName, "SEND_TO_HONORHALL") ||
+                CaseInsensitiveEquals(optionStateName, "DESPAWN_CHILD_PLAYER")) {
                 return BlockedFertilityMcmClick{
                     .provider = FertilityProvider::Fmr,
                     .action = BlockedFertilityMcmAction::SendToOrphanage,
