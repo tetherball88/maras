@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.6.0.alpha - 2026-11-18
+
+> **Important — UI Requirement Change:** M.A.R.A.S now uses **[Magelight UI](https://github.com/Severause/MagelightUI)** instead of **Prisma UI** to power the in-game Dashboard (`Alt + B`) and pop-up menus. Please install **Magelight UI** when updating (Prisma UI is no longer required by M.A.R.A.S).
+
+### Added
+- **Child Training Academies & Growing Into Adult Adventurers**:
+  - **22 Training Schools, Guilds, Temples & Shrines**: Once a biological child grows into a young child (whether unspawned or already living in your home), you can send them off to train at **22 locations across Skyrim and Tamriel**—including the *College of Winterhold*, *Jorrvaskr*, *Thieves Guild*, *Dark Brotherhood*, *Bards College*, *Stormcloaks*, *Imperial Legion*, *Sky Haven Temple*, *Fort Dawnguard*, *Stendarr's Beacon*, *Temple of Kynareth*, *House Telvanni*, *College of Whispers*, *The Synod*, *School of Julianos*, *Fighters Guild*, **4 Daedric Shrines** (*Meridia*, *Boethiah*, *Nocturnal*, *Molag Bal*), and **2 Werewolf Packs** (*Frostmoon Crag* and *The Underforge* for children with Beastblood).
+  - **Parent Guild Discounts & Custom Settings**: Tuition varies by academy prestige, and if a parent or guardian is a member or leader of that faction, you automatically receive a **10% member** or **25% leader** discount. You can adjust training duration (default `14` days), base tuition cost (default `2,000` gold), and guild membership rules in **Settings -> Children & Pets**, or finish training early from the child's profile.
+  - **Grown Adult Children (`Spawn Adult`)**: Graduated children can be spawned into Skyrim as full-grown adult adventurers and recruitable followers! They inherit their look (hair color, eye color, skin tone, and height) and natural talents from their biological parents, guidance and starting gold from the guardians who raised them, class gear/spells/perks from their academy (growing stronger alongside you as you level up), and even a **Daedric Champion Blessing** if you have completed Daedric quests.
+  - **Independent Traveling Life**: When grown adult children aren't assigned to live in one of your homes or married to you, they travel across Skyrim on their own—staying at inns and taverns for a few days at a time and occasionally coming home to visit family.
+  - **Inherited Werewolf Beastblood**: Biological children have a **50% chance** to inherit Beastblood when one biological parent is a werewolf (or **100%** when both are werewolves), unlocking Werewolf Pack training paths. While **Secrets** mode is hidden, Beastblood inherited from an undiscovered secret father stays hidden until the truth comes out.
+  - **Continuous Childhood-to-Adulthood AI Memories (SkyrimNet)**: When a spawned young child leaves for training and later returns as an adult, they keep all of their childhood memories, conversations, diaries, and evolving character biography—along with new memories of their training—so they remember growing up with you.
+- **Multi-Language Support & Ukrainian Translation**:
+  - **Full Translation Support**: Every Dashboard screen, pop-up window, notification, spouse buff, child training path, letter, quest, and dialogue line can now be translated cleanly without editing the main mod plugin, with any untranslated text falling back smoothly to English instead of broken placeholders.
+  - **In-Game Language Selector**: Added a **Language** selector in **Settings -> General** with automatic Skyrim language detection and an instant **Reload** button that applies language updates without restarting the game.
+  - **Ukrainian Language Pack**: Added a complete Ukrainian translation covering the Dashboard, pop-ups, quests, letters, and dialogue (available in the separate Translations FOMOD installer).
+- **Safer & Friendlier Fertility Mod Integration (FMR & Beeing Female NG)**:
+  - **Child Naming Window**: When a newborn in **Fertility Mode Reloaded** grows into a young child, M.A.R.A.S now opens an interactive **Name Your Son / Daughter** window where you can type any custom name, pick from suggested lore-friendly racial names, or roll a random lore name.
+  - **Old MCM Button Protection**: Clicking child spawn, training, orphanage, grow-up, or adult summon/dismiss buttons inside the **Fertility Mode Reloaded** or **Beeing Female NG** SkyUI MCM menus is now safely blocked *before* any gold is spent or child data gets out of sync, showing a helpful prompt with a one-click **Open M.A.R.A.S. Dashboard** button instead.
+  - **Existing Child & Pregnancy Import Checklist**: Loading M.A.R.A.S for the first time on a save that already has adopted children or fertility-mod pregnancies/babies now shows a checklist so you can choose which ones to import and uncheck any old or unwanted entries.
+- **Save Upgrade Protection**:
+  - Added automatic safety checks when loading saves from older versions of M.A.R.A.S. If anything ever fails to upgrade cleanly, a warning screen alerts you immediately before you save over your game and writes a support report.
+
+### Changed
+- **Switched Dashboard UI to Magelight UI**: Migrated the in-game Dashboard (`Alt + B`) and all interactive pop-up windows from Prisma UI to **Magelight UI** for smoother responsiveness and reliability.
+- **Smarter Family Moves & Child Spawning**:
+  - Moving a child to a player house brings along their siblings and eligible co-parent without forcing an unhoused spouse or follower to stay indoors all day unless you move that spouse directly or enable **Stay at Home**, and already-housed spouses update their home smoothly without abrupt teleports.
+  - Clicking **Spawn Child** or **Spawn Adult** in the Dashboard now automatically closes the menu so your newly arrived child can walk up and greet you right away.
+- **Faster & Smoother Background Performance**: Rebuilt M.A.R.A.S's relationship, affection, household, buff, and marriage systems behind the scenes to reduce script lag, speed up Dashboard updates, and keep large households running smoothly.
+- **Richer SkyrimNet AI Awareness**: Improved AI biography and relationship guidance so NPCs better understand relationship commitment levels during inner thoughts and background scenes, and remember specific details about where their children trained.
+
+### Fixed
+- **Loading Screen Freezes & Black Screens**: Fixed rare freezes and black screens that could occur when loading a save, starting a new game, or reloading during a session.
+- **Long-Playthrough & Large-Modlist Save Stability**: Fixed save-loading issues on long playthroughs with many tracked relationships, children, or large modlists so family ties and house assignments stay intact across reloads and load-order changes.
+- **Secrets Mode Spoilers**: Closed several places in the Dashboard and SkyrimNet AI conversations where undiscovered affairs, hidden pregnancies, secret biological fathers, or deceased partners' and children's secrets could be spoiled while **Secrets** mode was hidden.
+- **Shared Spouse Homes After Breakups or Loss**: Fixed shared spouse homes not properly restoring private ownership and trespassing rules after a divorce, a spouse's death, or low affection.
+- **Step-Children Moving Into Player Homes**: Fixed step-children brought into a marriage properly clearing their old town home ties and settling into your player house alongside their parent.
+- **Children Greeting Loops**: Fixed household children getting stuck repeating or failing to finish their welcome-home greeting when you returned home.
+- **Divorce, Bereavement & Matchmaking Edge Cases**: Fixed several edge cases around divorce cleanup, deceased spouse/parent handling (including lingering buffs and orphan custody transfers), and background matchmaking respecting your orientation and partner rules.
+
 ## 2.5.1.alpha - 2026-11-12
 
 ### Fixed
