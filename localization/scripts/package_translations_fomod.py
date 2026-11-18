@@ -3,15 +3,15 @@
 M.A.R.A.S Multi-Language FOMOD Translation Packager.
 
 Discovers completed non-English translation packs in:
-  - `SKSE/Plugins/MARAS/localization/<lang>/`
-  - `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`
+  - `localization/packs/<lang>/`
+  - `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`
 
 Validates JSON syntax, `{named}` placeholders, CLDR plural stems, Scaleform-safe
 punctuation, Creation Kit DSD tags, and `$DragonFont` ASCII preservation, then builds
 a single MO2/Vortex-compatible `SelectExactlyOne` FOMOD archive
 (`MARAS_Translations_<version>.zip`).
 
-100% standalone (Python 3.10+ standard library only; zero dependency on `tools/`).
+100% standalone (Python 3.10+ standard library only; zero dependency on other scripts).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from xml.sax.saxutils import escape as xml_escape
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_REPO_ROOT = SCRIPT_DIR.parents[3]
+DEFAULT_REPO_ROOT = SCRIPT_DIR.parents[1]
 
 PLURAL_SUFFIXES = ("_zero", "_one", "_two", "_few", "_many", "_other")
 SPECIAL_FILES = {"_meta.json", "names.json"}
@@ -303,8 +303,8 @@ def validate_names_overlay(names_path: Path) -> List[str]:
     return issues
 
 
-def resolve_dsd_file(repo_root: Path, code: str) -> Optional[Path]:
-    dsd_dir = repo_root / "SKSE" / "Plugins" / "DynamicStringDistributor" / "TT_MARAS.esp"
+def resolve_dsd_file(lang_dir: Path, code: str) -> Optional[Path]:
+    dsd_dir = lang_dir / "dsd" / "TT_MARAS.esp"
     if not dsd_dir.is_dir():
         return None
     direct = dsd_dir / f"{code}.json"
@@ -319,7 +319,6 @@ def resolve_dsd_file(repo_root: Path, code: str) -> Optional[Path]:
 
 
 def validate_and_load_pack(
-    repo_root: Path,
     lang_dir: Path,
     en_flats: Dict[str, Dict[str, str]],
     dsd_template_by_nk: Optional[Dict[str, Dict[str, Any]]],
@@ -423,14 +422,14 @@ def validate_and_load_pack(
             f"{code}: incomplete JSON coverage ({translated_en_keys}/{total_en_keys} keys) with --strict"
         )
 
-    dsd_file = resolve_dsd_file(repo_root, code)
+    dsd_file = resolve_dsd_file(lang_dir, code)
     dsd_done = 0
     dsd_total: Optional[int] = len(dsd_template_by_nk) if dsd_template_by_nk is not None else None
 
     if dsd_file is None:
         if not allow_no_dsd:
             errors.append(
-                f"{code}: missing DSD file SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/{code}.json "
+                f"{code}: missing DSD file localization/packs/{code}/dsd/TT_MARAS.esp/{code}.json "
                 "(pass --allow-no-dsd to skip)"
             )
     else:
@@ -681,7 +680,7 @@ def read_default_version(repo_root: Path) -> str:
 def load_optional_dsd_template(repo_root: Path, no_dsd_template: bool) -> Optional[Dict[str, Dict[str, Any]]]:
     if no_dsd_template:
         return None
-    tmpl_path = repo_root / "tools" / "localization" / "TT_MARAS_dsd_template.json"
+    tmpl_path = repo_root / "localization" / "scripts" / "TT_MARAS_dsd_template.json"
     if not tmpl_path.is_file():
         return None
     raw = json.loads(tmpl_path.read_text(encoding="utf-8"))
@@ -712,6 +711,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument("--repo-root", default=str(DEFAULT_REPO_ROOT), help="Workspace root directory.")
     parser.add_argument(
+        "--en-dir",
+        default=None,
+        help="Override base English localization/en directory.",
+    )
+    parser.add_argument(
+        "--packs-dir",
+        default=None,
+        help="Override non-English localization/packs directory.",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Fail if any English JSON keys or DSD entries are missing/warned.",
@@ -724,15 +733,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--no-dsd-template",
         action="store_true",
-        help="Ignore tools/localization/TT_MARAS_dsd_template.json even if present locally (simulates CI).",
+        help="Ignore localization/scripts/TT_MARAS_dsd_template.json even if present locally (simulates CI).",
     )
     args = parser.parse_args(argv)
 
     repo_root = Path(args.repo_root).resolve()
-    loc_root = repo_root / "SKSE" / "Plugins" / "MARAS" / "localization"
-    en_dir = loc_root / "en"
+    en_dir = (
+        Path(args.en_dir).resolve()
+        if args.en_dir
+        else (repo_root / "SKSE" / "Plugins" / "MARAS" / "localization" / "en")
+    )
+    packs_root = Path(args.packs_dir).resolve() if args.packs_dir else (repo_root / "localization" / "packs")
     if not en_dir.is_dir():
         print(f"[ERROR] Base English localization directory missing: {en_dir}", file=sys.stderr)
+        return 1
+    if not packs_root.is_dir():
+        print(f"[ERROR] Translation packs directory missing: {packs_root}", file=sys.stderr)
         return 1
 
     en_flats: Dict[str, Dict[str, str]] = {}
@@ -751,17 +767,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     requested_langs = {x.strip().lower() for x in args.langs} if args.langs else None
     candidate_dirs: List[Path] = []
     if requested_langs is not None:
-        by_lower = {d.name.lower(): d for d in sorted(loc_root.iterdir()) if d.is_dir()}
+        by_lower = {d.name.lower(): d for d in sorted(packs_root.iterdir()) if d.is_dir()}
         for req in sorted(requested_langs):
             if req == "en":
                 print("[ERROR] 'en' is built into the main mod archive and cannot be packaged in FOMOD.", file=sys.stderr)
                 return 1
             if req not in by_lower:
-                print(f"[ERROR] Requested language folder not found: {loc_root / req}", file=sys.stderr)
+                print(f"[ERROR] Requested language folder not found: {packs_root / req}", file=sys.stderr)
                 return 1
             candidate_dirs.append(by_lower[req])
     else:
-        for d in sorted(loc_root.iterdir()):
+        for d in sorted(packs_root.iterdir()):
             if d.is_dir() and d.name.lower() != "en":
                 candidate_dirs.append(d)
 
@@ -781,7 +797,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             continue
 
         pack, errs, warns = validate_and_load_pack(
-            repo_root=repo_root,
             lang_dir=lang_dir,
             en_flats=en_flats,
             dsd_template_by_nk=dsd_template_by_nk,

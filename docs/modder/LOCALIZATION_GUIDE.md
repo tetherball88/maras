@@ -6,23 +6,23 @@ M.A.R.A.S is designed to be **100% localizable without editing or overriding `TT
 
 ## 1. Two-Part Translation Architecture
 
-A complete M.A.R.A.S translation mod (shipped as a standalone FOMOD/MO2/Vortex archive with zero `.esp` plugins) consists of two folders under `Data/SKSE/Plugins/`:
+A complete M.A.R.A.S translation mod (shipped as a standalone FOMOD/MO2/Vortex archive with zero `.esp` plugins) deploys into two folders under `Data/SKSE/Plugins/` (and is authored inside `localization/packs/<lang>/` in this repository):
 
-| Layer | Target Path in `Data/` | Covers | Required Mod Dependency |
-| :--- | :--- | :--- | :--- |
-| **1. MARAS Localization Pack** | `SKSE/Plugins/MARAS/localization/<lang>/*.json` | HUD notifications, Papyrus messages, standalone confirmation/choice modals, spouse buff names/descriptions, adolescent training paths, Daedric blessings, encounter letters, optional newborn/critter names, and the entire Magelight UI Dashboard & Settings. | Built natively into `MARAS.dll` |
-| **2. Dynamic String Distributor (DSD)** | `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` | `TT_MARAS.esp` player/NPC dialogue topics & responses (`DIAL` / `INFO`), quests (`QUST`), courier letters & scrolls (`BOOK`), spells (`SPEL`), magic effects (`MGEF`), perks (`PERK`), and engine messages (`MESG`). | [Dynamic String Distributor (DSD)](https://www.nexusmods.com/skyrimspecialedition/mods/107676) |
+| Layer | Installed Path in `Data/` | Repo Source Path | Covers | Required Mod Dependency |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. MARAS Localization Pack** | `SKSE/Plugins/MARAS/localization/<lang>/*.json` | `SKSE/Plugins/MARAS/localization/en/` (base `en`), `localization/packs/<lang>/` (output packs) | HUD notifications, Papyrus messages, standalone confirmation/choice modals, spouse buff names/descriptions, adolescent training paths, Daedric blessings, encounter letters, optional newborn/critter names, and the entire Magelight UI Dashboard & Settings. | Built natively into `MARAS.dll` |
+| **2. Dynamic String Distributor (DSD)** | `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` | `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json` | `TT_MARAS.esp` player/NPC dialogue topics & responses (`DIAL` / `INFO`), quests (`QUST`), courier letters & scrolls (`BOOK`), spells (`SPEL`), magic effects (`MGEF`), perks (`PERK`), and engine messages (`MESG`). | [Dynamic String Distributor (DSD)](https://www.nexusmods.com/skyrimspecialedition/mods/107676) |
 
-**Official Release Packaging (English Main Archive vs. Translations FOMOD)**: Because Dynamic String Distributor unconditionally loads every `.json` file inside `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/`, official GitHub Actions releases keep `MARAS_<version>.zip` English-only (`localization/en/` only, excluding DSD and non-English packs) and distribute all non-English packs in a separate `SelectExactlyOne` FOMOD archive (`MARAS_Translations_<version>.zip`) so DSD translations never leak into English setups or overwrite one another.
+**Official Release Packaging & Dev Separation (English Main Archive vs. Translations FOMOD)**: Because Dynamic String Distributor unconditionally loads every `.json` file inside `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/`, keeping non-English packs and DSD JSONs under `localization/packs/<lang>/` ensures development mod setups stay cleanly in English. Official GitHub Actions releases keep `MARAS_<version>.zip` English-only (`SKSE/Plugins/MARAS/localization/en/` only) and bundle all non-English packs from `localization/packs/` into a separate `SelectExactlyOne` FOMOD archive (`MARAS_Translations_<version>.zip`) that maps each chosen pack into `Data/SKSE/Plugins/`.
 
 > [!NOTE]
 > **Why SkyrimNet AI Prompts Are Not Translated**: Files under `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/` and `SKSE/Plugins/MARAS/promptStrings.json` remain in canonical English intentionally. Large Language Models reason accurately over English context blocks while generating spoken NPC dialogue in whatever output language you configure inside SkyrimNet.
 
 ---
 
-## 2. Pack Structure (`SKSE/Plugins/MARAS/localization/<lang>/`)
+## 2. Pack Structure (Installed `Data/` vs. Repository `localization/packs/`)
 
-Base English files live in [`SKSE/Plugins/MARAS/localization/en/`](../../SKSE/Plugins/MARAS/localization/en/) and serve as the authoritative reference schema:
+Base English files live in [`SKSE/Plugins/MARAS/localization/en/`](../../SKSE/Plugins/MARAS/localization/en/) and serve as the authoritative reference schema, while non-English FOMOD output packs live in [`localization/packs/<lang>/`](../../localization/packs/) in the repository and install to `Data/SKSE/Plugins/`:
 
 ```text
 Data/SKSE/Plugins/MARAS/localization/
@@ -106,14 +106,14 @@ Count-sensitive strings use CLDR plural suffixes on the key stem (`<stem>_zero`,
 
 ---
 
-## 4. Translator Workflow & Sync CLI (`tools/localization/`)
+## 4. Translator Workflow & Sync CLI (`localization/scripts/`)
 
-Both helper scripts in [`tools/localization/`](../../tools/localization/) use **only the Python 3.10+ standard library** (zero `pip install` packages required).
+All helper scripts in [`localization/scripts/`](../../localization/scripts/) use **only the Python 3.10+ standard library** (zero `pip install` packages required).
 
 ### 4.1 Starting or Updating Any Language Pack (Unified JSON + DSD Flow)
-`sync_localization.py` audits and synchronizes **both** `SKSE/Plugins/MARAS/localization/<lang>/*.json` **and** `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` in one command:
+`sync_localization.py` audits and synchronizes **both** `localization/packs/<lang>/*.json` **and** `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json` in one command:
 
-1. Create `SKSE/Plugins/MARAS/localization/de/_meta.json`:
+1. Create `localization/packs/de/_meta.json`:
    ```json
    {
      "code": "de",
@@ -123,43 +123,43 @@ Both helper scripts in [`tools/localization/`](../../tools/localization/) use **
    ```
 2. **Generate `_todo.json` automatically**:
    ```powershell
-   # Audits both JSON + DSD and automatically writes SKSE/Plugins/MARAS/localization/de/_todo.json
+   # Audits both JSON + DSD and automatically writes localization/packs/de/_todo.json
    # (preserves any in-progress translations already typed inside _todo.json!)
-   python tools/localization/sync_localization.py --lang de
+   python localization/scripts/sync_localization.py --lang de
 
    # Optional: when updating across M.A.R.A.S versions, pass --prev-en to also flag changed English JSON strings
    # (changed TT_MARAS.esp DSD strings are detected automatically via each DSD entry's "original" field!)
-   python tools/localization/sync_localization.py --lang de --prev-en C:/old_maras/localization/en
+   python localization/scripts/sync_localization.py --lang de --prev-en C:/old_maras/localization/en
    ```
    *(Pass `--check` for a read-only status check without writing `_todo.json`, `--no-dsd` to skip DSD, or `--dsd-only` for DSD alone.)*
-3. **Translate inside `localization/de/_todo.json`** (in small batches or all at once):
+3. **Translate inside `localization/packs/de/_todo.json`** (in small batches or all at once):
    Fill in `"translation"` for any entries under `"files"` (MARAS JSON packs) and/or `"dsd"` (`TT_MARAS.esp` records).
 4. **Apply translated entries**:
    ```powershell
-   python tools/localization/sync_localization.py --lang de --apply-todo --prune-obsolete
+   python localization/scripts/sync_localization.py --lang de --apply-todo --prune-obsolete
    ```
-   - Merges completed `"files"` entries into `SKSE/Plugins/MARAS/localization/de/*.json` (preserving `en/` key order).
-   - Merges completed `"dsd"` entries into `SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/de.json`.
+   - Merges completed `"files"` entries into `localization/packs/de/*.json` (preserving `en/` key order).
+   - Merges completed `"dsd"` entries into `localization/packs/de/dsd/TT_MARAS.esp/de.json`.
    - Automatically removes applied items from `_todo.json` (and deletes `_todo.json` once 0 pending items remain).
 5. **Test live in-game & verify before publishing**:
-   Open the M.A.R.A.S Dashboard (`Alt+B`), select **Deutsch (German)** in **Settings $\rightarrow$ General**, and click **Reload Localization** to preview JSON edits without restarting Skyrim. Run a strict final check:
+   Copy the built pack (or install the generated FOMOD/zip into a separate MO2 profile), open the M.A.R.A.S Dashboard (`Alt+B`), select **Deutsch (German)** in **Settings $\rightarrow$ General**, and click **Reload Localization** to preview JSON edits without restarting Skyrim. Run a strict final check:
    ```powershell
-   python tools/localization/sync_localization.py --lang de --strict
+   python localization/scripts/sync_localization.py --lang de --strict
    ```
    To preview or bundle all completed non-English packs into the official `SelectExactlyOne` FOMOD archive (`MARAS_Translations_<version>.zip`)—mirroring what `.github/workflows/main-release.yml` and `translations-release.yml` produce—run:
    ```powershell
-   python .agents/skills/maras-translations/scripts/package_translations_fomod.py --version v2.6.0 --output dist/MARAS_Translations_v2.6.0.zip
+   python localization/scripts/package_translations_fomod.py --version v2.6.0 --output dist/MARAS_Translations_v2.6.0.zip
    ```
 
 ---
 
 ## 5. `TT_MARAS.esp` Dynamic String Distributor (DSD) Details
 
-`TT_MARAS.esp` keeps inline English strings (`Small` ESL flag only). Translations for quests, dialogue topics/responses, books/letters, spells, magic effects, perks, and messages live at:
+`TT_MARAS.esp` keeps inline English strings (`Small` ESL flag only). In the repository, DSD translations live at `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`, and the FOMOD installer deploys them to:
 ```text
 Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json
 ```
-You can either manage `<lang>.json` directly through `sync_localization.py` (`"dsd"` section in `_todo.json`) or copy [`tools/localization/TT_MARAS_dsd_template.json`](../../tools/localization/TT_MARAS_dsd_template.json) directly:
+You can either manage `<lang>.json` directly through `sync_localization.py` (`"dsd"` section in `_todo.json`) or copy [`localization/scripts/TT_MARAS_dsd_template.json`](../../localization/scripts/TT_MARAS_dsd_template.json) directly:
 ```json
 {
   "form_id": "000162|TT_MARAS.esp",
@@ -179,7 +179,7 @@ You can either manage `<lang>.json` directly through `sync_localization.py` (`"d
 
 - **For M.A.R.A.S Developers**: Whenever records in `.spriggit/TT_MARAS.esp/` are added or edited, regenerate the DSD template via:
   ```powershell
-  python tools/localization/export_dsd_template.py
+  python localization/scripts/export_dsd_template.py
   ```
 
 ---

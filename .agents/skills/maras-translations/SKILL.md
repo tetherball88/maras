@@ -7,8 +7,8 @@ description: >-
 # M.A.R.A.S Localization & Translation Runbook
 
 M.A.R.A.S uses a **100% ESP-override-free two-layer localization architecture** with key-by-key English fallback:
-1. **MARAS JSON Pack (`SKSE/Plugins/MARAS/localization/<lang>/`)** — `_meta.json`, `hud_and_modals.json`, `catalogs.json`, `ui_dashboard.json`, `ui_settings.json`, optional `names.json`, and optional `zz_<addon>.json` overlays (`LocalizationService` + `useLocaleStore`).
-2. **Dynamic String Distributor (`SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`)** — `DIAL`, `INFO`, `QUST`, `BOOK`, `MESG`, `SPEL`, `MGEF`, and `PERK` text synced against [TT_MARAS_dsd_template.json](../../../tools/localization/TT_MARAS_dsd_template.json).
+1. **MARAS JSON Pack** — Base English lives at [`SKSE/Plugins/MARAS/localization/en/`](../../../SKSE/Plugins/MARAS/localization/en/) (shipped in the main archive). Non-English output packs live in [`localization/packs/<lang>/`](../../../localization/packs/) (bundled into the Translations FOMOD, installing to `Data/SKSE/Plugins/MARAS/localization/<lang>/`): `_meta.json`, `hud_and_modals.json`, `catalogs.json`, `ui_dashboard.json`, `ui_settings.json`, optional `names.json`, and optional `zz_<addon>.json` overlays (`LocalizationService` + `useLocaleStore`).
+2. **Dynamic String Distributor (`TT_MARAS.esp`)** — `DIAL`, `INFO`, `QUST`, `BOOK`, `MESG`, `SPEL`, `MGEF`, and `PERK` text synced against [TT_MARAS_dsd_template.json](../../../localization/scripts/TT_MARAS_dsd_template.json). Non-English output files live in `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json` (installing via FOMOD to `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` so dev MO2 setups stay English).
 
 ---
 
@@ -55,13 +55,13 @@ Whenever adding, renaming, or removing player-facing text in code or data files,
 5. **`TT_MARAS.esp` Records (`.spriggit/TT_MARAS.esp/`)**:
    - After modifying any player-facing `DIAL`, `INFO`, `QUST`, `BOOK`, `MESG`, `SPEL`, `MGEF`, or `PERK` text in `.spriggit/TT_MARAS.esp/`, refresh the DSD template:
      ```powershell
-     python tools/localization/export_dsd_template.py
+     python localization/scripts/export_dsd_template.py
      ```
 
 6. **Developer Verification Gate**:
    ```powershell
-   python tools/localization/export_dsd_template.py --check
-   python tools/localization/sync_localization.py --lang en --strict
+   python localization/scripts/export_dsd_template.py --check
+   python localization/scripts/sync_localization.py --lang en --strict
    ```
 
 ---
@@ -71,20 +71,20 @@ Whenever adding, renaming, or removing player-facing text in code or data files,
 Before translating strings into `<lang>`, **read [translation-style-and-gotchas.md](./references/translation-style-and-gotchas.md)** for concatenation traps (`bonuses.*.0.description`, `modal.confirm.label_*`), CLDR plural suffixes per language family, `$DragonFont` rules, and Elder Scrolls terminology.
 
 > [!IMPORTANT]
-> A full translation pack spans **~2,870 entries** (`~1,613` JSON keys + `~1,258` DSD entries). **Never** read or edit the entire `<lang>/_todo.json` in a single tool call—always split into batches using [translation_batches.py](./scripts/translation_batches.py).
+> A full translation pack spans **~2,870 entries** (`~1,613` JSON keys + `~1,258` DSD entries). **Never** read or edit the entire `localization/packs/<lang>/_todo.json` in a single tool call—always split into batches using [translation_batches.py](../../../localization/scripts/translation_batches.py).
 
 ### Step-by-Step Batch Pipeline
 
 1. **Initialize `_meta.json` & Split Pending (or Full-Pack Review) Entries into Batches**:
    ```powershell
-   # Creates localization/<lang>/_meta.json (if missing), runs sync_localization.py,
+   # Creates localization/packs/<lang>/_meta.json (if missing), runs sync_localization.py,
    # scaffolds language-specific CLDR plural siblings (_few/_many for Slavic, _other-only for CJK),
    # auto-protects $DragonFont runes, orders DSD records chronologically via .spriggit/TT_MARAS.esp
    # (Quest/Branch LinkTo chains & Scene variants + speaker hints), and writes ~100-entry batch_*.json files:
-   python .agents/skills/maras-translations/scripts/translation_batches.py split --lang <lang> --out-dir "<scratch_dir>/i18n_<lang>" --init-meta
+   python localization/scripts/translation_batches.py split --lang <lang> --out-dir "<scratch_dir>/i18n_<lang>" --init-meta
 
    # Full-pack LQA / editorial review mode (pre-fills all entries with existing <lang> strings even at 100% coverage):
-   python .agents/skills/maras-translations/scripts/translation_batches.py split --lang <lang> --all --out-dir "<scratch_dir>/i18n_<lang>"
+   python localization/scripts/translation_batches.py split --lang <lang> --all --out-dir "<scratch_dir>/i18n_<lang>"
    ```
    *(Optional flags: `--batch-size 80`, `--prev-en <old_en_dir>` to flag changed English JSON strings across versions, `--no-dsd`, `--dsd-only`, or `--all` for full LQA passes.)*
 
@@ -93,28 +93,28 @@ Before translating strings into `<lang>`, **read [translation-style-and-gotchas.
    - Follow inline `"placeholders"`, `"plural_rule"`, `"required_tags"`, `"context"` (quest, branch, `prompt_en`, `speaker_hints`, scene `variant`/`phase`), and `"note"` hints attached to batch items.
    - Maintain multi-turn conversation flow, consistent T-V pronoun register per speaker/relationship role, Nominative placeholder case-framing, and natural idiomatic phrasing (avoiding word-for-word calques and stiff gender-dodge passives).
    - When fanning out across parallel subagents or `run_workflow`, assign **disjoint `batch_*.json` files** to each worker so zero file write collisions occur, and instruct each worker to read [translation-style-and-gotchas.md](./references/translation-style-and-gotchas.md) first.
-   - Omit `names.json` for Latin-script languages unless requested; for Cyrillic/CJK/Korean packs (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`), optionally localize `SKSE/Plugins/MARAS/localization/<lang>/names.json` using root keys `"childrenNames"` and `"critterNames"`.
+   - Omit `names.json` for Latin-script languages unless requested; for Cyrillic/CJK/Korean packs (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`), optionally localize `localization/packs/<lang>/names.json` using root keys `"childrenNames"` and `"critterNames"`.
 
 3. **Validate & Apply Completed Batches**:
    ```powershell
    # Check placeholders, CK <Alias=...>/<mag>/%.0f/<font> tags, $DragonFont ASCII, and JSON syntax:
-   python .agents/skills/maras-translations/scripts/translation_batches.py validate --lang <lang> --batch-dir "<scratch_dir>/i18n_<lang>" --require-complete
+   python localization/scripts/translation_batches.py validate --lang <lang> --batch-dir "<scratch_dir>/i18n_<lang>" --require-complete
 
-   # Atomically merge all validated batches into localization/<lang>/*.json and
-   # SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json:
-   python .agents/skills/maras-translations/scripts/translation_batches.py apply --lang <lang> --batch-dir "<scratch_dir>/i18n_<lang>" --prune-obsolete
+   # Atomically merge all validated batches into localization/packs/<lang>/*.json and
+   # localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json:
+   python localization/scripts/translation_batches.py apply --lang <lang> --batch-dir "<scratch_dir>/i18n_<lang>" --prune-obsolete
    ```
 
 4. **Strict Audit & Optional MO2/Vortex Archive Packaging**:
    ```powershell
    # Verify 100% coverage and 0 placeholder/CK-tag warnings or errors:
-   python tools/localization/sync_localization.py --lang <lang> --strict
+   python localization/scripts/sync_localization.py --lang <lang> --strict
 
-   # Build standalone zero-ESP archive for a single language (SKSE/Plugins/MARAS/localization/<lang>/ + DynamicStringDistributor/...):
-   python .agents/skills/maras-translations/scripts/translation_batches.py package --lang <lang> --output "dist/MARAS_Translation_<lang>.zip"
+   # Build standalone zero-ESP archive for a single language (maps to Data/SKSE/Plugins/...):
+   python localization/scripts/translation_batches.py package --lang <lang> --output "dist/MARAS_Translation_<lang>.zip"
 
-   # Build the multi-language MO2/Vortex FOMOD installer (auto-discovers all complete/valid non-en packs; SelectExactlyOne):
-   python .agents/skills/maras-translations/scripts/package_translations_fomod.py --version <ver> --output "dist/MARAS_Translations_<ver>.zip"
+   # Build the multi-language MO2/Vortex FOMOD installer (auto-discovers all complete/valid packs in localization/packs/; SelectExactlyOne):
+   python localization/scripts/package_translations_fomod.py --version <ver> --output "dist/MARAS_Translations_<ver>.zip"
    ```
    *(In-game live preview: open Dashboard $\to$ **Settings $\to$ General $\to$ Language**, select `<lang>`, and click **Reload Localization** without restarting Skyrim.)*
 

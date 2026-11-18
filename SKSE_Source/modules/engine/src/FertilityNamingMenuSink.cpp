@@ -23,6 +23,7 @@ namespace MARAS {
 
         constexpr std::string_view kCustomMenuName = "CustomMenu";
         constexpr std::string_view kFmrUtilityScript = "_JSW_BB_Utility";
+        constexpr std::string_view kFmrUiExtBridgeScript = "_JSW_BB_UIExtensionsBridge";
         constexpr std::string_view kFmrGenerateNameFn = "GenerateName";
         constexpr std::string_view kFmrShowVrMenuFn = "ShowVRNameMenuSimple";
         constexpr std::string_view kFmrHandlerAliasScript = "_JSW_BB_HandlerQuestAliasScript";
@@ -368,7 +369,7 @@ namespace MARAS {
                 return;
             }
 
-            bool injectedIntoLiveStack = false;
+            std::uint32_t patchedArrays = 0;
             if (auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton()) {
                 RE::BSSpinLockGuard lk{ vm->runningStacksLock };
                 const auto it = vm->allRunningStacks.find(stackId);
@@ -384,25 +385,56 @@ namespace MARAS {
                         if (!objName || !fnName) {
                             continue;
                         }
-                        if (Foundation::StringUtils::CaseInsensitiveEquals(objName, kFmrUtilityScript) &&
-                            Foundation::StringUtils::CaseInsensitiveEquals(fnName, kFmrShowVrMenuFn)) {
-                            if (auto* listVar = FindFrameVariable(stack, frame, "nameList");
-                                listVar && listVar->IsArray() && !listVar->IsNoneArray()) {
-                                if (auto arr = listVar->GetArray(); arr && arr->size() > 0) {
-                                    (*arr)[0].SetString(chosenName);
-                                    injectedIntoLiveStack = true;
-                                }
-                            }
-                        } else if (Foundation::StringUtils::CaseInsensitiveEquals(objName, "UIMenuBase") &&
-                                   Foundation::StringUtils::CaseInsensitiveEquals(fnName, "WaitLock")) {
+
+                        if (Foundation::StringUtils::CaseInsensitiveEquals(objName, "UIMenuBase") &&
+                            Foundation::StringUtils::CaseInsensitiveEquals(fnName, "WaitLock")) {
                             if (auto* lockOutVar = FindFrameVariable(stack, frame, "lockOut");
                                 lockOutVar && lockOutVar->IsInt()) {
                                 lockOutVar->SetSInt(0);
+                            }
+                            continue;
+                        }
+
+                        // Patch names[0] / availableNames[0] / nameList[0] across _JSW_BB_UIExtensionsBridge::ChooseName,
+                        // _JSW_BB_Utility::SelectAvailableName, and _JSW_BB_Utility::ShowVRNameMenuSimple
+                        if (Foundation::StringUtils::CaseInsensitiveEquals(objName, kFmrUiExtBridgeScript) ||
+                            Foundation::StringUtils::CaseInsensitiveEquals(objName, kFmrUtilityScript)) {
+                            const std::uint32_t pageHint = stack->GetPageForFrame(frame);
+                            if (pageHint != static_cast<std::uint32_t>(-1)) {
+                                const std::uint32_t frameSize = fn->GetStackFrameSize();
+                                for (std::uint32_t idx = 0; idx < frameSize; ++idx) {
+                                    RE::BSFixedString slotName;
+                                    if (!fn->GetVarNameForStackIndex(idx, slotName) ||
+                                        !slotName.c_str() ||
+                                        slotName.c_str()[0] == '\0' ||
+                                        slotName.c_str()[0] == ':') {
+                                        continue;
+                                    }
+                                    auto& var = stack->GetStackFrameVariable(frame, idx, pageHint);
+                                    if (var.GetType().GetRawType() == RE::BSScript::TypeInfo::RawType::kStringArray &&
+                                        !var.IsNoneArray()) {
+                                        if (auto arr = var.GetArray(); arr && arr->size() > 0) {
+                                            (*arr)[0].SetString(chosenName);
+                                            ++patchedArrays;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (Foundation::StringUtils::CaseInsensitiveEquals(objName, kFmrUtilityScript) &&
+                                Foundation::StringUtils::CaseInsensitiveEquals(fnName, kFmrGenerateNameFn)) {
+                                break;
                             }
                         }
                     }
                 }
             }
+
+            MARAS_LOG_DEBUG(
+                "[FertilityNamingMenuSink] Patched {} candidate String[] array(s) on FMR stack {} with '{}'",
+                patchedArrays,
+                stackId,
+                chosenName);
 
             if (auto listObj = FindQuestScriptObject(
                     FormCache::GetSingleton().GetUiExtListMenuQuest(), "UIListMenu")) {
@@ -426,7 +458,7 @@ namespace MARAS {
 
             SendSkseModEvent("UIListMenu_SelectItem", "0", 0.0f);
 
-            if (!injectedIntoLiveStack) {
+            if (patchedArrays == 0) {
                 MARAS_LOG_WARN(
                     "[FertilityNamingMenuSink] FMR naming stack {} already unwound before modal closed — applying PlayerChildName fallback '{}'",
                     stackId,

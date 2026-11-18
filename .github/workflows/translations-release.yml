@@ -50,7 +50,7 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           mkdir -p out
-          python3 .agents/skills/maras-translations/scripts/package_translations_fomod.py \
+          python3 localization/scripts/package_translations_fomod.py \
             --version "${VERSION}" \
             --output "out/MARAS_Translations_${VERSION}.zip"
 

@@ -2,17 +2,17 @@
 """
 M.A.R.A.S Translation Batch, Validation & Packaging Helper CLI.
 
-Works alongside `tools/localization/sync_localization.py` so AI agents and human translators
+Works alongside `localization/scripts/sync_localization.py` so AI agents and human translators
 never have to read or edit a monolithic ~2,870-entry `_todo.json` file in a single pass.
 
 Subcommands:
-  init-meta  Create `SKSE/Plugins/MARAS/localization/<lang>/_meta.json` with canonical Skyrim metadata.
+  init-meta  Create `localization/packs/<lang>/_meta.json` with canonical Skyrim metadata.
   split      Run `sync_localization.py` and split pending JSON + DSD entries into right-sized
              `batch_*.json` files with language-aware CLDR plural scaffolding and inline context notes.
   validate   Check `batch_*.json` files for UTF-8 JSON validity, `{named}` placeholders, DSD Creation Kit
              `<Alias=...>` / `<mag>` / `%.0f` / `<font>` tags, `$DragonFont` ASCII safety, and concat rules.
   apply      Validate all completed entries across `--batch-dir` and merge them atomically into
-             `localization/<lang>/*.json` and `DynamicStringDistributor/TT_MARAS.esp/<lang>.json`.
+             `localization/packs/<lang>/*.json` and `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`.
   package    Verify `--strict` (unless `--allow-partial`) and build a zero-ESP MO2/Vortex `.zip` archive.
 
 Zero third-party dependencies (Python 3.10+ standard library only).
@@ -32,9 +32,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_REPO_ROOT = SCRIPT_DIR.parents[3]
+DEFAULT_REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(SCRIPT_DIR))
-sys.path.insert(0, str(DEFAULT_REPO_ROOT / "tools" / "localization"))
 from dsd_spriggit_context import enrich_and_group_dsd_units
 
 try:
@@ -253,21 +252,26 @@ def json_context_note(fname: str, key: str) -> Optional[str]:
     return None
 
 
-def resolve_paths(args: argparse.Namespace) -> Tuple[Path, Path, Path, Path]:
+def resolve_paths(args: argparse.Namespace) -> Tuple[Path, Path, Path, Path, Path]:
     repo_root = Path(args.repo_root).resolve()
-    loc_dir = Path(args.loc_dir).resolve() if args.loc_dir else (repo_root / "SKSE" / "Plugins" / "MARAS" / "localization")
+    en_dir = (
+        Path(args.en_dir).resolve()
+        if args.en_dir
+        else (repo_root / "SKSE" / "Plugins" / "MARAS" / "localization" / "en")
+    )
+    packs_dir = Path(args.packs_dir).resolve() if args.packs_dir else (repo_root / "localization" / "packs")
     dsd_template = (
         Path(args.dsd_template).resolve()
         if args.dsd_template
-        else (repo_root / "tools" / "localization" / "TT_MARAS_dsd_template.json")
+        else (repo_root / "localization" / "scripts" / "TT_MARAS_dsd_template.json")
     )
     lang = canonical_lang_code(args.lang)
     dsd_file = (
         Path(args.dsd_file).resolve()
         if getattr(args, "dsd_file", None)
-        else (repo_root / "SKSE" / "Plugins" / "DynamicStringDistributor" / "TT_MARAS.esp" / f"{lang}.json")
+        else (packs_dir / lang / "dsd" / "TT_MARAS.esp" / f"{lang}.json")
     )
-    return repo_root, loc_dir, dsd_template, dsd_file
+    return repo_root, en_dir, packs_dir, dsd_template, dsd_file
 
 
 def read_maras_version(repo_root: Path) -> str:
@@ -279,7 +283,7 @@ def read_maras_version(repo_root: Path) -> str:
 
 def ensure_meta_file(
     repo_root: Path,
-    loc_dir: Path,
+    packs_dir: Path,
     lang: str,
     name: Optional[str] = None,
     native_name: Optional[str] = None,
@@ -288,7 +292,7 @@ def ensure_meta_file(
     force: bool = False,
 ) -> Path:
     canon = canonical_lang_code(lang)
-    target_dir = loc_dir / canon
+    target_dir = packs_dir / canon
     meta_path = target_dir / "_meta.json"
     if meta_path.is_file() and not force:
         return meta_path
@@ -319,16 +323,16 @@ def ensure_meta_file(
 
 
 def run_sync_script(repo_root: Path, extra_args: List[str]) -> subprocess.CompletedProcess[str]:
-    sync_script = repo_root / "tools" / "localization" / "sync_localization.py"
+    sync_script = repo_root / "localization" / "scripts" / "sync_localization.py"
     cmd = [sys.executable, str(sync_script), *extra_args]
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def cmd_init_meta(args: argparse.Namespace) -> int:
-    repo_root, loc_dir, _, _ = resolve_paths(args)
+    repo_root, _, packs_dir, _, _ = resolve_paths(args)
     ensure_meta_file(
         repo_root=repo_root,
-        loc_dir=loc_dir,
+        packs_dir=packs_dir,
         lang=args.lang,
         name=args.name,
         native_name=args.native_name,
@@ -515,21 +519,23 @@ def _build_full_review_todo(
 
 
 def cmd_split(args: argparse.Namespace) -> int:
-    repo_root, loc_dir, dsd_template, dsd_file = resolve_paths(args)
+    repo_root, en_dir, packs_dir, dsd_template, dsd_file = resolve_paths(args)
     lang = canonical_lang_code(args.lang)
     if lang.lower() == "en":
         print("[ERROR] 'split' targets non-English translation packs (--lang de, ru, zh-CN, etc.).", file=sys.stderr)
         return 1
 
     if args.init_meta:
-        ensure_meta_file(repo_root=repo_root, loc_dir=loc_dir, lang=lang)
+        ensure_meta_file(repo_root=repo_root, packs_dir=packs_dir, lang=lang)
 
     review_all = bool(getattr(args, "all", False))
     sync_args = [
         "--lang",
         lang,
-        "--loc-dir",
-        str(loc_dir),
+        "--en-dir",
+        str(en_dir),
+        "--packs-dir",
+        str(packs_dir),
         "--dsd-template",
         str(dsd_template),
         "--dsd-file",
@@ -550,8 +556,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     if res.stderr:
         print(res.stderr.rstrip(), file=sys.stderr)
 
-    en_dir = loc_dir / "en"
-    lang_dir = loc_dir / lang
+    lang_dir = packs_dir / lang
     dsd_tmpl_list, dsd_en_by_key = _load_dsd_en_lookup(dsd_template)
 
     if review_all:
@@ -565,7 +570,7 @@ def cmd_split(args: argparse.Namespace) -> int:
             include_dsd=not args.no_dsd,
         )
     else:
-        todo_path = loc_dir / lang / "_todo.json"
+        todo_path = lang_dir / "_todo.json"
         if not todo_path.is_file():
             if res.returncode != 0:
                 return res.returncode
@@ -775,12 +780,11 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 
 def validate_batches_internal(
-    loc_dir: Path,
+    en_dir: Path,
     dsd_template_path: Path,
     batch_files: List[Path],
     require_complete: bool = False,
 ) -> Tuple[int, int, List[str], List[str], Dict[str, Dict[str, str]], Dict[str, str]]:
-    en_dir = loc_dir / "en"
     en_by_file: Dict[str, Dict[str, str]] = {}
     plural_stems_by_file: Dict[str, Set[str]] = {}
     if en_dir.is_dir():
@@ -996,7 +1000,7 @@ def collect_batch_files(batch_dir: Optional[Path], batch_file: Optional[Path]) -
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    _, loc_dir, dsd_template, _ = resolve_paths(args)
+    _, en_dir, _, dsd_template, _ = resolve_paths(args)
     bfiles = collect_batch_files(
         Path(args.batch_dir) if args.batch_dir else None,
         Path(args.batch_file) if args.batch_file else None,
@@ -1006,7 +1010,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
     seen, filled, errors, warnings, _, _ = validate_batches_internal(
-        loc_dir=loc_dir,
+        en_dir=en_dir,
         dsd_template_path=dsd_template,
         batch_files=bfiles,
         require_complete=args.require_complete,
@@ -1026,7 +1030,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
-    repo_root, loc_dir, dsd_template, dsd_file = resolve_paths(args)
+    repo_root, en_dir, packs_dir, dsd_template, dsd_file = resolve_paths(args)
     lang = canonical_lang_code(args.lang)
     bfiles = collect_batch_files(
         Path(args.batch_dir) if args.batch_dir else None,
@@ -1037,7 +1041,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         return 1
 
     seen, filled, errors, warnings, merged_files, merged_dsd = validate_batches_internal(
-        loc_dir=loc_dir,
+        en_dir=en_dir,
         dsd_template_path=dsd_template,
         batch_files=bfiles,
         require_complete=False,
@@ -1064,8 +1068,10 @@ def cmd_apply(args: argparse.Namespace) -> int:
         apply_args = [
             "--lang",
             lang,
-            "--loc-dir",
-            str(loc_dir),
+            "--en-dir",
+            str(en_dir),
+            "--packs-dir",
+            str(packs_dir),
             "--dsd-template",
             str(dsd_template),
             "--dsd-file",
@@ -1089,8 +1095,10 @@ def cmd_apply(args: argparse.Namespace) -> int:
     refresh_args = [
         "--lang",
         lang,
-        "--loc-dir",
-        str(loc_dir),
+        "--en-dir",
+        str(en_dir),
+        "--packs-dir",
+        str(packs_dir),
         "--dsd-template",
         str(dsd_template),
         "--dsd-file",
@@ -1103,7 +1111,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         print(refresh_res.stderr.rstrip(), file=sys.stderr)
 
     # Remove stale `<lang>/_todo.json` if 0 missing/changed items remain
-    todo_path = loc_dir / lang / "_todo.json"
+    todo_path = packs_dir / lang / "_todo.json"
     if todo_path.is_file() and "[TODO] Wrote " not in (refresh_res.stdout or ""):
         todo_path.unlink(missing_ok=True)
         print(f"[CLEAN] Removed completed {todo_path}")
@@ -1112,7 +1120,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
 
 
 def cmd_package(args: argparse.Namespace) -> int:
-    repo_root, loc_dir, dsd_template, dsd_file = resolve_paths(args)
+    repo_root, en_dir, packs_dir, dsd_template, dsd_file = resolve_paths(args)
     lang = canonical_lang_code(args.lang)
     if lang.lower() == "en":
         print("[ERROR] 'package' is for non-English translation packs.", file=sys.stderr)
@@ -1124,8 +1132,10 @@ def cmd_package(args: argparse.Namespace) -> int:
         [
             "--lang",
             lang,
-            "--loc-dir",
-            str(loc_dir),
+            "--en-dir",
+            str(en_dir),
+            "--packs-dir",
+            str(packs_dir),
             "--dsd-template",
             str(dsd_template),
             "--dsd-file",
@@ -1144,7 +1154,7 @@ def cmd_package(args: argparse.Namespace) -> int:
         )
         return audit_res.returncode
 
-    lang_dir = loc_dir / lang
+    lang_dir = packs_dir / lang
     if not lang_dir.is_dir():
         print(f"[ERROR] Language directory missing: {lang_dir}", file=sys.stderr)
         return 1
@@ -1186,13 +1196,14 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--lang", required=True, help="Target language code (e.g. de, ru, fr, es, ja, zh-CN).")
     common.add_argument("--repo-root", default=str(DEFAULT_REPO_ROOT), help="Workspace root directory.")
-    common.add_argument("--loc-dir", default=None, help="Override localization root directory.")
+    common.add_argument("--en-dir", default=None, help="Override base English localization/en directory.")
+    common.add_argument("--packs-dir", default=None, help="Override output localization/packs directory.")
     common.add_argument("--dsd-template", default=None, help="Override TT_MARAS_dsd_template.json path.")
     common.add_argument("--dsd-file", default=None, help="Override target DSD <lang>.json path.")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_meta = sub.add_parser("init-meta", parents=[common], help="Create localization/<lang>/_meta.json.")
+    p_meta = sub.add_parser("init-meta", parents=[common], help="Create localization/packs/<lang>/_meta.json.")
     p_meta.add_argument("--name", default=None, help="English display name (e.g. 'German').")
     p_meta.add_argument("--native-name", default=None, help="Native display name (e.g. 'Deutsch').")
     p_meta.add_argument("--author", default=None, help="Optional translator/author credit.")
