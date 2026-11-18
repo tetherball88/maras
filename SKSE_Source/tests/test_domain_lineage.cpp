@@ -1352,6 +1352,16 @@ namespace MARAS::Tests {
             MARAS_CHECK_EQ(adopt->provider, FertilityProvider::Fmr);
             MARAS_CHECK_EQ(adopt->action, BlockedFertilityMcmAction::SpawnYoungChild);
 
+            const auto legacySpawn = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "SPAWN_CHILD_PLAYER_MALE");
+            const auto legacyAdopt = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "ADOPT_CHILD_PLAYER");
+            const auto legacyDespawn = ClassifyBlockedFertilityMcmClick("_JSW_BB_ConfigQuestScript", "DESPAWN_CHILD_PLAYER");
+            MARAS_REQUIRE(legacySpawn.has_value());
+            MARAS_REQUIRE(legacyAdopt.has_value());
+            MARAS_REQUIRE(legacyDespawn.has_value());
+            MARAS_CHECK_EQ(legacySpawn->action, BlockedFertilityMcmAction::SpawnYoungChild);
+            MARAS_CHECK_EQ(legacyAdopt->action, BlockedFertilityMcmAction::SpawnYoungChild);
+            MARAS_CHECK_EQ(legacyDespawn->action, BlockedFertilityMcmAction::SendToOrphanage);
+
             const auto train = ClassifyBlockedFertilityMcmClick("_jsw_bb_configquestscript", "send_for_training");
             MARAS_REQUIRE(train.has_value());
             MARAS_CHECK_EQ(train->provider, FertilityProvider::Fmr);
