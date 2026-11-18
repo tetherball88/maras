@@ -292,12 +292,15 @@ namespace MARAS::State {
             return plan;
         }
 
+        const bool isPhysicalChildOrInfant =
+            (rec->stage == ChildStage::Child || rec->stage == ChildStage::Infant);
         plan.isYoungChild = true;
+        plan.isPhysicalInfant = (rec->stage == ChildStage::Infant);
 
         const auto* hhRec = snap.household->FindChildState(childId);
         const bool inPlayerHousehold =
             rec->guardians.HasGuardian(ActorId::Player()) &&
-            (hhRec != nullptr || rec->stage == ChildStage::Child);
+            (hhRec != nullptr || isPhysicalChildOrInfant);
         plan.inPlayerHousehold = inPlayerHousehold;
 
         if (inPlayerHousehold) {
@@ -308,7 +311,7 @@ namespace MARAS::State {
             plan.playerFactionRank = std::int8_t{ 0 };
             plan.adoptableOp = FactionMembershipOp::EnsurePresent;
             plan.adoptableRank = std::int8_t{ 25 };
-        } else if (childId.IsDynamicRuntimeActor() && rec->stage == ChildStage::Child) {
+        } else if (childId.IsDynamicRuntimeActor() && isPhysicalChildOrInfant) {
             if (!honorhallOrphanageMarkerId.IsNull() && resolvedFollowTargetId == honorhallOrphanageMarkerId) {
                 plan.adoptableOp = FactionMembershipOp::EnsurePresent;
                 plan.adoptableRank = std::int8_t{ 0 };
@@ -378,11 +381,12 @@ namespace MARAS::State {
         const auto* childRec = snap.lineage->FindChild(childId);
         const auto* hhChildRec = snap.household->FindChildState(childId);
 
-        // 1. Precedence Tier 1: Household tenant (adult spouse/member or housed Stage 2 child)
+        // 1. Precedence Tier 1: Household tenant (adult spouse/member or housed Stage 1/2 child)
         const auto& tenants = snap.household->AllTenants();
         if (const auto tenantIt = tenants.find(actorId.raw()); tenantIt != tenants.end()) {
             plan.isTenant = true;
-            if (childRec != nullptr && childRec->stage == ChildStage::Child) {
+            if (childRec != nullptr &&
+                (childRec->stage == ChildStage::Child || childRec->stage == ChildStage::Infant)) {
                 plan.homeSandboxTargetId = hhChildRec ? hhChildRec->homeMarkerId : RefId{};
             } else {
                 const auto* profile = snap.actors->Find(actorId);
@@ -404,8 +408,9 @@ namespace MARAS::State {
             return plan;
         }
 
-        // 3. Precedence Tier 3: Unhoused Stage 2 player child or dynamic 0xFF non-player child
-        if (childRec != nullptr && childRec->stage == ChildStage::Child) {
+        // 3. Precedence Tier 3: Unhoused Stage 1/2 player child or dynamic 0xFF non-player child
+        if (childRec != nullptr &&
+            (childRec->stage == ChildStage::Child || childRec->stage == ChildStage::Infant)) {
             const bool hasPlayerGuardian = childRec->guardians.HasGuardian(ActorId::Player());
             const bool isUnhousedPlayerChild =
                 hasPlayerGuardian && (hhChildRec == nullptr || hhChildRec->currentHouseId.IsNull());

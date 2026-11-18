@@ -1,4 +1,4 @@
-# 💍🐉 M.A.R.A.S — Marriage, Affection, Romance & Adoption in Skyrim
+# 💍🐉 M.A.R.A.S — Marriage, Affairs, Relationships, Ancestry & Society
 
 ## 1. General Overview ✨🏰
 

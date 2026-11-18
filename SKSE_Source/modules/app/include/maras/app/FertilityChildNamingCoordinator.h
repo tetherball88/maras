@@ -27,6 +27,13 @@ namespace MARAS::App {
             Engine::IEngineEventHooks::FertilityChildNamingRequest request,
             std::function<void(const std::string&)> onResolved);
 
+        void PromptBeeingFemaleChildNaming(
+            RE::FormID childId,
+            RE::FormID motherId,
+            bool isFemale,
+            std::string initialName,
+            std::function<void(const std::string&)> onNamed = {});
+
     private:
         FertilityChildNamingCoordinator() = default;
         ~FertilityChildNamingCoordinator() = default;

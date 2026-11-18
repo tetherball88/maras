@@ -146,8 +146,123 @@ Function OnBirth(Form akMother, Form akFather, Form akBaby, string asBabyName, i
 EndFunction
 
 ;/
+  ApplyChildName: Syncs a name chosen via the M.A.R.A.S. Child Naming Modal back to Beeing Female NG's
+  child actor storage (BabySpawn = 1) or carried baby item list (BabySpawn = 2).
+/;
+Function ApplyChildName(Actor childActor, Actor mother, string oldName, string newName) global
+    if (newName == "")
+        return
+    endif
+    if (childActor != none)
+        StorageUtil.SetStringValue(childActor, "FW.Child.Name", newName)
+        childActor.SetDisplayName(newName, true)
+    endif
+    if (mother != none)
+        int itemCount = StorageUtil.StringListCount(mother, "FW.BabyItemName")
+        int i = itemCount - 1
+        while (i >= 0)
+            string entry = StorageUtil.StringListGet(mother, "FW.BabyItemName", i)
+            if (oldName == "" || entry == oldName)
+                StorageUtil.StringListSet(mother, "FW.BabyItemName", i, newName)
+                i = -1
+            else
+                i -= 1
+            endif
+        endWhile
+
+        if (childActor == none)
+            int nBabys = StorageUtil.FormListCount(none, "FW.Babys")
+            int b = nBabys - 1
+            while (b >= 0)
+                Actor cand = StorageUtil.FormListGet(none, "FW.Babys", b) as Actor
+                if (cand != none && (StorageUtil.GetFormValue(cand, "FW.Child.Mother", none) as Actor) == mother)
+                    string storedName = StorageUtil.GetStringValue(cand, "FW.Child.Name", "")
+                    if (oldName == "" || storedName == oldName)
+                        StorageUtil.SetStringValue(cand, "FW.Child.Name", newName)
+                        cand.SetDisplayName(newName, true)
+                        b = -1
+                    else
+                        b -= 1
+                    endif
+                else
+                    b -= 1
+                endif
+            endWhile
+        endif
+    endif
+EndFunction
+
+;/
+  FinishInfantGrowth: Stops Beeing Female's scale-up loop on a physical BF Infant promoted early to Stage 2.
+/;
+Function FinishInfantGrowth(Actor childActor) global
+    if (!childActor)
+        return
+    endif
+    StorageUtil.SetIntValue(childActor, "FW.AddOn.StartGrowing", 0)
+    childActor.SetScale(1.0)
+    childActor.AllowPCDialogue(true)
+EndFunction
+
+;/
+  RemoveCarriedBabyItem: Removes a carried BF BabySpawn = 2 baby item from the mother when M.A.R.A.S.
+  manually grows the infant early so Beeing Female will not hatch a duplicate copy later.
+/;
+Function RemoveCarriedBabyItem(Actor mother, string babyName) global
+    if (!mother)
+        return
+    endif
+    int itemCount = StorageUtil.StringListCount(mother, "FW.BabyItemName")
+    if (itemCount <= 0)
+        return
+    endif
+    int matchIdx = -1
+    int i = itemCount - 1
+    while (i >= 0 && matchIdx < 0)
+        string entry = StorageUtil.StringListGet(mother, "FW.BabyItemName", i)
+        if (babyName == "" || entry == babyName)
+            matchIdx = i
+        endif
+        i -= 1
+    endWhile
+    if (matchIdx < 0)
+        return
+    endif
+
+    Armor arm = none
+    if (StorageUtil.FormListCount(mother, "FW.BabyItemArmor") > matchIdx)
+        arm = StorageUtil.FormListGet(mother, "FW.BabyItemArmor", matchIdx) as Armor
+        StorageUtil.FormListRemoveAt(mother, "FW.BabyItemArmor", matchIdx)
+    endif
+    if (StorageUtil.StringListCount(mother, "FW.BabyItemName") > matchIdx)
+        StorageUtil.StringListRemoveAt(mother, "FW.BabyItemName", matchIdx)
+    endif
+    if (StorageUtil.IntListCount(mother, "FW.BabyItemSex") > matchIdx)
+        StorageUtil.IntListRemoveAt(mother, "FW.BabyItemSex", matchIdx)
+    endif
+    if (StorageUtil.FormListCount(mother, "FW.BabyItemRace") > matchIdx)
+        StorageUtil.FormListRemoveAt(mother, "FW.BabyItemRace", matchIdx)
+    endif
+    if (StorageUtil.FormListCount(mother, "FW.BabyItemFather") > matchIdx)
+        StorageUtil.FormListRemoveAt(mother, "FW.BabyItemFather", matchIdx)
+    endif
+    if (StorageUtil.FloatListCount(mother, "FW.BabyItemDOB") > matchIdx)
+        StorageUtil.FloatListRemoveAt(mother, "FW.BabyItemDOB", matchIdx)
+    endif
+
+    if (arm != none)
+        if (mother == TTM_Data.GetPlayer())
+            StorageUtil.FormListRemove(none, "FW.Babys", arm, false)
+        endif
+        mother.UnequipItem(arm)
+        mother.RemoveItem(arm, 1, true)
+    endif
+EndFunction
+
+;/
   OnChildSpawned: Fired by Beeing Female NG ("BeeingFemaleChildSpawned" ModEvent) once a child is physically in the world.
-  The Infant becomes a Stage 2 child bound to that actor.
+  Scaled-down growing BF actors remain Stage 1 Infants (non-conversational) until reaching normal scale (1.0),
+  while full-scale child actors immediately enter Stage 2 Young Child.
 /;
 Function OnChildSpawned(Form akMother, Form akFather, Form akChild, string asChildName) global
     Actor childActor = akChild as Actor
@@ -155,24 +270,33 @@ Function OnChildSpawned(Form akMother, Form akFather, Form akChild, string asChi
         return
     endif
     Actor mother = akMother as Actor
-    string childName = asChildName
-    if (childName == "")
-        childName = StorageUtil.GetStringValue(childActor, "FW.Child.Name", "")
-    endif
-    if (childName == "")
-        childName = childActor.GetDisplayName()
-    endif
 
     if (MARAS.GetChildStage(childActor.GetFormID()) != 0)
         return ; already registered
     endif
 
     ; A baby born straight as an actor fires this event right after BeeingFemaleBirth: let the birth handler create the
-    ; Infant and announce the batch before the record is re-keyed to the child actor.
+    ; Infant (and any player-household Child Naming Modal) finish before re-keying to the child actor.
     Utility.Wait(1.0)
+
+    string childName = StorageUtil.GetStringValue(childActor, "FW.Child.Name", "")
+    if (childName == "")
+        childName = asChildName
+    endif
+    if (childName == "")
+        childName = childActor.GetDisplayName()
+    endif
+
     int childID = MARAS.FindFertilityInfantForSpawn(mother, childName)
+    if (childID == 0 && asChildName != "" && asChildName != childName)
+        childID = MARAS.FindFertilityInfantForSpawn(mother, asChildName)
+    endif
     if (childID == 0)
         Utility.Wait(2.0)
+        childName = StorageUtil.GetStringValue(childActor, "FW.Child.Name", "")
+        if (childName == "")
+            childName = asChildName
+        endif
         childID = MARAS.FindFertilityInfantForSpawn(mother, childName)
     endif
 
@@ -187,11 +311,25 @@ Function OnChildSpawned(Form akMother, Form akFather, Form akChild, string asChi
         if (recordedFather != none)
             bioFather = recordedFather
         endif
+        string recordedName = MARAS.GetChildName(childID)
+        if (recordedName != "" && recordedName != "Newborn" && recordedName != childName)
+            childName = recordedName
+            StorageUtil.SetStringValue(childActor, "FW.Child.Name", childName)
+            childActor.SetDisplayName(childName, true)
+        endif
     endif
 
-    RegisterBeeingFemaleChild(childActor, bioMother, bioFather, childID, 2)
-    TTM_Debug.info("TTM_ServiceFertilityBF: Child actor " + childName + " is in the world (FormID " + childActor.GetFormID() + ")")
-    MARAS.OnFertilityChildGrewUpActor(childActor, childName)
+    float refScale = MARAS.GetActorRefScale(childActor)
+    bool isGrowingInfant = (refScale < 0.99) || (StorageUtil.GetIntValue(childActor, "FW.AddOn.StartGrowing", 0) == 1)
+    if (isGrowingInfant)
+        childActor.AllowPCDialogue(false)
+        RegisterBeeingFemaleChild(childActor, bioMother, bioFather, childID, 1)
+        TTM_Debug.info("TTM_ServiceFertilityBF: Scaled-down BF infant actor " + childName + " registered at Stage 1 (FormID " + childActor.GetFormID() + ", refScale=" + refScale + ")")
+    else
+        RegisterBeeingFemaleChild(childActor, bioMother, bioFather, childID, 2)
+        TTM_Debug.info("TTM_ServiceFertilityBF: Child actor " + childName + " is in the world at Stage 2 (FormID " + childActor.GetFormID() + ", refScale=" + refScale + ")")
+        MARAS.OnFertilityChildGrewUpActor(childActor, childName)
+    endif
 EndFunction
 
 ;/
@@ -425,6 +563,9 @@ Function MigrateChildActor(Actor childActor) global
 
     if (!childActor.IsChild() && StorageUtil.GetIntValue(childActor, "FW.Child.GrownUp", 0) == 1)
         MARAS.RegisterChildActor(childActor, none, none, none, mother, father, syntheticID, 4, sendEvent = false) ; Stage 4 = Adult
+    elseif ((MARAS.GetActorRefScale(childActor) < 0.99) || (StorageUtil.GetIntValue(childActor, "FW.AddOn.StartGrowing", 0) == 1))
+        childActor.AllowPCDialogue(false)
+        RegisterBeeingFemaleChild(childActor, mother, father, syntheticID, 1, isMigrating = true)
     else
         RegisterBeeingFemaleChild(childActor, mother, father, syntheticID, 2, isMigrating = true)
     endif

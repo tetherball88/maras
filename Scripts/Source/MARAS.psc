@@ -1193,6 +1193,9 @@ Actor Function GetFertilitySpawnCoSpouse(int childId, Actor bioMother = None, Ac
 ;/ Generate child name and create completed synthetic child record during FMR NPC migration /;
 int Function MigrateCompletedFmrNpcChild(Actor mother, Actor father, float conceptionTime, float birthTime) global native
 
+;/ Read raw reference scale (refScale / 100.0, independent of race height) for an actor /;
+float Function GetActorRefScale(Actor akActor) global native
+
 
 ;/ =====================================================================
 ;   SECTION 10: Banter Coordinator

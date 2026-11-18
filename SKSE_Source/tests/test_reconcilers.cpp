@@ -313,6 +313,59 @@ MARAS_TEST(Reconcilers, ChildFactions_UnhousedPlayerChildPreservesAdoptable25And
 
     const auto p3 = ComputeChildFactionPlan(*snap, parentedNpcChild, ActorSex::Unknown, npcMom, honorhall);
     MARAS_CHECK_EQ(p3.adoptableOp, FactionMembershipOp::EnsureAbsent);
+    MARAS_CHECK_EQ(p3.isPhysicalInfant, false);
+}
+
+MARAS_TEST(Reconcilers, PhysicalInfant_MutedFactionPlanAndHomeSandboxOrFollowPackages) {
+    WorldStore store{};
+    constexpr HouseId house{ 0x00060010u };
+    constexpr RefId childHomeMarker{ 0x00060011u };
+    constexpr ChildId housedInfant{ 0xFF000601u };
+    constexpr ChildId npcInfant{ 0xFF000602u };
+    constexpr RefId npcMom{ 0x0002B099u };
+    constexpr RefId honorhall{ 0x00090001u };
+
+    store.Modify([&](WorldState& ws) {
+        ws.household.Write().RegisterHouse(house, RefId{ 0x00060012u });
+
+        ChildRecord c1{};
+        c1.childId = housedInfant;
+        c1.stage = ChildStage::Infant;
+        c1.guardians.Assign(ActorId::Player(), ActorId{});
+        ws.lineage.Write().UpsertChild(c1);
+
+        ChildHouseholdRecord hh{};
+        hh.childId = housedInfant;
+        hh.currentHouseId = house;
+        hh.homeMarkerId = childHomeMarker;
+        ws.household.Write().UpsertChildState(hh);
+        ws.household.Write().AssignTenant(housedInfant.raw(), house, true);
+
+        ChildRecord c2{};
+        c2.childId = npcInfant;
+        c2.stage = ChildStage::Infant;
+        c2.guardians.Assign(ActorId{ npcMom.raw() }, ActorId{});
+        ws.lineage.Write().UpsertChild(c2);
+    });
+
+    const auto snap = store.Snapshot();
+
+    const auto fp1 = ComputeChildFactionPlan(*snap, housedInfant, ActorSex::Unknown, RefId{}, honorhall);
+    MARAS_CHECK_EQ(fp1.isYoungChild, true);
+    MARAS_CHECK_EQ(fp1.isPhysicalInfant, true);
+    MARAS_CHECK_EQ(fp1.inPlayerHousehold, true);
+
+    const auto pp1 = ComputeActorPackagePlan(*snap, RefId{ housedInfant.raw() }, RefId{});
+    MARAS_CHECK_EQ(pp1.role, PackageRole::HousedTenant);
+    MARAS_CHECK_EQ(pp1.homeSandboxTargetId, childHomeMarker);
+
+    const auto fp2 = ComputeChildFactionPlan(*snap, npcInfant, ActorSex::Unknown, npcMom, honorhall);
+    MARAS_CHECK_EQ(fp2.isPhysicalInfant, true);
+    MARAS_CHECK_EQ(fp2.adoptableOp, FactionMembershipOp::EnsureAbsent);
+
+    const auto pp2 = ComputeActorPackagePlan(*snap, RefId{ npcInfant.raw() }, npcMom);
+    MARAS_CHECK_EQ(pp2.role, PackageRole::FollowParentChild);
+    MARAS_CHECK_EQ(pp2.childFollowTargetId, npcMom);
 }
 
 MARAS_TEST(Reconcilers, CompanionFactions_AssignedAndRemovedPetCritter) {

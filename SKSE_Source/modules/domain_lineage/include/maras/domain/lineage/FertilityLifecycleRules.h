@@ -114,6 +114,78 @@ namespace MARAS::Domain::Lineage {
     [[nodiscard]] FertilityChildNamingPromptInfo ClassifyFertilityChildNamingPrompt(
         std::string_view promptText) noexcept;
 
+    enum class DashboardInfantGrowthMode : std::uint8_t {
+        None = 0,
+        PromotePhysicalInPlace = 1,
+        PromoteSyntheticAndSpawn = 2
+    };
+
+    struct DashboardInfantGrowthPlan {
+        DashboardInfantGrowthMode mode{ DashboardInfantGrowthMode::None };
+        bool needsGenderRoll{ false };
+        bool needsNameFallback{ false };
+        bool removeCarriedBfBabyItem{ false };
+        ActorId bioMother{};
+        ActorId bioFather{};
+        std::uint8_t existingGender{ 2 };
+
+        bool operator==(const DashboardInfantGrowthPlan&) const = default;
+    };
+
+    constexpr float kPhysicalInfantFullScaleThreshold = 0.99f;
+
+    [[nodiscard]] constexpr float RefScaleRawToFloat(std::uint16_t rawRefScale) noexcept {
+        return rawRefScale == 0 ? 1.0f : static_cast<float>(rawRefScale) / 100.0f;
+    }
+
+    [[nodiscard]] bool IsPhysicalInfantScaledDown(
+        float actorRefScale,
+        bool isStillGrowingFlag) noexcept;
+
+    [[nodiscard]] bool ShouldPromotePhysicalInfantToChild(float actorRefScale) noexcept;
+
+    [[nodiscard]] bool ShouldBlockQuestPackageForPhysicalInfant(
+        ChildStage stage,
+        std::string_view questEditorId) noexcept;
+
+    [[nodiscard]] bool ShouldPromptBeeingFemaleChildNaming(
+        const State::WorldStateSnapshot& snap,
+        ActorId motherId,
+        ActorId bioFatherId,
+        ActorId presumedFatherId,
+        bool isSecretForBioFather = false) noexcept;
+
+    [[nodiscard]] bool ShouldPromptBeeingFemaleChildNamingForRecord(
+        const State::WorldStateSnapshot& snap,
+        ChildId childId,
+        ActorId motherHint = {},
+        ActorId bioFatherHint = {}) noexcept;
+
+    [[nodiscard]] std::vector<std::string> CollectExistingChildNamesForNaming(
+        const State::LineageTable& lineage,
+        ChildId excludeChildId);
+
+    [[nodiscard]] ChildId ResolveNamingTargetChildId(
+        const State::LineageTable& lineage,
+        ChildId initialChildId,
+        ActorId motherId,
+        std::string_view initialName);
+
+    [[nodiscard]] std::vector<ChildId> CollectPhysicalInfantIds(
+        const State::LineageTable& lineage);
+
+    [[nodiscard]] constexpr bool CanGrowInfantFromDashboard(
+        ChildStage stage,
+        bool hasPhysicalActor,
+        bool hasBeeingFemale) noexcept {
+        return stage == ChildStage::Infant && (hasPhysicalActor || hasBeeingFemale);
+    }
+
+    [[nodiscard]] DashboardInfantGrowthPlan PlanDashboardInfantGrowth(
+        const State::LineageTable& lineage,
+        ChildId childId,
+        bool hasBeeingFemale) noexcept;
+
     [[nodiscard]] std::string ResolveSubmittedChildName(
         std::string_view buttonId,
         std::string_view typedName,

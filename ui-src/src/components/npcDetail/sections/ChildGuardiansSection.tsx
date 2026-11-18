@@ -100,9 +100,13 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
   // Parent resolution for child NPCs
   const childRecord = children.get(npcId)
 
-  const isSecretForPartner = Boolean(childRecord?.isSecretForPartner ?? childRecord?.isSecret)
+  const isSecretForPartner = Boolean(
+    !childRecord?.discoveredByPartner && (childRecord?.isSecretForPartner ?? childRecord?.isSecret),
+  )
   const isPregnancySecretForPartner = Boolean(
-    childRecord?.stage === 'unborn' && childRecord?.isPregnancySecretForPartner,
+    !childRecord?.discoveredByPartner &&
+      childRecord?.stage === 'unborn' &&
+      childRecord?.isPregnancySecretForPartner,
   )
   const isSecretForBio = Boolean(childRecord?.isSecretForBioFather)
   const hasActiveSecret = isSecretForPartner || isSecretForBio || isPregnancySecretForPartner
@@ -168,7 +172,8 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
   const bioMotherProfile = resolveDisplayProfile(bioMotherId, childRecord?.bioMotherName)
   const bioFatherProfile = resolveDisplayProfile(bioFatherId, childRecord?.bioFatherName)
   const presumedFatherProfile = resolveDisplayProfile(presumedFatherId, childRecord?.presumedFatherName)
-  const showPresumedFatherSlot = revealSecretsInUI || Boolean(presumedFatherProfile)
+  const showPresumedFatherSlot =
+    revealSecretsInUI && (isSecretForPartner || isPregnancySecretForPartner)
 
   useEffect(() => {
     if (!showPresumedFatherSlot && activeSlot === 'presumedFather') {
@@ -564,13 +569,6 @@ export const ChildGuardiansSection: React.FC<ChildGuardiansSectionProps> = ({
                             title={t('npcDetail.guardians.secretPresumedBioTooltip')}
                           >
                             {t('npcDetail.guardians.badgeSecretFromPartner')}
-                          </span>
-                        ) : childRecord?.discoveredByPartner ? (
-                          <span
-                            className="text-[0.5625rem] px-[0.25rem] py-[0.0625rem] rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold uppercase tracking-wider"
-                            title={t('npcDetail.guardians.truthKnownTooltip')}
-                          >
-                            {t('npcDetail.guardians.badgeTruthKnown')}
                           </span>
                         ) : null
                       )}

@@ -1537,4 +1537,132 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainLineage, BeeingFemalePhysicalInfantScaleAndNamingRules) {
+        // 1. Raw refScale conversion, scale classification & promotion threshold (independent of race height 0.80)
+        MARAS_CHECK_EQ(RefScaleRawToFloat(0), 1.0f);
+        MARAS_CHECK_EQ(RefScaleRawToFloat(75), 0.75f);
+        MARAS_CHECK_EQ(RefScaleRawToFloat(100), 1.0f);
+
+        MARAS_CHECK(IsPhysicalInfantScaledDown(RefScaleRawToFloat(70), false));
+        MARAS_CHECK(IsPhysicalInfantScaledDown(RefScaleRawToFloat(75), false));
+        MARAS_CHECK(IsPhysicalInfantScaledDown(0.985f, false));
+        MARAS_CHECK(IsPhysicalInfantScaledDown(RefScaleRawToFloat(100), true));
+        MARAS_CHECK(!IsPhysicalInfantScaledDown(RefScaleRawToFloat(99), false));
+        MARAS_CHECK(!IsPhysicalInfantScaledDown(RefScaleRawToFloat(100), false));
+
+        MARAS_CHECK(!ShouldPromotePhysicalInfantToChild(RefScaleRawToFloat(75)));
+        MARAS_CHECK(!ShouldPromotePhysicalInfantToChild(0.989f));
+        MARAS_CHECK(ShouldPromotePhysicalInfantToChild(RefScaleRawToFloat(99)));
+        MARAS_CHECK(ShouldPromotePhysicalInfantToChild(RefScaleRawToFloat(100)));
+        MARAS_CHECK(!ShouldPromotePhysicalInfantToChild(std::numeric_limits<float>::quiet_NaN()));
+
+        // 2. Physical infants must never receive TTM_ChildrenSandbox (ForceGreet / Stage 2 routines)
+        MARAS_CHECK(ShouldBlockQuestPackageForPhysicalInfant(ChildStage::Infant, "TTM_ChildrenSandbox"));
+        MARAS_CHECK(ShouldBlockQuestPackageForPhysicalInfant(ChildStage::Infant, "ttm_childrensandbox"));
+        MARAS_CHECK(!ShouldBlockQuestPackageForPhysicalInfant(ChildStage::Child, "TTM_ChildrenSandbox"));
+        MARAS_CHECK(!ShouldBlockQuestPackageForPhysicalInfant(ChildStage::Adult, "TTM_ChildrenSandbox"));
+        MARAS_CHECK(!ShouldBlockQuestPackageForPhysicalInfant(ChildStage::Infant, "MQ101"));
+
+        // 2. Player-household naming prompt eligibility (respecting bio-father secrecy)
+        WorldState ws{};
+        StubLineageMeta meta{};
+        const ActorId wife{ 0x00031001u };
+        const ActorId npcMom{ 0x00031002u };
+        const ActorId npcDad{ 0x00031003u };
+        (void)ws.TransitionRelationship(wife, ActorId::Player(), RelationshipStatus::Married, 1.0f, wife, meta);
+        const auto snap = ws.Snapshot();
+
+        MARAS_CHECK(ShouldPromptBeeingFemaleChildNaming(snap, ActorId::Player(), npcDad, npcDad, false));
+        MARAS_CHECK(ShouldPromptBeeingFemaleChildNaming(snap, wife, npcDad, ActorId::Player(), false));
+        MARAS_CHECK(ShouldPromptBeeingFemaleChildNaming(snap, wife, npcDad, ActorId{}, false));
+        MARAS_CHECK(ShouldPromptBeeingFemaleChildNaming(snap, npcMom, ActorId::Player(), ActorId{}, false));
+        MARAS_CHECK(!ShouldPromptBeeingFemaleChildNaming(snap, npcMom, ActorId::Player(), npcDad, true));
+        MARAS_CHECK(!ShouldPromptBeeingFemaleChildNaming(snap, npcMom, npcDad, npcDad, false));
+    }
+
+    MARAS_TEST(DomainLineage, BeeingFemaleNamingLookupAndDashboardGrowthPlans) {
+        WorldState ws{};
+        StubLineageMeta meta{};
+        const ActorId wife{ 0x00032001u };
+        const ActorId npcMom{ 0x00032002u };
+        const ActorId npcDad{ 0x00032003u };
+        (void)ws.TransitionRelationship(wife, ActorId::Player(), RelationshipStatus::Married, 1.0f, wife, meta);
+
+        const ChildId synthSecret{ 0xFF700101u };
+        const ChildId physInfant{ 0xFF000201u };
+        const ChildId physChild{ 0xFF000202u };
+        const ChildId synthBfUnnamed{ 0xFF700102u };
+        const ChildId synthAlreadyRekeyed{ 0xFF700199u };
+
+        ChildRecord secretRec{
+            .childId = synthSecret, .name = "Canis", .bioMother = npcMom, .bioFather = ActorId::Player(),
+            .presumedFather = npcDad, .stage = ChildStage::Infant, .gender = 1
+        };
+        secretRec.paternitySecret.isSecret = true;
+        secretRec.paternitySecret.isSecretForBioFather = true;
+        ws.lineage.Write().UpsertChild(secretRec);
+
+        ChildRecord physInfRec{
+            .childId = physInfant, .name = "Astrid", .bioMother = wife, .bioFather = ActorId::Player(),
+            .stage = ChildStage::Infant, .gender = 1
+        };
+        ws.lineage.Write().UpsertChild(physInfRec);
+
+        ChildRecord stage2Rec{
+            .childId = physChild, .name = "astrid", .bioMother = wife, .bioFather = ActorId::Player(),
+            .stage = ChildStage::Child, .gender = 1
+        };
+        ws.lineage.Write().UpsertChild(stage2Rec);
+
+        ChildRecord bfUnnamedRec{
+            .childId = synthBfUnnamed, .name = "Newborn", .bioMother = wife, .bioFather = ActorId::Player(),
+            .stage = ChildStage::Infant, .gender = 2
+        };
+        ws.lineage.Write().UpsertChild(bfUnnamedRec);
+
+        const auto snap = ws.Snapshot();
+
+        // 1. Record-based naming prompt respects undiscovered bio-father secrecy
+        MARAS_CHECK(!ShouldPromptBeeingFemaleChildNamingForRecord(snap, synthSecret));
+        MARAS_CHECK(ShouldPromptBeeingFemaleChildNamingForRecord(snap, physInfant));
+        ws.lineage.Write().FindChildMutable(synthSecret)->paternitySecret.discovered = true;
+        MARAS_CHECK(ShouldPromptBeeingFemaleChildNamingForRecord(ws.Snapshot(), synthSecret));
+
+        // 2. Existing names for duplicate check exclude self, "Newborn", and case-insensitive duplicates
+        const auto existing = CollectExistingChildNamesForNaming(ws.lineage.Read(), synthSecret);
+        MARAS_REQUIRE_EQ(existing.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(existing[0], "Astrid");
+
+        // 3. Re-keyed infant target lookup resolves physical infant when synthetic ID was replaced
+        MARAS_CHECK_EQ(ResolveNamingTargetChildId(ws.lineage.Read(), synthSecret, npcMom, "Canis"), synthSecret);
+        MARAS_CHECK_EQ(ResolveNamingTargetChildId(ws.lineage.Read(), synthAlreadyRekeyed, wife, "astrid"), physInfant);
+        MARAS_CHECK_EQ(ResolveNamingTargetChildId(ws.lineage.Read(), synthAlreadyRekeyed, npcMom, "astrid"), synthAlreadyRekeyed);
+
+        // 4. Physical infant collection excludes synthetic infants and Stage 2 children
+        const auto physIds = CollectPhysicalInfantIds(ws.lineage.Read());
+        MARAS_REQUIRE_EQ(physIds.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(physIds[0], physInfant);
+
+        // 5. Dashboard infant growth eligibility & plan
+        MARAS_CHECK(CanGrowInfantFromDashboard(ChildStage::Infant, true, false));
+        MARAS_CHECK(CanGrowInfantFromDashboard(ChildStage::Infant, false, true));
+        MARAS_CHECK(!CanGrowInfantFromDashboard(ChildStage::Infant, false, false));
+        MARAS_CHECK(!CanGrowInfantFromDashboard(ChildStage::Child, true, true));
+
+        const auto planPhys = PlanDashboardInfantGrowth(ws.lineage.Read(), physInfant, true);
+        MARAS_CHECK_EQ(planPhys.mode, DashboardInfantGrowthMode::PromotePhysicalInPlace);
+
+        const auto planSynthBf = PlanDashboardInfantGrowth(ws.lineage.Read(), synthBfUnnamed, true);
+        MARAS_CHECK_EQ(planSynthBf.mode, DashboardInfantGrowthMode::PromoteSyntheticAndSpawn);
+        MARAS_CHECK(planSynthBf.needsGenderRoll);
+        MARAS_CHECK(planSynthBf.needsNameFallback);
+        MARAS_CHECK(planSynthBf.removeCarriedBfBabyItem);
+
+        const auto planSynthNoBf = PlanDashboardInfantGrowth(ws.lineage.Read(), synthBfUnnamed, false);
+        MARAS_CHECK_EQ(planSynthNoBf.mode, DashboardInfantGrowthMode::None);
+
+        const auto planStage2 = PlanDashboardInfantGrowth(ws.lineage.Read(), physChild, true);
+        MARAS_CHECK_EQ(planStage2.mode, DashboardInfantGrowthMode::None);
+    }
+
 }  // namespace MARAS::Tests

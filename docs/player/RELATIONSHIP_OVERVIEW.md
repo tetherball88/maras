@@ -1,6 +1,6 @@
 # 💞🔥 M.A.R.A.S Relationship Guide — Romance, Marriage & Soap-Opera Drama
 
-Welcome to **M.A.R.A.S** (*Marriage, Affection, Romance & Adoption in Skyrim*)! Whether you want a cozy fairytale marriage with one soulmate, a sprawling twelve-spouse noble dynasty, or a messy web of tavern hookups and secret affairs, this guide covers how love (and heartbreak) works in Skyrim.
+Welcome to **M.A.R.A.S** (*Marriage, Affairs, Relationships, Ancestry & Society*)! Whether you want a cozy fairytale marriage with one soulmate, a sprawling twelve-spouse noble dynasty, or a messy web of tavern hookups and secret affairs, this guide covers how love (and heartbreak) works in Skyrim.
 
 And here's the best part: **the world doesn't revolve only around the Dragonborn**. While you're out slaying dragons, NPCs across Skyrim are dating each other, hooking up at the local inn, getting engaged, marrying, walking in on cheating partners, and filing for divorce! 🍿
 

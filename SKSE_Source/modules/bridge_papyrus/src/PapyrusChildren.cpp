@@ -1420,4 +1420,11 @@ namespace MARAS::PapyrusInterface {
             mother, father, conceptionTime, birthTime);
     }
 
+    float GetActorRefScale(RE::StaticFunctionTag*, RE::Actor* actor) {
+        if (!actor || actor->IsDeleted()) {
+            return 1.0f;
+        }
+        return Domain::Lineage::RefScaleRawToFloat(actor->GetReferenceRuntimeData().refScale);
+    }
+
 }  // namespace MARAS::PapyrusInterface

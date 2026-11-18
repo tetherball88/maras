@@ -95,6 +95,7 @@ export interface ChildRecord {
   stage?: ChildStage
   isEphemeral?: boolean
   hasRefID?: boolean
+  canGrowInfant?: boolean
   trainingLocation?: string
   trainingClassIndex?: number
   trainingClassName?: string
@@ -158,6 +159,7 @@ export interface NPCProfile {
   stage?: ChildStage
   isEphemeral?: boolean
   hasRefID?: boolean
+  canGrowInfant?: boolean
   trainingLocation?: string
   trainingClassIndex?: number
   trainingClassName?: string

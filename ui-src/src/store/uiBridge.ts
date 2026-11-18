@@ -117,6 +117,10 @@ export function spawnChild(childId: string) {
   sendMarasAction('spawnChild', { childId })
 }
 
+export function growInfant(childId: string) {
+  sendMarasAction('growInfant', { childId })
+}
+
 export function sendChildToTraining(childId: string, trainingClassIndex: number) {
   sendMarasAction('sendChildToTraining', { childId, trainingClassIndex })
 }
@@ -277,6 +281,7 @@ export function initializeUIBridge() {
         stage: item.stage ?? existing?.stage,
         isEphemeral: item.isEphemeral ?? existing?.isEphemeral,
         hasRefID: item.hasRefID ?? existing?.hasRefID,
+        canGrowInfant: item.canGrowInfant ?? existing?.canGrowInfant,
         trainingLocation: item.trainingLocation ?? existing?.trainingLocation,
         trainingClassIndex: item.trainingClassIndex ?? existing?.trainingClassIndex,
         trainingClassName: item.trainingClassName ?? existing?.trainingClassName,
@@ -330,6 +335,7 @@ export function initializeUIBridge() {
           stage: detail.stage,
           isEphemeral: detail.isEphemeral,
           hasRefID: detail.hasRefID,
+          canGrowInfant: detail.canGrowInfant,
           trainingLocation: detail.trainingLocation,
           trainingClassIndex: detail.trainingClassIndex,
           trainingClassName: detail.trainingClassName,

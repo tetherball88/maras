@@ -2,17 +2,24 @@
 
 #include "maras/app/AffectionEventCoordinator.h"
 #include "maras/app/AppContext.h"
+#include "maras/app/ChildSkyrimNetSuccession.h"
+#include "maras/app/FertilityChildNamingCoordinator.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
 #include "maras/app/PaternityWorkflowCoordinator.h"
 #include "maras/domain/lineage/FertilityLifecycleRules.h"
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/EngineLogging.h"
+#include "maras/engine/FactionReconciler.h"
+#include "maras/engine/FormCache.h"
 #include "maras/engine/LocalizationService.h"
 #include "maras/engine/NamePoolLoader.h"
+#include "maras/engine/PackageReconciler.h"
 #include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/foundation/DomainEnums.h"
+#include "maras/foundation/StringUtils.h"
 #include "maras/foundation/StrongIds.h"
 #include "maras/state/SessionEpoch.h"
 #include "maras/state/WorldStore.h"
@@ -302,16 +309,24 @@ namespace MARAS::App {
                 break;
             }
             case Domain::Lineage::BfCycleStateAction::RecoveryDelivery: {
+                struct RecoveryBornEntry {
+                    RE::FormID childId{ 0 };
+                    std::string initialName{};
+                    bool isFemale{ false };
+                    bool promptNaming{ false };
+                };
+                std::vector<RecoveryBornEntry> recoveryBorn;
+
                 if (!pw.GetUnbornChildren(motherId).empty()) {
                     auto& pool = Engine::NamePoolLoader::GetSingleton();
                     if (!pool.IsChildLoaded()) {
                         (void)pool.LoadChildNamesFromFile();
                     }
-                    const bool femaleMother = IsFemaleActor(mother);
 
                     auto& lineage = LineageUseCases::GetSingleton();
                     while (!pw.GetUnbornChildren(motherId).empty()) {
-                        std::string childName = pool.GetRandomChildName(mother, femaleMother, true);
+                        const bool isFemale = (Utils::RandomFloat(0.0f, 1.0f) < 0.5f);
+                        std::string childName = pool.GetRandomChildName(mother, isFemale, true);
                         if (childName.empty()) {
                             childName = "Newborn";
                         }
@@ -319,14 +334,27 @@ namespace MARAS::App {
                         if (childId == 0) {
                             break;
                         }
-                        lineage.SetChildGender(childId, 2);
+                        lineage.SetChildGender(childId, isFemale ? 1 : 0);
                         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
                             (void)Domain::Lineage::ApplyAppendBornToDeliveryBatch(
                                 ws.lineage.Write(), State::ActorId{ motherId }, State::ChildId{ childId });
                         });
+
+                        bool promptNaming = false;
+                        if (const auto snap = State::WorldStore::GetSingleton().Snapshot(); snap) {
+                            promptNaming = Domain::Lineage::ShouldPromptBeeingFemaleChildNamingForRecord(
+                                *snap, State::ChildId{ childId }, State::ActorId{ motherId });
+                        }
+
+                        recoveryBorn.push_back(RecoveryBornEntry{
+                            .childId = childId,
+                            .initialName = childName,
+                            .isFemale = isFemale,
+                            .promptNaming = promptNaming,
+                        });
                         MARAS_LOG_INFO(
-                            "[Fertility][BF] {} ({:08X}) gave birth without spawned baby item (ID {:08X}, name='{}')",
-                            ActorSvc::GetName(motherId), motherId, childId, childName);
+                            "[Fertility][BF] {} ({:08X}) gave birth without spawned baby actor/item (ID {:08X}, name='{}', sex={})",
+                            ActorSvc::GetName(motherId), motherId, childId, childName, isFemale ? 1 : 0);
                     }
                 }
 
@@ -335,7 +363,35 @@ namespace MARAS::App {
                     completed = Domain::Lineage::ApplyPopDeliveryBatch(
                         ws.lineage.Write(), State::ActorId{ motherId });
                 });
-                if (completed && !completed->bornChildIds.empty()) {
+
+                std::vector<RecoveryBornEntry> toPrompt;
+                for (auto& entry : recoveryBorn) {
+                    if (entry.promptNaming) {
+                        toPrompt.push_back(std::move(entry));
+                    }
+                }
+
+                if (!toPrompt.empty()) {
+                    const auto completedIds =
+                        completed ? completed->bornChildIds : std::vector<Foundation::ChildId>{};
+                    auto& naming = FertilityChildNamingCoordinator::GetSingleton();
+                    for (std::size_t idx = 0; idx < toPrompt.size(); ++idx) {
+                        const bool isLast = (idx + 1 == toPrompt.size());
+                        std::function<void(const std::string&)> onNamed;
+                        if (isLast && !completedIds.empty()) {
+                            onNamed = [motherId, completedIds](const std::string&) {
+                                FertilityLifecycleCoordinator::GetSingleton().FinalizeCompletedDeliveryBatch(
+                                    motherId, completedIds);
+                            };
+                        }
+                        naming.PromptBeeingFemaleChildNaming(
+                            toPrompt[idx].childId,
+                            motherId,
+                            toPrompt[idx].isFemale,
+                            std::move(toPrompt[idx].initialName),
+                            std::move(onNamed));
+                    }
+                } else if (completed && !completed->bornChildIds.empty()) {
                     FinalizeCompletedDeliveryBatch(motherId, completed->bornChildIds);
                 }
                 break;
@@ -510,10 +566,38 @@ namespace MARAS::App {
                 fromUnborn);
         });
 
+        bool promptNaming = false;
+        if (const auto snap = State::WorldStore::GetSingleton().Snapshot(); snap) {
+            promptNaming = Domain::Lineage::ShouldPromptBeeingFemaleChildNamingForRecord(
+                *snap, State::ChildId{ childId }, State::ActorId{ motherId }, State::ActorId{ effectiveBioFatherId });
+        }
+
         if (outcome.batchCompleted) {
-            FinalizeCompletedDeliveryBatch(motherId, outcome.completedChildIds);
-        } else if (auto& sn = GetSkyrimNetGateway(); sn.IsAvailable()) {
-            sn.EmitLaborProgress(motherId, outcome.bornSoFar, outcome.laborTotal);
+            if (promptNaming) {
+                auto completedIds = outcome.completedChildIds;
+                FertilityChildNamingCoordinator::GetSingleton().PromptBeeingFemaleChildNaming(
+                    childId,
+                    motherId,
+                    normalizedSex == 1,
+                    effectiveName,
+                    [motherId, completedIds = std::move(completedIds)](const std::string&) {
+                        FertilityLifecycleCoordinator::GetSingleton().FinalizeCompletedDeliveryBatch(
+                            motherId, completedIds);
+                    });
+            } else {
+                FinalizeCompletedDeliveryBatch(motherId, outcome.completedChildIds);
+            }
+        } else {
+            if (promptNaming) {
+                FertilityChildNamingCoordinator::GetSingleton().PromptBeeingFemaleChildNaming(
+                    childId,
+                    motherId,
+                    normalizedSex == 1,
+                    effectiveName);
+            }
+            if (auto& sn = GetSkyrimNetGateway(); sn.IsAvailable()) {
+                sn.EmitLaborProgress(motherId, outcome.bornSoFar, outcome.laborTotal);
+            }
         }
     }
 
@@ -1038,6 +1122,192 @@ namespace MARAS::App {
                 GetUiBridgeGateway().ShowDashboard();
             });
         });
+    }
+
+    void FertilityLifecycleCoordinator::CheckPhysicalInfantsGrowth(float /*currentGameDay*/) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (!snap || !snap->lineage) {
+            return;
+        }
+
+        const auto physicalInfants = Domain::Lineage::CollectPhysicalInfantIds(*snap->lineage);
+        if (physicalInfants.empty()) {
+            return;
+        }
+
+        auto* filterFac = FormCache::GetSingleton().GetSkyrimNetFilterFaction();
+        for (const State::ChildId cid : physicalInfants) {
+            const RE::FormID childId = cid.raw();
+            auto* actor = ResolveActorForm(childId);
+            if (!actor || actor->IsDeleted() || actor->IsDead()) {
+                continue;
+            }
+
+            const float refScale =
+                Domain::Lineage::RefScaleRawToFloat(actor->GetReferenceRuntimeData().refScale);
+            if (Domain::Lineage::ShouldPromotePhysicalInfantToChild(refScale)) {
+                MARAS_LOG_INFO(
+                    "[Fertility][BF] Physical infant {:08X} ('{}') reached normal refScale ({:.3f}); promoting to Stage 2 Young Child",
+                    childId,
+                    ActorSvc::GetName(childId),
+                    refScale);
+                (void)PromotePhysicalInfantToChild(childId, /*forceSnapScale=*/false);
+            } else {
+                actor->AllowPCDialogue(false);
+                if (filterFac && !actor->IsInFaction(filterFac)) {
+                    Utils::AddToFaction(childId, filterFac, 0);
+                }
+            }
+        }
+    }
+
+    bool FertilityLifecycleCoordinator::PromotePhysicalInfantToChild(
+        RE::FormID childId,
+        bool forceSnapScale) {
+        if (childId == 0 || IsSyntheticChildID(childId)) {
+            return false;
+        }
+
+        auto& lineage = LineageUseCases::GetSingleton();
+        auto existingOpt = lineage.GetChildEntry(childId);
+        if (!existingOpt || existingOpt->stage != Foundation::ChildStage::Infant) {
+            return false;
+        }
+
+        RE::Actor* actor = ResolveActorForm(childId);
+        if (forceSnapScale && actor && !actor->IsDeleted()) {
+            actor->SetScale(1.0f);
+            if (auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton()) {
+                RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCb;
+                RE::Actor* actorArg = actor;
+                auto args = RE::MakeFunctionArguments(std::move(actorArg));
+                vm->DispatchStaticCall("TTM_ServiceFertilityBF", "FinishInfantGrowth", args, nullCb);
+            }
+        }
+
+        if (!lineage.SetChildStage(childId, Foundation::ChildStage::Child)) {
+            return false;
+        }
+
+        lineage.InitializeAndApplyChildVisualsAndRPG(childId);
+
+        State::ChildRecord rec = *existingOpt;
+        if (auto refreshed = lineage.GetChildEntry(childId)) {
+            rec = *refreshed;
+        }
+
+        const std::uint64_t resolvedUuid = ResolveAndLinkSpawnedChildIdentity(
+            childId, Foundation::ChildStage::Child, rec.skyrimNetUuid, 0, rec.name);
+        if (resolvedUuid != 0 && resolvedUuid != rec.skyrimNetUuid) {
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                if (auto* mutableRec = ws.lineage.Write().FindChildMutable(State::ChildId{ childId })) {
+                    mutableRec->skyrimNetUuid = resolvedUuid;
+                }
+            });
+        }
+
+        FactionReconciler::GetSingleton().ReconcileActor(childId);
+        PackageReconciler::GetSingleton().ReconcileActor(childId);
+
+        if (GetSkyrimNetGateway().IsAvailable()) {
+            GetSkyrimNetGateway().RequestChildProfileUpdate(childId, Foundation::ChildStage::Child);
+        }
+
+        const std::string resolvedName =
+            rec.name.empty() ? ActorSvc::GetName(childId) : rec.name;
+        if (actor && !actor->IsDeleted()) {
+            actor->AllowPCDialogue(true);
+            OnChildGrewUpActor(actor, resolvedName);
+        } else {
+            AffectionEventCoordinator::GetSingleton().ApplyChildMilestoneForParents(childId, "child");
+            if (auto& sn = GetSkyrimNetGateway(); sn.IsAvailable()) {
+                sn.EmitChildGrewUp(childId, resolvedName);
+            }
+        }
+
+        MARAS_LOG_INFO(
+            "[Fertility][BF] Promoted physical infant {:08X} ('{}') -> Stage 2 Young Child (forceSnapScale={})",
+            childId,
+            resolvedName,
+            forceSnapScale);
+
+        GetUiBridgeGateway().SendOverviewData();
+        GetUiBridgeGateway().SendNPCDetail(childId);
+        return true;
+    }
+
+    bool FertilityLifecycleCoordinator::GrowInfantFromDashboard(RE::FormID childId) {
+        if (childId == 0) {
+            return false;
+        }
+
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (!snap || !snap->lineage) {
+            return false;
+        }
+
+        const bool hasBeeingFemale = (FormCache::GetSingleton().GetBeeingFemaleMcmQuest() != nullptr);
+        const auto plan = Domain::Lineage::PlanDashboardInfantGrowth(
+            *snap->lineage, State::ChildId{ childId }, hasBeeingFemale);
+
+        if (plan.mode == Domain::Lineage::DashboardInfantGrowthMode::None) {
+            MARAS_LOG_WARN(
+                "[Fertility] GrowInfantFromDashboard ignored for {:08X}: not eligible for manual infant growth",
+                childId);
+            return false;
+        }
+
+        if (plan.mode == Domain::Lineage::DashboardInfantGrowthMode::PromotePhysicalInPlace) {
+            return PromotePhysicalInfantToChild(childId, /*forceSnapScale=*/true);
+        }
+
+        const auto* rec = snap->lineage->FindChild(State::ChildId{ childId });
+        const std::string originalName = rec ? rec->name : std::string{};
+
+        const std::int32_t gender =
+            plan.needsGenderRoll ? ((Utils::RandomFloat(0.0f, 1.0f) < 0.5f) ? 0 : 1)
+                                 : static_cast<std::int32_t>(plan.existingGender);
+        std::string childName = originalName;
+        if (plan.needsNameFallback) {
+            RE::Actor* motherActor =
+                !plan.bioMother.IsNull() ? ResolveActorForm(plan.bioMother.raw()) : nullptr;
+            RE::Actor* fatherActor =
+                (!plan.bioFather.IsNull() && !plan.bioFather.IsUnknownFather())
+                    ? ResolveActorForm(plan.bioFather.raw())
+                    : nullptr;
+            childName = PickNpcChildNameForParents(motherActor, fatherActor, gender == 1);
+            if (childName.empty()) {
+                childName = (gender == 1) ? "Daughter" : "Son";
+            }
+        }
+
+        if (plan.removeCarriedBfBabyItem) {
+            if (RE::Actor* motherActor = ResolveActorForm(plan.bioMother.raw())) {
+                if (auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton()) {
+                    RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCb;
+                    RE::BSFixedString nameArg(originalName.c_str());
+                    auto args = RE::MakeFunctionArguments(std::move(motherActor), std::move(nameArg));
+                    vm->DispatchStaticCall("TTM_ServiceFertilityBF", "RemoveCarriedBabyItem", args, nullCb);
+                }
+            }
+        }
+
+        ApplyGrowUpTransition(childId, childName, gender);
+
+        const std::string childIdStr = std::format("{:08X}", childId);
+        const float childIdFloat = static_cast<float>(static_cast<std::int32_t>(childId));
+        EmitModCallbackEvent(
+            "maras_spawn_synthetic_child",
+            childIdStr,
+            childIdFloat,
+            RE::FormID{ 0 });
+
+        MARAS_LOG_INFO(
+            "[Fertility] Manual early growth triggered from Dashboard for synthetic infant {:08X} ('{}', gender={})",
+            childId,
+            childName,
+            gender);
+        return true;
     }
 
 }  // namespace MARAS::App

@@ -478,7 +478,17 @@ namespace MARAS::Projection {
                        : State::ActorId{})
                 : child.bioFather;
 
-        if (!ctx.hideSecretFromViewer && ctx.hasPresumedFather) {
+        const bool hasStoredPresumedOrSecretHistory =
+            !child.presumedFather.IsNull() ||
+            sec.isSecret ||
+            sec.isSecretForPartner ||
+            sec.isSecretForBioFather ||
+            sec.isPregnancySecretForPartner ||
+            sec.discovered ||
+            sec.discoveredByPartner ||
+            sec.discoveredByBioFather;
+
+        if (!ctx.hideSecretFromViewer && ctx.hasPresumedFather && hasStoredPresumedOrSecretHistory) {
             out.presumedFather = ctx.effectivePresumedFather;
         }
 
@@ -514,19 +524,10 @@ namespace MARAS::Projection {
             out.hasBeastblood = !ctx.hideSecretFromViewer || visibleParentHasBeastblood;
         }
 
-        // Detailed paternity secret metadata only exposed when viewer knows truth and intrigue context exists.
-        const bool hasIntrigueContext =
-            (!ctx.effectivePresumedFather.IsNull() && !ctx.isBioSameAsPresumed) ||
-            sec.isSecretForBioFather;
+        // Detailed paternity secret metadata only exposed when viewer knows truth and actual secret/presumed history exists.
         const bool hasAnySecretHistoryOrContext =
-            hasIntrigueContext ||
-            sec.isSecret ||
-            sec.discovered ||
-            sec.discoveredByPartner ||
-            sec.discoveredByBioFather ||
-            sec.isPregnancySecretForPartner ||
-            sec.hasPhenotypeMismatch ||
-            !child.presumedFather.IsNull();
+            hasStoredPresumedOrSecretHistory ||
+            sec.hasPhenotypeMismatch;
         if (!ctx.hideSecretFromViewer && ctx.canViewerKnow && hasAnySecretHistoryOrContext) {
             PerceivedPaternitySecret pSec{};
             pSec.isSecret = !sec.discovered && (sec.isSecretForPartner || sec.isSecretForBioFather);

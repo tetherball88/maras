@@ -163,7 +163,11 @@ namespace MARAS {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        MARAS_LOG_DEBUG("DialogueEventSink: resolved speaker {:08X} ({})", npc->GetFormID(), npc->GetName());
+        const char* speakerName = npc->GetDisplayFullName();
+        if (!speakerName || speakerName[0] == '\0') {
+            speakerName = npc->GetName();
+        }
+        MARAS_LOG_DEBUG("DialogueEventSink: resolved speaker {:08X} ({})", npc->GetFormID(), speakerName ? speakerName : "");
         SendDialogueEvent(npc);
         return RE::BSEventNotifyControl::kContinue;
     }
