@@ -6,7 +6,7 @@ Project-wide invariants across all layers of **M.A.R.A.S**. **Mandatory First St
 3. **Papyrus Scripts**: [Scripts/Source/AGENTS.md](Scripts/Source/AGENTS.md)
 4. **SkyrimNet Bundle**: [SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md](SKSE/Plugins/SkyrimNet/external/tetherball88.maras/AGENTS.md)
 
-Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_INTEGRATION.md`, `HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md`, `API_AND_UI_BRIDGE_REFERENCE.md`, `RELATIONSHIP_DYNAMICS_GUIDE.md`, `FERTILITY_MODE_RELOADED_INTEGRATION.md`, `INGAME_SANITY_TEST_SUITE.md`). Step-by-step runbooks live in `.agents/skills/` (`maras-build-and-test`, `maras-cosave-and-tests`, `maras-add-setting`, `maras-doc-sync`).
+Architecture docs live in `docs/modder/` (`ARCHITECTURE.md`, `SKYRIMNET_AND_AI_INTEGRATION.md`, `HOUSEHOLD_AND_CHILDREN_ARCHITECTURE.md`, `API_AND_UI_BRIDGE_REFERENCE.md`, `RELATIONSHIP_DYNAMICS_GUIDE.md`, `FERTILITY_MODE_RELOADED_INTEGRATION.md`, `INGAME_SANITY_TEST_SUITE.md`). Step-by-step runbooks live in `.agents/skills/` (`maras-build-and-test`, `maras-cosave-and-tests`, `maras-add-setting`, `maras-doc-sync`, `maras-translations`).
 
 ---
 
