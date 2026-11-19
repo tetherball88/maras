@@ -79,6 +79,7 @@ namespace MARAS {
         (void)GetCanFormNonCheatingMainFaction();
         (void)GetSpouseSharedHouseFaction();
         (void)GetSpouseNoInitialHouseFaction();
+        (void)GetPlayerFamilyBlockedFaction();
         (void)GetCheatingNpcCaughtFaction();
         (void)GetBYOHRelationshipAdoptionChildOwnedFaction();
         (void)GetBYOHRelationshipAdoptionFaction();
@@ -319,6 +320,10 @@ namespace MARAS {
 
     RE::TESFaction* FormCache::GetSpouseNoInitialHouseFaction() {
         return LazyLoadForm(spouseNoInitialHouseFaction_, 0x7F, "spouse no initial house faction");
+    }
+
+    RE::TESFaction* FormCache::GetPlayerFamilyBlockedFaction() {
+        return LazyLoadForm(playerFamilyBlockedFaction_, 0xDD4, "player family blocked faction");
     }
 
     RE::TESFaction* FormCache::GetCheatingNpcCaughtFaction() {

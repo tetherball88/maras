@@ -75,6 +75,10 @@ DialogConditions:
     Faction: 000007:TT_MARAS.esp
 - MutagenObjectType: ConditionFloat
   Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000DD4:TT_MARAS.esp
+- MutagenObjectType: ConditionFloat
+  Data:
     MutagenObjectType: HasKeywordConditionData
     Keyword: 013794:Skyrim.esm
   ComparisonValue: 1

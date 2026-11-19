@@ -1,5 +1,6 @@
 #include "maras/engine/GiftMenuEventSink.h"
 
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineEventHooks.h"
@@ -143,7 +144,11 @@ namespace MARAS {
             return;
         }
 
-        if (!snap || !Domain::Relationships::HasTrackedPlayerStatus(*snap, Foundation::ActorId{ destId })) {
+        if (!snap || !Domain::Relationships::HasTrackedPlayerStatus(
+                         *snap,
+                         Foundation::ActorId{ destId },
+                         nullptr,
+                         Utils::AreVanillaEngineFamily(destId, kPlayerFormID))) {
             return;
         }
 

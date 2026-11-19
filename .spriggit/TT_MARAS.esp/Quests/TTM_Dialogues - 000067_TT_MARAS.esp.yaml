@@ -11,6 +11,10 @@ DialogConditions:
     MutagenObjectType: GetInFactionConditionData
     Faction: 000007:TT_MARAS.esp
   ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 000DD4:TT_MARAS.esp
 NextAliasID: 4
 Aliases:
 - Name: CurrentMarriageTarget

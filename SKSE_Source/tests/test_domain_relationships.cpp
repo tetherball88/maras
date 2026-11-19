@@ -1412,4 +1412,67 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(DomainRelationships, PlayerFamilyBlockedFromCandidateDialogueGiftsAndIntimacy) {
+        WorldState ws{};
+        StubMetadataProvider meta{};
+        const ChildId adultChildId{ 0xFF000701u };
+        const ActorId adultChild = adultChildId.AsActorId();
+        const ActorId vanillaRelative{ 0x00019401u };
+        const ActorId nonRelative{ 0x00019402u };
+
+        RegisterAdult(ws, adultChild);
+        RegisterAdult(ws, vanillaRelative);
+        RegisterAdult(ws, nonRelative);
+
+        ChildRecord rec{};
+        rec.childId = adultChildId;
+        rec.stage = ChildStage::Adult;
+        rec.bioMother = ActorId::Player();
+        ws.lineage.Write().UpsertChild(rec);
+
+        const auto snap0 = ws.Snapshot();
+        std::string reason;
+        MARAS_CHECK(!CanFormRelationship(snap0, meta, ActorId::Player(), adultChild, RelationshipStatus::Candidate, {}, &reason));
+        RelationshipCheckContext engCtx{};
+        engCtx.areEngineFamily = true;
+        MARAS_CHECK(!CanFormRelationship(snap0, meta, ActorId::Player(), vanillaRelative, RelationshipStatus::Candidate, engCtx, &reason));
+
+        // Demoting a pre-existing active edge to Candidate stays permitted
+        (void)ws.TransitionRelationship(ActorId::Player(), adultChild, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
+        MARAS_CHECK(CanFormRelationship(ws.Snapshot(), meta, ActorId::Player(), adultChild, RelationshipStatus::Candidate, {}, &reason));
+
+        // No-AI chances zeroed for family even when alwaysSuccessMarriage is true
+        const auto zeroChances = ComputeNoAiDialogueChances(0.9f, true, RelationshipStatus::Candidate, false, false, true);
+        MARAS_CHECK(zeroChances.datingChance == 0.0f && zeroChances.loverChance == 0.0f && zeroChances.marriageChance == 0.0f);
+
+        // Dialogue begin/end outcomes block romance/sex/join while preserving breakup
+        MARAS_CHECK(!EvaluateDialogueTopicBeginOutcome("maras_enable_candidate", RelationshipStatus::Unknown, true).registerCandidate);
+        MARAS_CHECK_EQ(EvaluateDialogueTopicBeginOutcome("maras_no_ai_initiate_sex", RelationshipStatus::Candidate, true).PackPapyrusEffectCode(), 0);
+        MARAS_CHECK(!EvaluateDialogueTopicBeginOutcome("maras_no_ai_dating", RelationshipStatus::Candidate, true).promoteSpeakerStatus.has_value());
+        MARAS_CHECK(!EvaluateDialogueTopicBeginOutcome("maras_no_ai_lover", RelationshipStatus::Candidate, true).promoteSpeakerStatus.has_value());
+        MARAS_CHECK(!EvaluateDialogueTopicBeginOutcome("maras_no_ai_engagement", RelationshipStatus::Candidate, true).promoteSpeakerStatus.has_value());
+        MARAS_CHECK_EQ(EvaluateDialogueTopicEndOutcome("maras_sex_walkin_cheating_join_yes", true).papyrusSideEffect, DialogueEndSideEffect::None);
+        MARAS_CHECK_EQ(*EvaluateDialogueTopicBeginOutcome("maras_breakup", RelationshipStatus::Dating, true).promoteSpeakerStatus, RelationshipStatus::ExDating);
+
+        // Tracked player status, gifts, and intimate thread evaluation exclude MARAS & engine family
+        const auto snap1 = ws.Snapshot();
+        MARAS_CHECK(!HasTrackedPlayerStatus(snap1, adultChild, &meta, false));
+        MARAS_CHECK(!HasTrackedPlayerStatus(snap1, vanillaRelative, &meta, true));
+        MARAS_CHECK(HasTrackedPlayerStatus(snap1, nonRelative, &meta, false));
+
+        const std::vector<GiftedItemEntry> giftItems{ { "Ring", 1, 100 } };
+        MARAS_CHECK(!EvaluateGiftSession(snap1, adultChild, "Player", "Child", giftItems, &meta, false).valid);
+        MARAS_CHECK(!EvaluateGiftSession(snap1, vanillaRelative, "Player", "Kin", giftItems, &meta, true).valid);
+
+        const std::vector<ActorId> participants{ ActorId::Player(), adultChild, vanillaRelative, nonRelative };
+        const std::vector<ActorId> engineFam{ vanillaRelative };
+        const auto threadEval = EvaluateIntimateThreadParticipants(snap1, participants, false, engineFam, &meta);
+        MARAS_REQUIRE_EQ(threadEval.playerIntimacyPartners.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(threadEval.playerIntimacyPartners[0], nonRelative);
+
+        const auto endEval = EvaluateIntimateThreadCompletion(snap1, participants, true, engineFam, &meta);
+        MARAS_REQUIRE_EQ(endEval.eligiblePartners.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(endEval.eligiblePartners[0], nonRelative);
+    }
+
 }  // namespace MARAS::Tests

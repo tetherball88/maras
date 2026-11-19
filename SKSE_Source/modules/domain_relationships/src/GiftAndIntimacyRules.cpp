@@ -1,15 +1,37 @@
 #include "maras/domain/relationships/GiftAndIntimacyRules.h"
 
+#include "maras/domain/relationships/RelationshipRules.h"
+
 #include <algorithm>
 #include <format>
 #include <limits>
 
 namespace MARAS::Domain::Relationships {
 
+    namespace {
+
+        [[nodiscard]] bool ContainsActor(std::span<const ActorId> actors, ActorId target) noexcept {
+            return std::find(actors.begin(), actors.end(), target) != actors.end();
+        }
+
+    }  // namespace
+
     bool HasTrackedPlayerStatus(
         const State::WorldStateSnapshot& snap,
-        ActorId actor) noexcept {
-        if (actor.IsNull() || actor.IsPlayer() || actor.IsUnknownFather() || actor.IsSyntheticChild()) {
+        ActorId actor,
+        const State::IActorMetadataProvider* meta,
+        bool isEngineFamilyWithPlayer) noexcept {
+        if (isEngineFamilyWithPlayer || actor.IsNull() || actor.IsPlayer() ||
+            actor.IsUnknownFather() || actor.IsSyntheticChild()) {
+            return false;
+        }
+        try {
+            State::DefaultActorMetadataProvider fallbackMeta{};
+            const auto& activeMeta = meta ? *meta : fallbackMeta;
+            if (AreMarasFamilyMembers(snap, activeMeta, actor, ActorId::Player())) {
+                return false;
+            }
+        } catch (...) {
             return false;
         }
         if (snap.relationships &&
@@ -24,9 +46,11 @@ namespace MARAS::Domain::Relationships {
         ActorId receiver,
         std::string_view playerName,
         std::string_view receiverName,
-        std::span<const GiftedItemEntry> items) {
+        std::span<const GiftedItemEntry> items,
+        const State::IActorMetadataProvider* meta,
+        bool isReceiverEngineFamilyWithPlayer) {
         GiftSessionOutcome outcome{};
-        if (!HasTrackedPlayerStatus(snap, receiver) || items.empty()) {
+        if (!HasTrackedPlayerStatus(snap, receiver, meta, isReceiverEngineFamilyWithPlayer) || items.empty()) {
             return outcome;
         }
 
@@ -65,7 +89,9 @@ namespace MARAS::Domain::Relationships {
     IntimateThreadParticipantEvaluation EvaluateIntimateThreadParticipants(
         const State::WorldStateSnapshot& snap,
         std::span<const ActorId> participants,
-        bool hasThreadCheatingOrOpenPotential) {
+        bool hasThreadCheatingOrOpenPotential,
+        std::span<const ActorId> engineFamilyWithPlayer,
+        const State::IActorMetadataProvider* meta) {
         IntimateThreadParticipantEvaluation eval{};
         bool hasPlayer = false;
         std::vector<ActorId> uniqueParticipants;
@@ -88,7 +114,8 @@ namespace MARAS::Domain::Relationships {
             if (actor.IsPlayer()) {
                 continue;
             }
-            if (hasPlayer && HasTrackedPlayerStatus(snap, actor)) {
+            if (hasPlayer &&
+                HasTrackedPlayerStatus(snap, actor, meta, ContainsActor(engineFamilyWithPlayer, actor))) {
                 eval.playerIntimacyPartners.push_back(actor);
             }
             if (hasThreadCheatingOrOpenPotential &&
@@ -107,12 +134,14 @@ namespace MARAS::Domain::Relationships {
     IntimateThreadCompletionOutcome EvaluateIntimateThreadCompletion(
         const State::WorldStateSnapshot& snap,
         std::span<const ActorId> recordedPartners,
-        bool hadSex) {
+        bool hadSex,
+        std::span<const ActorId> engineFamilyWithPlayer,
+        const State::IActorMetadataProvider* meta) {
         IntimateThreadCompletionOutcome outcome{};
         outcome.baseAffection = hadSex ? 15.0f : 8.0f;
 
         for (const ActorId partner : recordedPartners) {
-            if (!HasTrackedPlayerStatus(snap, partner)) {
+            if (!HasTrackedPlayerStatus(snap, partner, meta, ContainsActor(engineFamilyWithPlayer, partner))) {
                 continue;
             }
             if (std::find(outcome.eligiblePartners.begin(), outcome.eligiblePartners.end(), partner) ==

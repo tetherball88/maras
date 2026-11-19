@@ -9,6 +9,7 @@
 #include "maras/state/SpatialActorSnapshot.h"
 
 #include <RE/A/AIProcess.h>
+#include <RE/B/BGSRelationship.h>
 #include <RE/B/BSExtraData.h>
 #include <RE/E/ExtraFactionChanges.h>
 #include <RE/E/ExtraLinkedRef.h>
@@ -16,9 +17,39 @@
 #include <RE/T/TESPackage.h>
 #include <REL/Relocation.h>
 
+#include <format>
+#include <unordered_set>
+
 namespace MARAS::Utils {
 
     namespace {
+
+        constexpr RE::FormID kSiblingsAssocFormID = 0x000142C5;
+        constexpr RE::FormID kParentChildAssocFormID = 0x000142C6;
+        constexpr RE::FormID kAuntUncleAssocFormID = 0x000142C7;
+        constexpr RE::FormID kCousinsAssocFormID = 0x000142C8;
+        constexpr RE::FormID kGrandparentGrandchildAssocFormID = 0x0001E803;
+        constexpr RE::FormID kGrandAuntUncleAssocFormID = 0x0001E80B;
+        constexpr RE::FormID kGreatGrandparentAssocFormID = 0x0001E90B;
+
+        [[nodiscard]] bool PlayerBaseHasVanillaParent(
+            RE::TESDataHandler* dataHandler,
+            const RE::TESNPC* playerBase) noexcept {
+            if (!dataHandler || !playerBase) {
+                return false;
+            }
+            static const bool s_hasParent = [&]() noexcept -> bool {
+                for (const auto* rel : dataHandler->GetFormArray<RE::BGSRelationship>()) {
+                    if (rel && rel->assocType &&
+                        rel->assocType->GetFormID() == kParentChildAssocFormID &&
+                        rel->npc2 == playerBase && rel->npc1 && rel->npc1 != playerBase) {
+                        return true;
+                    }
+                }
+                return false;
+            }();
+            return s_hasParent;
+        }
 
         bool IsMannequinRace(const RE::TESRace* a_race) {
             if (!a_race) return false;
@@ -446,6 +477,120 @@ namespace MARAS::Utils {
         auto& runtimeData = actor->GetActorRuntimeData();
         RE::AIProcess* ai = runtimeData.currentProcess;
         return CheckPackageTargetsPlayer(pkg, actor, player, ai);
+    }
+
+    bool AreVanillaEngineFamily(
+        RE::FormID actorA,
+        RE::FormID actorB,
+        std::string* outReason) {
+        if (outReason) {
+            outReason->clear();
+        }
+        if (actorA == 0 || actorB == 0 || actorA == actorB) {
+            return false;
+        }
+
+        auto isPlayerId = [](RE::FormID id) noexcept -> bool {
+            return id == kPlayerRefID || id == kPlayerBaseID;
+        };
+
+        auto* playerBase = ActorSvc::GetActorBase(kPlayerRefID);
+        auto* baseA = isPlayerId(actorA) ? playerBase : ActorSvc::GetActorBase(actorA);
+        auto* baseB = isPlayerId(actorB) ? playerBase : ActorSvc::GetActorBase(actorB);
+        if (!baseA || !baseB || baseA == baseB) {
+            return false;
+        }
+
+        auto formatNames = [&](std::string& nameA, std::string& nameB) {
+            nameA = ActorSvc::GetName(actorA);
+            nameB = ActorSvc::GetName(actorB);
+            if (nameA.empty()) {
+                nameA = std::format("{:08X}", actorA);
+            }
+            if (nameB.empty()) {
+                nameB = std::format("{:08X}", actorB);
+            }
+        };
+
+        auto describeAssoc = [&](const RE::BGSRelationship* rel) -> bool {
+            if (!rel || !rel->assocType) {
+                return false;
+            }
+            const RE::FormID assocID = rel->assocType->GetFormID();
+            std::string_view msgSuffix;
+            switch (assocID) {
+                case kSiblingsAssocFormID:
+                    msgSuffix = "are siblings (brother/sister).";
+                    break;
+                case kParentChildAssocFormID:
+                    msgSuffix = "have a parent/child relationship.";
+                    break;
+                case kAuntUncleAssocFormID:
+                    msgSuffix = "have an aunt/uncle and niece/nephew relationship.";
+                    break;
+                case kCousinsAssocFormID:
+                    msgSuffix = "are cousins.";
+                    break;
+                case kGrandparentGrandchildAssocFormID:
+                    msgSuffix = "have a grandparent/grandchild relationship.";
+                    break;
+                case kGrandAuntUncleAssocFormID:
+                    msgSuffix = "have a grand-aunt/uncle relationship.";
+                    break;
+                case kGreatGrandparentAssocFormID:
+                    msgSuffix = "have a great-grandparent/grandchild relationship.";
+                    break;
+                default:
+                    return false;
+            }
+            if (outReason) {
+                std::string nameA;
+                std::string nameB;
+                formatNames(nameA, nameB);
+                *outReason = std::format("{} and {} {}", nameA, nameB, msgSuffix);
+            }
+            return true;
+        };
+
+        if (describeAssoc(RE::BGSRelationship::GetRelationship(baseA, baseB)) ||
+            describeAssoc(RE::BGSRelationship::GetRelationship(baseB, baseA))) {
+            return true;
+        }
+
+        // Detect implicit vanilla siblings sharing a ParentChild BGSRelationship parent
+        if (auto* dataHandler = RE::TESDataHandler::GetSingleton()) {
+            if ((baseA == playerBase || baseB == playerBase) &&
+                !PlayerBaseHasVanillaParent(dataHandler, playerBase)) {
+                return false;
+            }
+
+            std::unordered_set<const RE::TESNPC*> parentsA;
+            std::unordered_set<const RE::TESNPC*> parentsB;
+            for (const auto* rel : dataHandler->GetFormArray<RE::BGSRelationship>()) {
+                if (!rel || !rel->assocType || rel->assocType->GetFormID() != kParentChildAssocFormID) {
+                    continue;
+                }
+                if (rel->npc2 == baseA && rel->npc1 && rel->npc1 != baseA) {
+                    parentsA.insert(rel->npc1);
+                }
+                if (rel->npc2 == baseB && rel->npc1 && rel->npc1 != baseB) {
+                    parentsB.insert(rel->npc1);
+                }
+            }
+            for (const auto* p : parentsA) {
+                if (parentsB.contains(p)) {
+                    if (outReason) {
+                        std::string nameA;
+                        std::string nameB;
+                        formatNames(nameA, nameB);
+                        *outReason = std::format("{} and {} share a vanilla parent (half/full siblings).", nameA, nameB);
+                    }
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
 }  // namespace MARAS::Utils

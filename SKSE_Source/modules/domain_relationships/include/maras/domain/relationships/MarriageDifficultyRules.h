@@ -108,6 +108,7 @@ namespace MARAS::Domain::Relationships {
         bool alwaysSuccessMarriage,
         Foundation::RelationshipStatus playerNpcStatus,
         bool npcHasClosedMainPair,
-        bool playerHasClosedMainPair) noexcept;
+        bool playerHasClosedMainPair,
+        bool isBlockedPlayerFamily = false) noexcept;
 
 }  // namespace MARAS::Domain::Relationships

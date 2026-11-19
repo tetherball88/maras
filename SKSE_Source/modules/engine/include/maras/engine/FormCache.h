@@ -31,6 +31,7 @@ namespace MARAS {
         RE::TESFaction* GetCanFormNonCheatingMainFaction();
         RE::TESFaction* GetSpouseSharedHouseFaction();
         RE::TESFaction* GetSpouseNoInitialHouseFaction();
+        RE::TESFaction* GetPlayerFamilyBlockedFaction();
         RE::TESFaction* GetCheatingNpcCaughtFaction();
         RE::TESFaction* GetBYOHRelationshipAdoptionChildOwnedFaction();
         RE::TESFaction* GetBYOHRelationshipAdoptionFaction();
@@ -228,6 +229,7 @@ namespace MARAS {
         RE::TESFaction* CanFormNonCheatingMainFaction_{ nullptr };
         RE::TESFaction* spouseSharedHouseFaction_{ nullptr };
         RE::TESFaction* spouseNoInitialHouseFaction_{ nullptr };
+        RE::TESFaction* playerFamilyBlockedFaction_{ nullptr };
         RE::TESFaction* cheatingNpcCaughtFaction_{ nullptr };
         RE::TESFaction* byohRelationshipAdoptionChildOwnedFaction_{ nullptr };
         RE::TESFaction* byohRelationshipAdoptionFaction_{ nullptr };

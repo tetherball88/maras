@@ -220,6 +220,7 @@ Because Creation Kit dialogue branches, AI packages, and Story Manager nodes eva
   - `0x119` (`SpouseAffectionFaction`): Rank stores exact clamped permanent affection (`0..100`) so CK dialogue conditions can threshold directly (Estranged `<25`, Troubled `25..49`, Content `50..74`, Happy `>=75`).
   - `0x2BD` (`SpouseCheatingFaction`) & `0x2DC` (`SpouseOpenRelFaction`): `0x2BD` (`Rank 0` = undiscovered ongoing secret, `Rank 1` = known ongoing affair) and `0x2DC` mark infidelity and open-relationship state for dialogue/scene conditions.
   - `0x5D2` (`TTM_CanFormNonCheatingMain`): Assigned to the Player (`Rank 1` when polygamy is active or no closed main-tier partner exists, `Rank 0` otherwise) and all registered NPCs (`Rank 0` = in a closed main-tier pair; `Rank 1` = free to form a non-cheating main relationship).
+  - `0xDD4` (`TTM_PlayerFamilyBlocked`): Assigned (`Rank 0`) by `FactionReconciler` / `EngineSyncPlan` to MARAS and vanilla `BGSRelationship` family members of the Player to gate `TTM_MainController` (`0x800`) initial attraction and `TTM_Dialogues` (`0x67`) Player romance/quick-sex topics.
   - `0x5A3`, `0x5A4`, `0x5C4`: Caught-cheating state factions used during confrontation dialogues.
 - **Archetypes**:
   - `0x66` (`SocialClassFaction`): Ranks `0..7` (`Outcast` `0`, `Poverty` `1`, `Working` `2`, `Middle` `3`, `Wealthy` `4`, `Religious` `5`, `Nobles` `6`, `Rulers` `7`).

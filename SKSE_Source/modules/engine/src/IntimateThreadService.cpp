@@ -285,16 +285,21 @@ namespace MARAS {
                              hasOpenRelationshipPotential);
 
         std::vector<Foundation::ActorId> strongActorIds;
+        std::vector<Foundation::ActorId> engineFamilyWithPlayer;
         strongActorIds.reserve(actorIDs.size());
         for (const RE::FormID id : actorIDs) {
             strongActorIds.emplace_back(id);
+            if (id != kPlayerFormID && Utils::AreVanillaEngineFamily(id, kPlayerFormID)) {
+                engineFamilyWithPlayer.emplace_back(id);
+            }
         }
         Domain::Relationships::IntimateThreadParticipantEvaluation participantEval{};
         if (const auto snap = State::WorldStore::GetSingleton().Snapshot()) {
             participantEval = Domain::Relationships::EvaluateIntimateThreadParticipants(
                 *snap,
                 strongActorIds,
-                hasCheatingPotential || hasOpenRelationshipPotential);
+                hasCheatingPotential || hasOpenRelationshipPotential,
+                engineFamilyWithPlayer);
         }
 
         std::vector<RE::FormID> actorsToAddFaction;

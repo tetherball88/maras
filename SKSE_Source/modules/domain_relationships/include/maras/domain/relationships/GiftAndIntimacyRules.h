@@ -19,7 +19,9 @@ namespace MARAS::Domain::Relationships {
      */
     [[nodiscard]] bool HasTrackedPlayerStatus(
         const State::WorldStateSnapshot& snap,
-        ActorId actor) noexcept;
+        ActorId actor,
+        const State::IActorMetadataProvider* meta = nullptr,
+        bool isEngineFamilyWithPlayer = false) noexcept;
 
     struct GiftedItemEntry {
         std::string itemName{};
@@ -43,7 +45,9 @@ namespace MARAS::Domain::Relationships {
         ActorId receiver,
         std::string_view playerName,
         std::string_view receiverName,
-        std::span<const GiftedItemEntry> items);
+        std::span<const GiftedItemEntry> items,
+        const State::IActorMetadataProvider* meta = nullptr,
+        bool isReceiverEngineFamilyWithPlayer = false);
 
     struct IntimateThreadParticipantEvaluation {
         std::vector<ActorId> playerIntimacyPartners{};
@@ -55,7 +59,9 @@ namespace MARAS::Domain::Relationships {
     [[nodiscard]] IntimateThreadParticipantEvaluation EvaluateIntimateThreadParticipants(
         const State::WorldStateSnapshot& snap,
         std::span<const ActorId> participants,
-        bool hasThreadCheatingOrOpenPotential);
+        bool hasThreadCheatingOrOpenPotential,
+        std::span<const ActorId> engineFamilyWithPlayer = {},
+        const State::IActorMetadataProvider* meta = nullptr);
 
     struct IntimateThreadCompletionOutcome {
         float baseAffection{ 8.0f };
@@ -67,6 +73,8 @@ namespace MARAS::Domain::Relationships {
     [[nodiscard]] IntimateThreadCompletionOutcome EvaluateIntimateThreadCompletion(
         const State::WorldStateSnapshot& snap,
         std::span<const ActorId> recordedPartners,
-        bool hadSex);
+        bool hadSex,
+        std::span<const ActorId> engineFamilyWithPlayer = {},
+        const State::IActorMetadataProvider* meta = nullptr);
 
 }  // namespace MARAS::Domain::Relationships

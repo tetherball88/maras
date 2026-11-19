@@ -382,46 +382,66 @@ namespace MARAS::Domain::Relationships {
         return 0;
     }
 
-    DialogueTopicEndOutcome EvaluateDialogueTopicEndOutcome(std::string_view promptKey) {
+    DialogueTopicEndOutcome EvaluateDialogueTopicEndOutcome(
+        std::string_view promptKey,
+        bool isSpeakerFamilyWithPlayer) {
+        DialogueTopicEndOutcome out{};
         if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_sorry_no_persuade_failure") ||
             StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_sorry_didnt_forgave_persuade_failure") ||
             StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_join_no_persuade_failure")) {
-            return DialogueTopicEndOutcome{ .breakupWithSpeaker = true };
-        }
-        if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_join_yes") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_join_no_persuade_success") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_or_join_yes") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_or_join_no_persuade_success")) {
-            return DialogueTopicEndOutcome{
+            out = DialogueTopicEndOutcome{ .breakupWithSpeaker = true };
+        } else if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_join_yes") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_cheating_join_no_persuade_success") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_or_join_yes") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_sex_walkin_or_join_no_persuade_success")) {
+            out = DialogueTopicEndOutcome{
                 .papyrusSideEffect = DialogueEndSideEffect::AddParticipantPlayerSpeaker
             };
-        }
-        if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_success") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_intimidate_success") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_persuade_success") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_giveup_stop")) {
-            return DialogueTopicEndOutcome{
+        } else if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_success") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_intimidate_success") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_persuade_success") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_no_ai_cheating_demand_giveup_stop")) {
+            out = DialogueTopicEndOutcome{
                 .papyrusSideEffect = DialogueEndSideEffect::EndCaughtCheaterThread,
                 .requiresCaughtFactionForSideEffect = true
             };
-        }
-        if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_player_caught_cheater_join__persuade_success") ||
-            StringUtils::CaseInsensitiveEquals(promptKey, "maras_player_caught_cheater_join_success")) {
-            return DialogueTopicEndOutcome{
+        } else if (StringUtils::CaseInsensitiveEquals(promptKey, "maras_player_caught_cheater_join__persuade_success") ||
+                   StringUtils::CaseInsensitiveEquals(promptKey, "maras_player_caught_cheater_join_success")) {
+            out = DialogueTopicEndOutcome{
                 .papyrusSideEffect = DialogueEndSideEffect::AddParticipantSpeakerPlayer
             };
         }
-        return {};
+
+        if (isSpeakerFamilyWithPlayer &&
+            (out.papyrusSideEffect == DialogueEndSideEffect::AddParticipantPlayerSpeaker ||
+             out.papyrusSideEffect == DialogueEndSideEffect::AddParticipantSpeakerPlayer)) {
+            out.papyrusSideEffect = DialogueEndSideEffect::None;
+        }
+        return out;
     }
 
     DialogueTopicBeginOutcome EvaluateDialogueTopicBeginOutcome(
         std::string_view promptKey,
-        RelationshipStatus currentSpeakerPlayerStatus) {
+        RelationshipStatus currentSpeakerPlayerStatus,
+        bool isSpeakerFamilyWithPlayer) {
         for (const auto& rule : kBeginRules) {
             if (StringUtils::CaseInsensitiveEquals(promptKey, rule.promptKey)) {
                 DialogueTopicBeginOutcome out = rule.outcome;
                 if (rule.conditionalBreakup) {
                     out.promoteSpeakerStatus = MapActiveBreakupTarget(currentSpeakerPlayerStatus);
+                }
+                if (isSpeakerFamilyWithPlayer) {
+                    const bool isBlockedScene =
+                        out.sceneAction == DialogueSceneAction::SetupQuickSexScene ||
+                        ((out.sceneAction == DialogueSceneAction::FreeNoticeCheatingPlayer ||
+                          out.sceneAction == DialogueSceneAction::FreeNoticeOpenRelPlayer) &&
+                         !out.breakupWithSpeaker);
+                    const bool isBlockedStatus =
+                        out.promoteSpeakerStatus.has_value() &&
+                        Foundation::IsActivePartnerStatus(*out.promoteSpeakerStatus);
+                    if (out.registerCandidate || isBlockedScene || isBlockedStatus) {
+                        return {};
+                    }
                 }
                 return out;
             }

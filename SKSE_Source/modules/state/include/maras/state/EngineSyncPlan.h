@@ -49,6 +49,7 @@ namespace MARAS::State {
         bool isRegisteredAdult{ false };
         bool isGraduatedAdultChild{ false };
         bool isHousedAdultTenant{ false };
+        bool isBlockedPlayerFamily{ false };
 
         // MARAS ranked factions (nullopt => EnsureAbsent / remove if present)
         std::optional<std::int8_t> trackedRank{};
@@ -63,6 +64,7 @@ namespace MARAS::State {
         std::optional<std::int8_t> canFormNonCheatingMainRank{};
         std::optional<std::int8_t> housedRank{};
         std::optional<std::int8_t> spouseSharedHouseRank{};
+        std::optional<std::int8_t> playerFamilyBlockedRank{};
 
         // Vanilla marriage & follower/werewolf factions
         FactionMembershipOp marriedFactionOp{ FactionMembershipOp::LeaveUntouched };
@@ -72,6 +74,7 @@ namespace MARAS::State {
         FactionMembershipOp courtingOp{ FactionMembershipOp::LeaveUntouched };
         FactionMembershipOp potentialHirelingOp{ FactionMembershipOp::LeaveUntouched };
         FactionMembershipOp marriagePotentialOp{ FactionMembershipOp::LeaveUntouched };
+        bool forceStripMarriagePotential{ false };
         bool clearIgnoreProposeKeyword{ false };
 
         // Graduated Stage 4 adult children flags
@@ -189,7 +192,8 @@ namespace MARAS::State {
     [[nodiscard]] AdultActorFactionPlan ComputeAdultActorFactionPlan(
         const WorldStateSnapshot& snap,
         ActorId actorId,
-        std::string_view adultChildClassId = {});
+        std::string_view adultChildClassId = {},
+        bool isBlockedPlayerFamily = false);
 
     [[nodiscard]] ChildFactionPlan ComputeChildFactionPlan(
         const WorldStateSnapshot& snap,

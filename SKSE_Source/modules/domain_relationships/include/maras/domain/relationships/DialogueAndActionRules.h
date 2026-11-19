@@ -91,11 +91,14 @@ namespace MARAS::Domain::Relationships {
     [[nodiscard]] std::int32_t ParseDivorceResolutionQuestStage(std::string_view decision);
 
     /// Evaluates the pure outcome table for `TTM_DialogueManagerMisc` Fragment_2 (OnEnd).
-    [[nodiscard]] DialogueTopicEndOutcome EvaluateDialogueTopicEndOutcome(std::string_view promptKey);
+    [[nodiscard]] DialogueTopicEndOutcome EvaluateDialogueTopicEndOutcome(
+        std::string_view promptKey,
+        bool isSpeakerFamilyWithPlayer = false);
 
     /// Evaluates the pure outcome table for `TTM_DialogueManagerMisc` Fragment_0 (OnBegin).
     [[nodiscard]] DialogueTopicBeginOutcome EvaluateDialogueTopicBeginOutcome(
         std::string_view promptKey,
-        Foundation::RelationshipStatus currentSpeakerPlayerStatus);
+        Foundation::RelationshipStatus currentSpeakerPlayerStatus,
+        bool isSpeakerFamilyWithPlayer = false);
 
 }  // namespace MARAS::Domain::Relationships

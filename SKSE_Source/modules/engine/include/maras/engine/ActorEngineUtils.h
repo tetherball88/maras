@@ -4,6 +4,7 @@
 #include "maras/state/DomainTypes.h"
 
 #include <cstdint>
+#include <string>
 
 namespace MARAS::Utils {
 
@@ -65,6 +66,11 @@ namespace MARAS::Utils {
         RE::FormID newB);
 
     [[nodiscard]] bool IsPlayerFollower(RE::Actor* actor);
+
+    [[nodiscard]] bool AreVanillaEngineFamily(
+        RE::FormID actorA,
+        RE::FormID actorB,
+        std::string* outReason = nullptr);
 
 }  // namespace MARAS::Utils
 

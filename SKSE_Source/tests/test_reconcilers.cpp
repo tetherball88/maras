@@ -650,3 +650,73 @@ MARAS_TEST(Reconcilers, SpouseSharedHouseFactionPlanSync) {
         MARAS_CHECK(!ComputeAdultActorFactionPlan(*snap, spouseSharing).spouseSharedHouseRank.has_value());
     }
 }
+
+MARAS_TEST(Reconcilers, PlayerFamilyBlockedFactions_SuppressRomanceAndStripPotentialMarriage) {
+    WorldStore store{};
+    constexpr ChildId playerUnregChild{ 0xFF000601u };
+    constexpr ChildId playerRegChild{ 0xFF000602u };
+    constexpr ChildId npcOnlyChild{ 0xFF000603u };
+    constexpr ActorId npcSpouseA{ 0x0001D001u };
+    constexpr ActorId npcSpouseB{ 0x0001D002u };
+    constexpr ActorId npcPartner{ 0x0001D003u };
+    constexpr ActorId vanillaSibling{ 0x0001D004u };
+
+    store.Modify([&](WorldState& ws) {
+        ChildRecord c1{};
+        c1.childId = playerUnregChild;
+        c1.guardians.Assign(ActorId::Player(), npcSpouseA);
+        c1.stage = ChildStage::Adult;
+        ws.lineage.Write().UpsertChild(c1);
+
+        ChildRecord c2{};
+        c2.childId = playerRegChild;
+        c2.bioMother = ActorId::Player();
+        c2.stage = ChildStage::Adult;
+        ws.lineage.Write().UpsertChild(c2);
+        ws.actors.Write().Upsert(MakeAdultProfile(playerRegChild.raw(), SocialClass::Wealthy, SkillType::Mage, Temperament::Proud));
+        ws.affection.Write().SetPermanent(playerRegChild.AsActorId(), 90);
+        AddRelationship(ws, playerRegChild.AsActorId(), npcPartner, RelationshipStatus::Dating);
+
+        ChildRecord c3{};
+        c3.childId = npcOnlyChild;
+        c3.guardians.Assign(npcSpouseA, npcSpouseB);
+        c3.bioMother = npcSpouseA;
+        c3.bioFather = npcSpouseB;
+        c3.stage = ChildStage::Adult;
+        ws.lineage.Write().UpsertChild(c3);
+    });
+
+    const auto snap = store.Snapshot();
+
+    const auto unregPlan = ComputeAdultActorFactionPlan(*snap, playerUnregChild.AsActorId());
+    MARAS_CHECK_EQ(unregPlan.isRelevantAdult, true);
+    MARAS_CHECK_EQ(unregPlan.isBlockedPlayerFamily, true);
+    MARAS_CHECK_EQ(unregPlan.playerFamilyBlockedRank, std::optional<std::int8_t>{ std::int8_t{ 0 } });
+    MARAS_CHECK(!unregPlan.trackedRank.has_value());
+    MARAS_CHECK_EQ(unregPlan.marriagePotentialOp, FactionMembershipOp::EnsureAbsent);
+    MARAS_CHECK_EQ(unregPlan.forceStripMarriagePotential, true);
+
+    const auto regPlan = ComputeAdultActorFactionPlan(*snap, playerRegChild.AsActorId());
+    MARAS_CHECK_EQ(regPlan.isBlockedPlayerFamily, true);
+    MARAS_CHECK_EQ(regPlan.playerFamilyBlockedRank, std::optional<std::int8_t>{ std::int8_t{ 0 } });
+    MARAS_CHECK_EQ(regPlan.socialClassRank, std::optional<std::int8_t>{ static_cast<std::int8_t>(SocialClass::Wealthy) });
+    MARAS_CHECK_EQ(regPlan.skillTypeRank, std::optional<std::int8_t>{ static_cast<std::int8_t>(SkillType::Mage) });
+    MARAS_CHECK_EQ(regPlan.temperamentRank, std::optional<std::int8_t>{ static_cast<std::int8_t>(Temperament::Proud) });
+    MARAS_CHECK_EQ(regPlan.canFormNonCheatingMainRank, std::optional<std::int8_t>{ std::int8_t{ 0 } });
+    MARAS_CHECK(!regPlan.trackedRank.has_value());
+    MARAS_CHECK(!regPlan.affectionRank.has_value());
+    MARAS_CHECK_EQ(regPlan.marriagePotentialOp, FactionMembershipOp::EnsureAbsent);
+    MARAS_CHECK_EQ(regPlan.forceStripMarriagePotential, true);
+    MARAS_CHECK_EQ(regPlan.clearIgnoreProposeKeyword, false);
+
+    const auto npcChildPlan = ComputeAdultActorFactionPlan(*snap, npcOnlyChild.AsActorId());
+    MARAS_CHECK_EQ(npcChildPlan.isBlockedPlayerFamily, false);
+    MARAS_CHECK(!npcChildPlan.playerFamilyBlockedRank.has_value());
+
+    const auto engineFamilyPlan = ComputeAdultActorFactionPlan(*snap, vanillaSibling, {}, /*isBlockedPlayerFamily=*/true);
+    MARAS_CHECK_EQ(engineFamilyPlan.isRelevantAdult, true);
+    MARAS_CHECK_EQ(engineFamilyPlan.isBlockedPlayerFamily, true);
+    MARAS_CHECK_EQ(engineFamilyPlan.playerFamilyBlockedRank, std::optional<std::int8_t>{ std::int8_t{ 0 } });
+    MARAS_CHECK_EQ(engineFamilyPlan.marriagePotentialOp, FactionMembershipOp::EnsureAbsent);
+    MARAS_CHECK_EQ(engineFamilyPlan.forceStripMarriagePotential, true);
+}

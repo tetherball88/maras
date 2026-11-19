@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(MARAS VERSION 0.0.1 LANGUAGES CXX)
+project(MARAS VERSION 2.6.1 LANGUAGES CXX)
 
 set(MOD_FOLDER_NAME "M.A.R.A.S Dev")
 set(SKYRIM_MODS_FOLDER "E:\\Skyrim\\development\\mods")

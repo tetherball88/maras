@@ -40,6 +40,15 @@ namespace MARAS::App {
                 return;
             }
 
+            if (RelationshipUseCases::GetSingleton().AreFamilyMembers(
+                    npcFormID, Foundation::kPlayerRefRawId)) {
+                const auto zeroChances = Domain::Relationships::ComputeNoAiDialogueChances(
+                    0.0f, false, Foundation::RelationshipStatus::Candidate, false, false, true);
+                RelationshipEngineReconciler::GetSingleton().ApplyNoAiDialogueChanceGlobals(zeroChances);
+                outAlwaysSuccess = true;
+                return;
+            }
+
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
             outAlwaysSuccess = snap->settings->alwaysSuccessMarriage;
             if (outAlwaysSuccess) {

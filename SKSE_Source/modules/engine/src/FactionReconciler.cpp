@@ -1,5 +1,6 @@
 #include "maras/engine/FactionReconciler.h"
 
+#include "maras/domain/relationships/RelationshipRules.h"
 #include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/ChildSpawnService.h"
@@ -7,6 +8,7 @@
 #include "maras/engine/EngineEventHooks.h"
 #include "maras/engine/EngineLogging.h"
 #include "maras/engine/FormCache.h"
+#include "maras/engine/SpatialWorldIndex.h"
 #include "maras/engine/TaskDispatcher.h"
 #include "maras/engine/TrainingCatalogLoader.h"
 #include "maras/state/WorldStore.h"
@@ -82,6 +84,43 @@ namespace MARAS {
         RemoveFromFaction_t _originalRemoveFromFaction = nullptr;
 
         constexpr RE::FormID kPlayerMarriedFactionID = 0x000C6472;
+        constexpr RE::FormID kPotentialMarriageFactionID = 0x00019809;
+        constexpr RE::FormID kMarriageAskedFactionID = 0x000FF7F3;
+        constexpr RE::FormID kCourtingFactionID = 0x0007431A;
+
+        class EngineFamilyMetadataProvider final : public State::IActorMetadataProvider {
+        public:
+            [[nodiscard]] State::BaseId GetActorBaseId(Foundation::ActorId actor) const noexcept override {
+                if (actor.IsNull()) {
+                    return {};
+                }
+                if (actor.IsPlayer() || actor.raw() == Foundation::kPlayerBaseRawId) {
+                    return State::BaseId{ Foundation::kPlayerBaseRawId };
+                }
+                if (const RE::FormID baseId = SpatialWorldIndex::GetSingleton().GetBaseID(actor.raw()); baseId != 0) {
+                    return State::BaseId{ baseId };
+                }
+                if (auto* base = ActorSvc::GetActorBase(actor.raw())) {
+                    return State::BaseId{ base->GetFormID() };
+                }
+                return {};
+            }
+        };
+
+        [[nodiscard]] bool IsBlockedPlayerFamilyActor(
+            RE::FormID actorId,
+            const State::WorldStateSnapshot& snap) {
+            if (actorId == 0 || actorId == kPlayerFormID || actorId == kPlayerBaseID ||
+                IsSyntheticChildID(actorId)) {
+                return false;
+            }
+            const EngineFamilyMetadataProvider meta{};
+            if (Domain::Relationships::AreMarasFamilyMembers(
+                    snap, meta, Foundation::ActorId{ actorId }, Foundation::ActorId::Player())) {
+                return true;
+            }
+            return Utils::AreVanillaEngineFamily(actorId, kPlayerFormID);
+        }
 
         void WriteAbsoluteJump(std::uint8_t* dst, std::uintptr_t target) {
             dst[0] = 0xFF;
@@ -208,8 +247,14 @@ namespace MARAS {
                 return;
             }
 
-            const bool isMarriedFaction = (a_faction->GetFormID() == kPlayerMarriedFactionID);
-            if (!isMarriedFaction && !FactionReconciler::GetSingleton().HasListeners()) {
+            const RE::FormID factionIdRaw = a_faction->GetFormID();
+            const bool isMarriedFaction = (factionIdRaw == kPlayerMarriedFactionID);
+            const bool isVanillaCourtshipOrPotentialFaction =
+                (factionIdRaw == kPotentialMarriageFactionID ||
+                 factionIdRaw == kMarriageAskedFactionID ||
+                 factionIdRaw == kCourtingFactionID);
+            if (!isMarriedFaction && !isVanillaCourtshipOrPotentialFaction &&
+                !FactionReconciler::GetSingleton().HasListeners()) {
                 if (_originalAddToFaction) {
                     _originalAddToFaction(a_actor, a_faction, a_rank);
                 }
@@ -230,18 +275,31 @@ namespace MARAS {
             }
 
             const RE::FormID actorId = a_actor->GetFormID();
-            const RE::FormID factionId = a_faction->GetFormID();
+            const RE::FormID factionId = factionIdRaw;
 
             if (!DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
                 if (_originalAddToFaction) {
                     _originalAddToFaction(a_actor, a_faction, a_rank);
                 }
                 if (actorId != 0 && factionId != 0) {
-                    AddCurrentEpochTask("FactionReconciler::HookAddToFaction", [actorId, factionId, a_rank, isPlayer, isMarriedFaction]() {
+                    AddCurrentEpochTask("FactionReconciler::HookAddToFaction",
+                                        [actorId, factionId, a_rank, isPlayer, isMarriedFaction,
+                                         isVanillaCourtshipOrPotentialFaction]() {
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorId);
                         auto* faction = RE::TESForm::LookupByID<RE::TESFaction>(factionId);
                         if (!actor || actor->IsDeleted() || !faction) {
                             return;
+                        }
+                        if (!isPlayer && isVanillaCourtshipOrPotentialFaction && a_rank >= 0) {
+                            std::lock_guard papyrusLock(GetPapyrusMutex());
+                            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+                            if (snap && IsBlockedPlayerFamilyActor(actorId, *snap)) {
+                                MARAS_LOG_DEBUG(
+                                    "FactionReconciler: Reconciling off-thread vanilla courtship/potential faction {:08X} for blocked Player family NPC {:08X}",
+                                    factionId, actorId);
+                                FactionReconciler::GetSingleton().ReconcileActor(actorId);
+                                return;
+                            }
                         }
                         if (!isPlayer && isMarriedFaction) {
                             std::lock_guard papyrusLock(GetPapyrusMutex());
@@ -287,6 +345,15 @@ namespace MARAS {
             }
 
             // Validate relationship eligibility BEFORE mutating engine faction state
+            if (!isPlayer && isVanillaCourtshipOrPotentialFaction && a_rank >= 0) {
+                const auto snap = State::WorldStore::GetSingleton().Snapshot();
+                if (snap && IsBlockedPlayerFamilyActor(actorId, *snap)) {
+                    MARAS_LOG_DEBUG(
+                        "FactionReconciler: Blocked vanilla courtship/potential faction {:08X} (rank {}) for Player family NPC {:08X} ({})",
+                        factionId, a_rank, actorId, a_actor->GetName());
+                    return;
+                }
+            }
             if (!isPlayer && isMarriedFaction) {
                 bool notifyAdded = false;
                 bool notifyRemoved = false;
@@ -727,6 +794,7 @@ namespace MARAS {
         (void)SyncActorFaction(actor, fc.GetCanFormNonCheatingMainFaction(), plan.canFormNonCheatingMainRank);
         (void)SyncActorFaction(actor, fc.GetSpouseHousedFaction(), plan.housedRank);
         (void)SyncActorFaction(actor, fc.GetSpouseSharedHouseFaction(), plan.spouseSharedHouseRank);
+        (void)SyncActorFaction(actor, fc.GetPlayerFamilyBlockedFaction(), plan.playerFamilyBlockedRank);
 
         // Mirrored vanilla relationship & house factions
         (void)ApplyMembershipOp(actor, fc.GetMarriedFaction(), plan.marriedFactionOp, 0, false);
@@ -735,7 +803,8 @@ namespace MARAS {
         (void)ApplyMembershipOp(actor, fc.GetMarriageAskedFaction(), plan.marriageAskedOp, 0, false);
         (void)ApplyMembershipOp(actor, fc.GetCourtingFaction(), plan.courtingOp, 0, false);
         (void)ApplyMembershipOp(actor, fc.GetPotentialHirelingFaction(), plan.potentialHirelingOp, 0, true);
-        (void)ApplyMembershipOp(actor, fc.GetMarriagePotentialFaction(), plan.marriagePotentialOp, 0, true);
+        (void)ApplyMembershipOp(
+            actor, fc.GetMarriagePotentialFaction(), plan.marriagePotentialOp, 0, !plan.forceStripMarriagePotential);
 
         if (plan.clearIgnoreProposeKeyword) {
             ClearKeywordOnBase(actor, fc.GetIgnoreProposeKeyword());
@@ -855,7 +924,7 @@ namespace MARAS {
         }
 
         auto& fc = FormCache::GetSingleton();
-        const std::array<RE::TESFaction*, 13> marasFactions{{
+        const std::array<RE::TESFaction*, 14> marasFactions{{
             fc.GetTrackedFaction(),
             fc.GetSpouseSocialClassFaction(),
             fc.GetSpouseSkillTypeFaction(),
@@ -867,6 +936,7 @@ namespace MARAS {
             fc.GetSpouseOpenRelationshipFaction(),
             fc.GetCanFormNonCheatingMainFaction(),
             fc.GetSpouseHousedFaction(),
+            fc.GetPlayerFamilyBlockedFaction(),
             fc.GetPlayerChildBothParentsFaction(),
             fc.GetPlayerChildPetFaction()
         }};
@@ -972,7 +1042,9 @@ namespace MARAS {
             adultClassId = ResolveAdultChildClassId(*childRec);
         }
 
-        const auto adultPlan = State::ComputeAdultActorFactionPlan(*snap, Foundation::ActorId{ actorId }, adultClassId);
+        const bool isBlockedFamily = IsBlockedPlayerFamilyActor(actorId, *snap);
+        const auto adultPlan = State::ComputeAdultActorFactionPlan(
+            *snap, Foundation::ActorId{ actorId }, adultClassId, isBlockedFamily);
         if (adultPlan.isRelevantAdult) {
             ReconcileAdultFactions(actor, *snap, adultPlan);
             return;
@@ -1081,6 +1153,24 @@ namespace MARAS {
             for (const std::uint32_t tenantRawId : house.tenantOrder) {
                 if (tenantRawId != 0 && tenantRawId != kPlayerFormID && !IsSyntheticChildID(tenantRawId)) {
                     targets.insert(tenantRawId);
+                }
+            }
+        }
+
+        if (auto* processLists = RE::ProcessLists::GetSingleton()) {
+            for (const auto& handle : processLists->highActorHandles) {
+                if (!handle) {
+                    continue;
+                }
+                auto actorPtr = handle.get();
+                auto* actor = actorPtr.get();
+                if (!actor || actor->IsPlayerRef() || actor->IsDeleted()) {
+                    continue;
+                }
+                const RE::FormID id = actor->GetFormID();
+                if (id != 0 && id != kPlayerFormID && !IsSyntheticChildID(id) &&
+                    Utils::AreVanillaEngineFamily(id, kPlayerFormID)) {
+                    targets.insert(id);
                 }
             }
         }

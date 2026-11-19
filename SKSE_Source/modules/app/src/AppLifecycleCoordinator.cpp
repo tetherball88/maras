@@ -14,6 +14,7 @@
 #include "maras/app/SettingsCoordinator.h"
 #include "maras/app/SkyrimNetActionCoordinator.h"
 #include "maras/domain/household/HouseholdRules.h"
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ChildVisualReconciler.h"
 #include "maras/engine/DeferredActorResolver.h"
 #include "maras/engine/EngineLogging.h"
@@ -433,8 +434,9 @@ namespace MARAS::App {
         if (!snap) {
             return;
         }
+        const bool isEngineFamily = Utils::AreVanillaEngineFamily(receiverId, Foundation::kPlayerRefRawId);
         const auto outcome = Domain::Relationships::EvaluateGiftSession(
-            *snap, State::ActorId{ receiverId }, playerName, receiverName, items);
+            *snap, State::ActorId{ receiverId }, playerName, receiverName, items, nullptr, isEngineFamily);
         if (!outcome.valid) {
             return;
         }
@@ -491,12 +493,17 @@ namespace MARAS::App {
             return;
         }
         std::vector<State::ActorId> partners;
+        std::vector<State::ActorId> engineFamilyWithPlayer;
         partners.reserve(recordedPartnerIds.size());
         for (const RE::FormID rawId : recordedPartnerIds) {
             partners.emplace_back(rawId);
+            if (Utils::AreVanillaEngineFamily(rawId, Foundation::kPlayerRefRawId)) {
+                engineFamilyWithPlayer.emplace_back(rawId);
+            }
         }
         const auto outcome =
-            Domain::Relationships::EvaluateIntimateThreadCompletion(*snap, partners, hadSex);
+            Domain::Relationships::EvaluateIntimateThreadCompletion(
+                *snap, partners, hadSex, engineFamilyWithPlayer);
         for (const auto partner : outcome.eligiblePartners) {
             AffectionEventCoordinator::GetSingleton().AddIntimacyAffection(
                 partner.raw(), outcome.baseAffection);

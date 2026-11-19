@@ -1,5 +1,6 @@
 #include "maras/state/EngineSyncPlan.h"
 
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <limits>
@@ -33,6 +34,81 @@ namespace MARAS::State {
                     return true;
                 }
             }
+            return false;
+        }
+
+        [[nodiscard]] bool IsPlayerRawId(ActorId id) noexcept {
+            return id.IsPlayer() || id.raw() == Foundation::kPlayerBaseRawId;
+        }
+
+        [[nodiscard]] bool HasAnyPlayerParent(const ChildRecord& rec) noexcept {
+            return IsPlayerRawId(rec.guardians.slotA) ||
+                   IsPlayerRawId(rec.guardians.slotB) ||
+                   IsPlayerRawId(rec.bioMother) ||
+                   IsPlayerRawId(rec.bioFather);
+        }
+
+        [[nodiscard]] bool IsMarasPlayerFamilyInSnapshot(
+            const WorldStateSnapshot& snap,
+            ActorId actorId) noexcept {
+            if (!snap.lineage || actorId.IsNull() || IsPlayerRawId(actorId)) {
+                return false;
+            }
+
+            const auto* childRec = snap.lineage->FindChild(ChildId{ actorId.raw() });
+            if (childRec != nullptr && HasAnyPlayerParent(*childRec)) {
+                return true;
+            }
+
+            const ChildRecord* playerChildRec =
+                snap.lineage->FindChild(ChildId{ Foundation::kPlayerRefRawId });
+            if (!playerChildRec) {
+                playerChildRec = snap.lineage->FindChild(ChildId{ Foundation::kPlayerBaseRawId });
+            }
+            if (!playerChildRec) {
+                return false;
+            }
+
+            BaseId actorBaseId{};
+            if (snap.actors) {
+                if (const auto* prof = snap.actors->Find(RefId{ actorId.raw() })) {
+                    actorBaseId = prof->baseId;
+                }
+            }
+
+            const std::array<ActorId, 4> playerParents{
+                playerChildRec->guardians.slotA,
+                playerChildRec->guardians.slotB,
+                playerChildRec->bioMother,
+                playerChildRec->bioFather
+            };
+            for (const ActorId p : playerParents) {
+                if (!p.IsNull() && !p.IsUnknownFather() &&
+                    (p == actorId || (!actorBaseId.IsNull() && p.raw() == actorBaseId.raw()))) {
+                    return true;
+                }
+            }
+
+            if (childRec != nullptr) {
+                const std::array<ActorId, 4> actorParents{
+                    childRec->guardians.slotA,
+                    childRec->guardians.slotB,
+                    childRec->bioMother,
+                    childRec->bioFather
+                };
+                for (const ActorId ap : actorParents) {
+                    if (ap.IsNull() || ap.IsUnknownFather()) {
+                        continue;
+                    }
+                    for (const ActorId pp : playerParents) {
+                        if (!pp.IsNull() && !pp.IsUnknownFather() &&
+                            (ap == pp || (IsPlayerRawId(ap) && IsPlayerRawId(pp)))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
             return false;
         }
 
@@ -92,7 +168,8 @@ namespace MARAS::State {
     AdultActorFactionPlan ComputeAdultActorFactionPlan(
         const WorldStateSnapshot& snap,
         ActorId actorId,
-        std::string_view adultChildClassId) {
+        std::string_view adultChildClassId,
+        bool isBlockedPlayerFamily) {
         AdultActorFactionPlan plan{};
         if (!snap.actors || !snap.relationships || !snap.affairs || !snap.lineage ||
             !snap.hierarchy || !snap.household || !snap.affection || !snap.settings) {
@@ -114,8 +191,10 @@ namespace MARAS::State {
         const auto* profile = snap.actors->Find(refId);
         const bool isGraduatedAdultChild = (childRec != nullptr && childRec->stage == ChildStage::Adult);
         const bool isTenant = !snap.household->GetTenantHouse(actorId.raw()).IsNull();
+        const bool blockedPlayerFamily =
+            isBlockedPlayerFamily || IsMarasPlayerFamilyInSnapshot(snap, actorId);
 
-        if (!isRegisteredAdult && !isGraduatedAdultChild && !isTenant) {
+        if (!isRegisteredAdult && !isGraduatedAdultChild && !isTenant && !blockedPlayerFamily) {
             return plan;
         }
 
@@ -123,14 +202,14 @@ namespace MARAS::State {
         plan.isRegisteredAdult = isRegisteredAdult;
         plan.isGraduatedAdultChild = isGraduatedAdultChild;
         plan.isHousedAdultTenant = isTenant;
+        plan.isBlockedPlayerFamily = blockedPlayerFamily;
+        if (blockedPlayerFamily) {
+            plan.playerFamilyBlockedRank = std::int8_t{ 0 };
+        }
 
         const RelationshipStatus playerStatus = snap.relationships->GetStatus(actorId, ActorId::Player());
 
         if (isRegisteredAdult) {
-            const RelationshipStatus trackedStatus =
-                (playerStatus != RelationshipStatus::Unknown) ? playerStatus : RelationshipStatus::Candidate;
-            plan.trackedRank = static_cast<std::int8_t>(trackedStatus);
-
             if (profile != nullptr) {
                 const auto sc = static_cast<int>(profile->socialClass);
                 if (sc >= 0 && sc < static_cast<int>(SocialClass::_Count)) {
@@ -146,58 +225,66 @@ namespace MARAS::State {
                 }
             }
 
-            if (playerStatus == RelationshipStatus::Married) {
-                const int rank = snap.hierarchy->GetRank(actorId);
-                if (rank >= 0 && rank <= 2) {
-                    plan.hierarchyRank = static_cast<std::int8_t>(rank);
-                }
-
-                const auto childrenWithPlayer = snap.lineage->GetChildrenWithGuardianSet(ActorId::Player(), actorId);
-                if (!childrenWithPlayer.empty()) {
-                    const auto clamped = std::min<std::size_t>(childrenWithPlayer.size(), 127u);
-                    plan.spouseChildrenRank = static_cast<std::int8_t>(clamped);
-                }
-            }
-
-            if (snap.affection->HasPermanent(actorId)) {
-                const int affVal = std::clamp(snap.affection->GetPermanent(actorId, 0), 0, 100);
-                plan.affectionRank = static_cast<std::int8_t>(affVal);
-            }
-
-            if (IsMainTierStatus(playerStatus)) {
-                bool hasOngoingKnown = false;
-                bool hasOngoingSecret = false;
-                for (const auto& rec : snap.affairs->GetForCouplePair(CanonicalPairKey{ actorId, ActorId::Player() })) {
-                    if (rec.cheater == actorId &&
-                        rec.deceivedPartner.IsPlayer() &&
-                        rec.affairStatus == AffairStatus::Ongoing) {
-                        if (rec.isSecret) {
-                            hasOngoingSecret = true;
-                        } else {
-                            hasOngoingKnown = true;
-                        }
-                    }
-                }
-                if (hasOngoingKnown) {
-                    plan.spouseCheatingRank = std::int8_t{ 1 };
-                } else if (hasOngoingSecret) {
-                    plan.spouseCheatingRank = std::int8_t{ 0 };
-                }
-
-                if (snap.relationships->IsPairOpen(actorId, ActorId::Player())) {
-                    plan.spouseOpenRelationshipRank = std::int8_t{ 0 };
-                }
-            }
-
             plan.canFormNonCheatingMainRank =
                 HasAnyClosedMainPair(snap, actorId) ? std::int8_t{ 0 } : std::int8_t{ 1 };
 
-            if (snap.household) {
-                for (const auto& [cellId, rec] : snap.household->AllSharedCells()) {
-                    (void)cellId;
-                    if (rec.sharedWithPlayer && rec.sharingSpouses.contains(actorId)) {
-                        plan.spouseSharedHouseRank = std::int8_t{ 0 };
-                        break;
+            if (!blockedPlayerFamily) {
+                const RelationshipStatus trackedStatus =
+                    (playerStatus != RelationshipStatus::Unknown) ? playerStatus : RelationshipStatus::Candidate;
+                plan.trackedRank = static_cast<std::int8_t>(trackedStatus);
+
+                if (playerStatus == RelationshipStatus::Married) {
+                    const int rank = snap.hierarchy->GetRank(actorId);
+                    if (rank >= 0 && rank <= 2) {
+                        plan.hierarchyRank = static_cast<std::int8_t>(rank);
+                    }
+
+                    const auto childrenWithPlayer =
+                        snap.lineage->GetChildrenWithGuardianSet(ActorId::Player(), actorId);
+                    if (!childrenWithPlayer.empty()) {
+                        const auto clamped = std::min<std::size_t>(childrenWithPlayer.size(), 127u);
+                        plan.spouseChildrenRank = static_cast<std::int8_t>(clamped);
+                    }
+                }
+
+                if (snap.affection->HasPermanent(actorId)) {
+                    const int affVal = std::clamp(snap.affection->GetPermanent(actorId, 0), 0, 100);
+                    plan.affectionRank = static_cast<std::int8_t>(affVal);
+                }
+
+                if (IsMainTierStatus(playerStatus)) {
+                    bool hasOngoingKnown = false;
+                    bool hasOngoingSecret = false;
+                    for (const auto& rec :
+                         snap.affairs->GetForCouplePair(CanonicalPairKey{ actorId, ActorId::Player() })) {
+                        if (rec.cheater == actorId &&
+                            rec.deceivedPartner.IsPlayer() &&
+                            rec.affairStatus == AffairStatus::Ongoing) {
+                            if (rec.isSecret) {
+                                hasOngoingSecret = true;
+                            } else {
+                                hasOngoingKnown = true;
+                            }
+                        }
+                    }
+                    if (hasOngoingKnown) {
+                        plan.spouseCheatingRank = std::int8_t{ 1 };
+                    } else if (hasOngoingSecret) {
+                        plan.spouseCheatingRank = std::int8_t{ 0 };
+                    }
+
+                    if (snap.relationships->IsPairOpen(actorId, ActorId::Player())) {
+                        plan.spouseOpenRelationshipRank = std::int8_t{ 0 };
+                    }
+                }
+
+                if (snap.household) {
+                    for (const auto& [cellId, rec] : snap.household->AllSharedCells()) {
+                        (void)cellId;
+                        if (rec.sharedWithPlayer && rec.sharingSpouses.contains(actorId)) {
+                            plan.spouseSharedHouseRank = std::int8_t{ 0 };
+                            break;
+                        }
                     }
                 }
             }
@@ -208,56 +295,67 @@ namespace MARAS::State {
         }
 
         // Vanilla marriage & player-house membership convergence
-        if (playerStatus == RelationshipStatus::Married) {
-            plan.marriedFactionOp = FactionMembershipOp::EnsurePresent;
-            plan.playerFactionOp = FactionMembershipOp::EnsurePresent;
-            plan.playerBedOwnershipOp = FactionMembershipOp::EnsurePresent;
-            plan.marriageAskedOp = FactionMembershipOp::EnsureAbsent;
-            plan.courtingOp = FactionMembershipOp::EnsureAbsent;
-            plan.potentialHirelingOp = FactionMembershipOp::EnsureAbsent;
-        } else if (playerStatus == RelationshipStatus::Engaged) {
+        if (blockedPlayerFamily) {
             plan.marriedFactionOp = FactionMembershipOp::EnsureAbsent;
             plan.playerFactionOp = FactionMembershipOp::EnsureAbsent;
             plan.playerBedOwnershipOp = FactionMembershipOp::EnsureAbsent;
-            plan.marriageAskedOp = FactionMembershipOp::EnsurePresent;
-            plan.courtingOp = FactionMembershipOp::EnsurePresent;
+            plan.marriageAskedOp = FactionMembershipOp::EnsureAbsent;
+            plan.courtingOp = FactionMembershipOp::EnsureAbsent;
+            plan.marriagePotentialOp = FactionMembershipOp::EnsureAbsent;
+            plan.forceStripMarriagePotential = true;
+            plan.clearIgnoreProposeKeyword = false;
         } else {
-            plan.marriedFactionOp = FactionMembershipOp::EnsureAbsent;
-            plan.playerFactionOp = FactionMembershipOp::EnsureAbsent;
-            plan.playerBedOwnershipOp = FactionMembershipOp::EnsureAbsent;
-            plan.marriageAskedOp = FactionMembershipOp::EnsureAbsent;
-            plan.courtingOp = FactionMembershipOp::EnsureAbsent;
-        }
-
-        if (isRegisteredAdult) {
-            bool marriedToNpc = false;
-            bool hasDivorcedOrCandidateNpcEdge = false;
-            for (const auto& pairKey : snap.relationships->GetAdjacentPairs(actorId)) {
-                const auto* edge = snap.relationships->FindEdge(pairKey);
-                if (!edge) {
-                    continue;
-                }
-                const ActorId other = pairKey.Other(actorId);
-                if (!other.IsPlayer()) {
-                    if (edge->status == RelationshipStatus::Married) {
-                        marriedToNpc = true;
-                    }
-                    if (edge->status == RelationshipStatus::Divorced ||
-                        edge->status == RelationshipStatus::Candidate) {
-                        hasDivorcedOrCandidateNpcEdge = true;
-                    }
-                }
+            if (playerStatus == RelationshipStatus::Married) {
+                plan.marriedFactionOp = FactionMembershipOp::EnsurePresent;
+                plan.playerFactionOp = FactionMembershipOp::EnsurePresent;
+                plan.playerBedOwnershipOp = FactionMembershipOp::EnsurePresent;
+                plan.marriageAskedOp = FactionMembershipOp::EnsureAbsent;
+                plan.courtingOp = FactionMembershipOp::EnsureAbsent;
+                plan.potentialHirelingOp = FactionMembershipOp::EnsureAbsent;
+            } else if (playerStatus == RelationshipStatus::Engaged) {
+                plan.marriedFactionOp = FactionMembershipOp::EnsureAbsent;
+                plan.playerFactionOp = FactionMembershipOp::EnsureAbsent;
+                plan.playerBedOwnershipOp = FactionMembershipOp::EnsureAbsent;
+                plan.marriageAskedOp = FactionMembershipOp::EnsurePresent;
+                plan.courtingOp = FactionMembershipOp::EnsurePresent;
+            } else {
+                plan.marriedFactionOp = FactionMembershipOp::EnsureAbsent;
+                plan.playerFactionOp = FactionMembershipOp::EnsureAbsent;
+                plan.playerBedOwnershipOp = FactionMembershipOp::EnsureAbsent;
+                plan.marriageAskedOp = FactionMembershipOp::EnsureAbsent;
+                plan.courtingOp = FactionMembershipOp::EnsureAbsent;
             }
 
-            if (marriedToNpc && !snap.settings->enablePlayerPolygamy) {
-                plan.marriagePotentialOp = FactionMembershipOp::EnsureAbsent;
-            } else if (playerStatus == RelationshipStatus::Candidate ||
-                       playerStatus == RelationshipStatus::Divorced ||
-                       hasDivorcedOrCandidateNpcEdge) {
-                plan.marriagePotentialOp = FactionMembershipOp::EnsurePresent;
-            }
+            if (isRegisteredAdult) {
+                bool marriedToNpc = false;
+                bool hasDivorcedOrCandidateNpcEdge = false;
+                for (const auto& pairKey : snap.relationships->GetAdjacentPairs(actorId)) {
+                    const auto* edge = snap.relationships->FindEdge(pairKey);
+                    if (!edge) {
+                        continue;
+                    }
+                    const ActorId other = pairKey.Other(actorId);
+                    if (!other.IsPlayer()) {
+                        if (edge->status == RelationshipStatus::Married) {
+                            marriedToNpc = true;
+                        }
+                        if (edge->status == RelationshipStatus::Divorced ||
+                            edge->status == RelationshipStatus::Candidate) {
+                            hasDivorcedOrCandidateNpcEdge = true;
+                        }
+                    }
+                }
 
-            plan.clearIgnoreProposeKeyword = !snap.relationships->GetAdjacentPairs(actorId).empty();
+                if (marriedToNpc && !snap.settings->enablePlayerPolygamy) {
+                    plan.marriagePotentialOp = FactionMembershipOp::EnsureAbsent;
+                } else if (playerStatus == RelationshipStatus::Candidate ||
+                           playerStatus == RelationshipStatus::Divorced ||
+                           hasDivorcedOrCandidateNpcEdge) {
+                    plan.marriagePotentialOp = FactionMembershipOp::EnsurePresent;
+                }
+
+                plan.clearIgnoreProposeKeyword = !snap.relationships->GetAdjacentPairs(actorId).empty();
+            }
         }
 
         if (isGraduatedAdultChild) {

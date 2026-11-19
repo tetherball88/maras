@@ -1,0 +1,6 @@
+FormKey: 000DD4:TT_MARAS.esp
+EditorID: TTM_PlayerFamilyBlocked
+CrimeValues:
+  Arrest: True
+  AttackOnSight: True
+VendorValues: {}

@@ -4,6 +4,7 @@
 #include "maras/app/RelationshipInteractionCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/domain/relationships/DialogueAndActionRules.h"
+#include "maras/engine/FactionReconciler.h"
 #include "maras/engine/FormCache.h"
 #include "maras/foundation/StrongIds.h"
 
@@ -24,7 +25,12 @@ namespace MARAS::App {
         const RE::FormID speakerId = speaker->GetFormID();
         auto& relSvc = RelationshipUseCases::GetSingleton();
         const auto currentStatus = relSvc.GetRelationshipStatus(speakerId, Foundation::kPlayerRefRawId);
-        const auto outcome = Domain::Relationships::EvaluateDialogueTopicBeginOutcome(promptKey, currentStatus);
+        const bool isFamily = relSvc.AreFamilyMembers(speakerId, Foundation::kPlayerRefRawId);
+        const auto outcome = Domain::Relationships::EvaluateDialogueTopicBeginOutcome(
+            promptKey, currentStatus, isFamily);
+        if (isFamily) {
+            FactionReconciler::GetSingleton().ReconcileActor(speakerId);
+        }
 
         if (outcome.registerCandidate) {
             (void)relSvc.RegisterAsCandidate(speakerId);
@@ -64,7 +70,9 @@ namespace MARAS::App {
             return 0;
         }
 
-        const auto outcome = Domain::Relationships::EvaluateDialogueTopicEndOutcome(promptKey);
+        const bool isFamily = RelationshipUseCases::GetSingleton().AreFamilyMembers(
+            speaker->GetFormID(), Foundation::kPlayerRefRawId);
+        const auto outcome = Domain::Relationships::EvaluateDialogueTopicEndOutcome(promptKey, isFamily);
         if (outcome.breakupWithSpeaker) {
             (void)RelationshipUseCases::GetSingleton().Breakup(
                 Foundation::kPlayerRefRawId, speaker->GetFormID(), true);

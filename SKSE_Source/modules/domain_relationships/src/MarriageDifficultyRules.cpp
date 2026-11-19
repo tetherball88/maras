@@ -309,7 +309,11 @@ namespace MARAS::Domain::Relationships {
         bool alwaysSuccessMarriage,
         Foundation::RelationshipStatus playerNpcStatus,
         bool npcHasClosedMainPair,
-        bool playerHasClosedMainPair) noexcept {
+        bool playerHasClosedMainPair,
+        bool isBlockedPlayerFamily) noexcept {
+        if (isBlockedPlayerFamily) {
+            return NoAiDialogueChances{ 0.0f, 0.0f, 0.0f };
+        }
         if (alwaysSuccessMarriage) {
             return NoAiDialogueChances{ 100.0f, 100.0f, 100.0f };
         }

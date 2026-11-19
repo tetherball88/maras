@@ -50,14 +50,8 @@ namespace MARAS::App {
 
     namespace {
 
-        constexpr RE::FormID kSiblingsAssocFormID = 0x000142C5;
         constexpr RE::FormID kParentChildAssocFormID = 0x000142C6;
-        constexpr RE::FormID kAuntUncleAssocFormID = 0x000142C7;
-        constexpr RE::FormID kCousinsAssocFormID = 0x000142C8;
         constexpr RE::FormID kSpouseAssocFormID = 0x000142CA;
-        constexpr RE::FormID kGrandparentGrandchildAssocFormID = 0x0001E803;
-        constexpr RE::FormID kGrandAuntUncleAssocFormID = 0x0001E80B;
-        constexpr RE::FormID kGreatGrandparentAssocFormID = 0x0001E90B;
         constexpr RE::FormID kCourtingAssocFormID = 0x0001EE23;
 
         [[nodiscard]] float GetCurrentGameDays() noexcept {
@@ -430,99 +424,6 @@ namespace MARAS::App {
             return false;
         }
 
-        void CheckVanillaEngineFamily(RE::FormID actorA,
-                                      RE::FormID actorB,
-                                      bool& outIsFamily,
-                                      std::string& outReason) {
-            outIsFamily = false;
-            outReason.clear();
-
-            auto* baseA = IsPlayerFormID(actorA)
-                              ? ActorSvc::GetActorBase(RelationshipUseCases::kPlayerFormID)
-                              : ActorSvc::GetActorBase(actorA);
-            auto* baseB = IsPlayerFormID(actorB)
-                              ? ActorSvc::GetActorBase(RelationshipUseCases::kPlayerFormID)
-                              : ActorSvc::GetActorBase(actorB);
-            if (!baseA || !baseB || baseA == baseB) {
-                return;
-            }
-
-            std::string nameA = ActorSvc::GetName(actorA);
-            std::string nameB = ActorSvc::GetName(actorB);
-            if (nameA.empty()) {
-                nameA = std::format("{:08X}", actorA);
-            }
-            if (nameB.empty()) {
-                nameB = std::format("{:08X}", actorB);
-            }
-
-            auto describeAssoc = [&](const RE::BGSRelationship* rel) -> bool {
-                if (!rel || !rel->assocType) {
-                    return false;
-                }
-                const RE::FormID assocID = rel->assocType->GetFormID();
-                if (assocID == kSiblingsAssocFormID) {
-                    outReason = std::format("{} and {} are siblings (brother/sister).", nameA, nameB);
-                    return true;
-                }
-                if (assocID == kParentChildAssocFormID) {
-                    outReason = std::format("{} and {} have a parent/child relationship.", nameA, nameB);
-                    return true;
-                }
-                if (assocID == kAuntUncleAssocFormID) {
-                    outReason = std::format("{} and {} have an aunt/uncle and niece/nephew relationship.", nameA, nameB);
-                    return true;
-                }
-                if (assocID == kCousinsAssocFormID) {
-                    outReason = std::format("{} and {} are cousins.", nameA, nameB);
-                    return true;
-                }
-                if (assocID == kGrandparentGrandchildAssocFormID) {
-                    outReason = std::format("{} and {} have a grandparent/grandchild relationship.", nameA, nameB);
-                    return true;
-                }
-                if (assocID == kGrandAuntUncleAssocFormID) {
-                    outReason = std::format("{} and {} have a grand-aunt/uncle relationship.", nameA, nameB);
-                    return true;
-                }
-                if (assocID == kGreatGrandparentAssocFormID) {
-                    outReason = std::format("{} and {} have a great-grandparent/grandchild relationship.", nameA, nameB);
-                    return true;
-                }
-                return false;
-            };
-
-            if (describeAssoc(RE::BGSRelationship::GetRelationship(baseA, baseB)) ||
-                describeAssoc(RE::BGSRelationship::GetRelationship(baseB, baseA))) {
-                outIsFamily = true;
-                return;
-            }
-
-            // Detect implicit vanilla siblings sharing a ParentChild BGSRelationship parent
-            if (auto* dataHandler = RE::TESDataHandler::GetSingleton()) {
-                std::unordered_set<const RE::TESNPC*> parentsA;
-                std::unordered_set<const RE::TESNPC*> parentsB;
-                for (const auto* rel : dataHandler->GetFormArray<RE::BGSRelationship>()) {
-                    if (!rel || !rel->assocType || rel->assocType->GetFormID() != kParentChildAssocFormID) {
-                        continue;
-                    }
-                    if (rel->npc2 == baseA && rel->npc1 && rel->npc1 != baseA) {
-                        parentsA.insert(rel->npc1);
-                    }
-                    if (rel->npc2 == baseB && rel->npc1 && rel->npc1 != baseB) {
-                        parentsB.insert(rel->npc1);
-                    }
-                }
-                for (const auto* p : parentsA) {
-                    if (parentsB.contains(p)) {
-                        outIsFamily = true;
-                        outReason = std::format("{} and {} share a vanilla parent (half/full siblings).", nameA, nameB);
-                        return;
-                    }
-                }
-            }
-        }
-
         struct RelationshipCheckData {
             CachedActorMetadataProvider meta{};
             Domain::Relationships::RelationshipCheckContext ctx{};
@@ -543,7 +444,8 @@ namespace MARAS::App {
                     RelationshipEngineReconciler::GetSingleton().GetVanillaRelationshipRank(
                         partnerID, RelationshipUseCases::kPlayerFormID);
             }
-            CheckVanillaEngineFamily(actorA, actorB, data.ctx.areEngineFamily, data.ctx.engineFamilyReason);
+            data.ctx.areEngineFamily =
+                Utils::AreVanillaEngineFamily(actorA, actorB, &data.ctx.engineFamilyReason);
             return data;
         }
 
@@ -697,7 +599,10 @@ namespace MARAS::App {
 
         TryResolvePendingRelationships(base->GetFormID(), actorId);
 
-        if (fromInitScript || snap->actors->IsRegisteredAdult(State::RefId{ actorId })) {
+        if (fromInitScript ||
+            snap->actors->IsRegisteredAdult(State::RefId{ actorId }) ||
+            (snap->lineage && snap->lineage->FindChild(State::ChildId{ actorId }) != nullptr) ||
+            Utils::AreVanillaEngineFamily(actorId, kPlayerFormID)) {
             FactionReconciler::GetSingleton().ReconcileLoadedActor(actor);
         }
     }
@@ -1929,16 +1834,7 @@ namespace MARAS::App {
         if (Domain::Relationships::AreMarasFamilyMembers(*snap, meta, State::ActorId{ actorA }, State::ActorId{ actorB }, outReason)) {
             return true;
         }
-        bool engineFamily = false;
-        std::string engineReason;
-        CheckVanillaEngineFamily(actorA, actorB, engineFamily, engineReason);
-        if (engineFamily) {
-            if (outReason) {
-                *outReason = std::move(engineReason);
-            }
-            return true;
-        }
-        return false;
+        return Utils::AreVanillaEngineFamily(actorA, actorB, outReason);
     }
 
     bool RelationshipUseCases::CanFormRelationship(RE::FormID actorA,

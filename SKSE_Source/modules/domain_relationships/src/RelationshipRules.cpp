@@ -197,7 +197,13 @@ namespace MARAS::Domain::Relationships {
             return false;
         }
 
-        if (Foundation::IsActivePartnerStatus(targetStatus)) {
+        const auto* existingDirectEdge = snap.relationships ? snap.relationships->FindEdge(actorA, actorB) : nullptr;
+        const bool isDemotingActiveToCandidate =
+            targetStatus == RelationshipStatus::Candidate &&
+            existingDirectEdge != nullptr &&
+            Foundation::IsActivePartnerStatus(existingDirectEdge->status);
+        if (Foundation::IsActivePartnerStatus(targetStatus) ||
+            (targetStatus == RelationshipStatus::Candidate && !isDemotingActiveToCandidate)) {
             if (AreMarasFamilyMembers(snap, meta, actorA, actorB, outReason)) {
                 return false;
             }

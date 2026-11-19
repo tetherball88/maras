@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.6.1.alpha - 2026-11-19
+
+### Fixed
+- **Adult Children & Close Family Romance Guardrails**: Added strict family-relation safeguards preventing grown adult children and other close family members from entering romantic relationships, marriage proposals, courtship/potential-marriage dialogue, romantic gift/intimacy affection, or walk-in intimacy joins with you or their parents and close relatives.
+
 ## 2.6.0.alpha - 2026-11-18
 
 > **Important — UI Requirement Change:** M.A.R.A.S now uses **[Magelight UI](https://github.com/Severause/MagelightUI)** instead of **Prisma UI** to power the in-game Dashboard (`Alt + B`) and pop-up menus. Please install **Magelight UI** when updating (Prisma UI is no longer required by M.A.R.A.S).
