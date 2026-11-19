@@ -67,7 +67,7 @@ Both C++ `LocalizationCatalog::SelectPluralCategory` and React `Intl.PluralRules
 
 ## 3. `TT_MARAS.esp` Dynamic String Distributor (DSD) Subrecord Guide
 
-DSD entries in `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json` (deployed to `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`) cover `1,258` records across these subrecord types:
+DSD entries in `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` (deployed to `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`) cover `1,258` records across these subrecord types:
 
 | DSD `type` | In-Game Surface | Translation & Formatting Rules |
 | :--- | :--- | :--- |
@@ -127,5 +127,5 @@ Skyrim's native `.swf` Scaleform fonts (dialogues, quests, books, message boxes,
 4. **UI Badge & Tab Compactness**:
    - Magelight UI scales proportionally via `rem`. Keep top navigation tabs, status pills (`enums.relationshipStatus.*`, `badge_*`), table column headers, and slider unit suffixes (`unitDaysShort`, `unitHours`, `unitPercent`, `unitMultiplier`) compact so cards and badges do not clip or wrap awkwardly.
 5. **Optional `names.json` Policy**:
-   - Omit `localization/packs/<lang>/names.json` (runtime `SKSE/Plugins/MARAS/localization/<lang>/names.json`) for Latin-alphabet languages unless explicitly requested, preserving lore-friendly Tamrielic names (*Thorvik, Yrsil, Aubrin*).
+   - Omit `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/names.json` (runtime `SKSE/Plugins/MARAS/localization/<lang>/names.json`) for Latin-alphabet languages unless explicitly requested, preserving lore-friendly Tamrielic names (*Thorvik, Yrsil, Aubrin*).
    - Include `names.json` (root keys `"childrenNames"` mapping race $\to$ `{"male": [...], "female": [...]}` and `"critterNames"` mapping species $\to$ `[...]`) for non-Latin scripts (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`) so newborn/critter names match vanilla NPC script rendering.

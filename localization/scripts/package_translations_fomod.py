@@ -3,8 +3,8 @@
 M.A.R.A.S Multi-Language FOMOD Translation Packager.
 
 Discovers completed non-English translation packs in:
-  - `localization/packs/<lang>/`
-  - `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`
+  - `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/`
+  - `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`
 
 Validates JSON syntax, `{named}` placeholders, CLDR plural stems, Scaleform-safe
 punctuation, Creation Kit DSD tags, and `$DragonFont` ASCII preservation, then builds
@@ -303,8 +303,20 @@ def validate_names_overlay(names_path: Path) -> List[str]:
     return issues
 
 
-def resolve_dsd_file(lang_dir: Path, code: str) -> Optional[Path]:
-    dsd_dir = lang_dir / "dsd" / "TT_MARAS.esp"
+def resolve_pack_json_dir(pack_dir: Path) -> Path:
+    loc_parent = pack_dir / "SKSE" / "Plugins" / "MARAS" / "localization"
+    direct = loc_parent / pack_dir.name
+    if direct.is_dir() or not loc_parent.is_dir():
+        return direct
+    target_low = pack_dir.name.lower()
+    for cand in sorted(loc_parent.iterdir()):
+        if cand.is_dir() and cand.name.lower() == target_low:
+            return cand
+    return direct
+
+
+def resolve_dsd_file(pack_dir: Path, code: str) -> Optional[Path]:
+    dsd_dir = pack_dir / "SKSE" / "Plugins" / "DynamicStringDistributor" / "TT_MARAS.esp"
     if not dsd_dir.is_dir():
         return None
     direct = dsd_dir / f"{code}.json"
@@ -319,7 +331,8 @@ def resolve_dsd_file(lang_dir: Path, code: str) -> Optional[Path]:
 
 
 def validate_and_load_pack(
-    lang_dir: Path,
+    pack_dir: Path,
+    json_dir: Path,
     en_flats: Dict[str, Dict[str, str]],
     dsd_template_by_nk: Optional[Dict[str, Dict[str, Any]]],
     allow_no_dsd: bool,
@@ -328,24 +341,26 @@ def validate_and_load_pack(
     errors: List[str] = []
     warnings: List[str] = []
 
-    meta_path = lang_dir / "_meta.json"
+    meta_path = json_dir / "_meta.json"
     try:
         meta_raw = json.loads(meta_path.read_text(encoding="utf-8"))
     except Exception as exc:
-        return None, [f"{lang_dir.name}/_meta.json: invalid JSON ({exc})"], warnings
+        return None, [f"{pack_dir.name}/_meta.json: invalid JSON ({exc})"], warnings
     if not isinstance(meta_raw, dict):
-        return None, [f"{lang_dir.name}/_meta.json: root must be a JSON object"], warnings
+        return None, [f"{pack_dir.name}/_meta.json: root must be a JSON object"], warnings
 
-    known = KNOWN_LANGUAGES.get(lang_dir.name.lower())
-    code = str(meta_raw.get("code") or (known[0] if known else lang_dir.name)).strip()
-    if code.lower() != lang_dir.name.lower():
-        errors.append(f"{lang_dir.name}/_meta.json: code '{code}' does not match folder '{lang_dir.name}'")
+    known = KNOWN_LANGUAGES.get(pack_dir.name.lower())
+    code = str(meta_raw.get("code") or (known[0] if known else pack_dir.name)).strip()
+    if code.lower() != pack_dir.name.lower() or code.lower() != json_dir.name.lower():
+        errors.append(
+            f"{pack_dir.name}/_meta.json: code '{code}' does not match pack '{pack_dir.name}' / folder '{json_dir.name}'"
+        )
     name = str(meta_raw.get("name") or (known[1] if known else code)).strip()
     native_name = str(meta_raw.get("nativeName") or (known[2] if known else name)).strip()
     author = str(meta_raw.get("author") or "").strip()
 
-    domain_paths = list_domain_json_paths(lang_dir)
-    names_path = lang_dir / "names.json"
+    domain_paths = list_domain_json_paths(json_dir)
+    names_path = json_dir / "names.json"
     has_names = names_path.is_file()
     if has_names:
         for issue in validate_names_overlay(names_path):
@@ -422,14 +437,14 @@ def validate_and_load_pack(
             f"{code}: incomplete JSON coverage ({translated_en_keys}/{total_en_keys} keys) with --strict"
         )
 
-    dsd_file = resolve_dsd_file(lang_dir, code)
+    dsd_file = resolve_dsd_file(pack_dir, code)
     dsd_done = 0
     dsd_total: Optional[int] = len(dsd_template_by_nk) if dsd_template_by_nk is not None else None
 
     if dsd_file is None:
         if not allow_no_dsd:
             errors.append(
-                f"{code}: missing DSD file localization/packs/{code}/dsd/TT_MARAS.esp/{code}.json "
+                f"{code}: missing DSD file localization/packs/{code}/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/{code}.json "
                 "(pass --allow-no-dsd to skip)"
             )
     else:
@@ -539,7 +554,7 @@ def validate_and_load_pack(
         name=name,
         native_name=native_name,
         author=author,
-        lang_dir=lang_dir,
+        lang_dir=json_dir,
         json_files=domain_paths,
         has_names=has_names,
         dsd_file=dsd_file,
@@ -785,11 +800,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     all_errors: List[str] = []
     all_warnings: List[str] = []
 
-    for lang_dir in candidate_dirs:
-        meta_file = lang_dir / "_meta.json"
-        domain_files = list_domain_json_paths(lang_dir)
+    for pack_dir in candidate_dirs:
+        json_dir = resolve_pack_json_dir(pack_dir)
+        meta_file = json_dir / "_meta.json"
+        domain_files = list_domain_json_paths(json_dir)
         if not meta_file.is_file() or not domain_files:
-            msg = f"[SKIP] {lang_dir}: no completed localization files found"
+            msg = f"[SKIP] {pack_dir}: no completed localization files found"
             if requested_langs is not None:
                 all_errors.append(msg)
             else:
@@ -797,7 +813,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             continue
 
         pack, errs, warns = validate_and_load_pack(
-            lang_dir=lang_dir,
+            pack_dir=pack_dir,
+            json_dir=json_dir,
             en_flats=en_flats,
             dsd_template_by_nk=dsd_template_by_nk,
             allow_no_dsd=args.allow_no_dsd,

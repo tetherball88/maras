@@ -4,9 +4,9 @@ M.A.R.A.S Localization Sync, Audit & Delta Workflow Tool (JSON Packs + DSD).
 
 Audits and synchronizes BOTH localization layers of M.A.R.A.S:
   1. C++ / Papyrus / Catalogs / Magelight UI JSON packs:
-       `SKSE/Plugins/MARAS/localization/en/*.json`  <->  `localization/packs/<lang>/*.json`
+       `SKSE/Plugins/MARAS/localization/en/*.json`  <->  `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/*.json`
   2. `TT_MARAS.esp` Dynamic String Distributor (DSD) packs:
-       `localization/scripts/TT_MARAS_dsd_template.json`  <->  `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`
+       `localization/scripts/TT_MARAS_dsd_template.json`  <->  `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`
 
 Features:
   - Running `python localization/scripts/sync_localization.py --lang <lang>` audits both layers
@@ -19,7 +19,8 @@ Features:
   - Detects changed English `.esp` strings automatically via DSD `"original"` fields, and
     detects changed English JSON strings when `--prev-en <dir>` is supplied.
   - `--apply-todo [path]` merges translated entries from `_todo.json` back into both
-    `localization/packs/<lang>/*.json` and `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`.
+    `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/*.json` and
+    `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`.
 
 Usage examples:
   python localization/scripts/sync_localization.py --lang de
@@ -491,10 +492,22 @@ def validate_meta_file(meta_path: Path, expected_code: str) -> List[str]:
     return issues
 
 
+def resolve_pack_json_dir(packs_dir: Path, lang: str) -> Path:
+    loc_parent = packs_dir / lang / "SKSE" / "Plugins" / "MARAS" / "localization"
+    direct = loc_parent / lang
+    if direct.is_dir() or not loc_parent.is_dir():
+        return direct
+    lang_low = lang.lower()
+    for cand in sorted(loc_parent.iterdir()):
+        if cand.is_dir() and cand.name.lower() == lang_low:
+            return cand
+    return direct
+
+
 def resolve_dsd_target_file(packs_dir: Path, lang: str, explicit_dsd_file: Optional[Path]) -> Path:
     if explicit_dsd_file is not None:
         return explicit_dsd_file
-    dsd_folder = packs_dir / lang / "dsd" / "TT_MARAS.esp"
+    dsd_folder = packs_dir / lang / "SKSE" / "Plugins" / "DynamicStringDistributor" / "TT_MARAS.esp"
     direct = dsd_folder / f"{lang}.json"
     if direct.is_file() or not dsd_folder.is_dir():
         return direct
@@ -1016,7 +1029,7 @@ def main() -> int:
         "--dsd-file",
         type=Path,
         default=None,
-        help="Explicit path to target DSD JSON (default: localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json).",
+        help="Explicit path to target DSD JSON (default: localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json).",
     )
     parser.add_argument(
         "--no-dsd",
@@ -1078,8 +1091,10 @@ def main() -> int:
         print(f"[ERROR] Base English directory not found: {en_dir}", file=sys.stderr)
         return 1
 
-    target_dir = en_dir if args.lang.lower() == "en" else (args.packs_dir / args.lang)
-    default_todo_path = target_dir / "_todo.json"
+    is_en = args.lang.lower() == "en"
+    pack_root = args.packs_dir / args.lang
+    target_dir = en_dir if is_en else resolve_pack_json_dir(args.packs_dir, args.lang)
+    default_todo_path = (en_dir / "_todo.json") if is_en else (pack_root / "_todo.json")
     dsd_target_path = resolve_dsd_target_file(args.packs_dir, args.lang, args.dsd_file)
 
     if args.sanitize_existing:
@@ -1374,8 +1389,8 @@ def main() -> int:
         doc: Dict[str, Any] = {
             "_instructions": (
                 f"Fill in 'translation' for any entries below, then run: `{apply_cmd}` "
-                f"(merges JSON packs into localization/packs/{args.lang}/ and DSD entries into "
-                f"localization/packs/{args.lang}/dsd/TT_MARAS.esp/{args.lang}.json)."
+                f"(merges JSON packs into localization/packs/{args.lang}/SKSE/Plugins/MARAS/localization/{args.lang}/ "
+                f"and DSD entries into localization/packs/{args.lang}/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/{args.lang}.json)."
             ),
             "language": args.lang,
         }

@@ -6,7 +6,7 @@ Why this exists:
   `TT_MARAS.esp` intentionally keeps inline English strings (`Small` ESL flag only;
   no `Localized` header flag and no `.STRINGS` / `.DLSTRINGS` / `.ILSTRINGS` binary tables).
   Translators ship `.esp` record translations as zero-ESP-override DSD JSON files:
-    - Repository output pack: `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`
+    - Repository output pack: `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`
     - Installed game path:    `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`
 
 Usage:

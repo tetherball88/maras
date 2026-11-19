@@ -7,8 +7,8 @@ description: >-
 # M.A.R.A.S Localization & Translation Runbook
 
 M.A.R.A.S uses a **100% ESP-override-free two-layer localization architecture** with key-by-key English fallback:
-1. **MARAS JSON Pack** — Base English lives at [`SKSE/Plugins/MARAS/localization/en/`](../../../SKSE/Plugins/MARAS/localization/en/) (shipped in the main archive). Non-English output packs live in [`localization/packs/<lang>/`](../../../localization/packs/) (bundled into the Translations FOMOD, installing to `Data/SKSE/Plugins/MARAS/localization/<lang>/`): `_meta.json`, `hud_and_modals.json`, `catalogs.json`, `ui_dashboard.json`, `ui_settings.json`, optional `names.json`, and optional `zz_<addon>.json` overlays (`LocalizationService` + `useLocaleStore`).
-2. **Dynamic String Distributor (`TT_MARAS.esp`)** — `DIAL`, `INFO`, `QUST`, `BOOK`, `MESG`, `SPEL`, `MGEF`, and `PERK` text synced against [TT_MARAS_dsd_template.json](../../../localization/scripts/TT_MARAS_dsd_template.json). Non-English output files live in `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json` (installing via FOMOD to `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` so dev MO2 setups stay English).
+1. **MARAS JSON Pack** — Base English lives at [`SKSE/Plugins/MARAS/localization/en/`](../../../SKSE/Plugins/MARAS/localization/en/) (shipped in the main archive). Non-English output packs mirror `Data/` 1:1 inside [`localization/packs/<lang>/`](../../../localization/packs/) at `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/` (bundled into the Translations FOMOD, installing directly to `Data/SKSE/Plugins/MARAS/localization/<lang>/`): `_meta.json`, `hud_and_modals.json`, `catalogs.json`, `ui_dashboard.json`, `ui_settings.json`, optional `names.json`, and optional `zz_<addon>.json` overlays (`LocalizationService` + `useLocaleStore`).
+2. **Dynamic String Distributor (`TT_MARAS.esp`)** — `DIAL`, `INFO`, `QUST`, `BOOK`, `MESG`, `SPEL`, `MGEF`, and `PERK` text synced against [TT_MARAS_dsd_template.json](../../../localization/scripts/TT_MARAS_dsd_template.json). Non-English output files live at `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` (mirroring `Data/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json` 1:1 while keeping dev setups English).
 
 ---
 
@@ -77,7 +77,7 @@ Before translating strings into `<lang>`, **read [translation-style-and-gotchas.
 
 1. **Initialize `_meta.json` & Split Pending (or Full-Pack Review) Entries into Batches**:
    ```powershell
-   # Creates localization/packs/<lang>/_meta.json (if missing), runs sync_localization.py,
+   # Creates localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/_meta.json (if missing), runs sync_localization.py,
    # scaffolds language-specific CLDR plural siblings (_few/_many for Slavic, _other-only for CJK),
    # auto-protects $DragonFont runes, orders DSD records chronologically via .spriggit/TT_MARAS.esp
    # (Quest/Branch LinkTo chains & Scene variants + speaker hints), and writes ~100-entry batch_*.json files:
@@ -93,15 +93,15 @@ Before translating strings into `<lang>`, **read [translation-style-and-gotchas.
    - Follow inline `"placeholders"`, `"plural_rule"`, `"required_tags"`, `"context"` (quest, branch, `prompt_en`, `speaker_hints`, scene `variant`/`phase`), and `"note"` hints attached to batch items.
    - Maintain multi-turn conversation flow, consistent T-V pronoun register per speaker/relationship role, Nominative placeholder case-framing, and natural idiomatic phrasing (avoiding word-for-word calques and stiff gender-dodge passives).
    - When fanning out across parallel subagents or `run_workflow`, assign **disjoint `batch_*.json` files** to each worker so zero file write collisions occur, and instruct each worker to read [translation-style-and-gotchas.md](./references/translation-style-and-gotchas.md) first.
-   - Omit `names.json` for Latin-script languages unless requested; for Cyrillic/CJK/Korean packs (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`), optionally localize `localization/packs/<lang>/names.json` using root keys `"childrenNames"` and `"critterNames"`.
+   - Omit `names.json` for Latin-script languages unless requested; for Cyrillic/CJK/Korean packs (`ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`), optionally localize `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/names.json` using root keys `"childrenNames"` and `"critterNames"`.
 
 3. **Validate & Apply Completed Batches**:
    ```powershell
    # Check placeholders, CK <Alias=...>/<mag>/%.0f/<font> tags, $DragonFont ASCII, and JSON syntax:
    python localization/scripts/translation_batches.py validate --lang <lang> --batch-dir "<scratch_dir>/i18n_<lang>" --require-complete
 
-   # Atomically merge all validated batches into localization/packs/<lang>/*.json and
-   # localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json:
+   # Atomically merge all validated batches into localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/*.json and
+   # localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json:
    python localization/scripts/translation_batches.py apply --lang <lang> --batch-dir "<scratch_dir>/i18n_<lang>" --prune-obsolete
    ```
 

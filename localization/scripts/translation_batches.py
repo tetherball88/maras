@@ -6,13 +6,14 @@ Works alongside `localization/scripts/sync_localization.py` so AI agents and hum
 never have to read or edit a monolithic ~2,870-entry `_todo.json` file in a single pass.
 
 Subcommands:
-  init-meta  Create `localization/packs/<lang>/_meta.json` with canonical Skyrim metadata.
+  init-meta  Create `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/_meta.json` with canonical Skyrim metadata.
   split      Run `sync_localization.py` and split pending JSON + DSD entries into right-sized
              `batch_*.json` files with language-aware CLDR plural scaffolding and inline context notes.
   validate   Check `batch_*.json` files for UTF-8 JSON validity, `{named}` placeholders, DSD Creation Kit
              `<Alias=...>` / `<mag>` / `%.0f` / `<font>` tags, `$DragonFont` ASCII safety, and concat rules.
   apply      Validate all completed entries across `--batch-dir` and merge them atomically into
-             `localization/packs/<lang>/*.json` and `localization/packs/<lang>/dsd/TT_MARAS.esp/<lang>.json`.
+             `localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/*.json` and
+             `localization/packs/<lang>/SKSE/Plugins/DynamicStringDistributor/TT_MARAS.esp/<lang>.json`.
   package    Verify `--strict` (unless `--allow-partial`) and build a zero-ESP MO2/Vortex `.zip` archive.
 
 Zero third-party dependencies (Python 3.10+ standard library only).
@@ -252,6 +253,10 @@ def json_context_note(fname: str, key: str) -> Optional[str]:
     return None
 
 
+def pack_json_dir(packs_dir: Path, lang: str) -> Path:
+    return packs_dir / lang / "SKSE" / "Plugins" / "MARAS" / "localization" / lang
+
+
 def resolve_paths(args: argparse.Namespace) -> Tuple[Path, Path, Path, Path, Path]:
     repo_root = Path(args.repo_root).resolve()
     en_dir = (
@@ -269,7 +274,7 @@ def resolve_paths(args: argparse.Namespace) -> Tuple[Path, Path, Path, Path, Pat
     dsd_file = (
         Path(args.dsd_file).resolve()
         if getattr(args, "dsd_file", None)
-        else (packs_dir / lang / "dsd" / "TT_MARAS.esp" / f"{lang}.json")
+        else (packs_dir / lang / "SKSE" / "Plugins" / "DynamicStringDistributor" / "TT_MARAS.esp" / f"{lang}.json")
     )
     return repo_root, en_dir, packs_dir, dsd_template, dsd_file
 
@@ -292,7 +297,7 @@ def ensure_meta_file(
     force: bool = False,
 ) -> Path:
     canon = canonical_lang_code(lang)
-    target_dir = packs_dir / canon
+    target_dir = pack_json_dir(packs_dir, canon)
     meta_path = target_dir / "_meta.json"
     if meta_path.is_file() and not force:
         return meta_path
@@ -556,21 +561,22 @@ def cmd_split(args: argparse.Namespace) -> int:
     if res.stderr:
         print(res.stderr.rstrip(), file=sys.stderr)
 
-    lang_dir = packs_dir / lang
+    pack_root = packs_dir / lang
+    json_dir = pack_json_dir(packs_dir, lang)
     dsd_tmpl_list, dsd_en_by_key = _load_dsd_en_lookup(dsd_template)
 
     if review_all:
         todo_doc = _build_full_review_todo(
             lang=lang,
             en_dir=en_dir,
-            lang_dir=lang_dir,
+            lang_dir=json_dir,
             dsd_tmpl_list=dsd_tmpl_list,
             dsd_file=dsd_file,
             include_json=not args.dsd_only,
             include_dsd=not args.no_dsd,
         )
     else:
-        todo_path = lang_dir / "_todo.json"
+        todo_path = pack_root / "_todo.json"
         if not todo_path.is_file():
             if res.returncode != 0:
                 return res.returncode
@@ -600,7 +606,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
         en_file = en_dir / fname
         en_flat = flatten_json(json.loads(en_file.read_text(encoding="utf-8"))) if en_file.is_file() else {}
-        tgt_file = lang_dir / fname
+        tgt_file = json_dir / fname
         tgt_flat = flatten_json(json.loads(tgt_file.read_text(encoding="utf-8"))) if tgt_file.is_file() else {}
         true_plural_stems = find_true_cldr_plural_stems(en_flat)
 
@@ -1154,9 +1160,9 @@ def cmd_package(args: argparse.Namespace) -> int:
         )
         return audit_res.returncode
 
-    lang_dir = packs_dir / lang
-    if not lang_dir.is_dir():
-        print(f"[ERROR] Language directory missing: {lang_dir}", file=sys.stderr)
+    json_dir = pack_json_dir(packs_dir, lang)
+    if not json_dir.is_dir():
+        print(f"[ERROR] Language directory missing: {json_dir}", file=sys.stderr)
         return 1
 
     ver = read_maras_version(repo_root)
@@ -1170,7 +1176,7 @@ def cmd_package(args: argparse.Namespace) -> int:
 
     archived_files: List[str] = []
     with zipfile.ZipFile(out_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for p in sorted(lang_dir.glob("*.json")):
+        for p in sorted(json_dir.glob("*.json")):
             low = p.name.lower()
             if low != "_meta.json" and (low.startswith("_") or low.endswith("_todo.json") or low.endswith(".todo.json")):
                 continue
@@ -1203,7 +1209,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_meta = sub.add_parser("init-meta", parents=[common], help="Create localization/packs/<lang>/_meta.json.")
+    p_meta = sub.add_parser(
+        "init-meta",
+        parents=[common],
+        help="Create localization/packs/<lang>/SKSE/Plugins/MARAS/localization/<lang>/_meta.json.",
+    )
     p_meta.add_argument("--name", default=None, help="English display name (e.g. 'German').")
     p_meta.add_argument("--native-name", default=None, help="Native display name (e.g. 'Deutsch').")
     p_meta.add_argument("--author", default=None, help="Optional translator/author credit.")
