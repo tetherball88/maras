@@ -263,3 +263,11 @@ EndFunction
 Faction Function GetMarriedFaction() global
     return Game.GetFormFromFile(0xc6472, "Skyrim.esm") as Faction
 EndFunction
+
+Faction Function GetDLC1PotentialVampireFaction() global
+    return Game.GetFormFromFile(0x142e6, "Dawnguard.esm") as Faction
+EndFunction
+
+Faction Function GetDLC1PlayerTurnedVampireFaction() global
+    return Game.GetFormFromFile(0x588d, "Dawnguard.esm") as Faction
+EndFunction

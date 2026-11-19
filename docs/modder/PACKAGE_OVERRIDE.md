@@ -124,12 +124,12 @@ All patterns in `Whitelist`, `AllowedPlugins`, and `QuestWhitelist` are **case-i
 Whitelist=SkyrimNet*,WIGames*
 AllowedPlugins=nwsFollowerFramework.esp
 ; QuestPriority=61
-QuestWhitelist=TTM_ChildrenSandbox,TTM_DialoguesChildrenScenes,TTM_NpcsScenes
+QuestWhitelist=TTM_ChildrenSandbox,TTM_DialoguesChildrenScenes,TTM_NpcsScenes,DLC1RV06
 ```
 
 - **`Whitelist=SkyrimNet*,WIGames*`**: Permits all SkyrimNet AI action/conversation packages and vanilla world interaction games (such as children playing Tag or Hide-and-Seek).
 - **`AllowedPlugins=nwsFollowerFramework.esp`**: Permits all packages from Nether's Follower Framework.
-- **`QuestWhitelist=TTM_ChildrenSandbox,TTM_DialoguesChildrenScenes,TTM_NpcsScenes`**: Permits M.A.R.A.S's own scene and child-order quests (`Variable06` chores/games, `Variable07` forcegreets, and autonomous couple scenes) to override the default home sandbox whenever those scenes or orders are active.
+- **`QuestWhitelist=TTM_ChildrenSandbox,TTM_DialoguesChildrenScenes,TTM_NpcsScenes,DLC1RV06`**: Permits M.A.R.A.S's own scene and child-order quests (`Variable06` chores/games, `Variable07` forcegreets, and autonomous couple scenes) as well as Dawnguard's *"The Gift"* (`DLC1RV06`) spouse vampire-turn packages to override the default home sandbox whenever active.
 
 ---
 

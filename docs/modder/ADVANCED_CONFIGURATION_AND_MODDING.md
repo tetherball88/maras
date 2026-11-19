@@ -237,7 +237,7 @@ daedricBlessings:
 Whitelist = SkyrimNet*, WIGames*
 AllowedPlugins = nwsFollowerFramework.esp
 ; QuestPriority = 61
-QuestWhitelist = TTM_ChildrenSandbox, TTM_DialoguesChildrenScenes, TTM_NpcsScenes
+QuestWhitelist = TTM_ChildrenSandbox, TTM_DialoguesChildrenScenes, TTM_NpcsScenes, DLC1RV06
 ```
 For full wildcard syntax and evaluation order details, see the [Package Override Configuration Guide](PACKAGE_OVERRIDE.md).
 

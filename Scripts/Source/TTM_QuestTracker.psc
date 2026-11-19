@@ -72,22 +72,34 @@ Event OnQuestStart(Quest akQuest)
         akQuest.Reset()
         akQuest.Stop()
     elseif(akQuest == TTM_Data.GetTurnSpouseToVampireQuest())
-        Actor[] spouses = MARAS.GetNPCsByStatus("married")
-        int i = 0
+        Faction potentialVampFac = TTM_Data.GetDLC1PotentialVampireFaction()
+        Faction playerTurnedVampFac = TTM_Data.GetDLC1PlayerTurnedVampireFaction()
+        ReferenceAlias spouseAlias = akQuest.GetAliasByName("Spouse") as ReferenceAlias
+        Actor existingSpouse = none
+        if(spouseAlias)
+            existingSpouse = spouseAlias.GetActorRef()
+        endif
+
         Actor candidate = none
-
-        while(i < spouses.Length && candidate == none)
-            if(!spouses[i].HasKeywordString("Vampire"))
-                candidate = spouses[i]
-            endif
-            i += 1
-        endwhile
-
-        if(candidate != none)
-            ReferenceAlias spouseAlias = akQuest.GetAliasByName("Spouse") as ReferenceAlias
-            spouseAlias.ForceRefTo(candidate)
+        if(existingSpouse && MARAS.IsNPCStatus(existingSpouse, "married") && IsEligibleVampireSpouseCandidate(existingSpouse, potentialVampFac, playerTurnedVampFac))
+            candidate = existingSpouse
         else
-            TTM_Debug.err("TTM_QuestTracker: OnQuestStart: OnTurnSpouseToVampireQuest() No non-vampire spouse found!")
+            Actor[] spouses = MARAS.GetNPCsByStatus("married")
+            int i = 0
+            while(i < spouses.Length && candidate == none)
+                if(IsEligibleVampireSpouseCandidate(spouses[i], potentialVampFac, playerTurnedVampFac))
+                    candidate = spouses[i]
+                endif
+                i += 1
+            endwhile
+        endif
+
+        if(candidate != none && spouseAlias != none)
+            if(existingSpouse != candidate)
+                spouseAlias.ForceRefTo(candidate)
+            endif
+        else
+            TTM_Debug.warn("TTM_QuestTracker: OnQuestStart: OnTurnSpouseToVampireQuest() No eligible non-vampire spouse found!")
             akQuest.Reset()
             akQuest.SetStage(300)
         endif
@@ -102,4 +114,20 @@ Event OnQuestStop(Quest akQuest)
         TTM_Data.ResetDLC1RV06DoOnceGlobal()
     endif
 EndEvent
+
+bool Function IsEligibleVampireSpouseCandidate(Actor akSpouse, Faction akPotentialVampFac, Faction akPlayerTurnedVampFac)
+    if(!akSpouse || akSpouse.IsDead())
+        return false
+    endif
+    if(akSpouse.HasKeywordString("Vampire"))
+        return false
+    endif
+    if(akPlayerTurnedVampFac && akSpouse.IsInFaction(akPlayerTurnedVampFac))
+        return false
+    endif
+    if(akPotentialVampFac && !akSpouse.IsInFaction(akPotentialVampFac))
+        return false
+    endif
+    return true
+EndFunction
 
