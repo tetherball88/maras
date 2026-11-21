@@ -645,6 +645,9 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
             MARAS_LOG_ERROR("Failed to register Papyrus functions.");
             return false;
         }
+        if (!papyrus->Register(MARAS::FactionReconciler::RegisterPapyrusHooks)) {
+            MARAS_LOG_WARN("Failed to register MARAS Papyrus faction hooks.");
+        }
     } else {
         MARAS_LOG_ERROR("Papyrus interface unavailable.");
         return false;

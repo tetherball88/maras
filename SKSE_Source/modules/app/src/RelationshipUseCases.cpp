@@ -862,7 +862,22 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::RegisterAsCandidate(RE::FormID npcFormID) {
-        return RegisterCandidate(npcFormID);
+        if (npcFormID == 0 || npcFormID == kPlayerFormID) {
+            return false;
+        }
+        if (!EnsureRegistered(npcFormID)) {
+            return false;
+        }
+        const auto currentStatus = GetRelationshipStatus(npcFormID, kPlayerFormID);
+        if (currentStatus != Foundation::RelationshipStatus::Unknown &&
+            currentStatus != Foundation::RelationshipStatus::Candidate) {
+            MARAS_LOG_INFO("RegisterAsCandidate: NPC {:08X} already has relationship status {} with player",
+                           npcFormID,
+                           Foundation::RelationshipStatusToString(currentStatus));
+            FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+            return false;
+        }
+        return DemoteToCandidate(npcFormID, kPlayerFormID, /*sendEvent=*/true);
     }
 
     bool RelationshipUseCases::RegisterCandidate(RE::FormID npcFormID) {
@@ -1931,7 +1946,7 @@ namespace MARAS::App {
             return false;
         }
 
-        if (status != Foundation::RelationshipStatus::Candidate && !IsBreakupStatus(status)) {
+        if (!IsBreakupStatus(status)) {
             EnsureRegistered(npcFormID);
             EnsureRegistered(targetFormID);
         }

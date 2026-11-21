@@ -720,3 +720,127 @@ MARAS_TEST(Reconcilers, PlayerFamilyBlockedFactions_SuppressRomanceAndStripPoten
     MARAS_CHECK_EQ(engineFamilyPlan.marriagePotentialOp, FactionMembershipOp::EnsureAbsent);
     MARAS_CHECK_EQ(engineFamilyPlan.forceStripMarriagePotential, true);
 }
+
+MARAS_TEST(Reconcilers, ExternalFactionWrite_PapyrusMarriagePolygamyAndFamilyGuards) {
+    using MARAS::State::ClampPapyrusFactionRank;
+    using MARAS::State::ComputeModdedFactionRank;
+    using MARAS::State::EvaluateExternalFactionWrite;
+    using MARAS::State::ExternalFactionWriteAction;
+    using MARAS::State::kVanillaCourtingFactionRawId;
+    using MARAS::State::kVanillaMarriageAskedFactionRawId;
+    using MARAS::State::kVanillaPlayerMarriedFactionRawId;
+    using MARAS::State::kVanillaPotentialMarriageFactionRawId;
+
+    MARAS_CHECK_EQ(ClampPapyrusFactionRank(0), std::int8_t{ 0 });
+    MARAS_CHECK_EQ(ClampPapyrusFactionRank(-1), std::int8_t{ -1 });
+    MARAS_CHECK_EQ(ClampPapyrusFactionRank(200), std::int8_t{ 127 });
+    MARAS_CHECK_EQ(ClampPapyrusFactionRank(-200), std::int8_t{ -128 });
+    MARAS_CHECK_EQ(ComputeModdedFactionRank(true, 2, -5), std::int8_t{ -3 });
+    MARAS_CHECK_EQ(ComputeModdedFactionRank(false, 0, 1), std::int8_t{ 1 });
+
+    WorldStore store{};
+    constexpr ActorId bride{ 0x0001A675u };
+    constexpr ChildId playerChild{ 0xFF000701u };
+    constexpr ActorId sibling{ 0x0001A68Bu };
+
+    store.Modify([&](WorldState& ws) {
+        ws.settings.Write().enablePlayerPolygamy = false;
+        AddRelationship(ws, bride, ActorId::Player(), RelationshipStatus::Engaged);
+        ChildRecord ch{};
+        ch.childId = playerChild;
+        ch.guardians.Assign(ActorId::Player(), bride);
+        ch.stage = ChildStage::Adult;
+        ws.lineage.Write().UpsertChild(ch);
+    });
+
+    auto snap = store.Snapshot();
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, bride, kVanillaPlayerMarriedFactionRawId, 0),
+        ExternalFactionWriteAction::PromoteNpcToPlayerMarried);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, ActorId::Player(), kVanillaPlayerMarriedFactionRawId, 0),
+        ExternalFactionWriteAction::Passthrough);
+
+    store.Modify([&](WorldState& ws) {
+        ws.relationships.Write().GetOrCreateEdge(bride, ActorId::Player()).status = RelationshipStatus::Married;
+        ws.settings.Write().enablePlayerPolygamy = true;
+    });
+    snap = store.Snapshot();
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, bride, kVanillaPlayerMarriedFactionRawId, 0),
+        ExternalFactionWriteAction::Passthrough);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, bride, kVanillaPlayerMarriedFactionRawId, -1),
+        ExternalFactionWriteAction::DemoteNpcToPlayerDivorced);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, ActorId::Player(), kVanillaPlayerMarriedFactionRawId, 0),
+        ExternalFactionWriteAction::BlockPolygamyPlayerMarried);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, ActorId::Player(), kVanillaPlayerMarriedFactionRawId, -1),
+        ExternalFactionWriteAction::Passthrough);
+
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, playerChild.AsActorId(), kVanillaPotentialMarriageFactionRawId, 0),
+        ExternalFactionWriteAction::BlockPlayerFamilyCourtship);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, playerChild.AsActorId(), kVanillaMarriageAskedFactionRawId, 0),
+        ExternalFactionWriteAction::BlockPlayerFamilyCourtship);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, sibling, kVanillaCourtingFactionRawId, 0, /*isBlockedEngineFamily=*/true),
+        ExternalFactionWriteAction::BlockPlayerFamilyCourtship);
+    MARAS_CHECK_EQ(
+        EvaluateExternalFactionWrite(*snap, bride, 0x00012345u, 0),
+        ExternalFactionWriteAction::Passthrough);
+}
+
+MARAS_TEST(Reconcilers, AdultActorFactions_PotentialMarriageAndIgnoreProposalLifecycle) {
+    WorldStore store{};
+    constexpr ActorId npcA{ 0x0001E001u };
+    constexpr ActorId npcB{ 0x0001E002u };
+    constexpr ActorId npcC{ 0x0001E003u };
+    constexpr ActorId directFiance{ 0x0001E004u };
+
+    store.Modify([&](WorldState& ws) {
+        ws.settings.Write().enablePlayerPolygamy = false;
+        ws.actors.Write().Upsert(MakeAdultProfile(npcA.raw(), SocialClass::Working, SkillType::Warrior, Temperament::Proud));
+        ws.actors.Write().Upsert(MakeAdultProfile(npcB.raw(), SocialClass::Working, SkillType::Warrior, Temperament::Proud));
+        ws.actors.Write().Upsert(MakeAdultProfile(npcC.raw(), SocialClass::Working, SkillType::Warrior, Temperament::Proud));
+        ws.actors.Write().Upsert(MakeAdultProfile(directFiance.raw(), SocialClass::Middle, SkillType::Orator, Temperament::Jealous));
+        AddRelationship(ws, npcA, npcB, RelationshipStatus::Dating);
+        AddRelationship(ws, npcB, npcC, RelationshipStatus::Married);
+        AddRelationship(ws, npcB, ActorId::Player(), RelationshipStatus::Dating);
+        AddRelationship(ws, directFiance, ActorId::Player(), RelationshipStatus::Engaged);
+    });
+
+    const auto npcOnlyPlan = ComputeAdultActorFactionPlan(*store.Snapshot(), npcA);
+    MARAS_CHECK_EQ(npcOnlyPlan.marriagePotentialOp, FactionMembershipOp::LeaveUntouched);
+    MARAS_CHECK_EQ(npcOnlyPlan.clearIgnoreProposeKeyword, false);
+
+    const auto marriedNpcPlan = ComputeAdultActorFactionPlan(*store.Snapshot(), npcB);
+    MARAS_CHECK_EQ(marriedNpcPlan.marriagePotentialOp, FactionMembershipOp::EnsureAbsent);
+    MARAS_CHECK_EQ(marriedNpcPlan.clearIgnoreProposeKeyword, false);
+
+    const auto directPlan = ComputeAdultActorFactionPlan(*store.Snapshot(), directFiance);
+    MARAS_CHECK_EQ(directPlan.marriagePotentialOp, FactionMembershipOp::EnsurePresent);
+    MARAS_CHECK_EQ(directPlan.clearIgnoreProposeKeyword, true);
+
+    for (const auto st : { RelationshipStatus::Candidate, RelationshipStatus::Dating, RelationshipStatus::Lover,
+                           RelationshipStatus::ExDating, RelationshipStatus::ExLover }) {
+        store.Modify([&](WorldState& ws) {
+            ws.relationships.Write().GetOrCreateEdge(npcA, ActorId::Player()).status = st;
+        });
+        const auto plan = ComputeAdultActorFactionPlan(*store.Snapshot(), npcA);
+        MARAS_CHECK_EQ(plan.marriagePotentialOp, FactionMembershipOp::EnsurePresent);
+        MARAS_CHECK_EQ(plan.clearIgnoreProposeKeyword, false);
+    }
+
+    for (const auto st : { RelationshipStatus::Engaged, RelationshipStatus::Married,
+                           RelationshipStatus::Divorced, RelationshipStatus::Jilted }) {
+        store.Modify([&](WorldState& ws) {
+            ws.relationships.Write().GetOrCreateEdge(npcA, ActorId::Player()).status = st;
+        });
+        const auto plan = ComputeAdultActorFactionPlan(*store.Snapshot(), npcA);
+        MARAS_CHECK_EQ(plan.marriagePotentialOp, FactionMembershipOp::EnsurePresent);
+        MARAS_CHECK_EQ(plan.clearIgnoreProposeKeyword, true);
+    }
+}

@@ -43,7 +43,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".agents/skills/maras-releas
 ```
 
 This updates version strings across:
-- `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/manifest.json` (`"version"`)
+- `SKSE/Plugins/SkyrimNet/external/tetherball88.maras/manifest.json` (`"version": "X.Y.Z"` — strictly numeric `X.Y.Z`; **never** append `.alpha` or pre-release suffixes, even for `vX.Y.Z.alpha` releases)
 - `SKSE_Source/CMakeLists.txt` (`project(MARAS VERSION X.Y.Z LANGUAGES CXX)`)
 - `SKSE_Source/version.rc` (`FILEVERSION`, `PRODUCTVERSION`, `FileVersion`, `ProductVersion`)
 - `SKSE_Source/modules/foundation/include/maras/foundation/VersionInfo.h` (`kCompiledModVersion`)

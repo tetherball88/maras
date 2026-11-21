@@ -98,7 +98,9 @@ Function ResetMarriageQuests(Actor npc = none, bool complete = false, bool fromO
     endif
 
     ReferenceAlias currentMarriageTarget = TTM_Data.GetMarasDialoguesQuest().GetAliasByName("CurrentMarriageTarget") as ReferenceAlias
-    currentMarriageTarget.ForceRefTo(none)
+    if(currentMarriageTarget)
+        currentMarriageTarget.Clear()
+    endif
 EndFunction
 
 ;/
@@ -112,7 +114,7 @@ Function SkipWedding(Actor fiance) global
     Actor loveInterest = loveInterestAl.GetActorRef()
     Quest wedding = TTM_Data.GetMarriageWeddingQuest()
 
-    if(loveInterest == fiance && mainMarr.GetStage() >= 20 && mainMarr.IsRunning())
+    if(loveInterest == fiance && mainMarr.GetStage() >= 20 && mainMarr.GetStage() < 100 && mainMarr.IsRunning() && (!wedding.IsRunning() || !wedding.GetStageDone(100)))
         ResetMarriageQuests(fiance, true)
         Actor player = TTM_Data.GetPlayer()
 
@@ -190,11 +192,56 @@ Function CheckOngoingMarriage() global
 EndFunction
 
 ;/
+  Resolves the active spouse/fiance across Skyrim's marriage and MARAS dialogue quests.
+/;
+Actor Function ResolveActiveWeddingSpouse() global
+    Quest weddingQst = TTM_Data.GetMarriageWeddingQuest()
+    Actor spouse = none
+    if(weddingQst)
+        spouse = TTM_Utils.GetActorAlias(weddingQst, "LoveInterest")
+    endif
+    if(!spouse)
+        Quest finQst = TTM_Data.GetMarriageFinQuest()
+        if(finQst)
+            spouse = TTM_Utils.GetActorAlias(finQst, "LoveInterest")
+        endif
+    endif
+    if(!spouse)
+        Quest mainQst = TTM_Data.GetMarriageMainQuest()
+        if(mainQst)
+            spouse = TTM_Utils.GetActorAlias(mainQst, "LoveInterest")
+        endif
+    endif
+    if(!spouse)
+        Quest dialQst = TTM_Data.GetMarasDialoguesQuest()
+        if(dialQst)
+            spouse = TTM_Utils.GetActorAlias(dialQst, "CurrentMarriageTarget")
+        endif
+    endif
+    return spouse
+EndFunction
+
+;/
+  Records wedding completion and ensures the spouse is promoted to married in MARAS.
+/;
+Function CompleteWeddingForSpouse(Actor spouse) global
+    MARAS.SetPlayerHadWedding(true)
+    if(!spouse)
+        TTM_Debug.warn("TTM_ServiceMarriageQuest:CompleteWeddingForSpouse:No spouse found")
+        return
+    endif
+    if(!MARAS.IsNPCStatus(spouse, "married"))
+        TTM_Debug.info("TTM_ServiceMarriageQuest:CompleteWeddingForSpouse:Promoting " + TTM_Utils.GetActorName(spouse) + " to married")
+        MARAS.PromoteNPCToStatus(spouse, "married")
+    endif
+EndFunction
+
+;/
   Called when the wedding quest finishes. Sends relationship change event for marriage.
 /;
 Function OnWeddingQstFinish() global
-    Actor spouse = TTM_Utils.GetActorAlias(TTM_Data.GetMarriageWeddingQuest(), "LoveInterest")
-    MARAS.SetPlayerHadWedding(true)
+    Actor spouse = ResolveActiveWeddingSpouse()
+    CompleteWeddingForSpouse(spouse)
 EndFunction
 
 ;/
@@ -215,6 +262,10 @@ EndFunction
 /;
 Function OnMarriageQuestStop() global
     TTM_Debug.debug("TTM_ServiceMarriageQuest:OnMarriageQuestStop")
+    Quest wedding = TTM_Data.GetMarriageWeddingQuest()
+    if(!TTM_Data.IsMigrating() && wedding && wedding.IsRunning() && wedding.GetStageDone(100))
+        CompleteWeddingForSpouse(ResolveActiveWeddingSpouse())
+    endif
     ResetMarriageQuests(fromOnstop = true)
     CheckNextFiance()
 EndFunction
@@ -224,7 +275,10 @@ EndFunction
 /;
 Function CheckNextFiance() global
     Actor[] fiances = MARAS.GetNPCsByStatus("engaged")
-    Actor nextFiance = fiances[0] as Actor
+    Actor nextFiance = none
+    if(fiances.Length > 0)
+        nextFiance = fiances[0] as Actor
+    endif
     TTM_Debug.debug("TTM_ServiceMarriageQuest:CheckNextFiance:"+TTM_Utils.GetActorName(nextFiance))
     if(nextFiance)
         Utility.Wait(0.3)
@@ -239,7 +293,25 @@ EndFunction
 /;
 Function OnMarriageFinQstStart() global
     TTM_Debug.debug("TTM_ServiceMarriageQuest:OnMarriageFinQstStart:stops vanilla post marriage quest")
-    TTM_Data.GetMarriageFinQuest().stop()
+    Quest fin = TTM_Data.GetMarriageFinQuest()
+    Actor finSpouse = none
+    if(!TTM_Data.IsMigrating())
+        if(fin)
+            finSpouse = TTM_Utils.GetActorAlias(fin, "LoveInterest")
+        endif
+        if(!finSpouse)
+            Quest wedding = TTM_Data.GetMarriageWeddingQuest()
+            if(wedding && wedding.GetStageDone(100))
+                finSpouse = ResolveActiveWeddingSpouse()
+            endif
+        endif
+    endif
+    if(fin)
+        fin.stop()
+    endif
+    if(finSpouse)
+        CompleteWeddingForSpouse(finSpouse)
+    endif
 EndFunction
 
 Function OnMarriageBreakupReconcile() global

@@ -13,6 +13,43 @@
 
 namespace MARAS::State {
 
+    inline constexpr std::uint32_t kVanillaPlayerMarriedFactionRawId = 0x000C6472u;
+    inline constexpr std::uint32_t kVanillaPotentialMarriageFactionRawId = 0x00019809u;
+    inline constexpr std::uint32_t kVanillaMarriageAskedFactionRawId = 0x000FF7F3u;
+    inline constexpr std::uint32_t kVanillaCourtingFactionRawId = 0x0007431Au;
+
+    [[nodiscard]] constexpr bool IsInterceptedMarriageOrCourtshipFaction(std::uint32_t factionFormId) noexcept {
+        return factionFormId == kVanillaPlayerMarriedFactionRawId ||
+               factionFormId == kVanillaPotentialMarriageFactionRawId ||
+               factionFormId == kVanillaMarriageAskedFactionRawId ||
+               factionFormId == kVanillaCourtingFactionRawId;
+    }
+
+    [[nodiscard]] constexpr std::int8_t ClampPapyrusFactionRank(std::int32_t rawRank) noexcept {
+        if (rawRank < -128) {
+            return std::int8_t{ -128 };
+        }
+        if (rawRank > 127) {
+            return std::int8_t{ 127 };
+        }
+        return static_cast<std::int8_t>(rawRank);
+    }
+
+    [[nodiscard]] constexpr std::int8_t ComputeModdedFactionRank(
+        bool wasInFaction,
+        std::int32_t currentRank,
+        std::int32_t rankDelta) noexcept {
+        return ClampPapyrusFactionRank(wasInFaction ? (currentRank + rankDelta) : rankDelta);
+    }
+
+    enum class ExternalFactionWriteAction : std::uint8_t {
+        Passthrough = 0,
+        BlockPolygamyPlayerMarried = 1,
+        BlockPlayerFamilyCourtship = 2,
+        PromoteNpcToPlayerMarried = 3,
+        DemoteNpcToPlayerDivorced = 4
+    };
+
     enum class FactionMembershipOp : std::uint8_t {
         LeaveUntouched = 0,
         EnsurePresent = 1,
@@ -219,5 +256,12 @@ namespace MARAS::State {
         std::string_view bonusType,
         float baseValue,
         float multiplier) noexcept;
+
+    [[nodiscard]] ExternalFactionWriteAction EvaluateExternalFactionWrite(
+        const WorldStateSnapshot& snap,
+        ActorId actorId,
+        std::uint32_t factionFormId,
+        std::int8_t targetRank,
+        bool isBlockedEngineFamily = false) noexcept;
 
 }  // namespace MARAS::State

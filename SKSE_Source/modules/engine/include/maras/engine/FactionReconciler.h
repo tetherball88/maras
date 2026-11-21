@@ -31,6 +31,12 @@ namespace MARAS {
         static FactionReconciler& GetSingleton();
 
         static void InstallHooks();
+        static bool RegisterPapyrusHooks(RE::BSScript::IVirtualMachine* a_vm);
+
+        // Internal family-block check shared with engine/Papyrus faction hooks
+        [[nodiscard]] static bool IsBlockedPlayerFamilyActor(
+            RE::FormID actorId,
+            const State::WorldStateSnapshot& snap);
 
         // RAII scope marking internal MARAS faction writes so hooks skip external auto-promote/demote
         struct InternalFactionScope {

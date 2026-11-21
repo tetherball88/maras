@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(MARAS VERSION 2.6.1 LANGUAGES CXX)
+project(MARAS VERSION 2.6.2 LANGUAGES CXX)
 
 set(MOD_FOLDER_NAME "M.A.R.A.S Dev")
 set(SKYRIM_MODS_FOLDER "E:\\Skyrim\\development\\mods")
@@ -196,6 +196,7 @@ add_library(maras_engine OBJECT
     modules/engine/src/DialogueEventSink.cpp
     modules/engine/src/EncounterConfigLoader.cpp
     modules/engine/src/EngineLogging.cpp
+    modules/engine/src/FactionHooks.cpp
     modules/engine/src/FactionReconciler.cpp
     modules/engine/src/FertilityMcmClickSink.cpp
     modules/engine/src/FertilityNamingMenuSink.cpp

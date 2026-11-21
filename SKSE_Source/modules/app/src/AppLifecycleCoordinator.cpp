@@ -355,7 +355,7 @@ namespace MARAS::App {
 
     void AppLifecycleCoordinator::EnsureActorRegistered(RE::FormID actorId) {
         std::lock_guard lock(GetPapyrusMutex());
-        (void)RelationshipUseCases::GetSingleton().RegisterAsCandidate(actorId);
+        (void)RelationshipUseCases::GetSingleton().EnsureRegistered(actorId);
     }
 
     void AppLifecycleCoordinator::OnDialogueOpened(RE::FormID npcId) {

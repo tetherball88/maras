@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.6.2.alpha - 2026-11-20
+
+### Fixed
+- **Temple of Mara & Modded Wedding Completion**: Fixed marriage ceremonies reverting the spouse's status back to **Engaged** after a wedding at the Temple of Mara (or a custom follower wedding quest) completed instead of advancing to **Married**.
+- **Non-Vanilla NPC Weddings & Candidate Registration**: Fixed NPCs outside Skyrim's default marriage pool (such as Carlotta Valentia and other town NPCs) properly entering the marriage candidate pool and starting the Temple of Mara wedding ceremony whether registered through courtship dialogue or promoted directly in the Dashboard.
+- **Custom Follower Proposal Compatibility**: Fixed custom-voiced followers with their own marriage systems keeping their custom proposal handling intact during early courtship stages instead of unlocking generic M.A.R.A.S proposal dialogue prematurely before engagement or marriage.
+- **Romance Dialogue Gender Filter on Candidates**: Fixed the non-marriage relationship management dialogue respecting your **Start Romance Dialogue Gender** setting when speaking with **Candidate** NPCs, while keeping management options available for existing partners.
+- **SkyrimNet Bundle Registration**: Fixed the SkyrimNet external bundle manifest version format so SkyrimNet properly recognizes and registers M.A.R.A.S.
+
 ## 2.6.1.alpha - 2026-11-19
 
 ### Fixed

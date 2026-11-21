@@ -348,13 +348,16 @@ namespace MARAS::State {
 
                 if (marriedToNpc && !snap.settings->enablePlayerPolygamy) {
                     plan.marriagePotentialOp = FactionMembershipOp::EnsureAbsent;
-                } else if (playerStatus == RelationshipStatus::Candidate ||
-                           playerStatus == RelationshipStatus::Divorced ||
+                } else if (playerStatus != RelationshipStatus::Unknown ||
                            hasDivorcedOrCandidateNpcEdge) {
                     plan.marriagePotentialOp = FactionMembershipOp::EnsurePresent;
                 }
 
-                plan.clearIgnoreProposeKeyword = !snap.relationships->GetAdjacentPairs(actorId).empty();
+                plan.clearIgnoreProposeKeyword =
+                    (playerStatus == RelationshipStatus::Engaged ||
+                     playerStatus == RelationshipStatus::Married ||
+                     playerStatus == RelationshipStatus::Divorced ||
+                     playerStatus == RelationshipStatus::Jilted);
             }
         }
 
@@ -648,6 +651,53 @@ namespace MARAS::State {
         out.engineTargetValue = out.rawScaledValue;
         out.isActive = (out.rawScaledValue != 0.0f);
         return out;
+    }
+
+    ExternalFactionWriteAction EvaluateExternalFactionWrite(
+        const WorldStateSnapshot& snap,
+        ActorId actorId,
+        std::uint32_t factionFormId,
+        std::int8_t targetRank,
+        bool isBlockedEngineFamily) noexcept {
+        if (actorId.IsNull() || actorId.IsSyntheticChild() || actorId.IsUnknownFather()) {
+            return ExternalFactionWriteAction::Passthrough;
+        }
+
+        const bool isRemoval = (targetRank < 0);
+
+        if (IsPlayerRawId(actorId)) {
+            if (factionFormId == kVanillaPlayerMarriedFactionRawId &&
+                !isRemoval &&
+                snap.settings &&
+                snap.settings->enablePlayerPolygamy) {
+                return ExternalFactionWriteAction::BlockPolygamyPlayerMarried;
+            }
+            return ExternalFactionWriteAction::Passthrough;
+        }
+
+        if ((factionFormId == kVanillaPotentialMarriageFactionRawId ||
+             factionFormId == kVanillaMarriageAskedFactionRawId ||
+             factionFormId == kVanillaCourtingFactionRawId) &&
+            !isRemoval) {
+            if (isBlockedEngineFamily || IsMarasPlayerFamilyInSnapshot(snap, actorId)) {
+                return ExternalFactionWriteAction::BlockPlayerFamilyCourtship;
+            }
+            return ExternalFactionWriteAction::Passthrough;
+        }
+
+        if (factionFormId == kVanillaPlayerMarriedFactionRawId && snap.relationships) {
+            const auto currentStatus = snap.relationships->GetStatus(actorId, ActorId::Player());
+            if (!isRemoval) {
+                return (currentStatus != RelationshipStatus::Married)
+                           ? ExternalFactionWriteAction::PromoteNpcToPlayerMarried
+                           : ExternalFactionWriteAction::Passthrough;
+            }
+            return (currentStatus == RelationshipStatus::Married)
+                       ? ExternalFactionWriteAction::DemoteNpcToPlayerDivorced
+                       : ExternalFactionWriteAction::Passthrough;
+        }
+
+        return ExternalFactionWriteAction::Passthrough;
     }
 
 }  // namespace MARAS::State

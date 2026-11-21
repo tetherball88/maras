@@ -101,14 +101,14 @@ if ($ApplyVersion) {
         $newManifest = [regex]::Replace(
             $manifestRaw,
             '("version"\s*:\s*")[^"]*(")',
-            ('${1}' + $FullVer + '${2}'),
+            ('${1}' + $NumericSemVer + '${2}'),
             1
         )
         if ($newManifest -ne $manifestRaw) {
             Write-Utf8NoBom -Path $ManifestPath -Text $newManifest
-            Write-Host ("[UPDATED] {0} -> version = ""{1}""" -f $ManifestRel, $FullVer) -ForegroundColor Green
+            Write-Host ("[UPDATED] {0} -> version = ""{1}""" -f $ManifestRel, $NumericSemVer) -ForegroundColor Green
         } else {
-            Write-Host ("[OK] {0} already at ""{1}""" -f $ManifestRel, $FullVer)
+            Write-Host ("[OK] {0} already at ""{1}""" -f $ManifestRel, $NumericSemVer)
         }
     }
 
@@ -179,10 +179,10 @@ Write-Host "1. Version Metadata Sync" -ForegroundColor Cyan
 if (Test-Path $ManifestPath) {
     try {
         $manifestJson = [System.IO.File]::ReadAllText($ManifestPath) | ConvertFrom-Json
-        if ($manifestJson.version -eq $FullVer) {
-            Write-Pass ("{0} version is '{1}'" -f $ManifestRel, $FullVer)
+        if ($manifestJson.version -eq $NumericSemVer) {
+            Write-Pass ("{0} version is '{1}'" -f $ManifestRel, $NumericSemVer)
         } else {
-            Write-Fail ("{0} version is '{1}' (expected '{2}'). Run with -ApplyVersion." -f $ManifestRel, $manifestJson.version, $FullVer)
+            Write-Fail ("{0} version is '{1}' (expected '{2}'). Run with -ApplyVersion." -f $ManifestRel, $manifestJson.version, $NumericSemVer)
         }
     } catch {
         Write-Fail ("{0} failed JSON parse: {1}" -f $ManifestRel, $_.Exception.Message)
